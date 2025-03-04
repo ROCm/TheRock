@@ -15,7 +15,6 @@ to be sensical for both.
 import importlib.util
 from setuptools import setup
 import sys
-import os
 from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -46,34 +45,7 @@ print(
 )
 
 
-# Resolve the build target family. This consults a list of things in increasing
-# order of specificity:
-#   1. "ROCM_SDK_TARGET_FAMILY" environment variable
-#   2. Dynamically discovered/most salient target family on the actual system
-#   3. dist_info.DEFAULT_TARGET_FAMILY
-def discover_current_target_family() -> str | None:
-    # TODO: Implement dynamic discovery.
-    return None
-
-
-def determine_target_family() -> str:
-    target_family = os.getenv("ROCM_SDK_TARGET_FAMILY")
-    if target_family is None:
-        target_family = discover_current_target_family()
-        if target_family is None:
-            target_family = dist_info.DEFAULT_TARGET_FAMILY
-    assert target_family is not None
-    if target_family not in dist_info.AVAILABLE_TARGET_FAMILIES:
-        raise ValueError(
-            f"Requested ROCM_SDK_TARGET_FAMILY={target_family} is "
-            f"not available in the distribution (available: "
-            f"{', '.join(dist_info.AVAILABLE_TARGET_FAMILIES)})"
-        )
-    print(f"Determined target family: '{target_family}'")
-    return target_family
-
-
-TARGET_FAMILY = determine_target_family()
+TARGET_FAMILY = dist_info.determine_target_family()
 INSTALL_REQUIRES = [
     pkg.get_dist_package_require(target_family=TARGET_FAMILY)
     for pkg in dist_info.ALL_PACKAGES.values()
