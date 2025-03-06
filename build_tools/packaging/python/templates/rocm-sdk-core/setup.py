@@ -43,8 +43,8 @@ setup(
     include_package_data=True,
     entry_points={
         "console_scripts": [
-          "amdclang++=rocm_sdk_core._cli:amdclangpp",
-          "rocm-smi=rocm_sdk_core._cli:rocm_smi",  
+            "amdclang++=rocm_sdk_core._cli:amdclangpp",
+            "rocm-smi=rocm_sdk_core._cli:rocm_smi",
         ],
     },
 )
