@@ -1,0 +1,165 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8f4f5bce..d156f75d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -199,6 +199,9 @@ else()
+     set( Tensile_COMPILER "amdclang++" CACHE STRING "Tensile compiler")
+     set( Tensile_LIBRARY_FORMAT "msgpack" CACHE STRING "Tensile library format")
+     set( Tensile_CPU_THREADS "" CACHE STRING "Number of threads for Tensile parallel build")
++    set( Tensile_ROCM_OFFLOAD_BUNDLER_PATH "" CACHE STRING "Path to clang-offload-bundler (or auto-detect)")
++    set( Tensile_ROCM_ASSEMBLER_PATH "" CACHE STRING "Path to a rocm assembler driver (or auto-detect)")
++    set( Tensile_TOOLCHAIN_FLAGS "" CACHE STRING "Flags that must be passed to tensile-invoked compilers/assemblers")
+ 
+     option( Tensile_MERGE_FILES "Tensile to merge kernels and solutions files?" ON )
+     option( Tensile_SHORT_FILENAMES "Tensile to use short file names? Use if compiler complains they're too long." OFF )
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+index 13cf5bd2..ca2808ad 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
++++ b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+@@ -30,7 +30,13 @@ function(CompileSourceKernel source archs buildIdKind outputFolder)
+     add_custom_target(MatrixTransformKernels ALL
+                       DEPENDS ${outputFolder}/hipblasltTransform.hsaco
+                       VERBATIM)
+-    add_custom_command(OUTPUT ${outputFolder}/hipblasltTransform.hsaco
+-                       COMMAND bash  ${CMAKE_CURRENT_SOURCE_DIR}/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh ${source} ${archs} ${CMAKE_BUILD_TYPE} ${buildIdKind} ${outputFolder}/hipblasltTransform.hsaco
+-                       COMMENT "Compiling source kernels")
++    add_custom_command(
++        OUTPUT ${outputFolder}/hipblasltTransform.hsaco
++        COMMAND
++            # See script for environment variables it uses.
++            ${CMAKE_COMMAND} -E env
++                "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
++                "Tensile_TOOLCHAIN_FLAGS=${Tensile_TOOLCHAIN_FLAGS}"
++                bash ${CMAKE_CURRENT_SOURCE_DIR}/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh ${source} ${archs} ${CMAKE_BUILD_TYPE} ${buildIdKind} ${outputFolder}/hipblasltTransform.hsaco
++        COMMENT "Compiling source kernels")
+ endfunction()
+\ No newline at end of file
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+index 4ff71ea0..ecd65b01 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
++++ b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+@@ -34,5 +34,6 @@ elif [ "$build_type" = "Debug" ]; then
+ fi
+ 
+ rocm_path="${ROCM_PATH:-/opt/rocm}"
+-clang_path="${rocm_path}/bin/amdclang++"
+-$clang_path -x hip "$sources" --offload-arch="${archs}" -c --offload-device-only -Xoffload-linker --build-id=$build_id_kind $additional_options -o "$dest"
+\ No newline at end of file
++clang_path="${CMAKE_CXX_COMPILER:-${rocm_path}/bin/amdclang++}"
++clang_flags="${Tensile_TOOLCHAIN_FLAGS:-}"
++$clang_path ${clang_flags} -x hip "$sources" --offload-arch="${archs}" -c --offload-device-only -Xoffload-linker --build-id=$build_id_kind $additional_options -o "$dest"
+\ No newline at end of file
+diff --git a/tensilelite/Tensile/BuildCommands/SourceCommands.py b/tensilelite/Tensile/BuildCommands/SourceCommands.py
+index 0b1ed01d..667e4a2c 100644
+--- a/tensilelite/Tensile/BuildCommands/SourceCommands.py
++++ b/tensilelite/Tensile/BuildCommands/SourceCommands.py
+@@ -24,6 +24,7 @@ def _compileSourceObjectFile(cmdlineArchs: List[str], cxxCompiler: str, cxxSrcPa
+     Raises:
+         RuntimeError: If the compilation command fails.
+     """
++    toolchain_flags = shlex.split(os.environ.get('Tensile_TOOLCHAIN_FLAGS', ''))
+     archFlags = ['--offload-arch=' + arch for arch in cmdlineArchs]
+ 
+     #TODO(@jichangjichang) Needs to be fixed when Maneesh's change is made available
+@@ -45,7 +46,7 @@ def _compileSourceObjectFile(cmdlineArchs: List[str], cxxCompiler: str, cxxSrcPa
+     if os.name == "nt":
+       hipFlags.extend(['-fms-extensions', '-fms-compatibility', '-fPIC', '-Wno-deprecated-declarations'])
+ 
+-    args = launcher + [which(cxxCompiler)] + hipFlags + archFlags + [cxxSrcPath, '-c', '-o', objDestPath]
++    args = launcher + [which(cxxCompiler)] + toolchain_flags + hipFlags + archFlags + [cxxSrcPath, '-c', '-o', objDestPath]
+ 
+     try:
+       out = subprocess.check_output(args, stderr=subprocess.STDOUT)
+diff --git a/tensilelite/Tensile/Ops/gen_assembly.sh b/tensilelite/Tensile/Ops/gen_assembly.sh
+index 160d708f..cded03b8 100755
+--- a/tensilelite/Tensile/Ops/gen_assembly.sh
++++ b/tensilelite/Tensile/Ops/gen_assembly.sh
+@@ -33,7 +33,7 @@ if ! [ -z ${ROCM_PATH+x} ]; then
+     rocm_path=${ROCM_PATH}
+ fi
+ 
+-toolchain=${rocm_path}/bin/amdclang++
++toolchain="${TENSILE_ROCM_ASSEMBLER_PATH:-${rocm_path}/llvm/bin/clang++}"
+ 
+ . ${venv}/bin/activate
+ 
+diff --git a/tensilelite/Tensile/cmake/TensileConfig.cmake b/tensilelite/Tensile/cmake/TensileConfig.cmake
+index 76277806..bd60c2d9 100644
+--- a/tensilelite/Tensile/cmake/TensileConfig.cmake
++++ b/tensilelite/Tensile/cmake/TensileConfig.cmake
+@@ -72,6 +72,48 @@ endif()
+ add_subdirectory("${Tensile_ROOT}/Source" "Tensile")
+ include("${Tensile_ROOT}/Source/TensileCreateLibrary.cmake")
+ 
++# Gets a command line fragment that can be prepended to a command in order to
++# preserve toolchain options and environment variables into a child process.
++function(TensileGetEnvCommand out_var)
++  # Tensile uses a lot of environment variables for invoking the toolchain.
++  # Since any variables we have set here are configure-time, we have to arrange
++  # to include them in any build-time commands.
++  set(CommandEnv ${CMAKE_COMMAND} -E env)
++  list(APPEND CommandEnv "CMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
++  list(APPEND CommandEnv "CMAKE_C_COMPILER=${CMAKE_C_COMPILER}")
++  if(CMAKE_CXX_COMPILER_LAUNCHER)
++    list(APPEND "Tensile_CMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}")
++  endif()
++
++  # For environment variables that Tensile uses, accept them either as a CMake
++  # cache option (for better ergonomics) or from the configure time environment.
++  # Note that cache options spell "Tensile" in mixed case for consistency whereas
++  # environment vars of a certain age are all caps. New environment variables
++  # try to be consistent.
++  if(NOT Tensile_ROCM_OFFLOAD_BUNDLER_PATH)
++    set(Tensile_ROCM_OFFLOAD_BUNDLER_PATH $ENV{TENSILE_ROCM_OFFLOAD_BUNDLER_PATH})
++  endif()
++  if(Tensile_ROCM_OFFLOAD_BUNDLER_PATH)
++    list(APPEND CommandEnv "TENSILE_ROCM_OFFLOAD_BUNDLER_PATH=${Tensile_ROCM_OFFLOAD_BUNDLER_PATH}")
++  endif()
++
++  if(NOT Tensile_ROCM_ASSEMBLER_PATH)
++    set(Tensile_ROCM_ASSEMBLER_PATH $ENV{TENSILE_ROCM_ASSEMBLER_PATH})
++  endif()
++  if(Tensile_ROCM_ASSEMBLER_PATH)
++    list(APPEND CommandEnv "TENSILE_ROCM_ASSEMBLER_PATH=${Tensile_ROCM_ASSEMBLER_PATH}")
++  endif()
++
++  if(NOT Tensile_TOOLCHAIN_FLAGS)
++    set(Tensile_TOOLCHAIN_FLAGS $ENV{Tensile_TOOLCHAIN_FLAGS})
++  endif()
++  if(Tensile_TOOLCHAIN_FLAGS)
++    list(APPEND CommandEnv "Tensile_TOOLCHAIN_FLAGS=${Tensile_TOOLCHAIN_FLAGS}")
++  endif()
++  list(APPEND CommandEnv "--")
++  set("${out_var}" "${CommandEnv}" PARENT_SCOPE)
++endfunction()
++
+ # Output target: ${Tensile_VAR_PREFIX}_LIBRARY_TARGET. Ensures that the libs get built in Tensile_OUTPUT_PATH/library.
+ function(TensileCreateLibraryFiles
+          Tensile_LOGIC_PATH
+@@ -234,7 +276,8 @@ function(TensileCreateLibraryFiles
+     set(Options ${Options} "--build-id=${Tensile_BUILD_ID}")
+   endif()
+ 
+-  set(CommandLine ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
++  TensileGetEnvCommand(CommandEnv)
++  set(CommandLine ${CommandEnv} ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
+   message(STATUS "Tensile_CREATE_COMMAND: ${CommandLine}")
+ 
+   if(Tensile_EMBED_LIBRARY)
+@@ -293,6 +336,7 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr)
+   set(ext_op_library_path ${build_tmp_dir}/hipblasltExtOpLibrary.dat)
+   file(REMOVE ${ext_op_library_path})
+ 
++  TensileGetEnvCommand(CommandEnv)
+   add_custom_command(
+     OUTPUT ${OutputFolder}/hipblasltExtOpLibrary.dat
+     WORKING_DIRECTORY "${cwd}"
+@@ -300,7 +344,7 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr)
+     COMMAND ${CMAKE_COMMAND} -E rm -rf ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${OutputFolder}
+-    COMMAND bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_HOME_DIR}" "${Tensile_BUILD_ID}"
++    COMMAND ${CommandEnv} bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_HOME_DIR}" "${Tensile_BUILD_ID}"
+     COMMAND ${CMAKE_COMMAND} -E copy ${ext_op_library_path} ${build_tmp_dir}/extop_*.co ${OutputFolder}
+   )
+ 
