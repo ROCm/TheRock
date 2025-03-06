@@ -7,6 +7,7 @@ of bootstrapping, we are including it inline for the moment.
 import os
 import platform
 
+
 def os_arch() -> str:
     """Gets the `os_arch` placeholder for the current system."""
     return f"{platform.system().lower()}-{platform.machine()}"
@@ -79,25 +80,8 @@ def determine_target_family() -> str:
     return target_family
 
 
-# Overall ROCM package version.
-__version__ = "6.4.0"
-
-# Nonce added to the backend packages which encodes the version. This is
-# typically empty for development distributions. Only backend packages with
-# a matching nonce will be considered for use by this meta package.
-PY_PACKAGE_SUFFIX_NONCE = ""
-
 # All packages that are part of the distribution.
 ALL_PACKAGES: dict[str, PackageEntry] = {}
-
-# If a target family cannot be found or is not relevant (i.e. building devel
-# packages on a gpu-less system), this is the default target family.
-# TODO: This needs to be controlled by the overall build.
-DEFAULT_TARGET_FAMILY: str = "gfx1100"
-
-# All available target families that this distribution has available.
-# TODO: This needs to be controlled by the overall build.
-AVAILABLE_TARGET_FAMILIES: list[str] = ["gfx1100"]
 
 # Always available packages.
 PackageEntry("core", "rocm-sdk-core-{os_arch}", required=True)
@@ -105,3 +89,18 @@ PackageEntry(
     "libraries", "rocm-sdk-libraries-{target_family}-{os_arch}", required=False
 )
 PackageEntry("devel", "rocm-sdk-devel-{os_arch}", required=False)
+
+# Overall ROCM package version.
+__version__ = "DEFAULT"
+
+# Nonce added to the backend packages which encodes the version. This is
+# typically empty for development distributions. Only backend packages with
+# a matching nonce will be considered for use by this meta package.
+PY_PACKAGE_SUFFIX_NONCE: str = "_DEFAULT"
+
+# If a target family cannot be found or is not relevant (i.e. building devel
+# packages on a gpu-less system), this is the default target family.
+DEFAULT_TARGET_FAMILY: str = "DEFAULT"
+
+# All available target families that this distribution has available.
+AVAILABLE_TARGET_FAMILIES: list[str] = []

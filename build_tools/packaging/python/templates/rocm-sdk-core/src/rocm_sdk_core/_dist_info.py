@@ -1,1 +1,0 @@
-../../../rocm-sdk/src/rocm_sdk/_dist_info.py
