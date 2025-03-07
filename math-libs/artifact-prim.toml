@@ -1,11 +1,27 @@
 # rocPRIM
 [components.dev."math-libs/rocPRIM/stage"]
 [components.doc."math-libs/rocPRIM/stage"]
+[components.test."math-libs/rocPRIM/stage"]
+include = [
+  "bin/test_*",
+  "bin/rocprim/CTestTestfile.cmake",
+]
 
 # hipCUB
 [components.dev."math-libs/hipCUB/stage"]
 [components.doc."math-libs/hipCUB/stage"]
+[components.test."math-libs/hipCUB/stage"]
+include = [
+  "bin/test_*",
+  "bin/hipcub/CTestTestfile.cmake",
+]
 
 # rocThrust
 [components.dev."math-libs/rocThrust/stage"]
 [components.doc."math-libs/rocThrust/stage"]
+[components.test."math-libs/rocThrust/stage"]
+include = [
+  "bin/test_*",
+  "bin/*.hip",
+  "bin/rocthrust/CTestTestfile.cmake",
+]

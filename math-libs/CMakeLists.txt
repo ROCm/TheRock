@@ -78,6 +78,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      -DBUILD_TEST=ON
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
@@ -97,6 +98,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      -DBUILD_TEST=ON
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
@@ -118,6 +120,7 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      -DBUILD_TEST=ON
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
@@ -137,6 +140,7 @@ if(THEROCK_ENABLE_PRIM)
     COMPONENTS
       dev
       doc
+      test
     SUBPROJECT_DEPS rocPRIM hipCUB rocThrust
   )
 endif(THEROCK_ENABLE_PRIM)
