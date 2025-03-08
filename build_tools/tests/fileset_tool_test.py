@@ -8,6 +8,8 @@ import sys
 import tempfile
 import unittest
 
+from _therock_utils.hash_util import calculate_hash
+
 FILESET_TOOL = Path(__file__).parent.parent / "fileset_tool.py"
 
 ARTIFACT_DESCRIPTOR_1 = r"""
@@ -135,8 +137,7 @@ class FilesetToolTest(unittest.TestCase):
         )
 
         # Verify digest.
-        with open(artifact_archive, "rb") as f:
-            expected_digest = hashlib.file_digest(f, "sha256").hexdigest()
+        expected_digest = calculate_hash(artifact_archive, "sha256").hexdigest()
         actual_digest = hash_file.read_text().strip()
         self.assertEqual(expected_digest, actual_digest)
 

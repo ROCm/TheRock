@@ -15,13 +15,13 @@ with the following changes:
 
 from typing import Callable
 import argparse
-import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import sys
 import shutil
 import tarfile
 
+from _therock_utils.hash_util import calculate_hash, write_hash
 from _therock_utils.pattern_match import PatternMatcher
 
 
@@ -221,22 +221,8 @@ def do_artifact_archive(args):
                     arc.add(dir_entry.path, arcname=fullpath, recursive=False)
 
     if args.hash_file:
-        with open(output_path, "rb") as f:
-            try:
-                digest = hashlib.file_digest(f, args.hash_algorithm)
-            except AttributeError:  # file_digest() was added in Python 3.11.
-                digest = hashlib.new(args.hash_algorithm)
-                buffer = bytearray(2**16)
-                view = memoryview(buffer)
-                while True:
-                    size = f.readinto(buffer)
-                    if size == 0:
-                        break
-                    digest.update(view[:size])
-
-        with open(args.hash_file, "wt") as hash_file:
-            hash_file.write(digest.hexdigest())
-            hash_file.write("\n")
+        digest = calculate_hash(output_path, args.hash_algorithm)
+        write_hash(args.hash_file, digest)
 
 
 def _open_archive(p: Path) -> tarfile.TarFile:
