@@ -13,7 +13,7 @@ requires some additional development tools, which are included below.
 ## Common
 
 ```
-pip install CppHeaderParser==2.7.4 meson==1.7.0
+pip install -r requirements.txt
 ```
 
 ## On Ubuntu

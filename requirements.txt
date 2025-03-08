@@ -1,0 +1,4 @@
+CppHeaderParser>=2.7.4
+build>=1.2.2
+meson>=1.7.0
+python-magic>=0.4.27
