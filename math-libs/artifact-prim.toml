@@ -9,3 +9,9 @@
 # rocThrust
 [components.dev."math-libs/rocThrust/stage"]
 [components.doc."math-libs/rocThrust/stage"]
+[components.test."math-libs/rocThrust/stage"]
+include = [
+  "bin/test_*",
+  "bin/*.hip",
+  "bin/rocthrust/CTestTestfile.cmake",
+]
