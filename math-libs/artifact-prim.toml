@@ -5,6 +5,11 @@
 # hipCUB
 [components.dev."math-libs/hipCUB/stage"]
 [components.doc."math-libs/hipCUB/stage"]
+[components.test."math-libs/hipCUB/stage"]
+include = [
+  "bin/test_*",
+  "bin/hipcub/CTestTestfile.cmake",
+]
 
 # rocThrust
 [components.dev."math-libs/rocThrust/stage"]
