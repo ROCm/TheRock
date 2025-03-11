@@ -61,6 +61,7 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
+    therock-host-blas
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
 SUBDIRS
