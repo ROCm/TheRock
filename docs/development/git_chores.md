@@ -30,7 +30,7 @@ If that succeeds, create a PR and make sure that the CI passes.
 
 ### Resolving Conflicts
 
-If the above fails, it will most likely be when applying patches and you will 
+If the above fails, it will most likely be when applying patches and you will
 get a message indicating that the `git am` command failed and left some state
 in a submodule. When this happens, you should clean up by going into the
 submodule, looking around and aborting the command. Then proceed to the
@@ -40,7 +40,7 @@ next section for rebasing with conflicts:
 git am --abort
 ```
 
-You can return the source tree to a consistent state by running (without 
+You can return the source tree to a consistent state by running (without
 arguments):
 
 ```
@@ -74,6 +74,6 @@ that a commit has been made for the submodule in a pristine state. Example:
 ```
 
 In this case, the commit `b91661c88a0fd7f5848a60212839bfc2496ff932` should be
-the base ref. It is best to look at `git log` to verify, as it is quite 
+the base ref. It is best to look at `git log` to verify, as it is quite
 easy to get into an inconsistent state, and it is hard to spot errors in
 commit hashes.
