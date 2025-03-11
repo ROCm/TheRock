@@ -1,7 +1,7 @@
-From a09c41a771a33b720a59423721552dd4dfe65817 Mon Sep 17 00:00:00 2001
+From d70eaf6fa8894731020c30747a2762d3714fd23a Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Fri, 14 Feb 2025 13:06:48 +0000
-Subject: [PATCH 4/5] Update find_package for msgpack to work with 5.x and 6.x.
+Subject: [PATCH 1/2] Update find_package for msgpack to work with 5.x and 6.x.
 
 Adapted from: https://github.com/msgpack/msgpack-c/wiki/Q%26A#how-to-support-both-msgpack-c-c-version-5x-and-6x-
 
