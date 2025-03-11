@@ -48,7 +48,6 @@ therock_cmake_subproject_declare(hipBLASLt
     -DROCM_PATH=
     -DROCM_DIR=
     -DTensile_LOGIC=
-    -DTensile_CODE_OBJECT_VERSION=default
     -DTensile_CPU_THREADS=
     -DTensile_LIBRARY_FORMAT=msgpack
     # TODO(#55): Enable once roctracer is added
