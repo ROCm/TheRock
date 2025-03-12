@@ -16,7 +16,8 @@ on:
         type: string
         default: gfx110X-dgpu
   workflow_call:
-    amdgpu_target:
+    inputs:
+      amdgpu_target:
         type: string
         default: gfx110X-dgpu
   push:
