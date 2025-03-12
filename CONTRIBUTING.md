@@ -6,7 +6,7 @@ to other parts of ROCM outside of **TheRock**, please see
 
 ## Development workflow
 
-**TheRock** is focused on making it easy for developers to contribute. In order to facilitate this, 
+**TheRock** is focused on making it easy for developers to contribute. In order to facilitate this,
 the source of truth for all issue tracking, project planning and code contributions are in GitHub and
 we leverage an open source stack for all development tools and infrastructure so that it they can be
 easily leveraged in any fork.
