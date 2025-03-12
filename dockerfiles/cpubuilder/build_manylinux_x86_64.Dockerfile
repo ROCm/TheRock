@@ -50,7 +50,6 @@ RUN ./install_awscli.sh && rm -rf /install-awscli
 RUN yum install -y epel-release && \
     yum install -y gcc-toolset-12-libatomic-devel && \
     yum install -y patchelf && \
-    yum install -y gtest-devel && \
     yum install -y vim-common git-lfs && \
     yum clean all && \
     rm -rf /var/cache/yum
