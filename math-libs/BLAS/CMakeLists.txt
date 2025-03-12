@@ -48,7 +48,6 @@ therock_cmake_subproject_declare(hipBLASLt
     -DROCM_PATH=
     -DROCM_DIR=
     -DTensile_LOGIC=
-    -DTensile_CODE_OBJECT_VERSION=default
     -DTensile_CPU_THREADS=
     -DTensile_LIBRARY_FORMAT=msgpack
     # TODO(#55): Enable once roctracer is added
@@ -61,6 +60,7 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
+    therock-host-blas
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
 SUBDIRS
@@ -86,7 +86,11 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
     "-DTensile_TEST_LOCAL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/Tensile"
-    # # TODO: Enable clients.
+    # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
+    # doing a strict check of exact version.
+    -DTENSILE_VERSION=
+    -DBUILD_CLIENTS_TESTS=ON
+    -DLINK_BLIS=OFF
   IGNORE_PACKAGES
       ROCM
   COMPILER_TOOLCHAIN
@@ -97,6 +101,7 @@ therock_cmake_subproject_declare(rocBLAS
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
+    rocm_smi_lib
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
@@ -286,5 +291,6 @@ therock_provide_artifact(blas
       doc
       lib
       run
+      test
   SUBPROJECT_DEPS ${_blas_subproject_names}
 )

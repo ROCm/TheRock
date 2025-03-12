@@ -1,7 +1,7 @@
-From 267d5fe496ad19a5af5bc47d6698e58e141c5218 Mon Sep 17 00:00:00 2001
+From 560f1a9f4b725a9b9d0299249b44c19242feddf0 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 14 Feb 2025 16:52:43 -0800
-Subject: [PATCH 5/5] Capture configure-time PATH when invoking tensile at
+Subject: [PATCH 2/2] Capture configure-time PATH when invoking tensile at
  build time.
 
 ---

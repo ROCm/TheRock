@@ -17,7 +17,7 @@ FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:9042a22d33af2223ff7a3599f236aff1e
 ENV PATH="/opt/python/cp312-cp312/bin:${PATH}"
 
 ######## Pip Packages ########
-RUN pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1
+RUN pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
 ######## Repo ########
 RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo
@@ -44,13 +44,18 @@ WORKDIR /install-awscli
 COPY install_awscli.sh ./
 RUN ./install_awscli.sh && rm -rf /install-awscli
 
+######## Installing Google test #######
+WORKDIR /install-googletest
+ENV GOOGLE_TEST_VERSION="1.16.0"
+COPY install_googletest.sh ./
+RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
+
 ######## Yum Packages #######
 # TODO: Figure out why gcc-toolset-12-libatomic-devel doesn't install with the
 # rest of the dev toolset.
 RUN yum install -y epel-release && \
     yum install -y gcc-toolset-12-libatomic-devel && \
     yum install -y patchelf && \
-    yum install -y gtest-devel && \
     yum install -y vim-common git-lfs && \
     yum clean all && \
     rm -rf /var/cache/yum
