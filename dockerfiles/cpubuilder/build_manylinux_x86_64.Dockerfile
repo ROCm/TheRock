@@ -54,14 +54,10 @@ RUN yum install -y epel-release && \
     yum clean all && \
     rm -rf /var/cache/yum
 
-######## Installing google test #######
-RUN git clone https://github.com/google/googletest.git && \
-    cd googletest && \
-    mkdir build && \
-    cd build && \
-    cmake -GNinja .. -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
-    ninja && \
-    ninja install
+######## Installing Google test #######
+WORKDIR /install-google-test
+ENV GOOGLE_TEST_VERSION="1.16.0"
+RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-google-test
 
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version
