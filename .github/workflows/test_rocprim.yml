@@ -39,6 +39,7 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      BUILD_ARTIFACTS_DIR: "build/artifacts"
 
     # MOSTLY BOILER PLATE ABOVE.
     steps:
@@ -64,7 +65,6 @@ jobs:
         run: |
           source ${VENV_DIR}/bin/activate
 
-          BUILD_ARTIFACTS_DIR="build/artifacts"
           # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
           # runner, everything else is generic. Use just generic since this is all core/below.
           VARIANT="_generic"
