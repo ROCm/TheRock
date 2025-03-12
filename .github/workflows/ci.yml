@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  AMDGPU_TARGET: "${{ inputs.amdgpu_target != '' && inputs.amdgpu_target || 'gfx110X-dgpu' }}" 
+
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
   # queued and in-progress runs for the same PR (presubmit) or commit
