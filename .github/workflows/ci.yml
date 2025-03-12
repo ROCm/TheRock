@@ -32,7 +32,7 @@ jobs:
     name: Build Linux Packages
     uses: ./.github/workflows/build_linux_packages.yml
     with:
-      amdgpu_target: ${AMDGPU_TARGET}
+      amdgpu_target: ${{ env.AMDGPU_TARGET }}
 
   build_windows_packages:
     name: Build Windows Packages
@@ -43,7 +43,7 @@ jobs:
     name: Test Linux Packages
     uses: ./.github/workflows/test_linux_packages.yml
     with:
-      amdgpu_target: ${AMDGPU_TARGET}
+      amdgpu_target: ${{ env.AMDGPU_TARGET }}
 
   # build_python_packages:
   #   name: Build Python Packages
