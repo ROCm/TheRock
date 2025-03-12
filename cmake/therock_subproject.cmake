@@ -983,8 +983,14 @@ function(_therock_cmake_subproject_setup_toolchain
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
-    # On Windows, we only have the amd-llvm toolchain today.
-    if (compiler_toolchain STREQUAL "amd-hip" AND NOT WIN32)
+    if(WIN32 AND compiler_toolchain STREQUAL "amd-hip")
+      # On Windows, we only have the amd-llvm toolchain today, so override.
+      set(compiler_toolchain "amd-llvm")
+      if(THEROCK_VERBOSE)
+        message(STATUS "Windows: overriding compiler_toolchain from amd-hip to amd-llvm")
+      endif()
+    endif()
+    if(compiler_toolchain STREQUAL "amd-hip")
       set(_toolchain_subproject "hip-clr")
     else()
       set(_toolchain_subproject "amd-llvm")
@@ -1025,7 +1031,7 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
 
   # Configure additional HIP dependencies.
-  if (compiler_toolchain STREQUAL "amd-hip" AND NOT WIN32)
+  if (compiler_toolchain STREQUAL "amd-hip")
     _therock_assert_is_cmake_subproject("hip-clr")
     get_target_property(_hip_dist_dir hip-clr THEROCK_DIST_DIR)
     get_target_property(_hip_stamp_dir hip-clr THEROCK_STAMP_DIR)
