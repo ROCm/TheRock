@@ -85,6 +85,9 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
     "-DTensile_TEST_LOCAL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/Tensile"
+    # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
+    # doing a strict check of exact version.
+    -DTENSILE_VERSION=
     # # TODO: Enable clients.
   IGNORE_PACKAGES
       ROCM
