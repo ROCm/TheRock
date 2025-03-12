@@ -54,6 +54,15 @@ RUN yum install -y epel-release && \
     yum clean all && \
     rm -rf /var/cache/yum
 
+######## Installing google test #######
+RUN git clone https://github.com/google/googletest.git && \
+    cd googletest && \
+    mkdir build && \
+    cd build && \
+    cmake -GNinja .. -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
+    ninja && \
+    ninja install
+
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version
 # configuration scripts in a docker image where the tree was checked
