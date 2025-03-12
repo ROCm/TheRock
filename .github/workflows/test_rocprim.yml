@@ -68,15 +68,15 @@ jobs:
           # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
           # runner, everything else is generic. Use just generic since this is all core/below.
           VARIANT="_generic"
-          MACHINE_VARIANT="_${{ inputs.amdgpu_target }}"
+          TARGET="_${{ inputs.amdgpu_target }}"
           echo "Making ${BUILD_ARTIFACTS_DIR} directory"
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
           echo "Downloading artifacts"
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_dev"${MACHINE_VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_test"${MACHINE_VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_dev"${TARGET}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_test"${TARGET}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
 
           echo "Unpacking artifacts"
           pushd "${BUILD_ARTIFACTS_DIR}"
