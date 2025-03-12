@@ -10,14 +10,12 @@ on:
       amdgpu_target:
         type: string
         default: gfx110X-dgpu
-  workflow_call:
-    inputs:
-      amdgpu_target:
-        type: string
-        default: gfx110X-dgpu
 
 permissions:
   contents: read
+
+env:
+  AMDGPU_TARGET: "${{ inputs.amdgpu_target != '' && inputs.amdgpu_target || 'gfx110X-dgpu' }}" 
 
 concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
@@ -34,7 +32,7 @@ jobs:
     name: Build Linux Packages
     uses: ./.github/workflows/build_linux_packages.yml
     with:
-      amdgpu_target: ${{ inputs.amdgpu_target }}
+      amdgpu_target: ${{ env.AMDGPU_TARGET }}
 
   build_windows_packages:
     name: Build Windows Packages
@@ -45,7 +43,7 @@ jobs:
     name: Test Linux Packages
     uses: ./.github/workflows/test_linux_packages.yml
     with:
-      amdgpu_target: ${{ inputs.amdgpu_target }}
+      amdgpu_target: ${{ env.AMDGPU_TARGET }}
 
   # build_python_packages:
   #   name: Build Python Packages
