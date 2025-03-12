@@ -11,7 +11,7 @@ on:
         default: gfx94X-dcgpu
   workflow_call:
     inputs:
-      artifact_run_id:
+      amdgpu_target:
         type: string
         default: ""
       amdgpu_families:
