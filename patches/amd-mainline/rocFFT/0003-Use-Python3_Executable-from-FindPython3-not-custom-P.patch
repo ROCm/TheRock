@@ -30,7 +30,7 @@ index 587a04a0..29693469 100644
  add_custom_command(
    OUTPUT ${kgen_embed_cpp}
 -  COMMAND ${PYTHON3_EXE} ${kgen_embed_command}
-+  COMMAND ${Python3_EXECUTABLE}} ${kgen_embed_command}
++  COMMAND ${Python3_EXECUTABLE} ${kgen_embed_command}
    --embed ${kgen_embed_files} --logic ${kgen_logic_files} --output ${kgen_embed_cpp}
    DEPENDS ${kgen_embed_command} ${kgen_embed_files} ${kgen_logic_files}
  )
@@ -39,7 +39,7 @@ index 587a04a0..29693469 100644
  add_custom_command(
    OUTPUT ${gen_solutions}
 -  COMMAND ${PYTHON3_EXE} ${solship_py}
-+  COMMAND ${Python3_EXECUTABLE}} ${solship_py}
++  COMMAND ${Python3_EXECUTABLE} ${solship_py}
    --gpu-arch="${sol_gpu_arch}"
    --data-folder=${ROCFFT_SOLUTION_MAP_DIR}
    DEPENDS ${solution_map_files}
@@ -52,7 +52,7 @@ index e1fb9247..6b0e8039 100644
  add_custom_command(OUTPUT function_pool.cpp
    OUTPUT ${FUNCTION_POOLS}
 -  COMMAND ${CMAKE_COMMAND} -E env "LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH}:${ROCM_PATH}/${CMAKE_INSTALL_LIBDIR}" ${PYTHON3_EXE} ${kgen}
-+  COMMAND ${CMAKE_COMMAND} -E env "LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH}:${ROCM_PATH}/${CMAKE_INSTALL_LIBDIR}" ${Python3_EXECUTABLE}} ${kgen}
++  COMMAND ${CMAKE_COMMAND} -E env "LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH}:${ROCM_PATH}/${CMAKE_INSTALL_LIBDIR}" ${Python3_EXECUTABLE} ${kgen}
    --runtime-compile-default=${ROCFFT_RUNTIME_COMPILE_DEFAULT}
    --num-files=${ROCFFT_FUNCTION_POOL_N}
    generate $<TARGET_FILE:stockham_gen>
