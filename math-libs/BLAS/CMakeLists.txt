@@ -53,6 +53,7 @@ therock_cmake_subproject_declare(hipBLASLt
     # TODO(#55): Enable once roctracer is added
     -DHIPBLASLT_ENABLE_MARKER=OFF
     # TODO: Enable clients.
+    -DBUILD_CLIENTS_TESTS=ON
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
@@ -60,6 +61,7 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
+    rocm_smi_lib
     therock-host-blas
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt

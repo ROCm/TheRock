@@ -1,0 +1,65 @@
+From b5d832db8e1c065081433567b66359bb08907519 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Wed, 12 Mar 2025 22:41:27 +0000
+Subject: [PATCH 4/4] Fix finding BLAS and LAPACK
+
+So far it is assumed that NETLIB BLAS and LAPACK are avilable without
+checking. If they are nore, the build fails when trying to link.
+Switches to `find_package()` therefore which also enables using
+OpenBLAS.
+---
+ clients/CMakeLists.txt            | 4 +++-
+ clients/benchmarks/CMakeLists.txt | 4 ++--
+ clients/gtest/CMakeLists.txt      | 4 ++--
+ 3 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 6b662094..b24ca1c3 100755
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -92,7 +92,9 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+     set( BLAS_LIBRARY ${BLIS_LIB} )
+     set( BLIS_CPP ../common/blis_interface.cpp )
+   else()
+-    set( BLAS_LIBRARY "blas" )
++    find_package( LAPACK REQUIRED )
++    find_package( BLAS REQUIRED )
++    set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
+   endif()
+ 
+   # Find the package ROCmSMI
+diff --git a/clients/benchmarks/CMakeLists.txt b/clients/benchmarks/CMakeLists.txt
+index 99ec31f3..0d70d528 100644
+--- a/clients/benchmarks/CMakeLists.txt
++++ b/clients/benchmarks/CMakeLists.txt
+@@ -76,9 +76,9 @@ endif()
+ # target_compile_options does not go to linker like CMAKE_CXX_FLAGS does, so manually add
+ if (NOT WIN32)
+   if (BUILD_CUDA)
+-    target_link_libraries( hipblaslt-bench PRIVATE -llapack -lcblas )
++    target_link_libraries( hipblaslt-bench PRIVATE -l${LAPACK_LIBRARIES} -lcblas )
+   else()
+-    target_link_libraries( hipblaslt-bench PRIVATE lapack cblas )
++    target_link_libraries( hipblaslt-bench PRIVATE ${LAPACK_LIBRARIES} cblas )
+   endif()
+   list( APPEND COMMON_LINK_LIBS "-lm -lstdc++fs")
+ 
+diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
+index cbedcfa4..eec47b6f 100644
+--- a/clients/gtest/CMakeLists.txt
++++ b/clients/gtest/CMakeLists.txt
+@@ -85,9 +85,9 @@ target_compile_options(hipblaslt-test PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${COMMON
+ # target_compile_options does not go to linker like CMAKE_CXX_FLAGS does, so manually add
+ 
+ if (BUILD_CUDA)
+-  target_link_libraries( hipblaslt-test PRIVATE -llapack -lcblas )
++  target_link_libraries( hipblaslt-test PRIVATE -l${LAPACK_LIBRARIES} -lcblas )
+ else()
+-  target_link_libraries( hipblaslt-test PRIVATE lapack cblas )
++  target_link_libraries( hipblaslt-test PRIVATE ${LAPACK_LIBRARIES} cblas )
+ endif()
+ 
+ list( APPEND COMMON_LINK_LIBS "-lm -lstdc++fs")
+-- 
+2.43.0
+
