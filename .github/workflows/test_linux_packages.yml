@@ -12,10 +12,16 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      amdgpu_target:
+        type: string
+        default: gfx110X-dgpu
+  workflow_call:
+    amdgpu_target:
+        type: string
+        default: gfx110X-dgpu
   push:
     branches:
       - ADHOCBUILD
-  workflow_call:
 
 jobs:
   test_sanity_check:
@@ -30,3 +36,4 @@ jobs:
     uses: './.github/workflows/test_rocprim.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_target: ${{ inputs.amdgpu_target }}
