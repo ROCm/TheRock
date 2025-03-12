@@ -50,12 +50,6 @@ set(THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS
   -Wno-unused-command-line-argument
 )
 
-if (WIN32)
-  set(EXE_SUFFIX ".exe")
-else()
-  set(EXE_SUFFIX)
-endif()
-
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
 # LOG_FILE: If given, command output will also be sent to this log file. If
@@ -999,9 +993,9 @@ function(_therock_cmake_subproject_setup_toolchain
     get_target_property(_amd_llvm_dist_dir "${_toolchain_subproject}" THEROCK_DIST_DIR)
     get_target_property(_amd_llvm_stamp_dir "${_toolchain_subproject}" THEROCK_STAMP_DIR)
     # Add a dependency on the toolchain's dist
-    set(AMD_LLVM_C_COMPILER "${_amd_llvm_dist_dir}/lib/llvm/bin/clang${EXE_SUFFIX}")
-    set(AMD_LLVM_CXX_COMPILER "${_amd_llvm_dist_dir}/lib/llvm/bin/clang++${EXE_SUFFIX}")
-    set(AMD_LLVM_LINKER "${_amd_llvm_dist_dir}/lib/llvm/bin/lld${EXE_SUFFIX}")
+    set(AMD_LLVM_C_COMPILER "${_amd_llvm_dist_dir}/lib/llvm/bin/clang${CMAKE_EXECUTABLE_SUFFIX}")
+    set(AMD_LLVM_CXX_COMPILER "${_amd_llvm_dist_dir}/lib/llvm/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}")
+    set(AMD_LLVM_LINKER "${_amd_llvm_dist_dir}/lib/llvm/bin/lld${CMAKE_EXECUTABLE_SUFFIX}")
     set(_amd_llvm_cxx_flags_spaces )
     string(JOIN " " _amd_llvm_cxx_flags_spaces ${THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS})
 
