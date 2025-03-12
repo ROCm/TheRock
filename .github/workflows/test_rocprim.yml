@@ -17,6 +17,9 @@ on:
         default: gfx110X-dgpu
   workflow_call:
     inputs:
+      artifact_run_id:
+        type: string
+        default: ""
       amdgpu_target:
         type: string
         default: gfx110X-dgpu
