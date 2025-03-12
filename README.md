@@ -1,6 +1,9 @@
 # TheRock
 
-The HIP Environment and ROCm Kit - A lightweight open source build system for HIP and ROCm
+The HIP Environment and ROCm Kit - A lightweight open source build system for HIP and ROCm.
+
+We are currently in an **early preview state** but welcome contributors. Come try us out!
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
@@ -106,6 +109,7 @@ separately.
 
 ## Development Manuals
 
+- [Contribution Guidelines](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
 - [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).
 - [Build System](docs/development/build_system.md): More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc.
 - [Git Chores](docs/development/git_chores.md): Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc.
