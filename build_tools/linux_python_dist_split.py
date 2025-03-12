@@ -143,9 +143,12 @@ import magic
 import re
 import os
 from pathlib import Path
+import platform
+import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 
 from _therock_utils.artifacts import ArtifactCatalog, ArtifactName
 from _therock_utils.exe_stub_gen import generate_exe_link_stub
@@ -155,31 +158,198 @@ MAGIC_AR_MATCH = re.compile("ar archive")
 MAGIC_EXECUTABLE_MATCH = re.compile("ELF[^,]+executable,")
 MAGIC_SO_MATCH = re.compile("ELF[^,]+shared object,")
 
+THIS_DIR = Path(__file__).resolve().parent
+PYTHON_PACKAGING_DIR = THIS_DIR / "packaging" / "python" / "templates"
+
+ENABLED_VLOG_LEVEL: int = 1
+
+
+def log(*args, vlog: int = 0, **kwargs):
+    if vlog > ENABLED_VLOG_LEVEL:
+        return
+    file = sys.stdout
+    print(*args, **kwargs, file=file)
+    file.flush()
+
+
+def get_os_arch() -> str:
+    """Gets the `os_arch` placeholder for the current system.
+
+    Matches the equivalent in the package _dist_info.py file.
+    """
+    return f"{platform.system().lower()}_{platform.machine()}"
+
 
 def run(args: argparse.Namespace):
     artifacts = ArtifactCatalog(args.artifact_dir)
     target_families = artifacts.all_target_families
+    if not target_families:
+        raise ValueError(f"No target artifacts found in {args.artifact_dir}")
+    default_target_family = sorted(target_families)[0]
 
-    core_path = args.dest_dir / f"rocm_sdk_core{args.version_suffix}"
-    libraries_path = args.dest_dir / f"rocm_sdk_libraries{args.version_suffix}"
-    devel_path = args.dest_dir / f"rocm_sdk_devel{args.version_suffix}"
+    # Prepare the _dist_info.py file by reading the template in the rocm-sdk
+    # package and adding lines to set distribution specific options.
+    dist_info_path = (
+        PYTHON_PACKAGING_DIR / "rocm-sdk" / "src" / "rocm_sdk" / "_dist_info.py"
+    )
+    dist_info_contents = dist_info_path.read_text()
+    dist_info_contents += f"__version__ = '{args.version}'\n"
+    dist_info_contents += f"PY_PACKAGE_SUFFIX_NONCE = '{args.version_suffix}'\n"
+    dist_info_contents += f"DEFAULT_TARGET_FAMILY = '{default_target_family}'\n"
+    for target_family in target_families:
+        dist_info_contents += f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
+    log(f"_dist_info.py: {dist_info_contents}", vlog=1)
+
+    populate_built_artifacts(
+        args,
+        artifacts=artifacts,
+        target_families=target_families,
+        dist_info_contents=dist_info_contents,
+    )
+
+    if args.build_packages:
+        build_packages(args, args.dest_dir)
+
+
+def build_packages(args: argparse.Namespace, dest_dir: Path):
+    dist_dir = dest_dir / "dist"
+    for child_path in dest_dir.iterdir():
+        if not child_path.is_dir():
+            continue
+        if not (child_path / "pyproject.toml").exists():
+            continue
+        child_name = child_path.name
+
+        # Some of our packages build as sdists and some as wheels.
+        # Contrary to documented wisdom, we invoke setuptools directly. This is
+        # because the "build frontends" have an impossible compatibility matrix
+        # and opinions about how to pass arguments to the backends. So we skip
+        # the frontends for such a closed case as this.
+        build_args = [sys.executable, "-m", "build", "-v", "--outdir", str(dist_dir)]
+        build_args = [
+            sys.executable,
+            str(child_path / "setup.py"),
+        ]
+        if child_name in ["rocm-sdk"]:
+            build_args.append("sdist")
+        else:
+            build_args.append("bdist_wheel")
+            if not args.wheel_compression:
+                build_args.append("--compression")
+                build_args.append("stored")
+        build_args.extend(
+            [
+                "-v",
+                "--dist-dir",
+                str(dist_dir),
+            ]
+        )
+
+        log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
+        subprocess.check_call(build_args, cwd=child_path)
+
+
+def populate_built_artifacts(
+    args: argparse.Namespace,
+    *,
+    artifacts: ArtifactCatalog,
+    target_families: set[str],
+    dist_info_contents: str,
+):
+    os_arch = get_os_arch()
+
+    # Prepare the target neutral package directories.
+    meta_path = copy_package_template(
+        args.dest_dir,
+        "rocm-sdk",
+        dist_info_relpath="src/rocm_sdk/_dist_info.py",
+        dist_info_contents=dist_info_contents,
+    )
+    core_path = copy_package_template(
+        args.dest_dir,
+        "rocm-sdk-core",
+        dist_info_relpath="src/rocm_sdk_core/_dist_info.py",
+        dist_info_contents=dist_info_contents,
+    )
+    devel_path = copy_package_template(
+        args.dest_dir,
+        "rocm-sdk-devel",
+        dist_info_relpath="src/rocm_sdk_devel/_dist_info.py",
+        dist_info_contents=dist_info_contents,
+    )
 
     # Where things go is a waterfall: each package we populate removes files
     # from consideration. Anything that is left goes in the devel package.
     # Relative path to materialized abs path.
     materialized_paths: dict[str, Path] = {}
-    populate_core_package(args, core_path, artifacts, materialized_paths)
+    populate_core_package(
+        args,
+        core_path / "platform" / f"_rocm_sdk_core_{os_arch}{args.version_suffix}",
+        artifacts,
+        materialized_paths,
+    )
 
     # Emit libraries, one per artifact family that we have
     for target_family in target_families:
-        libraries_path = (
-            args.dest_dir / f"rocm_sdk_libraries_{target_family}{args.version_suffix}"
+        libraries_path = copy_package_template(
+            args.dest_dir,
+            "rocm-sdk-libraries",
+            dest_name=f"rocm-sdk-libraries-{target_family}",
+            dist_info_relpath="src/rocm_sdk_libraries/_dist_info.py",
+            dist_info_contents=dist_info_contents
+            + f"\nTHIS_TARGET_FAMILY='{target_family}'\n",
         )
         populate_libraries_package(
-            args, target_family, libraries_path, artifacts, materialized_paths
+            args,
+            target_family,
+            libraries_path
+            / "platform"
+            / f"_rocm_sdk_libraries_{target_family}_{os_arch}{args.version_suffix}",
+            artifacts,
+            materialized_paths,
         )
 
-    populate_devel_package(args, devel_path, artifacts, materialized_paths)
+    populate_devel_package(
+        args,
+        devel_path / "src" / "rocm_sdk_devel",
+        devel_path / "platform" / f"_rocm_sdk_devel_{os_arch}{args.version_suffix}",
+        artifacts,
+        materialized_paths,
+    )
+
+
+def copy_package_template(
+    dest_dir: Path,
+    template_name: str,
+    *,
+    dist_info_relpath: str,
+    dist_info_contents: str,
+    dest_name: str | None = None,
+) -> Path:
+    """Copies a named template to the dest_dir and returns the Path.
+
+    The template_name names a sub-directory of packaging/python. If no dest_name
+    is specified, then a same-named sub-directory will be created in dest_dir
+    and returned. Otherwise, it will be named dest_name.
+    """
+    if dest_name is None:
+        dest_name = template_name
+    template_path = PYTHON_PACKAGING_DIR / template_name
+    if not template_path.exists():
+        raise ValueError(f"Python package template {template_path} does not exist")
+    package_dest_dir = dest_dir / dest_name
+    if package_dest_dir.exists():
+        shutil.rmtree(package_dest_dir)
+    log(f"::: Creating package {package_dest_dir}")
+    shutil.copytree(template_path, package_dest_dir, symlinks=True, dirs_exist_ok=True)
+
+    # Replace the _dist_info.py file.
+    dist_info_path = package_dest_dir / dist_info_relpath
+    log(f"  Writing dist info: {dist_info_path}")
+    dist_info_path.parent.mkdir(parents=True, exist_ok=True)
+    dist_info_path.write_text(dist_info_contents)
+
+    return package_dest_dir
 
 
 def core_artifact_filter(an: ArtifactName) -> bool:
@@ -242,6 +412,7 @@ def populate_core_package(
     if package_path.exists():
         shutil.rmtree(package_path)
     package_path.mkdir(parents=True, exist_ok=True)
+    (package_path / "__init__.py").touch()
     materialize_lib_package(our_artifacts.pm, package_path, materialized_paths)
 
 
@@ -257,27 +428,30 @@ def populate_libraries_package(
         all_artifacts.artifact_dir,
         filter=functools.partial(libraries_artifact_filter, target_family),
     )
-    print(f"::: Populating libraries package {target_family} {package_path}")
+    log(f"::: Populating libraries package {target_family} {package_path}")
     for an in our_artifacts.artifact_names:
-        print(f"  + {an}")
+        log(f"  + {an}")
     if package_path.exists():
         shutil.rmtree(package_path)
     package_path.mkdir(parents=True, exist_ok=True)
+    (package_path / "__init__.py").touch()
     materialize_lib_package(our_artifacts.pm, package_path, materialized_paths)
 
 
 def populate_devel_package(
     args: argparse.Namespace,
+    src_path: Path,
     package_path: Path,
     all_artifacts: ArtifactCatalog,
     materialized_paths: dict[str, Path],
 ):
-    print(f"::: Populating devel package {package_path}")
+    log(f"::: Populating devel package {package_path}")
     for an in all_artifacts.artifact_names:
-        print(f"  + {an}")
+        log(f"  + {an}")
     if package_path.exists():
         shutil.rmtree(package_path)
     package_path.mkdir(parents=True, exist_ok=True)
+    (package_path / "__init__.py").touch()
     for relpath, dir_entry in all_artifacts.pm.matches():
         dest_path = package_path / relpath
         materialize_devel_file(
@@ -287,6 +461,23 @@ def populate_devel_package(
             materialized_paths,
             root_output_dir=package_path.parent,
         )
+
+    # For packaging, the devel platform/ contents are not wheel safe, so we
+    # store them into their own tarball and dynamically decompress at runtime.
+    # The tarball will contain as its first path component the top level
+    # python package name that contains the platform files.
+    tar_suffix = ".tar.xz" if args.devel_tarball_compression else ".tar"
+    tar_mode = "w:xz" if args.devel_tarball_compression else "w"
+    tar_path = src_path / f"_devel{tar_suffix}"
+    log(f"::: Building secondary devel tarball: {tar_path}")
+    with tarfile.open(tar_path, mode=tar_mode) as tf:
+        for root, _, files in os.walk(package_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, package_path.parent)
+                log(f"Adding {arcname}", vlog=2)
+                tf.add(file_path, arcname=arcname)
+    shutil.rmtree(package_path)
 
 
 # Materializes a "library" package. This is used for everything except the
@@ -415,10 +606,10 @@ def materialize_file(
     if dest_path.exists():
         os.unlink(dest_path)
     # We have to patch many files, so we do not hard-link: always copy.
-    print(f"  MATERIALIZE: {relpath} (from {src_path})")
+    log(f"  MATERIALIZE: {relpath} (from {src_path})", vlog=2)
     shutil.copy2(src_path, dest_path)
     if relpath in materialized_paths:
-        print(f"WARNING: Path already materialized: {relpath}")
+        log(f"WARNING: Path already materialized: {relpath}")
     materialized_paths[relpath] = dest_path
 
 
@@ -438,7 +629,7 @@ def materialize_devel_file(
         # Materialize as a symlink to the original placement.
         original_path = materialized_paths[relpath]
         link_target = original_path.relative_to(dest_path.parent, walk_up=True)
-        print(f"LINK: {relpath} -> {link_target}")
+        log(f"LINK: {relpath} -> {link_target}", vlog=2)
         if dest_path.exists(follow_symlinks=False):
             dest_path.unlink()
         dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -450,12 +641,12 @@ def materialize_devel_file(
         if dest_path.exists(follow_symlinks=False):
             dest_path.unlink()
         target_path = os.readlink(src_entry.path)
-        print(f"LINK: {relpath} (to {target_path})")
+        log(f"LINK: {relpath} (to {target_path})", vlog=2)
         os.symlink(target_path, dest_path)
         return
 
     # Otherwise, no one else has emitted it, so just materialize verbatim.
-    print(f"MATERIALIZE: {relpath} (from {src_entry.path})")
+    log(f"MATERIALIZE: {relpath} (from {src_entry.path})", vlog=2)
     if dest_path.exists(follow_symlinks=False):
         dest_path.unlink()
     dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -505,15 +696,34 @@ def main(argv: list[str]):
         help="Source artifacts/ dir from a build",
     )
     p.add_argument(
+        "--build-packages",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Build the resulting sdists/wheels",
+    )
+    p.add_argument(
         "--dest-dir",
         type=Path,
         required=True,
         help="Destination directory in which to materialize packages",
     )
+    p.add_argument("--version", default="0.1.dev0", help="Package versions")
     p.add_argument(
         "--version-suffix",
         default="",
         help="Version suffix to append to package names on disk",
+    )
+    p.add_argument(
+        "--devel-tarball-compression",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Enable compression of the devel tarball (slows build time but more efficient)",
+    )
+    p.add_argument(
+        "--wheel-compression",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Apply compression when building wheels (disable for faster iteration or prior to recompression activities)",
     )
     args = p.parse_args(argv)
     run(args)
