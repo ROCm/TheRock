@@ -5,6 +5,8 @@ The HIP Environment and ROCm Kit - A lightweight open source build system for HI
 We are currently in an **early preview state** but welcome contributors. Come try us out!
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
+If you're looking to quickly see how far along we are, check the [Releases Page](RELEASES.md).
+
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
 # Install Deps
@@ -115,3 +117,4 @@ separately.
 - [Git Chores](docs/development/git_chores.md): Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc.
 - [Dependencies](docs/development/dependencies.md): Further specifications on ROCm-wide standards for depending on various components.
 - [Build Containers](docs/development/build_containers.md): Further information about containers used for building TheRock on CI.
+- [Roadmap for Support](ROADMAP.md): Documents our current prioritized roadmap  to support all AMD GPUs.
