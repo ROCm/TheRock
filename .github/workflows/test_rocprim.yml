@@ -14,7 +14,7 @@ on:
         default: ""
       amdgpu_target:
         type: string
-        default: gfx110X-dgpu
+        default: gfx94X-dcgpu
   workflow_call:
     inputs:
       artifact_run_id:
@@ -22,7 +22,7 @@ on:
         default: ""
       amdgpu_target:
         type: string
-        default: gfx110X-dgpu
+        default: gfx94X-dcgpu
   push:
     branches:
       - ADHOCBUILD
@@ -68,15 +68,15 @@ jobs:
           # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
           # runner, everything else is generic. Use just generic since this is all core/below.
           VARIANT="_generic"
-          TARGET="_${{ inputs.amdgpu_target }}"
+          TARGET_VARIANT="_${{ inputs.amdgpu_target }}"
           echo "Making ${BUILD_ARTIFACTS_DIR} directory"
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
           echo "Downloading artifacts"
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_dev"${TARGET}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_test"${TARGET}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_test"${TARGET_VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
 
           echo "Unpacking artifacts"
           pushd "${BUILD_ARTIFACTS_DIR}"
@@ -89,4 +89,4 @@ jobs:
         run: |
           echo "Running rocPRIM tests"
           pushd "${BUILD_ARTIFACTS_DIR}/output_dir/bin/rocprim"
-          ctest
+          ctest --output-on-failure
