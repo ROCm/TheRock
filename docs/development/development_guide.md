@@ -1,12 +1,12 @@
 # TheRock Development Guide
 
-While TheRock started life as a super-project for doing combined builds and releases of individual ROCm components, it has increasingly been used as an entrpoint for developing ROCm components as well, since it provides a stable, single entrypoint to iterate on any ROCm sub-project. This guide collects notes and procedures aimed at ROCm developers who wish to use TheRock as a development environment.
+While TheRock started life as a super-project for doing combined builds and releases of individual ROCm components, it has increasingly been used as an entrypoint for developing ROCm components as well, since it provides a stable, single entrypoint to iterate on any ROCm sub-project. This guide collects notes and procedures aimed at ROCm developers who wish to use TheRock as a development environment.
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
 ## IDE Support
 
-Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opend in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide. Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
+Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide. Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
 
 ## Single Component Development
 
@@ -73,7 +73,7 @@ If only changing source files and not wanting to blow away the configured build 
 
 Every component is a submodule (not strictly true: there are some small compatibility components that are directly included in TheRock repo). Use normal `git` tools for adding remotes, switching branches, applying patches, etc.
 
-An outer level execution of `./build_toole/fetch_sources.py` will reset all submodule state and re-apply any local patches. If this results in loss of local commits, they can typically be found in the component's `git reflog`. It should not be possibly to truly lose uncommitted work, but re-fetching sources will effectively `git reset --hard`.
+An outer level execution of `./build_tools/fetch_sources.py` will reset all submodule state and re-apply any local patches. If this results in loss of local commits, they can typically be found in the component's `git reflog`. It should not be possibly to truly lose uncommitted work, but re-fetching sources will effectively `git reset --hard`.
 
 ## Developer CMake Flags
 
