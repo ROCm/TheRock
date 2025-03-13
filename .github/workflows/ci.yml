@@ -35,11 +35,6 @@ jobs:
     name: Test Linux Packages
     uses: ./.github/workflows/test_linux_packages.yml
 
-  verify_docker_image:
-    needs: build_linux_packages
-    name: Verify Docker Image
-    uses: ./.github/workflows/verify_docker_image.yml
-
   # build_python_packages:
   #   name: Build Python Packages
   #   uses: ./.github/workflows/build_python_packages.yml
