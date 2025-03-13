@@ -7,7 +7,7 @@ Our goal here is document the prioritized roadmap of target architectures we pla
 
 ## Prioritized Target Architectures
 
-The following is a roadmap. We will endeavor to work top-to-bottom to go from Sanity Tested -> Release Ready per chipset within each section and move down while also supporting any new chipset as it comes to market. Each category is its own roadmap and we will be moving in parallel across all categories as much. Current focus areas are in __bold__. There will be exceptions from the "top-to-bottom" ordering occassionally based on test device availability.
+The following is a list of prioritized roadmaps divided by OS (Linux/Windows) and architecture. Each individual section is its own roadmap and we will be in parallel trying to support at least one *new* architecture per section in parallel working top-to-bottom Current focus areas are in __bold__. There will be exceptions from the "top-to-bottom" ordering occassionally based on test device availability.
 
 *Note* for the purposes of the table below Sanity-Tested = "either in CI or some light form of manual QA has been performed. "Release-Ready" will mean that its supported and tested as part of our overall release process.
 
@@ -50,7 +50,3 @@ RDNA3 | gfx1101 ||
 RDNA3 | gfx1100 ||
 RDNA2 | gfx1030 ||
 GCN5.1 | gfx906 ||
-
-
-
-

@@ -117,5 +117,6 @@ separately.
 - [Git Chores](docs/development/git_chores.md): Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc.
 - [Dependencies](docs/development/dependencies.md): Further specifications on ROCm-wide standards for depending on various components.
 - [Build Containers](docs/development/build_containers.md): Further information about containers used for building TheRock on CI.
-- [Roadmap for Support](ROADMAP.md): Documents our current prioritized roadmap  to support all AMD GPUs.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
+- [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
+- [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
