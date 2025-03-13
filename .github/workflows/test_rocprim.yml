@@ -14,7 +14,7 @@ on:
       artifact_run_id:
         type: string
         default: ""
-      amdgpu_target:
+      amdgpu_families:
         type: string
         default: ""
       amdgpu_families:
