@@ -1,7 +1,7 @@
-From fc2b5a9e93954054512b32043df8dc44e6e742db Mon Sep 17 00:00:00 2001
+From 75d321b60ad464b77004edeab95b5a6ed792f19a Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 7 Mar 2025 12:13:41 -0800
-Subject: [PATCH 2/2] Do not hard-code hipBLASLt to find tools in /opt/rocm and
+Subject: [PATCH 2/5] Do not hard-code hipBLASLt to find tools in /opt/rocm and
  propagate configure time PATH.
 
 * Makes gen_assembly.sh and compile_code_object.sh scripts fail on error vs silently succeeding (`set -e`). These scripts have a suspect design overall, but making them error on failure is a minimal thing that is needed.
@@ -65,7 +65,7 @@ index 4ff71ea0..04ab923d 100644
  $clang_path -x hip "$sources" --offload-arch="${archs}" -c --offload-device-only -Xoffload-linker --build-id=$build_id_kind $additional_options -o "$dest"
 \ No newline at end of file
 diff --git a/tensilelite/Tensile/Ops/gen_assembly.sh b/tensilelite/Tensile/Ops/gen_assembly.sh
-index 160d708f..0bf1c3f9 100755
+index fdc5960d..889e1410 100755
 --- a/tensilelite/Tensile/Ops/gen_assembly.sh
 +++ b/tensilelite/Tensile/Ops/gen_assembly.sh
 @@ -22,19 +22,23 @@
@@ -98,10 +98,10 @@ index 160d708f..0bf1c3f9 100755
  
  IFS=';' read -r -a archs <<< "$archStr"
 diff --git a/tensilelite/Tensile/cmake/TensileConfig.cmake b/tensilelite/Tensile/cmake/TensileConfig.cmake
-index 76277806..b82a2cab 100644
+index cf6685a7..a5cb874a 100644
 --- a/tensilelite/Tensile/cmake/TensileConfig.cmake
 +++ b/tensilelite/Tensile/cmake/TensileConfig.cmake
-@@ -235,6 +235,12 @@ function(TensileCreateLibraryFiles
+@@ -210,6 +210,12 @@ function(TensileCreateLibraryFiles
    endif()
  
    set(CommandLine ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
@@ -114,7 +114,7 @@ index 76277806..b82a2cab 100644
    message(STATUS "Tensile_CREATE_COMMAND: ${CommandLine}")
  
    if(Tensile_EMBED_LIBRARY)
-@@ -300,7 +306,9 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr)
+@@ -275,7 +281,9 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr)
      COMMAND ${CMAKE_COMMAND} -E rm -rf ${build_tmp_dir}
      COMMAND ${CMAKE_COMMAND} -E make_directory ${build_tmp_dir}
      COMMAND ${CMAKE_COMMAND} -E make_directory ${OutputFolder}
@@ -126,5 +126,5 @@ index 76277806..b82a2cab 100644
    )
  
 -- 
-2.43.0
+2.34.1
 

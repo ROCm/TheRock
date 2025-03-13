@@ -1,7 +1,7 @@
-From b16a0c8148aba163260330ec2735c096f71732d2 Mon Sep 17 00:00:00 2001
+From d150c267b4808eb0abab141116add579158d482d Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 22:39:56 +0000
-Subject: [PATCH 3/4] Find `rocm_smi` via config files
+Subject: [PATCH 3/5] Find `rocm_smi` via config files
 
 Use the config files provided by upstream instead of a custom finder.
 ---
@@ -88,5 +88,5 @@ index a6fa375a..00000000
 -
 -#set(rocm_smi_root "${hip_LIB_INSTALL_DIR}/../../rocm_smi")
 -- 
-2.43.0
+2.34.1
 
