@@ -7,7 +7,7 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      amdgpu_target:
+      amdgpu_families:
         type: string
         default: gfx94X-dcgpu
 
@@ -29,7 +29,7 @@ jobs:
     name: Build Linux Packages
     uses: ./.github/workflows/build_linux_packages.yml
     with:
-      amdgpu_target: "${{ inputs.amdgpu_target != '' && inputs.amdgpu_target || 'gfx110X-dgpu' }}"
+      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx110X-dgpu' }}"
 
   build_windows_packages:
     name: Build Windows Packages
@@ -40,7 +40,7 @@ jobs:
     name: Test Linux Packages
     uses: ./.github/workflows/test_linux_packages.yml
     with:
-      amdgpu_target: "${{ inputs.amdgpu_target != '' && inputs.amdgpu_target || 'gfx110X-dgpu' }}"
+      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx110X-dgpu' }}"
 
   # build_python_packages:
   #   name: Build Python Packages
