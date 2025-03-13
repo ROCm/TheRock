@@ -14,12 +14,12 @@ on:
         default: ""
       amdgpu_target:
         type: string
-        default: gfx110X-dgpu
+        default: gfx94X-dcgpu
   workflow_call:
     inputs:
       amdgpu_target:
         type: string
-        default: gfx110X-dgpu
+        default: gfx94X-dcgpu
   push:
     branches:
       - ADHOCBUILD
