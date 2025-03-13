@@ -9,14 +9,14 @@ WORKDIR /
 RUN apt update && apt install -y \
   python3 python3-pip python3-pip-whl \
   gfortran git-lfs ninja-build cmake g++ pkg-config \
-  xxd libgtest-dev patchelf automake
+  xxd libgtest-dev libgmock-dev patchelf automake
 # TODO: Remove once https://github.com/ROCm/TheRock/issues/160 is resolved.
 RUN apt install -y libgl-dev
 # TODO: Remove once https://github.com/ROCm/TheRock/issues/161 is resolved.
 RUN apt install -y python3-venv
 
 RUN python3 -m pip install --break-system-packages \
-  CppHeaderParser==2.7.4 meson==1.7.0
+  CppHeaderParser==2.7.4 meson==1.7.0 PyYAML==6.0.2
 COPY dockerfiles/pytorch-dev/build_rocm.sh /
 # TODO: The ROCM components still output some things to the source dir. Remove
 # "rw" when fixed. See https://github.com/ROCm/TheRock/issues/159
