@@ -6,7 +6,7 @@ on:
       package_version:
         type: string
         default: ADHOCBUILD
-      amdgpu_target:
+      amdgpu_families:
         type: string
         default: gfx94X-dcgpu
 
@@ -15,7 +15,7 @@ on:
       package_version:
         type: string
         default: ADHOCBUILD
-      amdgpu_target:
+      amdgpu_families:
         type: string
         default: gfx94X-dcgpu
 
@@ -70,13 +70,13 @@ jobs:
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
-          amdgpu_target="${{ inputs.amdgpu_target }}"
+          amdgpu_families="${{ inputs.amdgpu_families }}"
           echo "Building package ${package_version}"
 
           # Build.
           cmake -B build -GNinja . \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_target} \
+            -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_VERBOSE=ON
           ./build_tools/watch_top_processes.sh &
