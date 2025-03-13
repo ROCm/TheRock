@@ -6,9 +6,14 @@ on:
       package_suffix:
         type: string
         default: -ADHOCBUILD
+      # TODO: make this optional. For now we require it to be set explicitly.
+      # Default behavior could be either:
+      #   A) generate a version or date -based tag for each release
+      #   B) append assets to 'mainline-snapshot' with a version or date suffix
+      #   C) overwrite assets on 'mainline-snapshot'
       release_tag:
         description: Publish files to this release tag
-        required: false
+        required: true
         type: string
 
   workflow_call:
@@ -16,9 +21,10 @@ on:
       package_suffix:
         type: string
         default: -ADHOCBUILD
+      # TODO: make this optional. See above.
       release_tag:
         description: Publish files to this release tag
-        required: false
+        required: true
         type: string
 
 permissions:
@@ -93,8 +99,8 @@ jobs:
         if: github.event.inputs.release_tag != ''
         with:
           artifacts: "${{ env.DIST_ARCHIVE }}"
-          tag: mainline-snapshot
-          name: mainline-snapshot
+          tag: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_tag }}
           removeArtifacts: false
           allowUpdates: true
           replacesArtifacts: true
