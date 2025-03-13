@@ -1,0 +1,130 @@
+From fc2b5a9e93954054512b32043df8dc44e6e742db Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Fri, 7 Mar 2025 12:13:41 -0800
+Subject: [PATCH 2/2] Do not hard-code hipBLASLt to find tools in /opt/rocm and
+ propagate configure time PATH.
+
+* Makes gen_assembly.sh and compile_code_object.sh scripts fail on error vs silently succeeding (`set -e`). These scripts have a suspect design overall, but making them error on failure is a minimal thing that is needed.
+* Do not hard-code /opt/rocm tooling paths in these shell scripts. Instead use an explicit `ROCM_PATH` if specified, falling back to `PATH` resolution like the rest of the project. This is still looser than I would like (I would prefer explicit configuration of tools), but this at least makes things work. We should never have hard-coded /opt/rocm paths in scripts.
+* Wraps build time tool invocation in `cmake -E env PATH=...` to propagate the configure time PATH to build time. Otherwise, this project cannot build with separate configure/build environments, which is a standard practice for assembling super-projects.
+
+In general, hipBLASLt is very sloppy in terms of how it finds its tools. I resisted the urge to attempt to clean that up because the refactoring would need to be quite extensive. This is a minimal set of changes to at least make what was written correct.
+
+This will have a subtle change that if the project was not build with an explicit ROCM_PATH and was somehow relying on falling back to /opt/rocm implicitly, that will now fail. As it should.
+---
+ .../src/kernels/CompileSourceKernel.cmake          |  4 +++-
+ .../rocblaslt/src/kernels/compile_code_object.sh   | 14 ++++++++++++--
+ tensilelite/Tensile/Ops/gen_assembly.sh            | 14 +++++++++-----
+ tensilelite/Tensile/cmake/TensileConfig.cmake      | 10 +++++++++-
+ 4 files changed, 33 insertions(+), 9 deletions(-)
+
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+index 13cf5bd2..27a3172d 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
++++ b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+@@ -31,6 +31,8 @@ function(CompileSourceKernel source archs buildIdKind outputFolder)
+                       DEPENDS ${outputFolder}/hipblasltTransform.hsaco
+                       VERBATIM)
+     add_custom_command(OUTPUT ${outputFolder}/hipblasltTransform.hsaco
+-                       COMMAND bash  ${CMAKE_CURRENT_SOURCE_DIR}/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh ${source} ${archs} ${CMAKE_BUILD_TYPE} ${buildIdKind} ${outputFolder}/hipblasltTransform.hsaco
++                       COMMAND
++                         "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --
++                         bash  ${CMAKE_CURRENT_SOURCE_DIR}/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh ${source} ${archs} ${CMAKE_BUILD_TYPE} ${buildIdKind} ${outputFolder}/hipblasltTransform.hsaco
+                        COMMENT "Compiling source kernels")
+ endfunction()
+\ No newline at end of file
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+index 4ff71ea0..04ab923d 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
++++ b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+@@ -20,6 +20,8 @@
+ # CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ #
+ # ########################################################################
++set -e
++
+ sources=$1
+ archs=$2
+ build_type=$3
+@@ -33,6 +35,14 @@ elif [ "$build_type" = "Debug" ]; then
+     additional_options="-O0 -g"
+ fi
+ 
+-rocm_path="${ROCM_PATH:-/opt/rocm}"
+-clang_path="${rocm_path}/bin/amdclang++"
++if [[ -z "$ROCM_PATH" ]]; then
++    clang_path="$(which amdclang++)"
++    if [[ -z "$clang_path" ]]; then
++        echo "error: amdclang++ not found on path"
++        exit 1
++    fi
++else
++    clang_path="${ROCM_PATH}/bin/amdclang++"
++fi
++
+ $clang_path -x hip "$sources" --offload-arch="${archs}" -c --offload-device-only -Xoffload-linker --build-id=$build_id_kind $additional_options -o "$dest"
+\ No newline at end of file
+diff --git a/tensilelite/Tensile/Ops/gen_assembly.sh b/tensilelite/Tensile/Ops/gen_assembly.sh
+index 160d708f..0bf1c3f9 100755
+--- a/tensilelite/Tensile/Ops/gen_assembly.sh
++++ b/tensilelite/Tensile/Ops/gen_assembly.sh
+@@ -22,19 +22,23 @@
+ # SOFTWARE.
+ #
+ ################################################################################
++set -e
+ 
+ archStr=$1
+ dst=$2
+ venv=$3
+ build_id_kind=$4
+ 
+-rocm_path=/opt/rocm
+-if ! [ -z ${ROCM_PATH+x} ]; then
+-    rocm_path=${ROCM_PATH}
++if [[ -z "$ROCM_PATH" ]]; then
++    toolchain="$(which amdclang++)"
++    if [[ -z "$toolchain" ]]; then
++        echo "error: amdclang++ not found on path"
++        exit 1
++    fi
++else
++    toolchain="${ROCM_PATH}/bin/amdclang++"
+ fi
+ 
+-toolchain=${rocm_path}/bin/amdclang++
+-
+ . ${venv}/bin/activate
+ 
+ IFS=';' read -r -a archs <<< "$archStr"
+diff --git a/tensilelite/Tensile/cmake/TensileConfig.cmake b/tensilelite/Tensile/cmake/TensileConfig.cmake
+index 76277806..b82a2cab 100644
+--- a/tensilelite/Tensile/cmake/TensileConfig.cmake
++++ b/tensilelite/Tensile/cmake/TensileConfig.cmake
+@@ -235,6 +235,12 @@ function(TensileCreateLibraryFiles
+   endif()
+ 
+   set(CommandLine ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
++  # Tensile relies on the tools from the path, so capture the configure time 
++  # path. It would be better if tool paths were explicit, but that would be a pretty 
++  # big change.
++  set(CommandLine 
++     "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --
++      ${CommandLine})  
+   message(STATUS "Tensile_CREATE_COMMAND: ${CommandLine}")
+ 
+   if(Tensile_EMBED_LIBRARY)
+@@ -300,7 +306,9 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr)
+     COMMAND ${CMAKE_COMMAND} -E rm -rf ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${OutputFolder}
+-    COMMAND bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_HOME_DIR}" "${Tensile_BUILD_ID}"
++    COMMAND
++      "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --    
++      bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_HOME_DIR}" "${Tensile_BUILD_ID}"
+     COMMAND ${CMAKE_COMMAND} -E copy ${ext_op_library_path} ${build_tmp_dir}/extop_*.co ${OutputFolder}
+   )
+ 
+-- 
+2.43.0
+

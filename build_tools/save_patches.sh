@@ -34,7 +34,7 @@ fi
 # Directories.
 patch_dir="$root_dir/patches/$patch_subdir/$project_name"
 mkdir -p $patch_dir
-source_dir="$root_dir/sources/$project_name"
+source_dir="$(git config --file $root_dir/.gitmodules --get submodule.${project_name}.path)"
 if ! [ -d "$source_dir" ]; then
   echo "Source directory not found: $source_dir"
   exit 1

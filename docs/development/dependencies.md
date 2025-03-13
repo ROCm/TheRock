@@ -1,12 +1,12 @@
 # Dependencies
 
-The ROCM projects have a number of dependencies. Typically those that escape
+The ROCm projects have a number of dependencies. Typically those that escape
 any specific library and are generally available as part of an OS distribution
 are the concern of TheRock. In these cases, TheRock prefers to build them
 all from source in such that:
 
 - They are installed into the `lib/rocm_sysdeps` prefix.
-- All ROCM libraries can find them by adding an appropriate relative RPATH.
+- All ROCm libraries can find them by adding an appropriate relative RPATH.
 - For symbol-versioned libraries, all symbols will be prefixed with
   `AMDROCM_SYSDEPS_1.0_`; whereas for non-versioned libraries, they will be
   built to version all symbols with `AMDROCM_SYSDEPS_1.0`.

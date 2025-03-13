@@ -1,0 +1,65 @@
+From a6ae01b094fb545c82baac8f4f6c332f0b1ea9c8 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Thu, 6 Mar 2025 14:39:58 -0800
+Subject: [PATCH] Miscellaneous CMake fixes.
+
+* Adds a `project` declaration (not having this is a big anti-pattern).
+* Changes the `CMAKE_MODULE_PATH` setup to be based on `list(PREPEND`. It is completely reasonable for a super-project to set `CMAKE_MODULE_PATH` and that should not influence whether the project sets up its own path. Note that PREPEND vs APPEND was chosen because the project also includes an unqualified `utils.cmake`, which is an overly broad name and is an anti-pattern. Project maintainers should properly scope their CMake file names and should change this directive to APPEND.
+* Adds libdrm include directories to `librocm_smi64` and `liboam`. This is needed in situations where a non-system libdrm is being used.
+---
+ CMakeLists.txt          | 6 ++----
+ oam/CMakeLists.txt      | 2 ++
+ rocm_smi/CMakeLists.txt | 2 ++
+ 3 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 129a5ce..7b1643b 100755
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2,15 +2,13 @@
+ # Minimum version of cmake and C++ required
+ #
+ cmake_minimum_required(VERSION 3.14)
++project(rocm_smi_lib)
+ 
+ set(ROCM_SMI_LIBS_TARGET "rocm_smi_libraries")
+ 
+ set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared library (.so) or not.")
+ 
+-## Set default module path if not already set
+-if(NOT DEFINED CMAKE_MODULE_PATH)
+-    set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
+-endif()
++list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
+ ## Include common cmake modules
+ include(utils)
+ 
+diff --git a/oam/CMakeLists.txt b/oam/CMakeLists.txt
+index 4789bd4..aaf72ab 100644
+--- a/oam/CMakeLists.txt
++++ b/oam/CMakeLists.txt
+@@ -94,6 +94,8 @@ endif ()
+ # use the target_include_directories() command to specify the include directories for the target
+ target_include_directories(${OAM_TARGET}
+                            PUBLIC
++                           "$<BUILD_INTERFACE:${DRM_INCLUDE_DIRS}>"
++                           "$<BUILD_INTERFACE:${AMDGPU_DRM_INCLUDE_DIRS}>"
+                            "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                            "$<INSTALL_INTERFACE:{OAM_NAME}/include>")
+ 
+diff --git a/rocm_smi/CMakeLists.txt b/rocm_smi/CMakeLists.txt
+index 75070a2..6c0cdfe 100755
+--- a/rocm_smi/CMakeLists.txt
++++ b/rocm_smi/CMakeLists.txt
+@@ -88,6 +88,8 @@ target_include_directories(${ROCM_SMI_TARGET} PRIVATE
+ # use the target_include_directories() command to specify the include directories for the target
+ target_include_directories(${ROCM_SMI_TARGET}
+                            PUBLIC
++                           "$<BUILD_INTERFACE:${DRM_INCLUDE_DIRS}>"
++                           "$<BUILD_INTERFACE:${AMDGPU_DRM_INCLUDE_DIRS}>"
+                            "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                            "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+ )
+-- 
+2.43.0
+

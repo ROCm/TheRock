@@ -25,6 +25,7 @@ block()
       string(APPEND _accum "${_dir}")
     endforeach()
     set(ENV{PKG_CONFIG_PATH} "${_accum}${_sep}$ENV{PKG_CONFIG_PATH}")
+    message(STATUS "Sub-project PKG_CONFIG_PATH: $ENV{PKG_CONFIG_PATH}")
   endif()
 endblock()
 

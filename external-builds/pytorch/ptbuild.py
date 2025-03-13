@@ -221,14 +221,16 @@ def do_checkout(args: argparse.Namespace):
         exec(["git", "remote", "add", "origin", args.pytorch_origin], cwd=repo_dir)
 
     # Fetch and checkout.
-    depth_args = []
+    fetch_args = []
     if args.depth is not None:
-        depth_args = ["--depth", str(args.depth)]
-    exec(["git", "fetch"] + depth_args + ["origin", args.pytorch_ref], cwd=repo_dir)
+        fetch_args.extend(["--depth", str(args.depth)])
+    if args.jobs:
+        fetch_args.extend(["-j", str(args.jobs)])
+    exec(["git", "fetch"] + fetch_args + ["origin", args.pytorch_ref], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE], cwd=repo_dir)
     exec(
-        ["git", "submodule", "update", "--init", "--recursive"] + depth_args,
+        ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
         cwd=repo_dir,
     )
     exec(
@@ -306,6 +308,7 @@ def main(cl_args: list[str]):
         "--pytorch-ref", default=default_tag, help="PyTorch ref/tag to checkout"
     )
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
+    checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
     checkout_p.add_argument(
         "--hipify",
         action=argparse.BooleanOptionalAction,

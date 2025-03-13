@@ -1,7 +1,7 @@
-From f556a7c7b5be1ae61f43c0fa20a4fe8fded62777 Mon Sep 17 00:00:00 2001
+From 914b58be8d2826b61ff0f154aecf8bc559803cb7 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 21 Feb 2025 13:17:39 -0800
-Subject: [PATCH 2/2] Use proper casing for 'hip' and 'hiprtc' packages.
+Subject: [PATCH 2/3] Use proper casing for 'hip' and 'hiprtc' packages.
 
 * Package names are case-sensitive, and the name for both of these is lowercase.
 * There are situations where the wrong casing can be made to work (i.e. if you manually specify "-DHIP_DIR=" and "-DHIPRTC_DIR=" config vars with the wrong case, the search procedure will happen to work in this very narrow case, but it isn't right).
@@ -32,5 +32,5 @@ index 53873b78..9559e515 100644
  # The nvidia backend can be used to compile for CUDA devices.
  # Specify the CUDA prefix in the CUDA_PREFIX variable.
 -- 
-2.43.0
+2.47.1.windows.2
 

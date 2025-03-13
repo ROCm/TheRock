@@ -1,19 +1,21 @@
-name: Publish build_manylinux_x86_64 image
+name: Publish PyTorch Dev Dockers
 on:
   workflow_dispatch:
-  push:
-    branches: ['main', 'docker*']
-    paths:
-    - "dockerfiles/cpubuilder/**"
-    - .github/workflows/publish_build_manylinux_x86_64.yml
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ROCm/therock_build_manylinux_x86_64
 
 jobs:
   build-and-push-image:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        targets:
+          - amdgpu_target: "gfx1100"
+          - amdgpu_target: "gfx1201"
+
+    name: ${{ matrix.targets.amdgpu_target }}::Build
+    runs-on: azure-linux-scale-rocm
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
@@ -21,6 +23,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Runner Health Settings
+        run: |
+          df -h
+          echo "python: $(which python), python3: $(which python3)"
+          echo "Git version: $(git --version)"
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+          git config --global user.email "nobody@amd.com"
+          git config --global user.name "Nobody"
+      - name: Fetch sources
+        run: |
+          python3 ./build_tools/fetch_sources.py --jobs 10
       - name: Log in to the Container registry
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
@@ -38,8 +52,10 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
         with:
-          context: dockerfiles/cpubuilder
-          file: dockerfiles/cpubuilder/build_manylinux_x86_64.Dockerfile
+          context: .
+          file: dockerfiles/pytorch-dev/pytorch_dev_ubuntu_24.04.Dockerfile
+          build-args: |
+            AMDGPU_TARGETS=${{ matrix.targets.amdgpu_target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

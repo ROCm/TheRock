@@ -1,53 +1,62 @@
-# TheROCK Build System Manual
+# TheRock Build System Manual
 
-The ROCM distribution consists of many component projects that form a DAG
+The ROCm distribution consists of many component projects that form a DAG
 consisting of build and runtime dependencies between projects. Each individual
 sub-project is CMake based and dependencies between them are generally
 resolved via `find_package`. This means that it is possible to build each
 project in isolation.
 
 However, working with the individual pieces is not well suited for many tasks,
-most notably CI and full-stack development workflows. TheROCK provides a CMake
+most notably CI and full-stack development workflows. TheRock provides a CMake
 base super-project and monorepo like organization of the source and build to
 make building and testing more of a one stop shop.
 
 ## Terminology
 
-Super-Project
-: This refers to `TheROCK` project itself as the container of sub-projects.
+*Super-Project*
 
-Sub-Project
-: Each individual piece or standalone dependency of the ROCM system is
-referred to as a sub-project.
+- This refers to `TheRock` project itself as the container of sub-projects.
 
-Build Phases
-: Each sub-project is built in several phases: `configure`, `build`, `stage`,
-and `dist`. Inter-project dependencies are taken at a build phase
-granularity, allowing a degree of parallelism in the case of a more
-limited dependency. For each project in the tree, a specific phase can
-be built interactively by appending `+phase` to the sub-project's target
-name.
+*Sub-Project*
 
-Build Dependency
-: If a sub-project dependency is a build dependency, it is not required to be
-co-resident in a unified install tree in order to function.
+- Each individual piece or standalone dependency of the ROCm system is
+  referred to as a sub-project.
 
-Runtime Dependency
-: If a sub-project is a runtime dependency that all/part of it must be
-co-resident in the unified install tree of the depending project in order
-to function.
+*Build Phases*
 
-Utility Targets
-: Sub-projects may expose additional utility targets that can be accessed as
-`+utility`. Currently, this just includes `+expunge`, which removes all
-configured/built files related to the sub-project.
+- Each sub-project is built in several phases: `configure`, `build`, `stage`,
+  and `dist`.
+- Inter-project dependencies are taken at a build phase
+  granularity, allowing a degree of parallelism in the case of a more
+  limited dependency.
+- For each project in the tree, a specific phase can
+  be built interactively by appending `+phase` to the sub-project's target
+  name.
 
-Stamps
-: All Build Phases depend on a set of stamp files and produce a stamp file
-named `phase.stamp`. This produces a worst-case ordering DAG between
-phases. If a stamp file is removed (manually or via `clean`), the phase
-and all of its dependencies will re-run, regardless of whether any sources
-changed.
+*Build Dependency*
+
+- If a sub-project dependency is a build dependency, it is not required to be
+  co-resident in a unified install tree in order to function.
+
+*Runtime Dependency*
+
+- If a sub-project is a runtime dependency that all/part of it must be
+  co-resident in the unified install tree of the depending project in order
+  to function.
+
+*Utility Targets*
+
+- Sub-projects may expose additional utility targets that can be accessed as
+  `+utility`. Currently, this just includes `+expunge`, which removes all
+  configured/built files related to the sub-project.
+
+*Stamps*
+
+- All Build Phases depend on a set of stamp files and produce a stamp file
+  named `phase.stamp`. This produces a worst-case ordering DAG between
+  phases. If a stamp file is removed (manually or via `clean`), the phase
+  and all of its dependencies will re-run, regardless of whether any sources
+  changed.
 
 ## Directory Layout
 
@@ -59,16 +68,23 @@ implicit `all` pseudo-target), this provides some developer ergonomics, allowing
 easy partial builds/cleans or deletions of parts of the build tree while
 working.
 
-The following structure is presently used:
+Sub-project directories:
 
-- `base/` : Utility sub-projects that are dependency free or minimally
-  co-dependent, providing core dependencies for the rest of the system. For
-  standalone builds, bundled external libraries will be rooted here.
-- `compiler/` : Compiler sub-projects, most notably the AMD-LLVM build, `hipcc`,
-  etc.
-- `core/` : Core runtime sub-projects, including the low-level ROCR-Runtime and
+- [`base/`](/base/) : Utility sub-projects that are dependency free or minimally
+  co-dependent, providing core dependencies for the rest of the system.
+- [`compiler/`](/compiler/) : Compiler sub-projects, most notably the
+  [AMD-LLVM](https://github.com/ROCm/llvm-project) build, `hipcc`, etc.
+- [`core/`](/core/) : Core runtime sub-projects, including the low-level
+  [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime) and
   higher level HIP runtimes.
-- TODO: others
+- [`comm-libs/`](/comm-libs/) : Communication library sub-projects, including
+  [rccl](https://github.com/ROCm/rccl)
+- [`math-libs/`](/math-libs/) : Math library sub-projects, including `math-libs/BLAS` for
+  [Basic Linear Algebra Subprogram](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms)
+  projects like [hipBLASLt](https://github.com/ROCm/hipBLASLt).
+- [`ml-libs/`](/ml-libs/) : Machine learning library sub-projects like
+  [MIOpen](https://github.com/ROCm/MIOpen).
+- [`profiler/`](/profiler/) : Profiler sub-projects
 
 Note that there is nothing in the build system which ensures naming consistency,
 however, we try to name leaf directories after their global sub-project
@@ -105,13 +121,28 @@ Each sub-project, by default, uses a standard directory layout for its build:
   properly.
 - `_init.cmake` : Generated as part of the super-project to set all necessary
   CMake settings to build the sub-project. This is injected at configure time
-  via the `CMAKE_PROJECT_TOP_LEVEL_INCLUDES` facility and serves some other
-  ancillary functions as well:
+  via the
+  [`CMAKE_PROJECT_TOP_LEVEL_INCLUDES`](https://cmake.org/cmake/help/latest/variable/CMAKE_PROJECT_TOP_LEVEL_INCLUDES.html)
+  facility and serves some other ancillary functions as well:
   - Loads sub-project specific `pre` and `post` CMake file for further
     sub-project customization needed as part of the integrated whole.
   - Installs a [CMake dependency provider](https://cmake.org/cmake/help/latest/command/cmake_language.html#dependency-providers)
     which rewrites `find_package` calls for any packages provided as part
     of super-project deps appropriately.
+- `_toolchain.cmake` : Generated as part of the super-project to configure the
+  toolchain used to build the sub-project. This is injected at configure time
+  via the
+  [`CMAKE_TOOLCHAIN_FILE`](https://cmake.org/cmake/help/latest/variable/CMAKE_TOOLCHAIN_FILE.html)
+  facility and allows for sub-projects to use compilers and settings which
+  differ from the host toolchain, e.g. building with the AMD version of `clang`
+  instead of the host `clang` on Linux or the host MSVC on Windows.
+  - Note that a number of sub-projects provide their own toolchain files, one
+    per platform, like
+    [`rocPRIM/toolchain-linux.cmake`](https://github.com/ROCm/rocPRIM/blob/develop/toolchain-linux.cmake)
+    and
+    [`rocPRIM/toolchain-windows.cmake`](https://github.com/ROCm/rocPRIM/blob/develop/toolchain-windows.cmake).
+    In TheRock we generate a single toolchain file dynamically that is used for
+    the current platform.
 - `stamp/` : Directory of `{phase}.stamp` files that are used to control
   build sequencing.
 
@@ -121,8 +152,8 @@ TODO
 
 ## Developer Cookbook
 
-TheROCK aims to not just be a CI tool but to be a daily driver for developer
-and end-users who wish to consume a source build of ROCM. This section contains
+TheRock aims to not just be a CI tool but to be a daily driver for developer
+and end-users who wish to consume a source build of ROCm. This section contains
 some advice that may help such users be more productive.
 
 ### Building part of the tree
@@ -163,7 +194,8 @@ ninja amd-llvm+expunge
 
 ## Adding Sub-Projects
 
-The entire sub-project facility is defined in `cmake/therock_subproject.cmake`
+The entire sub-project facility is defined in
+[`cmake/therock_subproject.cmake`](/cmake/therock_subproject.cmake)
 and it may be useful to refer to that if doing anything advanced. This section
 attempts to document the basics.
 

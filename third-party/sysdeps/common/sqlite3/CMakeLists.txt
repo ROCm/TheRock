@@ -70,6 +70,7 @@ if(NOT WIN32)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libsqlite3.so TYPE LIB)
 endif()
 install(FILES "${SOURCE_DIR}/sqlite3.h" TYPE INCLUDE)
+install(FILES "${SOURCE_DIR}/sqlite3ext.h" TYPE INCLUDE)
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/sqlite3-config.cmake.in

@@ -18,12 +18,26 @@
 include = [
   "lib/hipblaslt/library/**",
 ]
+[components.test."math-libs/BLAS/hipBLASLt/stage"]
+include = [
+  "bin/hipblaslt-test",
+  "bin/hipblaslt_gentest.py",
+  "bin/hipblaslt_gtest.data",
+  "bin/hipblaslt_*.yaml",
+]
 
 # rocBLAS
 [components.dbg."math-libs/BLAS/rocBLAS/stage"]
 [components.dev."math-libs/BLAS/rocBLAS/stage"]
 [components.doc."math-libs/BLAS/rocBLAS/stage"]
 [components.lib."math-libs/BLAS/rocBLAS/stage"]
+[components.test."math-libs/BLAS/rocBLAS/stage"]
+include = [
+  "bin/rocblas-test",
+  "bin/rocblas_gentest.py",
+  "bin/rocblas_gtest.data",
+  "bin/rocblas_*.yaml",
+]
 
 # rocSOLVER
 [components.dbg."math-libs/BLAS/rocSOLVER/stage"]

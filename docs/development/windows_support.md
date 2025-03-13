@@ -18,45 +18,45 @@ This table tracks current support status for each subproject in TheRock on
 Windows. Some subprojects may need extra patches to build within TheRock (on
 mainline, in open source, using MSVC, etc.).
 
-| Component subset | Subproject                                                                   | Supported | Notes                                 |
-| ---------------- | ---------------------------------------------------------------------------- | --------- | ------------------------------------- |
-| base             | aux-overlay                                                                  | ✅        |                                       |
-| base             | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                             | ✅        |                                       |
-| base             | [rocm-core](https://github.com/ROCm/rocm-core)                               | ✅        | No shared libraries                   |
-| base             | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                         | ❌        | Unsupported                           |
-| base             | [rocprofiler-register](https://github.com/ROCm/rocprofiler-register)         | ⭕        | Patched to no-op                      |
-| base             | [rocm-half](https://github.com/ROCm/half)                                    | ✅        |                                       |
-|                  |                                                                              |           |                                       |
-| compiler         | [amd-llvm](https://github.com/ROCm/llvm-project)                             | ✅        | No shared libraries, limited runtimes |
-| compiler         | [amd-comgr](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/comgr) | ✅        | No shared libraries                   |
-| compiler         | [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc)     | ✅        |                                       |
-| compiler         | [hipify](https://github.com/ROCm/HIPIFY)                                     | ✅        | Patched for Ninja                     |
-|                  |                                                                              |           |                                       |
-| core             | [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime)                         | ❌        | Unsupported                           |
-| core             | [rocminfo](https://github.com/ROCm/rocminfo)                                 | ❌        | Unsupported                           |
-| core             | [clr](https://github.com/ROCm/clr)                                           | ❔        |                                       |
-|                  |                                                                              |           |                                       |
-| profiler         | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❔        |                                       |
-|                  |                                                                              |           |                                       |
-| comm-libs        | [rccl](https://github.com/ROCm/rccl)                                         | ❔        |                                       |
-|                  |                                                                              |           |                                       |
-| math-libs        | [rocRAND](https://github.com/ROCm/rocRAND)                                   | ❔        |                                       |
-| math-libs        | [hipRAND](https://github.com/ROCm/hipRAND)                                   | ❔        |                                       |
-| math-libs        | [rocPRIM](https://github.com/ROCm/rocPRIM)                                   | ❔        |                                       |
-| math-libs        | [hipCUB](https://github.com/ROCm/hipCUB)                                     | ❔        |                                       |
-| math-libs        | [rocThrust](https://github.com/ROCm/rocThrust)                               | ❔        |                                       |
-| math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ❔        |                                       |
-| math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ❔        |                                       |
-| math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ❔        |                                       |
-| math-libs (blas) | [hipBLASlt](https://github.com/ROCm/hipBLASlt)                               | ❔        |                                       |
-| math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ❔        |                                       |
-| math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ❔        |                                       |
-| math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ❔        |                                       |
-| math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ❔        |                                       |
-| math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ❔        |                                       |
-| math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ❔        |                                       |
-|                  |                                                                              |           |                                       |
-| ml-libs          | [MIOpen](https://github.com/ROCm/MIOpen)                                     | ❔        |                                       |
+| Component subset | Subproject                                                                   | Supported | Notes                                            |
+| ---------------- | ---------------------------------------------------------------------------- | --------- | ------------------------------------------------ |
+| base             | aux-overlay                                                                  | ✅        |                                                  |
+| base             | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                             | ✅        |                                                  |
+| base             | [rocm-core](https://github.com/ROCm/rocm-core)                               | ✅        | No shared libraries                              |
+| base             | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                         | ❌        | Unsupported                                      |
+| base             | [rocprofiler-register](https://github.com/ROCm/rocprofiler-register)         | ⭕        | Patched to no-op                                 |
+| base             | [rocm-half](https://github.com/ROCm/half)                                    | ✅        |                                                  |
+|                  |                                                                              |           |                                                  |
+| compiler         | [amd-llvm](https://github.com/ROCm/llvm-project)                             | ✅        | No shared libraries, limited runtimes            |
+| compiler         | [amd-comgr](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/comgr) | ✅        | No shared libraries                              |
+| compiler         | [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc)     | ✅        |                                                  |
+| compiler         | [hipify](https://github.com/ROCm/HIPIFY)                                     | ✅        | Patched for Ninja                                |
+|                  |                                                                              |           |                                                  |
+| core             | [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime)                         | ❌        | Unsupported                                      |
+| core             | [rocminfo](https://github.com/ROCm/rocminfo)                                 | ❌        | Unsupported                                      |
+| core             | [clr](https://github.com/ROCm/clr)                                           | ❔        | Under review (partly closed source)              |
+|                  |                                                                              |           |                                                  |
+| profiler         | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❔        |                                                  |
+|                  |                                                                              |           |                                                  |
+| comm-libs        | [rccl](https://github.com/ROCm/rccl)                                         | ❔        |                                                  |
+|                  |                                                                              |           |                                                  |
+| math-libs        | [rocRAND](https://github.com/ROCm/rocRAND)                                   | ❔        | Almost ready. Needs workaround for `hip-clr` dep |
+| math-libs        | [hipRAND](https://github.com/ROCm/hipRAND)                                   | ❔        | Almost ready. Needs workaround for `hip-clr` dep |
+| math-libs        | [rocPRIM](https://github.com/ROCm/rocPRIM)                                   | ❔        |                                                  |
+| math-libs        | [hipCUB](https://github.com/ROCm/hipCUB)                                     | ❔        |                                                  |
+| math-libs        | [rocThrust](https://github.com/ROCm/rocThrust)                               | ❔        |                                                  |
+| math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ❔        |                                                  |
+| math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ❔        |                                                  |
+| math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ❔        |                                                  |
+| math-libs (blas) | [hipBLASlt](https://github.com/ROCm/hipBLASlt)                               | ❔        |                                                  |
+| math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ❔        |                                                  |
+| math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ❔        |                                                  |
+| math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ❔        |                                                  |
+| math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ❔        |                                                  |
+| math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ❔        |                                                  |
+| math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ❔        |                                                  |
+|                  |                                                                              |           |                                                  |
+| ml-libs          | [MIOpen](https://github.com/ROCm/MIOpen)                                     | ❔        |                                                  |
 
 ## Building from source
 

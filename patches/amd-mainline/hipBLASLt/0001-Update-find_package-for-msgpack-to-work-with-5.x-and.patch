@@ -1,38 +1,36 @@
-From a09c41a771a33b720a59423721552dd4dfe65817 Mon Sep 17 00:00:00 2001
-From: Marius Brehler <marius.brehler@amd.com>
-Date: Fri, 14 Feb 2025 13:06:48 +0000
-Subject: [PATCH 4/5] Update find_package for msgpack to work with 5.x and 6.x.
+From 2f8b74be392a93ae44cde84822c851fb9e1213bd Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Mon, 3 Feb 2025 20:28:58 -0800
+Subject: [PATCH 1/2] Update find_package for msgpack to work with 5.x and 6.x.
 
 Adapted from: https://github.com/msgpack/msgpack-c/wiki/Q%26A#how-to-support-both-msgpack-c-c-version-5x-and-6x-
 
 Note that 6.x also defines compile definitions that must be respected.
 ---
- Tensile/Source/lib/CMakeLists.txt | 30 +++++++++++++-----------------
- 1 file changed, 13 insertions(+), 17 deletions(-)
+ tensilelite/Tensile/Source/lib/CMakeLists.txt | 28 +++++++++----------
+ 1 file changed, 13 insertions(+), 15 deletions(-)
 
-diff --git a/Tensile/Source/lib/CMakeLists.txt b/Tensile/Source/lib/CMakeLists.txt
-index 024ebcc4..78c70ab0 100644
---- a/Tensile/Source/lib/CMakeLists.txt
-+++ b/Tensile/Source/lib/CMakeLists.txt
-@@ -90,24 +90,20 @@ if(TENSILE_USE_LLVM OR TENSILE_USE_MSGPACK)
+diff --git a/tensilelite/Tensile/Source/lib/CMakeLists.txt b/tensilelite/Tensile/Source/lib/CMakeLists.txt
+index d055b635..a8a98690 100644
+--- a/tensilelite/Tensile/Source/lib/CMakeLists.txt
++++ b/tensilelite/Tensile/Source/lib/CMakeLists.txt
+@@ -96,22 +96,20 @@ if(TENSILE_USE_LLVM OR TENSILE_USE_MSGPACK)
  endif()
  
  if(TENSILE_USE_MSGPACK)
--    find_package(msgpack REQUIRED NAMES msgpack msgpack-cxx msgpack-c)
+-    find_package(msgpack REQUIRED)
 -    target_compile_definitions(TensileHost PUBLIC -DTENSILE_MSGPACK=1)
 -
 -    if(TARGET msgpackc-cxx)
 -        get_target_property(msgpack_inc msgpackc-cxx INTERFACE_INCLUDE_DIRECTORIES)
 -    elseif(TARGET msgpackc)
 -        get_target_property(msgpack_inc msgpackc INTERFACE_INCLUDE_DIRECTORIES)
--    elseif(TARGET msgpack-cxx)
--        get_target_property(msgpack_inc msgpack-cxx INTERFACE_INCLUDE_DIRECTORIES)
 -    endif()
 -
 -    if(DEFINED msgpack_inc)
 -        # include C++ headers manually
 -        # External header includes included as system files
--        target_include_directories(TensileHost 
+-        target_include_directories(TensileHost
 -            SYSTEM PRIVATE $<BUILD_INTERFACE:${msgpack_inc}>
 -        )
 +    # See: https://github.com/msgpack/msgpack-c/wiki/Q%26A#how-to-support-both-msgpack-c-c-version-5x-and-6x-

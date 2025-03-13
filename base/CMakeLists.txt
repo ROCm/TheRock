@@ -54,6 +54,8 @@ therock_cmake_subproject_declare(rocm_smi_lib
   EXTERNAL_SOURCE_DIR "rocm_smi_lib"
   INTERFACE_LINK_DIRS
     "lib"
+  RUNTIME_DEPS
+    ${THEROCK_BUNDLED_LIBDRM}
 )
 therock_cmake_subproject_glob_c_sources(rocm_smi_lib
   SUBDIRS

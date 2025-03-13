@@ -65,7 +65,7 @@ therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all
 # gfx110X family
 therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
 therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
-therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY igpu-all gfx110X-all gfx110X-igpu)
+therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
 therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu)
 
 # gfx115X family
@@ -81,10 +81,7 @@ therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-
 )
 
 # gfx120X family
-therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
-  EXCLUDE_TARGET_PROJECTS
-    hipBLASLt  # https://github.com/ROCm/TheRock/issues/149
-)
+therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all)
 
 
 # Validates and normalizes AMDGPU target selection cache variables.

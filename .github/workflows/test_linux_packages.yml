@@ -8,6 +8,10 @@ name: Test Linux Packages
 
 on:
   workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -24,6 +28,7 @@ jobs:
         shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
 
     # MOSTLY BOILER PLATE ABOVE.
     steps:
@@ -31,7 +36,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install the AWS tool
-        run: ./dockerfiles/install_awscli.sh
+        run: ./dockerfiles/cpubuilder/install_awscli.sh
 
       - name: "Setting up Python"
         id: setup_python
@@ -40,7 +45,10 @@ jobs:
           python-version: 3.11
 
       - name: Create Python venv
-        run: python -m venv ${VENV_DIR}
+        run: |
+          python -m venv ${VENV_DIR}
+          source ${VENV_DIR}/bin/activate
+          pip install -r requirements-test.txt
 
       - name: Download and Unpack Artifacts
         run: |
@@ -54,10 +62,10 @@ jobs:
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
           echo "Downloading artifacts"
-          aws s3 cp s3://therock-artifacts/${{github.run_id}}/core-runtime_run"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${{github.run_id}}/core-runtime_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${{github.run_id}}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${{github.run_id}}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-runtime_run"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-runtime_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
 
           echo "Unpacking artifacts"
           pushd "${BUILD_ARTIFACTS_DIR}"
@@ -70,3 +78,9 @@ jobs:
         run: |
           echo "Running rocminfo"
           /bin/rocminfo
+
+      - name: Run ROCm Sanity Tests
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest tests/ \
+          --log-cli-level=info

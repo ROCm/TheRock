@@ -18,7 +18,11 @@ else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi" CACHE STRING "Enabled runtimes" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp" CACHE STRING "Enabled runtimes" FORCE)
+  # Settinng "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
+  # with each other" as libomp and generated headers are copied into the original
+  # source otherwise. Defaults to `ON`.
+  set(LIBOMP_COPY_EXPORTS OFF)
 endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
