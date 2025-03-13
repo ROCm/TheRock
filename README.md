@@ -18,7 +18,7 @@ requires some additional development tools, which are included below.
 ## Common
 
 ```
-pip install CppHeaderParser==2.7.4 meson==1.7.0
+pip install CppHeaderParser==2.7.4 meson==1.7.0 PyYAML==6.0.2
 ```
 
 ## On Ubuntu
@@ -118,3 +118,4 @@ separately.
 - [Dependencies](docs/development/dependencies.md): Further specifications on ROCm-wide standards for depending on various components.
 - [Build Containers](docs/development/build_containers.md): Further information about containers used for building TheRock on CI.
 - [Roadmap for Support](ROADMAP.md): Documents our current prioritized roadmap  to support all AMD GPUs.
+- [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.

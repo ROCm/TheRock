@@ -1,0 +1,43 @@
+From a83ae9e5534082e89bf14d45182187bb3e88f6f0 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Wed, 12 Mar 2025 14:18:00 +0000
+Subject: [PATCH 2/3] Fix handling BLIS and finding BLAS
+
+* Fail if `LINK_BLIS` is set (defaults to `ON`) but the library is not
+  found. Fails otherwise at the end of the build when trying to link.
+* Switches to `find_package()` instead of assuming that the reference
+  BLAS is available without ANY check. This also allows to use OpenBLAS.
+---
+ clients/CMakeLists.txt | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 61942861..0c673368 100644
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -140,10 +140,11 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+         set( BLAS_LIBRARY /usr/local/lib/libblis.a )
+         set( BLIS_INCLUDE_DIR /usr/local/include/blis )
+       else()
+-        message( WARNING "Could not find libblis" )
++        message( FATAL_ERROR "Could not find libblis" )
+       endif()
+     else()
+-      set( BLAS_LIBRARY "blas" )
++      find_package( BLAS REQUIRED )
++      set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
+     endif()
+   else() # WIN32
+     file(TO_CMAKE_PATH "C:/Program\ Files/AMD/AOCL-Windows/amd-blis/lib/ILP64/AOCL-LibBlis-Win-MT.lib" AOCL_BLAS_LIBRARY)
+@@ -170,7 +171,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+     set( BLIS_CPP ../common/blis_interface.cpp )
+   endif()
+ 
+-  message(STATUS "Linking Reference BLAS LIB: ${BLAS_LIBRARY}")
++  message(STATUS "Linking BLAS LIB: ${BLAS_LIBRARY}")
+ 
+   if ( WARN_NOT_ILP64_PREFERRED )
+     message( WARNING "Using ${BLAS_LIBRARY} as reference library, 64-bit tests may fail. Test suite should be run with --gtest_filter=-*stress*")
+-- 
+2.43.0
+

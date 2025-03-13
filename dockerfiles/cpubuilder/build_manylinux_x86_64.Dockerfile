@@ -17,7 +17,7 @@ FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:9042a22d33af2223ff7a3599f236aff1e
 ENV PATH="/opt/python/cp312-cp312/bin:${PATH}"
 
 ######## Pip Packages ########
-RUN pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1
+RUN pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
 ######## Repo ########
 RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo

@@ -89,7 +89,8 @@ therock_cmake_subproject_declare(rocBLAS
     # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
     # doing a strict check of exact version.
     -DTENSILE_VERSION=
-    # # TODO: Enable clients.
+    -DBUILD_CLIENTS_TESTS=ON
+    -DLINK_BLIS=OFF
   IGNORE_PACKAGES
       ROCM
   COMPILER_TOOLCHAIN
@@ -100,6 +101,7 @@ therock_cmake_subproject_declare(rocBLAS
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
+    rocm_smi_lib
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
@@ -289,5 +291,6 @@ therock_provide_artifact(blas
       doc
       lib
       run
+      test
   SUBPROJECT_DEPS ${_blas_subproject_names}
 )

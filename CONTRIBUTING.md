@@ -17,7 +17,7 @@ functionality is lacking or even better volunteer to help contribute to help clo
 ### Issue tracking
 
 Before filing a new issue, search the
-[existing issues](https://github.com/ROCm/therock/issues) to make sure your issue isn't
+[existing issues](https://github.com/ROCm/TheRock/issues) to make sure your issue isn't
 already listed.
 
 General issue guidelines:
