@@ -9,7 +9,11 @@ Our goal here is document the prioritized roadmap of target architectures we pla
 
 The following is a list of prioritized roadmaps divided by OS (Linux/Windows) and architecture. Each individual section is its own roadmap and we will be in parallel trying to support at least one *new* architecture per section in parallel working top-to-bottom Current focus areas are in __bold__. There will be exceptions from the "top-to-bottom" ordering occassionally based on test device availability.
 
-*Note* for the purposes of the table below Sanity-Tested = "either in CI or some light form of manual QA has been performed. "Release-Ready" will mean that its supported and tested as part of our overall release process.
+> [!NOTE]
+> For the purposes of the table below:
+> 
+> * *Sanity-Tested* means "either in CI or some light form of manual QA has been performed".
+> * *Release-Ready* means "it is supported and tested as part of our overall release process".
 
 ### ROCm on Linux
 
@@ -30,18 +34,9 @@ RDNA3 | gfx1101 ||
 RDNA2 | gfx1030 ||
 GCN5.1 | gfx906 ||
 
-### ROCm on Windows
+### HIP Runtime and SDK on Windows
 
 Check [windows_support.md](docs/development/windows_support.md) on current status of development.
-
-**AMD Instinct**
-Architecture | LLVM target | Sanity Tested | Release Ready
--- | -- | -- | --
-**CDNA3** | **gfx942** ||
-CDNA2 | gfx90a ||
-CDNA | gfx908 ||
-GCN5.1 | gfx906 ||
-GCN5.1 | gfx900 ||
 
 **AMD Radeon**
 Architecture | LLVM target | Sanity Tested | Release Ready
