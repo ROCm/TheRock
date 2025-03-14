@@ -50,7 +50,7 @@ we can detect mismatches in Python code and triage accordingly.
 
 Surgical Alterations
 --------------------
-Python packages have a number of idiosynchracies that make them somewhat
+Python packages have a number of idiosyncrasies that make them somewhat
 hostile for distributing native software components. Chief among these is
 that symlinks are simply materialized as discrete copies. This breaks a number
 of assumptions regarding how Unix libraries are laid out.
@@ -93,7 +93,7 @@ Critically, all such symlinks are relative. We replace them with a stub
 executable that we compile as part of the script which can perform the
 dynamic path computation and exec() the intended target.
 
-There are other alterations we have to make to accomodate our uniquely split
+There are other alterations we have to make to accommodate our uniquely split
 layout on disk.
 
 Fat and Thin Target Packages
