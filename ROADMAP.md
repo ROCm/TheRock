@@ -28,8 +28,6 @@ The following is a list of prioritized roadmaps divided by OS (Linux/Windows) an
 
 **AMD Radeon**
 
-Architecture | LLVM target | Sanity Tested | Release Ready
--- | -- | -- | --
 | Architecture | LLVM target | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- |
 | **RDNA3**    | **gfx1100** | ✅            |               |
