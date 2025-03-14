@@ -7,3 +7,13 @@ therock_set_install_rpath(
   PATHS
     .
 )
+
+therock_set_install_rpath(
+  TARGETS
+    hipblaslt-test
+  PATHS
+    ../lib
+    ../lib/host-math/lib
+    ../lib/llvm/lib
+    ../lib/rocm_sysdeps/lib
+)
