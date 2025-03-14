@@ -1,13 +1,13 @@
 # TheRock
 
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+
 The HIP Environment and ROCm Kit - A lightweight open source build system for HIP and ROCm.
 
 We are currently in an **early preview state** but welcome contributors. Come try us out!
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
 If you're looking to quickly see how far along we are, check the [Releases Page](RELEASES.md).
-
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
 # Install Deps
 
