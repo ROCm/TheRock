@@ -2,7 +2,6 @@
 
 [!WARNING] This project is still in active development and not intended for production use.
 
-This page is inspired by the discussion in https://github.com/ROCm/ROCm/discussions/4276 .
 Our goal here is document the prioritized roadmap of target architectures we plan to test and eventually support as part of TheRock.
 
 ## Prioritized Target Architectures
@@ -26,7 +25,8 @@ GCN5.1 | gfx900 ||
 Architecture | LLVM target | Sanity Tested | Release Ready
 -- | -- | -- | --
 **RDNA3** | **gfx1100** | ✅ |
-RDNA3 | gfx1101 ||
+**RDNA3** | **gfx1101** ||
+**RDNA3** | **gfx1102** ||
 RDNA2 | gfx1030 ||
 GCN5.1 | gfx906 ||
 
@@ -34,19 +34,10 @@ GCN5.1 | gfx906 ||
 
 Check [windows_support.md](docs/development/windows_support.md) on current status of development.
 
-**AMD Instinct**
-Architecture | LLVM target | Sanity Tested | Release Ready
--- | -- | -- | --
-**CDNA3** | **gfx942** ||
-CDNA2 | gfx90a ||
-CDNA | gfx908 ||
-GCN5.1 | gfx906 ||
-GCN5.1 | gfx900 ||
-
 **AMD Radeon**
 Architecture | LLVM target | Sanity Tested | Release Ready
 -- | -- | -- | --
-RDNA3 | gfx1101 ||
-RDNA3 | gfx1100 ||
+**RDNA3** | **gfx1101** ||
+**RDNA3** | **gfx1100** ||
 RDNA2 | gfx1030 ||
 GCN5.1 | gfx906 ||
