@@ -1,0 +1,28 @@
+From 4311b6c3ec948bd819a3413d83435307378ccaa8 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Thu, 6 Mar 2025 15:17:08 -0800
+Subject: [PATCH 5/5] Update 'packaging' in pip venv to stabilize setuptools.
+
+When using setuptools>=71.0.0 and packaging<22.0, setuptools may fail with `TypeError: canonicalize_version() got an unexpected keyword argument 'strip_trailing_zero'`.
+---
+ cmake/virtualenv.cmake | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/cmake/virtualenv.cmake b/cmake/virtualenv.cmake
+index 82bb6d94..a80fb337 100644
+--- a/cmake/virtualenv.cmake
++++ b/cmake/virtualenv.cmake
+@@ -35,6 +35,10 @@ function(virtualenv_install)
+       COMMAND ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} -m pip install --upgrade setuptools
+       COMMAND_ECHO STDOUT
+     )
++    execute_process(
++      COMMAND ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} -m pip install --upgrade packaging
++      COMMAND_ECHO STDOUT
++    )
+     execute_process(
+       COMMAND ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} -m pip install ${ARGN}
+       COMMAND_ECHO STDOUT
+-- 
+2.34.1
+

@@ -1,7 +1,7 @@
-From b5d832db8e1c065081433567b66359bb08907519 Mon Sep 17 00:00:00 2001
+From c92ac8d8319a6820b3d30f6bef7d70a4bcc64571 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 22:41:27 +0000
-Subject: [PATCH 4/4] Fix finding BLAS and LAPACK
+Subject: [PATCH 4/5] Fix finding BLAS and LAPACK
 
 So far it is assumed that NETLIB BLAS and LAPACK are avilable without
 checking. If they are nore, the build fails when trying to link.
@@ -61,5 +61,5 @@ index cbedcfa4..eec47b6f 100644
  
  list( APPEND COMMON_LINK_LIBS "-lm -lstdc++fs")
 -- 
-2.43.0
+2.34.1
 

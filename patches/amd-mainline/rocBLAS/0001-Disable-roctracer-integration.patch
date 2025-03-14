@@ -1,7 +1,7 @@
-From d2874eb3544f6639a64f097c6790b27712365e5e Mon Sep 17 00:00:00 2001
+From 8367871e44ae81ac819dfce15b182bd2cc6295de Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Thu, 6 Feb 2025 21:18:34 -0800
-Subject: [PATCH] Disable roctracer integration.
+Subject: [PATCH 1/2] Disable roctracer integration.
 
 ---
  library/CMakeLists.txt          |  6 ++---
@@ -102,5 +102,5 @@ index 352e4e39..d0b8e477 100644
  
  private:
 -- 
-2.43.0
+2.34.1
 
