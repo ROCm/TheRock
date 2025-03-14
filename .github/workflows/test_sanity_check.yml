@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install the AWS tool
-        uses: unfor19/install-aws-cli-action@v1
+        uses: unfor19/install-aws-cli-action@27d6061dae5d39e89be4d2246824f15e111a7e06
         with:
           version: 2
           arch: amd64
