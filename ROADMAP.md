@@ -10,7 +10,7 @@ The following is a list of prioritized roadmaps divided by OS (Linux/Windows) an
 
 > [!NOTE]
 > For the purposes of the table below:
-> 
+>
 > - *Sanity-Tested* means "either in CI or some light form of manual QA has been performed".
 > - *Release-Ready* means "it is supported and tested as part of our overall release process".
 
