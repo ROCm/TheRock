@@ -16,9 +16,6 @@ on:
         default: ""
       amdgpu_families:
         type: string
-        default: ""
-      amdgpu_families:
-        type: string
         default: gfx94X-dcgpu
   push:
     branches:
