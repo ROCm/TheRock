@@ -24,13 +24,13 @@ popd
 
 ### From per-commit CI builds
 
-Our CI builds artifacts need to be flattened to be used. Leverage the `build_tools/fileset_tool.py artifact-flatten` command. You will need to have a [checkout](README.md#Checkout-Sources) to leverage this tool and a Python environment.
+Our CI builds artifacts need to be flattened to be used. Leverage the `build_tools/fileset_tool.py artifact-flatten` command. You will need to have a [checkout](README.md#Checkout-Sources) in ${SOURCE_DIR} to leverage this tool and a Python environment.
 
 ```bash
 echo "Unpacking artifacts"
 pushd "${BUILD_ARTIFACTS_DIR}"
 mkdir output_dir
-python build_tools/fileset_tool.py artifact-flatten *.tar.xz -o output_dir --verbose
+python "${SOURCE_DIR}/build_tools/fileset_tool.py artifact-flatten *.tar.xz -o output_dir --verbose
 popd
 ```
 
@@ -49,4 +49,4 @@ popd
 
 - [Releases](https://github.com/ROCm/TheRock/releases): Our releases page has the latest "developer" release of our tarball artifacts and source code.
 - [Packages](https://github.com/orgs/ROCm/packages?repo_name=TheRock): We currently publish docker images for LLVM targets we support (as well as a container for our build machines)
-- [Per-commit CI builds](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess): Each of our latest passing CI builds has its own artifacts you can leverage. This is the latest and greatest! We will eventually support a nightly release that is at a higher quality bar than CI.
+- [Per-commit CI builds](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess): Each of our latest passing CI builds has its own artifacts you can leverage. This is the latest and greatest! We will eventually support a nightly release that is at a higher quality bar than CI. Note a quick recipe for getting all of these from the s3 bucket is to use this quick command `aws s3 cp s3://therock-artifacts . --recursive --exclude "*" --include "${RUN_ID}/*.tar.xz" --no-sign-request` where ${RUN_ID} is the runner id you selected (see the URL). Check the [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to get the aws cli.
