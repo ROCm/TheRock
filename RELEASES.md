@@ -8,7 +8,7 @@ Currently, we produce build artifacts as part of our CI workflows ([example](.gi
 
 ## Using our tarballs
 
-Here's a quick way  assuming you copied the all the tar files into `${BUILD_ARTIFACTS_DIR}` to "install" TheRock into `${BUILD_ARTIFACTS_DIR}/output_dir`
+Here's a quick way assuming you copied the all the tar files into `${BUILD_ARTIFACTS_DIR}` to "install" TheRock into `${BUILD_ARTIFACTS_DIR}/output_dir`
 
 ### From release builds
 
