@@ -7,6 +7,9 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      amdgpu_families:
+        type: string
+        default: gfx94X-dcgpu
 
 permissions:
   contents: read
@@ -25,6 +28,8 @@ jobs:
       id-token: write
     name: Build Linux Packages
     uses: ./.github/workflows/build_linux_packages.yml
+    with:
+      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
 
   build_windows_packages:
     name: Build Windows Packages
@@ -34,6 +39,8 @@ jobs:
     needs: build_linux_packages
     name: Test Linux Packages
     uses: ./.github/workflows/test_linux_packages.yml
+    with:
+      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
 
   # build_python_packages:
   #   name: Build Python Packages
