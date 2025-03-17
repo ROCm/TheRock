@@ -21,8 +21,13 @@ jobs:
         run: |
           docker run --rm ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx1201:main /bin/bash -c "
             echo 'Running inside the container';
-            python3 --version;  # Check Python version
-            pip list;           # List installed Python packages
+            python3 --version; 
+            pip list;           
+            cd
+            apt-get install -y wget
+            wget https://gist.githubusercontent.com/erman-gurses/ecab96a3f331ba6155b0eb17bbd2d84e/raw/3828aa1c6260b9bcac65f73c6bb5d193528c9eac/pytest-examples.py
+            PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest
+            pytest -v pytest-examples.py
             echo 'Task completed!'
           "
       - name: Verify Containers Status
