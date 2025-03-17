@@ -21,12 +21,18 @@ jobs:
         run: |
           docker run --rm ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx1201:main /bin/bash -c "
             echo 'Running inside the container';
-            python3 --version; 
+            echo 'Check Python version';
+            python3 --version;
+            echo 'List the pip packages';
             pip list;           
             cd
+            echo 'Install wget';
             apt-get install -y wget
+            echo 'Download smoke tests';
             wget https://gist.githubusercontent.com/erman-gurses/ecab96a3f331ba6155b0eb17bbd2d84e/raw/3828aa1c6260b9bcac65f73c6bb5d193528c9eac/pytest-examples.py
+            echo 'Install pytest';
             PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest
+            echo 'Run smoke tests';
             pytest -v pytest-examples.py
             echo 'Task completed!'
           "
