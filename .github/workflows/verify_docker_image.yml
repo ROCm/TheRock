@@ -24,7 +24,7 @@ jobs:
             echo 'Check Python version';
             python3 --version;
             echo 'List the pip packages';
-            pip list;           
+            pip list;
             cd
             echo 'Install wget';
             apt-get install -y wget
