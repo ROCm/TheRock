@@ -5,7 +5,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-zlib-sources
       SOURCE_DIR "${_source_dir}"
-      URL "https://www.zlib.net/zlib-1.3.1.tar.gz"
+      # Originally mirrored from: "https://www.zlib.net/zlib-1.3.1.tar.gz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/zlib-1.3.1.tar.gz"
       URL_HASH "SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
       TOUCH "${_download_stamp}"
     )

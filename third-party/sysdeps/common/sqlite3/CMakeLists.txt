@@ -5,7 +5,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-sqlite3-sources
       SOURCE_DIR "${_source_dir}"
-      URL "https://www.sqlite.org/2025/sqlite-amalgamation-3490100.zip"
+      # Originally mirrored from: "https://www.sqlite.org/2025/sqlite-amalgamation-3490100.zip"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/sqlite-amalgamation-3490100.zip"
       URL_HASH "SHA256=6cebd1d8403fc58c30e93939b246f3e6e58d0765a5cd50546f16c00fd805d2c3"
       TOUCH "${_download_stamp}"
     )

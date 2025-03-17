@@ -5,7 +5,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-elfutils-sources
       SOURCE_DIR "${_source_dir}"
-      URL "https://sourceware.org/elfutils/ftp/0.192/elfutils-0.192.tar.bz2"
+      # Originally mirrored from: "https://sourceware.org/elfutils/ftp/0.192/elfutils-0.192.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/elfutils-0.192.tar.bz2"
       URL_HASH "SHA512=543188f5f2cfe5bc7955a878416c5f252edff9926754e5de0c6c57b132f21d9285c9b29e41281e93baad11d4ae7efbbf93580c114579c182103565fe99bd3909"
       TOUCH "${_download_stamp}"
     )
