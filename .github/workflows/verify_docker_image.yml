@@ -1,12 +1,9 @@
 name: Pull and Verify Docker Image
 
 on:
-  push:
-  pull_request:
-    branches:
-      - main
+  registry_package:
+  workflow_call:
   workflow_dispatch:
-
 jobs:
   pull-and-build-image:
     name: "Verify Docker Image"
