@@ -24,5 +24,5 @@ The following operations are covered in these smoke tests:
 To run the tests, ensure you have PyTorch installed:
 
 ```bash
-pytest -v pytorch_smoke_tests.py
+PYTORCH_TEST_WITH_ROCM=1 python3 test/run_test.py --verbose
 ```
