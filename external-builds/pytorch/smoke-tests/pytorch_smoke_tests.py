@@ -1,6 +1,7 @@
 import torch
 import pytest
 
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="ROCm is not available")
 def test_matrix_multiplication():
     matrix1 = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device="cuda")
