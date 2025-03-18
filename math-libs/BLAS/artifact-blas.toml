@@ -33,6 +33,10 @@ include = [
 [components.lib."math-libs/BLAS/rocBLAS/stage"]
 [components.test."math-libs/BLAS/rocBLAS/stage"]
 include = [
+  # Clients benchmarks
+  "bin/rocblas-bench",
+  "bin/rocblas-gemm-tune",
+  # Clients tests
   "bin/rocblas-test",
   "bin/rocblas_gentest.py",
   "bin/rocblas_gtest.data",

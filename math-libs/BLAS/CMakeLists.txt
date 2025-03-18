@@ -92,6 +92,7 @@ therock_cmake_subproject_declare(rocBLAS
     # doing a strict check of exact version.
     -DTENSILE_VERSION=
     -DBUILD_CLIENTS_TESTS=ON
+    -DBUILD_CLIENTS_BENCHMARKS=ON
     -DLINK_BLIS=OFF
   IGNORE_PACKAGES
       ROCM
