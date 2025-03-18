@@ -20,6 +20,12 @@ include = [
 ]
 [components.test."math-libs/BLAS/hipBLASLt/stage"]
 include = [
+  # Clients benchmarks
+  "bin/hipblaslt-bench",
+  "bin/hipblaslt-bench-*",
+  "bin/hipblaslt-sequence",
+  "bin/sequence.yaml",
+  # Clients tests
   "bin/hipblaslt-test",
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",

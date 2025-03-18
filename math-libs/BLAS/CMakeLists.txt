@@ -52,8 +52,8 @@ therock_cmake_subproject_declare(hipBLASLt
     -DTensile_LIBRARY_FORMAT=msgpack
     # TODO(#55): Enable once roctracer is added
     -DHIPBLASLT_ENABLE_MARKER=OFF
-    # TODO: Enable clients.
     -DBUILD_CLIENTS_TESTS=ON
+    -DBUILD_CLIENTS_BENCHMARKS=ON
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
