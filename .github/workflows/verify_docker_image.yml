@@ -24,10 +24,14 @@ jobs:
             echo 'List the pip packages';
             pip list;
             cd
+            echo 'Install wget';
+            apt-get install -y wget
+            echo 'Download smoke tests';
+            wget https://github.com/ROCm/TheRock/blob/main/external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
             echo 'Install pytest';
             PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest
             echo 'Run smoke tests';
-            pytest -v external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
+            pytest -v pytorch_smoke_tests.py
             echo 'Task completed!'
           "
       - name: Verify Containers Status
