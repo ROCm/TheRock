@@ -27,6 +27,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      BUILD_ARTIFACTS_DIR: "build/artifacts"
+      BIN_DIR: "${{ github.workspace }}/${BUILD_ARTIFACTS_DIR}/output_dir/bin"
 
     steps:
       - name: Checkout Repository
@@ -54,7 +56,6 @@ jobs:
         run: |
           source ${VENV_DIR}/bin/activate
 
-          BUILD_ARTIFACTS_DIR="build/artifacts"
           # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
           # runner, everything else is generic. Use just generic since this is all core/below.
           VARIANT="_generic"
@@ -66,6 +67,8 @@ jobs:
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-runtime_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_run"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
 
           echo "Unpacking artifacts"
           pushd "${BUILD_ARTIFACTS_DIR}"
@@ -76,7 +79,7 @@ jobs:
 
       - name: Run rocminfo
         run: |
-          /bin/rocminfo
+          ${BIN_DIR}/rocminfo
 
       - name: Run ROCm Sanity Tests
         run: |

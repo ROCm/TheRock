@@ -4,11 +4,13 @@ import re
 from pathlib import Path
 from pytest_check import check
 import logging
+import os
 
 THIS_DIR = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
 
+BIN_DIR = os.getenv("BIN_DIR")
 
 def run_command(command):
     process = subprocess.run(command, capture_output=True)
@@ -18,7 +20,7 @@ def run_command(command):
 @pytest.fixture(scope="session")
 def rocm_info_output():
     try:
-        return run_command(["rocminfo"])
+        return run_command([f"{BIN_DIR}/rocminfo"])
     except Exception as e:
         logger.info(str(e))
         return None
@@ -80,7 +82,7 @@ class TestROCmSanity:
         # Compiling .cpp file using hipcc
         run_command(
             [
-                "hipcc",
+                f"{BIN_DIR}/hipcc",
                 str(THIS_DIR / "hip_printf.cpp"),
                 "-o",
                 str(THIS_DIR / "hip_printf"),
