@@ -27,7 +27,7 @@ jobs:
             echo 'Install wget';
             apt-get install -y wget
             echo 'Download smoke tests';
-            wget https://github.com/ROCm/TheRock/blob/main/external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
+            wget https://raw.githubusercontent.com/ROCm/TheRock/refs/heads/main/external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
             echo 'Install pytest';
             PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest
             echo 'Run smoke tests';
