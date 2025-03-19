@@ -1,7 +1,7 @@
 name: Pull and Verify Docker Image
 
 on:
-  pull_request:
+  push:
   registry_package:
   workflow_call:
   workflow_dispatch:
