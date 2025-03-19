@@ -1,6 +1,7 @@
 import torch
 import pytest
 
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="ROCm is not available")
 class TestMatrixOperations:
     def test_matrix_multiplication(self):
