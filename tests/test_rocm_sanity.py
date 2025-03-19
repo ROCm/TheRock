@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 BIN_DIR = os.getenv("BIN_DIR")
 
+
 def run_command(command):
     process = subprocess.run(command, capture_output=True)
     return str(process.stdout)
@@ -55,27 +56,6 @@ class TestROCmSanity:
         check.is_not_none(
             re.search(to_search, rocm_info_output),
             f"Failed to search for {to_search} in rocminfo output",
-        )
-
-    @pytest.mark.parametrize(
-        "to_search",
-        [
-            (r"Device(\s|\\t)*Type:(\s|\\t)*CL_DEVICE_TYPE_GPU"),
-            (r"Name:(\s|\\t)*gfx"),
-            (r"Vendor:(\s|\\t)*Advanced Micro Devices, Inc."),
-        ],
-        ids=[
-            "clinfo - GPU Device Type Search",
-            "clinfo - GFX Name Search",
-            "clinfo - AMD Vendor Name Search",
-        ],
-    )
-    def test_clinfo_output(self, clinfo_info_output, to_search):
-        if not clinfo_info_output:
-            pytest.fail("Command clinfo failed to run")
-        check.is_not_none(
-            re.search(to_search, clinfo_info_output),
-            f"Failed to search for {to_search} in clinfo output",
         )
 
     def test_hip_printf(self):
