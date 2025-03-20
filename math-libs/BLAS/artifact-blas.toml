@@ -37,6 +37,9 @@ include = [
 [components.dev."math-libs/BLAS/rocBLAS/stage"]
 [components.doc."math-libs/BLAS/rocBLAS/stage"]
 [components.lib."math-libs/BLAS/rocBLAS/stage"]
+include = [
+  "lib/rocblas/library/**",
+]
 [components.test."math-libs/BLAS/rocBLAS/stage"]
 include = [
   # Clients benchmarks
