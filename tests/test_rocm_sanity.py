@@ -50,7 +50,14 @@ class TestROCmSanity:
 
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
-        run_command(
+        args = [
+            f"{BIN_DIR}/hipcc",
+            str(THIS_DIR / "hip_printf.cpp"),
+            "-o",
+            str(THIS_DIR / "hip_printf"),
+        ]
+        logger.info(str(args))
+        return_output = run_command(
             [
                 f"{BIN_DIR}/hipcc",
                 str(THIS_DIR / "hip_printf.cpp"),
@@ -58,7 +65,9 @@ class TestROCmSanity:
                 str(THIS_DIR / "hip_printf"),
             ]
         )
+        logger.info(str(return_output))
 
         # Running the executable
         output = run_command([str(THIS_DIR / "hip_printf")])
+        logger.info(output)
         check.is_not_none(re.search(r"Thread.*is\swriting", output))
