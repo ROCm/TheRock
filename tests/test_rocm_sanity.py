@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 BIN_DIR = os.getenv("BIN_DIR")
 
-
 def run_command(command):
     process = subprocess.run(command, capture_output=True)
     return str(process.stdout)
@@ -22,15 +21,6 @@ def run_command(command):
 def rocm_info_output():
     try:
         return run_command([f"{BIN_DIR}/rocminfo"])
-    except Exception as e:
-        logger.info(str(e))
-        return None
-
-
-@pytest.fixture(scope="session")
-def clinfo_info_output():
-    try:
-        return run_command(["clinfo"])
     except Exception as e:
         logger.info(str(e))
         return None
