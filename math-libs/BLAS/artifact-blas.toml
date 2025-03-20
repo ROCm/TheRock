@@ -78,6 +78,12 @@ optional = true
 optional = true
 [components.lib."math-libs/BLAS/rocSPARSE/stage"]
 optional = true
+[components.test."math-libs/BLAS/rocSPARSE/stage"]
+include = [
+  "bin/rocsparse-bench",
+  "bin/rocsparse-test",
+]
+optional = true
 
 # hipSPARSE
 [components.dbg."math-libs/BLAS/hipSPARSE/stage"]
