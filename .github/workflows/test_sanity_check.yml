@@ -20,7 +20,7 @@ jobs:
     name: "Sanity ROCM Test"
     runs-on: linux-mi300-1gpu-ossci-rocm
     strategy:
-      fail-fast: true
+      fail-fast: false
     defaults:
       run:
         shell: bash
@@ -86,4 +86,7 @@ jobs:
           source ${VENV_DIR}/bin/activate
           pytest tests/ \
           --log-cli-level=info
+
+      - name: Run ROCm Sanity Tests
+        run: |
           ./tests/hip_printf
