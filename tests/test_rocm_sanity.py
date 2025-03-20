@@ -17,7 +17,7 @@ logger.info(f"BIN DIR NAME: {BIN_DIR}")
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd)
-    logger.info(str(process.stderr))
+    logger.info(str(process))
     return str(process.stdout)
 
 
