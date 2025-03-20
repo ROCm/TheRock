@@ -5,13 +5,13 @@ from pathlib import Path
 from pytest_check import check
 import logging
 import os
-import glob
 
 THIS_DIR = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
 
 BIN_DIR = os.getenv("BIN_DIR")
+
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd)
@@ -56,12 +56,12 @@ class TestROCmSanity:
                 "./hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                str(THIS_DIR / "hipcc_check")
+                str(THIS_DIR / "hipcc_check"),
             ],
-            cwd=str(BIN_DIR)
+            cwd=str(BIN_DIR),
         )
 
-        # Checking the executable
+        # Running and checking the executable
         process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
         check.equal(process.returncode, 0)
         check.greater(os.path.getsize(str(THIS_DIR / "hipcc_check")), 0)

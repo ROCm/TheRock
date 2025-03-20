@@ -71,11 +71,9 @@ jobs:
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
 
           echo "Unpacking artifacts"
-          pushd "${BUILD_ARTIFACTS_DIR}"
-          mkdir output_dir
-          python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten *.tar.xz -o output_dir --verbose
-          sudo rsync --archive --keep-dirlinks --verbose output_dir/* /
-          popd
+          mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
+          python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
+          sudo rsync --archive --keep-dirlinks --verbose ${BUILD_ARTIFACTS_DIR}/output_dir/* ${BUILD_ARTIFACTS_DIR}
 
       - name: Run rocminfo
         run: |
