@@ -13,6 +13,5 @@ int main() {
   hipMalloc(&d_buf, size * sizeof(int));
   hipLaunchKernelGGL(squares, gridsize, blocksize, 0, 0, d_buf);
   hipDeviceSynchronize();
-  fflush(stdout); // Ensure the output is flushed immediately
   return 0;
 }

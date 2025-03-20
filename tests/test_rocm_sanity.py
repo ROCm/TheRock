@@ -58,6 +58,7 @@ class TestROCmSanity:
                 str(THIS_DIR / "hip_printf.cpp"),
                 "-o",
                 str(THIS_DIR / "hip_printf"),
+                "-DHIP_ENABLE_PRINTF"
             ],
             cwd=str(BIN_DIR)
         )
@@ -68,5 +69,5 @@ class TestROCmSanity:
                 logger.info(f"{file}: {os.path.getsize(file)} bytes")
 
         # Running the executable
-        # output = run_command(["./hip_printf"], cwd=str(THIS_DIR))
-        # check.is_not_none(re.search(r"Thread.*is\swriting", output))
+        output = run_command(["./hip_printf"], cwd=str(THIS_DIR))
+        check.is_not_none(re.search(r"Thread.*is\swriting", output))
