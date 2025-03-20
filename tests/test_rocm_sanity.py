@@ -56,14 +56,12 @@ class TestROCmSanity:
                 "./hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                str(THIS_DIR / "hipcc_check"),
-                "-DHIP_ENABLE_PRINTF"
+                str(THIS_DIR / "hipcc_check")
             ],
             cwd=str(BIN_DIR)
         )
 
         # Checking the executable
         process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
-        logger.info(process.stdout)
         check.equal(process.returncode, 0)
         check.greater(os.path.getsize(str(THIS_DIR / "hipcc_check")), 0)
