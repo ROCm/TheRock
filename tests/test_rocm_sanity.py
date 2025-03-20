@@ -12,8 +12,6 @@ THIS_DIR = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
 
 BIN_DIR = os.getenv("BIN_DIR")
-logger.info(f"BIN DIR NAME: {BIN_DIR}")
-
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd)

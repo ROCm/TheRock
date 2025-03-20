@@ -86,3 +86,4 @@ jobs:
           source ${VENV_DIR}/bin/activate
           pytest tests/ \
           --log-cli-level=info
+          ./tests/hip_printf
