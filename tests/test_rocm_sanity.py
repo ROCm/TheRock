@@ -10,7 +10,7 @@ THIS_DIR = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
 
-BIN_DIR = os.getenv("BIN_DIR")
+THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 
 
 def run_command(command, cwd=None):
@@ -21,7 +21,7 @@ def run_command(command, cwd=None):
 @pytest.fixture(scope="session")
 def rocm_info_output():
     try:
-        return str(run_command([f"{BIN_DIR}/rocminfo"]).stdout)
+        return str(run_command([f"{THEROCK_BIN_DIR}/rocminfo"]).stdout)
     except Exception as e:
         logger.info(str(e))
         return None
@@ -58,7 +58,7 @@ class TestROCmSanity:
                 "-o",
                 str(THIS_DIR / "hipcc_check"),
             ],
-            cwd=str(BIN_DIR),
+            cwd=str(THEROCK_BIN_DIR),
         )
 
         # Running and checking the executable
