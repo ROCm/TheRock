@@ -5,7 +5,6 @@ from pathlib import Path
 from pytest_check import check
 import logging
 import os
-import glob
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -13,8 +12,9 @@ logger = logging.getLogger(__name__)
 
 BIN_DIR = os.getenv("BIN_DIR")
 
-def run_command(command):
-    process = subprocess.run(command, capture_output=True)
+
+def run_command(command, cwd=None):
+    process = subprocess.run(command, capture_output=True, cwd=cwd)
     return str(process.stdout)
 
 
@@ -59,10 +59,7 @@ class TestROCmSanity:
                 str(THIS_DIR / "hip_printf"),
             ]
         )
-        
-        logger.info(glob.glob(str(THIS_DIR)))
-        
+
         # Running the executable
-        output = run_command([f"./{str(THIS_DIR)}/hip_printf"])
-        logger.info(output)
+        output = run_command(["./hip_printf"], cwd=str(THIS_DIR))
         check.is_not_none(re.search(r"Thread.*is\swriting", output))
