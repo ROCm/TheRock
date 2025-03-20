@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 BIN_DIR = os.getenv("BIN_DIR")
 
-def run_command(command):
-    process = subprocess.run(command, capture_output=True)
+def run_command(command, cwd=None):
+    process = subprocess.run(command, capture_output=True, cwd=cwd)
     return str(process.stdout)
 
 
@@ -48,26 +48,21 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
+    import glob
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
-        args = [
-            f"{BIN_DIR}/hipcc",
-            str(THIS_DIR / "hip_printf.cpp"),
-            "-o",
-            str(THIS_DIR / "hip_printf"),
-        ]
-        logger.info(str(args))
-        return_output = run_command(
+        run_command(
             [
-                f"{BIN_DIR}/hipcc",
+                "hipcc",
                 str(THIS_DIR / "hip_printf.cpp"),
                 "-o",
                 str(THIS_DIR / "hip_printf"),
-            ]
+            ],
+            BIN_DIR
         )
-        logger.info(str(return_output))
 
+        logger.info(glob.glob(str(THIS_DIR)))
+        
         # Running the executable
-        output = run_command([str(THIS_DIR / "hip_printf")])
-        logger.info(output)
+        output = run_command(["hip_printf"], cwd=str(THIS_DIR))
         check.is_not_none(re.search(r"Thread.*is\swriting", output))
