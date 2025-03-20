@@ -15,14 +15,13 @@ BIN_DIR = os.getenv("BIN_DIR")
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd)
-    logger.info(str(process))
-    return process.stdout
+    return process
 
 
 @pytest.fixture(scope="session")
 def rocm_info_output():
     try:
-        return str(run_command([f"{BIN_DIR}/rocminfo"]))
+        return str(run_command([f"{BIN_DIR}/rocminfo"]).stdout)
     except Exception as e:
         logger.info(str(e))
         return None
@@ -55,21 +54,16 @@ class TestROCmSanity:
         run_command(
             [
                 "./hipcc",
-                str(THIS_DIR / "hip_printf.cpp"),
+                str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                str(THIS_DIR / "hip_printf"),
+                str(THIS_DIR / "hipcc_check"),
                 "-DHIP_ENABLE_PRINTF"
             ],
             cwd=str(BIN_DIR)
         )
-        
-        files = glob.glob(str(THIS_DIR) + "/*")
-        for file in files:
-            if os.path.isfile(file):
-                logger.info(f"{file}: {os.path.getsize(file)} bytes")
 
-        # Running the executable
-        process = run_command(["./hip_printf"], cwd=str(THIS_DIR))
-        output = subprocess.run(['tee'], input=process, capture_output=True)
-        logger.info(output.stdout)
-        check.is_not_none(re.search(r"Thread.*is\swriting", str(output.stdout)))
+        # Checking the executable
+        process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
+        logger.info(process.stdout)
+        check.equal(process.returncode, 0)
+        check.greater(os.path.getsize(str(THIS_DIR / "hipcc_check")), 0)

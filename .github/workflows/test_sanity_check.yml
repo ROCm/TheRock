@@ -86,3 +86,11 @@ jobs:
           source ${VENV_DIR}/bin/activate
           pytest tests/ \
           --log-cli-level=info
+
+      - name: Run ROCm Sanity Tests
+        run: |
+          ./hipcc_check
+
+      - name: Run ROCm Sanity Tests
+        run: |
+          ./hipcc_check | tee
