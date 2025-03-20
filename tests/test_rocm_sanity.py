@@ -5,6 +5,7 @@ from pathlib import Path
 from pytest_check import check
 import logging
 import os
+import glob
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -12,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 BIN_DIR = os.getenv("BIN_DIR")
 
-def run_command(command, cwd=None):
-    process = subprocess.run(command, capture_output=True, cwd=cwd)
+def run_command(command):
+    process = subprocess.run(command, capture_output=True)
     return str(process.stdout)
 
 
@@ -48,21 +49,20 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    import glob
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         run_command(
             [
-                "hipcc",
+                f"{BIN_DIR}/hipcc",
                 str(THIS_DIR / "hip_printf.cpp"),
                 "-o",
                 str(THIS_DIR / "hip_printf"),
-            ],
-            BIN_DIR
+            ]
         )
-
+        
         logger.info(glob.glob(str(THIS_DIR)))
         
         # Running the executable
-        output = run_command(["hip_printf"], cwd=str(THIS_DIR))
+        output = run_command([f"./{str(THIS_DIR)}/hip_printf"])
+        logger.info(output)
         check.is_not_none(re.search(r"Thread.*is\swriting", output))
