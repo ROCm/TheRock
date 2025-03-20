@@ -16,13 +16,13 @@ BIN_DIR = os.getenv("BIN_DIR")
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd)
     logger.info(str(process))
-    return str(process.stdout)
+    return process.stdout
 
 
 @pytest.fixture(scope="session")
 def rocm_info_output():
     try:
-        return run_command([f"{BIN_DIR}/rocminfo"])
+        return str(run_command([f"{BIN_DIR}/rocminfo"]))
     except Exception as e:
         logger.info(str(e))
         return None
@@ -69,5 +69,7 @@ class TestROCmSanity:
                 logger.info(f"{file}: {os.path.getsize(file)} bytes")
 
         # Running the executable
-        output = run_command(["./hip_printf"], cwd=str(THIS_DIR))
-        check.is_not_none(re.search(r"Thread.*is\swriting", output))
+        process = run_command(["./hip_printf"], cwd=str(THIS_DIR))
+        output = subprocess.run(['tee'], input=process, capture_output=True)
+        logger.info(output.stdout)
+        check.is_not_none(re.search(r"Thread.*is\swriting", str(output.stdout)))
