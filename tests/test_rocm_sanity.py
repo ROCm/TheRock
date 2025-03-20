@@ -17,6 +17,7 @@ logger.info(f"BIN DIR NAME: {BIN_DIR}")
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd)
+    logger.info(str(process.stderr))
     return str(process.stdout)
 
 
@@ -63,7 +64,10 @@ class TestROCmSanity:
             cwd=str(BIN_DIR)
         )
         
-        logger.info(glob.glob(str(THIS_DIR) + "/*"))
+        files = glob.glob(str(THIS_DIR) + "/*")
+        for file in files:
+            if os.path.isfile(file):
+                logger.info(f"{file}: {os.path.getsize(file)} bytes")
 
         # Running the executable
         output = run_command(["./hip_printf"], cwd=str(THIS_DIR))
