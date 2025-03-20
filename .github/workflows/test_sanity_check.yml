@@ -89,8 +89,8 @@ jobs:
 
       - name: Run ROCm Sanity Tests
         run: |
-          ./hipcc_check
+          ./tests/hipcc_check
 
       - name: Run ROCm Sanity Tests
         run: |
-          ./hipcc_check | tee
+          ./tests/hipcc_check | tee
