@@ -103,7 +103,9 @@ be enabled manually if enabling/disabling individual features.
 A report of enabled/disabled features and flags will be printed on every
 CMake configure.
 
-## Sanity Checks
+## Testing
+
+Project-wide testing can be controlled with the standard CMake `-DBUILD_TESTING=ON|OFF` flag. This gates both setup of build tests and compilation of installed testing artifacts.
 
 Tests of the integrity of the build are enabled by default and can be run
 with ctest:
