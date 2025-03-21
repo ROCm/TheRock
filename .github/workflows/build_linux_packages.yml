@@ -78,7 +78,8 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
-            -DTHEROCK_VERBOSE=ON
+            -DTHEROCK_VERBOSE=ON \
+            -DBUILD_TESTING=ON
           ./build_tools/watch_top_processes.sh &
           cmake --build build --target therock-archives therock-dist
           kill %1
