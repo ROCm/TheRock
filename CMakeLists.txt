@@ -12,7 +12,6 @@ endif()
 project(THEROCK)
 
 cmake_policy(SET CMP0135 NEW)
-enable_testing()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CMakeDependentOption)
@@ -23,6 +22,25 @@ include(therock_features)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
+
+################################################################################
+# Testing Setup
+# Does normal CMake setup so that BUILD_TESTING functions as a master control
+# switch. Then we set THEROCK_BUILD_TESTING if not explicitly set by the user
+# based on the advice here:
+#   https://cliutils.gitlab.io/modern-cmake/chapters/testing.html
+# THEROCK_BUILD_TESTING is used to condition inclusion of testing binaries, etc.
+################################################################################
+
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  include(CTest)
+endif()
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND NOT DEFINED THEROCK_BUILD_TESTING)
+  set(THEROCK_BUILD_TESTING ${BUILD_TESTING})
+endif()
+if(THEROCK_BUILD_TESTING)
+  message(STATUS "Enabling building tests")
+endif()
 
 ################################################################################
 # Options
@@ -279,24 +297,27 @@ add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 
-add_subdirectory(examples)
-
-# ################################################################################
-# # Testing
-# ################################################################################
-
-if(NOT WIN32)
-  add_executable(
-    dlopen-hip
-    tests/dlopen-hip.c
-  )
-  target_link_libraries(dlopen-hip dl)
-else()
-  # TODO: Test that is compatible with Windows (LoadLibraryA instead of dlopen)
-  #   then add instructions in the README to run with a command like
-  #   `./build/dlopen-hip install/amdhip64.dll`
+if(THEROCK_BUILD_TESTING)
+  add_subdirectory(examples)
 endif()
 
+################################################################################
+# Testing
+################################################################################
+
+if(THEROCK_BUILD_TESTING)
+  if(NOT WIN32)
+    add_executable(
+      dlopen-hip
+      tests/dlopen-hip.c
+    )
+    target_link_libraries(dlopen-hip dl)
+  else()
+    # TODO: Test that is compatible with Windows (LoadLibraryA instead of dlopen)
+    #   then add instructions in the README to run with a command like
+    #   `./build/dlopen-hip install/amdhip64.dll`
+  endif()
+endif()
 
 ################################################################################
 # Finalization
