@@ -27,7 +27,7 @@ include(therock_testing)
 # Testing Setup
 # Does normal CMake setup so that BUILD_TESTING functions as a master control
 # switch. Then we set THEROCK_BUILD_TESTING if not explicitly set by the user
-# based on the advice here: 
+# based on the advice here:
 #   https://cliutils.gitlab.io/modern-cmake/chapters/testing.html
 # THEROCK_BUILD_TESTING is used to condition inclusion of testing binaries, etc.
 ################################################################################
