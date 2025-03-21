@@ -1,0 +1,107 @@
+name: TheRock BLAS math-lib tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+        default: gfx94X-dcgpu
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+        default: gfx94X-dcgpu
+  push:
+    branches:
+      - ADHOCBUILD
+
+jobs:
+  test_blas:
+    name: "BLAS math-lib test"
+    runs-on: linux-mi300-1gpu-ossci-rocm
+    strategy:
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      BUILD_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install the AWS tool
+        run: ./dockerfiles/cpubuilder/install_awscli.sh
+
+      - name: "Setting up Python"
+        id: setup_python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: 3.11
+
+      - name: Create Python venv and installing packages
+        run: |
+          python -m venv ${VENV_DIR}
+          source ${VENV_DIR}/bin/activate
+          pip install -r requirements-test.txt
+          sudo apt install libgfortran5 -y
+
+      - name: Download and Unpack Artifacts
+        run: |
+          source ${VENV_DIR}/bin/activate
+
+          # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
+          # runner, everything else is generic. Use just generic since this is all core/below.
+          VARIANT="_generic"
+          TARGET_VARIANT="_${{ inputs.amdgpu_families }}"
+          echo "Making ${BUILD_ARTIFACTS_DIR} directory"
+          mkdir -p "${BUILD_ARTIFACTS_DIR}"
+
+          echo "Downloading artifacts"
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-runtime_run"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-runtime_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-hip_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/host-blas_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/blas_lib"${TARGET_VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/blas_test"${TARGET_VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+
+          echo "Unpacking artifacts"
+          mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
+          python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
+
+      - name: Run hipBLASlt tests
+        run: |
+          source ${VENV_DIR}/bin/activate
+          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*quick*
+
+      # # Do an additional test with psdb filter, using rtest.py
+      # - name: Run hipBLASlt tests
+      #   run: |
+      #     source ${VENV_DIR}/bin/activate
+      #     ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*quick*
+
+      - name: Run rocBLAS smoke tests
+        run: |
+          ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
+          source ${VENV_DIR}/bin/activate
+          ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
+
+      # # This test takes ~ 1 hour. Might want to figure out appropriate subset of tests
+      # - name: Run rocBLAS tests
+      #   run: |
+      #     ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
+      #     source ${VENV_DIR}/bin/activate
+      #     ${THEROCK_BIN_DIR}/rocblas-test --gtest_filter=*quick*
