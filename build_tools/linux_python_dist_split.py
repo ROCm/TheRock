@@ -284,7 +284,9 @@ def populate_built_artifacts(
     materialized_paths: dict[str, Path] = {}
     populate_core_package(
         args,
-        core_path / "platform" / f"_rocm_sdk_core_{os_arch}{args.version_suffix}",
+        core_path
+        / "platform"
+        / _legalize_py_package_str(f"_rocm_sdk_core_{os_arch}{args.version_suffix}"),
         artifacts,
         materialized_paths,
     )
@@ -304,7 +306,9 @@ def populate_built_artifacts(
             target_family,
             libraries_path
             / "platform"
-            / f"_rocm_sdk_libraries_{target_family}_{os_arch}{args.version_suffix}",
+            / _legalize_py_package_str(
+                f"_rocm_sdk_libraries_{target_family}_{os_arch}{args.version_suffix}"
+            ),
             artifacts,
             materialized_paths,
         )
@@ -487,6 +491,7 @@ def materialize_lib_package(
     package_dest_dir: Path,
     materialized_paths: dict[str, Path],
 ):
+    package_dest_dir.mkdir(parents=True, exist_ok=True)
     # Handle each file.
     for relpath, dir_entry in pm.matches():
         if relpath in materialized_paths:
@@ -685,6 +690,12 @@ def get_soname(sofile: Path) -> str:
         .decode()
         .strip()
     )
+
+
+# Legalizes a dash-based name to an underscore based name that is a legaly
+# python package name.
+def _legalize_py_package_str(mixed_str: str) -> str:
+    return mixed_str.replace("-", "_")
 
 
 def main(argv: list[str]):

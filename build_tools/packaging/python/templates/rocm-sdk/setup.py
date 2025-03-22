@@ -13,7 +13,7 @@ to be sensical for both.
 """
 
 import importlib.util
-from setuptools import setup
+from setuptools import setup, find_packages
 import sys
 from pathlib import Path
 
@@ -58,11 +58,19 @@ EXTRAS_REQUIRE = {
     if not pkg.required
 }
 print(f"extras_require={EXTRAS_REQUIRE}")
+packages = find_packages(where="./src")
+print("Found packages:", packages)
 
 setup(
     name="rocm-sdk",
     version=dist_info.__version__,
     package_dir={"": "src"},
+    packages=packages,
+    entry_points={
+        "console_scripts": [
+            "rocm-sdk = rocm_sdk.__main__:main",
+        ],
+    },
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
 )
