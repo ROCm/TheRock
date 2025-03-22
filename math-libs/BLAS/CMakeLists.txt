@@ -264,6 +264,10 @@ therock_cmake_subproject_declare(hipBLAS
     -DROCM_PATH=
     -DROCM_DIR=
     "-DBUILD_WITH_SOLVER=${THEROCK_ENABLE_SOLVER}"
+    -DBUILD_CLIENTS_TESTS=ON
+    -DBUILD_CLIENTS_BENCHMARKS=ON
+    -DBUILD_CLIENTS_SAMPLES=OFF
+    -DLINK_BLIS=OFF
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
@@ -271,6 +275,7 @@ therock_cmake_subproject_declare(hipBLAS
   RUNTIME_DEPS
     hip-clr
     rocBLAS
+    therock-host-blas
     ${hipBLAS_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLAS
