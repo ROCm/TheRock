@@ -3,16 +3,26 @@
 import argparse
 import sys
 
+from . import _dist_info as di
+
 
 def _do_test(args: argparse.Namespace):
     import unittest
 
+    # Start with required test modules.
     ALL_TEST_MODULES = [
         "rocm_sdk.tests.base_test",
         "rocm_sdk.tests.core_test",
     ]
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
+
+    # Add test modules if they are installed.
+    target_family = di.determine_target_family()
+    if di.ALL_PACKAGES["libraries"].has_py_package(target_family):
+        ALL_TEST_MODULES.append("rocm_sdk.tests.libraries_test")
+    else:
+        print("NOTE: Skipping libraries tests (not installed for this arch)")
 
     # Load all tests.
     for test_module_name in ALL_TEST_MODULES:

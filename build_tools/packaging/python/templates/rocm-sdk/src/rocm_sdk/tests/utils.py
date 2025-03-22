@@ -1,6 +1,8 @@
 """Test utilities."""
 
 from pathlib import Path
+import platform
+import unittest
 
 
 def assert_is_physical_package(mod):
@@ -12,3 +14,13 @@ def assert_is_physical_package(mod):
     assert (
         Path(mod.__file__).name == "__init__.py"
     ), f"Expected `{mod.__name__}` to be a non-namespace package"
+
+
+def get_module_shared_libraries(mod) -> list[Path]:
+    path = Path(mod.__file__).parent
+    if platform.system() == "Windows":
+        so_paths = list(path.glob("**/*.dll"))
+    else:
+        so_paths = list(path.glob("**/*.so.*")) + list(path.glob("**/*.so"))
+
+    return so_paths

@@ -246,7 +246,7 @@ def build_packages(args: argparse.Namespace, dest_dir: Path):
         )
 
         log(f"::: Building python package {child_name}: {shlex.join(build_args)}")
-        subprocess.check_call(build_args, cwd=child_path)
+        subprocess.check_call(build_args, cwd=child_path, stderr=subprocess.STDOUT)
 
 
 def populate_built_artifacts(
@@ -278,21 +278,26 @@ def populate_built_artifacts(
         dist_info_contents=dist_info_contents,
     )
 
+    core_py_package_name = _legalize_py_package_str(
+        f"_rocm_sdk_core_{os_arch}{args.version_suffix}"
+    )
+
     # Where things go is a waterfall: each package we populate removes files
     # from consideration. Anything that is left goes in the devel package.
     # Relative path to materialized abs path.
     materialized_paths: dict[str, Path] = {}
     populate_core_package(
         args,
-        core_path
-        / "platform"
-        / _legalize_py_package_str(f"_rocm_sdk_core_{os_arch}{args.version_suffix}"),
+        core_path / "platform" / core_py_package_name,
         artifacts,
         materialized_paths,
     )
 
     # Emit libraries, one per artifact family that we have
     for target_family in target_families:
+        libraries_py_package_name = _legalize_py_package_str(
+            f"_rocm_sdk_libraries_{target_family}_{os_arch}{args.version_suffix}"
+        )
         libraries_path = copy_package_template(
             args.dest_dir,
             "rocm-sdk-libraries",
@@ -304,13 +309,13 @@ def populate_built_artifacts(
         populate_libraries_package(
             args,
             target_family,
-            libraries_path
-            / "platform"
-            / _legalize_py_package_str(
-                f"_rocm_sdk_libraries_{target_family}_{os_arch}{args.version_suffix}"
-            ),
+            libraries_path / "platform" / libraries_py_package_name,
             artifacts,
             materialized_paths,
+            dep_py_package_relpaths=[
+                Path(core_py_package_name) / "lib",
+                Path(core_py_package_name) / "lib" / "rocm_sysdeps",
+            ],
         )
 
     populate_devel_package(
@@ -417,7 +422,9 @@ def populate_core_package(
         shutil.rmtree(package_path)
     package_path.mkdir(parents=True, exist_ok=True)
     (package_path / "__init__.py").touch()
-    materialize_lib_package(our_artifacts.pm, package_path, materialized_paths)
+    materialize_lib_package(
+        our_artifacts.pm, package_path, materialized_paths, dep_py_package_relpaths=[]
+    )
 
 
 def populate_libraries_package(
@@ -426,6 +433,8 @@ def populate_libraries_package(
     package_path: Path,
     all_artifacts: ArtifactCatalog,
     materialized_paths: dict[str, Path],
+    *,
+    dep_py_package_relpaths: list[Path],
 ):
     # Setup.
     our_artifacts = ArtifactCatalog(
@@ -439,7 +448,12 @@ def populate_libraries_package(
         shutil.rmtree(package_path)
     package_path.mkdir(parents=True, exist_ok=True)
     (package_path / "__init__.py").touch()
-    materialize_lib_package(our_artifacts.pm, package_path, materialized_paths)
+    materialize_lib_package(
+        our_artifacts.pm,
+        package_path,
+        materialized_paths,
+        dep_py_package_relpaths=dep_py_package_relpaths,
+    )
 
 
 def populate_devel_package(
@@ -490,6 +504,8 @@ def materialize_lib_package(
     pm: PatternMatcher,
     package_dest_dir: Path,
     materialized_paths: dict[str, Path],
+    *,
+    dep_py_package_relpaths: list[Path],
 ):
     package_dest_dir.mkdir(parents=True, exist_ok=True)
     # Handle each file.
@@ -499,11 +515,42 @@ def materialize_lib_package(
         file_type = get_file_type(dir_entry)
         dest_path = package_dest_dir / relpath
         if file_type == "symlink":
-            maybe_materialize_lib_symlink(
+            materialized_path = maybe_materialize_lib_symlink(
                 relpath, dest_path, dir_entry, materialized_paths
             )
         else:
-            materialize_lib_file(relpath, dest_path, dir_entry, materialized_paths)
+            materialized_path = materialize_lib_file(
+                relpath,
+                dest_path,
+                dir_entry,
+                materialized_paths,
+                dep_py_package_relpaths=dep_py_package_relpaths,
+            )
+
+        # If we materialized a shared library or EXE, extend its RPATH. This is a bit
+        # sloppy, and in the rewrite that is to come, we should do this when we create
+        # the file. But it is currently fairly branchy and hard to get at all of those
+        # points.
+        if materialized_path and dep_py_package_relpaths:
+            materialized_file_type = get_file_type(materialized_path)
+            if materialized_file_type in ["exe", "so"]:
+                # Need to patch the elf to add more RPATH entries.
+                parent_relpath = package_dest_dir.relative_to(
+                    materialized_path, walk_up=True
+                )
+                addl_rpaths = [
+                    f"$ORIGIN/{parent_relpath}/{addl}"
+                    for addl in dep_py_package_relpaths
+                ]
+                for addl_rpath in addl_rpaths:
+                    log(f"Extend RPATH {materialized_path}: {addl_rpath}")
+                    patchelf_cl = [
+                        "patchelf",
+                        "--add-rpath",
+                        addl_rpath,
+                        str(materialized_path),
+                    ]
+                    subprocess.check_call(patchelf_cl)
 
 
 # Maybe materializes a symlink destined for a library package.
@@ -512,7 +559,7 @@ def maybe_materialize_lib_symlink(
     dest_path: Path,
     src_entry: os.DirEntry[str],
     materialized_paths: dict[str, Path],
-):
+) -> Path | None:
     # Symlink handling is annoying because we can't have any :(
     # Here is what we do based on what it points to:
     #   1. Dangling or directory symlink: drop
@@ -528,19 +575,18 @@ def maybe_materialize_lib_symlink(
 
     # Case 2: Shared library.
     if target_file_type == "so":
-        maybe_materialize_lib_so(relpath, dest_path, src_entry, materialized_paths)
-        return
-
+        return maybe_materialize_lib_so(
+            relpath, dest_path, src_entry, materialized_paths
+        )
     # Case 3: Executable.
     if target_file_type == "exe":
         # Compile a standalone executable that dynamically emulates the symlink.
         link_target = os.readlink(src_entry.path)
         generate_exe_link_stub(dest_path, link_target)
         materialized_paths[relpath] = dest_path
-        return
-
+        return dest_path
     # Case 4: Copy.
-    materialize_file(relpath, dest_path, src_entry, materialized_paths)
+    return materialize_file(relpath, dest_path, src_entry, materialized_paths)
 
 
 # Materializes a shared library iff its name == the SONAME. This will resolve
@@ -550,7 +596,7 @@ def maybe_materialize_lib_so(
     dest_path: Path,
     src_entry: os.DirEntry[str],
     materialized_paths: dict[str, Path],
-):
+) -> Path | None:
     soname = get_soname(src_entry.path)
     if soname != src_entry.name:
         return
@@ -565,7 +611,7 @@ def maybe_materialize_lib_so(
             link_target_relpath = str(Path(relpath).parent / link_target)
             assert link_target_relpath not in materialized_paths
             materialized_paths[link_target_relpath] = dest_path
-    materialize_file(
+    return materialize_file(
         relpath, dest_path, src_entry, materialized_paths, resolve_src=True
     )
 
@@ -578,14 +624,16 @@ def materialize_lib_file(
     dest_path: Path,
     src_entry: os.DirEntry[str],
     materialized_paths: dict[str, Path],
-):
+    *,
+    dep_py_package_relpaths: list[Path],
+) -> Path | None:
     # Skip shared library without matching SONAME.
     file_type = get_file_type(src_entry.path)
     if file_type == "so":
         soname = get_soname(src_entry.path)
         if soname != dest_path.name:
             return
-    materialize_file(relpath, dest_path, src_entry, materialized_paths)
+    return materialize_file(relpath, dest_path, src_entry, materialized_paths)
 
 
 def materialize_file(
@@ -595,7 +643,7 @@ def materialize_file(
     materialized_paths: dict[str, Path],
     *,
     resolve_src: bool = True,
-):
+) -> Path | None:
     is_symlink = src_entry.is_symlink()
     src_path = Path(src_entry.path)
     if resolve_src and is_symlink:
@@ -616,6 +664,7 @@ def materialize_file(
     if relpath in materialized_paths:
         log(f"WARNING: Path already materialized: {relpath}")
     materialized_paths[relpath] = dest_path
+    return dest_path
 
 
 def materialize_devel_file(
