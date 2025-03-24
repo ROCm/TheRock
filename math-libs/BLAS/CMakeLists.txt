@@ -255,6 +255,9 @@ set(hipBLAS_optional_deps)
 if(THEROCK_ENABLE_SOLVER)
   list(APPEND hipBLAS_optional_deps rocSOLVER)
 endif()
+if(THEROCK_BUILD_TESTING)
+  list(APPEND hipBLAS_optional_deps therock-host-blas)
+endif()
 
 therock_cmake_subproject_declare(hipBLAS
   EXTERNAL_SOURCE_DIR "hipBLAS"
@@ -275,7 +278,6 @@ therock_cmake_subproject_declare(hipBLAS
   RUNTIME_DEPS
     hip-clr
     rocBLAS
-    therock-host-blas
     ${hipBLAS_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLAS
