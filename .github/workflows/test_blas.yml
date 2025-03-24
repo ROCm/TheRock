@@ -25,6 +25,8 @@ jobs:
   test_blas:
     name: "BLAS math-lib test"
     runs-on: linux-mi300-1gpu-ossci-rocm
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     strategy:
       fail-fast: false
     defaults:
