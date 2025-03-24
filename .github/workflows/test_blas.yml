@@ -82,7 +82,7 @@ jobs:
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
           python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
 
-      - name: Run hipBLASlt pre-check in tests
+      - name: Run hipBLASlt tests
         run: |
           source ${VENV_DIR}/bin/activate
           ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
