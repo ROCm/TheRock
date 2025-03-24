@@ -8,14 +8,16 @@ therock_set_install_rpath(
     .
 )
 
-therock_set_install_rpath(
-  TARGETS
-    rocblas-bench
-    rocblas-gemm-tune
-    rocblas-test
-  PATHS
-    ../lib
-    ../lib/host-math/lib
-    ../lib/llvm/lib
-    ../lib/rocm_sysdeps/lib
-)
+if(THEROCK_BUILD_TESTING)
+  therock_set_install_rpath(
+    TARGETS
+      rocblas-bench
+      rocblas-gemm-tune
+      rocblas-test
+    PATHS
+      ../lib
+      ../lib/host-math/lib
+      ../lib/llvm/lib
+      ../lib/rocm_sysdeps/lib
+  )
+endif()
