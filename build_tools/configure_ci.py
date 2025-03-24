@@ -115,24 +115,41 @@ def write_job_summary(summary: str):
 
 
 def main():
-    is_pr = os.environ.get("GITHUB_EVENT_NAME", "") == "pull_request"
+    github_event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    is_pr = github_event_name == "pull_request"
+    is_push = github_event_name == "push"
+    is_workflow_dispatch = github_event_name == "workflow_dispatch"
+
     labels = get_pr_labels() if is_pr else []
     # TODO(#199): Use labels or remove the code for handling them
+
     base_ref = os.environ.get("BASE_REF", "HEAD^1")
     print("Found metadata:")
-    print("  is_pr:", is_pr)
-    print("  labels:", labels)
-
-    enable_build_jobs = False
+    print(f"  github_event_name: {github_event_name}")
+    print(f"  is_pr: {is_pr}")
+    print(f"  is_push: {is_push}")
+    print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
+    print(f"  labels: {labels}")
 
     modified_paths = get_modified_paths(base_ref)
     print("modified_paths (max 200):", modified_paths[:200])
-    includes_non_skippable_path = check_for_non_skippable_path(modified_paths)
-    if includes_non_skippable_path:
-        print("Enabling build jobs since a non-skippable path was modified")
+
+    enable_build_jobs = False
+    if is_workflow_dispatch:
+        print("Enabling build jobs since this had a workflow_dispatch trigger")
         enable_build_jobs = True
     else:
-        print("Only skippable paths were modified, keeping build jobs disabled")
+        print(
+            f"Checking modified files since this had a {github_event_name} trigger, not workflow_dispatch"
+        )
+        # TODO(#199): other behavior changes
+        #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
+        includes_non_skippable_path = check_for_non_skippable_path(modified_paths)
+        if includes_non_skippable_path:
+            print("Enabling build jobs since a non-skippable path was modified")
+            enable_build_jobs = True
+        else:
+            print("Only skippable paths were modified, keeping build jobs disabled")
 
     write_job_summary(
         f"""## Workflow configure results
