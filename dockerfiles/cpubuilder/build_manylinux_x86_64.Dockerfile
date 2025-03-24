@@ -57,6 +57,7 @@ RUN yum install -y epel-release && \
     yum install -y gcc-toolset-12-libatomic-devel && \
     yum install -y patchelf && \
     yum install -y vim-common git-lfs && \
+    yum install -y libgfortran5 && \
     yum clean all && \
     rm -rf /var/cache/yum
 
