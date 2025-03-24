@@ -1,7 +1,7 @@
-From 73a3886215d132f602830e5627500dc8a91ead5d Mon Sep 17 00:00:00 2001
+From 86ee73302883dab1311a1a655bbbc3bb0bb05be2 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 16:58:59 +0000
-Subject: [PATCH 4/4] Move `blas_ex/common_gemm_ex3` to different target
+Subject: [PATCH 6/6] Move `blas_ex/common_gemm_ex3` to different target
 
 `clients/common/blas_ex/common_gemm_ex3.cpp` pulls in cblas via
 `clients/common/common_helpers.hpp` ->
@@ -18,10 +18,10 @@ executable in a later step.
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/clients/common/CMakeLists.txt b/clients/common/CMakeLists.txt
-index 8b56bf5f..f8e08c1a 100644
+index 7fabacf5..7ab67d91 100644
 --- a/clients/common/CMakeLists.txt
 +++ b/clients/common/CMakeLists.txt
-@@ -158,11 +158,11 @@ if( BUILD_WITH_TENSILE )
+@@ -147,11 +147,11 @@ if( BUILD_WITH_TENSILE )
    )
  endif()
  

@@ -1,15 +1,16 @@
-From 8367871e44ae81ac819dfce15b182bd2cc6295de Mon Sep 17 00:00:00 2001
+From d56d0df336a7038860ae090f8f76ad3a14d46379 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
-Date: Thu, 6 Feb 2025 21:18:34 -0800
-Subject: [PATCH 1/2] Disable roctracer integration.
+Date: Mon, 24 Mar 2025 22:52:34 +0000
+Subject: [PATCH 1/6] Disable roctracer integration.
 
+Co-authored-by: Marius Brehler <marius.brehler@amd.com>
 ---
- library/CMakeLists.txt          |  6 ++---
- library/src/include/logging.hpp | 44 ++++++++++++++++-----------------
- 2 files changed, 25 insertions(+), 25 deletions(-)
+ library/CMakeLists.txt  |  6 +++---
+ library/src/logging.cpp | 28 ++++++++++++++--------------
+ 2 files changed, 17 insertions(+), 17 deletions(-)
 
 diff --git a/library/CMakeLists.txt b/library/CMakeLists.txt
-index 762580d7..73bc7aba 100644
+index 8cd2bd51..0c0f8460 100644
 --- a/library/CMakeLists.txt
 +++ b/library/CMakeLists.txt
 @@ -80,9 +80,9 @@ function( rocblas_library_settings lib_target_ )
@@ -25,13 +26,12 @@ index 762580d7..73bc7aba 100644
    endif()
      target_link_libraries( ${lib_target_} PRIVATE Threads::Threads )
    #  -fno-gpu-rdc compiler option was used with hcc, so revisit feature at some point
-diff --git a/library/src/include/logging.hpp b/library/src/include/logging.hpp
-index 352e4e39..d0b8e477 100644
---- a/library/src/include/logging.hpp
-+++ b/library/src/include/logging.hpp
-@@ -40,9 +40,9 @@
- #include <unordered_map>
- #include <utility>
+diff --git a/library/src/logging.cpp b/library/src/logging.cpp
+index 737f30d1..e22c6f1e 100644
+--- a/library/src/logging.cpp
++++ b/library/src/logging.cpp
+@@ -1,8 +1,8 @@
+ #include <limits>
  
 -#if !defined(ROCBLAS_STATIC_LIB) && !defined(WIN32)
 -#include <roctracer/roctx.h>
@@ -40,67 +40,42 @@ index 352e4e39..d0b8e477 100644
 +// #include <roctracer/roctx.h>
 +// #endif
  
- /************************************************************************************
-  * Profile kernel arguments
-@@ -453,16 +453,16 @@ class Logger
- public:
-     Logger() = default;
+ #include "logging.hpp"
  
+@@ -126,22 +126,22 @@ const char* c_rocblas_internal = "rocblas_internal";
+ 
+ void rocblas_internal_logger::log_endline(rocblas_internal_ostream& os)
+ {
 -#if !defined(ROCBLAS_STATIC_LIB) && !defined(WIN32)
--    void log_range(const std::string& name)
+-    if(!m_active)
 -    {
--        if(!m_active)
--        {
--            roctxRangePush(name.c_str());
--            m_active = true;
--        }
+-        const std::string& name = os.str();
+-        roctxRangePush(name.c_str());
+-        m_active = true;
 -    }
 -#endif
 +// #if !defined(ROCBLAS_STATIC_LIB) && !defined(WIN32)
-+//     void log_range(const std::string& name)
++//     if(!m_active)
 +//     {
-+//         if(!m_active)
-+//         {
-+//             roctxRangePush(name.c_str());
-+//             m_active = true;
-+//         }
++//         const std::string& name = os.str();
++//         roctxRangePush(name.c_str());
++//         m_active = true;
 +//     }
 +// #endif
+     os << std::endl;
+ }
  
-     template <typename H, typename... Ts>
-     void log_arguments(rocblas_internal_ostream& os, const char* sep, H&& head, Ts&&... xs)
-@@ -472,9 +472,9 @@ public:
-         // ((os << sep << std::forward<Ts>(xs)), ...);
-         (void)(int[]){(os << sep << std::forward<Ts>(xs), 0)...};
- 
+ void rocblas_internal_logger::log_cleanup()
+ {
 -#if !defined(ROCBLAS_STATIC_LIB) && !defined(WIN32)
--        log_range(os.str());
+-    roctxRangePop();
 -#endif
 +// #if !defined(ROCBLAS_STATIC_LIB) && !defined(WIN32)
-+//         log_range(os.str());
++//     roctxRangePop();
 +// #endif
-         os << std::endl;
-     }
+ }
  
-@@ -527,12 +527,12 @@ public:
- 
-     ~Logger()
-     {
--#if !defined(ROCBLAS_STATIC_LIB) && !defined(WIN32)
--        if(m_active)
--        {
--            roctxRangePop();
--        }
--#endif
-+// #if !defined(ROCBLAS_STATIC_LIB) && !defined(WIN32)
-+//         if(m_active)
-+//         {
-+//             roctxRangePop();
-+//         }
-+// #endif
-     }
- 
- private:
+ /******************************************************************
 -- 
-2.34.1
+2.43.0
 
