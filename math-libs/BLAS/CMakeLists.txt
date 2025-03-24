@@ -40,6 +40,14 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # hipBLASLt
 ##############################################################################
 
+set(hipBLASLt_optional_deps)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND hipBLASLt_optional_deps
+    therock-host-blas
+    rocm_smi_lib
+  )
+endif()
+
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "hipBLASLt"
   BACKGROUND_BUILD
@@ -61,8 +69,7 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
-    rocm_smi_lib
-    therock-host-blas
+    ${hipBLASLt_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
 SUBDIRS
@@ -76,6 +83,11 @@ list(APPEND _blas_subproject_names hipBLASLt)
 ##############################################################################
 # rocBLAS
 ##############################################################################
+
+set(rocBLAS_optional_deps)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_optional_deps rocm_smi_lib)
+endif()
 
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "rocBLAS"
@@ -104,7 +116,7 @@ therock_cmake_subproject_declare(rocBLAS
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
-    rocm_smi_lib
+    ${rocBLAS_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
