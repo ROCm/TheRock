@@ -82,26 +82,13 @@ jobs:
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
           python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
 
-      - name: Run hipBLASlt quick tests
+      - name: Run hipBLASlt pre-check in tests
         run: |
           source ${VENV_DIR}/bin/activate
-          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*quick*
+          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
 
-      # Do an additional test with psdb filter, using rtest.py
-      - name: Run hipBLASlt pre-submit tests
-        run: |
-          source ${VENV_DIR}/bin/activate
-          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*psdb*
-
-      - name: Run rocBLAS smoke tests
+      - name: Run rocBLAS tests
         run: |
           ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
           source ${VENV_DIR}/bin/activate
           ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
-
-      # This test takes ~ 1 hour. Might want to figure out appropriate subset of tests
-      - name: Run rocBLAS pre-submit tests
-        run: |
-          ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
-          source ${VENV_DIR}/bin/activate
-          ${THEROCK_BIN_DIR}/rocblas-test --gtest_filter=*psdb*
