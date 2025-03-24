@@ -36,8 +36,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      BUILD_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+      BUILD_ARTIFACTS_DIR: "./build/artifacts"
+      THEROCK_BIN_DIR: "./build/artifacts/output_dir/bin"
 
     steps:
       - name: Checkout Repository
@@ -82,7 +82,7 @@ jobs:
 
           echo "Unpacking artifacts"
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
-          python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
+          python ./build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
 
       - name: Run hipBLASlt tests
         run: |
