@@ -27,6 +27,7 @@ jobs:
     runs-on: linux-mi300-1gpu-ossci-rocm
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
+      options: "--device=/dev/kfd --device=/dev/dri --group-add video"
     strategy:
       fail-fast: false
     defaults:
