@@ -54,6 +54,10 @@ therock_cmake_subproject_declare(rocm_smi_lib
   EXTERNAL_SOURCE_DIR "rocm_smi_lib"
   INTERFACE_LINK_DIRS
     "lib"
+  INSTALL_RPATH_DIRS
+    "lib"
+  INTERFACE_INSTALL_RPATH_DIRS
+    "lib"
   RUNTIME_DEPS
     ${THEROCK_BUNDLED_LIBDRM}
 )
@@ -76,6 +80,8 @@ endif()
 therock_cmake_subproject_declare(rocprofiler-register
   EXTERNAL_SOURCE_DIR "rocprofiler-register"
   INTERFACE_LINK_DIRS
+    "lib"
+  INTERFACE_INSTALL_RPATH_DIRS
     "lib"
 )
 therock_cmake_subproject_glob_c_sources(rocprofiler-register

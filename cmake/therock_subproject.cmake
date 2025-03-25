@@ -20,6 +20,12 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   THEROCK_SOURCE_DIR
   THEROCK_BINARY_DIR
   ROCM_SYMLINK_LIBS
+
+  # RPATH handling.
+  THEROCK_NO_INSTALL_RPATH
+  THEROCK_PRIVATE_INSTALL_RPATH_DIRS
+  THEROCK_INSTALL_RPATH_EXECUTABLE_DIR
+  THEROCK_INSTALL_RPATH_LIBRARY_DIR
 )
 
 # Some sub-projects do not react well to not having any GPU targets to build.
@@ -206,12 +212,45 @@ endfunction()
 #   it fails (logs will still be written). While generally not good to squelch a
 #   "chatty" build, some third party libraries are hopeless and provide little
 #   signal.
+#
+# RPATH handling:
+# Each subproject has default logic injected which configures the INSTALL_RPATH
+# of any defined executable or shared library targets. This default behavior can
+# be disabled by setting NO_INSTALL_RPATH.
+# *IMPORTANT:* This *overrides* any project local install RPATH configuration.
+# While it may seem that this is heavy handed, in practice, almost no library
+# on its own does the right thing. If it does, opt it out.
+#
+# In order to compute a correct RPATH (which we always set as relative to
+# the installation prefix), it must be possible to determine each target's
+# ORIGIN, as the OS will see it in the install tree. CMake does not have a
+# way to determine this, so we use the following heuristic:
+#   * Use THEROCK_INSTALL_RPATH_ORIGIN target property if defined.
+#   * For executables, use the project level THEROCK_INSTALL_RPATH_EXECUTABLE_DIR.
+#   * For shared libraries, use the project level THEROCK_INSTALL_RPATH_LIBRARY_DIR.
+#
+# We then get the computed private install RPATH dirs (which is the combination
+# of any transitive INTERFACE_INSTALL_RPATH_DIRS) and transform them to an
+# origin relative path and set them on the INSTALL_RPATH property.
+#
+# INSTALL_RPATH_DIRS: Install-tree relative paths to runtime shared library
+#   dependencies to be used for targets defined directly in this project.
+# INTERFACE_INSTALL_RPATH_DIRS: Like INSTALL_RPATH_DIRS but advertises these
+#   directories to dependent projects (but does not use them itself).
+# INSTALL_RPATH_EXECUTABLE_DIR: Default install-tree relative path to assume
+#   that all executables are installed to. Defaults to INSTALL_DESTINATION/bin.
+#   Can be overriden on a per target basis by setting
+#   THEROCK_INSTALL_RPATH_EXECUTABLE_DIR.
+# INSTALL_RPATH_LIBRARY_DIR: Default install-tree relative path to assume
+#   that all shared libraries are installed to. Defaults to
+#   INSTALL_DESTINATION/lib. Can be overriden on a per target basis by setting
+#   THEROCK_INSTALL_RPATH_LIBRARY_DIR.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS"
+    "ACTIVATE;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -258,7 +297,7 @@ function(therock_cmake_subproject_declare target_name)
 
   # Collect LINK_DIRS and PROGRAM_DIRS from explicit args and RUNTIME_DEPS.
   _therock_cmake_subproject_collect_runtime_deps(
-      _private_link_dirs _private_program_dirs _private_pkg_config_dirs
+      _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
       _transitive_runtime_deps
       _transitive_configure_depend_files
       ${ARG_RUNTIME_DEPS})
@@ -283,6 +322,10 @@ function(therock_cmake_subproject_declare target_name)
   _therock_cmake_subproject_absolutize(_declared_pkg_config_dirs "${_stage_dir}")
   set(_interface_pkg_config_dirs ${_private_pkg_config_dirs} ${_declared_pkg_config_dirs})
 
+  # Install RPATH dirs.
+  set(_interface_install_rpath_dirs ${_interface_install_rpath_dirs} ${ARG_INTERFACE_INSTALL_RPATH_DIRS})
+  set(_private_install_rpath_dirs ${ARG_INSTALL_RPATH_DIRS} ${_interface_install_rpath_dirs})
+
   # Dedup transitives.
   list(REMOVE_DUPLICATES _private_link_dirs)
   list(REMOVE_DUPLICATES _interface_link_dirs)
@@ -292,6 +335,26 @@ function(therock_cmake_subproject_declare target_name)
   list(REMOVE_DUPLICATES _transitive_configure_depend_files)
   list(REMOVE_DUPLICATES _private_pkg_config_dirs)
   list(REMOVE_DUPLICATES _interface_pkg_config_dirs)
+  list(REMOVE_DUPLICATES _interface_install_rpath_dirs)
+  list(REMOVE_DUPLICATES _private_install_rpath_dirs)
+
+  # RPATH Executable and Library dir.
+  if(NOT ARG_INSTALL_RPATH_EXECUTABLE_DIR)
+    if(ARG_INSTALL_DESTINATION)
+      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR ARG_INSTALL_DESTINATION)
+      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
+    else()
+      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
+    endif()
+  endif()
+  if(NOT ARG_INSTALL_RPATH_LIBRARY_DIR)
+    if(ARG_INSTALL_DESTINATION)
+      set(ARG_INSTALL_RPATH_LIBRARY_DIR ARG_INSTALL_DESTINATION)
+      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "lib")
+    else()
+      set(ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
+    endif()
+  endif()
 
   # Build pool determination.
   set(_build_pool)
@@ -336,6 +399,13 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES "${_transitive_configure_depend_files}"
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
     THEROCK_OUTPUT_ON_FAILURE "${ARG_OUTPUT_ON_FAILURE}"
+
+    # RPATH
+    THEROCK_NO_INSTALL_RPATH "${ARG_NO_INSTALL_RPATH}"
+    THEROCK_INTERFACE_INSTALL_RPATH_DIRS "${_interface_install_rpath_dirs}"
+    THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_private_install_rpath_dirs}"
+    THEROCK_INSTALL_RPATH_EXECUTABLE_DIR "${ARG_INSTALL_RPATH_EXECUTABLE_DIR}"
+    THEROCK_INSTALL_RPATH_LIBRARY_DIR "${ARG_INSTALL_RPATH_LIBRARY_DIR}"
   )
 
   if(ARG_ACTIVATE)
@@ -392,6 +462,14 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_sources "${target_name}" SOURCES)
   get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  # RPATH properties: just mirror these to same named variables because we just
+  # mirror them syntactically into the subprojet..
+  get_target_property(THEROCK_NO_INSTALL_RPATH "${target_name}" THEROCK_NO_INSTALL_RPATH)
+  get_target_property(THEROCK_INTERFACE_INSTALL_RPATH_DIRS "${target_name}" THEROCK_INTERFACE_INSTALL_RPATH_DIRS)
+  get_target_property(THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${target_name}" THEROCK_PRIVATE_INSTALL_RPATH_DIRS)
+  get_target_property(THEROCK_INSTALL_RPATH_EXECUTABLE_DIR "${target_name}" THEROCK_INSTALL_RPATH_EXECUTABLE_DIR)
+  get_target_property(THEROCK_INSTALL_RPATH_LIBRARY_DIR "${target_name}" THEROCK_INSTALL_RPATH_LIBRARY_DIR)
+
 
   # Handle optional properties.
   if(NOT _sources)
@@ -443,7 +521,7 @@ function(therock_cmake_subproject_activate target_name)
   if(_build_deps OR _runtime_deps)
     set(_dep_provider_file "${THEROCK_SOURCE_DIR}/cmake/therock_subproject_dep_provider.cmake")
   endif()
-  set(_injected_file "${THEROCK_SOURCE_DIR}/cmake/therock_external_project_include.cmake")
+
   set(_init_contents)
   foreach(_var_name ${_mirror_cmake_vars})
     string(APPEND _init_contents "set(${_var_name} \"@${_var_name}@\" CACHE STRING \"\" FORCE)\n")
@@ -494,10 +572,12 @@ function(therock_cmake_subproject_activate target_name)
   if(_pre_hook_path)
     string(APPEND _init_contents "include(@_pre_hook_path@)\n")
   endif()
+  string(APPEND _init_contents "set(THEROCK_USER_POST_HOOK)\n")
   if(_post_hook_path)
-    string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_post_hook_path@\")\n")
+    string(APPEND _init_contents "set(THEROCK_USER_POST_HOOK \"@_post_hook_path@\")\n")
   endif()
-  string(APPEND _init_contents "include(${_injected_file})\n")
+  set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
+  string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
@@ -574,7 +654,7 @@ function(therock_cmake_subproject_activate target_name)
       "${_cmake_source_dir}/CMakeLists.txt"
       "${_cmake_project_toolchain_file}"
       "${_cmake_project_init_file}"
-      "${_injected_file}"
+      "${_global_post_include}"
       ${_extra_depends}
       ${_dep_provider_file}
       ${_configure_dep_stamps}
@@ -838,8 +918,10 @@ endfunction()
 # and transitive runtime deps. Both lists may contain duplicates if the DAG
 # includes the same dep multiple times.
 function(_therock_cmake_subproject_collect_runtime_deps
-    out_link_dirs out_program_dirs out_pkg_config_dirs out_transitive_deps
+    out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
+    out_transitive_deps
     out_transitive_configure_depend_files)
+  set(_install_rpath_dirs)
   set(_link_dirs)
   set(_program_dirs)
   set(_pkg_config_dirs)
@@ -873,7 +955,14 @@ function(_therock_cmake_subproject_collect_runtime_deps
     if(_pkg_config_dir)
       list(APPEND _pkg_config_dirs ${_pkg_config_dir})
     endif()
+
+    # RPATH dirs.
+    get_target_property(_install_rpath_dir "${target_name}" THEROCK_INTERFACE_INSTALL_RPATH_DIRS)
+    if(_install_rpath_dir)
+      list(APPEND _install_rpath_dirs ${_install_rpath_dir})
+    endif()
   endforeach()
+  set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
   set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
   set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)
   set("${out_pkg_config_dirs}" "${_pkg_config_dirs}" PARENT_SCOPE)

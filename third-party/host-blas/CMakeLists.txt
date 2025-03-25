@@ -26,6 +26,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTERNAL_SOURCE_DIR .
       INSTALL_DESTINATION "lib/host-math"
       INTERFACE_LINK_DIRS "lib/host-math/lib"
+      INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         -DBUILD_SHARED_LIBS=ON
