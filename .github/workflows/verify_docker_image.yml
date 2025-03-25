@@ -26,7 +26,7 @@ jobs:
             PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U --user pytest
             echo 'Run smoke tests';
             export PATH="$HOME/.local/bin:$PATH"
-            pytest -v /workspace/external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
+            pytest -v external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
             echo 'Task completed!'
           "
       - name: Verify Containers Status
