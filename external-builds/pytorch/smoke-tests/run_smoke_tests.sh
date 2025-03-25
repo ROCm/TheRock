@@ -13,7 +13,7 @@ echo 'List the pip packages'
 pip list
 
 echo 'Install pytest'
-PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest
+PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest --timeout 60 -i https://pypi.org/simple
 
 echo 'Run smoke tests'
 pytest -v external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
