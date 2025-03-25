@@ -601,16 +601,16 @@ def maybe_materialize_lib_so(
     if soname != src_entry.name:
         return
 
-    if src_entry.is_symlink():
-        # We're just going to "rotate" the symlinks so that the SONAME based
-        # one is primary and everything else points to that.
-        link_target = os.readlink(src_entry.path)
-        if not link_target.count("/"):
-            # It is just the normal libfoo.so.0 -> libfoo.so.0.1 style thing.
-            # Note that this path was materialized to dest_path too.
-            link_target_relpath = str(Path(relpath).parent / link_target)
-            assert link_target_relpath not in materialized_paths
-            materialized_paths[link_target_relpath] = dest_path
+    # if src_entry.is_symlink():
+    #     # We're just going to "rotate" the symlinks so that the SONAME based
+    #     # one is primary and everything else points to that.
+    #     link_target = os.readlink(src_entry.path)
+    #     if link_target.count("/") == 0:
+    #         # It is just the normal libfoo.so.0 -> libfoo.so.0.1 style thing.
+    #         # Note that this path was materialized to dest_path too.
+    #         link_target_relpath = str(Path(relpath).parent / link_target)
+    #         assert link_target_relpath not in materialized_paths
+    #         #materialized_paths[link_target_relpath] = dest_path
     return materialize_file(
         relpath, dest_path, src_entry, materialized_paths, resolve_src=True
     )
@@ -632,6 +632,14 @@ def materialize_lib_file(
     if file_type == "so":
         soname = get_soname(src_entry.path)
         if soname != dest_path.name:
+            # It is a concrete library like libfoo.so.0.1 where the soname
+            # is libfoo.so.0. We don't want to ever write such a thing (the
+            # actual soname link will be materialized with the contents in
+            # maybe_materialize_lib_so), but we want to advertise that it has
+            # been materialized as the soname (so we kind of invert the linkage).
+            inverted_dest_path = dest_path.with_name(soname)
+            log(f"INVLINK: {relpath} -> {inverted_dest_path} ({soname})")
+            materialized_paths[relpath] = inverted_dest_path
             return
     return materialize_file(relpath, dest_path, src_entry, materialized_paths)
 
@@ -680,10 +688,24 @@ def materialize_devel_file(
         return
 
     if relpath in materialized_paths:
-        # Materialize as a symlink to the original placement.
+        # Materialize as a symlink to the original placement. This is tricky
+        # because the symlink needs to be correct with respect to the install
+        # placement, which is something like:
+        #   _rocm_sdk_core/path/to/foo.txt
+        #   _rocm_sdk_devel/path/to/foo.txt
+        # In this example, relpath would be "path/to/foo.txt" and the proper
+        # symlink:
+        #   ../../../_rocm_sdk_core/path/to/foo.txt
+        # Conveniently, the root sibling is len(relpath_segments) up from the
+        # original_path.
+        # This is admittedly ugly, but there is not a super convenient way to
+        # do it given that the relative path is computed for an installation
+        # layout that is different from the packaging input layout.
         original_path = materialized_paths[relpath]
-        link_target = original_path.relative_to(dest_path.parent, walk_up=True)
-        log(f"LINK: {relpath} -> {link_target}", vlog=2)
+        relpath_segment_count = len(Path(relpath).parts)
+        root_sibling_path = original_path.parts[-(relpath_segment_count + 1) :]
+        link_target = Path(*([".."] * relpath_segment_count + list(root_sibling_path)))
+        log(f"DEVLINK: {relpath} -> {link_target} ({root_sibling_path})", vlog=2)
         if dest_path.exists(follow_symlinks=False):
             dest_path.unlink()
         dest_path.parent.mkdir(parents=True, exist_ok=True)

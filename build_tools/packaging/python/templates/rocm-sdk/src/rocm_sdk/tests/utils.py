@@ -2,7 +2,21 @@
 
 from pathlib import Path
 import platform
-import unittest
+import shlex
+import subprocess
+import sys
+
+
+def exec(args: list[str | Path], cwd: Path | None = None, capture: bool = False):
+    args = [str(arg) for arg in args]
+    if cwd is None:
+        cwd = Path.cwd()
+    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    sys.stdout.flush()
+    if capture:
+        return subprocess.check_output(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+    else:
+        subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
 def assert_is_physical_package(mod):
