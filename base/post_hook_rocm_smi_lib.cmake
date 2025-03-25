@@ -1,4 +1,4 @@
-# smi_lib public headers include DRM, so in the bundled case, we must ensure
+# smi_lib public headers include libdrm, so in the bundled case, we must ensure
 # that the installed libraries add the include directory. This is because
 # libdrm does not cross the install boundary as a dep (since it is pkgconfig
 # and was not set up that way).
