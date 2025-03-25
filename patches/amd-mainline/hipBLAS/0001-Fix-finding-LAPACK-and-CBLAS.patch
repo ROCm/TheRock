@@ -1,6 +1,6 @@
-From fa7a5fea33022ba1a68ca40162354eec6244401e Mon Sep 17 00:00:00 2001
+From 1bd858122d5bb62dc0738ba6a354e01f3a4c48dc Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
-Date: Thu, 20 Mar 2025 17:42:38 +0000
+Date: Tue, 25 Mar 2025 12:13:13 +0000
 Subject: [PATCH] Fix finding LAPACK and CBLAS
 
 Use target names provided by `find_package()` instead of assuming that
@@ -10,7 +10,7 @@ the reference NETLIB libraries should be used.
  1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
-index 7cad5e1..b258ae2 100644
+index 4b01cc8..5198853 100644
 --- a/clients/CMakeLists.txt
 +++ b/clients/CMakeLists.txt
 @@ -28,8 +28,8 @@ function( get_lapack lapack_lib lapack_inc )
@@ -33,8 +33,8 @@ index 7cad5e1..b258ae2 100644
      endif()
    endif()
    set( ${cblas_libs} ${libs} PARENT_SCOPE )
-@@ -196,7 +196,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
-   endif()
+@@ -201,7 +201,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+   find_package( GTest REQUIRED )
  
    message(STATUS "Build Dir: ${BUILD_DIR}")
 -  message(STATUS "Linking Ref. Libs: ${BLAS_LIBRARY}")
