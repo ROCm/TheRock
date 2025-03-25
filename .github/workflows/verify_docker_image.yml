@@ -14,11 +14,16 @@ jobs:
       - name: Pull Docker Image
         run: |
           docker pull ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main
+      - name: Pre-download pytest wheel
+        run: |
+          mkdir -p pytest_wheels
+          pip download pytest -d pytest_wheels
       - name: Run Docker Container and Execute Commands
         run: |
           docker run --rm \
           --device=/dev/kfd \
           --device=/dev/dri \
+          --mount type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
           --mount type=bind,source="$GITHUB_WORKSPACE",target=/TheRock \
           --group-add video \
           --cap-add=SYS_PTRACE \
