@@ -601,16 +601,6 @@ def maybe_materialize_lib_so(
     if soname != src_entry.name:
         return
 
-    # if src_entry.is_symlink():
-    #     # We're just going to "rotate" the symlinks so that the SONAME based
-    #     # one is primary and everything else points to that.
-    #     link_target = os.readlink(src_entry.path)
-    #     if link_target.count("/") == 0:
-    #         # It is just the normal libfoo.so.0 -> libfoo.so.0.1 style thing.
-    #         # Note that this path was materialized to dest_path too.
-    #         link_target_relpath = str(Path(relpath).parent / link_target)
-    #         assert link_target_relpath not in materialized_paths
-    #         #materialized_paths[link_target_relpath] = dest_path
     return materialize_file(
         relpath, dest_path, src_entry, materialized_paths, resolve_src=True
     )
