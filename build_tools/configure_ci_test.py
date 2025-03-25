@@ -24,6 +24,11 @@ class ConfigureCITest(unittest.TestCase):
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertFalse(run_ci)
 
+    def test_run_ci_if_source_file_and_unrelated_workflow_file_edited(self):
+        paths = ["source_file.h", ".github/workflows/publish_pytorch_dev_docker.yml"]
+        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
+        self.assertTrue(run_ci)
+
 
 if __name__ == "__main__":
     unittest.main()
