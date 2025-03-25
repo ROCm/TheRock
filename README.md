@@ -18,13 +18,7 @@ requires some additional development tools, which are included below.
 ## Common
 
 ```
-pip install CppHeaderParser==2.7.4 meson==1.7.0 PyYAML==6.0.2
-```
-
-Python 3.10 also requires `tomli`:
-
-```
-pip install tomli==2.2.1
+pip install -r requirements.txt
 ```
 
 ## On Ubuntu

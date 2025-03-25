@@ -9,6 +9,19 @@
 [components.dev."math-libs/BLAS/hipBLAS/stage"]
 [components.doc."math-libs/BLAS/hipBLAS/stage"]
 [components.lib."math-libs/BLAS/hipBLAS/stage"]
+[components.test."math-libs/BLAS/hipBLAS/stage"]
+include = [
+  "bin/hipblas_*.yaml",
+  # Clients benchmarks
+  "bin/hipblas-bench",
+  "bin/hipblas_v2-bench",
+  # Clients tests
+  "bin/hipblas-test",
+  "bin/hipblas_gentest.py",
+  "bin/hipblas_gtest.data",
+  "bin/hipblas_v2-test",
+  "bin/hipblas_v2_gtest.data",
+]
 
 # hipBLASLt
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]

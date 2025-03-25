@@ -8,6 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         targets:
+          - amdgpu_target: "gfx942"
           - amdgpu_target: "gfx1100"
           - amdgpu_target: "gfx1201"
 

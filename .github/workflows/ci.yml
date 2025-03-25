@@ -26,20 +26,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  setup:
+    uses: ./.github/workflows/setup.yml
+
   build_linux_packages:
-    permissions:
-      id-token: write
     name: Build Linux Packages
+    needs: setup
+    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
       amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
+    permissions:
+      id-token: write
 
   build_windows_packages:
     name: Build Windows Packages
+    needs: setup
+    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
     uses: ./.github/workflows/build_windows_packages.yml
 
   test_linux_packages:
-    needs: build_linux_packages
+    needs: [setup, build_linux_packages]
     name: Test Linux Packages
     uses: ./.github/workflows/test_linux_packages.yml
     with:

@@ -1,7 +1,7 @@
-From 39193b497ddaae7c0bce1468cc7e4916db11848f Mon Sep 17 00:00:00 2001
+From 7413f1b2b01f9ddc03ccff4b4e607af6261225af Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 14:26:45 +0000
-Subject: [PATCH 3/3] Find `rocm_smi` via config files
+Subject: [PATCH 5/6] Find `rocm_smi` via config files
 
 Use the config files provided by upstream instead of a custom finder.
 ---
@@ -11,10 +11,10 @@ Use the config files provided by upstream instead of a custom finder.
  delete mode 100644 clients/cmake/FindROCmSMI.cmake
 
 diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
-index 0c673368..d92421ed 100644
+index 12bd44d7..dc61a102 100644
 --- a/clients/CMakeLists.txt
 +++ b/clients/CMakeLists.txt
-@@ -179,8 +179,8 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+@@ -193,8 +193,8 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
  
    # Find the package ROCmSMI
    if(NOT WIN32)

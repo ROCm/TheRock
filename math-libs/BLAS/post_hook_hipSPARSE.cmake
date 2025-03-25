@@ -8,12 +8,14 @@ therock_set_install_rpath(
     .
 )
 
-therock_set_install_rpath(
-  TARGETS
-    hipsparse-bench
-    hipsparse-test
-  PATHS
-    ../lib
-    ../lib/llvm/lib
-    ../lib/rocm_sysdeps/lib
-)
+if(THEROCK_BUILD_TESTING)
+  therock_set_install_rpath(
+    TARGETS
+      hipsparse-bench
+      hipsparse-test
+    PATHS
+      ../lib
+      ../lib/llvm/lib
+      ../lib/rocm_sysdeps/lib
+  )
+endif()

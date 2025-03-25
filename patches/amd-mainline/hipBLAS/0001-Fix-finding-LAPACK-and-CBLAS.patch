@@ -1,0 +1,47 @@
+From 1bd858122d5bb62dc0738ba6a354e01f3a4c48dc Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Tue, 25 Mar 2025 12:13:13 +0000
+Subject: [PATCH] Fix finding LAPACK and CBLAS
+
+Use target names provided by `find_package()` instead of assuming that
+the reference NETLIB libraries should be used.
+---
+ clients/CMakeLists.txt | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 4b01cc8..5198853 100644
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -28,8 +28,8 @@ function( get_lapack lapack_lib lapack_inc )
+     set( inc "${BUILD_DIR}/deps/deps-install/include" )
+     set( ${cblas_inc} ${inc} PARENT_SCOPE )
+   else()
+-    find_package( lapack REQUIRED CONFIG )
+-    set( lib "lapack" )
++    find_package( LAPACK REQUIRED )
++    set( lib "${LAPACK_LIBRARIES}" )
+   endif()
+   set( ${lapack_lib} ${lib} PARENT_SCOPE )
+ endfunction( )
+@@ -52,7 +52,7 @@ function( get_cblas cblas_libs cblas_inc )
+       set( ${cblas_inc} ${inc} PARENT_SCOPE )
+     else()
+       find_package( cblas REQUIRED CONFIG )
+-      set( libs cblas blas )
++      set( libs ${CBLAS_LIBRARIES} )
+     endif()
+   endif()
+   set( ${cblas_libs} ${libs} PARENT_SCOPE )
+@@ -201,7 +201,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+   find_package( GTest REQUIRED )
+ 
+   message(STATUS "Build Dir: ${BUILD_DIR}")
+-  message(STATUS "Linking Ref. Libs: ${BLAS_LIBRARY}")
++  message(STATUS "Linking Libs: ${BLAS_LIBRARY}")
+ 
+   if( BUILD_CLIENTS_TESTS )
+     add_subdirectory( gtest )
+-- 
+2.43.0
+

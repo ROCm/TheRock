@@ -40,6 +40,14 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # hipBLASLt
 ##############################################################################
 
+set(hipBLASLt_optional_deps)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND hipBLASLt_optional_deps
+    therock-host-blas
+    rocm_smi_lib
+  )
+endif()
+
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "hipBLASLt"
   BACKGROUND_BUILD
@@ -61,8 +69,7 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
-    rocm_smi_lib
-    therock-host-blas
+    ${hipBLASLt_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
 SUBDIRS
@@ -76,6 +83,11 @@ list(APPEND _blas_subproject_names hipBLASLt)
 ##############################################################################
 # rocBLAS
 ##############################################################################
+
+set(rocBLAS_optional_deps)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_optional_deps rocm_smi_lib)
+endif()
 
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "rocBLAS"
@@ -104,7 +116,7 @@ therock_cmake_subproject_declare(rocBLAS
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
-    rocm_smi_lib
+    ${rocBLAS_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
@@ -255,6 +267,9 @@ set(hipBLAS_optional_deps)
 if(THEROCK_ENABLE_SOLVER)
   list(APPEND hipBLAS_optional_deps rocSOLVER)
 endif()
+if(THEROCK_BUILD_TESTING)
+  list(APPEND hipBLAS_optional_deps therock-host-blas)
+endif()
 
 therock_cmake_subproject_declare(hipBLAS
   EXTERNAL_SOURCE_DIR "hipBLAS"
@@ -264,6 +279,10 @@ therock_cmake_subproject_declare(hipBLAS
     -DROCM_PATH=
     -DROCM_DIR=
     "-DBUILD_WITH_SOLVER=${THEROCK_ENABLE_SOLVER}"
+    -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
+    -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
+    -DBUILD_CLIENTS_SAMPLES=OFF
+    -DLINK_BLIS=OFF
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
