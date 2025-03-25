@@ -48,13 +48,23 @@ if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
+# Meson refuses to build if the source dir is a subdir of the build dir, so
+# make it a sibling.
+set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
+
 add_custom_target(
   meson_build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${PATCH_SOURCE_DIR}"
   COMMAND
-    "${CMAKE_COMMAND}" -E chdir "${SOURCE_DIR}"
+    # We have to patch the sources so make a fresh copy.
+    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
+  COMMAND
+    # Inline the amdgpu device table.
+    "${CMAKE_CURRENT_SOURCE_DIR}/inline_amdgpu_ids.sh" "${PATCH_SOURCE_DIR}"
+  COMMAND
+    "${CMAKE_COMMAND}" -E chdir "${PATCH_SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
       # Escaping hack: experimentally determined to persist through the layers.
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
