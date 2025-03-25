@@ -16,15 +16,17 @@ jobs:
           docker pull ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main
       - name: Run Docker Container and Execute Commands
         run: |
-          docker run --rm --device=/dev/kfd --mount type=bind,source="$GITHUB_WORKSPACE",target=/workspace --device=/dev/dri --group-add video --cap-add=SYS_PTRACE ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main /bin/bash
+          docker run --rm --device=/dev/kfd --mount type=bind,source="$GITHUB_WORKSPACE",target=/ --device=/dev/dri --group-add video --cap-add=SYS_PTRACE ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main /bin/bash
             echo 'Running inside the container';
+            echo 'Set path to .local/bin;
+            export PATH="$HOME/.local/bin:$PATH"
+            echo ${PATH}
             echo 'Check Python version';
             python3 --version;
             echo 'List the pip packages';
             pip list;
             echo 'Install pytest';
             PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest
-            export PATH="$HOME/.local/bin:$PATH"
             echo 'Run smoke tests';
             ls  external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
             pwd
