@@ -1,6 +1,7 @@
 name: Pull and Verify Docker Image
 
 on:
+  push:
   workflow_call:
   workflow_dispatch:
 jobs:
