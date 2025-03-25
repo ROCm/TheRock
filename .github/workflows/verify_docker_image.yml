@@ -1,44 +1,30 @@
 name: Pull and Verify Docker Image
 
 on:
-  push:
-  registry_package:
   workflow_call:
   workflow_dispatch:
 jobs:
   pull-and-build-image:
-    strategy:
-      fail-fast: false
-      matrix:
-        targets:
-          - amdgpu_target: "gfx942"
-        os: [ubuntu_24_04]
-        runs-on: [linux-mi300-1gpu-ossci-rocm]
-    name: Verify therock_pytorch_dev_${{matrix.os}}_${{ matrix.targets.amdgpu_target }} Image
-    runs-on: ${{matrix.runs-on}}
+    name: Verify Docker Image
+    runs-on: linux-mi300-1gpu-ossci-rocm
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Pull Docker Image
         run: |
-          docker pull ghcr.io/rocm/therock_pytorch_dev_${{matrix.os}}_${{matrix.targets.amdgpu_target}}:main
+          docker pull ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main
       - name: Run Docker Container and Execute Commands
         run: |
-          docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --cap-add=SYS_PTRACE ghcr.io/rocm/therock_pytorch_dev_${{matrix.os}}_${{matrix.targets.amdgpu_target}}:main /bin/bash -c "
+          docker run --rm --device=/dev/kfd --mount type=bind,source="$GITHUB_WORKSPACE",target=/workspace --device=/dev/dri --group-add video --cap-add=SYS_PTRACE ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main /bin/bash
             echo 'Running inside the container';
             echo 'Check Python version';
             python3 --version;
             echo 'List the pip packages';
             pip list;
-            cd
-            echo 'Install wget';
-            apt-get install -y wget
-            echo 'Download smoke tests';
-            wget https://raw.githubusercontent.com/ROCm/TheRock/refs/heads/main/external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
             echo 'Install pytest';
             PIP_BREAK_SYSTEM_PACKAGES=1 pip install -U pytest
             echo 'Run smoke tests';
-            pytest -v pytorch_smoke_tests.py
+            pytest -v /workspace/external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
             echo 'Task completed!'
           "
       - name: Verify Containers Status
