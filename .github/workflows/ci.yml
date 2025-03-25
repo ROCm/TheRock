@@ -10,6 +10,9 @@ on:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
 
 permissions:
   contents: read
@@ -41,6 +44,7 @@ jobs:
     uses: ./.github/workflows/test_linux_packages.yml
     with:
       amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
+      runs-on: "${{ inputs.runs-on != '' && inputs.runs-on || 'linux-mi300-1gpu-ossci-rocm' }}"
 
   # build_python_packages:
   #   name: Build Python Packages

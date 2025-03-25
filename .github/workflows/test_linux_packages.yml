@@ -9,11 +9,17 @@ on:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   workflow_call:
     inputs:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   push:
     branches:
       - ADHOCBUILD
@@ -24,6 +30,7 @@ jobs:
     uses: './.github/workflows/test_sanity_check.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      runs-on: ${{ inputs.runs-on }}
 
   test_blas:
     name: 'Test BLAS math-lib'
@@ -32,3 +39,4 @@ jobs:
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      runs-on: ${{ inputs.runs-on }}

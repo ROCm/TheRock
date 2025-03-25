@@ -9,6 +9,9 @@ on:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   workflow_call:
     inputs:
       artifact_run_id:
@@ -17,6 +20,9 @@ on:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   push:
     branches:
       - ADHOCBUILD
@@ -24,7 +30,7 @@ on:
 jobs:
   test_blas:
     name: "BLAS math-lib test"
-    runs-on: linux-mi300-1gpu-ossci-rocm
+    runs-on: ${{ inputs.runs-on }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
       options: "--device=/dev/kfd --device=/dev/dri --group-add video"
