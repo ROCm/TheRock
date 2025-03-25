@@ -101,6 +101,7 @@ SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "*.gitignore",
     "*.md",
+    "*.pre-commit-config.*",
     "*LICENSE",
 ]
 
@@ -115,6 +116,61 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
     if paths is None:
         return False
     return any(not is_path_skippable(p) for p in paths)
+
+
+# TODO(#199): rename all of these to `ci_*.yml` so this is easier to understand?
+GITHUB_WORKFLOWS_CI_PATTERNS = [
+    "ci.yml",
+    "setup.yml",
+    "build_*_packages.yml",
+    "test_*_packages.yml",
+]
+
+
+def is_path_workflow_file_related_to_ci(path: str) -> bool:
+    return any(
+        fnmatch.fnmatch(path, ".github/workflows/" + pattern)
+        for pattern in GITHUB_WORKFLOWS_CI_PATTERNS
+    )
+
+
+def check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:
+    if paths is None:
+        return False
+    return any(is_path_workflow_file_related_to_ci(p) for p in paths)
+
+
+def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
+    """Returns true if CI workflows should run given a list of modified paths."""
+
+    if paths is None:
+        print("No files were modified, skipping build jobs")
+        return False
+
+    paths_set = set(paths)
+    github_workflows_paths = set(
+        [p for p in paths if p.startswith(".github/workflows")]
+    )
+    other_paths = paths_set - github_workflows_paths
+
+    related_to_ci = check_for_workflow_file_related_to_ci(github_workflows_paths)
+    contains_other_non_skippable_files = check_for_non_skippable_path(other_paths)
+
+    print("should_ci_run_given_modified_paths findings:")
+    print(f"  related_to_ci: {related_to_ci}")
+    print(f"  contains_other_non_skippable_files: {contains_other_non_skippable_files}")
+
+    if related_to_ci:
+        print("Enabling build jobs since a related workflow file was modified")
+        return True
+    elif contains_other_non_skippable_files:
+        print("Enabling build jobs since a non-skippable path was modified")
+        return True
+    else:
+        print(
+            "Only unrelated and/or skippable paths were modified, skipping build jobs"
+        )
+        return False
 
 
 # --------------------------------------------------------------------------- #
@@ -163,12 +219,7 @@ def main():
         )
         # TODO(#199): other behavior changes
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
-        includes_non_skippable_path = check_for_non_skippable_path(modified_paths)
-        if includes_non_skippable_path:
-            print("Enabling build jobs since a non-skippable path was modified")
-            enable_build_jobs = True
-        else:
-            print("Only skippable paths were modified, keeping build jobs disabled")
+        enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
     write_job_summary(
         f"""## Workflow configure results
