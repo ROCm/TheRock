@@ -1,0 +1,33 @@
+name: Pull and Verify Docker Image
+
+on:
+  workflow_call:
+  workflow_dispatch:
+jobs:
+  pull-and-build-image:
+    name: Verify Docker Image
+    runs-on: linux-mi300-1gpu-ossci-rocm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Pull Docker Image
+        run: |
+          docker pull ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main
+      - name: Pre-download pytest wheel
+        run: |
+          mkdir -p pytest_wheels
+          pip download pytest -d pytest_wheels
+      - name: Run Docker Container and Execute Commands
+        run: |
+          docker run --rm \
+          --device=/dev/kfd \
+          --device=/dev/dri \
+          --mount type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
+          --mount type=bind,source="$GITHUB_WORKSPACE",target=/TheRock \
+          --group-add video \
+          --cap-add=SYS_PTRACE \
+          -w /TheRock \
+          ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main \
+          bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+      - name: Verify Containers Status
+        run: docker ps -a
