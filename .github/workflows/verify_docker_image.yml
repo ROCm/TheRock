@@ -16,7 +16,7 @@ jobs:
           docker pull ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main
       - name: Run Docker Container and Execute Commands
         run: |
-          docker run --rm --device=/dev/kfd --mount type=bind,source="$GITHUB_WORKSPACE",target=/ --device=/dev/dri --group-add video --cap-add=SYS_PTRACE ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main /bin/bash
+          docker run --rm --device=/dev/kfd --mount type=bind,source="$GITHUB_WORKSPACE",target=/TheRock --device=/dev/dri --group-add video --cap-add=SYS_PTRACE ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main /bin/bash
             echo 'Running inside the container';
             echo 'Set path to .local/bin;
             export PATH="$HOME/.local/bin:$PATH"
