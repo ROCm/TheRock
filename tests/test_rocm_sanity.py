@@ -51,7 +51,7 @@ class TestROCmSanity:
 
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
-        process = run_command(
+        run_command(
             [
                 "./hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),

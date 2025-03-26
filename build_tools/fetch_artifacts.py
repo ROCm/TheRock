@@ -26,7 +26,6 @@ def s3_exec(variant, package, run_id, build_dir):
     log(f"++ Exec [{cmd}]")
     subprocess.run(cmd)
 
-
 def retrieve_base_artifacts(run_id, build_dir):
     base_artifacts = [
         "core-runtime_run",

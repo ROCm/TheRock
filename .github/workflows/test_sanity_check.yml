@@ -66,13 +66,13 @@ jobs:
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
           echo "Downloading artifacts"
-          python ./build_tools/fetch_artifacts.py \
+          python ${{ github.workspace }}/build_tools/fetch_artifacts.py \
             --run-id=${ARTIFACT_RUN_ID} \
             --build-dir=${BUILD_ARTIFACTS_DIR}
 
           echo "Unpacking artifacts"
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
-          python ./build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
+          python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
 
       - name: Run rocminfo
         run: |
