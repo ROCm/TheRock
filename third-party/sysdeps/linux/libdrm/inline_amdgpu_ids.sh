@@ -3,6 +3,8 @@
 # with a fully inlined table that does not need to consult a fixed place on
 # the filesystem.
 
+set -euo pipefail
+
 SOURCE_DIR="${1:?Expected source directory}"
 
 generate() {
