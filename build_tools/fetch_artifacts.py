@@ -34,12 +34,11 @@ def retrieve_base_artifacts(run_id, build_dir):
         "sysdeps_lib",
         "base_lib",
         "amd-llvm_lib",
+        "amd-llvm_run",
         "core-hip_lib",
         "host-blas_lib",
         "rocprofiler-sdk_lib",
-        "host-suite-sparse_lib",
-        "core-runtime_run",
-        "amd-llvm_run",
+        "host-suite-sparse_lib"
     ]
     for base_artifact in base_artifacts:
         s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
