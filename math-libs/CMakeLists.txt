@@ -138,6 +138,7 @@ if(THEROCK_ENABLE_PRIM)
   therock_provide_artifact(prim
     DESCRIPTOR artifact-prim.toml
     COMPONENTS
+      dbg
       dev
       doc
       test

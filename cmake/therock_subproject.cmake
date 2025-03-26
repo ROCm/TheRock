@@ -27,6 +27,9 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   THEROCK_PRIVATE_INSTALL_RPATH_DIRS
   THEROCK_INSTALL_RPATH_EXECUTABLE_DIR
   THEROCK_INSTALL_RPATH_LIBRARY_DIR
+
+  # Debug info handling.
+  THEROCK_SPLIT_DEBUG_INFO
 )
 
 # Some sub-projects do not react well to not having any GPU targets to build.
@@ -636,6 +639,7 @@ function(therock_cmake_subproject_activate target_name)
       "-B${_binary_dir}"
       "-S${_cmake_source_dir}"
       "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
+      "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
       "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
       "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
       ${_cmake_args}
@@ -708,6 +712,10 @@ function(therock_cmake_subproject_activate target_name)
   add_dependencies("${target_name}" "${target_name}+build")
 
   # stage install target.
+  set(_install_strip_option)
+  if(THEROCK_SPLIT_DEBUG_INFO)
+    set(_install_strip_option "--strip")
+  endif()
   therock_subproject_log_command(_install_log_prefix
     LOG_FILE "${target_name}_install.log"
     LABEL "${target_name} install"
@@ -718,7 +726,7 @@ function(therock_cmake_subproject_activate target_name)
   set(_stage_stamp_file "${_stamp_dir}/stage.stamp")
   add_custom_command(
     OUTPUT "${_stage_stamp_file}"
-    COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}"
+    COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
     COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
     WORKING_DIRECTORY "${_binary_dir}"
     COMMENT "Stage installing sub-project ${target_name}"

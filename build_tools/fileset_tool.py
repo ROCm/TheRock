@@ -44,7 +44,14 @@ class ComponentDefaults:
 
 
 # Debug components collect all platform specific dbg file patterns.
-ComponentDefaults("dbg", includes=["**/*.dbg"])
+ComponentDefaults(
+    "dbg", 
+    includes=[
+        # Linux build-id based debug files.
+        ".build-id/**/*.debug",
+    ],
+)
+
 # Dev components include all static library based file patterns and
 # exclude file name patterns implicitly included for "run" and "lib".
 # Descriptors should explicitly include header file any package file

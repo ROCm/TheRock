@@ -68,9 +68,16 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   message(STATUS "Defaulted CMAKE_INSTALL_PREFIX to ${CMAKE_INSTALL_PREFIX}")
 endif()
 
+
 set(ROCM_MAJOR_VERSION 6)
 set(ROCM_MINOR_VERSION 4)
 set(ROCM_PATCH_VERSION 0)
+
+################################################################################
+# Debug Options
+################################################################################
+
+option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
 
 ################################################################################
 # Feature selection

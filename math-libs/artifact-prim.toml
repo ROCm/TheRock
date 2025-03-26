@@ -1,4 +1,5 @@
 # rocPRIM
+[components.dbg."math-libs/rocPRIM/stage"]
 [components.dev."math-libs/rocPRIM/stage"]
 [components.doc."math-libs/rocPRIM/stage"]
 [components.test."math-libs/rocPRIM/stage"]
@@ -8,6 +9,7 @@ include = [
 ]
 
 # hipCUB
+[components.dbg."math-libs/hipCUB/stage"]
 [components.dev."math-libs/hipCUB/stage"]
 [components.doc."math-libs/hipCUB/stage"]
 [components.test."math-libs/hipCUB/stage"]
@@ -17,6 +19,7 @@ include = [
 ]
 
 # rocThrust
+[components.dbg."math-libs/rocThrust/stage"]
 [components.dev."math-libs/rocThrust/stage"]
 [components.doc."math-libs/rocThrust/stage"]
 [components.test."math-libs/rocThrust/stage"]

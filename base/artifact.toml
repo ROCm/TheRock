@@ -3,6 +3,7 @@
 [components.doc."base/half/stage"]
 
 # rocm_smi_lib
+[components.dbg."base/rocm_smi_lib/stage"]
 [components.dev."base/rocm_smi_lib/stage"]
 [components.doc."base/rocm_smi_lib/stage"]
 [components.lib."base/rocm_smi_lib/stage"]
@@ -28,6 +29,7 @@ include = [
 include = "libexec/**"
 
 # rocprofiler-register
+[components.dbg."base/rocprofiler-register/stage"]
 [components.dev."base/rocprofiler-register/stage"]
 [components.doc."base/rocprofiler-register/stage"]
 [components.lib."base/rocprofiler-register/stage"]

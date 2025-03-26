@@ -10,6 +10,31 @@ include(therock_subproject_utils)
 set(THEROCK_ALL_TARGETS)
 therock_get_all_targets(THEROCK_ALL_TARGETS "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# Separate linked targets into categories.
+set(THEROCK_EXECUTABLE_TARGETS)
+set(THEROCK_SHARED_LIBRARY_TARGETS)
+set(THEROCK_MODULE_TARGETS)
+block()
+  foreach(target ${THEROCK_ALL_TARGETS})
+    get_target_property(target_type "${target}" TYPE)
+    get_target_property(target_alias "${target}" ALIASED_TARGET)
+    if(target_alias)
+      continue()
+    endif()
+    if("${target_type}" STREQUAL "SHARED_LIBRARY")
+      list(APPEND THEROCK_SHARED_LIBRARY_TARGETS "${target}")
+    elseif("${target_type}" STREQUAL "EXECUTABLE")
+      list(APPEND THEROCK_EXECUTABLE_TARGETS "${target}")
+    elseif("${target_type}" STREQUAL "MODULE_LIBRARY")
+      list(APPEND THEROCK_MODULE_TARGETS "${target}")
+    endif()
+  endforeach()
+
+  set(THEROCK_SHARED_LIBRARY_TARGETS "${THEROCK_SHARED_LIBRARY_TARGETS}" PARENT_SCOPE)
+  set(THEROCK_EXECUTABLE_TARGETS "${THEROCK_EXECUTABLE_TARGETS}" PARENT_SCOPE)
+  set(THEROCK_MODULE_TARGETS "${THEROCK_MODULE_TARGETS}" PARENT_SCOPE)
+endblock()
+
 # Delegate to user post hook.
 if(THEROCK_USER_POST_HOOK)
   include("${THEROCK_USER_POST_HOOK}")
@@ -20,11 +45,12 @@ endif()
 # Unless if disabled by the global NO_INSTALL_RPATH on the project or locally
 # via THEROCK_NO_INSTALL_RPATH target property, performs default installation
 # RPATH assignment.
-function(_therock_post_process_rpath_target target target_type)
+function(_therock_post_process_rpath_target target)
   get_target_property(_no_install_rpath "${target}" THEROCK_NO_INSTALL_RPATH)
   if(THEROCK_NO_INSTALL_RPATH OR _no_install_rpath)
     return()
   endif()
+  get_target_property(target_type "${target}" TYPE)
 
   # Determine the target's origin, which is what RPATHs must be relative to.
   get_target_property(_origin ${target} THEROCK_INSTALL_RPATH_ORIGIN)
@@ -48,19 +74,42 @@ function(_therock_post_process_rpath_target target target_type)
   therock_set_install_rpath(TARGETS "${target}" PATHS ${_install_rpath})
 endfunction()
 
-# Iterate over all targets and set default RPATH (unless if globally disabled
-# for the subproject).
+
+# Iterate over all shared library and executable targets and set default RPATH 
+# (unless if globally disabled for the subproject).
 block()
   if(NOT THEROCK_NO_INSTALL_RPATH)
-    foreach(target ${THEROCK_ALL_TARGETS})
-      get_target_property(target_type "${target}" TYPE)
-      get_target_property(target_alias "${target}" ALIASED_TARGET)
-      if(ALIASED_TARGET OR
-        (NOT target_type STREQUAL "SHARED_LIBRARY" AND NOT target_type STREQUAL "EXECUTABLE"))
-        continue()
-      endif()
-
-      _therock_post_process_rpath_target(${target} ${target_type})
+    foreach(target ${THEROCK_EXECUTABLE_TARGETS} ${THEROCK_SHARED_LIBRARY_TARGETS})
+      _therock_post_process_rpath_target(${target})
     endforeach()
   endif()
 endblock()
+
+# Process all shared library and executable targets and emit install time code
+# to process their build id and split debug files out.
+if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  include(CMakeFindBinUtils)
+  block()
+    install(
+      CODE "set(THEROCK_DEBUG_BUILD_ID_PATHS)" 
+      CODE "set(THEROCK_OBJCOPY \"${CMAKE_OBJCOPY}\")"
+      CODE "set(THEROCK_READELF \"${CMAKE_READELF}\")"
+      CODE "set(THEROCK_STAGE_INSTALL_ROOT \"${THEROCK_STAGE_INSTALL_ROOT}\")"
+      COMPONENT THEROCK_DEBUG_BUILD_ID
+    )
+    foreach(target 
+            ${THEROCK_EXECUTABLE_TARGETS} 
+            ${THEROCK_SHARED_LIBRARY_TARGETS} 
+            ${THEROCK_MODULE_TARGETS})
+      set(_target_path "$<TARGET_FILE:${target}>")
+      install(
+        CODE "list(APPEND THEROCK_DEBUG_BUILD_ID_PATHS \"${_target_path}\")"
+        COMPONENT THEROCK_DEBUG_BUILD_ID
+      )
+    endforeach()
+    install(
+        SCRIPT "${THEROCK_SOURCE_DIR}/cmake/therock_install_linux_build_id_files.cmake"
+        COMPONENT THEROCK_DEBUG_BUILD_ID        
+    )
+  endblock()
+endif()

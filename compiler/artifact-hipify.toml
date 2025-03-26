@@ -1,3 +1,4 @@
+[components.dbg."compiler/hipify/stage"]
 [components.run."compiler/hipify/stage"]
 include = [
   "bin/**",
