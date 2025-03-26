@@ -35,6 +35,7 @@ def retrieve_base_artifacts(run_id, build_dir):
         "amd-llvm_run",
         "amd-llvm_lib",
         "core-hip_lib",
+        "core-hip_dev",
         "host-blas_lib",
         # "rocprofiler-sdk_lib",
         # "host-suite-sparse_lib"
