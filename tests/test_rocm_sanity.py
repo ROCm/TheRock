@@ -51,7 +51,7 @@ class TestROCmSanity:
 
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
-        run_command(
+        process = run_command(
             [
                 "./hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),
@@ -60,6 +60,9 @@ class TestROCmSanity:
             ],
             cwd=str(THEROCK_BIN_DIR),
         )
+        
+        logger.info(str(process.stdout))
+        logger.info(str(process.returncode))
 
         # Running and checking the executable
         process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
