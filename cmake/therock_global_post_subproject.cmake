@@ -75,7 +75,7 @@ function(_therock_post_process_rpath_target target)
 endfunction()
 
 
-# Iterate over all shared library and executable targets and set default RPATH 
+# Iterate over all shared library and executable targets and set default RPATH
 # (unless if globally disabled for the subproject).
 block()
   if(NOT THEROCK_NO_INSTALL_RPATH)
@@ -91,15 +91,15 @@ if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   include(CMakeFindBinUtils)
   block()
     install(
-      CODE "set(THEROCK_DEBUG_BUILD_ID_PATHS)" 
+      CODE "set(THEROCK_DEBUG_BUILD_ID_PATHS)"
       CODE "set(THEROCK_OBJCOPY \"${CMAKE_OBJCOPY}\")"
       CODE "set(THEROCK_READELF \"${CMAKE_READELF}\")"
       CODE "set(THEROCK_STAGE_INSTALL_ROOT \"${THEROCK_STAGE_INSTALL_ROOT}\")"
       COMPONENT THEROCK_DEBUG_BUILD_ID
     )
-    foreach(target 
-            ${THEROCK_EXECUTABLE_TARGETS} 
-            ${THEROCK_SHARED_LIBRARY_TARGETS} 
+    foreach(target
+            ${THEROCK_EXECUTABLE_TARGETS}
+            ${THEROCK_SHARED_LIBRARY_TARGETS}
             ${THEROCK_MODULE_TARGETS})
       set(_target_path "$<TARGET_FILE:${target}>")
       install(
@@ -109,7 +109,7 @@ if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endforeach()
     install(
         SCRIPT "${THEROCK_SOURCE_DIR}/cmake/therock_install_linux_build_id_files.cmake"
-        COMPONENT THEROCK_DEBUG_BUILD_ID        
+        COMPONENT THEROCK_DEBUG_BUILD_ID
     )
   endblock()
 endif()

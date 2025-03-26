@@ -44,7 +44,7 @@ block()
     cmake_path(GET _output_path PARENT_PATH _parent_dir)
     file(MAKE_DIRECTORY "${_parent_dir}")
     execute_process(
-      COMMAND 
+      COMMAND
         "${THEROCK_OBJCOPY}" --only-keep-debug
         "${binary_path}" "${_output_path}"
       COMMAND_ERROR_IS_FATAL ANY

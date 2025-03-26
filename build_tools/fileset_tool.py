@@ -45,7 +45,7 @@ class ComponentDefaults:
 
 # Debug components collect all platform specific dbg file patterns.
 ComponentDefaults(
-    "dbg", 
+    "dbg",
     includes=[
         # Linux build-id based debug files.
         ".build-id/**/*.debug",
