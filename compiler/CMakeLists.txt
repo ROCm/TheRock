@@ -12,6 +12,7 @@ if(THEROCK_ENABLE_COMPILER)
   endif()
 
   therock_cmake_subproject_declare(amd-llvm
+    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "amd-llvm"
     # Note that LLVM top level CMakeLists.txt is in the llvm subdir of the
     # monorepo.
@@ -49,6 +50,8 @@ if(THEROCK_ENABLE_COMPILER)
     INSTALL_DESTINATION "lib/llvm"
     INTERFACE_LINK_DIRS
       "lib/llvm/lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib/llvm/lib"
   )
   # Note that we do not trigger on LLVM source changes because the monorepo is
   # too large to glob like that. Consider having a project dev mode option for
@@ -68,6 +71,7 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
 
   therock_cmake_subproject_declare(amd-comgr
+    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
     BINARY_DIR "amd-comgr"
     BACKGROUND_BUILD
@@ -129,6 +133,7 @@ if(THEROCK_ENABLE_HIPIFY)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipify
+    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "hipify"
     BACKGROUND_BUILD
     INTERFACE_PROGRAM_DIRS

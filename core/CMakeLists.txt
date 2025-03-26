@@ -17,6 +17,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       ${THEROCK_BUNDLED_NUMACTL}
     INTERFACE_LINK_DIRS
       "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
   )
   therock_cmake_subproject_glob_c_sources(ROCR-Runtime
     SUBDIRS
@@ -93,6 +95,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
       "lib"
   )
   therock_cmake_subproject_glob_c_sources(hip-clr SUBDIRS .)

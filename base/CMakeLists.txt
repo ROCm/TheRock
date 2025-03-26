@@ -52,7 +52,15 @@ if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion g
 
 therock_cmake_subproject_declare(rocm_smi_lib
   EXTERNAL_SOURCE_DIR "rocm_smi_lib"
+  CMAKE_ARGS
+    # See the post_hook, which needs to advertise install interface directories
+    # in this case.
+    "-DTHEROCK_HAS_BUNDLED_LIBDRM=${THEROCK_BUNDLED_LIBDRM}"
   INTERFACE_LINK_DIRS
+    "lib"
+  INSTALL_RPATH_DIRS
+    "lib"
+  INTERFACE_INSTALL_RPATH_DIRS
     "lib"
   RUNTIME_DEPS
     ${THEROCK_BUNDLED_LIBDRM}
@@ -76,6 +84,8 @@ endif()
 therock_cmake_subproject_declare(rocprofiler-register
   EXTERNAL_SOURCE_DIR "rocprofiler-register"
   INTERFACE_LINK_DIRS
+    "lib"
+  INTERFACE_INSTALL_RPATH_DIRS
     "lib"
 )
 therock_cmake_subproject_glob_c_sources(rocprofiler-register
