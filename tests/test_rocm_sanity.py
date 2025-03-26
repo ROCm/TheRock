@@ -60,9 +60,6 @@ class TestROCmSanity:
             ],
             cwd=str(THEROCK_BIN_DIR),
         )
-        
-        logger.info(str(process.stderr))
-        logger.info(str(process.returncode))
 
         # Running and checking the executable
         process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
