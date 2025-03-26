@@ -21,7 +21,7 @@ struct inline_amdgpu_id {
 };
 '
   # Output an inline table.
-  echo "static struct inline_amdgpu_id inline_amdgpu_ids[] = {"
+  echo 'static struct inline_amdgpu_id inline_amdgpu_ids[] = {'
 
   # Syntax: device_id,  revision_id,  product_name
   # Fields are separated by {comma} {tab}.
@@ -38,10 +38,10 @@ struct inline_amdgpu_id {
     fi
     echo "  {0x${parts[0]}, 0x${parts[1]}, \"${parts[2]}\"},"
   done < "${SOURCE_DIR}/data/amdgpu.ids"
-  echo "};"
+  echo '};'
 
   # And export a lookup function.
-  echo "
+  echo '
 void amdgpu_parse_asic_ids(struct amdgpu_device *dev) {
   const size_t count = sizeof inline_amdgpu_ids / sizeof inline_amdgpu_ids[0];
   for (size_t i = 0; i < count; ++i) {
@@ -56,7 +56,7 @@ void amdgpu_parse_asic_ids(struct amdgpu_device *dev) {
     }
   }
 }
-"
+'
 }
 
 generate > "${SOURCE_DIR}/amdgpu/amdgpu_asic_id.c"
