@@ -19,7 +19,7 @@ jobs:
           pip download pytest -d pytest_wheels
       - name: Run Docker Container and Execute Commands
         run: |
-          docker run --rm -d --name pytorch_container \
+          docker run --rm -d --name the_container \
           --device=/dev/kfd \
           --device=/dev/dri \
           --mount type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
@@ -30,8 +30,8 @@ jobs:
           ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
       - name: Waiting for container to finish...
-        run: docker wait pytorch_container
+        run: docker wait the_container
       - name: Inspecting exit code...
-        run: exit $(docker inspect pytorch_container --format='{{.State.ExitCode}}')
+        run: exit $(docker inspect the_container --format='{{.State.ExitCode}}')
       - name: Verify Containers Status
         run: docker ps -a
