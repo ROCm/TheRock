@@ -28,7 +28,7 @@ jobs:
           --cap-add=SYS_PTRACE \
           -w /TheRock \
           ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main \
-          bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+          bash -c "stdbuf -oL -eL bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh"
       - name: Waiting for container to finish...
         run: docker wait the_container
       - name: Inspecting exit code...
