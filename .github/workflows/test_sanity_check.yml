@@ -35,7 +35,6 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       BUILD_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
       THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
-      VARIANT: "_generic"
 
     steps:
       - name: Checkout Repository
@@ -67,11 +66,13 @@ jobs:
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
           echo "Downloading artifacts"
-          ./build_tools/artifact_scripts/download_sanity_artifacts.sh
+          python ./build_tools/fetch_artifacts.py \
+            --run-id=${ARTIFACT_RUN_ID} \
+            --build-dir=${BUILD_ARTIFACTS_DIR}
 
           echo "Unpacking artifacts"
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
-          python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
+          python ./build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
 
       - name: Run rocminfo
         run: |
