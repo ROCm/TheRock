@@ -32,6 +32,6 @@ jobs:
       - name: Waiting for container to finish...
         run: docker wait pytorch_container
       - name: Inspecting exit code...
-        run: exit $(docker inspect test --format='{{.State.ExitCode}}')
+        run: exit $(docker inspect pytorch_container --format='{{.State.ExitCode}}')
       - name: Verify Containers Status
         run: docker ps -a
