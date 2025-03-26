@@ -19,7 +19,7 @@ jobs:
           pip download pytest -d pytest_wheels
       - name: Run Docker Container and Execute Commands
         run: |
-          docker run --rm -d --name the_container \
+          docker run -d --name the_container \
           --device=/dev/kfd \
           --device=/dev/dri \
           --mount type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
@@ -33,5 +33,7 @@ jobs:
         run: docker wait the_container
       - name: Inspecting exit code...
         run: exit $(docker inspect the_container --format='{{.State.ExitCode}}')
+      - name: Cleanup container
+        run: docker rm the_container
       - name: Verify Containers Status
         run: docker ps -a
