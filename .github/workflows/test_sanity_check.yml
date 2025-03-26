@@ -80,7 +80,6 @@ jobs:
 
       - name: Run ROCm Sanity Tests
         run: |
-          ls -l ./build/artifacts/output_dir/bin/
           source ${VENV_DIR}/bin/activate
           pytest tests/ \
           --log-cli-level=info
