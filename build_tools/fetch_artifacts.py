@@ -37,8 +37,8 @@ def retrieve_base_artifacts(run_id, build_dir):
         "core-hip_lib",
         "core-hip_dev",
         "host-blas_lib",
-        # "rocprofiler-sdk_lib",
-        # "host-suite-sparse_lib"
+        "rocprofiler-sdk_lib",
+        "host-suite-sparse_lib"
     ]
     for base_artifact in base_artifacts:
         s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
