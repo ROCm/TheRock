@@ -43,7 +43,7 @@ struct inline_amdgpu_id {
   # And export a lookup function.
   echo "
 void amdgpu_parse_asic_ids(struct amdgpu_device *dev) {
-  size_t count = sizeof inline_amdgpu_ids / sizeof inline_amdgpu_ids[0];
+  const size_t count = sizeof inline_amdgpu_ids / sizeof inline_amdgpu_ids[0];
   for (size_t i = 0; i < count; ++i) {
     if (inline_amdgpu_ids[i].did == dev->info.asic_id &&
         inline_amdgpu_ids[i].rid == dev->info.pci_rev_id) {
