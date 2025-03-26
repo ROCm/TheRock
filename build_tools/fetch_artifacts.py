@@ -39,7 +39,7 @@ def retrieve_base_artifacts(run_id, build_dir):
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
         "core-runtime_run",
-        "amd-llvm_run"
+        "amd-llvm_run",
     ]
     for base_artifact in base_artifacts:
         s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
