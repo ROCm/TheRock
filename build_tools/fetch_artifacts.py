@@ -26,6 +26,7 @@ def s3_exec(variant, package, run_id, build_dir):
     log(f"++ Exec [{cmd}]")
     subprocess.run(cmd)
 
+
 def retrieve_base_artifacts(run_id, build_dir):
     base_artifacts = [
         "core-runtime_run",
@@ -38,7 +39,7 @@ def retrieve_base_artifacts(run_id, build_dir):
         "core-hip_dev",
         "host-blas_lib",
         "rocprofiler-sdk_lib",
-        "host-suite-sparse_lib"
+        "host-suite-sparse_lib",
     ]
     for base_artifact in base_artifacts:
         s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
