@@ -24,10 +24,14 @@ def s3_exec(variant, package, run_id, build_dir):
         "--no-sign-request",
     ]
     log(f"++ Exec [{cmd}]")
-    subprocess.run(cmd)
+    try:
+        subprocess.run(cmd, check=True)
+    except Exception as ex:
+        log(f"Exception when executing [{cmd}]")
+        log(str(ex))
 
 
-def retrieve_base_artifacts(run_id, build_dir):
+def retrieve_base_artifacts(args, run_id, build_dir):
     base_artifacts = [
         "core-runtime_run",
         "core-runtime_lib",
@@ -37,15 +41,17 @@ def retrieve_base_artifacts(run_id, build_dir):
         "amd-llvm_lib",
         "core-hip_lib",
         "core-hip_dev",
-        "host-blas_lib",
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
+    if args.blas or args.all:
+        base_artifacts.append("host-blas_lib")
+
     for base_artifact in base_artifacts:
         s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
 
 
-def retrieve_enabled_artifacts(args, test_enabled):
+def retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir):
     base_artifact_path = []
     if args.blas or args.all:
         base_artifact_path.append("blas")
@@ -66,7 +72,8 @@ def retrieve_enabled_artifacts(args, test_enabled):
         if test_enabled:
             enabled_artifacts.append(f"{base_path}_test")
 
-    return enabled_artifacts
+    for enabled_artifact in enabled_artifacts:
+        s3_exec(f"{target}", enabled_artifact, run_id, build_dir)
 
 
 def run(args):
@@ -74,11 +81,8 @@ def run(args):
     target = args.target
     build_dir = args.build_dir
     test_enabled = args.test
-    retrieve_base_artifacts(run_id, build_dir)
-    enabled_artifacts = retrieve_enabled_artifacts(args, test_enabled)
-
-    for enabled_artifact in enabled_artifacts:
-        s3_exec(f"{target}", enabled_artifact, run_id, build_dir)
+    retrieve_base_artifacts(args, run_id, build_dir)
+    retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir)
 
 
 def main(argv):
