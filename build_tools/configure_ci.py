@@ -185,7 +185,7 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 amdgpu_family_info_matrix = {
     "gfx942X": {
-        "linux": {"runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx942X-dcgpu"}
+        "linux": {"runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"}
     }
 }
 
