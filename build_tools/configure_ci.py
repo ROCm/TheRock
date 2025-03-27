@@ -180,11 +180,11 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Matrix creation logic and determinator of PR, workflow_dispatch or push
+# Matrix creation logic based on PR, push or workflow_dispatch
 # --------------------------------------------------------------------------- #
 
 amdgpu_family_info_matrix = {
-    "gfx942X": {
+    "gfx94X": {
         "linux": {"runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"}
     }
 }
@@ -202,6 +202,7 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
     potential_windows_targets = []
 
     # For the specific event trigger, parse linux and windows target information
+    # if the trigger is a workflow_dispatch, parse through the inputs and retrieve the list
     if is_workflow_dispatch:
         input_linux_gpu_targets = os.environ.get("INPUT_LINUX_AMDGPU_FAMILIES", "")
         input_windows_gpu_targets = os.environ.get("INPUT_WINDOWS_AMDGPU_FAMILIES", "")
@@ -211,6 +212,7 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
             translator
         ).split()
 
+    # if the trigger is a pull_request label, parse through the labels and retrieve the list
     if is_pull_request:
         for label in get_pr_labels():
             if "gfx" in label:
@@ -224,7 +226,7 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
         # TODO: do we want to run all machines for main branch push? need to figure this out
         pass
 
-    # iterate through each potential target, validate it exists and then append target to run on
+    # iterate through each potential target, validate it exists in our matrix and then append target to run on
     linux_target_output = []
     windows_target_output = []
 
