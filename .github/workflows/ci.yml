@@ -1,15 +1,20 @@
 name: CI
 
 on:
-  pull_request:
   push:
     branches:
       - main
   workflow_dispatch:
     inputs:
-      amdgpu_families:
+      linux_amdgpu_families:
         type: string
-        default: gfx94X-dcgpu
+        description: "Insert comma-separated list of Linux GPU families"
+      windows_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Windows GPU families"
+  pull_request:
+    types:
+      - labeled
 
 permissions:
   contents: read
@@ -25,14 +30,20 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup.yml
+    with:
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
+      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
 
   build_linux_packages:
     name: Build Linux Packages
     needs: setup
     if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
+    strategy:
+      matrix:
+        families: ${{ fromJSON(needs.setup.outputs.linux_families) }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
-      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
+      amdgpu_families: ${{ matrix.families.target }}
     permissions:
       id-token: write
 
@@ -40,14 +51,23 @@ jobs:
     name: Build Windows Packages
     needs: setup
     if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
+    strategy:
+      matrix:
+        families: ${{ fromJSON(needs.setup.outputs.windows_families) }}
     uses: ./.github/workflows/build_windows_packages.yml
+    with:
+      amdgpu_families: ${{ matrix.families.target }}
 
   test_linux_packages:
     needs: [setup, build_linux_packages]
     name: Test Linux Packages
+    strategy:
+      matrix:
+        families: ${{ fromJSON(needs.setup.outputs.linux_families) }}
     uses: ./.github/workflows/test_linux_packages.yml
     with:
-      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
+      amdgpu_families: ${{ matrix.families.target }}
+      runs_on: ${{ matrix.families.runs-on }}
 
   # build_python_packages:
   #   name: Build Python Packages

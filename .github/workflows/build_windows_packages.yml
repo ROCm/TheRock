@@ -6,12 +6,16 @@ on:
       package_version:
         type: string
         default: ADHOCBUILD
+      amdgpu_families:
+        type: string
 
   workflow_call:
     inputs:
       package_version:
         type: string
         default: ADHOCBUILD
+      amdgpu_families:
+        type: string
 
 jobs:
   build_windows_packages:
@@ -85,6 +89,7 @@ jobs:
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
+          amdgpu_families="${{ inputs.amdgpu_families }}"
           echo "Building package ${package_version}"
 
           # Build.
@@ -92,7 +97,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
-            -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
+            -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_ENABLE_COMPILER=ON \
             -DTHEROCK_ENABLE_HIPIFY=ON \

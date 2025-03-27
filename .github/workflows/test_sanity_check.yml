@@ -6,11 +6,15 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      runs_on:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
         type: string
         default: ""
+      runs_on:
+        type: string
   push:
     branches:
       - ADHOCBUILD
@@ -18,7 +22,7 @@ on:
 jobs:
   test_sanity_check:
     name: "Sanity ROCM Test"
-    runs-on: linux-mi300-1gpu-ossci-rocm
+    runs-on: ${{ inputs.runs_on }}
     strategy:
       fail-fast: false
     defaults:
