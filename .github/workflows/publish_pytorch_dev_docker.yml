@@ -60,3 +60,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Verify Docker Image for gfx942
+        uses: ./.github/workflows/verify_docker_image.yml
