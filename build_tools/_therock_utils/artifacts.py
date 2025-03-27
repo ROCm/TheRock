@@ -18,12 +18,12 @@ contains one relative path per line. That path represents a path into a TheRock
 build directory that its contents are subset from.
 """
 
-from typing import Callable
+from typing import Callable, Sequence
 
 import re
 from pathlib import Path
 
-from .pattern_match import PatternMatcher
+from .pattern_match import PatternMatcher, MatchPredicate
 
 
 class ArtifactName:
@@ -41,10 +41,12 @@ class ArtifactCatalog:
         self,
         artifact_dir: Path,
         filter: Callable[[ArtifactName], bool] = lambda _: True,
+        includes: Sequence[str] = (),
+        excludes: Sequence[str] = (),
     ):
         self.artifact_dir = artifact_dir
         self.artifact_basedirs: list[tuple[ArtifactName, Path]] = []
-        self.pm = PatternMatcher()
+        self.pm = PatternMatcher(includes=includes, excludes=excludes)
 
         for subdir in self.artifact_dir.iterdir():
             if not subdir.is_dir():
