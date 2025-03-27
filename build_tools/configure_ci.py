@@ -282,15 +282,15 @@ def main():
         f"""## Workflow configure results
 
 * `enable_build_jobs`: {enable_build_jobs}
-* `linux_families`: {str([item.get("target") for item in linux_target_output])}
-* `windows_families`: {str([item.get("target") for item in windows_target_output])}
+* `linux_amdgpu_families`: {str([item.get("target") for item in linux_target_output])}
+* `windows_amdgpu_families`: {str([item.get("target") for item in windows_target_output])}
     """
     )
 
     output = {
         "enable_build_jobs": json.dumps(enable_build_jobs),
-        "linux_families": json.dumps(linux_target_output),
-        "windows_families": json.dumps(windows_target_output),
+        "linux_amdgpu_families": json.dumps(linux_target_output),
+        "windows_amdgpu_families": json.dumps(windows_target_output),
     }
     set_github_output(output)
 

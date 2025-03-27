@@ -40,7 +40,7 @@ jobs:
     if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
     strategy:
       matrix:
-        families: ${{ fromJSON(needs.setup.outputs.linux_families) }}
+        families: ${{ fromJSON(needs.setup.outputs.linux_amdgpu_families) }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
       amdgpu_families: ${{ matrix.families.target }}
@@ -53,7 +53,7 @@ jobs:
     if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
     strategy:
       matrix:
-        families: ${{ fromJSON(needs.setup.outputs.windows_families) }}
+        families: ${{ fromJSON(needs.setup.outputs.windows_amdgpu_families) }}
     uses: ./.github/workflows/build_windows_packages.yml
     with:
       amdgpu_families: ${{ matrix.families.target }}
@@ -63,7 +63,7 @@ jobs:
     name: Test Linux Packages
     strategy:
       matrix:
-        families: ${{ fromJSON(needs.setup.outputs.linux_families) }}
+        families: ${{ fromJSON(needs.setup.outputs.linux_amdgpu_families) }}
     uses: ./.github/workflows/test_linux_packages.yml
     with:
       amdgpu_families: ${{ matrix.families.target }}
