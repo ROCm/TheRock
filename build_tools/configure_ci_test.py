@@ -33,8 +33,8 @@ class ConfigureCITest(TestCase):
     @mock.patch.dict(
         os.environ,
         {
-            "INPUT_LINUX_AMDGPU_FAMILIES": "   gfx942X ,  gfx1201X,    gfx90X",
-            "INPUT_WINDOWS_AMDGPU_FAMILIES": "gfx942X , gfx1201X  gfx90X",
+            "INPUT_LINUX_AMDGPU_FAMILIES": "   gfx942X ,|.\\,  gfx1201X, --   gfx90X",
+            "INPUT_WINDOWS_AMDGPU_FAMILIES": "gfx942X \\., gfx1201X  gfx90X",
         },
     )
     def test_valid_workflow_dispatch_matrix_generator(self):

@@ -10,6 +10,9 @@
   * GITHUB_EVENT_NAME    : GitHub event name, e.g. pull_request.
   * GITHUB_OUTPUT        : path to write workflow output variables.
   * GITHUB_STEP_SUMMARY  : path to write workflow summary output.
+  * INPUT_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families
+  * INPUT_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families
+  * BRANCH_NAME (optional): The branch name
 
   Environment variables (for pull requests):
   * PR_LABELS (optional) : JSON list of PR label names.
@@ -23,6 +26,8 @@
 
   Written to GITHUB_OUTPUT:
   * enable_build_jobs : true/false
+  * linux_amdgpu_families : List of valid Linux AMD GPU families to execute jobs
+  * windows_amdgpu_families : List of valid Windows AMD GPU families to execute jobs
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -37,6 +42,7 @@ import os
 import subprocess
 import sys
 from typing import Iterable, List, Mapping, Optional
+import string
 
 # --------------------------------------------------------------------------- #
 # General utilities
@@ -199,9 +205,11 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
     if is_workflow_dispatch:
         input_linux_gpu_targets = os.environ.get("INPUT_LINUX_AMDGPU_FAMILIES", "")
         input_windows_gpu_targets = os.environ.get("INPUT_WINDOWS_AMDGPU_FAMILIES", "")
-
-        potential_linux_targets = input_linux_gpu_targets.replace(",", " ").split()
-        potential_windows_targets = input_windows_gpu_targets.replace(",", " ").split()
+        translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
+        potential_linux_targets = input_linux_gpu_targets.translate(translator).split()
+        potential_windows_targets = input_windows_gpu_targets.translate(
+            translator
+        ).split()
 
     if is_pull_request:
         for label in get_pr_labels():

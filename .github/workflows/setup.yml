@@ -7,8 +7,6 @@ on:
         type: string
       windows_amdgpu_families:
         type: string
-      operating_system:
-        type: string
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
