@@ -22,7 +22,7 @@ jobs:
           docker run --rm \
           --device=/dev/kfd \
           --device=/dev/dri \
-          --mountt type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
+          --mount type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
           --mount type=bind,source="$GITHUB_WORKSPACE",target=/TheRock \
           --group-add video \
           --cap-add=SYS_PTRACE \
