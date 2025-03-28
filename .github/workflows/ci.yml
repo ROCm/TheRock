@@ -15,6 +15,7 @@ on:
   pull_request:
     types:
       - labeled
+      - opened
 
 permissions:
   contents: read

@@ -190,13 +190,13 @@ amdgpu_family_info_matrix = {
 }
 
 
-def get_pr_labels() -> List[str]:
+def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
-    labels = json.loads(os.environ.get("PR_LABELS", "[]"))
+    labels = json.loads(args.get("pr_labels"))
     return labels
 
 
-def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
+def matrix_generator(is_pull_request, is_workflow_dispatch, is_push, args):
     """Parses and generates build matrix with build requirements"""
     potential_linux_targets = []
     potential_windows_targets = []
@@ -204,8 +204,8 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
     # For the specific event trigger, parse linux and windows target information
     # if the trigger is a workflow_dispatch, parse through the inputs and retrieve the list
     if is_workflow_dispatch:
-        input_linux_gpu_targets = os.environ.get("INPUT_LINUX_AMDGPU_FAMILIES", "")
-        input_windows_gpu_targets = os.environ.get("INPUT_WINDOWS_AMDGPU_FAMILIES", "")
+        input_linux_gpu_targets = args.get("input_linux_amdgpu_families")
+        input_windows_gpu_targets = args.get("input_windows_amdgpu_families")
         translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
         potential_linux_targets = input_linux_gpu_targets.translate(translator).split()
         potential_windows_targets = input_windows_gpu_targets.translate(
@@ -214,7 +214,7 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
 
     # if the trigger is a pull_request label, parse through the labels and retrieve the list
     if is_pull_request:
-        for label in get_pr_labels():
+        for label in get_pr_labels(args):
             if "gfx" in label:
                 target, operating_system = label.split("-")
                 if operating_system == "linux":
@@ -222,9 +222,15 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
                 if operating_system == "windows":
                     potential_windows_targets.append(target)
 
-    if is_push and os.environ.get("BRANCH_NAME") == "main":
-        # TODO: do we want to run all machines for main branch push? need to figure this out
-        pass
+    if is_push and args.get("branch_name") == "main":
+        # For now, we will add all machines
+        for key in amdgpu_family_info_matrix:
+            potential_linux_targets.append(key)
+            potential_windows_targets.append(key)
+
+    # Ensure the targets in the list are unique
+    potential_linux_targets = list(set(potential_linux_targets))
+    potential_windows_targets = list(set(potential_windows_targets))
 
     # iterate through each potential target, validate it exists in our matrix and then append target to run on
     linux_target_output = []
@@ -256,13 +262,13 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push):
 # --------------------------------------------------------------------------- #
 
 
-def main():
-    github_event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+def main(args):
+    github_event_name = args.get("github_event_name")
     is_push = github_event_name == "push"
     is_workflow_dispatch = github_event_name == "workflow_dispatch"
     is_pull_request = github_event_name == "pull_request"
 
-    base_ref = os.environ.get("BASE_REF", "HEAD^1")
+    base_ref = args.get("base_ref")
     print("Found metadata:")
     print(f"  github_event_name: {github_event_name}")
     print(f"  is_push: {is_push}")
@@ -285,7 +291,7 @@ def main():
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
     linux_target_output, windows_target_output = matrix_generator(
-        is_pull_request, is_workflow_dispatch, is_push
+        is_pull_request, is_workflow_dispatch, is_push, args
     )
 
     write_job_summary(
@@ -306,4 +312,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = {}
+    args["input_linux_amdgpu_families"] = os.environ.get(
+        "INPUT_LINUX_AMDGPU_FAMILIES", ""
+    )
+    args["input_windows_amdgpu_families"] = os.environ.get(
+        "INPUT_WINDOWS_AMDGPU_FAMILIES", ""
+    )
+    # For now, add default run for gfx94X-linux
+    args["pr_labels"] = os.environ.get("PR_LABELS", "['gfx94X-linux']")
+    args["branch_name"] = os.environ.get("BRANCH_NAME", "")
+    args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
+    args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
+
+    main(args)
