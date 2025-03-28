@@ -2,6 +2,9 @@
 # This script provides a somewhat dynamic way to
 # retrieve artifacts from s3
 
+# NOTE: This script currently only retrieves the requested artifacts,
+# but those artifacts may not have all required dependencies.
+
 import argparse
 import subprocess
 import sys
