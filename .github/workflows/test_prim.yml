@@ -73,7 +73,7 @@ jobs:
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
           aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_test"${TARGET_VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/prim_test_"${TARGET_VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
 
           echo "Unpacking artifacts"
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
