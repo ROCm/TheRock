@@ -24,3 +24,11 @@ jobs:
     uses: './.github/workflows/test_sanity_check.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+
+  test_sanity_check:
+    name: 'Test prim'
+    need: test_sanity_check
+    uses: './.github/workflows/test_prim.yml'
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
