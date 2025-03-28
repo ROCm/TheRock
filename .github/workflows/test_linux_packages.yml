@@ -8,12 +8,14 @@ on:
         default: ""
       amdgpu_families:
         type: string
-        default: gfx94X-dcgpu
+      runs_on:
+        type: string
   workflow_call:
     inputs:
       amdgpu_families:
         type: string
-        default: gfx94X-dcgpu
+      runs_on:
+        type: string
   push:
     branches:
       - ADHOCBUILD
@@ -24,3 +26,4 @@ jobs:
     uses: './.github/workflows/test_sanity_check.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      runs_on: ${{ inputs.runs_on }}
