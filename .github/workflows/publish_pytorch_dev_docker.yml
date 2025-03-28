@@ -16,7 +16,7 @@ jobs:
     runs-on: azure-linux-scale-rocm
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
+      IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_Temp${{ matrix.targets.amdgpu_target }}
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
