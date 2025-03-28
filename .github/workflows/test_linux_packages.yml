@@ -25,7 +25,7 @@ jobs:
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
-  test_sanity_check:
+  test_prim:
     name: 'Test prim'
     need: test_sanity_check
     uses: './.github/workflows/test_prim.yml'
