@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -xeuo
 
 echo 'Running inside the container'
 
