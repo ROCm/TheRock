@@ -65,3 +65,10 @@ class TestROCmSanity:
         process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
         check.equal(process.returncode, 0)
         check.greater(os.path.getsize(str(THIS_DIR / "hipcc_check")), 0)
+
+    def test_rocm_agent_enumerator(self):
+        process = run_command([f"{THEROCK_BIN_DIR}/rocm_agent_enumerator"])
+        output = process.stdout
+        return_code = process.returncode
+        check.equal(return_code, 0)
+        check.is_true(output)

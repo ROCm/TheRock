@@ -1,4 +1,4 @@
-name: TheRock PRIM math-lib tests
+name: TheRock BLAS math-lib tests
 
 on:
   workflow_dispatch:
@@ -28,8 +28,8 @@ on:
       - ADHOCBUILD
 
 jobs:
-  test_sanity_check:
-    name: "PRIM math-lib test"
+  test_blas:
+    name: "BLAS math-lib test"
     runs-on: ${{ inputs.runs-on }}
     strategy:
       fail-fast: false
@@ -39,8 +39,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      BUILD_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+      BUILD_ARTIFACTS_DIR: "./build/artifacts"
+      THEROCK_BIN_DIR: "./build/artifacts/output_dir/bin"
 
     steps:
       - name: Checkout Repository
@@ -49,18 +49,18 @@ jobs:
       - name: Install the AWS tool
         run: ./dockerfiles/cpubuilder/install_awscli.sh
 
-
       - name: "Setting up Python"
         id: setup_python
         uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: 3.11
 
-      - name: Create Python venv
+      - name: Create Python venv and installing packages
         run: |
           python -m venv ${VENV_DIR}
           source ${VENV_DIR}/bin/activate
           pip install -r requirements-test.txt
+          sudo apt install gfortran -y
 
       - name: Download and Unpack Artifacts
         run: |
@@ -68,7 +68,6 @@ jobs:
 
           # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
           # runner, everything else is generic. Use just generic since this is all core/below.
-          VARIANT="_generic"
           echo "Making ${BUILD_ARTIFACTS_DIR} directory"
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
@@ -78,20 +77,19 @@ jobs:
             --target=${{ inputs.amdgpu_families }} \
             --build-dir=${BUILD_ARTIFACTS_DIR} \
             --test \
-            --prim
+            --blas
 
           echo "Unpacking artifacts"
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
           python ./build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
 
-      - name: Run rocprim tests
+      - name: Run hipBLASLt tests
         run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/rocprim --output-on-failure
+          source ${VENV_DIR}/bin/activate
+          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
 
-      - name: Run rocthrust tests
+      - name: Run rocBLAS tests
         run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/rocthrust --output-on-failure
-
-      - name: Run hipcub tests
-        run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/hipcub --output-on-failure
+          ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
+          source ${VENV_DIR}/bin/activate
+          ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml

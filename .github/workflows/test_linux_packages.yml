@@ -9,11 +9,17 @@ on:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   workflow_call:
     inputs:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   push:
     branches:
       - ADHOCBUILD
@@ -25,10 +31,20 @@ jobs:
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
-  test_prim:
-    name: 'Test prim'
+  test_blas:
+    name: 'Test BLAS math-lib'
+    uses: './.github/workflows/test_blas.yml'
     needs: test_sanity_check
-    uses: './.github/workflows/test_prim.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      runs-on: ${{ inputs.runs-on }}
+
+  test_prim:
+    name: 'Test PRIM math-lib'
+    uses: './.github/workflows/test_prim.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      runs-on: ${{ inputs.runs-on }}

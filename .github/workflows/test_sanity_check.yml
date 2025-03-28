@@ -6,11 +6,17 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   workflow_call:
     inputs:
       artifact_run_id:
         type: string
         default: ""
+      runs-on:
+        type: string
+        default: linux-mi300-1gpu-ossci-rocm
   push:
     branches:
       - ADHOCBUILD
@@ -18,7 +24,7 @@ on:
 jobs:
   test_sanity_check:
     name: "Sanity ROCM Test"
-    runs-on: linux-mi300-1gpu-ossci-rocm
+    runs-on: ${{ inputs.runs-on }}
     strategy:
       fail-fast: false
     defaults:
@@ -56,17 +62,13 @@ jobs:
 
           # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
           # runner, everything else is generic. Use just generic since this is all core/below.
-          VARIANT="_generic"
           echo "Making ${BUILD_ARTIFACTS_DIR} directory"
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
           echo "Downloading artifacts"
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-runtime_run"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/core-runtime_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/sysdeps_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/base_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_run"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
-          aws s3 cp s3://therock-artifacts/${ARTIFACT_RUN_ID}/amd-llvm_lib"${VARIANT}".tar.xz "${BUILD_ARTIFACTS_DIR}" --no-sign-request
+          python ${{ github.workspace }}/build_tools/fetch_artifacts.py \
+            --run-id=${ARTIFACT_RUN_ID} \
+            --build-dir=${BUILD_ARTIFACTS_DIR}
 
           echo "Unpacking artifacts"
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
