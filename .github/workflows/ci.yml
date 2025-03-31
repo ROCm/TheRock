@@ -33,9 +33,6 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup.yml
-    with:
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
-      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
 
   build_linux_packages:
     name: Build Linux Packages
