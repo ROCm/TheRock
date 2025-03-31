@@ -315,7 +315,9 @@ def main(base_args, build_families, test_families):
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
     # If job trigger is workflow dispatch and user specifies valid build target, build jobs becomes enabled
-    if is_workflow_dispatch and (build_linux_target_output or build_windows_target_output):
+    if is_workflow_dispatch and (
+        build_linux_target_output or build_windows_target_output
+    ):
         enable_build_jobs = True
 
     if not enable_build_jobs:

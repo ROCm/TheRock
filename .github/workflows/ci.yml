@@ -9,19 +9,19 @@ on:
       build_linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build. ex: gfx94X, gfx1201X"
-        default: "gfx94X"
+        default: ""
       build_windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build. ex: gfx94X, gfx1201X"
-        default: "gfx94X"
+        default: ""
       test_linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families to test. ex: gfx94X, gfx1201X"
-        default: "gfx94X"
+        default: ""
       test_windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to test. ex: gfx94X, gfx1201X"
-        default: "gfx94X"
+        default: ""
       artifact_run_id:
         type: string
         description: "If provided, the tests will run on this artifact ID"
