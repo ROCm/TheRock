@@ -68,7 +68,6 @@ jobs:
 
           # TODO(sosa): We should infer this from the runner. For Libs and Above it should be based on the
           # runner, everything else is generic. Use just generic since this is all core/below.
-          VARIANT="_generic"
           echo "Making ${BUILD_ARTIFACTS_DIR} directory"
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
