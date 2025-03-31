@@ -34,7 +34,7 @@ mainline, in open source, using MSVC, etc.).
 |                  |                                                                              |           |                                                  |
 | core             | [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime)                         | ❌        | Unsupported                                      |
 | core             | [rocminfo](https://github.com/ROCm/rocminfo)                                 | ❌        | Unsupported                                      |
-| core             | [clr](https://github.com/ROCm/clr)                                           | ❔        | Under review (partly closed source)              |
+| core             | [clr](https://github.com/ROCm/clr)                                           | ⭕        | Needs a folder with prebuilt static libraries    |
 |                  |                                                                              |           |                                                  |
 | profiler         | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❔        |                                                  |
 |                  |                                                                              |           |                                                  |
@@ -206,3 +206,36 @@ cmake --build build
 
 At the moment this should build some projects in [`base/`](../../base/) as well
 as [`compiler/`](../../compiler/).
+
+### Building CLR from partial sources
+
+We are actively working on enabling source builds of
+https://github.com/ROCm/clr (notably for `amdhip64_6.dll`) on Windows.
+Historically this has been a closed source component due to the dependency on
+[Platform Abstraction Library (PAL)](https://github.com/GPUOpen-Drivers/pal)
+and providing a fully open source build will take more time. As an incremental
+step towards a fully open source build, we will use a `compute-win` folder
+containing header files and static library `.lib` files for PAL and related
+components.
+
+An incremental rollout is planned:
+
+1. *(We are here today)* The `compute-win` folder must be manually copied into
+   place at `core/compute-win`. This will allow AMD developers to iterate on
+   integration into TheRock while we work on making this folder or more source
+   files available.
+1. The `compute-win` folder will be available publicly and will be included
+   automatically from either a git repository or cloud storage (like the
+   existing third party dep mirrors in [`third-party/`](../../third-party/)).
+1. A more permanent open source strategy for building the CLR (the HIP runtime)
+   from source on Windows will eventually be available.
+
+With the `compute-win` folder available, build by configuring CMake with these
+options set:
+
+```bash
+-DTHEROCK_ENABLE_CORE=ON \
+-DTHEROCK_ENABLE_HIP_RUNTIME=ON \
+```
+
+then look for `build/core/clr/dist/bin/amdhip64_6.dll` and related outputs.

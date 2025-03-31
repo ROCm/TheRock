@@ -72,61 +72,110 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   # functional from this project (which contributes version and metadata).
   ##############################################################################
 
-  therock_cmake_subproject_declare(hip-clr
-    EXTERNAL_SOURCE_DIR "clr"
-    INTERFACE_PROGRAM_DIRS
-      bin
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      "-DHIP_COMMON_DIR=${CMAKE_CURRENT_SOURCE_DIR}/HIP"
-      -DCLR_BUILD_HIP=ON
-      # Legacy: Disable various auto-detection logic that breaks out of jail
-      # and can use local machine tools.
-      -DHIPCC_BIN_DIR=
-    BUILD_DEPS
-      rocm-cmake
-    RUNTIME_DEPS
-      amd-llvm
-      amd-comgr
-      hipcc     # For hipconfig
-      rocm-core
-      rocminfo  # Various things expect to be able to find the rocminfo tools
-      rocprofiler-register
-      ROCR-Runtime
-    INTERFACE_LINK_DIRS
-      "lib"
-    INTERFACE_INSTALL_RPATH_DIRS
-      "lib"
-  )
-  therock_cmake_subproject_glob_c_sources(hip-clr SUBDIRS .)
-  therock_cmake_subproject_provide_package(hip-clr hip lib/cmake/hip)
-  # TODO: Some projects resolve "hip" vs "HIP" so we advertise both, but this isn't
-  # great.
-  therock_cmake_subproject_provide_package(hip-clr HIP lib/cmake/hip)
-  therock_cmake_subproject_provide_package(hip-clr hip-lang lib/cmake/hip-lang)
-  therock_cmake_subproject_provide_package(hip-clr hiprtc lib/cmake/hiprtc)
-  therock_cmake_subproject_activate(hip-clr)
+  # CLR configuration is different enough between Linux and Windows that we
+  # branch at a high level here instead of extending individual options.
+  # TODO(#36): Share more code here, once options settle.
+  if(NOT WIN32)
+    therock_cmake_subproject_declare(hip-clr
+      EXTERNAL_SOURCE_DIR "clr"
+      INTERFACE_PROGRAM_DIRS
+        bin
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DHIP_PLATFORM=amd
+        "-DHIP_COMMON_DIR=${CMAKE_CURRENT_SOURCE_DIR}/HIP"
+        -DCLR_BUILD_HIP=ON
+        # Legacy: Disable various auto-detection logic that breaks out of jail
+        # and can use local machine tools.
+        -DHIPCC_BIN_DIR=
+      BUILD_DEPS
+        rocm-cmake
+      RUNTIME_DEPS
+        amd-llvm
+        amd-comgr
+        hipcc     # For hipconfig
+        rocm-core
+        rocminfo  # Various things expect to be able to find the rocminfo tools
+        rocprofiler-register
+        ROCR-Runtime
+      INTERFACE_LINK_DIRS
+        "lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+    )
+    therock_cmake_subproject_glob_c_sources(hip-clr SUBDIRS .)
+    therock_cmake_subproject_provide_package(hip-clr hip lib/cmake/hip)
+    # TODO: Some projects resolve "hip" vs "HIP" so we advertise both, but this isn't
+    # great.
+    therock_cmake_subproject_provide_package(hip-clr HIP lib/cmake/hip)
+    therock_cmake_subproject_provide_package(hip-clr hip-lang lib/cmake/hip-lang)
+    therock_cmake_subproject_provide_package(hip-clr hiprtc lib/cmake/hiprtc)
+    therock_cmake_subproject_activate(hip-clr)
 
+    therock_provide_artifact(core-hip
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-hip.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        hip-clr
+    )
 
-  therock_provide_artifact(core-hip
-    TARGET_NEUTRAL
-    DESCRIPTOR artifact-core-hip.toml
-    COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
-    SUBPROJECT_DEPS
-      hip-clr
-  )
+    therock_test_validate_shared_lib(
+      PATH clr/dist/lib
+      LIB_NAMES
+        libamdhip64.so
+        libhiprtc-builtins.so
+        libhiprtc.so
+    )
+  else()
+    set(_compute_win_dir "${CMAKE_CURRENT_SOURCE_DIR}/compute-win")
+    if(NOT EXISTS ${_compute_win_dir})
+      message(FATAL_ERROR "Can't build CLR: missing closed source 'compute-win' folder expected at '${_compute_win_dir}'")
+    endif()
 
-  therock_test_validate_shared_lib(
-    PATH clr/dist/lib
-    LIB_NAMES
-      libamdhip64.so
-      libhiprtc-builtins.so
-      libhiprtc.so
-  )
+    therock_cmake_subproject_declare(hip-clr
+      EXTERNAL_SOURCE_DIR "clr"
+      INTERFACE_PROGRAM_DIRS
+        bin
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DHIP_PLATFORM=amd"
+        "-DHIP_COMMON_DIR=${CMAKE_CURRENT_SOURCE_DIR}/HIP"
+        "-DCLR_BUILD_HIP=ON"
+        # Legacy: Disable various auto-detection logic that breaks out of jail
+        # and can use local machine tools.
+        "-DHIPCC_BIN_DIR="
+
+        # Windows specific options.
+        "-DUSE_PROF_API=OFF"
+        "-D__HIP_ENABLE_PCH=OFF"
+        "-DROCCLR_ENABLE_PAL=1"
+        "-DROCCLR_ENABLE_HSA=0"
+        "-DAMD_COMPUTE_WIN=${_compute_win_dir}"
+      BUILD_DEPS
+        rocm-cmake
+      RUNTIME_DEPS
+        amd-llvm
+        amd-comgr
+        hipcc     # For hipconfig
+        rocm-core
+      INTERFACE_LINK_DIRS
+        "lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+    )
+    therock_cmake_subproject_glob_c_sources(hip-clr SUBDIRS .)
+    therock_cmake_subproject_provide_package(hip-clr hip lib/cmake/hip)
+    # TODO: Some projects resolve "hip" vs "HIP" so we advertise both, but this isn't
+    # great.
+    therock_cmake_subproject_provide_package(hip-clr HIP lib/cmake/hip)
+    therock_cmake_subproject_provide_package(hip-clr hip-lang lib/cmake/hip-lang)
+    therock_cmake_subproject_provide_package(hip-clr hiprtc lib/cmake/hiprtc)
+    therock_cmake_subproject_activate(hip-clr)
+  endif()
 endif(THEROCK_ENABLE_HIP_RUNTIME)

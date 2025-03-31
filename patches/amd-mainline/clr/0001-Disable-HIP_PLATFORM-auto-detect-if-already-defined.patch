@@ -1,7 +1,7 @@
-From 54553db0d22c76c25863b5af9467d03afb94a9d3 Mon Sep 17 00:00:00 2001
+From e4a9f525ff7620f82927dbac692102979b8510ad Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Wed, 22 Jan 2025 14:01:50 -0800
-Subject: [PATCH] Disable HIP_PLATFORM auto-detect if already defined.
+Subject: [PATCH 1/2] Disable HIP_PLATFORM auto-detect if already defined.
 
 This code appears to be old copy-pasta and is effectively just a no-op if -DHIP_PLATFORM=amd is passed explicitly. It has a number of nit-picky checks which will fail in this case for no real reason.
 
@@ -89,7 +89,7 @@ index cc9cf1654..ad2201073 100644
      option(BUILD_SHARED_LIBS "Build the shared library" ON)
      if (NOT BUILD_SHARED_LIBS)
 diff --git a/hipamd/CMakeLists.txt b/hipamd/CMakeLists.txt
-index 9538dbbad..7babbfc36 100755
+index b9f90e315..ad5eba4d2 100755
 --- a/hipamd/CMakeLists.txt
 +++ b/hipamd/CMakeLists.txt
 @@ -53,7 +53,8 @@ if(MSVC)
@@ -102,7 +102,7 @@ index 9538dbbad..7babbfc36 100755
  
  if(__HIP_ENABLE_PCH)
    set(_pchStatus 1)
-@@ -393,9 +394,11 @@ endif()
+@@ -410,9 +411,11 @@ endif()
  install(FILES ${PROJECT_BINARY_DIR}/include/hip/hip_version.h
          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hip)
  
@@ -151,5 +151,5 @@ index 1fcdcd970..d033c09ac 100755
 +  set(HIP_HIPCONFIG_EXECUTABLE ${hip_HIPCONFIG_EXECUTABLE})
 +endif()
 -- 
-2.43.0
+2.47.1.windows.2
 
