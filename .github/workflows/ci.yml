@@ -9,9 +9,11 @@ on:
       linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families. ex: gfx942X, gfx1201X"
+        default: "gfx94X"
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families. ex: gfx942X, gfx1201X"
+        default: "gfx94X"
   pull_request:
     types:
       - labeled
@@ -38,7 +40,7 @@ jobs:
   build_linux_packages:
     name: Build Linux Packages
     needs: setup
-    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
+    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) || needs.setup.outputs.linux_amdgpu_families != '[]' }}
     strategy:
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.linux_amdgpu_families) }}
@@ -51,7 +53,7 @@ jobs:
   build_windows_packages:
     name: Build Windows Packages
     needs: setup
-    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
+    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) || needs.setup.outputs.windows_amdgpu_families != '[]' }}
     strategy:
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.windows_amdgpu_families) }}
@@ -62,13 +64,14 @@ jobs:
   test_linux_packages:
     needs: [setup, build_linux_packages]
     name: Test Linux Packages
+    if: ${{ needs.setup.outputs.linux_amdgpu_families != '[]' }}
     strategy:
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.linux_amdgpu_families) }}
     uses: ./.github/workflows/test_linux_packages.yml
     with:
       amdgpu_families: ${{ matrix.families.target }}
-      runs_on: ${{ matrix.families.runs-on }}
+      test_runs_on: ${{ matrix.families.test-runs-on }}
 
   # build_python_packages:
   #   name: Build Python Packages

@@ -185,7 +185,10 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 amdgpu_family_info_matrix = {
     "gfx94X": {
-        "linux": {"runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"}
+        "linux": {
+            "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+            "target": "gfx94X-dcgpu",
+        }
     }
 }
 
@@ -204,8 +207,14 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push, args):
     # For the specific event trigger, parse linux and windows target information
     # if the trigger is a workflow_dispatch, parse through the inputs and retrieve the list
     if is_workflow_dispatch:
+        print(f"Generating build matrix with {str(args)} for workflow dispatch trigger")
+
         input_linux_gpu_targets = args.get("input_linux_amdgpu_families")
         input_windows_gpu_targets = args.get("input_windows_amdgpu_families")
+
+        # Sanitizing the string to remove any punctuation from the input
+        # After replacing punctuation with spaces, turning string input to an array
+        # (ex: ",gfx94X ,|.gfx1201" -> "gfx94X   gfx1201" -> ["gfx94X", "gfx1201"])
         translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
         potential_linux_targets = input_linux_gpu_targets.translate(translator).split()
         potential_windows_targets = input_windows_gpu_targets.translate(
@@ -214,6 +223,7 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push, args):
 
     # if the trigger is a pull_request label, parse through the labels and retrieve the list
     if is_pull_request:
+        print(f"Generating build matrix with {str(args)} for pull request trigger")
         for label in get_pr_labels(args):
             if "gfx" in label:
                 target, operating_system = label.split("-")
@@ -223,6 +233,7 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push, args):
                     potential_windows_targets.append(target)
 
     if is_push and args.get("branch_name") == "main":
+        print(f"Generating build matrix with {str(args)} for main push trigger")
         # For now, we will add all machines
         for key in amdgpu_family_info_matrix:
             potential_linux_targets.append(key)
@@ -253,6 +264,10 @@ def matrix_generator(is_pull_request, is_workflow_dispatch, is_push, args):
             windows_target_output.append(
                 amdgpu_family_info_matrix.get(windows_target).get("windows")
             )
+
+    print("Generated build matrix:")
+    print(f"   Linux targets: {str(linux_target_output)}")
+    print(f"   Windows targets: {str(windows_target_output)}")
 
     return linux_target_output, windows_target_output
 

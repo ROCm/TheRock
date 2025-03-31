@@ -2,11 +2,6 @@ name: Setup
 
 on:
   workflow_call:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-      windows_amdgpu_families:
-        type: string
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -42,7 +37,7 @@ jobs:
         id: configure
         env:
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          INPUT_LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
-          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
+          INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
+          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
           BRANCH_NAME: ${GITHUB_REF#refs/heads/}
         run: ./build_tools/configure_ci.py
