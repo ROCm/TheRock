@@ -78,8 +78,7 @@ jobs:
     needs: [setup, build_linux_packages]
     name: Test Linux Packages
     if:
-      ${{ needs.setup.outputs.test_linux_amdgpu_families != '[]' }} &&
-      (needs.build_linux_packages.result == 'success' || needs.build_linux_packages.result == 'skipped')
+      ${{ needs.setup.outputs.test_linux_amdgpu_families != '[]' && (needs.build_linux_packages.result == 'success' || needs.build_linux_packages.result == 'skipped') }}
     strategy:
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.test_linux_amdgpu_families) }}
