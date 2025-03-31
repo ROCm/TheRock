@@ -12,6 +12,9 @@ on:
         type: string
   workflow_call:
     inputs:
+      artifact_run_id:
+        type: string
+        default: ""
       amdgpu_families:
         type: string
       test_runs_on:
