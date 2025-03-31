@@ -75,7 +75,7 @@ jobs:
       amdgpu_families: ${{ matrix.families.target }}
 
   test_linux_packages:
-    needs: [setup, build_linux_packages]
+    needs: setup
     name: Test Linux Packages
     if: ${{ needs.setup.outputs.test_linux_amdgpu_families != '[]' }}
     strategy:
