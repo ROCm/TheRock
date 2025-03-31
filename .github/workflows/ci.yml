@@ -22,6 +22,10 @@ on:
         type: string
         description: "Insert comma-separated list of Windows GPU families to test. ex: gfx94X, gfx1201X"
         default: "gfx94X"
+      artifact_run_id:
+        type: string
+        description: "If provided, the tests will run on this artifact ID"
+        default: ""
   # By default for pull requests, the label gfx94X is enabled in the PR_LABEL env variable.
   # In order to run build and tests, please select a provided label corresponding with the machine and OS (ex: gfx94X-linux)
   # If the label is already added, you can remove and re-add the label to restart the job.
@@ -81,6 +85,7 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.families.target }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
 
   # build_python_packages:
   #   name: Build Python Packages
