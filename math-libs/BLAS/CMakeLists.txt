@@ -226,6 +226,11 @@ if(THEROCK_ENABLE_SOLVER)
   # hipSOLVER
   ##############################################################################
 
+  set(hipSOLVER_optional_deps)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND hipSOLVER_optional_deps therock-host-blas)
+  endif()
+
   therock_cmake_subproject_declare(hipSOLVER
       EXTERNAL_SOURCE_DIR "hipSOLVER"
       BACKGROUND_BUILD
@@ -237,9 +242,9 @@ if(THEROCK_ENABLE_SOLVER)
         # BUILD_WITH_SPARSE converts rocsparse and cholmod to build time vs
         # runtime/dlopen deps.
         -DBUILD_WITH_SPARSE=ON
-        # Requires LAPACK
-        -DBUILD_CLIENTS_BENCHMARKS=OFF
-        -DBUILD_CLIENTS_TESTS=OFF
+        -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
+        -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
+        -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
       COMPILER_TOOLCHAIN
         amd-hip
       RUNTIME_DEPS
@@ -248,6 +253,7 @@ if(THEROCK_ENABLE_SOLVER)
         rocSOLVER
         rocSPARSE
         therock-SuiteSparse
+        ${hipSOLVER_optional_deps}
   )
   therock_cmake_subproject_glob_c_sources(hipSOLVER
       SUBDIRS
