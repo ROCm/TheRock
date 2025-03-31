@@ -21,13 +21,11 @@ on:
       - ADHOCBUILD
 
 jobs:
-  env:
-    ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
   test_sanity_check:
     name: 'Test Sanity Check'
     uses: './.github/workflows/test_sanity_check.yml'
     with:
-      artifact_run_id: ${{ env.ARTIFACT_RUN_ID }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
       test_runs_on: ${{ inputs.test_runs_on }}
 
   test_blas:
@@ -35,6 +33,6 @@ jobs:
     uses: './.github/workflows/test_blas.yml'
     needs: test_sanity_check
     with:
-      artifact_run_id: ${{ env.ARTIFACT_RUN_ID }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
