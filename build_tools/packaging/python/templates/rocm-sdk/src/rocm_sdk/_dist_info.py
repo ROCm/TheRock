@@ -13,11 +13,33 @@ CACHED_TARGET_FAMILY: str | None = None
 
 
 class PackageEntry:
+    """Defines a package known to the SDK.
+
+    Args:
+      logical_name: Short name referring to this package within the SDK.
+      dist_package_name: Templated dist package name, including '{target_family}' if
+        GPU target specific.
+      pure_py_package_name: Name of the pure-python API package. All GPU target specific
+        dist packages will export the same pure-python package. Since they are
+        identical, first wins.
+      template_directory: Directory name in the build system that provides the template
+        for this package.
+      required: Whether this package is required.
+    """
+
     def __init__(
-        self, logical_name: str, package_template: str, *, required: bool = False
+        self,
+        logical_name: str,
+        dist_package_template: str,
+        *,
+        pure_py_package_name: str,
+        template_directory: str,
+        required: bool = False,
     ):
         self.logical_name = logical_name
-        self.package_template = package_template
+        self.dist_package_template = dist_package_template
+        self.pure_py_package_name = pure_py_package_name
+        self.template_directory = template_directory
         self.required = required
         if logical_name in ALL_PACKAGES:
             raise ValueError(f"Package already defined: {logical_name}")
@@ -25,7 +47,7 @@ class PackageEntry:
 
     @property
     def is_target_specific(self) -> bool:
-        return "{target_family}" in self.package_template
+        return "{target_family}" in self.dist_package_template
 
     def get_dist_package_name(self, target_family: str | None = None) -> str:
         if self.is_target_specific and target_family is None:
@@ -35,7 +57,7 @@ class PackageEntry:
         kwargs = {}
         if target_family is not None:
             kwargs["target_family"] = target_family
-        return self.package_template.format(**kwargs)
+        return self.dist_package_template.format(**kwargs)
 
     def get_dist_package_require(self, target_family: str | None = None) -> str:
         return self.get_dist_package_name(target_family) + f"=={__version__}"
@@ -51,7 +73,7 @@ class PackageEntry:
         )
 
     def __repr__(self):
-        return self.package_template
+        return self.dist_package_template
 
 
 # Resolve the build target family. This consults a list of things in increasing
@@ -89,9 +111,34 @@ def determine_target_family() -> str:
 ALL_PACKAGES: dict[str, PackageEntry] = {}
 
 # Always available packages.
-PackageEntry("core", "rocm-sdk-core", required=True)
-PackageEntry("libraries", "rocm-sdk-libraries-{target_family}", required=False)
-PackageEntry("devel", "rocm-sdk-devel", required=False)
+PackageEntry(
+    "meta",
+    "rocm-sdk",
+    pure_py_package_name="rocm_sdk",
+    template_directory="rocm-sdk",
+    required=True,
+)
+PackageEntry(
+    "core",
+    "rocm-sdk-core",
+    pure_py_package_name="rocm_sdk_core",
+    template_directory="rocm-sdk-core",
+    required=True,
+)
+PackageEntry(
+    "libraries",
+    "rocm-sdk-libraries-{target_family}",
+    pure_py_package_name="rocm_sdk_libraries",
+    template_directory="rocm-sdk-libraries",
+    required=False,
+)
+PackageEntry(
+    "devel",
+    "rocm-sdk-devel",
+    pure_py_package_name="rocm_sdk_devel",
+    template_directory="rocm-sdk-devel",
+    required=False,
+)
 
 # Overall ROCM package version.
 __version__ = "DEFAULT"

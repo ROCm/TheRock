@@ -1,4 +1,4 @@
-name: TheRock Sanity Check
+name: TheRock BLAS math-lib tests
 
 on:
   workflow_dispatch:
@@ -6,6 +6,8 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      amdgpu_families:
+        type: string
       test_runs_on:
         type: string
   workflow_call:
@@ -13,6 +15,8 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      amdgpu_families:
+        type: string
       test_runs_on:
         type: string
   push:
@@ -20,8 +24,8 @@ on:
       - ADHOCBUILD
 
 jobs:
-  test_sanity_check:
-    name: "Sanity ROCM Test"
+  test_blas:
+    name: "BLAS math-lib test"
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
@@ -31,8 +35,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      BUILD_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+      BUILD_ARTIFACTS_DIR: "./build/artifacts"
+      THEROCK_BIN_DIR: "./build/artifacts/output_dir/bin"
 
     steps:
       - name: Checkout Repository
@@ -41,18 +45,18 @@ jobs:
       - name: Install the AWS tool
         run: ./dockerfiles/cpubuilder/install_awscli.sh
 
-
       - name: "Setting up Python"
         id: setup_python
         uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: 3.11
 
-      - name: Create Python venv
+      - name: Create Python venv and installing packages
         run: |
           python -m venv ${VENV_DIR}
           source ${VENV_DIR}/bin/activate
           pip install -r requirements-test.txt
+          sudo apt install gfortran -y
 
       - name: Download and Unpack Artifacts
         run: |
@@ -64,20 +68,24 @@ jobs:
           mkdir -p "${BUILD_ARTIFACTS_DIR}"
 
           echo "Downloading artifacts"
-          python ${{ github.workspace }}/build_tools/fetch_artifacts.py \
+          python ./build_tools/fetch_artifacts.py \
             --run-id=${ARTIFACT_RUN_ID} \
-            --build-dir=${BUILD_ARTIFACTS_DIR}
+            --target=${{ inputs.amdgpu_families }} \
+            --build-dir=${BUILD_ARTIFACTS_DIR} \
+            --test \
+            --blas
 
           echo "Unpacking artifacts"
           mkdir ${BUILD_ARTIFACTS_DIR}/output_dir
-          python ${{ github.workspace }}/build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
+          python ./build_tools/fileset_tool.py artifact-flatten ${BUILD_ARTIFACTS_DIR}/*.tar.xz -o ${BUILD_ARTIFACTS_DIR}/output_dir --verbose
 
-      - name: Run rocminfo
-        run: |
-          ${THEROCK_BIN_DIR}/rocminfo
-
-      - name: Run ROCm Sanity Tests
+      - name: Run hipBLASLt tests
         run: |
           source ${VENV_DIR}/bin/activate
-          pytest tests/ \
-          --log-cli-level=info
+          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
+
+      - name: Run rocBLAS tests
+        run: |
+          ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
+          source ${VENV_DIR}/bin/activate
+          ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
