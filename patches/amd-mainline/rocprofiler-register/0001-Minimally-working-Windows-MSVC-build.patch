@@ -1,17 +1,17 @@
-From c5a00b88a750a1dd2d166211adabfd82ad282528 Mon Sep 17 00:00:00 2001
+From 674113403c0aab60da777ca63b1a2798a5d7d9ae Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
-Date: Thu, 13 Feb 2025 15:10:48 -0800
+Date: Mon, 31 Mar 2025 20:41:29 +0000
 Subject: [PATCH] Minimally working Windows/MSVC build.
 
 ---
- .../include/rocprofiler-register/version.h.in | 10 ++-
- .../lib/rocprofiler-register/CMakeLists.txt   | 12 ++-
- .../lib/rocprofiler-register/details/dl.cpp   | 36 +++++----
- .../lib/rocprofiler-register/details/dl.hpp   | 23 ++++--
- .../details/environment.hpp                   |  7 +-
- .../rocprofiler-register/details/utility.cpp  |  1 -
- .../rocprofiler_register.cpp                  | 73 +++++++++++--------
- 7 files changed, 103 insertions(+), 59 deletions(-)
+ source/include/rocprofiler-register/version.h.in     | 10 ++++++++--
+ source/lib/rocprofiler-register/CMakeLists.txt       | 12 ++++++++++--
+ source/lib/rocprofiler-register/details/dl.cpp       |  8 ++++++++
+ source/lib/rocprofiler-register/details/dl.hpp       |  8 ++++++++
+ .../lib/rocprofiler-register/details/environment.hpp |  7 ++++++-
+ source/lib/rocprofiler-register/details/utility.cpp  |  1 -
+ .../rocprofiler-register/rocprofiler_register.cpp    |  8 ++++++++
+ 7 files changed, 48 insertions(+), 6 deletions(-)
 
 diff --git a/source/include/rocprofiler-register/version.h.in b/source/include/rocprofiler-register/version.h.in
 index 7623999..982411c 100644
@@ -42,7 +42,7 @@ index 7623999..982411c 100644
  #    define ROCPROFILER_REGISTER_ESC(...)      __VA_ARGS__
  
 diff --git a/source/lib/rocprofiler-register/CMakeLists.txt b/source/lib/rocprofiler-register/CMakeLists.txt
-index 840fbed..b5da033 100644
+index 840fbed..fe32cc0 100644
 --- a/source/lib/rocprofiler-register/CMakeLists.txt
 +++ b/source/lib/rocprofiler-register/CMakeLists.txt
 @@ -17,12 +17,20 @@ target_include_directories(
@@ -69,53 +69,22 @@ index 840fbed..b5da033 100644
  set_target_properties(
      rocprofiler-register
 diff --git a/source/lib/rocprofiler-register/details/dl.cpp b/source/lib/rocprofiler-register/details/dl.cpp
-index a497dd3..fc2f898 100644
+index a497dd3..1150e82 100644
 --- a/source/lib/rocprofiler-register/details/dl.cpp
 +++ b/source/lib/rocprofiler-register/details/dl.cpp
-@@ -20,23 +20,29 @@
+@@ -20,6 +20,12 @@
  // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  // SOFTWARE.
  
--#define GNU_SOURCE 1
 +#if defined(_WIN32) || defined(__CYGWIN__)
- 
--#include "dl.hpp"
--#include "filesystem.hpp"
--#include "utility.hpp"
++
 +// TODO: implement for Windows
- 
--#include <fstream>
--#include <optional>
--#include <string>
--#include <string_view>
++
 +#else
++
+ #define GNU_SOURCE 1
  
--#include <dlfcn.h>
--#include <elf.h>
--#include <fmt/core.h>
--#include <link.h>
--#include <sys/types.h>
--#include <unistd.h>
-+#    define GNU_SOURCE 1
-+
-+#    include "dl.hpp"
-+#    include "filesystem.hpp"
-+#    include "utility.hpp"
-+
-+#    include <fstream>
-+#    include <optional>
-+#    include <string>
-+#    include <string_view>
-+
-+#    include <dlfcn.h>
-+#    include <elf.h>
-+#    include <fmt/core.h>
-+#    include <link.h>
-+#    include <sys/types.h>
-+#    include <unistd.h>
- 
- namespace rocprofiler_register
- {
+ #include "dl.hpp"
 @@ -120,3 +126,5 @@ get_linked_path(std::string_view _name, open_modes_vec_t&& _open_modes)
  }
  }  // namespace binary
@@ -123,66 +92,50 @@ index a497dd3..fc2f898 100644
 +
 +#endif  // defined(_WIN32) || defined(__CYGWIN__)
 diff --git a/source/lib/rocprofiler-register/details/dl.hpp b/source/lib/rocprofiler-register/details/dl.hpp
-index bfded01..9cd316f 100644
+index bfded01..41220aa 100644
 --- a/source/lib/rocprofiler-register/details/dl.hpp
 +++ b/source/lib/rocprofiler-register/details/dl.hpp
-@@ -22,15 +22,20 @@
+@@ -22,6 +22,12 @@
  
  #pragma once
  
--#include <cstdint>
--#include <optional>
--#include <string>
--#include <string_view>
--#include <vector>
 +#if defined(_WIN32) || defined(__CYGWIN__)
- 
--#include <dlfcn.h>
--#include <sys/types.h>
--#include <unistd.h>
++
 +// TODO: implement for Windows
 +
 +#else
 +
-+#    include <cstdint>
-+#    include <optional>
-+#    include <string>
-+#    include <string_view>
-+#    include <vector>
-+
-+#    include <sys/types.h>
-+#    include <unistd.h>
- 
- namespace rocprofiler_register
- {
-@@ -58,3 +63,5 @@ std::optional<std::string>
+ #include <cstdint>
+ #include <optional>
+ #include <string>
+@@ -58,3 +64,5 @@ std::optional<std::string>
  get_linked_path(std::string_view, open_modes_vec_t&& = {});
  }  // namespace binary
  }  // namespace rocprofiler_register
 +
 +#endif  // defined(_WIN32) || defined(__CYGWIN__)
 diff --git a/source/lib/rocprofiler-register/details/environment.hpp b/source/lib/rocprofiler-register/details/environment.hpp
-index 4250ed4..7219214 100644
+index a0f10b5..941ee0b 100644
 --- a/source/lib/rocprofiler-register/details/environment.hpp
 +++ b/source/lib/rocprofiler-register/details/environment.hpp
 @@ -23,7 +23,7 @@
- #include "fmt/core.h"
- #include "glog/logging.h"
+ #include <fmt/core.h>
+ #include <glog/logging.h>
  
 -#include <unistd.h>
 +#include <stdlib.h>
  #include <cstdio>
  #include <cstdlib>
  #include <cstring>
-@@ -135,7 +135,12 @@ struct env_config
+@@ -157,7 +157,12 @@ struct env_config
          if(env_name.empty()) return -1;
          LOG(INFO) << fmt::format(
-             "setenv({}, {}, {})", env_name.c_str(), env_value.c_str(), override);
+             "setenv({}, {}, {})", env_name.c_str(), env_value.c_str(), overwrite);
 +#if defined(_WIN32) || defined(__CYGWIN__)
 +        // TODO: Windows implementation?
 +        return -1;
 +#else
-         return setenv(env_name.c_str(), env_value.c_str(), override);
+         return setenv(env_name.c_str(), env_value.c_str(), overwrite);
 +#endif
      }
  };
@@ -200,115 +153,28 @@ index cc9e9fc..930d542 100644
  namespace rocprofiler_register
  {
 diff --git a/source/lib/rocprofiler-register/rocprofiler_register.cpp b/source/lib/rocprofiler-register/rocprofiler_register.cpp
-index 0905edd..dd79655 100644
+index df9631e..5767eba 100644
 --- a/source/lib/rocprofiler-register/rocprofiler_register.cpp
 +++ b/source/lib/rocprofiler-register/rocprofiler_register.cpp
-@@ -36,19 +36,26 @@
+@@ -41,6 +41,12 @@
  #include <string_view>
  #include <utility>
  
--#include <dlfcn.h>
--
--extern "C" {
--#pragma weak rocprofiler_configure
--#pragma weak rocprofiler_set_api_table
--#pragma weak rocprofiler_register_import_hip
--#pragma weak rocprofiler_register_import_hip_static
--#pragma weak rocprofiler_register_import_hip_compiler
--#pragma weak rocprofiler_register_import_hip_compiler_static
--#pragma weak rocprofiler_register_import_hsa
--#pragma weak rocprofiler_register_import_hsa_static
--#pragma weak rocprofiler_register_import_roctx
--#pragma weak rocprofiler_register_import_roctx_static
 +#if defined(_WIN32) || defined(__CYGWIN__)
 +
 +// TODO: Do something sensible on Windows (at least implement APIs with no-ops)
 +
 +#else
 +
-+#    include <dlfcn.h>
-+
-+extern "C"
-+{
-+#    pragma weak rocprofiler_configure
-+#    pragma weak rocprofiler_set_api_table
-+#    pragma weak rocprofiler_register_import_hip
-+#    pragma weak rocprofiler_register_import_hip_static
-+#    pragma weak rocprofiler_register_import_hip_compiler
-+#    pragma weak rocprofiler_register_import_hip_compiler_static
-+#    pragma weak rocprofiler_register_import_hsa
-+#    pragma weak rocprofiler_register_import_hsa_static
-+#    pragma weak rocprofiler_register_import_roctx
-+#    pragma weak rocprofiler_register_import_roctx_static
+ #include <dlfcn.h>
+ #include <unistd.h>
  
- extern rocprofiler_tool_configure_result_t*
- rocprofiler_configure(uint32_t, const char*, uint32_t, rocprofiler_client_id_t*);
-@@ -124,23 +131,23 @@ struct supported_library_trait
- template <size_t Idx>
- struct rocp_reg_error_message;
- 
--#define ROCP_REG_DEFINE_LIBRARY_TRAITS(ENUM, NAME, SYM_NAME, LIB_NAME)                   \
--    template <>                                                                          \
--    struct supported_library_trait<ENUM>                                                 \
--    {                                                                                    \
--        static constexpr bool specialized  = true;                                       \
--        static constexpr auto value        = ENUM;                                       \
--        static constexpr auto common_name  = NAME;                                       \
--        static constexpr auto symbol_name  = SYM_NAME;                                   \
--        static constexpr auto library_name = LIB_NAME;                                   \
--    };
-+#    define ROCP_REG_DEFINE_LIBRARY_TRAITS(ENUM, NAME, SYM_NAME, LIB_NAME)               \
-+        template <>                                                                      \
-+        struct supported_library_trait<ENUM>                                             \
-+        {                                                                                \
-+            static constexpr bool specialized  = true;                                   \
-+            static constexpr auto value        = ENUM;                                   \
-+            static constexpr auto common_name  = NAME;                                   \
-+            static constexpr auto symbol_name  = SYM_NAME;                               \
-+            static constexpr auto library_name = LIB_NAME;                               \
-+        };
- 
--#define ROCP_REG_DEFINE_ERROR_MESSAGE(ENUM, MSG)                                         \
--    template <>                                                                          \
--    struct rocp_reg_error_message<ENUM>                                                  \
--    {                                                                                    \
--        static constexpr auto value = MSG;                                               \
--    };
-+#    define ROCP_REG_DEFINE_ERROR_MESSAGE(ENUM, MSG)                                     \
-+        template <>                                                                      \
-+        struct rocp_reg_error_message<ENUM>                                              \
-+        {                                                                                \
-+            static constexpr auto value = MSG;                                           \
-+        };
- 
- ROCP_REG_DEFINE_LIBRARY_TRAITS(ROCP_REG_HSA,
-                                "hsa",
-@@ -228,7 +235,8 @@ struct rocp_import
- };
- 
- template <size_t... Idx>
--auto rocp_reg_get_imports(std::index_sequence<Idx...>)
-+auto
-+rocp_reg_get_imports(std::index_sequence<Idx...>)
- {
-     auto _data        = std::vector<rocp_import>{};
-     auto _import_scan = [&_data](auto _info) {
-@@ -361,7 +369,8 @@ auto           import_info       = rocp_reg_get_imports(library_seq);
- auto           instance_counters = std::array<std::atomic_uint64_t, ROCP_REG_LAST>{};
- }  // namespace
- 
--extern "C" {
-+extern "C"
-+{
- rocprofiler_register_error_code_t
- rocprofiler_register_library_api_table(
-     const char*                                 common_name,
-@@ -469,3 +478,5 @@ rocprofiler_register_error_string(rocprofiler_register_error_code_t _ec)
-         _ec, std::make_index_sequence<ROCP_REG_ERROR_CODE_END>{});
+@@ -661,3 +667,5 @@ rocprofiler_register_invoke_all_registrations()
+     return rocp_invoke_registrations(true);
  }
  }
 +
 +#endif  // defined(_WIN32) || defined(__CYGWIN__)
 -- 
-2.47.1.windows.2
+2.43.0
 
