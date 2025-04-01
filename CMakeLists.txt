@@ -69,9 +69,12 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 
 
-set(ROCM_MAJOR_VERSION 6)
-set(ROCM_MINOR_VERSION 4)
-set(ROCM_PATCH_VERSION 0)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.json VERSION_JSON_STRING)
+string(JSON VERSION_STRING GET ${VERSION_JSON_STRING} rocm-version)
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" ROCM_VERSION ${VERSION_STRING})
+set(ROCM_MAJOR_VERSION ${CMAKE_MATCH_1})
+set(ROCM_MINOR_VERSION ${CMAKE_MATCH_2})
+set(ROCM_PATCH_VERSION ${CMAKE_MATCH_3})
 
 ################################################################################
 # Debug Options
