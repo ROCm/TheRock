@@ -77,3 +77,83 @@ In this case, the commit `b91661c88a0fd7f5848a60212839bfc2496ff932` should be
 the base ref. It is best to look at `git log` to verify, as it is quite
 easy to get into an inconsistent state, and it is hard to spot errors in
 commit hashes.
+
+## Switching a submodule branch
+
+### For submodules with no patches
+
+Using the HIP submodule as an example:
+
+1. Edit [`.gitmodules`](/.gitmodules) to switch the branch:
+
+   ```diff
+   [submodule "HIP"]
+       path = core/HIP
+       url = https://github.com/ROCm/HIP.git
+   -	branch = amd-mainline
+   +	branch = amd-staging
+   ```
+
+1. Change the submodule commit:
+
+   ```bash
+   pushd core/HIP
+   git fetch origin amd-staging
+   git checkout amd-staging
+   git pull
+   popd
+   ```
+
+1. Commit those changes:
+
+   ```bash
+   git add .gitmodules
+   git add core/HIP
+   # ...
+   ```
+
+1. Check that `fetch_sources.py` runs successfully:
+
+   ```bash
+   python ./build_tools/fetch_sources.py
+   ```
+
+### For submodules with patches
+
+These steps are similar to
+[Rebase Sub-Projects](#rebase-sub-projects-happy-path).
+
+Using the CLR submodule as an example:
+
+1. Edit [`.gitmodules`](/.gitmodules) to switch the branch:
+
+   ```diff
+   [submodule "clr"]
+       path = core/clr
+       url = https://github.com/ROCm/clr.git
+   -	branch = amd-mainline
+   +	branch = amd-staging
+   ```
+
+1. Fetch just that project from the remote with no patches:
+
+   ```bash
+   python ./build_tools/fetch_sources.py \
+     --remote \
+     --no-apply-patches \
+     --projects clr \
+     --no-include-math-libs \
+     --no-include-ml-frameworks
+   ```
+
+1. Commit the new submodule head
+
+   ```bash
+   git commit -a -m "Rebase submodules (for conflict prep)"
+   ```
+
+1. Apply patches and validate:
+
+   ```bash
+   python ./build_tools/fetch_sources.py
+   ```

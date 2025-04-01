@@ -9,7 +9,7 @@ on:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
-      runs-on:
+      test_runs_on:
         type: string
         default: linux-mi300-1gpu-ossci-rocm
   workflow_call:
@@ -20,7 +20,7 @@ on:
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
-      runs-on:
+      test_runs_on:
         type: string
         default: linux-mi300-1gpu-ossci-rocm
   push:
@@ -30,7 +30,7 @@ on:
 jobs:
   test_sanity_check:
     name: "PRIM math-lib test"
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
     defaults:

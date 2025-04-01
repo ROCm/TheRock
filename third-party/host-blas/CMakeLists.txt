@@ -26,6 +26,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTERNAL_SOURCE_DIR .
       INSTALL_DESTINATION "lib/host-math"
       INTERFACE_LINK_DIRS "lib/host-math/lib"
+      # RPATH logic needs to know that executables/libs for this project are in
+      # a non-default location.
+      INSTALL_RPATH_EXECUTABLE_DIR "lib/host-math/bin"
+      INSTALL_RPATH_LIBRARY_DIR "lib/host-math/lib"
       INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
@@ -41,6 +45,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_cmake_subproject_provide_package(therock-host-blas OpenBLAS lib/host-math/lib/cmake/OpenBLAS)
     therock_cmake_subproject_provide_package(therock-host-blas cblas lib/host-math/lib/cmake/OpenBLAS)
     therock_cmake_subproject_activate(therock-host-blas)
+
+    therock_test_validate_shared_lib(
+      PATH dist/lib/host-math/lib
+      LIB_NAMES libopenblas.so
+    )
 
     therock_provide_artifact(host-blas
       DESCRIPTOR artifact-host-OpenBLAS.toml
