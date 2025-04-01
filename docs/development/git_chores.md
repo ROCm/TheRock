@@ -100,6 +100,7 @@ Using the HIP submodule as an example:
    pushd core/HIP
    git fetch origin amd-staging
    git checkout amd-staging
+   git pull
    popd
    ```
 
