@@ -99,7 +99,14 @@ def run(args: argparse.Namespace):
 
     # And populate the devel package, which catches everything else.
     devel = PopulatedDistPackage(params, logical_name="devel")
-    devel.populate_devel_files(tarball_compression=args.devel_tarball_compression)
+    devel.populate_devel_files(
+        addl_artifact_names=[
+            # Since prim is a header only library, it is not included in runtime
+            # packages, but we still want it in the devel package.
+            "prim",
+        ],
+        tarball_compression=args.devel_tarball_compression,
+    )
 
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
@@ -113,7 +120,6 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-runtime",
         "host-blas",
         "host-suite-sparse",
-        "rocprofiler-sdk",
         "sysdeps",
     ] and an.component in [
         "lib",
@@ -133,7 +139,6 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "blas",
             "fft",
             "miopen",
-            "prim",
             "rand",
             "rccl",
         ]
