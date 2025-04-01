@@ -17,6 +17,7 @@ runs:
   using: "composite"
   steps:
     - name: Install the AWS tool
+      shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
 
     - name: "Setting up Python"
@@ -26,6 +27,7 @@ runs:
         python-version: 3.11
 
     - name: Create Python venv
+      shell: bash
       run: |
         python -m venv ${VENV_DIR}
         source ${VENV_DIR}/bin/activate
@@ -34,6 +36,7 @@ runs:
         VENV_DIR: ${{ inputs.VENV_DIR }}
 
     - name: Download and Unpack Artifacts
+      shell: bash
       run: |
         source ${VENV_DIR}/bin/activate
 
