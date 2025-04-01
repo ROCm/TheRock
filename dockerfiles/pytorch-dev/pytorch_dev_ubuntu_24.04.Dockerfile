@@ -67,6 +67,8 @@ FROM pytorch_sources AS pytorch_build
 ARG AMDGPU_TARGETS
 
 RUN python3 -m pip install --break-system-packages -r /therock/pytorch/requirements.txt
+# Downgrade CMake to avoid protobuf build failure
+RUN python3 -m pip install --break-system-packages cmake==3.26.4
 
 ENV CMAKE_PREFIX_PATH=/opt/rocm
 ENV USE_KINETO=OFF
