@@ -251,19 +251,17 @@ def matrix_generator(
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
-        # For now, we will add all machines
-        for key in amdgpu_family_info_matrix:
-            potential_linux_targets.append(key)
-            potential_windows_targets.append(key)
+        # For now, we will add all defaults down below since certain test machines are not available yet
 
-    # Adding defaults for build and test matrices.
+    # Adding defaults for build and test matrices for only main push and pull requests.
     # TODO (geo): improve PR defaults instead of hard-coding in the py file
-    if not is_test:
-        potential_linux_targets.extend(LINUX_BUILD_DEFAULTS)
-        potential_windows_targets.extend(WINDOWS_BUILD_DEFAULTS)
-    else:
-        potential_linux_targets.extend(LINUX_TEST_DEFAULTS)
-        potential_windows_targets.extend(WINDOWS_TEST_DEFAULTS)
+    if (is_push and base_args.get("branch_name") == "main") or is_pull_request:
+        if not is_test:
+            potential_linux_targets.extend(LINUX_BUILD_DEFAULTS)
+            potential_windows_targets.extend(WINDOWS_BUILD_DEFAULTS)
+        else:
+            potential_linux_targets.extend(LINUX_TEST_DEFAULTS)
+            potential_windows_targets.extend(WINDOWS_TEST_DEFAULTS)
 
     # Ensure the targets in the list are unique
     potential_linux_targets = list(set(potential_linux_targets))
