@@ -1,7 +1,7 @@
 [submodule "clr"]
 	path = core/clr
 	url = https://github.com/ROCm/clr
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "half"]
 	path = base/half
 	url = https://github.com/ROCm/half.git
