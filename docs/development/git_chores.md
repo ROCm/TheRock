@@ -148,8 +148,7 @@ Using the CLR submodule as an example:
 1. Commit the new submodule head
 
    ```bash
-   git add -A
-   git commit -m "Rebase submodules (for conflict prep)"
+   git commit -a -m "Rebase submodules (for conflict prep)"
    ```
 
 1. Apply patches and validate:
