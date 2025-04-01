@@ -390,12 +390,12 @@ class PopulatedDistPackage:
         tar_path = self.pure_dir / f"_devel{tar_suffix}"
         log(f"::: Building secondary devel tarball: {tar_path}")
         with tarfile.open(tar_path, mode=tar_mode) as tf:
-            for root, _, files in os.walk(package_path):
-                for file in files:
+            for root, dirnames, files in os.walk(package_path):
+                for file in list(files) + list(dirnames):
                     file_path = os.path.join(root, file)
                     arcname = os.path.relpath(file_path, package_path.parent)
                     log(f"Adding {arcname}", vlog=2)
-                    tf.add(file_path, arcname=arcname)
+                    tf.add(file_path, arcname=arcname, recursive=False)
         shutil.rmtree(package_path)
 
     def _populate_devel_file(
