@@ -68,13 +68,19 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   message(STATUS "Defaulted CMAKE_INSTALL_PREFIX to ${CMAKE_INSTALL_PREFIX}")
 endif()
 
-
-file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.json VERSION_JSON_STRING)
-string(JSON VERSION_STRING GET ${VERSION_JSON_STRING} rocm-version)
-string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" ROCM_VERSION ${VERSION_STRING})
-set(ROCM_MAJOR_VERSION ${CMAKE_MATCH_1})
-set(ROCM_MINOR_VERSION ${CMAKE_MATCH_2})
-set(ROCM_PATCH_VERSION ${CMAKE_MATCH_3})
+block(PROPAGATE ROCM_MAJOR_VERSION ROCM_MINOR_VERSION ROCM_PATCH_VERSION)
+  file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.json VERSION_JSON_STRING)
+  string(JSON VERSION_STRING GET ${VERSION_JSON_STRING} rocm-version)
+  string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)" ROCM_VERSION ${VERSION_STRING})
+  if(ROCM_VERSION)
+    set(ROCM_MAJOR_VERSION ${CMAKE_MATCH_1})
+    set(ROCM_MINOR_VERSION ${CMAKE_MATCH_2})
+    set(ROCM_PATCH_VERSION ${CMAKE_MATCH_3})
+    message(STATUS "ROCm version: ${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}")
+  else()
+    message(FATAL_ERROR "Failed to determine ROCm version.")
+  endif()
+endblock()
 
 ################################################################################
 # Debug Options
