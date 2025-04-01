@@ -16,6 +16,9 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Checkout Repository
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
     - name: Install the AWS tool
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
@@ -28,15 +31,21 @@ runs:
 
     - name: Create Python venv
       shell: bash
+      env:
+        VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
         python -m venv ${VENV_DIR}
         source ${VENV_DIR}/bin/activate
         pip install -r requirements-test.txt
-      env:
-        VENV_DIR: ${{ inputs.VENV_DIR }}
 
     - name: Download and Unpack Artifacts
       shell: bash
+      env:
+        VENV_DIR: ${{ inputs.VENV_DIR }}
+        OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
+        ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
+        AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
+        FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
       run: |
         source ${VENV_DIR}/bin/activate
 
@@ -55,9 +64,3 @@ runs:
         echo "Unpacking artifacts"
         mkdir ${OUTPUT_ARTIFACTS_DIR}/output_dir
         python ./build_tools/fileset_tool.py artifact-flatten ${OUTPUT_ARTIFACTS_DIR}/*.tar.xz -o ${OUTPUT_ARTIFACTS_DIR}/output_dir --verbose
-      env:
-        VENV_DIR: ${{ inputs.VENV_DIR }}
-        OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
-        ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
-        AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
-        FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
