@@ -9,9 +9,13 @@
 [components.dev."math-libs/BLAS/hipBLAS/stage"]
 [components.doc."math-libs/BLAS/hipBLAS/stage"]
 [components.lib."math-libs/BLAS/hipBLAS/stage"]
+exclude = [
+  "lib/libhipblas_fortran.so",
+]
 [components.test."math-libs/BLAS/hipBLAS/stage"]
 include = [
   "bin/hipblas_*.yaml",
+  "lib/libhipblas_fortran.so",
   # Clients benchmarks
   "bin/hipblas-bench",
   "bin/hipblas_v2-bench",
