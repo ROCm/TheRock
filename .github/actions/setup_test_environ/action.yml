@@ -16,9 +16,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Checkout Repository
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
     - name: Install the AWS tool
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh

@@ -55,6 +55,9 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--test --blas"
 
+      - name: Install additional packages
+        run: sudo apt install gfortran -y
+
       - name: Run hipBLASLt tests
         run: |
           source ${VENV_DIR}/bin/activate
