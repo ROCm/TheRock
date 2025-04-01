@@ -30,6 +30,7 @@ jobs:
     uses: './.github/workflows/test_sanity_check.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      runs-on: ${{ inputs.runs-on }}
 
   test_blas:
     name: 'Test BLAS math-lib'
