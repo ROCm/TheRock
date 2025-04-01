@@ -40,8 +40,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Run test set-up workflow
-        uses: './.github/actions/setup_test_env'
+      - name: Run setup test environment workflow
+        uses: './.github/actions/setup_test_environ'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
