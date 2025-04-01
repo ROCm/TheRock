@@ -24,7 +24,7 @@ mainline, in open source, using MSVC, etc.).
 | base             | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                             | ✅        |                                                  |
 | base             | [rocm-core](https://github.com/ROCm/rocm-core)                               | ✅        | No shared libraries                              |
 | base             | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                         | ❌        | Unsupported                                      |
-| base             | [rocprofiler-register](https://github.com/ROCm/rocprofiler-register)         | ⭕        | Patched to no-op                                 |
+| base             | [rocprofiler-register](https://github.com/ROCm/rocprofiler-register)         | ❌        | Unsupported                                      |
 | base             | [rocm-half](https://github.com/ROCm/half)                                    | ✅        |                                                  |
 |                  |                                                                              |           |                                                  |
 | compiler         | [amd-llvm](https://github.com/ROCm/llvm-project)                             | ✅        | No shared libraries, limited runtimes            |
