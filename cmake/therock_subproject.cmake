@@ -543,18 +543,11 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "${_deps_contents}")
   string(APPEND _init_contents "set(THEROCK_IGNORE_PACKAGES \"@_ignore_packages@\")\n")
   string(APPEND _init_contents "list(PREPEND CMAKE_MODULE_PATH \"${THEROCK_SOURCE_DIR}/cmake/finders\")\n")
-  if(WIN32)
-    # Windows currently relies on some prebuilt toolchain components from the
-    # HIP SDK. As part of https://github.com/ROCm/TheRock/issues/36 we should
-    # be able to satisfy find_package(HIP) via the toolchain.
-    file(TO_CMAKE_PATH "$ENV{HIP_PATH}" HIP_DIR)
-    string(APPEND _init_contents "string(APPEND CMAKE_PREFIX_PATH \"${HIP_DIR}\")\n")
-  endif()
   foreach(_private_link_dir ${_private_link_dirs})
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
     endif()
-    if(NOT MSVC)
+    if(NOT MSVC OR _compiler_toolchain STREQUAL "amd-llvm" OR _compiler_toolchain STREQUAL "amd-hip")
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
@@ -1081,13 +1074,6 @@ function(_therock_cmake_subproject_setup_toolchain
     # The main difference is that for "amd-llvm", we derive the configuration from
     # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
     # project (which has runtime dependencies on the underlying toolchain).
-    if(WIN32 AND compiler_toolchain STREQUAL "amd-hip")
-      # On Windows, we only have the amd-llvm toolchain today, so override.
-      set(compiler_toolchain "amd-llvm")
-      if(THEROCK_VERBOSE)
-        message(STATUS "Windows: overriding compiler_toolchain from amd-hip to amd-llvm")
-      endif()
-    endif()
     if(compiler_toolchain STREQUAL "amd-hip")
       set(_toolchain_subproject "hip-clr")
     else()
