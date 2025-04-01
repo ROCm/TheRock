@@ -120,6 +120,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-runtime",
         "host-blas",
         "host-suite-sparse",
+        "rocprofiler-sdk",
         "sysdeps",
     ] and an.component in [
         "lib",
