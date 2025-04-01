@@ -189,8 +189,23 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
             "target": "gfx94X-dcgpu",
         }
-    }
+    },
+    "gfx110X": {
+        "linux": {
+            "test-runs-on": "",
+            "target": "gfx110X-dgpu",
+        },
+        "windows": {
+            "test-runs-on": "",
+            "target": "gfx110X-dgpu",
+        },
+    },
 }
+
+LINUX_BUILD_DEFAULTS = ["gfx94X", "gfx110X"]
+LINUX_TEST_DEFAULTS = ["gfx94X"]
+WINDOWS_BUILD_DEFAULTS = ["gfx110X"]
+WINDOWS_TEST_DEFAULTS = []
 
 
 def get_pr_labels(args) -> List[str]:
@@ -200,7 +215,7 @@ def get_pr_labels(args) -> List[str]:
 
 
 def matrix_generator(
-    is_pull_request, is_workflow_dispatch, is_push, base_args, families
+    is_pull_request, is_workflow_dispatch, is_push, base_args, families, is_test
 ):
     """Parses and generates build matrix with build requirements"""
     potential_linux_targets = []
@@ -240,6 +255,15 @@ def matrix_generator(
         for key in amdgpu_family_info_matrix:
             potential_linux_targets.append(key)
             potential_windows_targets.append(key)
+
+    # Adding defaults for build and test matrices.
+    # TODO (geo): improve PR defaults instead of hard-coding in the py file
+    if not is_test:
+        potential_linux_targets.extend(LINUX_BUILD_DEFAULTS)
+        potential_windows_targets.extend(WINDOWS_BUILD_DEFAULTS)
+    else:
+        potential_linux_targets.extend(LINUX_TEST_DEFAULTS)
+        potential_windows_targets.extend(WINDOWS_TEST_DEFAULTS)
 
     # Ensure the targets in the list are unique
     potential_linux_targets = list(set(potential_linux_targets))
@@ -297,12 +321,12 @@ def main(base_args, build_families, test_families):
 
     print(f"Generating build matrix for {str(build_families)}")
     build_linux_target_output, build_windows_target_output = matrix_generator(
-        is_pull_request, is_workflow_dispatch, is_push, base_args, build_families
+        is_pull_request, is_workflow_dispatch, is_push, base_args, build_families, False
     )
 
     print(f"Generating test matrix for {str(test_families)}")
     test_linux_target_output, test_windows_target_output = matrix_generator(
-        is_pull_request, is_workflow_dispatch, is_push, base_args, test_families
+        is_pull_request, is_workflow_dispatch, is_push, base_args, test_families, True
     )
 
     enable_build_jobs = False
@@ -363,7 +387,7 @@ if __name__ == "__main__":
     )
 
     # For now, add default run for gfx94X-linux
-    base_args["pr_labels"] = os.environ.get("PR_LABELS", "['gfx94X-linux']")
+    base_args["pr_labels"] = os.environ.get("PR_LABELS", "[]")
     base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
