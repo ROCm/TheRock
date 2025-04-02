@@ -128,20 +128,19 @@ jobs:
       # TODO: Move to script
       - name: Upload Artifacts
         run: |
-          aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}/ \
-            --recursive --no-follow-symlinks \
+          aws s3 sync build/artifacts/ s3://therock-artifacts/${{github.run_id}}/ \
+            --no-follow-symlinks \
             --exclude "*" \
             --include "*.tar.xz*" --include "index.html"
 
       # TODO: Move to script
       - name: Upload Logs
         run: |
-          aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/ \
-            --recursive \
+          aws s3 sync build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/ \
             --content-type="text/plain" \
             --exclude "*" \
             --include "*.log"
-          aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/
+          aws s3 sync build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/
 
       - name: Add Links to Job Summary
         run: |
