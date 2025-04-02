@@ -31,8 +31,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts_sanity"
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts_sanity/output_dir/bin"
 
     steps:
       - name: Checkout Repository

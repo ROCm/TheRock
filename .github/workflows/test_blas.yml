@@ -35,8 +35,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts_blas"
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts_blas/output_dir/bin"
 
     steps:
       - name: Checkout Repository
@@ -52,7 +52,7 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--test --blas"
 
       - name: Install additional packages
-        run: sudo apt install gfortran -y
+        run: sudo apt install libgfortran5 -y
 
       - name: Run hipBLASLt tests
         run: |
