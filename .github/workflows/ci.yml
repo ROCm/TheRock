@@ -56,10 +56,11 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR_NUMBER: ${{ github.event.number }}
     steps:
-      run: |
-        gh pr edit ${PR_NUMBER} --add-label "gfx94X-linux"
-        gh pr edit ${PR_NUMBER} --add-label "gfx110X-linux"
-        gh pr edit ${PR_NUMBER} --add-label "gfx110X-windows"
+      - name: "Adding labels"
+        run: |
+          gh pr edit ${PR_NUMBER} --add-label "gfx94X-linux"
+          gh pr edit ${PR_NUMBER} --add-label "gfx110X-linux"
+          gh pr edit ${PR_NUMBER} --add-label "gfx110X-windows"
 
   setup:
     uses: ./.github/workflows/setup.yml
