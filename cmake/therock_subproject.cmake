@@ -60,6 +60,15 @@ set(THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS
   -Wno-unused-command-line-argument
 )
 
+if(WIN32)
+  # TODO(#36): Could we fix these warnings as part of enabling shared library builds?
+  # These are frequently set in subproject toolchain-windows.cmake files.
+  # For "__declspec attribute 'dllexport' is not supported [-Wignored-attributes]"
+  list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-ignored-attributes)
+  # For "unknown attribute '__dllimport__' ignored [-Wunknown-attributes]"
+  list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-unknown-attributes)
+endif()
+
 # Generates a command prefix that can be prepended to any custom command line
 # to perform log/console redirection and pretty printing.
 # LOG_FILE: If given, command output will also be sent to this log file. If
@@ -1050,7 +1059,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # here. If any flags are load bearing we can either add them to all projects
     # or source those flags from the projects themselves more locally.
     string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT )\n")
-    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -D_CRT_SECURE_NO_WARNINGS\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX \")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT )\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT )\n")
   else()
