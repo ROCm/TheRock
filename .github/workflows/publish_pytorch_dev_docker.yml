@@ -42,6 +42,11 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set nightly version
+        id: nightly_version
+        run: |
+          BASE_VERSION=$(jq -r '.["rocm-version"]' version.json)
+          echo "VERSION=${BASE_VERSION}rc$(date +'%Y%m%d')" >> "$GITHUB_ENV"
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.9
@@ -50,6 +55,15 @@ jobs:
       # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
+          tags: |
+            type=schedule,pattern={{date 'YYYYMMDD'}}
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.title=PyTorch ROCm Dev Image
+            org.opencontainers.image.description=Nightly ROCm PyTorch Dev Docker for target ${{ matrix.targets.amdgpu_target }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
       - name: Build and push Docker image
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
         with:
