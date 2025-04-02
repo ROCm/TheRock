@@ -104,3 +104,15 @@ class ROCmCoreTest(unittest.TestCase):
                         f"Expected '{expected_text}' in console-script {script_name} outuput:\n"
                         f"{output_text}"
                     )
+
+    def testPreloadLibraries(self):
+        target_family = di.determine_target_family()
+
+        for lib_entry in di.ALL_LIBRARIES.values():
+            # Only test for packages we have installed.
+            if lib_entry.package.has_py_package(target_family):
+                with self.subTest(
+                    msg="Check rocm_sdk.preload_libraries",
+                    shortname=lib_entry.shortname,
+                ):
+                    rocm_sdk.preload_libraries(lib_entry.shortname)
