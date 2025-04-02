@@ -74,7 +74,7 @@ jobs:
           # Build.
           cmake -B build -GNinja . \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_AMDGPU_FAMILIES=${AMDGPU_FAMILIES} \
+            -DTHEROCK_AMDGPU_FAMILIES=${{env.AMDGPU_FAMILIES}} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_VERBOSE=ON \
             -DBUILD_TESTING=ON
@@ -121,7 +121,7 @@ jobs:
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output build/indexer.py
-          python build/indexer.py -f '*.tar.xz*' build/artifacts/ -o build/artifacts/index-${AMDGPU_FAMILIES}.html
+          python build/indexer.py -f '*.tar.xz*' build/artifacts/ -o build/artifacts/index-${{env.AMDGPU_FAMILIES}}.html
           python build/indexer.py -f '*.log' build/logs/
           sed -i 's,a href="..",a href="../../index.html",g' build/logs/index.html
 
@@ -136,14 +136,14 @@ jobs:
       # TODO: Move to script
       - name: Upload Logs
         run: |
-          aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${AMDGPU_FAMILIES}/ \
+          aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
             --recursive \
             --content-type="text/plain" \
             --exclude "*" \
             --include "*.log"
-          aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/${AMDGPU_FAMILIES}/
+          aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/
 
       - name: Add Links to Job Summary
         run: |
-          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${AMDGPU_FAMILIES}.html)' >> $GITHUB_STEP_SUMMARY
-          echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/logs/${AMDGPU_FAMILIES}/index.html)' >> $GITHUB_STEP_SUMMARY
+          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
+          echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY
