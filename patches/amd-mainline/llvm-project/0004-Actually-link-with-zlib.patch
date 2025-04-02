@@ -1,0 +1,42 @@
+From 3eb1d23abf02b605472ebc29a94f6996985b40e6 Mon Sep 17 00:00:00 2001
+From: Scott Tsai <scottt.tw@gmail.com>
+Date: Thu, 3 Apr 2025 05:12:23 +0800
+Subject: [PATCH] Actually link with zlib
+
+amd-llvm currently does not properly link with zlib even if
+LLVM_ENABLE_ZLIB is set to ON and cmake would error out
+if set to FORCE_ON.
+
+This could cause projects like roc{SPARSE,SOLVER} which uses compressed debug
+info to fail when built with debug on.
+---
+ llvm/cmake/config-ix.cmake | 12 +-----------
+ 1 file changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/llvm/cmake/config-ix.cmake b/llvm/cmake/config-ix.cmake
+index 0aae13e30f2a..2561adb4fba3 100644
+--- a/llvm/cmake/config-ix.cmake
++++ b/llvm/cmake/config-ix.cmake
+@@ -133,18 +133,8 @@ if(LLVM_ENABLE_ZLIB)
+     find_package(ZLIB)
+   endif()
+   if(ZLIB_FOUND)
+-    # Check if zlib we found is usable; for example, we may have found a 32-bit
+-    # library on a 64-bit system which would result in a link-time failure.
+-    cmake_push_check_state()
+-    list(APPEND CMAKE_REQUIRED_INCLUDES ${ZLIB_INCLUDE_DIRS})
+-    list(APPEND CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARY})
+-    check_symbol_exists(compress2 zlib.h HAVE_ZLIB)
+-    cmake_pop_check_state()
+-    if(LLVM_ENABLE_ZLIB STREQUAL FORCE_ON AND NOT HAVE_ZLIB)
+-      message(FATAL_ERROR "Failed to configure zlib")
+-    endif()
++    set(LLVM_ENABLE_ZLIB 1)
+   endif()
+-  set(LLVM_ENABLE_ZLIB "${HAVE_ZLIB}")
+ else()
+   set(LLVM_ENABLE_ZLIB 0)
+ endif()
+-- 
+2.49.0
+
