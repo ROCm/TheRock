@@ -19,7 +19,6 @@ def log(*args, **kwargs):
 def exec(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    sys.stdout.flush()
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
@@ -44,7 +43,12 @@ def run(args):
         )
 
     exec(
-        ["./build_tools/fetch_sources.py", "--remote", "--no-apply-patches"],
+        [
+            sys.executable,
+            "./build_tools/fetch_sources.py",
+            "--remote",
+            "--no-apply-patches",
+        ],
         cwd=THEROCK_DIR,
     )
 
@@ -57,16 +61,17 @@ def run(args):
     )
 
     try:
-        subprocess.check_call(
-            "./build_tools/fetch_sources.py", cwd=THEROCK_DIR, stdin=subprocess.DEVNULL
+        exec(
+            [sys.executable, "./build_tools/fetch_sources.py"],
+            cwd=THEROCK_DIR,
         )
     except subprocess.CalledProcessError as patching_error:
-        log(f"Failed to apply patches")
+        log("Failed to apply patches")
         sys.exit(1)
 
     if args.push_branch:
         exec(
-            ["git", "push", "-u", "origin", +args.branch_name],
+            ["git", "push", "-u", "origin", args.branch_name],
             cwd=THEROCK_DIR,
         )
 
