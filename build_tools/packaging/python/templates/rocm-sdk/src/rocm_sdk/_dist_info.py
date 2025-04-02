@@ -161,6 +161,7 @@ PackageEntry(
 # Public libraries.
 LibraryEntry("amdhip64", "core", "libamdhip64.so.6")
 LibraryEntry("hiprtc", "core", "libhiprtc.so.6")
+LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so.0")
 
 LibraryEntry("hipblas", "libraries", "libhipblas.so.2")
 LibraryEntry("hipfft", "libraries", "libhipfft.so.0")

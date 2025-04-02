@@ -24,7 +24,7 @@ def find_libraries(*shortnames: str) -> list[Path]:
 
     paths: list[Path] = []
     missing_extras: set[str] = set()
-    is_windows = platform.platform() == "Windows"
+    is_windows = platform.system() == "Windows"
     for shortname in shortnames:
         try:
             lib_entry = _dist_info.ALL_LIBRARIES[shortname]
