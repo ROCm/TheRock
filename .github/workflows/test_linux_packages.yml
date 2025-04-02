@@ -26,6 +26,7 @@ on:
 jobs:
   test_sanity_check:
     name: 'Test Sanity Check'
+    if: ${{ inputs.test_runs_on != "" }} # if there is a test machine available
     uses: './.github/workflows/test_sanity_check.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
@@ -33,6 +34,7 @@ jobs:
 
   test_blas:
     name: 'Test BLAS math-lib'
+    if: ${{ inputs.test_runs_on != "" }} # if there is a test machine available
     uses: './.github/workflows/test_blas.yml'
     needs: test_sanity_check
     with:

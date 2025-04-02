@@ -41,10 +41,18 @@ jobs:
         with:
           # We need the parent commit to do a diff
           fetch-depth: 2
+
+      - name: Set PR_LABELS variable
+        if: ${{ github.event.issue.pull_request }} # only set PR labels var if this is a pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          echo "PR_LABELS=$(gh pr view ${PR_NUMBER} --json labels)" >> $GITHUB_ENV
+
       - name: "Configuring CI options"
         id: configure
         env:
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           INPUT_BUILD_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.build_linux_amdgpu_families }}
           INPUT_BUILD_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.build_windows_amdgpu_families }}
           INPUT_TEST_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.test_linux_amdgpu_families }}

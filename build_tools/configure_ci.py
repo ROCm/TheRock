@@ -202,11 +202,6 @@ amdgpu_family_info_matrix = {
     },
 }
 
-LINUX_BUILD_DEFAULTS = ["gfx94X", "gfx110X"]
-LINUX_TEST_DEFAULTS = ["gfx94X"]
-WINDOWS_BUILD_DEFAULTS = ["gfx110X"]
-WINDOWS_TEST_DEFAULTS = []
-
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
@@ -251,17 +246,12 @@ def matrix_generator(
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
-        # For now, we will add all defaults down below since certain test machines are not available yet
-
-    # Adding defaults for build and test matrices for only main push and pull requests.
-    # TODO (geo): improve PR defaults instead of hard-coding in the py file
-    if (is_push and base_args.get("branch_name") == "main") or is_pull_request:
-        if not is_test:
-            potential_linux_targets.extend(LINUX_BUILD_DEFAULTS)
-            potential_windows_targets.extend(WINDOWS_BUILD_DEFAULTS)
-        else:
-            potential_linux_targets.extend(LINUX_TEST_DEFAULTS)
-            potential_windows_targets.extend(WINDOWS_TEST_DEFAULTS)
+        # Add all options
+        for key in amdgpu_family_info_matrix:
+            if "linux" in amdgpu_family_info_matrix[key]:
+                potential_linux_targets.append(key)
+            if "windows" in amdgpu_family_info_matrix[key]:
+                potential_windows_targets.append(key)
 
     # Ensure the targets in the list are unique
     potential_linux_targets = list(set(potential_linux_targets))
