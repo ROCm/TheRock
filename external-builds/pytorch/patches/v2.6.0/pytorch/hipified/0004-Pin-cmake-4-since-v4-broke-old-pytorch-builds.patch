@@ -1,7 +1,7 @@
 From 77a75ffce90524e6e5fafed0759d30b63a156286 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Tue, 1 Apr 2025 14:52:15 -0700
-Subject: [PATCH 4/4] Pin cmake<4 since v4 broke old pytorch builds.
+Subject: [PATCH 4/5] Pin cmake<4 since v4 broke old pytorch builds.
 
 ---
  requirements.txt | 2 +-
