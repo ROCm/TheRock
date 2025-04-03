@@ -31,18 +31,47 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       test_runs_on: ${{ inputs.test_runs_on }}
 
-  test_blas:
-    name: 'Test BLAS math-lib'
-    uses: './.github/workflows/test_blas.yml'
+  # BLAS tests
+  test_hipblaslt:
+    name: 'Test hipBLASLt math-lib'
+    uses: './.github/workflows/test_hipblaslt.yml'
     needs: test_sanity_check
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
 
-  test_prim:
-    name: 'Test PRIM math-lib'
-    uses: './.github/workflows/test_prim.yml'
+  test_rocblas:
+    name: 'Test rocBLAS math-lib'
+    uses: './.github/workflows/test_rocblas.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+
+  # PRIM tests
+  test_rocprim:
+    name: 'Test rocPRIM math-lib'
+    uses: './.github/workflows/test_rocprim.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+
+  test_rocthrust:
+    name: 'Test rocTHRUST math-lib'
+    uses: './.github/workflows/test_rocthrust.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+
+  test_hipcub:
+    name: 'Test hipCUB math-lib'
+    uses: './.github/workflows/test_hipcub.yml'
     needs: test_sanity_check
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}

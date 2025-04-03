@@ -1,4 +1,4 @@
-name: TheRock BLAS math-lib tests
+name: TheRock rocTHRUST math-lib tests
 
 on:
   workflow_dispatch:
@@ -8,8 +8,10 @@ on:
         default: ""
       amdgpu_families:
         type: string
+        default: ""
       test_runs_on:
         type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_run_id:
@@ -17,15 +19,17 @@ on:
         default: ""
       amdgpu_families:
         type: string
+        default: ""
       test_runs_on:
         type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
 
 jobs:
-  test_blas:
-    name: "BLAS math-lib test"
+  test_rocthrust:
+    name: "rocTHRUST math-lib test"
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
@@ -43,24 +47,14 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run setup test environment workflow
-        uses: './.github/actions/setup_test_environ'
+        uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: "--test --blas"
+          FETCH_ARTIFACT_ARGS: "--test --prim"
 
-      - name: Install additional packages
-        run: sudo apt install libgfortran5 -y
-
-      - name: Run hipBLASLt tests
+      - name: Run rocthrust tests
         run: |
-          source ${VENV_DIR}/bin/activate
-          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
-
-      - name: Run rocBLAS tests
-        run: |
-          ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
-          source ${VENV_DIR}/bin/activate
-          ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
+          ctest --test-dir ${THEROCK_BIN_DIR}/rocthrust --output-on-failure --parallel 5

@@ -1,4 +1,4 @@
-name: TheRock PRIM math-lib tests
+name: TheRock hipCUB math-lib tests
 
 on:
   workflow_dispatch:
@@ -28,8 +28,8 @@ on:
       - ADHOCBUILD
 
 jobs:
-  test_prim:
-    name: "PRIM math-lib test"
+  test_hipcub:
+    name: "hipCUB math-lib test"
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run setup test environment workflow
-        uses: './.github/actions/setup_test_environ'
+        uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
@@ -55,14 +55,6 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--test --prim"
 
-      - name: Run rocprim tests
-        run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/rocprim --output-on-failure
-
-      - name: Run rocthrust tests
-        run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/rocthrust --output-on-failure
-
       - name: Run hipcub tests
         run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/hipcub --output-on-failure
+          ctest --test-dir ${THEROCK_BIN_DIR}/hipcub --output-on-failure --parallel 5
