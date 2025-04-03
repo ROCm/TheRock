@@ -1,7 +1,7 @@
-From 3b7899a0fe6b1339d04daf1bbba709bbd04f171c Mon Sep 17 00:00:00 2001
+From 519669d34dfaa980604f6014898f1ed4cb4d943a Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Wed, 19 Feb 2025 17:16:27 -0800
-Subject: [PATCH 3/3] TEMPORARY: Manually disable roctx until compatibility
+Subject: [PATCH 3/5] TEMPORARY: Manually disable roctx until compatibility
  with rocprofv3 is established.
 
 ---

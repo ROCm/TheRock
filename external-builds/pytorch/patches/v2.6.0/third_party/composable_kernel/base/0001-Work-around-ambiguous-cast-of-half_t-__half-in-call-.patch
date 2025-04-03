@@ -1,4 +1,4 @@
-From 019d6e65d121f6efdbf3875f9fffd4d433e22318 Mon Sep 17 00:00:00 2001
+From 64b64e642fe482acd0d262e22c7e6d9ee3cecc09 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Wed, 19 Feb 2025 17:17:01 -0800
 Subject: [PATCH] Work around ambiguous cast of half_t -> __half in call to

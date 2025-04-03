@@ -77,6 +77,19 @@ class ROCmDevelTest(unittest.TestCase):
         bin_path = path / "bin"
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
 
+    def testRootLLVMSymlinkExists(self):
+        # We had a bug where the root llvm/ symlink, which is for backwards compat,
+        # was not materialized. Verify it is.
+        output = (
+            utils.exec(
+                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
+            )
+            .decode()
+            .strip()
+        )
+        path = Path(output) / "llvm" / "bin" / "clang++"
+        self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
+
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
         _ = (
@@ -103,6 +116,14 @@ class ROCmDevelTest(unittest.TestCase):
             if "clang_rt" in str(so_path):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
+                continue
+            if (
+                "librocprofiler-sdk" in str(so_path) or "librocprofv3" in str(so_path)
+            ) and "librocprofiler-sdk-roctx" not in str(so_path):
+                # rocprofiler-sdk still depends on aqlprofiler, which is not yet
+                # open-source. But we do need the roctx library to load properly
+                # regardless.
+                # See: https://github.com/ROCm/TheRock/issues/330
                 continue
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree

@@ -1,18 +1,39 @@
 name: CI
 
 on:
-  pull_request:
   push:
     branches:
       - main
   workflow_dispatch:
     inputs:
-      amdgpu_families:
+      build_linux_amdgpu_families:
         type: string
-        default: gfx94X-dcgpu
-      runs-on:
+        description: "Insert comma-separated list of Linux GPU families to build. ex: gfx94X, gfx1201X"
+        default: ""
+      build_windows_amdgpu_families:
         type: string
-        default: linux-mi300-1gpu-ossci-rocm
+        description: "Insert comma-separated list of Windows GPU families to build. ex: gfx94X, gfx1201X"
+        default: ""
+      test_linux_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Linux GPU families to test. ex: gfx94X, gfx1201X"
+        default: ""
+      test_windows_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Windows GPU families to test. ex: gfx94X, gfx1201X"
+        default: ""
+      artifact_run_id:
+        type: string
+        description: "If provided, the tests will run on this artifact ID"
+        default: ""
+  # By default, We have selected build/test linux and windows targets in configure_ci.py.
+  # In order to run build and tests, please select a provided label corresponding with the machine and OS (ex: gfx94X-linux)
+  # If the label is already added, you can remove and re-add the label to restart the job.
+  # TODO (geo): improve pull request experience, whether with labels or comments
+  pull_request:
+    types:
+      - labeled
+      - opened
 
 permissions:
   contents: read
@@ -32,26 +53,47 @@ jobs:
   build_linux_packages:
     name: Build Linux Packages
     needs: setup
-    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
+    if: ${{ needs.setup.outputs.build_linux_amdgpu_families != '[]' }}
+    strategy:
+      matrix:
+        families: ${{ fromJSON(needs.setup.outputs.build_linux_amdgpu_families) }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
-      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
+      amdgpu_families: ${{ matrix.families.target }}
     permissions:
       id-token: write
 
   build_windows_packages:
     name: Build Windows Packages
     needs: setup
-    if: ${{ fromJSON(needs.setup.outputs.enable_build_jobs) }}
+    if: ${{ needs.setup.outputs.build_windows_amdgpu_families != '[]' }}
+    strategy:
+      matrix:
+        families: ${{ fromJSON(needs.setup.outputs.build_windows_amdgpu_families) }}
     uses: ./.github/workflows/build_windows_packages.yml
+    with:
+      amdgpu_families: ${{ matrix.families.target }}
 
   test_linux_packages:
     needs: [setup, build_linux_packages]
     name: Test Linux Packages
+    if: |
+      ${{
+        !cancelled() &&
+        needs.setup.outputs.test_linux_amdgpu_families != '[]' &&
+        (
+          needs.build_linux_packages.result == 'success' ||
+          needs.build_linux_packages.result == 'skipped'
+        )
+      }}
+    strategy:
+      matrix:
+        families: ${{ fromJSON(needs.setup.outputs.test_linux_amdgpu_families) }}
     uses: ./.github/workflows/test_linux_packages.yml
     with:
-      amdgpu_families: "${{ inputs.amdgpu_families != '' && inputs.amdgpu_families || 'gfx94X-dcgpu' }}"
-      runs-on: "${{ inputs.runs-on != '' && inputs.runs-on || 'linux-mi300-1gpu-ossci-rocm' }}"
+      amdgpu_families: ${{ matrix.families.target }}
+      test_runs_on: ${{ matrix.families.test-runs-on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
 
   # build_python_packages:
   #   name: Build Python Packages

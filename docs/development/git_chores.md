@@ -12,8 +12,7 @@ heads:
 ```
 ./build_tools/fetch_sources.py --remote --no-apply-patches
 # Capture new submodule heads, inspect and ensure things look sound.
-git add -A
-git commit -m "Rebase submodules (for conflict prep)"
+git commit -a -m "Rebase submodules (for conflict prep)"
 ```
 
 In the above, it is important to capture the submodule heads in a pristine
@@ -27,6 +26,8 @@ Apply patches and validate:
 ```
 
 If that succeeds, create a PR and make sure that the CI passes.
+For the above, the script `build_tools/bump_submodules.py` can be used,
+which is however still under development.
 
 ### Resolving Conflicts
 
