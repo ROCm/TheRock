@@ -42,9 +42,9 @@ mainline, in open source, using MSVC, etc.).
 |                  |                                                                              |           |                                               |
 | math-libs        | [rocRAND](https://github.com/ROCm/rocRAND)                                   | ✅        |                                               |
 | math-libs        | [hipRAND](https://github.com/ROCm/hipRAND)                                   | ✅        |                                               |
-| math-libs        | [rocPRIM](https://github.com/ROCm/rocPRIM)                                   | ❔        |                                               |
-| math-libs        | [hipCUB](https://github.com/ROCm/hipCUB)                                     | ❔        |                                               |
-| math-libs        | [rocThrust](https://github.com/ROCm/rocThrust)                               | ❔        |                                               |
+| math-libs        | [rocPRIM](https://github.com/ROCm/rocPRIM)                                   | ✅        |                                               |
+| math-libs        | [hipCUB](https://github.com/ROCm/hipCUB)                                     | ✅        |                                               |
+| math-libs        | [rocThrust](https://github.com/ROCm/rocThrust)                               | ✅        | Some tests fail to link                       |
 | math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ✅        | No shared libraries                           |
 | math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ✅        | No shared libraries                           |
 | math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ❔        |                                               |
@@ -239,3 +239,21 @@ options set:
 ```
 
 then look for `build/core/clr/dist/bin/amdhip64_6.dll` and related outputs.
+
+With the HIP runtime building, these flags can also now be enabled:
+
+```bash
+-DTHEROCK_ENABLE_RAND=ON \
+-DTHEROCK_ENABLE_PRIM=ON \
+-DTHEROCK_ENABLE_FFT=ON \
+```
+
+### Testing
+
+Test builds can be enabled with `-DBUILD_TESTING=ON`.
+
+Some subproject tests have been validated on Windows, like rocPRIM:
+
+```bash
+ctest --test-dir build/math-libs/rocPRIM/dist/bin/rocprim --output-on-failure
+```
