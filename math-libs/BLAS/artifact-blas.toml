@@ -78,6 +78,13 @@ optional = true
 optional = true
 [components.lib."math-libs/BLAS/rocSOLVER/stage"]
 optional = true
+[components.test."math-libs/BLAS/rocSOLVER/stage"]
+include = [
+  "bin/rocsolver-bench",
+  "bin/rocsolver-test",
+  "share/rocsolver/test/**",
+]
+optional = true
 
 # hipSOLVER
 [components.dbg."math-libs/BLAS/hipSOLVER/stage"]
