@@ -1065,12 +1065,15 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
   if(MSVC)
     # The system compiler and the toolchain compiler are incompatible, so we
-    # define flags from scratch for the toolchain compiler. Each ROCm project
-    # typically has its own `toolchain-windows.cmake` file that we are bypassing
-    # here. If any flags are load bearing we can either add them to all projects
-    # or source those flags from the projects themselves more locally.
+    # define flags from scratch for the toolchain compiler.
+    #
+    # Each ROCm project typically has its own `toolchain-windows.cmake` file
+    # that we are bypassing here. Some projects additionally set platform or
+    # configuration-specific options in `rmake.py`. If any flags are load
+    # bearing we can either add them to all projects or source those flags from
+    # the projects themselves more locally.
     string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT )\n")
-    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX \")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -fms-extensions -fms-compatibility -D_ENABLE_EXTENDED_ALIGNED_STORAGE \")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT )\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT )\n")
   else()
