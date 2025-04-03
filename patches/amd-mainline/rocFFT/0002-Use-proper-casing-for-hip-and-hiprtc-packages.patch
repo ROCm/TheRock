@@ -1,7 +1,7 @@
-From 914b58be8d2826b61ff0f154aecf8bc559803cb7 Mon Sep 17 00:00:00 2001
+From 5f562dfcba891f66ecfe60880e4aaa57cb3d92cd Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 21 Feb 2025 13:17:39 -0800
-Subject: [PATCH 2/3] Use proper casing for 'hip' and 'hiprtc' packages.
+Subject: [PATCH 2/4] Use proper casing for 'hip' and 'hiprtc' packages.
 
 * Package names are case-sensitive, and the name for both of these is lowercase.
 * There are situations where the wrong casing can be made to work (i.e. if you manually specify "-DHIP_DIR=" and "-DHIPRTC_DIR=" config vars with the wrong case, the search procedure will happen to work in this very narrow case, but it isn't right).

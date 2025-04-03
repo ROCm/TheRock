@@ -1,6 +1,6 @@
 """Utilities for producing Python packages."""
 
-from typing import Callable
+from typing import Callable, Sequence
 
 import importlib.util
 import magic
@@ -75,6 +75,7 @@ class Parameters:
         self.all_target_families = artifacts.all_target_families
         self.default_target_family = sorted(self.all_target_families)[0]
         self.files = PopulatedFiles()
+        self.runtime_artifact_names: set[str] = set()
 
         # Load and interpolate the _dist_info.py template.
         dist_info_contents = DIST_INFO_PATH.read_text()
@@ -225,6 +226,9 @@ class PopulatedDistPackage:
         )
         for an, an_path in artifacts.artifact_basedirs:
             log(f"  + {an}: {an_path}")
+            # Accumulate the artifact names we have created runtime packages for.
+            # This will be used later to restrict devel packages to only these.
+            self.params.runtime_artifact_names.add(an.name)
 
         files = self.params.files
         package_dest_dir = self.platform_dir
@@ -338,10 +342,34 @@ class PopulatedDistPackage:
             ]
             subprocess.check_call(patchelf_cl)
 
-    def populate_devel_files(self, tarball_compression: bool = True):
+    def populate_devel_files(
+        self,
+        *,
+        addl_artifact_names: Sequence[str] = (),
+        tarball_compression: bool = True,
+    ):
         """Populates all files that have not yet been materialized and symlink the rest."""
         package_path = self.platform_dir
-        artifacts = self.params.artifacts
+        # Set up for what artifacts to include in the devel package, including
+        # any emitted runtime artifacts plus additional requested.
+        devel_artifact_names = set(self.params.runtime_artifact_names)
+        devel_artifact_names.update(addl_artifact_names)
+        log(f":: Devel artifact inclusions: {devel_artifact_names}")
+
+        def _devel_artifact_filter(an: ArtifactName) -> bool:
+            if an.name not in devel_artifact_names:
+                # We didn't generate a runtime artifact for it, so no devel
+                # artifact.
+                return False
+            if (
+                an.target_family != "generic"
+                and an.target_family != self.params.default_target_family
+            ):
+                # We only materialize the default target family for devel packages.
+                return False
+            return True
+
+        artifacts = self.params.filter_artifacts(_devel_artifact_filter)
         log(f"::: Populating devel package {package_path}")
         for an, an_path in artifacts.artifact_basedirs:
             log(f"  + {an}: {an_path}")
@@ -362,12 +390,12 @@ class PopulatedDistPackage:
         tar_path = self.pure_dir / f"_devel{tar_suffix}"
         log(f"::: Building secondary devel tarball: {tar_path}")
         with tarfile.open(tar_path, mode=tar_mode) as tf:
-            for root, _, files in os.walk(package_path):
-                for file in files:
+            for root, dirnames, files in os.walk(package_path):
+                for file in list(files) + list(dirnames):
                     file_path = os.path.join(root, file)
                     arcname = os.path.relpath(file_path, package_path.parent)
                     log(f"Adding {arcname}", vlog=2)
-                    tf.add(file_path, arcname=arcname)
+                    tf.add(file_path, arcname=arcname, recursive=False)
         shutil.rmtree(package_path)
 
     def _populate_devel_file(

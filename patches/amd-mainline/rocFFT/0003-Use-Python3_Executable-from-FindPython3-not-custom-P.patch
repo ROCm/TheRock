@@ -1,7 +1,7 @@
-From af160679bf00c166861c06e0284eb6f659b84e37 Mon Sep 17 00:00:00 2001
+From a4b6d98e7d51224c22e911b63f9baa815277b67b Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Wed, 12 Mar 2025 14:53:14 -0700
-Subject: [PATCH 3/3] Use Python3_Executable from FindPython3, not custom
+Subject: [PATCH 3/4] Use Python3_Executable from FindPython3, not custom
  PYTHON3_EXE.
 
 ---
@@ -11,7 +11,7 @@ Subject: [PATCH 3/3] Use Python3_Executable from FindPython3, not custom
  3 files changed, 3 insertions(+), 9 deletions(-)
 
 diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
-index 587a04a0..29693469 100644
+index 587a04a0..cb8faa7c 100644
 --- a/library/src/CMakeLists.txt
 +++ b/library/src/CMakeLists.txt
 @@ -84,10 +84,6 @@ include( GenerateExportHeader )
@@ -44,7 +44,7 @@ index 587a04a0..29693469 100644
    --data-folder=${ROCFFT_SOLUTION_MAP_DIR}
    DEPENDS ${solution_map_files}
 diff --git a/library/src/device/CMakeLists.txt b/library/src/device/CMakeLists.txt
-index e1fb9247..6b0e8039 100644
+index e1fb9247..70d518c8 100644
 --- a/library/src/device/CMakeLists.txt
 +++ b/library/src/device/CMakeLists.txt
 @@ -76,7 +76,7 @@ endforeach()

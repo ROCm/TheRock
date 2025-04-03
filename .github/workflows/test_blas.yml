@@ -8,10 +8,8 @@ on:
         default: ""
       amdgpu_families:
         type: string
-        default: gfx94X-dcgpu
-      runs-on:
+      test_runs_on:
         type: string
-        default: linux-mi300-1gpu-ossci-rocm
   workflow_call:
     inputs:
       artifact_run_id:
@@ -19,10 +17,8 @@ on:
         default: ""
       amdgpu_families:
         type: string
-        default: gfx94X-dcgpu
-      runs-on:
+      test_runs_on:
         type: string
-        default: linux-mi300-1gpu-ossci-rocm
   push:
     branches:
       - ADHOCBUILD
@@ -30,7 +26,7 @@ on:
 jobs:
   test_blas:
     name: "BLAS math-lib test"
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
     defaults:

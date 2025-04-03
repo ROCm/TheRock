@@ -6,6 +6,18 @@ on:
       enable_build_jobs:
         description: Whether to enable build jobs.
         value: ${{ jobs.setup.outputs.enable_build_jobs }}
+      build_linux_amdgpu_families:
+        description: Linux families to run builds on.
+        value: ${{ jobs.setup.outputs.build_linux_amdgpu_families }}
+      build_windows_amdgpu_families:
+        description: Windows families to run builds for.
+        value: ${{ jobs.setup.outputs.build_windows_amdgpu_families }}
+      test_linux_amdgpu_families:
+        description: Linux families to run tests for.
+        value: ${{ jobs.setup.outputs.test_linux_amdgpu_families }}
+      test_windows_amdgpu_families:
+        description: Windows families to run tests for.
+        value: ${{ jobs.setup.outputs.test_windows_amdgpu_families }}
 
 permissions:
   contents: read
@@ -19,6 +31,10 @@ jobs:
       BASE_REF: HEAD^
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
+      build_linux_amdgpu_families: ${{ steps.configure.outputs.build_linux_amdgpu_families }}
+      build_windows_amdgpu_families: ${{ steps.configure.outputs.build_windows_amdgpu_families }}
+      test_linux_amdgpu_families: ${{ steps.configure.outputs.test_linux_amdgpu_families }}
+      test_windows_amdgpu_families: ${{ steps.configure.outputs.test_windows_amdgpu_families }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -29,4 +45,8 @@ jobs:
         id: configure
         env:
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          INPUT_BUILD_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.build_linux_amdgpu_families }}
+          INPUT_BUILD_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.build_windows_amdgpu_families }}
+          INPUT_TEST_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.test_linux_amdgpu_families }}
+          INPUT_TEST_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.test_windows_amdgpu_families }}
         run: ./build_tools/configure_ci.py

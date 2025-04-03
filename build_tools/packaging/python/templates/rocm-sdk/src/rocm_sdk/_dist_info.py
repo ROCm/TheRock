@@ -12,6 +12,23 @@ import platform
 CACHED_TARGET_FAMILY: str | None = None
 
 
+class LibraryEntry:
+    """Defines a public library that can be located by name within the overall
+    distribution."""
+
+    def __init__(self, shortname: str, package_name: str, soname: str):
+        self.shortname = shortname
+        self.package = ALL_PACKAGES[package_name]
+        self.posix_relpath = "lib"
+        self.windows_relpath = "bin"
+        self.soname = soname
+        assert shortname not in ALL_LIBRARIES
+        ALL_LIBRARIES[shortname] = self
+
+    def __repr__(self):
+        return f"{self.shortname}(soname={self.soname}, package={self.package})"
+
+
 class PackageEntry:
     """Defines a package known to the SDK.
 
@@ -66,11 +83,11 @@ class PackageEntry:
         dist_name = self.get_dist_package_name(target_family)
         return "_" + dist_name.replace("-", "_") + PY_PACKAGE_SUFFIX_NONCE
 
+    def get_py_package(self, target_family: str | None = None):
+        return importlib.util.find_spec(self.get_py_package_name(target_family))
+
     def has_py_package(self, target_family: str | None = None) -> bool:
-        return (
-            importlib.util.find_spec(self.get_py_package_name(target_family))
-            is not None
-        )
+        return self.get_py_package(self.get_py_package_name(target_family)) is not None
 
     def __repr__(self):
         return self.dist_package_template
@@ -109,6 +126,7 @@ def determine_target_family() -> str:
 
 # All packages that are part of the distribution.
 ALL_PACKAGES: dict[str, PackageEntry] = {}
+ALL_LIBRARIES: dict[str, LibraryEntry] = {}
 
 # Always available packages.
 PackageEntry(
@@ -139,6 +157,19 @@ PackageEntry(
     template_directory="rocm-sdk-devel",
     required=False,
 )
+
+# Public libraries.
+LibraryEntry("amdhip64", "core", "libamdhip64.so.6")
+LibraryEntry("hiprtc", "core", "libhiprtc.so.6")
+LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so.0")
+
+LibraryEntry("hipblas", "libraries", "libhipblas.so.2")
+LibraryEntry("hipfft", "libraries", "libhipfft.so.0")
+LibraryEntry("hiprand", "libraries", "libhiprand.so.1")
+LibraryEntry("hipsparse", "libraries", "libhipsparse.so.1")
+LibraryEntry("hipsolver", "libraries", "libhipsolver.so.0")
+LibraryEntry("rccl", "libraries", "librccl.so.1")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.0")
 
 # Overall ROCM package version.
 __version__ = "DEFAULT"

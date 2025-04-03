@@ -1,8 +1,8 @@
-From 6df0ce0c602dfc1720eac78703f85a09038e70ab Mon Sep 17 00:00:00 2001
+From 4099a852acb5c21f6d6f6c17367eb3ca20ab13e2 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Wed, 12 Mar 2025 13:49:43 -0700
-Subject: [PATCH] PYTHON3_EXE should be Python3_EXECUTABLE. Either way, it is
- unused.
+Subject: [PATCH 1/2] PYTHON3_EXE should be Python3_EXECUTABLE. Either way, it
+ is unused.
 
 ---
  toolchain-windows.cmake | 2 --
