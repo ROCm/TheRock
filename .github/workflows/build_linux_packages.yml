@@ -121,9 +121,9 @@ jobs:
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output build/indexer.py
-          python build/indexer.py -f '*.tar.xz*' build/artifacts/ -o build/artifacts/index-${{env.AMDGPU_FAMILIES}}.html
+          python build/indexer.py -f '*.tar.xz*' build/artifacts/
           python build/indexer.py -f '*.log' build/logs/
-          sed -i 's,a href="..",a href="../../index.html",g' build/logs/index.html
+          sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}.html",g' build/logs/index.html
 
       # TODO: Move to script
       - name: Upload Artifacts
@@ -131,7 +131,8 @@ jobs:
           aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}/ \
             --recursive --no-follow-symlinks \
             --exclude "*" \
-            --include "*.tar.xz*" --include "index-*.html"
+            --include "*.tar.xz*"
+          aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html
 
       # TODO: Move to script
       - name: Upload Logs
