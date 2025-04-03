@@ -45,8 +45,8 @@ mainline, in open source, using MSVC, etc.).
 | math-libs        | [rocPRIM](https://github.com/ROCm/rocPRIM)                                   | ❔        |                                               |
 | math-libs        | [hipCUB](https://github.com/ROCm/hipCUB)                                     | ❔        |                                               |
 | math-libs        | [rocThrust](https://github.com/ROCm/rocThrust)                               | ❔        |                                               |
-| math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ❔        |                                               |
-| math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ❔        |                                               |
+| math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ✅        | No shared libraries                           |
+| math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ✅        | No shared libraries                           |
 | math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ❔        |                                               |
 | math-libs (blas) | [hipBLASlt](https://github.com/ROCm/hipBLASlt)                               | ❔        |                                               |
 | math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ❔        |                                               |
