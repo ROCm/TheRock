@@ -62,7 +62,7 @@ jobs:
 
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' ||  'ubuntu-24.04'  }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     permissions:
       contents: write
     needs: [setup_metadata]
