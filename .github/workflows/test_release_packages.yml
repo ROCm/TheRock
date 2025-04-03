@@ -1,0 +1,103 @@
+name: Test release packages
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  generate_release_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      release_matrix: ${{ steps.configure.outputs.release_matrix }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Generating release matrix
+        id: configure
+        env:
+          ASSET_FILES: ${{ toJSON(github.event.release.assets) }}
+        run: python ./build_tools/configure_release_matrix.py
+
+
+  test_release_packages:
+    runs-on: linux-mi300-1gpu-ossci-rocm
+    needs: generate_release_matrix
+    strategy:
+      matrix:
+        file_name: ${{ fromJSON(needs.generate_release_matrix.outputs.release_matrix) }}
+    env:
+      FILE_NAME: ${{ matrix.file_name }}
+      VENV_DIR: ${{ github.workspace }}/.venv
+      THEROCK_BIN_DIR: ${{ github.workspace }}/artifacts/output_dir/bin
+      TAG_NAME: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # Downloading release tag assets to artifacts directory
+      # For now, we will only run tests on gfx942 since we only have one test machine for gfx942
+      - name: Download release artifacts
+        uses: robinraju/release-downloader@v1
+        with:
+          tag: ${{ env.TAG_NAME }}
+          fileName: ${{ env.FILE_NAME }}
+          out-file-path: 'artifacts'
+
+      - name: Extract tar asset file
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts/output_dir
+          tar -xf artifacts/${FILE_NAME} -C ${{ github.workspace }}/artifacts/output_dir
+
+      - name: Setting up Python
+        id: setup_python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: 3.11
+
+      - name: Create Python venv
+        run: |
+          python -m venv ${VENV_DIR}
+          source ${VENV_DIR}/bin/activate
+          pip install -r requirements-test.txt
+
+      - name: Run Sanity check
+        if: '!cancelled()'
+        id: sanity-check
+        run: |
+          source ${VENV_DIR}/bin/activate
+          pytest tests/ \
+          --log-cli-level=info
+
+      - name: Run hipBLASLt tests
+        if: '!cancelled()'
+        id: hipblaslt-tests
+        run: |
+          source ${VENV_DIR}/bin/activate
+          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
+
+      - name: Run rocBLAS tests
+        if: '!cancelled()'
+        id: rocblas-tests
+        run: |
+          ROCBLAS_TENSILE_LIBPATH="${THEROCK_BIN_DIR}/lib/rocblas/library/"
+          source ${VENV_DIR}/bin/activate
+          ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
+
+      # Creating a markdown file for testing notes since environment variables cannot be resolved in markdown
+      - name: Append results to markdown file
+        if: '!cancelled()'
+        run: |
+          echo "" >> ${{ github.workspace }}/test_notes.md
+          echo "Test results for ${{ env.FILE_NAME }}" >> ${{ github.workspace }}/test_notes.md
+          echo "* SANITY_CHECK_PASS=${{ steps.sanity-check.outcome }}" >> ${{ github.workspace }}/test_notes.md
+          echo "* HIPBLASLT_CHECK_PASS=${{ steps.hipblaslt-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
+          echo "* ROCBLAS_CHECK_PASS=${{ steps.rocblas-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
+
+      - name: Report test notes to the release body
+        if: '!cancelled()'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          append_body: true
+          body_path: ${{ github.workspace }}/test_notes.md
