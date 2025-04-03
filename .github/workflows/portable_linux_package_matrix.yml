@@ -27,6 +27,9 @@ on:
         required: true
         type: string
 
+  schedule:
+    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
+
 permissions:
   contents: read
 
