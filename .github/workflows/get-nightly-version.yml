@@ -1,0 +1,25 @@
+name: Get Nightly Version
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: "Computed nightly version"
+        value: ${{ jobs.get-version.outputs.version }}
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version_step.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Compute version
+        id: version_step
+        run: |
+          BASE_VERSION=$(jq -r '.["rocm-version"]' version.json)
+          VERSION="${BASE_VERSION}rc$(date +'%Y%m%d')"
+          echo "Computed version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"

@@ -4,7 +4,11 @@ on:
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
 jobs:
+  get-version:
+    uses: ./.github/workflows/get-nightly-version.yml
+
   build-and-push-image:
+    needs: get-version
     strategy:
       fail-fast: false
       matrix:
@@ -18,6 +22,7 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
+      VERSION: ${{ needs.get-version.outputs.version }}
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
@@ -43,11 +48,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set nightly version
-        id: nightly_version
-        run: |
-          BASE_VERSION=$(jq -r '.["rocm-version"]' version.json)
-          echo "VERSION=${BASE_VERSION}rc$(date +'%Y%m%d')" >> "$GITHUB_ENV"
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.9

@@ -42,7 +42,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  get-version:
+    uses: ./.github/workflows/get-nightly-version.yml
+
   portable_linux_packages:
+    needs: get-version
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +64,8 @@ jobs:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64:main
-      DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-${{ matrix.target_bundle.amdgpu_family }}${{ github.events.input.package_suffix }}.tar.gz"
+      VERSION: ${{ needs.get-version.outputs.version }}
+      DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-${{ matrix.target_bundle.amdgpu_family }}${{ github.events.input.package_suffix }}-${{ needs.get-version.outputs.version }}.tar.gz"
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
