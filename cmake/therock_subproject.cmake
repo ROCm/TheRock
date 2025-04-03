@@ -71,21 +71,6 @@ if(WIN32)
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-unknown-attributes)
 
   # Warning example:
-  #     macro '__AMDGCN_WAVEFRONT_SIZE' has been marked as deprecated:
-  #     compile-time-constant access to the wavefront size will be removed in
-  #     a future release"
-  list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-deprecated-pragma)
-
-  # Warning example:
-  #     'radix_key_codec' is deprecated: radix_key_codec is now public API.
-  list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-deprecated-declarations)
-
-  # Warning example:
-  #     note: GPU printf warnings for invalid rocPRIM warp operations on Navi
-  #     GPUs temporarily disabled, due to performance issues with printf.
-  list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS "-Wno-#pragma-messages")
-
-  # Warning example:
   #     duplicate 'static' declaration specifier
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
