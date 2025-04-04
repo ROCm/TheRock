@@ -1,4 +1,4 @@
-name: TheRock Sanity Check
+name: TheRock rocBLAS math-lib tests
 
 on:
   workflow_dispatch:
@@ -6,6 +6,8 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      amdgpu_families:
+        type: string
       test_runs_on:
         type: string
   workflow_call:
@@ -13,6 +15,8 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      amdgpu_families:
+        type: string
       test_runs_on:
         type: string
   push:
@@ -20,8 +24,8 @@ on:
       - ADHOCBUILD
 
 jobs:
-  test_sanity_check:
-    name: "Sanity ROCM Test"
+  test_rocblas:
+    name: "rocBLAS math-lib test"
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
@@ -42,15 +46,16 @@ jobs:
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: "--test --blas"
 
-      - name: Run rocminfo
-        run: |
-          ${THEROCK_BIN_DIR}/rocminfo
+      - name: Install additional packages
+        run: sudo apt install libgfortran5 -y
 
-      - name: Run ROCm Sanity Tests
+      - name: Run rocBLAS tests
         run: |
+          ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
           source ${VENV_DIR}/bin/activate
-          pytest tests/ \
-          --log-cli-level=info
+          ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
