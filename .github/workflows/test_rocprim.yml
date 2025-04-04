@@ -57,4 +57,4 @@ jobs:
 
       - name: Run rocprim tests
         run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/rocprim --output-on-failure --parallel 5
+          ctest --test-dir ${THEROCK_BIN_DIR}/rocprim --output-on-failure --parallel 8
