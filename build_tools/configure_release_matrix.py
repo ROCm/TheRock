@@ -23,7 +23,7 @@ def main(args):
     set_github_output(
         {
             "release_matrix": json.dumps(release_matrix),
-            "today_date": json.dumps(TODAY_DATE),
+            "today_date": TODAY_DATE,
         }
     )
 

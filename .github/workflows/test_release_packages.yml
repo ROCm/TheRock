@@ -40,7 +40,8 @@ jobs:
 
 
   test_release_packages:
-    runs-on: ${{ matrix.target.test-runs-on }}
+    runs-on: ubuntu-24.04
+    # runs-on: ${{ matrix.target.test-runs-on }}
     needs: generate_release_matrix
     strategy:
       matrix:
