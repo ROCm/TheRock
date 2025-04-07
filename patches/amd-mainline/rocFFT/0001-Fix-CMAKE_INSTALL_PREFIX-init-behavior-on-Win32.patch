@@ -1,7 +1,7 @@
 From 490ef7e19be9df99f7e23fce4b89e8d17e75464a Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Wed, 2 Apr 2025 14:57:58 -0700
-Subject: [PATCH 4/4] Fix CMAKE_INSTALL_PREFIX init behavior on Win32.
+Subject: [PATCH] Fix CMAKE_INSTALL_PREFIX init behavior on Win32.
 
 ---
  CMakeLists.txt | 4 +++-
