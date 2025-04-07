@@ -63,10 +63,16 @@ set(THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS
 if(WIN32)
   # TODO(#36): Could we fix these warnings as part of enabling shared library builds?
   # These are frequently set in subproject toolchain-windows.cmake files.
-  # For "__declspec attribute 'dllexport' is not supported [-Wignored-attributes]"
+  # Warning example:
+  #     __declspec attribute 'dllexport' is not supported
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-ignored-attributes)
-  # For "unknown attribute '__dllimport__' ignored [-Wunknown-attributes]"
+  # Warning example:
+  #     unknown attribute '__dllimport__' ignored
   list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-unknown-attributes)
+
+  # Warning example:
+  #     duplicate 'static' declaration specifier
+  list(APPEND THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS -Wno-duplicate-decl-specifier)
 endif()
 
 # Generates a command prefix that can be prepended to any custom command line
@@ -556,10 +562,15 @@ function(therock_cmake_subproject_activate target_name)
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
     endif()
-    if(NOT MSVC OR _compiler_toolchain STREQUAL "amd-llvm" OR _compiler_toolchain STREQUAL "amd-hip")
+    if(NOT MSVC)
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
+    elseif(_compiler_toolchain STREQUAL "amd-llvm" OR _compiler_toolchain STREQUAL "amd-hip")
+      # The Windows but using a clang-based toolchain way.
+      #   Working around "lld-link: warning: ignoring unknown argument '-rpath-link'"
+      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} \")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L ${_private_link_dir} \")\n")
     else()
       # The MSVC way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /LIBPATH:${_private_link_dir}\")\n")
