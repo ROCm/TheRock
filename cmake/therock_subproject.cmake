@@ -1063,7 +1063,7 @@ function(_therock_cmake_subproject_setup_toolchain
   string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER_LAUNCHER \"@CMAKE_C_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER_LAUNCHER \"@CMAKE_CXX_COMPILER_LAUNCHER@\")\n")
   string(APPEND _toolchain_contents "set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT \"@CMAKE_MSVC_DEBUG_INFORMATION_FORMAT@\")\n")
-  if(MSVC)
+  if(MSVC AND compiler_toolchain)
     # The system compiler and the toolchain compiler are incompatible, so we
     # define flags from scratch for the toolchain compiler.
     #
