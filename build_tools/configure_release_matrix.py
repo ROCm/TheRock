@@ -5,7 +5,8 @@ from datetime import datetime
 
 # This file helps generate a release test matrix for test_release_packages.yml
 
-TODAY_DATE = datetime.today().strftime('%Y%m%d')
+TODAY_DATE = datetime.today().strftime("%Y%m%d")
+
 
 def main(args):
     assets = json.loads(args.get("asset_files")).get("assets", [])
@@ -22,7 +23,7 @@ def main(args):
     set_github_output(
         {
             "release_matrix": json.dumps(release_matrix),
-            "today_date": json.dumps(TODAY_DATE)
+            "today_date": json.dumps(TODAY_DATE),
         }
     )
 
