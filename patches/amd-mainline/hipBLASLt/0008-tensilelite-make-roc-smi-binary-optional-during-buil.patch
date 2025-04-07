@@ -1,0 +1,40 @@
+From d62d29eaaab3346c619edc33dbec66db9139f2a3 Mon Sep 17 00:00:00 2001
+From: Scott Tsai <scottt.tw@gmail.com>
+Date: Tue, 8 Apr 2025 04:28:51 +0800
+Subject: [PATCH 8/8] tensilelite: make roc-smi binary optional during build
+
+---
+ tensilelite/Tensile/Common/GlobalParameters.py | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/tensilelite/Tensile/Common/GlobalParameters.py b/tensilelite/Tensile/Common/GlobalParameters.py
+index 8ec5f326..5d38fec8 100644
+--- a/tensilelite/Tensile/Common/GlobalParameters.py
++++ b/tensilelite/Tensile/Common/GlobalParameters.py
+@@ -549,7 +549,10 @@ def assignGlobalParameters(config, isaInfoMap: Dict[IsaVersion, IsaInfo]):
+         globalParameters["CmakeCCompiler"] = os.environ.get("CMAKE_C_COMPILER")
+ 
+     globalParameters["ROCmBinPath"] = os.path.join(globalParameters["ROCmPath"], "bin")
+-    globalParameters["ROCmSMIPath"] = locateExe(globalParameters["ROCmBinPath"], "rocm-smi")
++    try:
++        globalParameters["ROCmSMIPath"] = locateExe(globalParameters["ROCmBinPath"], "rocm-smi")
++    except OSError:
++        pass
+     globalParameters["ROCmLdPath"] = locateExe(
+         os.path.join(globalParameters["ROCmPath"], "llvm/bin"), "ld.lld"
+     )
+@@ -625,8 +628,9 @@ def setupRestoreClocks():
+     def restoreClocks():
+         if globalParameters["PinClocks"]:
+             rsmi = globalParameters["ROCmSMIPath"]
+-            subprocess.call([rsmi, "-d", "0", "--resetclocks"])
+-            subprocess.call([rsmi, "-d", "0", "--setfan", "50"])
++            if rsmi:
++                subprocess.call([rsmi, "-d", "0", "--resetclocks"])
++                subprocess.call([rsmi, "-d", "0", "--setfan", "50"])
+ 
+     atexit.register(restoreClocks)
+ 
+-- 
+2.49.0
+

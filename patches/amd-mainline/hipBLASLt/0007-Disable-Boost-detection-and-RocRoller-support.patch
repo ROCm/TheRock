@@ -1,0 +1,27 @@
+From 885ce4f76b8cf312121379c7aa0753f058fc42fb Mon Sep 17 00:00:00 2001
+From: Scott Tsai <scottt.tw@gmail.com>
+Date: Tue, 8 Apr 2025 01:25:11 +0800
+Subject: [PATCH 7/8] Disable Boost detection and RocRoller support
+
+---
+ CMakeLists.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 2ad200e6..dd473183 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -259,8 +259,8 @@ else()
+     endif()
+ endif()
+ 
+-find_package(Boost REQUIRED)
+-if(Boost_VERSION VERSION_LESS "1.74.0")
++find_package(Boost)
++if((NOT Boot_FOUND) OR (Boost_VERSION VERSION_LESS "1.74.0"))
+     message(WARNING "Boost version ${Boost_VERSION} too old, not building RocRoller")
+     set(USE_ROCROLLER OFF)
+ endif()
+-- 
+2.49.0
+
