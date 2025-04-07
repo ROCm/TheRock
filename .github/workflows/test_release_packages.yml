@@ -25,7 +25,7 @@ jobs:
         id: release_json
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          owner: geomin12
+          owner: ROCm
           repo: TheRock
           releaseTag: 'nightly-release'
 
