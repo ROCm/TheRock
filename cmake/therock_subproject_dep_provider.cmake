@@ -8,6 +8,9 @@
 #   THEROCK_IGNORE_PACKAGES: Packages to ignore, even if they are in
 #     THEROCK_PROVIDED_PACKAGES, falling back to the system resolver.
 #   THEROCK_PKG_CONFIG_DIRS: Directories to search for .pc files.
+#   THEROCK_STRICT_PROVIDED_PACKAGES: All packages that the super-project knows
+#     about. If a sub-project attempts to resolve one of these without a
+#     proper declared dependency, it will error.
 # See: _therock_cmake_subproject_setup_deps which assembles these variables
 
 block()
@@ -50,6 +53,10 @@ macro(therock_dependency_provider method package_name)
       "${THEROCK_PACKAGE_DIR_${package_name}}" "${package_name}" ${ARGN})
     find_package(${_therock_rewritten_superproject_find_package_sig})
   else()
+    if("${package_name}" IN_LIST THEROCK_STRICT_PROVIDED_PACKAGES)
+      cmake_policy(POP)
+      message(FATAL_ERROR "Project contains find_package(${package_name}) for a package availabe in the super-project but not declared: Add a BUILD_DEPS or RUNTIME_DEPS appropriately")
+    endif()
     cmake_policy(POP)
     message(STATUS "Resolving system find_package(${package_name}) (not found in super-project ${THEROCK_PROVIDED_PACKAGES})")
     find_package(${package_name} ${ARGN} BYPASS_PROVIDER)

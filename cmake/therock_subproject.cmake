@@ -32,6 +32,12 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   THEROCK_SPLIT_DEBUG_INFO
 )
 
+# Whenever a new package is advertised by the super-project, it is added here.
+# This is used by the sub-project dependency resolver to error if a package
+# dep is added but not declared (i.e. if it would fall back to the system
+# resolver).
+set_property(GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
+
 # Some sub-projects do not react well to not having any GPU targets to build.
 # In this case, we build them with a default target. This should only happen
 # with target filtering for non-production, single target builds, and we will
@@ -437,7 +443,13 @@ endfunction()
 # with `find_package(package_name)` at the given path relative to its install
 # directory.
 function(therock_cmake_subproject_provide_package target_name package_name relative_path)
-  string(APPEND CMAKE_MESSAGE_INDENT "  ")
+string(APPEND CMAKE_MESSAGE_INDENT "  ")
+get_property(existing_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
+  if("${package_name}" IN_LIST existing_packages)
+    message(SEND_ERROR "Duplicate package provided by ${target_name}: ${package_name}")
+  endif()
+  set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_PROVIDED_PACKAGES "${package_name}")
+
   get_target_property(_existing_packages "${target_name}" THEROCK_PROVIDE_PACKAGES)
   if(${package_name} IN_LIST _existing_packages)
     message(FATAL_ERROR "Package defined multiple times on sub-project ${target_name}: ${package_name}")
@@ -558,6 +570,9 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "${_deps_contents}")
   string(APPEND _init_contents "set(THEROCK_IGNORE_PACKAGES \"@_ignore_packages@\")\n")
   string(APPEND _init_contents "list(PREPEND CMAKE_MODULE_PATH \"${THEROCK_SOURCE_DIR}/cmake/finders\")\n")
+  get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
+  string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
+
   foreach(_private_link_dir ${_private_link_dirs})
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
