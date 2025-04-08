@@ -53,7 +53,6 @@ jobs:
 
   build_linux_packages:
     name: Build Linux Packages
-    id: build_linux_packages
     needs: setup
     if: ${{ needs.setup.outputs.build_linux_amdgpu_families != '[]' }}
     strategy:
