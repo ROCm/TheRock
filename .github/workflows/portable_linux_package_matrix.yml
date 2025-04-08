@@ -142,6 +142,13 @@ jobs:
           replacesArtifacts: true
           makeLatest: false
 
+      - name: Trigger test nightly release package workflow
+        if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
+        with:
+          workflow: test_release_packages.yml
+          inputs: '{ "today_date": "${{ needs.setup_metadata.outputs.version }}" }'
+
       - name: Report
         if: ${{ !cancelled() }}
         run: |

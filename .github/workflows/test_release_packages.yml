@@ -1,21 +1,16 @@
 name: Test release packages
 
 on:
-  workflow_run:
-    workflows: ["Build portable Linux packages"]
-    types:
-      - completed
-
-permissions:
-  contents: write
+  workflow_dispatch:
+    inputs:
+      today_date:
+        type: string
 
 jobs:
   generate_release_matrix:
     runs-on: ubuntu-24.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
       release_matrix: ${{ steps.configure.outputs.release_matrix }}
-      today_date: ${{ steps.configure.outputs.today_date }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -33,12 +28,15 @@ jobs:
         id: configure
         env:
           ASSET_FILES: ${{ steps.release_json.outputs.data_json }}
+          TODAY_DATE: ${{ inputs.today_date }}
         run: python ./build_tools/configure_release_matrix.py
 
 
   test_release_packages:
     runs-on: ${{ matrix.target.test-runs-on }}
     needs: generate_release_matrix
+    permissions:
+      contents: write
     strategy:
       matrix:
         target: ${{ fromJSON(needs.generate_release_matrix.outputs.release_matrix) }}
@@ -104,7 +102,7 @@ jobs:
         if: '!cancelled()'
         run: |
           echo "" >> ${{ github.workspace }}/test_notes.md
-          echo "[${{ needs.generate_release_matrix.outputs.today_date }}] Test results for ${{ env.FILE_NAME }}" >> ${{ github.workspace }}/test_notes.md
+          echo "[${{ inputs.today_date }}] Test results for ${{ env.FILE_NAME }}" >> ${{ github.workspace }}/test_notes.md
           echo "* SANITY_CHECK=${{ steps.sanity-check.outcome }}" >> ${{ github.workspace }}/test_notes.md
           echo "* HIPBLASLT_CHECK=${{ steps.hipblaslt-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
           echo "* ROCBLAS_CHECK=${{ steps.rocblas-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
