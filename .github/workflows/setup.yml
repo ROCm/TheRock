@@ -54,13 +54,6 @@ jobs:
             gfx94X-linux
             gfx110X-linux
             gfx110X-windows
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: |
-          gh pr edit ${PR_NUMBER} --add-label "gfx94X-linux"
-          gh pr edit ${PR_NUMBER} --add-label "gfx110X-linux"
-          gh pr edit ${PR_NUMBER} --add-label "gfx110X-windows"
 
       - name: Set PR_LABELS variable with labels assigned to pull request
         if: ${{ github.event.pull_request }} # only set PR labels var if this is a pull request
