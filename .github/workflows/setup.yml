@@ -46,6 +46,14 @@ jobs:
       # If a pull request was opened, add these default labels (labels subject to change)
       - name: "Adding default PR labels"
         if: ${{ github.event.action == 'opened' && github.event.pull_request }}
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          number: ${{ github.event.number }}
+          # repo: ROCm/TheRock
+          labels: |
+            gfx94X-linux
+            gfx110X-linux
+            gfx110X-windows
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.number }}
