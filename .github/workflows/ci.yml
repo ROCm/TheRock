@@ -26,14 +26,11 @@ on:
         type: string
         description: "If provided, the tests will run on this artifact ID"
         default: ""
-  # By default, We have selected build/test linux and windows targets in configure_ci.py.
-  # In order to run build and tests, please select a provided label corresponding with the machine and OS (ex: gfx94X-linux)
-  # If the label is already added, you can remove and re-add the label to restart the job.
-  # TODO (geo): improve pull request experience, whether with labels or comments
   pull_request:
     types:
       - labeled
       - opened
+      - synchronize
 
 permissions:
   contents: read
@@ -49,6 +46,10 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup.yml
+    secrets: inherit
+    permissions:
+      pull-requests: write
+      contents: write
 
   build_linux_packages:
     name: Build Linux Packages
@@ -79,12 +80,12 @@ jobs:
     name: Test Linux Packages
     if: |
       ${{
-        !cancelled() &&
-        needs.setup.outputs.test_linux_amdgpu_families != '[]' &&
+        fromJSON(needs.setup.outputs.test_linux_amdgpu_families) != '[]' &&
         (
           needs.build_linux_packages.result == 'success' ||
           needs.build_linux_packages.result == 'skipped'
-        )
+        ) &&
+        !cancelled()
       }}
     strategy:
       matrix:
