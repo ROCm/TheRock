@@ -171,6 +171,9 @@ therock_add_feature(PRIM
 therock_add_feature(BLAS
   GROUP MATH_LIBS
   DESCRIPTION "Enables blas libraries (hipblaslt, rocblas, hipblas)"
+  # NOTE: HOST_BLAS is only needed for some tests and PROFILER_SDK is 
+  # currently only required for rocblas. We may want to re-evaluate the deps
+  # if they continue to be sparse like this as it increases minimum dep length.
   REQUIRES COMPILER HIP_RUNTIME HOST_BLAS PROFILER_SDK
 )
 therock_add_feature(RAND
