@@ -13,6 +13,8 @@ if(THEROCK_ENABLE_RAND)
       -DROCM_DIR=
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      rocm-cmake
     RUNTIME_DEPS
       hip-clr
   )
@@ -38,6 +40,7 @@ if(THEROCK_ENABLE_RAND)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
+      rocm-cmake
       rocRAND
     RUNTIME_DEPS
       hip-clr
@@ -81,6 +84,8 @@ if(THEROCK_ENABLE_PRIM)
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      rocm-cmake
     RUNTIME_DEPS
       hip-clr
   )
@@ -101,10 +106,11 @@ if(THEROCK_ENABLE_PRIM)
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      rocPRIM
     RUNTIME_DEPS
       hip-clr
-    BUILD_DEPS
-      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(rocPRIM
     SUBDIRS
@@ -123,10 +129,11 @@ if(THEROCK_ENABLE_PRIM)
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      rocPRIM
     RUNTIME_DEPS
       hip-clr
-    BUILD_DEPS
-      rocPRIM
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
     SUBDIRS
@@ -178,6 +185,8 @@ if(THEROCK_ENABLE_FFT)
       -DBUILD_SHARED_LIBS=${_fft_shared_libs_arg}
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      rocm-cmake
     RUNTIME_DEPS
       hip-clr
       hipRAND
@@ -204,6 +213,8 @@ if(THEROCK_ENABLE_FFT)
       -DBUILD_SHARED_LIBS=${_fft_shared_libs_arg}
     COMPILER_TOOLCHAIN
       amd-hip
+    BUILD_DEPS
+      rocm-cmake
     RUNTIME_DEPS
       hip-clr
       rocFFT
