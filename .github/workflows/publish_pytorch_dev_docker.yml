@@ -72,3 +72,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+verify-image:
+  needs: build-and-push-image
+  strategy:
+    matrix:
+      targets:
+        - "gfx942"
+  uses: ./.github/workflows/verify_docker_image.yml
+  with:
+    amdgpu_target: ${{ matrix.targets }}
