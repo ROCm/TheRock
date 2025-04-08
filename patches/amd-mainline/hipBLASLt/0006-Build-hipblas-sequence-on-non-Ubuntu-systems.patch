@@ -1,4 +1,4 @@
-From 6a0725acc8e9b74679904f77502019881857174e Mon Sep 17 00:00:00 2001
+From 294d4db2ad360dd6603cf7358d3410ad19f75e72 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 18 Mar 2025 12:14:21 +0000
 Subject: [PATCH 6/7] Build `hipblas-sequence` on non-Ubuntu systems
@@ -8,7 +8,7 @@ Subject: [PATCH 6/7] Build `hipblas-sequence` on non-Ubuntu systems
  1 file changed, 30 insertions(+), 34 deletions(-)
 
 diff --git a/clients/benchmarks/CMakeLists.txt b/clients/benchmarks/CMakeLists.txt
-index 39aa4e8c..6b5532f5 100644
+index 39aa4e8c..1e0f8940 100644
 --- a/clients/benchmarks/CMakeLists.txt
 +++ b/clients/benchmarks/CMakeLists.txt
 @@ -118,42 +118,38 @@ add_executable( hipblaslt-bench-extop-matrixtransform client_extop_matrixtransfo
@@ -57,7 +57,7 @@ index 39aa4e8c..6b5532f5 100644
 +      if(NOT LLVM_FOUND)
 +          find_package(LLVM REQUIRED CONFIG)
 +      endif()
-+  endif()
+   endif()
 +  find_library(LLVMObjectYAML_LIBRARY
 +    NAMES LLVMObjectYAML
 +    PATHS ${LLVM_LIBRARY_DIR})
@@ -65,7 +65,7 @@ index 39aa4e8c..6b5532f5 100644
 +    target_link_libraries(hipblaslt-sequence PRIVATE LLVMObjectYAML )
 +  else()
 +    target_link_libraries(hipblaslt-sequence PRIVATE LLVM )
-   endif()
++  endif()
 +  target_include_directories(hipblaslt-sequence PRIVATE ${LLVM_INCLUDE_DIRS})
 +  set(ext_bench_list_all ${ext_bench_list_all} hipblaslt-sequence)
 +  set( HIPBLASLT_SEQUENCE_YAML "${PROJECT_BINARY_DIR}/staging/sequence.yaml")
@@ -85,5 +85,5 @@ index 39aa4e8c..6b5532f5 100644
  
  foreach( exe ${ext_bench_list_all} )
 -- 
-2.49.0
+2.43.0
 

@@ -1,7 +1,7 @@
-From d150c267b4808eb0abab141116add579158d482d Mon Sep 17 00:00:00 2001
+From a50ba02dda81965d094aded79852b0d06fb5a8d6 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 22:39:56 +0000
-Subject: [PATCH 3/5] Find `rocm_smi` via config files
+Subject: [PATCH 3/7] Find `rocm_smi` via config files
 
 Use the config files provided by upstream instead of a custom finder.
 ---
@@ -11,7 +11,7 @@ Use the config files provided by upstream instead of a custom finder.
  delete mode 100644 tensilelite/Tensile/Source/cmake/FindROCmSMI.cmake
 
 diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
-index 02ae47d3..6b662094 100755
+index 31a72fe8..96d908e4 100755
 --- a/clients/CMakeLists.txt
 +++ b/clients/CMakeLists.txt
 @@ -97,8 +97,8 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
@@ -88,5 +88,5 @@ index a6fa375a..00000000
 -
 -#set(rocm_smi_root "${hip_LIB_INSTALL_DIR}/../../rocm_smi")
 -- 
-2.34.1
+2.43.0
 

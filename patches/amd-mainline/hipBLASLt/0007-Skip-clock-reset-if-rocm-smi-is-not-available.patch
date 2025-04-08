@@ -1,14 +1,15 @@
-From d62d29eaaab3346c619edc33dbec66db9139f2a3 Mon Sep 17 00:00:00 2001
-From: Scott Tsai <scottt.tw@gmail.com>
-Date: Tue, 8 Apr 2025 04:28:51 +0800
-Subject: [PATCH 8/8] tensilelite: make roc-smi binary optional during build
+From 121342dcded7994a5fdf19d3256b50ae86f92454 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Tue, 8 Apr 2025 14:34:29 -0700
+Subject: [PATCH 7/7] Skip clock reset if rocm-smi is not available.
 
+* Pinning clocks was already conditioned on this, so the cleanup logic should also be.
 ---
- tensilelite/Tensile/Common/GlobalParameters.py | 10 +++++++---
- 1 file changed, 7 insertions(+), 3 deletions(-)
+ tensilelite/Tensile/Common/GlobalParameters.py | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/tensilelite/Tensile/Common/GlobalParameters.py b/tensilelite/Tensile/Common/GlobalParameters.py
-index 8ec5f326..5d38fec8 100644
+index 8ec5f326..58dd69f4 100644
 --- a/tensilelite/Tensile/Common/GlobalParameters.py
 +++ b/tensilelite/Tensile/Common/GlobalParameters.py
 @@ -549,7 +549,10 @@ def assignGlobalParameters(config, isaInfoMap: Dict[IsaVersion, IsaInfo]):
@@ -19,22 +20,25 @@ index 8ec5f326..5d38fec8 100644
 +    try:
 +        globalParameters["ROCmSMIPath"] = locateExe(globalParameters["ROCmBinPath"], "rocm-smi")
 +    except OSError:
-+        pass
++        printWarning("Could not find rocm-smi: features relying on it will be ignored")
      globalParameters["ROCmLdPath"] = locateExe(
          os.path.join(globalParameters["ROCmPath"], "llvm/bin"), "ld.lld"
      )
-@@ -625,8 +628,9 @@ def setupRestoreClocks():
+@@ -624,9 +627,12 @@ def setupRestoreClocks():
+ 
      def restoreClocks():
          if globalParameters["PinClocks"]:
++            # Clocks will only be pinned if rocm-smi is available, therefore
++            # we only need to restore if found.
              rsmi = globalParameters["ROCmSMIPath"]
 -            subprocess.call([rsmi, "-d", "0", "--resetclocks"])
 -            subprocess.call([rsmi, "-d", "0", "--setfan", "50"])
-+            if rsmi:
++            if rsmi is not None:
 +                subprocess.call([rsmi, "-d", "0", "--resetclocks"])
 +                subprocess.call([rsmi, "-d", "0", "--setfan", "50"])
  
      atexit.register(restoreClocks)
  
 -- 
-2.49.0
+2.43.0
 

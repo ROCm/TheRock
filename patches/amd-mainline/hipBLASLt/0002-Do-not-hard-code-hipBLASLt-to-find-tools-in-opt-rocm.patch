@@ -1,7 +1,7 @@
-From 0a1aa2f63c351b748af1ae3878ab29f24b6a4e28 Mon Sep 17 00:00:00 2001
+From aba1654c5317edcfcef22166f3e5073016627eeb Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 7 Mar 2025 12:13:41 -0800
-Subject: [PATCH 2/8] Do not hard-code hipBLASLt to find tools in /opt/rocm and
+Subject: [PATCH 2/7] Do not hard-code hipBLASLt to find tools in /opt/rocm and
  propagate configure time PATH.
 
 * Makes gen_assembly.sh and compile_code_object.sh scripts fail on error vs silently succeeding (`set -e`). These scripts have a suspect design overall, but making them error on failure is a minimal thing that is needed.
@@ -126,5 +126,5 @@ index d542c584..1d57885f 100644
    )
  
 -- 
-2.49.0
+2.43.0
 

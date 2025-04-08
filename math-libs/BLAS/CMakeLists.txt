@@ -62,11 +62,14 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_MARKER=OFF
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
+    # TODO(#376): rocRoller is broken
+    -DUSE_ROCROLLER=OFF
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
     hipBLAS-common
     rocm-cmake
+    therock-boost
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
