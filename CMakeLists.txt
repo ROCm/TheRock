@@ -171,7 +171,7 @@ therock_add_feature(PRIM
 therock_add_feature(BLAS
   GROUP MATH_LIBS
   DESCRIPTION "Enables blas libraries (hipblaslt, rocblas, hipblas)"
-  REQUIRES COMPILER HIP_RUNTIME
+  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS PROFILER_SDK
 )
 therock_add_feature(RAND
   GROUP MATH_LIBS

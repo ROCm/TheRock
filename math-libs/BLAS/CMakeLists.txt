@@ -116,6 +116,7 @@ therock_cmake_subproject_declare(rocBLAS
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
+    roctracer-compat
     ${rocBLAS_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
