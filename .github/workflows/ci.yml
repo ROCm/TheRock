@@ -83,8 +83,8 @@ jobs:
       ${{
         fromJSON(needs.setup.outputs.test_linux_amdgpu_families) != '[]' &&
         (
-          steps.build_linux_packages.conclusion == 'success' ||
-          steps.build_linux_packages.conclusion == 'skipped'
+          needs.build_linux_packages.result == 'success' ||
+          needs.build_linux_packages.result == 'skipped'
         ) &&
         !cancelled()
       }}
