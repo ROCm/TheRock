@@ -184,13 +184,13 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 # --------------------------------------------------------------------------- #
 
 amdgpu_family_info_matrix = {
-    "gfx94X": {
+    "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
             "target": "gfx94X-dcgpu",
         }
     },
-    "gfx110X": {
+    "gfx110x": {
         "linux": {
             "test-runs-on": "",
             "target": "gfx110X-dgpu",
@@ -265,6 +265,8 @@ def matrix_generator(
     windows_target_output = []
 
     for linux_target in potential_linux_targets:
+        # For workflow dispatch triggers, this helps prevent potential user-input errors
+        linux_target = linux_target.lower()
         if (
             linux_target in amdgpu_family_info_matrix
             and "linux" in amdgpu_family_info_matrix.get(linux_target)
@@ -274,6 +276,8 @@ def matrix_generator(
             )
 
     for windows_target in potential_windows_targets:
+        # For workflow dispatch triggers, this helps prevent potential user-input errors
+        windows_target = windows_target.lower()
         if (
             windows_target in amdgpu_family_info_matrix
             and "windows" in amdgpu_family_info_matrix.get(windows_target)
