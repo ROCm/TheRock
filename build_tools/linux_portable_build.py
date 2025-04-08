@@ -5,13 +5,13 @@ Example usage:
 
     # Build for a specific family. Note that all options after the "--" are
     # passed verbatim to CMake.
-    python build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 
     # Build with podman vs docker.
-    python build_portable.py --docker=podman
+    python linux_build_portable.py --docker=podman
 
     # Enter an interactive shell set up like the build.
-    python build_portable.py --interactive
+    python linux_build_portable.py --interactive
 
 Other options of note:
 
@@ -95,7 +95,7 @@ def main(argv: list[str]):
         rest_args = argv[rest_pos + 1 :]
         argv = argv[:rest_pos]
 
-    p = argparse.ArgumentParser(prog="build_portable.py")
+    p = argparse.ArgumentParser(prog="linux_build_portable.py")
     p.add_argument("--docker", default="docker", help="Docker or podman binary")
     p.add_argument(
         "--image",
