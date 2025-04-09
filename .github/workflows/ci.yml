@@ -34,6 +34,7 @@ on:
     types:
       - labeled
       - opened
+      - synchronize
 
 permissions:
   contents: read
