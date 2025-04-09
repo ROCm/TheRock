@@ -83,9 +83,12 @@ list(APPEND _blas_subproject_names hipBLASLt)
 # rocBLAS
 ##############################################################################
 
-set(rocBLAS_optional_deps)
+set(_rocBLAS_optional_runtime_deps)
 if(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_deps rocm_smi_lib)
+  list(APPEND _rocBLAS_optional_runtime_deps rocm_smi_lib)
+endif()
+if(NOT WIN32)
+  list(APPEND _rocBLAS_optional_runtime_deps roctracer-compat)
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
@@ -114,8 +117,7 @@ therock_cmake_subproject_declare(rocBLAS
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
-    roctracer-compat
-    ${rocBLAS_optional_deps}
+    ${_rocBLAS_optional_runtime_deps}
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
