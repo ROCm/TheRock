@@ -88,6 +88,7 @@ jobs:
       matrix:
         targets:
           - "gfx942"
+    runs-on: azure-linux-scale-rocm
     steps:
       - name: Log in to the Container registry
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
@@ -110,6 +111,7 @@ jobs:
       matrix:
         targets:
           - "gfx942"
+    runs-on: azure-linux-scale-rocm
     steps:
       - name: Log in to the Container registry
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
