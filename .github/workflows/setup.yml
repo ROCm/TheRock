@@ -19,12 +19,11 @@ on:
         description: Windows families to run tests for.
         value: ${{ jobs.setup.outputs.test_windows_amdgpu_families }}
 
-permissions:
-  pull-requests: write
-  contents: write
-
 jobs:
   setup:
+    permissions:
+      pull-requests: write
+      contents: write
     runs-on: ubuntu-24.04
     env:
       # The commit being checked out is the merge commit for a PR. Its first
