@@ -81,3 +81,15 @@ jobs:
     uses: ./.github/workflows/verify_docker_image.yml
     with:
       amdgpu_target: ${{ matrix.targets }}
+  handle-result:
+    needs: verify-image
+    if: ${{ needs.verify-image.result == 'failure' }}
+    steps:
+      - name: Print failure info
+        run: echo "Verification failed!"
+  on-success:
+    needs: verify-image
+    if: ${{ needs.verify-image.result == 'success' }}
+    steps:
+      - name: Print success info
+        run: echo "Verification passed!"
