@@ -121,17 +121,5 @@ jobs:
           - "gfx942"
     runs-on: azure-linux-scale-rocm
     steps:
-      - name: Log in to the Container registry
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Tag and Push 'verification-failed'
-        run: |
-          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets }}
-          docker pull $IMAGE:main || exit 0
-          docker tag $IMAGE:main $IMAGE:verification-failed
-          docker push $IMAGE:verification-failed || echo "Failed to push failed tag"
       - name: Print failure info
-        run: echo "Verification failed and tagged as 'verification-failed'."
+        run: echo "Verification failed for therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets }} image"
