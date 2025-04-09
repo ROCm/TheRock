@@ -81,15 +81,47 @@ jobs:
     uses: ./.github/workflows/verify_docker_image.yml
     with:
       amdgpu_target: ${{ matrix.targets }}
-  handle-result:
-    needs: verify-image
-    if: ${{ needs.verify-image.result == 'failure' }}
-    steps:
-      - name: Print failure info
-        run: echo "Verification failed!"
   on-success:
     needs: verify-image
     if: ${{ needs.verify-image.result == 'success' }}
+    strategy:
+      matrix:
+        targets:
+          - "gfx942"
     steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag and Push 'verified'
+        run: |
+          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets }}
+          docker pull $IMAGE:main
+          docker tag $IMAGE:main $IMAGE:verified
+          docker push $IMAGE:verified
       - name: Print success info
-        run: echo "Verification passed!"
+        run: echo "Verification passed and tagged as 'verified'."
+  on-failure:
+    needs: verify-image
+    if: ${{ needs.verify-image.result == 'failure' }}
+    strategy:
+      matrix:
+        targets:
+          - "gfx942"
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag and Push 'verification-failed'
+        run: |
+          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets }}
+          docker pull $IMAGE:main || exit 0
+          docker tag $IMAGE:main $IMAGE:verification-failed
+          docker push $IMAGE:verification-failed || echo "Failed to push failed tag"
+      - name: Print failure info
+        run: echo "Verification failed and tagged as 'verification-failed'."
