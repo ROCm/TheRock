@@ -46,9 +46,6 @@ jobs:
   setup:
     uses: ./.github/workflows/setup.yml
     secrets: inherit
-    permissions:
-      pull-requests: write
-      contents: write
 
   build_linux_packages:
     name: Build Linux Packages
@@ -79,12 +76,12 @@ jobs:
     name: Test Linux Packages
     if: |
       ${{
-        fromJSON(needs.setup.outputs.test_linux_amdgpu_families) != '[]' &&
+        !cancelled() &&
+        needs.setup.outputs.test_linux_amdgpu_families != '[]' &&
         (
           needs.build_linux_packages.result == 'success' ||
           needs.build_linux_packages.result == 'skipped'
-        ) &&
-        !cancelled()
+        )
       }}
     strategy:
       matrix:
