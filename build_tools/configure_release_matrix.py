@@ -6,14 +6,14 @@ from configure_ci import set_github_output, amdgpu_family_info_matrix
 
 
 def main(args):
-    assets = json.loads(args.get("asset_files")).get("assets", [])
-    today_date = args.get("today_date")
+    assets = json.loads(args.get("asset_files"))
+    version = args.get("version")
     release_matrix = []
     for asset in assets:
         asset_name = asset.get("name", "")
-        # Test only today's nightly release packages
+        # Test only today's release packages
         # for now, we can only run tests on gfx94X since we only have a linux gfx94X test machine
-        if today_date in asset_name and "gfx94X" in asset_name:
+        if version in asset_name and "gfx94X" in asset_name:
             target_info = amdgpu_family_info_matrix.get("gfx94X").get("linux")
             target_info["file_name"] = asset_name
             release_matrix.append(target_info)
@@ -24,5 +24,5 @@ def main(args):
 if __name__ == "__main__":
     args = {}
     args["asset_files"] = os.environ.get("ASSET_FILES", "[]")
-    args["today_date"] = os.environ.get("TODAY_DATE", "")
+    args["version"] = os.environ.get("VERSION", "")
     main(args)

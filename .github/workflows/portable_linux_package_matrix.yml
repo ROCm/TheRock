@@ -147,7 +147,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
           workflow: test_release_packages.yml
-          inputs: '{ "today_date": "${{ needs.setup_metadata.outputs.version }}" }'
+          inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-release" }'
 
       - name: Report
         if: ${{ !cancelled() }}
