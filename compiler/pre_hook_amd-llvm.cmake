@@ -62,3 +62,60 @@ set(LLVM_EXTERNAL_PROJECTS "amddevice-libs" CACHE STRING "Enable extra projects"
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../../../lib;$ORIGIN/../../rocm_sysdeps/lib")
 endif()
+
+# Disable all implicit LLVM tools by default so that we can allow-list just what
+# we want. It is unfortunate that LLVM doesn't have a global option to do this
+# bulk disabling. In the absence of that, we manually generate options using
+# the same logic as `create_llvm_tool_options` in `AddLLVM.cmake`. If this
+# ever drifts, we will build extra tools and (presumably) someone will notice
+# the bloat.
+
+function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
+  file(GLOB subdirs "${tools_dir}/*")
+  foreach(dir ${subdirs})
+    if(NOT IS_DIRECTORY "${dir}" OR NOT EXISTS "${dir}/CMakeLists.txt")
+      continue()
+    endif()
+    cmake_path(GET dir FILENAME toolname)
+    string(REPLACE "-" "_" toolname "${toolname}")
+    string(TOUPPER "${toolname}" toolname)
+    set(_option_name "${type}_TOOL_${toolname}_BUILD")
+    set(_option_value OFF)
+    if("${toolname}" IN_LIST required_tool_names)
+      set(_option_value ON)
+    endif()
+    message(STATUS "Implicit tool option: ${_option_name} = ${_option_value}")
+    set(${_option_name} "${_option_value}" CACHE BOOL "Implicit disable ${type} tool" FORCE)
+  endforeach()
+endfunction()
+
+block()
+  # This list contains the minimum tooling that must be enabled to build LLVM.
+  # It is empically derived (either configure or ninja invocation will fail
+  # on a missing tool).
+  set(_llvm_required_tools
+    LLVM_CONFIG
+    LLVM_DWARFDUMP
+    LLVM_JITLINK
+    LLVM_LINK
+    LLVM_MC
+    LLVM_SHLIB
+    LLVM_OBJCOPY
+    LLVM_OBJDUMP
+    OPT
+    YAML2OBJ
+  )
+  therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
+
+  # Clang tools that are required.
+  set(_clang_required_tools
+    AMDGPU_ARCH
+    CLANG_HIP
+    CLANG_OFFLOAD_BUNDLER
+    CLANG_OFFLOAD_PACKAGER
+    CLANG_OFFLOAD_WRAPPER
+    CLANG_SHLIB
+    DRIVER
+  )
+  therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
+endblock()
