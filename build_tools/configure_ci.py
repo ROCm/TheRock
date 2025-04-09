@@ -324,11 +324,6 @@ def main(base_args, build_families, test_families):
         is_pull_request, is_workflow_dispatch, is_push, base_args, test_families, True
     )
 
-    # Currently, we only have gfx94X test machines available for testing
-    # Adding an edge case to allow only gfx94X for testing
-    test_linux_target_output = [amdgpu_family_info_matrix.get("gfx94x").get("linux")]
-    test_windows_target_output = []
-
     enable_build_jobs = False
     if not is_workflow_dispatch:
         print(
