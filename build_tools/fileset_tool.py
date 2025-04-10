@@ -15,12 +15,12 @@ with the following changes:
 
 from typing import Callable
 import argparse
-import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import sys
 import shutil
 import tarfile
 
+from _therock_utils.artifacts import ArtifactPopulator
 from _therock_utils.hash_util import calculate_hash, write_hash
 from _therock_utils.pattern_match import PatternMatcher
 
@@ -237,72 +237,14 @@ def _open_archive(p: Path) -> tarfile.TarFile:
 
 
 def _do_artifact_flatten(args):
-    output_path: Path = args.o
-    artifact_paths: list[Path] = args.artifact
-    for artifact_path in artifact_paths:
-        if artifact_path.is_dir():
-            # Process an exploded artifact dir.
-            pm = PatternMatcher()
-            manifest_path: Path = artifact_path / "artifact_manifest.txt"
-            relpaths = manifest_path.read_text().splitlines()
-            for relpath in relpaths:
-                if not relpath:
-                    continue
-                source_dir = artifact_path / relpath
-                if not source_dir.exists():
-                    continue
-                pm.add_basedir(source_dir)
-            pm.copy_to(destdir=output_path, verbose=args.verbose, remove_dest=False)
-        else:
-            # Process as an archive file.
-            with tarfile.TarFile.open(artifact_path, mode="r:xz") as tf:
-                # Read manifest first.
-                manifest_member = tf.next()
-                if (
-                    manifest_member is None
-                    or manifest_member.name != "artifact_manifest.txt"
-                ):
-                    raise IOError(
-                        f"Artifact archive {artifact_path} must have artifact_manifest.txt as its first member"
-                    )
-                with tf.extractfile(manifest_member) as mf_file:
-                    relpaths = mf_file.read().decode().splitlines()
-                # Iterate over all remaining members.
-                while member := tf.next():
-                    member_name = member.name
-                    # Figure out which relpath prefix it is a part of.
-                    for prefix_relpath in relpaths:
-                        prefix_relpath += "/"
-                        if member_name.startswith(prefix_relpath):
-                            scoped_path = member_name[len(prefix_relpath) :]
-                            dest_path = output_path / PurePosixPath(scoped_path)
-                            if dest_path.is_symlink() or (
-                                dest_path.exists() and not dest_path.is_dir()
-                            ):
-                                os.unlink(dest_path)
-                            dest_path.parent.mkdir(parents=True, exist_ok=True)
-                            if member.isfile():
-                                exec_mask = member.mode & 0o111
-                                with tf.extractfile(member) as member_file:
-                                    with open(
-                                        dest_path,
-                                        "wb",
-                                    ) as out_file:
-                                        out_file.write(member_file.read())
-                                        st = os.fstat(out_file.fileno())
-                                        new_mode = st.st_mode | exec_mask
-                                        os.fchmod(out_file.fileno(), new_mode)
-                            elif member.isdir():
-                                dest_path.mkdir(parents=True, exist_ok=True)
-                            elif member.issym():
-                                dest_path.symlink_to(member.linkname)
-                            else:
-                                raise IOError(f"Unhandled tar member: {member}")
-                            break
-                    else:
-                        raise IOError(
-                            f"Extracting tar artifact archive, encountered file not in manifest: {member}"
-                        )
+    flattener = ArtifactPopulator(
+        output_path=args.o, verbose=args.verbose, flatten=True
+    )
+    flattener(*args.artifact)
+    relpaths = list(flattener.relpaths)
+    relpaths.sort()
+    for relpath in relpaths:
+        print(relpath)
 
 
 def _dup_list_or_str(v: list[str] | str) -> list[str]:
@@ -331,7 +273,7 @@ def main(cl_args: list[str]):
         p.add_argument("--verbose", action="store_true", help="Print verbose status")
 
     def pattern_matcher_action(
-        action: Callable[[argparse.Namespace, PatternMatcher], None]
+        action: Callable[[argparse.Namespace, PatternMatcher], None],
     ):
         def run_action(args: argparse.Namespace):
             if not args.basedir:
