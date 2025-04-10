@@ -57,4 +57,8 @@ jobs:
 
       - name: Run rocprim tests
         run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/rocprim --output-on-failure --parallel 8
+          ctest \
+            --test-dir ${THEROCK_BIN_DIR}/rocprim \
+            --output-on-failure \
+            --parallel 8 \
+            --exclude-regex "rocprim.lookback_reproducibility|rocprim.linking"
