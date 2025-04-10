@@ -1,6 +1,6 @@
-From 3d3bcc3540e3fc09a94483134bbe8813f6fa7495 Mon Sep 17 00:00:00 2001
+From 9c47113ae30c45f38cd1e897246e46235aae391c Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
-Date: Mon, 7 Apr 2025 15:01:18 -0700
+Date: Thu, 10 Apr 2025 11:59:04 +0000
 Subject: [PATCH] Forward CMAKE_BUILD_TYPE when building gtest.
 
 This avoids `lld-link: error: /failifmismatch: mismatch detected for '_ITERATOR_DEBUG_LEVEL':` errors on Windows when rocThrust is compiled in Release instead of Debug (the default).
@@ -9,12 +9,12 @@ This avoids `lld-link: error: /failifmismatch: mismatch detected for '_ITERATOR_
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/cmake/Dependencies.cmake b/cmake/Dependencies.cmake
-index b0bd252f..2088312f 100644
+index afad9348..b573cd8c 100644
 --- a/cmake/Dependencies.cmake
 +++ b/cmake/Dependencies.cmake
-@@ -53,7 +53,7 @@ if(BUILD_TEST OR BUILD_HIPSTDPAR_TEST)
-       GIT_REPOSITORY      https://github.com/google/googletest.git
+@@ -56,7 +56,7 @@ if(BUILD_TEST OR BUILD_HIPSTDPAR_TEST)
        GIT_TAG             release-1.11.0
+       GIT_SHALLOW         TRUE
        INSTALL_DIR         ${GTEST_ROOT}
 -      CMAKE_ARGS          -DBUILD_GTEST=ON -DINSTALL_GTEST=ON -Dgtest_force_shared_crt=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 +      CMAKE_ARGS          -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBUILD_GTEST=ON -DINSTALL_GTEST=ON -Dgtest_force_shared_crt=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
@@ -22,5 +22,5 @@ index b0bd252f..2088312f 100644
        LOG_CONFIGURE       TRUE
        LOG_BUILD           TRUE
 -- 
-2.47.1.windows.2
+2.43.0
 
