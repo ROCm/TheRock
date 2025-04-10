@@ -18,10 +18,12 @@ ARTIFACT_DESCRIPTOR_1 = r"""
 """
 
 
-def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+    return subprocess.check_output(
+        args, cwd=str(cwd), stdin=subprocess.DEVNULL
+    ).decode()
 
 
 def write_text(p: Path, text: str):
@@ -165,7 +167,7 @@ class FilesetToolTest(unittest.TestCase):
             self.assertTrue(is_executable(flat1_dir / "share" / "doc" / "executable"))
 
         # Flatten the archive file and verify.
-        exec(
+        flatten_output = exec(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -175,6 +177,7 @@ class FilesetToolTest(unittest.TestCase):
                 flat2_dir,
             ]
         )
+        self.assertListEqual(flatten_output.splitlines(), ["example/stage"])
         self.assertEqual(
             (flat2_dir / "share" / "doc" / "README.txt").read_text(),
             "Hello World!",

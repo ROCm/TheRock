@@ -149,11 +149,18 @@ therock_add_feature(HIP_RUNTIME
 )
 
 # Profiler Features.
-therock_add_feature(PROFILER_SDK
-  GROUP PROFILER
-  DESCRIPTION "Enables the rocprofiler-sdk project"
-  REQUIRES HIP_RUNTIME
-)
+if(NOT WIN32)
+  # Other platforms (Linux) _do_ have the profiler SDK.
+  therock_add_feature(PROFILER_SDK
+    GROUP PROFILER
+    DESCRIPTION "Enables the rocprofiler-sdk project"
+    REQUIRES HIP_RUNTIME
+  )
+  set(_blas_platform_requirements "PROFILER_SDK")
+else()
+  # No profiler SDK on Windows.
+  set(_blas_platform_requirements "")
+endif()
 
 # Comm-libs Features.
 therock_add_feature(RCCL
@@ -174,7 +181,7 @@ therock_add_feature(BLAS
   # NOTE: HOST_BLAS is only needed for some tests and PROFILER_SDK is
   # currently only required for rocblas. We may want to re-evaluate the deps
   # if they continue to be sparse like this as it increases minimum dep length.
-  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS PROFILER_SDK
+  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS ${_blas_platform_requirements}
 )
 therock_add_feature(RAND
   GROUP MATH_LIBS

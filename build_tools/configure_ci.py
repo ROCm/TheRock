@@ -184,13 +184,13 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 # --------------------------------------------------------------------------- #
 
 amdgpu_family_info_matrix = {
-    "gfx94X": {
+    "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
             "target": "gfx94X-dcgpu",
         }
     },
-    "gfx110X": {
+    "gfx110x": {
         "linux": {
             "test-runs-on": "",
             "target": "gfx110X-dgpu",
@@ -202,15 +202,16 @@ amdgpu_family_info_matrix = {
     },
 }
 
-LINUX_BUILD_DEFAULTS = ["gfx94X", "gfx110X"]
-LINUX_TEST_DEFAULTS = ["gfx94X"]
-WINDOWS_BUILD_DEFAULTS = ["gfx110X"]
-WINDOWS_TEST_DEFAULTS = []
+DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
+DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110X"]
 
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
-    labels = json.loads(args.get("pr_labels"))
+    data = json.loads(args.get("pr_labels"))
+    labels = []
+    for label in data.get("labels", []):
+        labels.append(label["name"])
     return labels
 
 
@@ -241,7 +242,8 @@ def matrix_generator(
     # if the trigger is a pull_request label, parse through the labels and retrieve the list
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
-        for label in get_pr_labels(base_args):
+        pr_labels = get_pr_labels(base_args)
+        for label in pr_labels:
             if "gfx" in label:
                 target, operating_system = label.split("-")
                 if operating_system == "linux":
@@ -249,19 +251,18 @@ def matrix_generator(
                 if operating_system == "windows":
                     potential_windows_targets.append(target)
 
+        # Add the linux and windows default labels to the potential target lists
+        potential_linux_targets.extend(DEFAULT_LINUX_CONFIGURATIONS)
+        potential_windows_targets.extend(DEFAULT_WINDOWS_CONFIGURATIONS)
+
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
-        # For now, we will add all defaults down below since certain test machines are not available yet
-
-    # Adding defaults for build and test matrices for only main push and pull requests.
-    # TODO (geo): improve PR defaults instead of hard-coding in the py file
-    if (is_push and base_args.get("branch_name") == "main") or is_pull_request:
-        if not is_test:
-            potential_linux_targets.extend(LINUX_BUILD_DEFAULTS)
-            potential_windows_targets.extend(WINDOWS_BUILD_DEFAULTS)
-        else:
-            potential_linux_targets.extend(LINUX_TEST_DEFAULTS)
-            potential_windows_targets.extend(WINDOWS_TEST_DEFAULTS)
+        # Add all options
+        for key in amdgpu_family_info_matrix:
+            if "linux" in amdgpu_family_info_matrix[key]:
+                potential_linux_targets.append(key)
+            if "windows" in amdgpu_family_info_matrix[key]:
+                potential_windows_targets.append(key)
 
     # Ensure the targets in the list are unique
     potential_linux_targets = list(set(potential_linux_targets))
@@ -272,6 +273,8 @@ def matrix_generator(
     windows_target_output = []
 
     for linux_target in potential_linux_targets:
+        # For workflow dispatch triggers, this helps prevent potential user-input errors
+        linux_target = linux_target.lower()
         if (
             linux_target in amdgpu_family_info_matrix
             and "linux" in amdgpu_family_info_matrix.get(linux_target)
@@ -281,6 +284,8 @@ def matrix_generator(
             )
 
     for windows_target in potential_windows_targets:
+        # For workflow dispatch triggers, this helps prevent potential user-input errors
+        windows_target = windows_target.lower()
         if (
             windows_target in amdgpu_family_info_matrix
             and "windows" in amdgpu_family_info_matrix.get(windows_target)

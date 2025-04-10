@@ -630,145 +630,171 @@ function(therock_cmake_subproject_activate target_name)
     set(_all_option "ALL")
   endif()
 
-  # configure target
-  if(THEROCK_VERBOSE)
-    message(STATUS "  CONFIGURE_DEPENDS: ${_transitive_configure_depend_files} ")
-  endif()
+  # Detect whether the stage dir has been pre-built.
+  set(_prebuilt_file "${_stage_dir}.prebuilt")
   set(_configure_stamp_file "${_stamp_dir}/configure.stamp")
-  set(_configure_comment_suffix " (in background)")
-  set(_terminal_option)
-  set(_build_terminal_option "USES_TERMINAL")
-  if("$ENV{THEROCK_INTERACTIVE}")
-    set(_terminal_option "USES_TERMINAL")
-    set(_configure_comment_suffix)
-  elseif(_build_pool)
-    if(THEROCK_VERBOSE)
-      message(STATUS "  JOB_POOL: ${_build_pool}")
-    endif()
-    set(_build_terminal_option JOB_POOL "${_build_pool}")
-    set(_build_comment_suffix " (in background)")
-  endif()
-  set(_stage_destination_dir "${_stage_dir}")
-  if(_install_destination)
-    cmake_path(APPEND _stage_destination_dir "${_install_destination}")
-  endif()
-  set(_compile_commands_file "${PROJECT_BINARY_DIR}/compile_commands_fragment_${target_name}.json")
-  therock_subproject_log_command(_configure_log_prefix
-    LOG_FILE "${target_name}_configure.log"
-    LABEL "${target_name} configure"
-    OUTPUT_ON_FAILURE "${_output_on_failure}"
-  )
-  add_custom_command(
-    OUTPUT "${_configure_stamp_file}"
-    COMMAND
-      ${_configure_log_prefix}
-      "${CMAKE_COMMAND}"
-      "-G${CMAKE_GENERATOR}"
-      "-B${_binary_dir}"
-      "-S${_cmake_source_dir}"
-      "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
-      "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
-      "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
-      "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
-      ${_cmake_args}
-    # CMake doesn't always generate a compile_commands.json so touch one to keep
-    # the build graph sane.
-    COMMAND "${CMAKE_COMMAND}" -E touch "${_binary_dir}/compile_commands.json"
-    COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
-    COMMAND "${CMAKE_COMMAND}" -E copy "${_binary_dir}/compile_commands.json" "${_compile_commands_file}"
-    WORKING_DIRECTORY "${_binary_dir}"
-    COMMENT "Configure sub-project ${target_name}${_configure_comment_suffix}"
-    ${_terminal_option}
-    BYPRODUCTS
-      "${_binary_dir}/CMakeCache.txt"
-      "${_binary_dir}/cmake_install.cmake"
-      "${_compile_commands_file}"
-    DEPENDS
-      "${_cmake_source_dir}/CMakeLists.txt"
-      "${_cmake_project_toolchain_file}"
-      "${_cmake_project_init_file}"
-      "${_global_post_include}"
-      ${_extra_depends}
-      ${_dep_provider_file}
-      ${_configure_dep_stamps}
-      ${_pre_hook_path}
-      ${_post_hook_path}
-      ${_compiler_toolchain_addl_depends}
-      ${_transitive_configure_depend_files}
-
-      # TODO: Have a mechanism for adding more depends for better rebuild ergonomics
-  )
-  add_custom_target(
-    "${target_name}+configure"
-    ${_all_option}
-    DEPENDS "${_configure_stamp_file}"
-  )
-  add_dependencies("${target_name}" "${target_name}+configure")
-  if(NOT _no_merge_compile_commands)
-    set_property(GLOBAL APPEND PROPERTY THEROCK_SUBPROJECT_COMPILE_COMMANDS_FILES
-      "${_compile_commands_file}"
-    )
-  endif()
-
-  # build target.
-  therock_subproject_log_command(_build_log_prefix
-    LOG_FILE "${target_name}_build.log"
-    LABEL "${target_name}"
-    OUTPUT_ON_FAILURE "${_output_on_failure}"
-  )
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
-  add_custom_command(
-    OUTPUT "${_build_stamp_file}"
-    COMMAND
-      ${_build_log_prefix}
-      "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
-      "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
-    COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
-    WORKING_DIRECTORY "${_binary_dir}"
-    COMMENT "Building sub-project ${target_name}${_build_comment_suffix}"
-    ${_build_terminal_option}
-    DEPENDS
-      "${_configure_stamp_file}"
-      ${_sources}
-  )
-  add_custom_target(
-    "${target_name}+build"
-    ${_all_option}
-    DEPENDS
-      "${_build_stamp_file}"
-  )
-  add_dependencies("${target_name}" "${target_name}+build")
-
-  # stage install target.
-  set(_install_strip_option)
-  if(THEROCK_SPLIT_DEBUG_INFO)
-    set(_install_strip_option "--strip")
-  endif()
-  therock_subproject_log_command(_install_log_prefix
-    LOG_FILE "${target_name}_install.log"
-    LABEL "${target_name} install"
-    # While useful for debugging, stage install logs are almost pure noise
-    # for interactive use.
-    OUTPUT_ON_FAILURE ON
-  )
   set(_stage_stamp_file "${_stamp_dir}/stage.stamp")
-  add_custom_command(
-    OUTPUT "${_stage_stamp_file}"
-    COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
-    COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
-    WORKING_DIRECTORY "${_binary_dir}"
-    COMMENT "Stage installing sub-project ${target_name}"
-    ${_terminal_option}
-    DEPENDS
-      "${_build_stamp_file}"
-  )
-  add_custom_target(
-    "${target_name}+stage"
-    ${_all_option}
-    DEPENDS
-      "${_stage_stamp_file}"
-  )
-  add_dependencies("${target_name}" "${target_name}+stage")
+
+  if(EXISTS "${_prebuilt_file}")
+    # If pre-built, just touch the stamp files, conditioned on the prebuilt
+    # marker file (which may just be a stamp file or may contain a unique hash
+    # for this part of the build).
+    message(STATUS "  DISABLING BUILD: Marked as pre-built")
+    add_custom_command(
+      OUTPUT "${_configure_stamp_file}"
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
+      DEPENDS "${_prebuilt_file}"
+    )
+    add_custom_command(
+      OUTPUT "${_build_stamp_file}"
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
+      DEPENDS "${_prebuilt_file}"
+    )
+    add_custom_command(
+      OUTPUT "${_stage_stamp_file}"
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
+      DEPENDS "${_prebuilt_file}"
+    )
+  else()
+    # Not pre-built: normal configure/build/stage install.
+    # configure target
+    if(THEROCK_VERBOSE)
+      message(STATUS "  CONFIGURE_DEPENDS: ${_transitive_configure_depend_files} ")
+    endif()
+    set(_configure_comment_suffix " (in background)")
+    set(_terminal_option)
+    set(_build_terminal_option "USES_TERMINAL")
+    if("$ENV{THEROCK_INTERACTIVE}")
+      set(_terminal_option "USES_TERMINAL")
+      set(_configure_comment_suffix)
+    elseif(_build_pool)
+      if(THEROCK_VERBOSE)
+        message(STATUS "  JOB_POOL: ${_build_pool}")
+      endif()
+      set(_build_terminal_option JOB_POOL "${_build_pool}")
+      set(_build_comment_suffix " (in background)")
+    endif()
+    set(_stage_destination_dir "${_stage_dir}")
+    if(_install_destination)
+      cmake_path(APPEND _stage_destination_dir "${_install_destination}")
+    endif()
+    set(_compile_commands_file "${PROJECT_BINARY_DIR}/compile_commands_fragment_${target_name}.json")
+    therock_subproject_log_command(_configure_log_prefix
+      LOG_FILE "${target_name}_configure.log"
+      LABEL "${target_name} configure"
+      OUTPUT_ON_FAILURE "${_output_on_failure}"
+    )
+    add_custom_command(
+      OUTPUT "${_configure_stamp_file}"
+      COMMAND
+        ${_configure_log_prefix}
+        "${CMAKE_COMMAND}"
+        "-G${CMAKE_GENERATOR}"
+        "-B${_binary_dir}"
+        "-S${_cmake_source_dir}"
+        "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
+        "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
+        "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
+        "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${_cmake_project_init_file}"
+        ${_cmake_args}
+      # CMake doesn't always generate a compile_commands.json so touch one to keep
+      # the build graph sane.
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_binary_dir}/compile_commands.json"
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
+      COMMAND "${CMAKE_COMMAND}" -E copy "${_binary_dir}/compile_commands.json" "${_compile_commands_file}"
+      WORKING_DIRECTORY "${_binary_dir}"
+      COMMENT "Configure sub-project ${target_name}${_configure_comment_suffix}"
+      ${_terminal_option}
+      BYPRODUCTS
+        "${_binary_dir}/CMakeCache.txt"
+        "${_binary_dir}/cmake_install.cmake"
+        "${_compile_commands_file}"
+      DEPENDS
+        "${_cmake_source_dir}/CMakeLists.txt"
+        "${_cmake_project_toolchain_file}"
+        "${_cmake_project_init_file}"
+        "${_global_post_include}"
+        ${_extra_depends}
+        ${_dep_provider_file}
+        ${_configure_dep_stamps}
+        ${_pre_hook_path}
+        ${_post_hook_path}
+        ${_compiler_toolchain_addl_depends}
+        ${_transitive_configure_depend_files}
+
+        # TODO: Have a mechanism for adding more depends for better rebuild ergonomics
+    )
+    add_custom_target(
+      "${target_name}+configure"
+      ${_all_option}
+      DEPENDS "${_configure_stamp_file}"
+    )
+    add_dependencies("${target_name}" "${target_name}+configure")
+    if(NOT _no_merge_compile_commands)
+      set_property(GLOBAL APPEND PROPERTY THEROCK_SUBPROJECT_COMPILE_COMMANDS_FILES
+        "${_compile_commands_file}"
+      )
+    endif()
+
+    # build target.
+    therock_subproject_log_command(_build_log_prefix
+      LOG_FILE "${target_name}_build.log"
+      LABEL "${target_name}"
+      OUTPUT_ON_FAILURE "${_output_on_failure}"
+    )
+    add_custom_command(
+      OUTPUT "${_build_stamp_file}"
+      COMMAND
+        ${_build_log_prefix}
+        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
+        "${CMAKE_COMMAND}" "--build" "${_binary_dir}"
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_build_stamp_file}"
+      WORKING_DIRECTORY "${_binary_dir}"
+      COMMENT "Building sub-project ${target_name}${_build_comment_suffix}"
+      ${_build_terminal_option}
+      DEPENDS
+        "${_configure_stamp_file}"
+        ${_sources}
+    )
+    add_custom_target(
+      "${target_name}+build"
+      ${_all_option}
+      DEPENDS
+        "${_build_stamp_file}"
+    )
+    add_dependencies("${target_name}" "${target_name}+build")
+
+    # stage install target.
+    set(_install_strip_option)
+    if(THEROCK_SPLIT_DEBUG_INFO)
+      set(_install_strip_option "--strip")
+    endif()
+    therock_subproject_log_command(_install_log_prefix
+      LOG_FILE "${target_name}_install.log"
+      LABEL "${target_name} install"
+      # While useful for debugging, stage install logs are almost pure noise
+      # for interactive use.
+      OUTPUT_ON_FAILURE ON
+    )
+    add_custom_command(
+      OUTPUT "${_stage_stamp_file}"
+      COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
+      COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
+      WORKING_DIRECTORY "${_binary_dir}"
+      COMMENT "Stage installing sub-project ${target_name}"
+      ${_terminal_option}
+      DEPENDS
+        "${_build_stamp_file}"
+    )
+    add_custom_target(
+      "${target_name}+stage"
+      ${_all_option}
+      DEPENDS
+        "${_stage_stamp_file}"
+    )
+    add_dependencies("${target_name}" "${target_name}+stage")
+  endif()
 
   # dist install target.
   set(_dist_stamp_file "${_stamp_dir}/dist.stamp")
