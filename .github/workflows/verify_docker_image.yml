@@ -7,22 +7,15 @@ on:
         description: "AMDGPU target to verify"
         required: true
         type: string
-      revision:
-        description: "Git SHA for reference (optional)"
-        required: false
-        type: string
 
   workflow_call:
     inputs:
       amdgpu_target:
         required: true
         type: string
-      revision:
-        required: false
-        type: string
 
 env:
-  IMAGE_TAG_TO_VERIFY: ${{ github.event.inputs.image_tag_to_verify || github.ref_name }}
+  IMAGE_REF_NAME: ${{ github.ref_name }}
 
 jobs:
   pull-and-build-image:
@@ -31,9 +24,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Sanitize tag values and build image ref
+        id: sanitize
+        run: |
+          TARGET="${{ inputs.amdgpu_target }}"
+
+          # # Sanitize values: lowercase, remove invalid characters
+          SAFE_TARGET=$(echo "$TARGET" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g')
+          IMAGE_TAG=$(echo "$IMAGE_REF_NAME" | cut -d':' -f2 | tr '/' '-')
+          IMAGE_REF="ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${SAFE_TARGET}:${IMAGE_TAG}"
+
+          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+          echo "Using image: $IMAGE_REF"
       - name: Pull Docker Image
         run: |
-          docker pull ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}:${{ inputs.revision }}
+          docker pull "$IMAGE_REF"
 
       - name: Pre-download pytest wheel
         run: |
@@ -49,7 +54,7 @@ jobs:
           --group-add video \
           --cap-add=SYS_PTRACE \
           -w /TheRock \
-          ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}:${{ inputs.revision }} \
+          "$IMAGE_REF" \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
       - name: Verify Containers Status
         run: docker ps -a
