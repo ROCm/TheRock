@@ -3,7 +3,8 @@ therock_subproject_fetch(therock-frugally-deep-sources
   # Use frugally-deep 0.15.x for MIOpen until the following issue is fixed
   # https://github.com/ROCm/MIOpen/issues/3588
   # TODO: copy tarball to rocm-third-party-deps.s3.us-east-2.amazonaws.com
-  URL https://codeload.github.com/Dobiasd/frugally-deep/tar.gz/refs/tags/v0.15.31
+  # Originally mirrored from: https://github.com/Dobiasd/frugally-deep/archive/refs/tags/v0.15.31.tar.gz
+  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/frugally-deep-0.15.31.tar.gz
   URL_HASH SHA256=49bf5e30ad2d33e464433afbc8b6fe8536fc959474004a1ce2ac03d7c54bc8ba
 )
 
