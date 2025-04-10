@@ -51,6 +51,7 @@ jobs:
     needs: setup
     if: ${{ needs.setup.outputs.build_linux_amdgpu_families != '[]' }}
     strategy:
+      fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.build_linux_amdgpu_families) }}
     uses: ./.github/workflows/build_linux_packages.yml
@@ -64,6 +65,7 @@ jobs:
     needs: setup
     if: ${{ needs.setup.outputs.build_windows_amdgpu_families != '[]' }}
     strategy:
+      fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.build_windows_amdgpu_families) }}
     uses: ./.github/workflows/build_windows_packages.yml
@@ -83,6 +85,7 @@ jobs:
         )
       }}
     strategy:
+      fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.test_linux_amdgpu_families) }}
     uses: ./.github/workflows/test_linux_packages.yml
