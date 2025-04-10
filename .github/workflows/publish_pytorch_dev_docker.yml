@@ -15,7 +15,7 @@ jobs:
 
       - name: Generating package target matrix
         id: configure
-        run: python ./build_tools/amdgpu_family_matrix.py
+        run: python ./build_tools/fetch_package_targets.py
 
   build-and-push-image:
     strategy:

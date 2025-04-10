@@ -63,7 +63,7 @@ jobs:
       
       - name: Generating package target matrix
         id: configure
-        run: python ./build_tools/amdgpu_family_matrix.py
+        run: python ./build_tools/fetch_package_targets.py
 
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux

@@ -15,24 +15,24 @@ amdgpu_family_info_matrix = {
             "target": "gfx110X-dgpu",
         },
     },
-    "gfx115X": {
+    "gfx1151": {
         "linux": {
             "test-runs-on": "",
-            "target": "gfx115X-igpu",
+            "target": "gfx1151",
         },
         "windows": {
             "test-runs-on": "",
-            "target": "gfx115X-igpu",
+            "target": "gfx1151",
         },
     },
-    "gfx120X": {
+    "gfx1201": {
         "linux": {
             "test-runs-on": "",
-            "target": "gfx120X-all",
+            "target": "gfx1201",
         },
         "windows": {
             "test-runs-on": "",
-            "target": "gfx120X-all",
+            "target": "gfx1201",
         },
     }
 }
