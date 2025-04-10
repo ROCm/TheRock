@@ -92,16 +92,26 @@ class ConfigureCITest(TestCase):
         linux_target_output, windows_target_output = configure_ci.matrix_generator(
             True, False, False, base_args, {}, False
         )
-        self.assertEqual(linux_target_output, [])
-        self.assertEqual(windows_target_output, [])
+        linux_target_to_compare = [
+            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"},
+            {"test-runs-on": "", "target": "gfx110X-dgpu"},
+        ]
+        windows_target_to_compare = [{"test-runs-on": "", "target": "gfx110X-dgpu"}]
+        self.assertEqual(linux_target_output, linux_target_to_compare)
+        self.assertEqual(windows_target_output, windows_target_to_compare)
 
     def test_empty_pull_request_matrix_generator(self):
         base_args = {"pr_labels": "{}"}
         linux_target_output, windows_target_output = configure_ci.matrix_generator(
             True, False, False, base_args, {}, False
         )
-        self.assertEqual(linux_target_output, [])
-        self.assertEqual(windows_target_output, [])
+        linux_target_to_compare = [
+            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"},
+            {"test-runs-on": "", "target": "gfx110X-dgpu"},
+        ]
+        windows_target_to_compare = [{"test-runs-on": "", "target": "gfx110X-dgpu"}]
+        self.assertEqual(linux_target_output, linux_target_to_compare)
+        self.assertEqual(windows_target_output, windows_target_to_compare)
 
     def test_main_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}

@@ -202,6 +202,8 @@ amdgpu_family_info_matrix = {
     },
 }
 
+DEFAULT_LABELS = ["gfx94X-linux", "gfx110X-linux", "gfx110X-windows"]
+
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
@@ -239,21 +241,17 @@ def matrix_generator(
     # if the trigger is a pull_request label, parse through the labels and retrieve the list
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
-        for label in get_pr_labels(base_args):
+        pr_labels = get_pr_labels(base_args)
+        # Add the linux and windows default labels to the potential targets
+        pr_labels.extend(DEFAULT_LABELS)
+
+        for label in pr_labels:
             if "gfx" in label:
                 target, operating_system = label.split("-")
                 if operating_system == "linux":
                     potential_linux_targets.append(target)
                 if operating_system == "windows":
                     potential_windows_targets.append(target)
-
-        # Add the linux and windows default labels to the potential targets
-        potential_linux_targets.extend(
-            json.loads(base_args.get("linux_default_labels"))
-        )
-        potential_windows_targets.extend(
-            json.loads(base_args.get("windows_default_labels"))
-        )
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
@@ -391,8 +389,6 @@ if __name__ == "__main__":
 
     # For now, add default run for gfx94X-linux
     base_args["pr_labels"] = os.environ.get("PR_LABELS", "[]")
-    base_args["linux_default_labels"] = os.environ.get("LINUX_DEFAULT_LABELS", "[]")
-    base_args["windows_default_labels"] = os.environ.get("WINDOWS_DEFAULT_LABELS", "[]")
     base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")

@@ -42,13 +42,6 @@ jobs:
           # We need the parent commit to do a diff
           fetch-depth: 2
 
-      # If a pull request trigger occured, add these default labels (labels subject to change)
-      - name: "Adding default PR labels"
-        if: ${{ github.event.pull_request }}
-        run: |
-          echo LINUX_DEFAULT_LABELS="[\"gfx94X\", \"gfx110X\"]" >> $GITHUB_ENV
-          echo WINDOWS_DEFAULT_LABELS="[\"gfx110X\"]" >> $GITHUB_ENV
-
       - name: Set PR_LABELS variable with labels assigned to pull request
         if: ${{ github.event.pull_request }} # only set PR labels var if this is a pull request
         env:
