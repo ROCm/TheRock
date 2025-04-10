@@ -43,6 +43,7 @@ import subprocess
 import sys
 from typing import Iterable, List, Mapping, Optional
 import string
+from amdgpu_family_matrix import amdgpu_family_info_matrix
 
 # --------------------------------------------------------------------------- #
 # General utilities
@@ -182,25 +183,6 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 # --------------------------------------------------------------------------- #
 # Matrix creation logic based on PR, push or workflow_dispatch
 # --------------------------------------------------------------------------- #
-
-amdgpu_family_info_matrix = {
-    "gfx94X": {
-        "linux": {
-            "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
-            "target": "gfx94X-dcgpu",
-        }
-    },
-    "gfx110X": {
-        "linux": {
-            "test-runs-on": "",
-            "target": "gfx110X-dgpu",
-        },
-        "windows": {
-            "test-runs-on": "",
-            "target": "gfx110X-dgpu",
-        },
-    },
-}
 
 LINUX_BUILD_DEFAULTS = ["gfx94X", "gfx110X"]
 LINUX_TEST_DEFAULTS = ["gfx94X"]
