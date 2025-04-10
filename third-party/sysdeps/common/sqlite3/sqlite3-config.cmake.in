@@ -7,11 +7,19 @@ if(_IMPORT_PREFIX STREQUAL "/")
 endif()
 
 if(NOT TARGET SQLite::SQLite3)
-  add_library(SQLite::SQLite3 SHARED IMPORTED)
-  set_target_properties(SQLite::SQLite3 PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libsqlite3.so"
-  )
+  if(@BUILD_SHARED_LIBS@)
+    add_library(SQLite::SQLite3 SHARED IMPORTED)
+    set_target_properties(SQLite::SQLite3 PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
+      IMPORTED_LOCATION "${_IMPORT_PREFIX}/@INSTALL_SHLIB_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@rocm_sysdeps_sqlite3@CMAKE_SHARED_LIBRARY_SUFFIX@"
+    )
+  else()
+    add_library(SQLite::SQLite3 SHARED IMPORTED)
+    set_target_properties(SQLite::SQLite3 PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
+      IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/@CMAKE_STATIC_LIBRARY_PREFIX@rocm_sysdeps_sqlite3@CMAKE_STATIC_LIBRARY_SUFFIX@"
+    )
+  endif()
 endif()
 
 set(_IMPORT_PREFIX)
