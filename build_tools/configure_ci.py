@@ -202,7 +202,8 @@ amdgpu_family_info_matrix = {
     },
 }
 
-DEFAULT_LABELS = ["gfx94X-linux", "gfx110X-linux", "gfx110X-windows"]
+DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
+DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110X"]
 
 
 def get_pr_labels(args) -> List[str]:
@@ -242,9 +243,6 @@ def matrix_generator(
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
         pr_labels = get_pr_labels(base_args)
-        # Add the linux and windows default labels to the potential targets
-        pr_labels.extend(DEFAULT_LABELS)
-
         for label in pr_labels:
             if "gfx" in label:
                 target, operating_system = label.split("-")
@@ -252,6 +250,10 @@ def matrix_generator(
                     potential_linux_targets.append(target)
                 if operating_system == "windows":
                     potential_windows_targets.append(target)
+
+        # Add the linux and windows default labels to the potential target lists
+        potential_linux_targets.extend(DEFAULT_LINUX_CONFIGURATIONS)
+        potential_windows_targets.extend(DEFAULT_WINDOWS_CONFIGURATIONS)
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
