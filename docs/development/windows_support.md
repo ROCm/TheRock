@@ -107,8 +107,11 @@ You will need:
 - Git: https://git-scm.com/downloads
 
   - Suggested: enable symlinks with `git config --global core.symlinks true`
+  - Suggested: enable `Use Git and optional Unix tools from the Windows Command Prompt` as building may use Bash
 
 - CMake: https://cmake.org/download/
+> [!WARNING]
+> Currently requires cmake version < 4.0.0 to build successfully ( https://github.com/ROCm/TheRock/issues/318 )
 
 - Ninja: https://ninja-build.org/
 
@@ -130,19 +133,21 @@ You will need:
   editor like VSCode, CMake can discover the compiler among other "kits". If you
   use the command line, see
   https://learn.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170.
-  (typically run the appropriate `vcvarsall.bat`)
+  (typically run the appropriate `vcvarsall.bat`, or `Start > Developer Command Prompt for VS 2022` )
 
 > [!TIP]
 > Some of these tools are available via package managers like
 > https://github.com/chocolatey/choco
->
+> 
+> As noted above, this will automatically configure necessary Visual Studio componenents, Unix tools, and cmake versions for a successful build.
 > ```
-> choco install git
-> choco install cmake
-> choco install ninja
-> choco install ccache
-> choco install sccache
-> choco install python
+> choco install visualstudio2022buildtools -y --params "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
+> choco install git.install -y --params "'/GitAndUnixToolsOnPath'"
+> choco install cmake --version=3.31.0 -y 
+> choco install ninja -y 
+> choco install ccache -y 
+> choco install sccache -y 
+> choco install python -y
 > ```
 
 ### Clone and fetch sources
