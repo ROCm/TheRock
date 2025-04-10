@@ -60,7 +60,7 @@ jobs:
         run: |
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
-      
+
       - name: Generating package target matrix
         id: configure
         run: python ./build_tools/fetch_package_targets.py

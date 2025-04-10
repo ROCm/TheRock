@@ -34,5 +34,5 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "target": "gfx1201",
         },
-    }
+    },
 }
