@@ -3,7 +3,7 @@ add_subdirectory(bzip2)
 add_subdirectory(libdrm)
 add_subdirectory(numactl)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/sqlite3" "${CMAKE_CURRENT_BINARY_DIR}/sqlite3")
-add_subdirectory(zlib)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zlib" "${CMAKE_CURRENT_BINARY_DIR}/zlib")
 add_subdirectory(zstd)
 
 # System deps that depend on the above.
