@@ -1,20 +1,20 @@
-From fa0eb8bcd1c5cf46243a1e1d070172d7309dfb4a Mon Sep 17 00:00:00 2001
+From 294d4db2ad360dd6603cf7358d3410ad19f75e72 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 18 Mar 2025 12:14:21 +0000
-Subject: [PATCH 6/6] Build `hipblas-sequence` on non-Ubuntu systems
+Subject: [PATCH 6/7] Build `hipblas-sequence` on non-Ubuntu systems
 
 ---
  clients/benchmarks/CMakeLists.txt | 64 +++++++++++++++----------------
  1 file changed, 30 insertions(+), 34 deletions(-)
 
 diff --git a/clients/benchmarks/CMakeLists.txt b/clients/benchmarks/CMakeLists.txt
-index 0d70d528..269cea79 100644
+index 39aa4e8c..1e0f8940 100644
 --- a/clients/benchmarks/CMakeLists.txt
 +++ b/clients/benchmarks/CMakeLists.txt
-@@ -107,42 +107,38 @@ add_executable( hipblaslt-bench-extop-matrixtransform client_extop_matrixtransfo
+@@ -118,42 +118,38 @@ add_executable( hipblaslt-bench-extop-matrixtransform client_extop_matrixtransfo
  add_executable( hipblaslt-bench-extop-softmax client_extop_softmax.cpp ../common/hipblaslt_random.cpp)
  add_executable( hipblaslt-bench-extop-amax client_extop_amax.cpp  ../common/hipblaslt_random.cpp)
- set(ext_bench_list_all hipblaslt-bench-groupedgemm-fixed-mk hipblaslt-bench-extop-layernorm hipblaslt-bench-extop-matrixtransform hipblaslt-bench-extop-softmax hipblaslt-bench-extop-amax)
+ set(ext_bench_list_all hipblaslt-api-overhead hipblaslt-bench-groupedgemm-fixed-mk hipblaslt-bench-extop-layernorm hipblaslt-bench-extop-matrixtransform hipblaslt-bench-extop-softmax hipblaslt-bench-extop-amax)
 -# Currently only build this for Ubuntu because other distro's llvm-dev version is not matching the rocm's version.
  if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 -  file(READ "/etc/os-release" OS_RELEASE)

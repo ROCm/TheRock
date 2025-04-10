@@ -1,0 +1,51 @@
+From 1b4325c9e4646942467c91005ef3297a3eb10f27 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Mon, 24 Feb 2025 23:04:55 -0800
+Subject: [PATCH] Search for libnuma with find_package before find_library.
+
+This avoids a false dependence on a system library when not desired.
+---
+ libhsakmt/CMakeLists.txt | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/libhsakmt/CMakeLists.txt b/libhsakmt/CMakeLists.txt
+index 0539f468..e5e237c4 100644
+--- a/libhsakmt/CMakeLists.txt
++++ b/libhsakmt/CMakeLists.txt
+@@ -164,13 +164,20 @@ get_os_info()
+ find_package(PkgConfig)
+ # Check for libraries required for building
+ find_library(LIBC NAMES c REQUIRED)
+-find_library(NUMA NAMES numa REQUIRED)
+-message(STATUS "LIBC:" ${LIBC})
+-message(STATUS "NUMA:" ${NUMA})
++find_package(NUMA)
++if(NUMA_FOUND)
++  set(NUMA "${NUMA_LIBRARIES}")
++else()
++  find_library(NUMA NAMES numa REQUIRED)
++endif()
++message(STATUS "LIBC: " ${LIBC})
++message(STATUS "NUMA: " ${NUMA})
+ 
+ ## If environment variable DRM_DIR is set, the script
+ ## will pick up the corresponding libraries from that path.
+-list (PREPEND CMAKE_PREFIX_PATH "${DRM_DIR}")
++if(DRM_DIR)
++  list (PREPEND CMAKE_PREFIX_PATH "${DRM_DIR}")
++endif()
+ 
+ # The module name passed to pkg_check_modules() is determined by the
+ # name of file *.pc
+@@ -180,7 +187,7 @@ include_directories(${DRM_AMDGPU_INCLUDE_DIRS})
+ include_directories(${DRM_INCLUDE_DIRS})
+ 
+ target_link_libraries ( ${HSAKMT_TARGET}
+-  PRIVATE ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread rt c numa ${CMAKE_DL_LIBS}
++  PRIVATE ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread rt ${LIBC} ${NUMA} ${CMAKE_DL_LIBS}
+ )
+ 
+ target_compile_options(${HSAKMT_TARGET} PRIVATE ${DRM_CFLAGS} ${HSAKMT_C_FLAGS})
+-- 
+2.43.0
+

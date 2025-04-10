@@ -25,7 +25,7 @@ RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin
 ######## CCache ########
 WORKDIR /install-ccache
 COPY install_ccache.sh ./
-RUN ./install_ccache.sh "4.9" && rm -rf /install-ccache
+RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
 
 ######## CMake ########
 WORKDIR /install-cmake

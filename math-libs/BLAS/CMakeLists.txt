@@ -18,13 +18,8 @@ CMAKE_ARGS
   -DROCM_DIR=
 COMPILER_TOOLCHAIN
   amd-hip
-IGNORE_PACKAGES
-  # The current version of rccl needs to download a 2y old version of rocm-cmake
-  # to work and it will only do so if the system resolver reports it not found
-  # without any other error (which due to the signature, our resolver will
-  # hard fail). Once fixed, `rocm-core` should be added to the BUILD_DEPS
-  # and this removed: https://github.com/ROCm/TheRock/issues/18
-  ROCM
+BUILD_DEPS
+  rocm-cmake
 RUNTIME_DEPS
   hip-clr
 )
@@ -62,10 +57,14 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_MARKER=OFF
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
+    # TODO(#376): rocRoller is broken
+    -DUSE_ROCROLLER=OFF
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    rocm-cmake
+    therock-boost
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
@@ -106,16 +105,16 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DLINK_BLIS=OFF
-  IGNORE_PACKAGES
-      ROCM
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
-    therock-msgpack-cxx
     hipBLAS-common
+    rocm-cmake
+    therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
+    roctracer-compat
     ${rocBLAS_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
@@ -146,6 +145,7 @@ if(THEROCK_ENABLE_SPARSE)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
+      rocm-cmake
       rocBLAS
       rocPRIM
     RUNTIME_DEPS
@@ -176,6 +176,7 @@ if(THEROCK_ENABLE_SPARSE)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
+      rocm-cmake
       rocSPARSE
     RUNTIME_DEPS
       hip-clr
@@ -208,6 +209,7 @@ if(THEROCK_ENABLE_SOLVER)
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
+        rocm-cmake
         rocBLAS
         rocPRIM
         therock-fmt
@@ -247,6 +249,8 @@ if(THEROCK_ENABLE_SOLVER)
         -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
       COMPILER_TOOLCHAIN
         amd-hip
+      BUILD_DEPS
+        rocm-cmake
       RUNTIME_DEPS
         hip-clr
         rocBLAS
@@ -293,6 +297,7 @@ therock_cmake_subproject_declare(hipBLAS
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    rocm-cmake
   RUNTIME_DEPS
     hip-clr
     rocBLAS
