@@ -60,7 +60,7 @@ jobs:
         families: ${{ fromJSON(needs.setup.outputs.build_linux_amdgpu_families) }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
-      amdgpu_families: ${{ matrix.families.target }}
+      amdgpu_families: ${{ matrix.families.family }}
     permissions:
       id-token: write
 
@@ -73,7 +73,7 @@ jobs:
         families: ${{ fromJSON(needs.setup.outputs.build_windows_amdgpu_families) }}
     uses: ./.github/workflows/build_windows_packages.yml
     with:
-      amdgpu_families: ${{ matrix.families.target }}
+      amdgpu_families: ${{ matrix.families.family }}
 
   test_linux_packages:
     needs: [setup, build_linux_packages]
@@ -92,7 +92,7 @@ jobs:
         families: ${{ fromJSON(needs.setup.outputs.test_linux_amdgpu_families) }}
     uses: ./.github/workflows/test_linux_packages.yml
     with:
-      amdgpu_families: ${{ matrix.families.target }}
+      amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
 

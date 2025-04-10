@@ -2,37 +2,33 @@ amdgpu_family_info_matrix = {
     "gfx94X": {
         "linux": {
             "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
-            "target": "gfx94X-dcgpu",
+            "family": "gfx94X-dcgpu",
+            "pytorch-target": "gfx942",
         }
     },
     "gfx110X": {
         "linux": {
             "test-runs-on": "",
-            "target": "gfx110X-dgpu",
+            "family": "gfx110X-dgpu",
+            "pytorch-target": "gfx1100",
         },
         "windows": {
             "test-runs-on": "",
-            "target": "gfx110X-dgpu",
+            "family": "gfx110X-dgpu",
         },
     },
-    "gfx1151": {
+    "gfx115X": {
         "linux": {
             "test-runs-on": "",
-            "target": "gfx1151",
-        },
-        "windows": {
-            "test-runs-on": "",
-            "target": "gfx1151",
-        },
+            "family": "gfx115X-igpu",
+            "pytorch-target": "gfx1151",
+        }
     },
-    "gfx1201": {
+    "gfx120X": {
         "linux": {
             "test-runs-on": "",
-            "target": "gfx1201",
-        },
-        "windows": {
-            "test-runs-on": "",
-            "target": "gfx1201",
-        },
+            "family": "gfx120X-all",
+            "pytorch-target": "gfx1201",
+        }
     },
 }

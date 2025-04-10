@@ -15,6 +15,8 @@ jobs:
 
       - name: Generating package target matrix
         id: configure
+        env:
+          PYTORCH_DEV_DOCKER: true
         run: python ./build_tools/fetch_package_targets.py
 
   build-and-push-image:
