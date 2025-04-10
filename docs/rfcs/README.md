@@ -16,7 +16,7 @@ benefit from further discussion.
 
 ## Index
 
-- [TODO: Link to RFC0001](RFC0001-Some-Short-Title.md)
+- [RFC0001: BLAS Stack Build Improvements](./RFC0001-BLAS-Stack-Build-Improvements.md)
 
 ## Adding an RFC
 
