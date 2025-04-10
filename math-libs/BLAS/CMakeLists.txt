@@ -94,8 +94,8 @@ if(WIN32)
 else()
   set(rocBLAS_build_with_tensile "ON")
   set(rocBLAS_build_with_hipblaslt "ON")
-  list(APPEND _rocBLAS_optional_runtime_deps hipBLASLt)
-  list(APPEND _rocBLAS_optional_runtime_deps roctracer-compat)
+  list(APPEND rocBLAS_optional_runtime_deps hipBLASLt)
+  list(APPEND rocBLAS_optional_runtime_deps roctracer-compat)
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
