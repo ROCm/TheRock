@@ -28,6 +28,10 @@ permissions:
   contents: read
 
 jobs:
+  generate_package_target_matrix:
+    runs-on: ubuntu-24.04
+    uses: './.github/actions/generate_package_targets'
+
   setup_metadata:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
@@ -65,7 +69,7 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     permissions:
       contents: write
-    needs: [setup_metadata]
+    needs: [setup_metadata, generate_package_target_matrix]
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
@@ -74,11 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_bundle:
-          - amdgpu_family: "gfx94X-dcgpu"
-          - amdgpu_family: "gfx110X-dgpu"
-          - amdgpu_family: "gfx1151"
-          - amdgpu_family: "gfx1201"
+        target_bundle: ${{ fromJSON(needs.generate_package_target_matrix.outputs.package_targets) }}
 
     steps:
       - name: "Checking out repository"

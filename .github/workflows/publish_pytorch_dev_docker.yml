@@ -3,21 +3,24 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
+
 jobs:
+  generate_package_target_matrix:
+    runs-on: ubuntu-24.04
+    uses: './.github/actions/generate_package_targets'
+
   build-and-push-image:
     strategy:
       fail-fast: false
       matrix:
-        targets:
-          - amdgpu_target: "gfx942"
-          - amdgpu_target: "gfx1100"
-          - amdgpu_target: "gfx1201"
+        targets: ${{ fromJSON(needs.generate_package_target_matrix.outputs.package_targets) }}
 
-    name: ${{ matrix.targets.amdgpu_target }}::Build
+    name: ${{ matrix.targets.amdgpu_family }}::Build
     runs-on: azure-linux-scale-rocm
+    needs: [generate_package_target_matrix]
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
+      IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_family }}
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
@@ -58,7 +61,7 @@ jobs:
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
           labels: |
             org.opencontainers.image.title=PyTorch ROCm Dev Image
-            org.opencontainers.image.description=Nightly ROCm PyTorch Dev Docker for target ${{ matrix.targets.amdgpu_target }}
+            org.opencontainers.image.description=Nightly ROCm PyTorch Dev Docker for target ${{ matrix.targets.amdgpu_family }}
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.created=${{ steps.meta.outputs.created }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -68,7 +71,7 @@ jobs:
           context: .
           file: dockerfiles/pytorch-dev/pytorch_dev_ubuntu_24.04.Dockerfile
           build-args: |
-            AMDGPU_TARGETS=${{ matrix.targets.amdgpu_target }}
+            AMDGPU_TARGETS=${{ matrix.targets.amdgpu_family }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
