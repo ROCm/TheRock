@@ -99,6 +99,7 @@ block()
     LLVM_JITLINK
     LLVM_LINK
     LLVM_MC
+    LLVM_NM
     LLVM_SHLIB
     LLVM_OBJCOPY
     LLVM_OBJDUMP
