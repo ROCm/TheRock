@@ -7,9 +7,10 @@ from amdgpu_family_matrix import amdgpu_family_info_matrix
 
 
 def main(args):
+    pytorch_dev_docker = args.get("PYTORCH_DEV_DOCKER") == "true"
     package_targets = []
     for key in amdgpu_family_info_matrix:
-        if args.get("PYTORCH_DEV_DOCKER"):
+        if pytorch_dev_docker:
             family = (
                 amdgpu_family_info_matrix.get(key).get("linux").get("pytorch-target")
             )

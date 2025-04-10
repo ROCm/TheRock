@@ -64,7 +64,7 @@ jobs:
       - name: Generating package target matrix
         id: configure
         env:
-          PYTORCH_DEV_DOCKER: false
+          PYTORCH_DEV_DOCKER: "false"
         run: python ./build_tools/fetch_package_targets.py
 
   portable_linux_packages:
