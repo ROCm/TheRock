@@ -30,3 +30,4 @@ repos:
     additional_dependencies:
     - mdformat-gfm
     - mdformat-black
+    - mdformat-frontmatter

@@ -43,18 +43,18 @@ and will require a relatively small level of effort. For examples of best practi
 To ensure routine development is not impacted while the component-level changes are developed, we will provide a new source tree that parallels the current tree. The new source tree will include only the CMakeLists.txt files necessary to support the new build system and will otherwise refer to the current source tree for the actual source files. This will prevent disruptions to on-going development as the monorepo comes online. The following components will be migrated to the monorepo in the order listed below:
 
 1. rocJenkins (optional)
-2. hipBLAS-common
-3. rocRoller (optional)
-4. Oragami (optional)
-5. hipBLASLt
-6. Tensile
-7. rocBLAS
-8. rocSparse
-9. hipSparse
-10. rocSolver
-11. hipSparseLt
-12. hipSolver
-13. hipBLAS
+1. hipBLAS-common
+1. rocRoller (optional)
+1. Oragami (optional)
+1. hipBLASLt
+1. Tensile
+1. rocBLAS
+1. rocSparse
+1. hipSparse
+1. rocSolver
+1. hipSparseLt
+1. hipSolver
+1. hipBLAS
 
 ## Building the monorepo
 
