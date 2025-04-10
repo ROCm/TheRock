@@ -10,8 +10,10 @@
   * GITHUB_EVENT_NAME    : GitHub event name, e.g. pull_request.
   * GITHUB_OUTPUT        : path to write workflow output variables.
   * GITHUB_STEP_SUMMARY  : path to write workflow summary output.
-  * INPUT_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families
-  * INPUT_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families
+  * INPUT_BUILD_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families to build
+  * INPUT_BUILD_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families to build
+  * INPUT_TEST_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families to test
+  * INPUT_TEST_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families to test
   * BRANCH_NAME (optional): The branch name
 
   Environment variables (for pull requests):
@@ -25,9 +27,10 @@
 -----------
 
   Written to GITHUB_OUTPUT:
-  * enable_build_jobs : true/false
-  * linux_amdgpu_families : List of valid Linux AMD GPU families to execute jobs
-  * windows_amdgpu_families : List of valid Windows AMD GPU families to execute jobs
+  * build_linux_amdgpu_families : List of valid Linux AMD GPU families to execute build jobs
+  * build_windows_amdgpu_families : List of valid Windows AMD GPU families to execute build jobs
+  * test_linux_amdgpu_families : List of valid Linux AMD GPU families to execute test jobs
+  * test_windows_amdgpu_families : List of valid Windows AMD GPU families to execute test jobs
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
