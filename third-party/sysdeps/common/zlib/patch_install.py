@@ -31,3 +31,4 @@ if platform.system() == "Linux":
 elif platform.system() == "Windows":
     # We don't want the libz.dll on Windows.
     (Path(PREFIX) / "bin" / "zlib.dll").unlink()
+    (Path(PREFIX) / "lib" / "zlib.lib").unlink()

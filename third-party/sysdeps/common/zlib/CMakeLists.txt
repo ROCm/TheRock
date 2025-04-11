@@ -74,13 +74,14 @@ add_custom_target(
       "-G${CMAKE_GENERATOR}"
       "-S${CMAKE_CURRENT_BINARY_DIR}/s"
       "-B${CMAKE_CURRENT_BINARY_DIR}/b"
+      "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/zlib_include.cmake"
       "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
       # Disable writing pc files: we will do so ourselves.
       -DSKIP_INSTALL_FILES=ON
-      -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+
   COMMAND
     "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"
   COMMAND
@@ -100,13 +101,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_libz.so")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(ZLIB_TYPE "STATIC")
-  set(ZLIB_IMPORTED_LOCATION "lib/zlib.lib")
+  set(ZLIB_IMPORTED_LOCATION "lib/zlibstatic.lib")
 else()
   message(FATAL_ERROR "Unrecognized system type")
-endif()
-
-if(NOT EXISTS "${CMAKE_INSTALL_PREFIX}/${ZLIB_IMPORTED_LOCATION}")
-  message(FATAL_ERROR "Expected installed zlib library not found: ${CMAKE_INSTALL_PREFIX}/${ZLIB_IMPORTED_LOCATION}")
 endif()
 
 configure_file(
