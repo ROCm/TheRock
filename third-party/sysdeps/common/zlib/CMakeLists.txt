@@ -98,7 +98,7 @@ add_custom_target(
 # on windows vs linux.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(ZLIB_TYPE "SHARED")
-  set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_libz.so")
+  set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_z.so.1")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(ZLIB_TYPE "STATIC")
   set(ZLIB_IMPORTED_LOCATION "lib/zlibstatic.lib")
