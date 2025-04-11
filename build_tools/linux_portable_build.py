@@ -17,6 +17,9 @@ Other options of note:
 
 * `--image`: Change the default build image
 * `--output-dir`: Change the output directory, which contains caches and build
+     or Python packages
+* `--artifact-dir`: Change the source artifacts/ directory to build Python
+     packages from
 """
 
 import argparse
@@ -57,6 +60,14 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
         ]
     )
 
+    if args.build_python_only:
+        cl.extend(
+            [
+                "--mount",
+                f"type=bind,src={args.artifact_dir},dst=/therock/artifacts",
+            ]
+        )
+
     if args.interactive:
         cl.extend(
             [
@@ -65,6 +76,15 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
                 "/bin/bash",
             ]
         )
+    elif args.build_python_only:
+        cl.extend(
+            [
+                args.image,
+                "/bin/bash",
+                "/therock/src/build_tools/detail/linux_python_package_in_container.sh",
+            ]
+        )
+        cl += rest_args
     else:
         cl.extend(
             [
@@ -121,6 +141,18 @@ def main(argv: list[str]):
         "--interactive",
         action=argparse.BooleanOptionalAction,
         help="Enter interactive shell vs invoking the build",
+    )
+    p.add_argument(
+        "--build-python-only",
+        action="store_true",
+        default=False,
+        help="Build only Python packages",
+    )
+    p.add_argument(
+        "--artifact-dir",
+        default=Path(REPO_DIR / "output-linux-portable" / "build" / "artifacts"),
+        type=Path,
+        help="Source artifacts/ dir from a build",
     )
 
     args = p.parse_args(argv)
