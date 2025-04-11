@@ -1,0 +1,7 @@
+# sqlite3
+[components.dev."third-party/sysdeps/windows/sqlite3/build/stage"]
+[components.lib."third-party/sysdeps/windows/sqlite3/build/stage"]
+
+# zlib
+[components.dev."third-party/sysdeps/linux/zlib/build/stage"]
+[components.lib."third-party/sysdeps/linux/zlib/build/stage"]
