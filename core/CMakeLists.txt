@@ -79,7 +79,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     cmake_path(NORMAL_PATH _compute_pal_dir)
     set(_compute_pal_probe "${_compute_pal_dir}/pal/CMakeLists.txt")
     if(NOT EXISTS "${_compute_pal_probe}")
-      message(FATAL_ERROR 
+      message(FATAL_ERROR
         "Can't build CLR: missing closed source AMDGPU/ROCm interop library folder "
         "expected at '${_compute_pal_dir}': "
         "This can be obtained by cloning this repository adjacent to TheRock: "
