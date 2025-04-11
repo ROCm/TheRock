@@ -1,25 +1,22 @@
 name: "Setup test environment"
+
 inputs:
-  ARTIFACT_RUN_ID:
-    type: string
-    required: true
-  AMDGPU_FAMILIES:
-    type: string
-  OUTPUT_ARTIFACTS_DIR:
-    type: string
-    required: true
-  FETCH_ARTIFACT_ARGS:
-    type: string
   VENV_DIR:
     type: string
     required: true
+  OUTPUT_ARTIFACTS_DIR:
+    type: string
+    required: true
+  ARTIFACT_RUN_ID:
+    type: string
+  AMDGPU_FAMILIES:
+    type: string
+  FETCH_ARTIFACT_ARGS:
+    type: string
+
 runs:
   using: "composite"
   steps:
-    - name: Install the AWS tool
-      shell: bash
-      run: ./dockerfiles/cpubuilder/install_awscli.sh
-
     - name: "Setting up Python"
       id: setup_python
       uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
@@ -35,6 +32,10 @@ runs:
         source ${VENV_DIR}/bin/activate
         pip install -r requirements-test.txt
         pip freeze
+
+    - name: Install the AWS tool
+      shell: bash
+      run: ./dockerfiles/cpubuilder/install_awscli.sh
 
     - name: Download and Unpack Artifacts
       shell: bash
