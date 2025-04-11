@@ -261,6 +261,12 @@ if(CMAKE_CXX_VISIBILITY_PRESET)
   list(APPEND DEFAULT_CMAKE_ARGS ${CMAKE_CXX_VISIBILITY_PRESET})
 endif()
 
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+  message(
+    FATAL_ERROR
+    "Cannot build 32-bit ROCm with MSVC: You must enable the Windows x64 "
+    "development tools and rebuild (detected compiler ${CMAKE_CXX_COMPILER})")
+endif()
 
 ################################################################################
 # Sysdep bundling
