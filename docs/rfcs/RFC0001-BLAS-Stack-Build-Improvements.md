@@ -97,6 +97,7 @@ Prior to starting the work, we will create a blas-libraries mailing list to soli
   - Avoid FetchContent and git submodules or at least look for a system/local install first
   - Don’t leak build system implementation to downstream consumers
   - Do not provide all possible configurations and put unused configurations like LEGACY_HIPBLAS_DIRECT on a path to deprecation
+  - Projects should be designed to be composable by a higher-level CMakeLists.txt
 
 - **Style and structure**
 
@@ -123,7 +124,7 @@ Prior to starting the work, we will create a blas-libraries mailing list to soli
   - Find packages in highest level CMakeLists.txt
   - Mark packages as required and fail loudly if they aren't found
   - Use target\_ functions rather than global functions such as include_directories
-  - Declare targets and aliases in highest level CMakeLists.txt
+  - Each project should declare options, targets, aliases, and dependencies in their highest-level CMakeLists.txt
   - Use target_sources to associate source files with targets in subdirectories
   - Use build and install interface correctly/consistently
   - No hard-coded options
