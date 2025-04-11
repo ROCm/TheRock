@@ -45,40 +45,80 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(ZLIB_BUILD)
+project(
+  ZLIB_BUILD
+  VERSION 1.3.1
+)
 
-include(ProcessorCount)
-ProcessorCount(PAR_JOBS)
-
-if(NOT PATCHELF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# zlib provides a CMakeLists.txt, however, we have to do some post-processing
+# of the libraries in order to prepare them for our use, so we invoke it as
+# a sub-build. We do this uniformly across all platforms because it is easier
+# to have common code paths. We write directly into the install prefix at
+# build time since this build is only ever used in a one shot way.
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
-    "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds" --
-    "${SOURCE_DIR}/configure" --prefix "${CMAKE_INSTALL_PREFIX}"
+    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
-    make -j "${PAR_JOBS}"
+    # Provide our own version map with private symbol versions.
+    "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/zlib.map"
   COMMAND
-    make install
+    "${CMAKE_COMMAND}"
+      "-G${CMAKE_GENERATOR}"
+      "-S${CMAKE_CURRENT_BINARY_DIR}/s"
+      "-B${CMAKE_CURRENT_BINARY_DIR}/b"
+      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+      "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
+      "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+      "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      # Disable writing pc files: we will do so ourselves.
+      -DSKIP_INSTALL_FILES=ON
+      -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+  COMMAND
+    "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"
+  COMMAND
+    "${CMAKE_COMMAND}" --install "${CMAKE_CURRENT_BINARY_DIR}/b"
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}" --
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 )
+
+
+# Output cmake and pkgconfig files. Note that the library names are different
+# on windows vs linux.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(ZLIB_TYPE "SHARED")
+  set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_libz.so")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(ZLIB_TYPE "STATIC")
+  set(ZLIB_IMPORTED_LOCATION "lib/zlib.lib")
+else()
+  message(FATAL_ERROR "Unrecognized system type")
+endif()
+
+if(NOT EXISTS "${CMAKE_INSTALL_PREFIX}/${ZLIB_IMPORTED_LOCATION}")
+  message(FATAL_ERROR "Expected installed zlib library not found: ${CMAKE_INSTALL_PREFIX}/${ZLIB_IMPORTED_LOCATION}")
+endif()
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/zlib-config.cmake.in
   ${CMAKE_CURRENT_BINARY_DIR}/zlib-config.cmake
   @ONLY
 )
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/zlib.pc.in
+  ${CMAKE_CURRENT_BINARY_DIR}/zlib.pc
+  @ONLY
+)
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/zlib-config.cmake" DESTINATION lib/cmake/ZLIB)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/zlib.pc" DESTINATION lib/pkgconfig)
