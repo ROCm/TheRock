@@ -11,6 +11,9 @@ def main(args):
     package_targets = []
     for key in amdgpu_family_info_matrix:
         if pytorch_dev_docker:
+            # If there is not a target specified for the family
+            if not "pytorch-target" in amdgpu_family_info_matrix.get(key).get("linux"):
+                continue
             family = (
                 amdgpu_family_info_matrix.get(key).get("linux").get("pytorch-target")
             )

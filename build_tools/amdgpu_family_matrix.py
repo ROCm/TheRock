@@ -20,8 +20,7 @@ amdgpu_family_info_matrix = {
     "gfx115X": {
         "linux": {
             "test-runs-on": "",
-            "family": "gfx115X-igpu",
-            "pytorch-target": "gfx1151",
+            "family": "gfx1151",
         }
     },
     "gfx120X": {
