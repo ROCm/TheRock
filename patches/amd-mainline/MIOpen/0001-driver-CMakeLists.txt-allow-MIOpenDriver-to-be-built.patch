@@ -1,0 +1,36 @@
+From 1fc12de07f605bb187a1a68dd9a6d37909862f00 Mon Sep 17 00:00:00 2001
+From: Scott Tsai <scottt.tw@gmail.com>
+Date: Thu, 10 Apr 2025 17:43:09 +0800
+Subject: [PATCH 1/4] driver/CMakeLists.txt: allow MIOpenDriver to be built in
+ TheRock
+
+MIOpenDriver source files need nlohmann_json and SQLite3 headers
+and were only looking for them in standard locations.
+---
+ driver/CMakeLists.txt | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/driver/CMakeLists.txt b/driver/CMakeLists.txt
+index 60d6fe6ce..d1c93b5c1 100644
+--- a/driver/CMakeLists.txt
++++ b/driver/CMakeLists.txt
+@@ -71,10 +71,14 @@ if(WIN32)
+ endif()
+ add_dependencies(MIOpenDriver generate_kernels)
+ target_include_directories(MIOpenDriver PRIVATE ../src/kernels)
+-target_link_libraries(MIOpenDriver MIOpen Threads::Threads roc::rocrand)
++target_link_libraries(MIOpenDriver PRIVATE MIOpen Threads::Threads roc::rocrand nlohmann_json)
+ if(NOT MIOPEN_EMBED_DB STREQUAL "")
+-target_link_libraries(MIOpenDriver $<BUILD_INTERFACE:miopen_data> )
++    target_link_libraries(MIOpenDriver PRIVATE $<BUILD_INTERFACE:miopen_data>)
+ endif()
++if(MIOPEN_ENABLE_SQLITE)
++    target_link_libraries(MIOpenDriver PRIVATE SQLite::SQLite3)
++endif()
++
+ # Cmake does not add flags correctly for gcc
+ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU") 
+     set_target_properties(MIOpenDriver PROPERTIES COMPILE_FLAGS -pthread LINK_FLAGS -pthread)
+-- 
+2.49.0
+
