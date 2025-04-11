@@ -23,6 +23,7 @@ if(THEROCK_ENABLE_MIOPEN)
       therock-boost
       therock-eigen
       therock-frugally-deep
+      therock-googletest
       therock-nlohmann-json
       therock-FunctionalPlus
     RUNTIME_DEPS
