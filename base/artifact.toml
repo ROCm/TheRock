@@ -4,10 +4,15 @@
 
 # rocm_smi_lib
 [components.dbg."base/rocm_smi_lib/stage"]
+optional = "windows"
 [components.dev."base/rocm_smi_lib/stage"]
+optional = "windows"
 [components.doc."base/rocm_smi_lib/stage"]
+optional = "windows"
 [components.lib."base/rocm_smi_lib/stage"]
+optional = "windows"
 [components.run."base/rocm_smi_lib/stage"]
+optional = "windows"
 include = [
   "bin/**",
   "libexec/**",
@@ -30,11 +35,17 @@ include = "libexec/**"
 
 # rocprofiler-register
 [components.dbg."base/rocprofiler-register/stage"]
+optional = "windows"
 [components.dev."base/rocprofiler-register/stage"]
+optional = "windows"
 [components.doc."base/rocprofiler-register/stage"]
+optional = "windows"
 [components.lib."base/rocprofiler-register/stage"]
+optional = "windows"
 [components.run."base/rocprofiler-register/stage"]
+optional = "windows"
 [components.test."base/rocprofiler-register/stage"]
+optional = "windows"
 include = [
   "share/rocprofiler-register/tests/**",
 ]
