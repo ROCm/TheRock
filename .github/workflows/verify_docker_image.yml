@@ -30,7 +30,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo jq
-        - name: Construct image reference
+      - name: Construct image reference
           id: image_ref
           run: |
             IMAGE_REF="ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
