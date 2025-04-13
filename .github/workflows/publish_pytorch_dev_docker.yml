@@ -92,10 +92,10 @@ jobs:
     strategy:
       matrix:
         targets:
-          - "gfx942"
+          - amdgpu_target: "gfx942"
     uses: ./.github/workflows/verify_docker_image.yml
     with:
-      amdgpu_target: ${{  matrix.targets }}
+      amdgpu_target: ${{  matrix.targets.amdgpu_target }}
       image_digest: ${{ needs.build-and-push-image.outputs.image_digest }}
 
   on-success:
@@ -104,7 +104,7 @@ jobs:
     strategy:
       matrix:
         targets:
-          - "gfx942"
+          - amdgpu_target: "gfx942"
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Log in to the Container registry
@@ -119,11 +119,11 @@ jobs:
       - name: Upload pinned version file as an artifact
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
-          name: latest_verified_image_version_pinned-${{ matrix.targets }}
+          name: latest_verified_image_version_pinned-${{ matrix.targets.amdgpu_target }}
           path: latest_verified_image_version_pinned.txt
       - name: Tag and Push 'verified'
         run: |
-          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets }}
+          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
           DIGEST=${{ needs.verify-image.outputs.image_digest }}
           VERSION=${{ env.VERSION }}
 
@@ -144,8 +144,8 @@ jobs:
     strategy:
       matrix:
         targets:
-          - "gfx942"
+          - amdgpu_target: "gfx942"
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Print failure info
-        run: echo "Verification failed for therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets }} image"
+        run: echo "Verification failed for therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }} image"
