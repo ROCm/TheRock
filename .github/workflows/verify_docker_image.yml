@@ -7,20 +7,16 @@ on:
         description: "AMDGPU target to verify"
         required: true
         type: string
-      image_tag:
-        description: "Docker image tag (version) to inspect"
-        required: true
-        default: "6.4.0rc20250410"  # Example default tag
 
   workflow_call:
     inputs:
       amdgpu_target:
         required: true
         type: string
+      image_digest:
+        required: true
+        type: string
 
-env:
-  IMAGE_REF_NAME: ${{ github.ref_name }}
-  IMAGE_TAG_TO_VERIFY: ${{ github.event.inputs.image_tag }}
 jobs:
   pull-and-build-image:
     name: Verify ${{ inputs.amdgpu_target }} Docker Image
@@ -34,19 +30,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo jq
-      - name: Get manifest digest
-        id: fetch_digest
-        env:
-          AMDGPU_TARGET: ${{ inputs.amdgpu_target }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
-        run: |
-          IMAGE_NAME="ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${AMDGPU_TARGET}"
-          digest=$(skopeo inspect --raw docker://$IMAGE_NAME:$IMAGE_TAG | sha256sum | awk '{print $1}')
-          echo "digest ---> $digest"
-          echo "digest=$digest" >> $GITHUB_OUTPUT
-          IMAGE_REF="${IMAGE_NAME}@sha256:${digest}"
-          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
-          echo "Using image: $IMAGE_REF"
+        - name: Construct image reference
+          id: image_ref
+          run: |
+            IMAGE_REF="ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
+            echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+            echo "Image to verify: $IMAGE_REF"
       - name: Pull Docker Image
         run: |
           docker pull "$IMAGE_REF"
