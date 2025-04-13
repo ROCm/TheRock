@@ -30,7 +30,7 @@ jobs:
       contents: read
       packages: write
       outputs:
-        image_digest: ${{ steps.build_push.outputs.digest }}
+        image_digest: ${{ needs.build-and-push-image.outputs.image_digest }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
