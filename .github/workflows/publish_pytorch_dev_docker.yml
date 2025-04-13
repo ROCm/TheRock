@@ -95,7 +95,7 @@ jobs:
           - "gfx942"
     uses: ./.github/workflows/verify_docker_image.yml
     with:
-      amdgpu_target: ${{  matrix.targets.amdgpu_target }}
+      amdgpu_target: ${{  matrix.targets }}
       image_digest: ${{ needs.build-and-push-image.outputs.image_digest }}
 
   on-success:
@@ -126,7 +126,7 @@ jobs:
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets }}
           DIGEST=${{ needs.verify-image.outputs.image_digest }}
           VERSION=${{ env.VERSION }}
-          
+
           echo "Pulling image with digest: $IMAGE@$DIGEST"
           docker pull $IMAGE@$DIGEST
 
