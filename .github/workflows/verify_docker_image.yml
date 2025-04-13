@@ -7,7 +7,11 @@ on:
         description: "AMDGPU target to verify"
         required: true
         type: string
-
+      image_digest:
+        description: "Enter the Image digest"
+        required: true
+        type: string
+  
   workflow_call:
     inputs:
       amdgpu_target:
