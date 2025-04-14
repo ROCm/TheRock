@@ -78,7 +78,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
       - name: Print image digest
         run: |
-            echo "Digest: ${{ steps.build_push.outputs.digest }}"
+            echo "Digest: ${{ needs.build-and-push-image.outputs.image_digest }}"
   verify-image:
     needs: build-and-push-image
     strategy:
