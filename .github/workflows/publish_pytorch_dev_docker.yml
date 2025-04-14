@@ -18,7 +18,7 @@ jobs:
     name: ${{ matrix.targets.amdgpu_target }}::Build
     runs-on: azure-linux-scale-rocm
     outputs:
-      image_digest: ${{ needs.build-and-push-image.outputs.image_digest }} 
+      image_digest: ${{ needs.build-and-push-image.outputs.image_digest }}
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
