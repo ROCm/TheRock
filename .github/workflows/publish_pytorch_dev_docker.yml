@@ -78,7 +78,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
       - name: Print image digest
         run: |
-            echo "Digest: ${{ steps.build_push.outputs.digest }}"
+            echo "Digestv1: ${{ steps.build_push.outputs.digest }}"
+            echo "Digestv2: ${{ needs.build-and-push-image.outputs.image_digest }}"
   verify-image:
     needs: build-and-push-image
     strategy:
@@ -116,7 +117,7 @@ jobs:
       - name: Tag and Push 'verified'
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
-          DIGEST=${{ needs.verify-image.outputs.image_digest }}
+          DIGEST=${{ needs.build-and-push-image.outputs.image_digest }}
           VERSION=${{ env.VERSION }}
 
           echo "Pulling image with digest: $IMAGE@$DIGEST"
