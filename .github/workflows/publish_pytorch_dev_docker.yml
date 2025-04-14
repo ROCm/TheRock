@@ -18,7 +18,7 @@ jobs:
     name: ${{ matrix.targets.amdgpu_target }}::Build
     runs-on: azure-linux-scale-rocm
     outputs:
-      image_digest: ${{ needs.build-and-push-image.outputs.image_digest }}
+      image_digest: ${{ steps.build_push.outputs.digest }}
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
@@ -78,7 +78,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
       - name: Print image digest
         run: |
-            echo "Digest: ${{ needs.build-and-push-image.outputs.image_digest }}"
+            echo "Digest: ${{ steps.build_push.outputs.digest }}"
   verify-image:
     needs: build-and-push-image
     strategy:
@@ -128,6 +128,7 @@ jobs:
 
           echo "Pushing :verified tag"
           docker push $IMAGE:verified
+          docker push $IMAGE:$VERSION
       - name: Print success info
         run: echo "Verification passed and tagged as 'verified'."
   on-failure:
