@@ -201,11 +201,8 @@ amdgpu_family_info_matrix = {
         },
     },
     "gfx120x": {
-        "linux": {
-            "test-runs-on": "linux-rx9070-gpu-rocm",
-            "target": "gfx120X-all"
-        }
-    }
+        "linux": {"test-runs-on": "linux-rx9070-gpu-rocm", "target": "gfx120X-all"}
+    },
 }
 
 DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
