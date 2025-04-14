@@ -2,11 +2,6 @@ name: Publish PyTorch Dev Dockers
 
 on:
   workflow_dispatch:
-    inputs:
-      image_tag_to_verify:
-        description: "Docker tag as 'verified'"
-        required: false
-        type: string
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
 
@@ -84,9 +79,6 @@ jobs:
       - name: Print image digest
         run: |
             echo "Digest: ${{ steps.build_push.outputs.digest }}"
-      - name: Save digest to env
-        run: |
-            echo "DOCKER_IMAGE_DIGEST=${{ steps.build_push.outputs.digest }}" >> $GITHUB_ENV
   verify-image:
     needs: build-and-push-image
     strategy:
@@ -115,7 +107,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Write pinned version to file
         run: |
-          echo "${{ github.event.inputs.image_tag_to_verify }}" > latest_verified_image_version_pinned.txt
+          echo "${{ env.VERSION }}" > latest_verified_image_version_pinned.txt
       - name: Upload pinned version file as an artifact
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
