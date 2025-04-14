@@ -184,26 +184,34 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 # --------------------------------------------------------------------------- #
 
 amdgpu_family_info_matrix = {
-    "gfx94x": {
+    # "gfx94x": {
+    #     "linux": {
+    #         "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+    #         "target": "gfx94X-dcgpu",
+    #     }
+    # },
+    # "gfx110x": {
+    #     "linux": {
+    #         "test-runs-on": "",
+    #         "target": "gfx110X-dgpu",
+    #     },
+    #     "windows": {
+    #         "test-runs-on": "",
+    #         "target": "gfx110X-dgpu",
+    #     },
+    # },
+    "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
-            "target": "gfx94X-dcgpu",
+            "test-runs-on": "linux-rx9070-gpu-rocm",
+            "target": "gfx120X-all"
         }
-    },
-    "gfx110x": {
-        "linux": {
-            "test-runs-on": "",
-            "target": "gfx110X-dgpu",
-        },
-        "windows": {
-            "test-runs-on": "",
-            "target": "gfx110X-dgpu",
-        },
-    },
+    }
 }
 
-DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
-DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110X"]
+DEFAULT_LINUX_CONFIGURATIONS = ["gfx120x"]
+# DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
+DEFAULT_WINDOWS_CONFIGURATIONS = []
+# DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110X"]
 
 
 def get_pr_labels(args) -> List[str]:
