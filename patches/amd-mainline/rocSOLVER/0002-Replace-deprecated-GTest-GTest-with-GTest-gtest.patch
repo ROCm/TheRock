@@ -1,0 +1,39 @@
+From c7bfebf13ec27c7113c5e6a65e0a7682f6989284 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Mon, 14 Apr 2025 15:25:58 -0700
+Subject: [PATCH 2/2] Replace deprecated GTest::GTest with GTest::gtest.
+
+---
+ clients/extras/CMakeLists.txt | 2 +-
+ clients/gtest/CMakeLists.txt  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/clients/extras/CMakeLists.txt b/clients/extras/CMakeLists.txt
+index bf1a9c0..f58cf4d 100644
+--- a/clients/extras/CMakeLists.txt
++++ b/clients/extras/CMakeLists.txt
+@@ -46,7 +46,7 @@ if(UNIX AND BUILD_SHARED_LIBS)
+       ROCSOLVER_LIB_NAME="$<TARGET_FILE:rocsolver>"
+     )
+     target_link_libraries(test-rocsolver-dlopen PRIVATE
+-      GTest::GTest
++      GTest::gtest
+       ${CMAKE_DL_LIBS}
+     )
+ 
+diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
+index 7de5cb9..a5b4af0 100755
+--- a/clients/gtest/CMakeLists.txt
++++ b/clients/gtest/CMakeLists.txt
+@@ -179,7 +179,7 @@ if(WIN32)
+ endif()
+ 
+ target_link_libraries(rocsolver-test PRIVATE
+-  GTest::GTest
++  GTest::gtest
+   hip::device
+   rocsolver-common
+   clients-common
+-- 
+2.43.0
+
