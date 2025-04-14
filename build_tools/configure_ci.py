@@ -349,7 +349,7 @@ def main(base_args, build_families, test_families):
         build_linux_target_output = []
         build_windows_target_output = []
 
-        # If this is a main push or PR trigger, skip the tests since there is no build to use.
+        # If this is a (main push or PR trigger) and enable_build_jobs is False, skip the tests since there is no build to use.
         if not workflow_dispatch:
             test_linux_target_output = []
             test_windows_target_output = []
