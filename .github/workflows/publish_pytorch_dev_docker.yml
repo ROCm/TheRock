@@ -127,7 +127,8 @@ jobs:
       - name: Tag and Push 'verified'
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
-          DIGEST=${{ needs.build-and-push-image.outputs.image_digest }}
+          DIGEST=${{ steps.build_push.outputs.digest }}
+
           VERSION=${{ env.VERSION }}
 
           echo "Pulling image with digest: $IMAGE@$DIGEST"
