@@ -15,7 +15,17 @@ GENERIC_VARIANT = "generic"
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
-
+    
+def s3_bucket_exists(run_id):
+    cmd = [
+        "aws",
+        "s3",
+        "ls",
+        f"s3://therock-artifacts/{run_id}",
+        "--no-sign-request",
+    ]
+    process = subprocess.run(cmd, check=False)
+    return process.returncode == 0
 
 def s3_exec(variant, package, run_id, build_dir):
     cmd = [
@@ -84,6 +94,9 @@ def run(args):
     target = args.target
     build_dir = args.build_dir
     test_enabled = args.test
+    if not s3_bucket_exists(run_id):
+        print(f"S3 artifacts for {run_id} does not exist. Exiting...")
+        return
     retrieve_base_artifacts(args, run_id, build_dir)
     retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir)
 
