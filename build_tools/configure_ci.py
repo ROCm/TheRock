@@ -192,7 +192,7 @@ amdgpu_family_info_matrix = {
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "azure-linux-rx7800-gpu",
             "target": "gfx110X-dgpu",
         },
         "windows": {
