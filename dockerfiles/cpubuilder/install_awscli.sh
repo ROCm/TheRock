@@ -17,7 +17,7 @@ curl --silent --fail --show-error --location \
 unzip -qq awscliv2.zip
 
 if [ "$EUID" -ne 0 ]; then
-  sudo ./aws/install
+  sudo ./aws/install --update
 else
-  ./aws/install
+  ./aws/install --update
 fi
