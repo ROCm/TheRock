@@ -25,9 +25,7 @@ option(THEROCK_ENABLE_RAND "Whether rocrand/hiprand are available" ON)
 option(THEROCK_ENABLE_RCCL "Whether rccl is available" ON)
 option(THEROCK_ENABLE_SOLVER "Whether rocsolver/hipsolver are available" ON)
 option(THEROCK_ENABLE_SPARSE "Whether rocsparse/hipsparse are available" ON)
-cmake_dependent_option(
-    ENABLE_DEVICE_TEST "Whether to enable testing that requires a device" ON
-    "$ENV{THEROCK_ENABLE_DEVICE_TEST}" OFF)
+option(ENABLE_DEVICE_TEST "Whether to enable testing that requires a device" OFF)
 
 set(TEST_PATH)
 if(WIN32)
