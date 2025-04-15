@@ -131,10 +131,10 @@ jobs:
 
           VERSION=${{ env.VERSION }}
 
-          echo "Pulling image with digest: $IMAGE@$DIGEST"
+          echo "Pulling image with digest: ${{ IMAGE }} @ ${{ DIGEST }}"
           docker pull $IMAGE@$DIGEST
 
-          echo "Tagging image as :verified and :$VERSION"
+          echo "Tagging image as :verified and : ${{ VERSION }}"
           docker tag $IMAGE@$DIGEST $IMAGE:verified
           docker tag $IMAGE@$DIGEST $IMAGE:$VERSION
 
