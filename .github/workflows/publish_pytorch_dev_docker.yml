@@ -3,7 +3,7 @@ name: Publish PyTorch Dev Dockers
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
+    - cron: "0 2 * * *" # Runs Nightly at 2 AM UTC
 
 jobs:
   build-and-push-image:
@@ -18,7 +18,7 @@ jobs:
     name: ${{ matrix.targets.amdgpu_target }}::Build
     runs-on: azure-linux-scale-rocm
     outputs:
-      image_digest: ${{ steps.build_push.outputs.digest }}
+      gfx942_digest: ${{ steps.export.outputs.gfx942 }}
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
@@ -26,6 +26,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -43,6 +44,7 @@ jobs:
       - name: Fetch sources
         run: |
           python3 ./build_tools/fetch_sources.py --jobs 10
+
       - name: Log in to the Container registry
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
@@ -51,7 +53,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set nightly version
-        id: nightly_version
         run: |
           BASE_VERSION=$(jq -r '.["rocm-version"]' version.json)
           echo "VERSION=${BASE_VERSION}rc$(date +'%Y%m%d')" >> "$GITHUB_ENV"
@@ -82,78 +83,72 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Print image digest
+      - name: Export digest
+        id: export
         run: |
-          echo "Digest from build_push step: ${{ steps.build_push.outputs.digest }}"
+          digest="${{ steps.build_push.outputs.digest }}"
+          case "${{ matrix.targets.amdgpu_target }}" in
+            gfx942) echo "gfx942=$digest" >> $GITHUB_OUTPUT ;;
+          esac
 
-  verify-image:
+verify-image:
     needs: build-and-push-image
     strategy:
       matrix:
-        targets:
-          - amdgpu_target: "gfx942"
+        include:
+          - amdgpu_target: gfx942
+            image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
     uses: ./.github/workflows/verify_docker_image.yml
     with:
-      amdgpu_target: ${{ matrix.targets.amdgpu_target }}
-      image_digest: ${{ needs.build-and-push-image.outputs.image_digest }}
+      amdgpu_target: ${{ matrix.amdgpu_target }}
+      image_digest: ${{ matrix.image_digest }}
 
-  on-success:
-    needs: verify-image
-    if: ${{ needs.verify-image.result == 'success' }}
-    strategy:
-      matrix:
-        targets:
-          - amdgpu_target: "gfx942"
-    runs-on: azure-linux-scale-rocm
+on-success:
+  needs: verify-image
+  if: ${{ success() }}
+  strategy:
+    matrix:
+      include:
+        - amdgpu_target: gfx942
+          image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
+  runs-on: azure-linux-scale-rocm
+  steps:
+    - name: Log in to registry
+      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-    steps:
-      - name: Log in to the Container registry
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Write pinned version to file
+      run: echo "${{ env.VERSION }}" > latest_verified_image_version_pinned.txt
 
-      - name: Write pinned version to file
-        run: |
-          echo "${{ env.VERSION }}" > latest_verified_image_version_pinned.txt
+    - name: Upload pinned version file
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+      with:
+        name: latest_verified_image_version_pinned-${{ matrix.amdgpu_target }}
+        path: latest_verified_image_version_pinned.txt
 
-      - name: Upload pinned version file as an artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
-        with:
-          name: latest_verified_image_version_pinned-${{ matrix.targets.amdgpu_target }}
-          path: latest_verified_image_version_pinned.txt
+    - name: Tag and push verified image
+      run: |
+        IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.amdgpu_target }}
+        DIGEST=${{ matrix.image_digest }}
+        VERSION=${{ env.VERSION }}
 
-      - name: Tag and Push 'verified'
-        run: |
-          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
-          DIGEST=${{  needs.build-and-push-image.outputs.image_digest }}
+        docker pull $IMAGE@$DIGEST
+        docker tag $IMAGE@$DIGEST $IMAGE:verified
+        docker tag $IMAGE@$DIGEST $IMAGE:$VERSION
+        docker push $IMAGE:verified
+        docker push $IMAGE:$VERSION
 
-          VERSION=${{ env.VERSION }}
-
-          echo "Pulling image with digest: $IMAGE@$DIGEST"
-          docker pull $IMAGE@$DIGEST
-
-          echo "Tagging image as :verified and :$VERSION"
-          docker tag $IMAGE@$DIGEST $IMAGE:verified
-          docker tag $IMAGE@$DIGEST $IMAGE:$VERSION
-
-          echo "Pushing tags..."
-          docker push $IMAGE:verified
-          docker push $IMAGE:$VERSION
-
-      - name: Print success info
-        run: echo "Verification passed and image was tagged as 'verified'."
-
-  on-failure:
-    needs: verify-image
-    if: ${{ needs.verify-image.result == 'failure' }}
-    strategy:
-      matrix:
-        targets:
-          - amdgpu_target: "gfx942"
-    runs-on: azure-linux-scale-rocm
-
-    steps:
-      - name: Print failure info
-        run: echo "Verification failed for image ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}"
+on-failure:
+  needs: verify-image
+  if: ${{ failure() }}
+  strategy:
+    matrix:
+      targets:
+        - amdgpu_target: "gfx942"
+  runs-on: azure-linux-scale-rocm
+  steps:
+    - name: Print failure message
+      run: echo "Verification failed for ${{ matrix.amdgpu_target }}"
