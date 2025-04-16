@@ -26,7 +26,7 @@ pip install -r requirements.txt
 Dev tools:
 
 ```
-sudo apt install gfortran git-lfs ninja-build cmake g++ pkg-config xxd libgmock-dev libgtest-dev patchelf automake
+sudo apt install gfortran git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake
 ```
 
 ## On Windows

@@ -4,6 +4,7 @@ if(EXISTS "${BINARY_DIR}")
 endif()
 
 set(propagate_vars
+  CMAKE_CXX_COMPILER
   THEROCK_ENABLE_BLAS
   THEROCK_ENABLE_FFT
   THEROCK_ENABLE_HIP
@@ -31,7 +32,7 @@ execute_process(
     "${BINARY_DIR}"
     --build-generator "${GENERATOR}"
     --build-options ${build_options}
-    --test-command "${CMAKE_CTEST_COMMAND}" --output-on-failure
+    --test-command "${CMAKE_CTEST_COMMAND}" --output-on-failure --verbose
   RESULT_VARIABLE CMD_RESULT
 )
 

@@ -11,6 +11,8 @@ enable_testing()
 
 set(CMAKE_CXX_STANDARD 17)
 
+include(CMakeDependentOption)
+
 # If defining a new option, ensure it is in the outer CMakeLists.txt and
 # the clean_configure_test_project.cmake to ensure it is passed from the
 # parent when testing.
@@ -23,6 +25,17 @@ option(THEROCK_ENABLE_RAND "Whether rocrand/hiprand are available" ON)
 option(THEROCK_ENABLE_RCCL "Whether rccl is available" ON)
 option(THEROCK_ENABLE_SOLVER "Whether rocsolver/hipsolver are available" ON)
 option(THEROCK_ENABLE_SPARSE "Whether rocsparse/hipsparse are available" ON)
+option(ENABLE_DEVICE_TEST "Whether to enable testing that requires a device" OFF)
+
+set(TEST_PATH)
+if(WIN32)
+    # On Windows, when not installed as a global assembly, the ROCM bin dir
+    # must be on the PATH in order to find DLLs.
+    set(TEST_PATH "${CMAKE_HIP_COMPILER_ROCM_ROOT}/bin")
+    string(APPEND TEST_PATH ";")
+    string(APPEND TEST_PATH "$ENV{PATH}")
+    message(STATUS "Using test path: ${TEST_PATH}")
+endif()
 
 if(THEROCK_ENABLE_HIP)
     # TODO: Don't require HIP_PLATFORM https://github.com/ROCm/TheRock/issues/68
@@ -97,8 +110,29 @@ if(THEROCK_ENABLE_HIP)
         hip-host-test.cpp
     )
     target_link_libraries(hip-host-test PRIVATE hip::host)
-    add_test(NAME hip-host-test COMMAND hip-host-test)
+    set(_DEVICE_ORDINAL)
+    if(ENABLE_DEVICE_TEST)
+        set(_DEVICE_ORDINAL 0)
+    endif()
+    add_test(NAME hip-host-test
+        COMMAND hip-host-test ${_DEVICE_ORDINAL}
+    )
+    if(TEST_PATH)
+        set_tests_properties(
+            hip-host-test
+            PROPERTIES ENVIRONMENT "PATH=${TEST_PATH}"
+        )
+    endif()
 
-    add_library(sample_kernel sample_kernel.hip)
+    add_executable(sample_kernel sample_kernel.hip)
     set_source_files_properties(sample_kernel PROPERTIES LANGUAGE HIP)
+    if(ENABLE_DEVICE_TEST)
+        add_test(NAME sample-kernel-test COMMAND sample_kernel)
+        if(TEST_PATH)
+            set_tests_properties(
+                sample-kernel-test
+                PROPERTIES ENVIRONMENT "PATH=${TEST_PATH}"
+            )
+        endif()
+    endif()
 endif()

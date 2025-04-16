@@ -16,6 +16,7 @@ with the following changes:
 from typing import Callable
 import argparse
 from pathlib import Path
+import platform
 import sys
 import shutil
 import tarfile
@@ -23,6 +24,26 @@ import tarfile
 from _therock_utils.artifacts import ArtifactPopulator
 from _therock_utils.hash_util import calculate_hash, write_hash
 from _therock_utils.pattern_match import PatternMatcher
+
+
+def evaluate_optional(optional_value) -> bool:
+    """Returns true if the given value should be considered optional on this platform.
+
+    It can be either a str, list of str, or a truthy value. If a str/list, then it will
+    return true if any of the strings match the case insensitive
+    `platform.system()`.
+    """
+    if optional_value is None:
+        return False
+    if isinstance(optional_value, str):
+        optional_value = [optional_value]
+    if isinstance(optional_value, list):
+        system_name = platform.system().lower()
+        for v in optional_value:
+            if str(v).lower() == system_name:
+                return True
+        return False
+    return bool(optional_value)
 
 
 class ComponentDefaults:
@@ -61,6 +82,7 @@ ComponentDefaults(
     "dev",
     includes=[
         "**/*.a",
+        "**/*.lib",
         "**/cmake/**",
         "**/include/**",
         "**/share/modulefiles/**",
@@ -135,7 +157,11 @@ def do_artifact(args):
                         matched, force inclusion, regardless of whether they match
                         an exclude pattern.
                     "optional": if true and the directory does not exist, it
-                      is not an error. Use for optionally built projects
+                      is not an error. Use for optionally built projects. This
+                      can also be either a string or array of strings, which
+                      are interpreted as a platform name. If the case-insensitive
+                      `platform.system()` equals one of them, then it is
+                      considered optional.
 
     Most sections can typically be blank because by default they use
     component specific include/exclude patterns (see `COMPONENT_DEFAULTS` above)
@@ -164,7 +190,7 @@ def do_artifact(args):
     for basedir_relpath, basedir_record in component_record.items():
         use_default_patterns = basedir_record.get("default_patterns", True)
         basedir = args.root_dir / Path(basedir_relpath)
-        optional = basedir_record.get("optional")
+        optional = evaluate_optional(basedir_record.get("optional"))
         if optional and not basedir.exists():
             continue
         all_basedir_relpaths.append(basedir_relpath)

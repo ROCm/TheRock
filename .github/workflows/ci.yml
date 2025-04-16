@@ -76,14 +76,12 @@ jobs:
   test_linux_packages:
     needs: [setup, build_linux_packages]
     name: Test Linux Packages
-    if: |
+    # If there are no linux_amdgpu_families to test or a dependent job failed/cancelled, this job will not be run
+    if: >-
       ${{
+        !failure() &&
         !cancelled() &&
-        needs.setup.outputs.test_linux_amdgpu_families != '[]' &&
-        (
-          needs.build_linux_packages.result == 'success' ||
-          needs.build_linux_packages.result == 'skipped'
-        )
+        needs.setup.outputs.test_linux_amdgpu_families != '[]'
       }}
     strategy:
       fail-fast: false
