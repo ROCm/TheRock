@@ -141,7 +141,7 @@ jobs:
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.amdgpu_target }}
           DIGEST=${{ matrix.image_digest }}
-          VERSION=6.4.0rc20250416-test
+          VERSION=${{ env.VERSION }}
 
           echo "Using image: $IMAGE"
           echo "Using digest: $DIGEST"
