@@ -14,7 +14,7 @@ Currently, the platform offers developers the option to build HIP and ROCm from 
 - [Tests](#tests)
 - [Development Manuals](#development-manuals)
 
-## Installation
+## Installation From Source
 ### Ubuntu
 ```bash
 # Clone the repository
