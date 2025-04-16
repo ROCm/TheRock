@@ -12,11 +12,14 @@ jobs:
       matrix:
         targets:
           - amdgpu_target: "gfx942"
+          - amdgpu_target: "gfx1100"
+          - amdgpu_target: "gfx1201"
 
     name: ${{ matrix.targets.amdgpu_target }}::Build
     runs-on: azure-linux-scale-rocm
     outputs:
       gfx942_digest: ${{ steps.export.outputs.gfx942 }}
+      version: ${{ env.VERSION }}
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
@@ -63,12 +66,6 @@ jobs:
       # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
-          labels: |
-            org.opencontainers.image.title=PyTorch ROCm Dev Image
-            org.opencontainers.image.description=Nightly ROCm PyTorch Dev Docker for target ${{ matrix.targets.amdgpu_target }}
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
-            org.opencontainers.image.revision=${{ github.sha }}
       - name: Build and push Docker image
         id: build_push
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
@@ -79,7 +76,12 @@ jobs:
             AMDGPU_TARGETS=${{ matrix.targets.amdgpu_target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            org.opencontainers.image.title=PyTorch ROCm Dev Image
+            org.opencontainers.image.description=Nightly ROCm PyTorch Dev Docker for target ${{ matrix.targets.amdgpu_target }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Export digest
         id: export
@@ -88,6 +90,8 @@ jobs:
           case "${{ matrix.targets.amdgpu_target }}" in
             gfx942) echo "gfx942=$digest" >> $GITHUB_OUTPUT ;;
           esac
+          echo "Exported digest: $digest for ${{ matrix.targets.amdgpu_target }}"
+
   verify-image:
       needs: build-and-push-image
       strategy:
@@ -101,7 +105,7 @@ jobs:
         image_digest: ${{ matrix.image_digest }}
 
   on-success:
-    needs: verify-image
+    needs: [build-and-push-image, verify-image]
     if: ${{ success() }}
     strategy:
       matrix:
@@ -110,6 +114,11 @@ jobs:
             image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
     runs-on: azure-linux-scale-rocm
     steps:
+      - name: Set version from build job
+        run: |
+          echo "VERSION=${{ needs.build-and-push-image.outputs.version }}" >> "$GITHUB_ENV"
+          echo "Using version: ${{ needs.build-and-push-image.outputs.version }}"
+
       - name: Log in to registry
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
@@ -130,7 +139,11 @@ jobs:
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.amdgpu_target }}
           DIGEST=${{ matrix.image_digest }}
-          VERSION=${{ env.VERSION }}
+          VERSION=6.4.0rc20250416-test
+
+          echo "Using image: $IMAGE"
+          echo "Using digest: $DIGEST"
+          echo "Using version: $VERSION"
 
           docker pull $IMAGE@$DIGEST
           docker tag $IMAGE@$DIGEST $IMAGE:verified
@@ -148,4 +161,4 @@ jobs:
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Print failure message
-        run: echo "Verification failed for ${{ matrix.amdgpu_target }}"
+        run: echo "Verification failed for ${{ matrix.targets.amdgpu_target }}"
