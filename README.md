@@ -18,7 +18,7 @@ Currently, the platform offers developers the option to build HIP and ROCm from 
 ### Ubuntu
 ```bash
 # Clone the repository
-https://github.com/ROCm/TheRock.git
+git clone https://github.com/ROCm/TheRock.git
 cd TheRock
 
 # Install dependencies
