@@ -35,7 +35,8 @@ https://github.com/ROCm/TheRock.git
 cd TheRock
 
 # Install dependencies
-python3 -m venv venv && source venv/bin/activate
+python3 -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 > [!WARNING]
