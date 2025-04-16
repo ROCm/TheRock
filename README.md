@@ -8,7 +8,7 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build pl
 Currently, the platform offers developers the option to build HIP and ROCm from source. Additionally, a GitHub actions pipeline will offer a nightly build with compiled ROCm/HIP software available in S3 and in the GitHub releases section.
 
 ## Table of Contents
-- [Installation](#installation)
+- [Installation From Source](#installation-from-source)
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Tests](#tests)
