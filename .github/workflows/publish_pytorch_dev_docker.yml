@@ -148,9 +148,7 @@ jobs:
           echo "Using version: $VERSION"
 
           docker pull $IMAGE@$DIGEST
-          docker tag $IMAGE@$DIGEST $IMAGE:verified
           docker tag $IMAGE@$DIGEST $IMAGE:$VERSION
-          docker push $IMAGE:verified
           docker push $IMAGE:$VERSION
 
   on-failure:
