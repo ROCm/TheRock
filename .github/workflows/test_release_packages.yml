@@ -7,40 +7,34 @@ on:
         type: string
       tag:
         type: string
+      file_name:
+        type: string
+      target:
+        type: string
 
 jobs:
-  generate_release_matrix:
+  generate_target_to_run:
     runs-on: ubuntu-24.04
     outputs:
-      release_matrix: ${{ steps.configure.outputs.release_matrix }}
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Retrieve asset metadata
-        uses: KevinRohn/github-full-release-data@5412e32eb61d2860644150afb0bebeb8136921db # v2.0.6
-        id: release_json
-        with:
-          version: ${{ inputs.tag }}
-
-      - name: Generating release matrix
+      - name: Generating target to run
         id: configure
         env:
-          ASSET_FILES: ${{ steps.release_json.outputs.assets_array_json }}
-          VERSION: ${{ inputs.version }}
-        run: python ./build_tools/configure_release_matrix.py
+          TARGET: ${{ inputs.target }}
+        run: python ./build_tools/configure_target_run.py
 
 
   test_release_packages:
-    runs-on: ${{ matrix.target.test-runs-on }}
-    needs: generate_release_matrix
+    runs-on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    needs: generate_target_to_run
     permissions:
       contents: write
-    strategy:
-      matrix:
-        target: ${{ fromJSON(needs.generate_release_matrix.outputs.release_matrix) }}
     env:
-      FILE_NAME: ${{ matrix.target.file_name }}
+      FILE_NAME: ${{ inputs.file_name }}
       VENV_DIR: ${{ github.workspace }}/.venv
       THEROCK_BIN_DIR: ${{ github.workspace }}/artifacts/output_dir/bin
       TAG_NAME: ${{ inputs.tag }}

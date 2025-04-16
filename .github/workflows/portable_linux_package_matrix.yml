@@ -71,6 +71,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64:main
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
+      FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
     strategy:
       fail-fast: false
       matrix:
@@ -147,7 +148,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
           workflow: test_release_packages.yml
-          inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-release" }'
+          inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-release", "file_name": "${{ env.FILE_NAME }}", "target": "${{ matrix.target_bundle.amdgpu_family }}" }'
 
       - name: Report
         if: ${{ !cancelled() }}
