@@ -91,6 +91,8 @@ jobs:
           digest="${{ steps.build_push.outputs.digest }}"
           case "${{ matrix.targets.amdgpu_target }}" in
             gfx942) echo "gfx942=$digest" >> $GITHUB_OUTPUT ;;
+            gfx1100) echo "gfx1100=$digest" >> $GITHUB_OUTPUT ;;
+            gfx1201) echo "gfx1201=$digest" >> $GITHUB_OUTPUT ;;
           esac
           echo "Exported digest: $digest for ${{ matrix.targets.amdgpu_target }}"
 
