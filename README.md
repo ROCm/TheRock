@@ -31,7 +31,7 @@ python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
 ### Windows
 ```bash
 # Clone the repository
-https://github.com/ROCm/TheRock.git
+git clone https://github.com/ROCm/TheRock.git
 cd TheRock
 
 # Install dependencies
