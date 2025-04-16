@@ -27,7 +27,9 @@ def _untar_files(output_dir):
     Retrieves all tar files in the output_dir, then extracts all files to the output_dir
     """
     output_dir_path = Path(output_dir).resolve()
+    # Get all the tar* files
     tar_file_paths = output_dir_path.glob("*.tar.*")
+    # In order to get better visibility on untar-ing status, tqdm adds a progress bar
     for file_path in tar_file_paths:
         log(f"Extracting {file_path.name} to {output_dir}")
         with tarfile.open(file_path) as extracted_tar_file:
@@ -79,7 +81,9 @@ def _get_github_release_assets(release_id, amdgpu_family):
         return
 
     release_data = response.json()
-    # If this release was "nightly-release" or "dev-release", we sort to retrieve the most recent release asset
+
+    # We retrieve the most recent release asset that matches the amdgpu_family
+    # In the cases of "nightly-release" or "dev-release", this will retrieve the most recent release asset
     asset_data = sorted(
         release_data["assets"], key=lambda item: item["updated_at"], reverse=True
     )
@@ -97,8 +101,11 @@ def _download_github_release_asset(asset_data, output_dir):
     asset_url = asset_data["url"]
     destination = Path(output_dir) / asset_name
     headers = {"Accept": "application/octet-stream"}
+    # Making the API call to retrieve the asset
     response = requests.get(asset_url, stream=True, headers=headers)
 
+    # Downloading the asset in chunks to destination
+    # In order to get better visibility on downloading status, tqdm adds a progress bar
     total_size = int(response.headers.get("content-length", 0))
     block_size = 1024
     with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
@@ -107,6 +114,7 @@ def _download_github_release_asset(asset_data, output_dir):
                 progress_bar.update(len(chunk))
                 file.write(chunk)
 
+    # After downloading the asset, untar-ing the file
     _untar_files(output_dir)
 
 
@@ -117,14 +125,18 @@ def retrieve_artifacts_by_ci(args):
     runner_id = args.runner_id
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
+    print(f"Retrieving artifacts for runner ID {runner_id}")
     if not s3_bucket_exists(runner_id):
         print(f"S3 artifacts for {runner_id} does not exist. Exiting...")
         return
 
     args.all = True
-    print(f"Retrieving artifacts for runner ID {runner_id}")
+
+    # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
     retrieve_base_artifacts(args, runner_id, output_dir)
     retrieve_enabled_artifacts(args, True, amdgpu_family, runner_id, output_dir)
+
+    # Flattening artifacts from .tar* files then removing .tar* files
     output_dir_path = Path(output_dir).resolve()
     tar_file_paths = list(output_dir_path.glob("*.tar.*"))
     flattener = ArtifactPopulator(
@@ -133,6 +145,7 @@ def retrieve_artifacts_by_ci(args):
     flattener(*tar_file_paths)
     for file_path in tar_file_paths:
         file_path.unlink()
+
     print(f"Retrieved artifacts for runner ID {runner_id}")
 
 
