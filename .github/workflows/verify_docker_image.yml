@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       image_digest:
-        description: "Enter the Image digest"
+        description: "Digest of image to verify"
         required: true
         type: string
   workflow_call:

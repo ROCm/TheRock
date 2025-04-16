@@ -19,6 +19,8 @@ jobs:
     runs-on: azure-linux-scale-rocm
     outputs:
       gfx942_digest: ${{ steps.export.outputs.gfx942 }}
+      gfx1100_digest: ${{ steps.export.outputs.gfx1100 }}
+      gfx1201_digest: ${{ steps.export.outputs.gfx1201 }}
       version: ${{ env.VERSION }}
     env:
       REGISTRY: ghcr.io
