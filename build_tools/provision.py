@@ -14,6 +14,7 @@ from pathlib import Path
 import requests
 import tarfile
 from tqdm import tqdm
+from _therock_utils.artifacts import ArtifactPopulator
 
 
 def log(*args, **kwargs):
@@ -21,24 +22,28 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def url_exists(url):
-    try:
-        response = urllib.request.urlopen(url)
-        return response.status == 200
-    except urllib.error.URLError:
-        return False
-
-
 def _untar_files(output_dir):
+    """
+    Retrieves all tar files in the output_dir, then extracts all files to the output_dir
+    """
     output_dir_path = Path(output_dir).resolve()
     tar_file_paths = output_dir_path.glob("*.tar.*")
     for file_path in tar_file_paths:
+        log(f"Extracting {file_path.name} to {output_dir}")
         with tarfile.open(file_path) as extracted_tar_file:
-            extracted_tar_file.extractall(output_dir)
+            for member in tqdm(
+                iterable=extracted_tar_file.getmembers(),
+                total=len(extracted_tar_file.getmembers()),
+            ):
+                extracted_tar_file.extract(member=member, path=output_dir_path)
         file_path.unlink()
 
 
-def create_output_directory(args):
+def _create_output_directory(args):
+    """
+    If the output directory already exists, delete it and its contents.
+    Then, create the output directory.
+    """
     output_dir_path = args.output_dir
     log(f"Creating directory {output_dir_path}")
     if os.path.isdir(output_dir_path):
@@ -50,7 +55,10 @@ def create_output_directory(args):
     log(f"Created directory {output_dir_path}")
 
 
-def get_github_release_assets(release_id, amdgpu_family):
+def _get_github_release_assets(release_id, amdgpu_family):
+    """
+    Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
+    """
     github_release_url = (
         f"https://api.github.com/repos/ROCm/TheRock/releases/tags/{release_id}"
     )
@@ -59,7 +67,12 @@ def get_github_release_assets(release_id, amdgpu_family):
         "X-GitHub-Api-Version": "2022-11-28",
     }
     response = requests.get(github_release_url, headers=headers)
-    if response.status_code != 200:
+    if response.status_code == 403:
+        print(
+            f"Error when retrieving GitHub release assets for release ID {release_id}. This is most likely a rate limiting issue, so please try again"
+        )
+        return
+    elif response.status_code != 200:
         print(
             f"Error when retrieving GitHub release assets for release ID {release_id}. Exiting..."
         )
@@ -76,7 +89,10 @@ def get_github_release_assets(release_id, amdgpu_family):
     return None
 
 
-def download_github_release_asset(asset_data, output_dir):
+def _download_github_release_asset(asset_data, output_dir):
+    """
+    With the GitHub asset data, this function downloads the asset to the output_dir
+    """
     asset_name = asset_data["name"]
     asset_url = asset_data["url"]
     destination = Path(output_dir) / asset_name
@@ -95,6 +111,9 @@ def download_github_release_asset(asset_data, output_dir):
 
 
 def retrieve_artifacts_by_ci(args):
+    """
+    If the user requested TheRock artifacts by CI (runner ID), this function will retrieve those assets
+    """
     runner_id = args.runner_id
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
@@ -106,25 +125,36 @@ def retrieve_artifacts_by_ci(args):
     print(f"Retrieving artifacts for runner ID {runner_id}")
     retrieve_base_artifacts(args, runner_id, output_dir)
     retrieve_enabled_artifacts(args, True, amdgpu_family, runner_id, output_dir)
-    _untar_files(output_dir)
+    output_dir_path = Path(output_dir).resolve()
+    tar_file_paths = list(output_dir_path.glob("*.tar.*"))
+    flattener = ArtifactPopulator(
+        output_path=output_dir_path, verbose=True, flatten=True
+    )
+    flattener(*tar_file_paths)
+    for file_path in tar_file_paths:
+        file_path.unlink()
     print(f"Retrieved artifacts for runner ID {runner_id}")
 
 
 def retrieve_artifacts_by_release(args):
+    """
+    If the user requested TheRock artifacts by release tag (release ID), this function will retrieve those assets
+    """
     release_id = args.release_id
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
     print(f"Retrieving artifacts for release ID {release_id}")
-    asset_data = get_github_release_assets(release_id, amdgpu_family)
+    asset_data = _get_github_release_assets(release_id, amdgpu_family)
     if not asset_data:
         print(f"GitHub release asset for {release_id} not found. Exiting...")
         return
-    download_github_release_asset(asset_data, output_dir)
+    _download_github_release_asset(asset_data, output_dir)
     print(f"Retrieving artifacts for runner ID {release_id}")
 
 
 def run(args):
-    create_output_directory(args)
+    log("### Provisioning TheRock 🪨 ###")
+    _create_output_directory(args)
     if args.runner_id:
         retrieve_artifacts_by_ci(args)
 
