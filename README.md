@@ -22,7 +22,7 @@ https://github.com/ROCm/TheRock.git
 cd TheRock
 
 # Install dependencies
-python3 -m venv venv && source venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 sudo apt install gfortran git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake
 python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
