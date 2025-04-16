@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 import requests
 import tarfile
+from tqdm import tqdm
 
 
 def log(*args, **kwargs):
@@ -29,7 +30,8 @@ def url_exists(url):
 
 
 def _untar_files(output_dir):
-    tar_file_paths = Path(output_dir).glob("*.tar.*")
+    output_dir_path = Path(output_dir).resolve()
+    tar_file_paths = output_dir_path.glob("*.tar.*")
     for file_path in tar_file_paths:
         with tarfile.open(file_path) as extracted_tar_file:
             extracted_tar_file.extractall(output_dir)
@@ -64,7 +66,11 @@ def get_github_release_assets(release_id, amdgpu_family):
         return
 
     release_data = response.json()
-    for asset in release_data["assets"]:
+    # If this release was "nightly-release" or "dev-release", we sort to retrieve the most recent release asset
+    asset_data = sorted(
+        release_data["assets"], key=lambda item: item["updated_at"], reverse=True
+    )
+    for asset in asset_data:
         if amdgpu_family in asset["name"]:
             return asset
     return None
@@ -76,9 +82,15 @@ def download_github_release_asset(asset_data, output_dir):
     destination = Path(output_dir) / asset_name
     headers = {"Accept": "application/octet-stream"}
     response = requests.get(asset_url, stream=True, headers=headers)
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(1024 * 1024):
-            f.write(chunk)
+
+    total_size = int(response.headers.get("content-length", 0))
+    block_size = 1024
+    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
+        with open(destination, "wb") as file:
+            for chunk in response.iter_content(block_size * block_size):
+                progress_bar.update(len(chunk))
+                file.write(chunk)
+
     _untar_files(output_dir)
 
 
@@ -106,6 +118,7 @@ def retrieve_artifacts_by_release(args):
     asset_data = get_github_release_assets(release_id, amdgpu_family)
     if not asset_data:
         print(f"GitHub release asset for {release_id} not found. Exiting...")
+        return
     download_github_release_asset(asset_data, output_dir)
     print(f"Retrieving artifacts for runner ID {release_id}")
 
@@ -124,7 +137,7 @@ def main(argv):
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="./build",
+        default="./therock-build",
         help="Path of the output directory for TheRock",
     )
 
