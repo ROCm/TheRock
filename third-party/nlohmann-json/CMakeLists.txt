@@ -12,7 +12,7 @@ therock_cmake_subproject_declare(therock-nlohmann-json
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   CMAKE_ARGS
     -DJSON_BuildTests=OFF
-    -DJSON_MultipleHeaders=ON    
+    -DJSON_MultipleHeaders=ON
 )
 therock_cmake_subproject_provide_package(
   therock-nlohmann-json nlohmann_json share/cmake/nlohmann_json)
