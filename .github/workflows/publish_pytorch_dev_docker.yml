@@ -19,8 +19,8 @@ jobs:
     runs-on: azure-linux-scale-rocm
     outputs:
       gfx942_digest: ${{ steps.export.outputs.gfx942 }}
-      gfx1100_digest: ${{ steps.export.outputs.gfx1100 }}
-      gfx1201_digest: ${{ steps.export.outputs.gfx1201 }}
+      # gfx1100_digest: ${{ steps.export.outputs.gfx1100 }}
+      # gfx1201_digest: ${{ steps.export.outputs.gfx1201 }}
       version: ${{ env.VERSION }}
     env:
       REGISTRY: ghcr.io
@@ -91,8 +91,8 @@ jobs:
           digest="${{ steps.build_push.outputs.digest }}"
           case "${{ matrix.targets.amdgpu_target }}" in
             gfx942) echo "gfx942=$digest" >> $GITHUB_OUTPUT ;;
-            gfx1100) echo "gfx1100=$digest" >> $GITHUB_OUTPUT ;;
-            gfx1201) echo "gfx1201=$digest" >> $GITHUB_OUTPUT ;;
+            # gfx1100) echo "gfx1100=$digest" >> $GITHUB_OUTPUT ;;
+            # gfx1201) echo "gfx1201=$digest" >> $GITHUB_OUTPUT ;;
           esac
           echo "Exported digest: $digest for ${{ matrix.targets.amdgpu_target }}"
 
@@ -106,9 +106,9 @@ jobs:
             image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
             runner: "azure-linux-scale-rocm"  # Default runner for gfx942
             #TODO Add digest and runner param for gfx1100 when the runner available
-          - amdgpu_target: gfx1201
-            image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
-            runner: "linux-rx9070-gpu-rocm"  # Specialized runner for gfx1201
+          # - amdgpu_target: gfx1201
+          #   image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
+          #   runner: "linux-rx9070-gpu-rocm"  # Specialized runner for gfx1201
     uses: ./.github/workflows/verify_docker_image.yml
     with:
       amdgpu_target: ${{ matrix.amdgpu_target }}
@@ -125,8 +125,8 @@ jobs:
           - amdgpu_target: "gfx942"
             image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
              #TODO Add digest param for gfx1100 when the runner available
-          - amdgpu_target: "gfx1201"
-            image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
+          # - amdgpu_target: "gfx1201"
+          #   image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Set version from build job
@@ -172,7 +172,7 @@ jobs:
       matrix:
         targets:
           - amdgpu_target: "gfx942"
-          - amdgpu_target: "gfx1201"
+          # - amdgpu_target: "gfx1201"
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Print failure message
