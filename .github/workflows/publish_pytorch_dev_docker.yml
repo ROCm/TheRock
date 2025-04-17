@@ -24,6 +24,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: write  # Added permission to trigger workflows
 
     steps:
       - name: Checkout repository
@@ -86,23 +87,61 @@ jobs:
       - name: Trigger verification workflow
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc
         with:
-          workflow: verify_docker_image.yml
+          workflow: verify_docker_image.yml  # Just the filename, not the full path
+          token: ${{ github.token }}
           inputs: |
             {
               "amdgpu_target": "${{ matrix.targets.amdgpu_target }}",
               "image_digest": "${{ steps.build_push.outputs.digest }}",
               "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') || 'linux-mi300-1gpu-ossci-rocm' }}"
             }
-      # Using the workflow_id output from workflow-dispatch to track completion
-      - name: Wait for verification to complete
-        id: wait-for-workflow
-        uses: fountainhead/action-wait-for-check@v1.1.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # Use the run ID from the benc-uk/workflow-dispatch action
-          checkName: verify_docker_image
-          ref: ${{ github.sha }}
-          timeoutSeconds: 900  # 15 minutes timeout
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      - name: Wait for verification to complete using GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "Waiting for workflow 'verify_docker_image.yml' on commit $COMMIT_SHA..."
+
+          for attempt in {1..30}; do
+            echo "Polling attempt $attempt..."
+
+            RUN_ID=$(gh run list \
+              --workflow="verify_docker_image.yml" \
+              --json databaseId,headSha \
+              --limit 10 \
+              -q "[.[] | select(.headSha == \"$COMMIT_SHA\")][0].databaseId")
+
+            if [ -z "$RUN_ID" ]; then
+              echo "No workflow run found yet. Retrying in 30s..."
+              sleep 30
+              continue
+            fi
+
+            STATUS=$(gh run view "$RUN_ID" --json status -q '.status')
+            CONCLUSION=$(gh run view "$RUN_ID" --json conclusion -q '.conclusion')
+
+            echo "Run ID: $RUN_ID | Status: $STATUS | Conclusion: $CONCLUSION"
+
+            if [[ "$STATUS" == "completed" ]]; then
+              if [[ "$CONCLUSION" == "success" ]]; then
+                echo "✅ Verification passed."
+                exit 0
+              else
+                echo "❌ Verification failed."
+                exit 1
+              fi
+            fi
+
+            sleep 30
+          done
+
+          echo "❌ Timed out after waiting 15 minutes for verification."
+          exit 1
 
       # Tag and push verified image
       - name: Tag and push verified image
