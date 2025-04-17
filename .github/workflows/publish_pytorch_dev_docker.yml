@@ -141,15 +141,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Write pinned version to file
-        run: echo "${{ env.VERSION }}" > latest_verified_image_version_pinned.txt
-
-      - name: Upload pinned version file
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
-        with:
-          name: latest_verified_image_version_pinned-${{ matrix.amdgpu_target }}
-          path: latest_verified_image_version_pinned.txt
-
       - name: Tag and push verified image
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.amdgpu_target }}
