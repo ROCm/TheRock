@@ -60,7 +60,7 @@ jobs:
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.9
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-      
+
       - name: Build and push Docker image
         id: build_push
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
@@ -87,8 +87,12 @@ jobs:
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc
         with:
           workflow: verify_docker_image.yml
-          inputs: '{"amdgpu_target": "${{ matrix.targets.amdgpu_target }}", "image_digest": "${{ steps.build_push.outputs.digest }}", "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm' || 'linux-mi300-1gpu-ossci-rocm' }}"}'
-
+          inputs: |
+            {
+              "amdgpu_target": "${{ matrix.targets.amdgpu_target }}",
+              "image_digest": "${{ steps.build_push.outputs.digest }}",
+              "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') || 'linux-mi300-1gpu-ossci-rocm' }}"
+            }
       # Using the workflow_id output from workflow-dispatch to track completion
       - name: Wait for verification to complete
         id: wait-for-workflow
