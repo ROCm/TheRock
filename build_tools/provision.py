@@ -9,12 +9,11 @@ from fetch_artifacts import (
     retrieve_enabled_artifacts,
     s3_bucket_exists,
 )
-import urllib.request
 from pathlib import Path
-import requests
 import tarfile
 from tqdm import tqdm
 from _therock_utils.artifacts import ArtifactPopulator
+import requests
 
 
 def log(*args, **kwargs):
@@ -22,23 +21,20 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def _untar_files(output_dir):
+def _untar_files(output_dir, destination):
     """
     Retrieves all tar files in the output_dir, then extracts all files to the output_dir
     """
     output_dir_path = Path(output_dir).resolve()
-    # Get all the tar* files
-    tar_file_paths = output_dir_path.glob("*.tar.*")
     # In order to get better visibility on untar-ing status, tqdm adds a progress bar
-    for file_path in tar_file_paths:
-        log(f"Extracting {file_path.name} to {output_dir}")
-        with tarfile.open(file_path) as extracted_tar_file:
-            for member in tqdm(
-                iterable=extracted_tar_file.getmembers(),
-                total=len(extracted_tar_file.getmembers()),
-            ):
-                extracted_tar_file.extract(member=member, path=output_dir_path)
-        file_path.unlink()
+    log(f"Extracting {destination.name} to {output_dir}")
+    with tarfile.open(destination) as extracted_tar_file:
+        for member in tqdm(
+            iterable=extracted_tar_file.getmembers(),
+            total=len(extracted_tar_file.getmembers()),
+        ):
+            extracted_tar_file.extract(member=member, path=output_dir_path)
+    destination.unlink()
 
 
 def _create_output_directory(args):
@@ -70,12 +66,12 @@ def _get_github_release_assets(release_id, amdgpu_family):
     }
     response = requests.get(github_release_url, headers=headers)
     if response.status_code == 403:
-        print(
+        log(
             f"Error when retrieving GitHub release assets for release ID {release_id}. This is most likely a rate limiting issue, so please try again"
         )
         return
     elif response.status_code != 200:
-        print(
+        log(
             f"Error when retrieving GitHub release assets for release ID {release_id}. Exiting..."
         )
         return
@@ -115,7 +111,7 @@ def _download_github_release_asset(asset_data, output_dir):
                 file.write(chunk)
 
     # After downloading the asset, untar-ing the file
-    _untar_files(output_dir)
+    _untar_files(output_dir, destination)
 
 
 def retrieve_artifacts_by_ci(args):
@@ -125,9 +121,9 @@ def retrieve_artifacts_by_ci(args):
     runner_id = args.runner_id
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    print(f"Retrieving artifacts for runner ID {runner_id}")
+    log(f"Retrieving artifacts for runner ID {runner_id}")
     if not s3_bucket_exists(runner_id):
-        print(f"S3 artifacts for {runner_id} does not exist. Exiting...")
+        log(f"S3 artifacts for {runner_id} does not exist. Exiting...")
         return
 
     args.all = True
@@ -137,6 +133,7 @@ def retrieve_artifacts_by_ci(args):
     retrieve_enabled_artifacts(args, True, amdgpu_family, runner_id, output_dir)
 
     # Flattening artifacts from .tar* files then removing .tar* files
+    log(f"Untar-ing artifacts for {runner_id}")
     output_dir_path = Path(output_dir).resolve()
     tar_file_paths = list(output_dir_path.glob("*.tar.*"))
     flattener = ArtifactPopulator(
@@ -146,7 +143,7 @@ def retrieve_artifacts_by_ci(args):
     for file_path in tar_file_paths:
         file_path.unlink()
 
-    print(f"Retrieved artifacts for runner ID {runner_id}")
+    log(f"Retrieved artifacts for runner ID {runner_id}")
 
 
 def retrieve_artifacts_by_release(args):
@@ -156,13 +153,13 @@ def retrieve_artifacts_by_release(args):
     release_id = args.release_id
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    print(f"Retrieving artifacts for release ID {release_id}")
+    log(f"Retrieving artifacts for release ID {release_id}")
     asset_data = _get_github_release_assets(release_id, amdgpu_family)
     if not asset_data:
-        print(f"GitHub release asset for {release_id} not found. Exiting...")
+        log(f"GitHub release asset for {release_id} not found. Exiting...")
         return
     _download_github_release_asset(asset_data, output_dir)
-    print(f"Retrieving artifacts for runner ID {release_id}")
+    log(f"Retrieving artifacts for runner ID {release_id}")
 
 
 def run(args):
@@ -188,7 +185,7 @@ def main(argv):
         "--amdgpu-family",
         type=str,
         default="gfx94X-dcgpu",
-        help="AMD GPU family to provision (please refer to this: https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake#L44-L81 for target choices)",
+        help="AMD GPU family to provision (please refer to this: https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81 for family choices)",
     )
 
     # This mutually exclusive group will ensure that only one argument is present

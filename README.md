@@ -122,3 +122,24 @@ separately.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
 - [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
+
+## Provisioning TheRock 🪨
+
+In order to provision TheRock using either a release tag or CI runner build, use the `build_tool/provision.py` script.
+
+Provisioning script setup:
+
+- `python3 -m venv venv`
+- `source venv/bin/activate`
+- `pip install -r requirements.txt`
+- `python build_tools/provision.py --help`
+
+Examples:
+
+- `python build_tools/provision.py --runner-id 14474448215 --amdgpu-family gfx94X-dcgpu`: Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 to the default output directory `therock-build`
+
+<br/>
+
+- `python build_tools/provision.py --release-id nightly-release --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the most recent uploaded gfx110X artifacts from GitHub release tag `nightly-releases` to the specified output directory `build`
+
+Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
