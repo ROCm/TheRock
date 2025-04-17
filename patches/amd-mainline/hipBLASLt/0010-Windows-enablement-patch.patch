@@ -1,7 +1,7 @@
-From f0dbb02517f39f55682b41f961664a1dda22b092 Mon Sep 17 00:00:00 2001
+From c7b325c3a2ffcd8d01bfeeaac630110188bcb5da Mon Sep 17 00:00:00 2001
 From: "From: Milica Trifunovic" <milica.trifunovic@amd.com>
 Date: Wed, 16 Apr 2025 23:45:41 +0100
-Subject: [PATCH 2/2] [WIP] Windows enablement patch
+Subject: [PATCH 2/3] Windows enablement patch
 
 jam: Trying to rebase https://github.com/ROCm/hipBLASLt/pull/1864
 
@@ -83,7 +83,7 @@ Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
  create mode 100644 toolchain-windows.cmake
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 2ad200e6..42471cf8 100644
+index 2ad200e6..7759a482 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -62,11 +62,19 @@ else()
@@ -242,7 +242,7 @@ index f69dee9f..fdb797ee 100755
  
    # Find the package ROCmSMI
 diff --git a/clients/benchmarks/CMakeLists.txt b/clients/benchmarks/CMakeLists.txt
-index 1e0f8940..efbebcb9 100644
+index 1e0f8940..c5377358 100644
 --- a/clients/benchmarks/CMakeLists.txt
 +++ b/clients/benchmarks/CMakeLists.txt
 @@ -92,6 +92,9 @@ if (NOT WIN32)
@@ -256,7 +256,7 @@ index 1e0f8940..efbebcb9 100644
  endif()
  target_link_libraries( hipblaslt-bench PRIVATE ${COMMON_LINK_LIBS} )
 diff --git a/clients/common/blis_interface.cpp b/clients/common/blis_interface.cpp
-index ad747b4b..e9b9e01a 100644
+index ad747b4b..5d62cc08 100644
 --- a/clients/common/blis_interface.cpp
 +++ b/clients/common/blis_interface.cpp
 @@ -29,7 +29,7 @@
@@ -269,7 +269,7 @@ index ad747b4b..e9b9e01a 100644
  #endif
  }
 diff --git a/clients/common/hipblaslt_init_device.cpp b/clients/common/hipblaslt_init_device.cpp
-index 5f4443ed..21d61d63 100644
+index 5f4443ed..73506b0e 100644
 --- a/clients/common/hipblaslt_init_device.cpp
 +++ b/clients/common/hipblaslt_init_device.cpp
 @@ -116,7 +116,7 @@ __device__ int8_t random_hpl(size_t idx)
@@ -341,7 +341,7 @@ index 5f4443ed..21d61d63 100644
                             bool                     is_nan,
                             void*                    A,
 diff --git a/clients/common/hipblaslt_parse_data.cpp b/clients/common/hipblaslt_parse_data.cpp
-index 2f42d841..f8491e3d 100644
+index 2f42d841..f945248e 100644
 --- a/clients/common/hipblaslt_parse_data.cpp
 +++ b/clients/common/hipblaslt_parse_data.cpp
 @@ -43,7 +43,7 @@ static std::string hipblaslt_parse_yaml(const std::string& yaml)
@@ -354,7 +354,7 @@ index 2f42d841..f8491e3d 100644
      if(status == -1)
          exit(EXIT_FAILURE);
 diff --git a/clients/common/utility.cpp b/clients/common/utility.cpp
-index 917dee32..7916fa36 100644
+index 917dee32..a7f7e10d 100644
 --- a/clients/common/utility.cpp
 +++ b/clients/common/utility.cpp
 @@ -32,7 +32,12 @@
@@ -545,7 +545,7 @@ index a57100f2..054ee9d3 100644
  
  set( HIPBLASLT_TEST_DATA "${PROJECT_BINARY_DIR}/staging/hipblaslt_gtest.data")
 diff --git a/clients/gtest/hipblaslt_test.cpp b/clients/gtest/hipblaslt_test.cpp
-index 73cfa5c8..b13c8db7 100644
+index 73cfa5c8..caaaf76a 100644
 --- a/clients/gtest/hipblaslt_test.cpp
 +++ b/clients/gtest/hipblaslt_test.cpp
 @@ -30,7 +30,7 @@
@@ -621,7 +621,7 @@ index 73cfa5c8..b13c8db7 100644
      if(set_alarm)
          alarm(0);
 diff --git a/clients/include/TensorDataManipulation.hpp b/clients/include/TensorDataManipulation.hpp
-index 227a9d51..68cdb6a7 100644
+index 227a9d51..6c53fc5b 100644
 --- a/clients/include/TensorDataManipulation.hpp
 +++ b/clients/include/TensorDataManipulation.hpp
 @@ -29,6 +29,10 @@
@@ -636,7 +636,7 @@ index 227a9d51..68cdb6a7 100644
  namespace Tensor
  {
 diff --git a/clients/include/datatype_interface.hpp b/clients/include/datatype_interface.hpp
-index 1430647d..40ab2a84 100644
+index 1430647d..dad51fb0 100644
 --- a/clients/include/datatype_interface.hpp
 +++ b/clients/include/datatype_interface.hpp
 @@ -26,6 +26,7 @@
@@ -648,7 +648,7 @@ index 1430647d..40ab2a84 100644
  union computeTypeInterface
  {
 diff --git a/clients/include/hipblaslt_arguments.hpp b/clients/include/hipblaslt_arguments.hpp
-index 0b39f0ae..a04144ff 100644
+index 0b39f0ae..9ccccec6 100644
 --- a/clients/include/hipblaslt_arguments.hpp
 +++ b/clients/include/hipblaslt_arguments.hpp
 @@ -296,7 +296,7 @@ struct Arguments
@@ -661,7 +661,7 @@ index 0b39f0ae..a04144ff 100644
      template <typename T>
      friend hipblaslt_internal_ostream& operator<<(hipblaslt_internal_ostream& os,
 diff --git a/clients/include/hipblaslt_init.hpp b/clients/include/hipblaslt_init.hpp
-index ce685476..7653e9f4 100644
+index ce685476..93df1e8a 100644
 --- a/clients/include/hipblaslt_init.hpp
 +++ b/clients/include/hipblaslt_init.hpp
 @@ -36,14 +36,14 @@
@@ -682,7 +682,7 @@ index ce685476..7653e9f4 100644
                             bool                     is_nan,
                             void*                    A,
 diff --git a/clients/include/hipblaslt_random.hpp b/clients/include/hipblaslt_random.hpp
-index 05e9c287..5e4287a7 100644
+index 05e9c287..7771a4ed 100644
 --- a/clients/include/hipblaslt_random.hpp
 +++ b/clients/include/hipblaslt_random.hpp
 @@ -93,6 +93,19 @@ public:
@@ -706,7 +706,7 @@ index 05e9c287..5e4287a7 100644
      // Random signed char
      explicit operator signed char()
 diff --git a/clients/include/testing_matmul.hpp b/clients/include/testing_matmul.hpp
-index f63856ef..aac0344d 100644
+index f63856ef..fc47b32f 100644
 --- a/clients/include/testing_matmul.hpp
 +++ b/clients/include/testing_matmul.hpp
 @@ -51,6 +51,10 @@
@@ -748,7 +748,7 @@ index f63856ef..aac0344d 100644
                                beta_isnan_type(arg, Talpha),
                                dC[i].buf(),
 diff --git a/cmake/virtualenv.cmake b/cmake/virtualenv.cmake
-index 96531ad2..02b4ffee 100644
+index 96531ad2..2cb1e3ba 100644
 --- a/cmake/virtualenv.cmake
 +++ b/cmake/virtualenv.cmake
 @@ -8,21 +8,38 @@ find_package(Python REQUIRED COMPONENTS Interpreter)
@@ -793,7 +793,7 @@ index 96531ad2..02b4ffee 100644
  function(virtualenv_install)
 diff --git a/deps/requirements.txt b/deps/requirements.txt
 new file mode 100644
-index 00000000..ffd54f95
+index 00000000..97412d7b
 --- /dev/null
 +++ b/deps/requirements.txt
 @@ -0,0 +1,10 @@
@@ -809,7 +809,7 @@ index 00000000..ffd54f95
 +joblib
 \ No newline at end of file
 diff --git a/library/CMakeLists.txt b/library/CMakeLists.txt
-index c5fce09d..a27cba73 100644
+index c5fce09d..6b41a0e1 100644
 --- a/library/CMakeLists.txt
 +++ b/library/CMakeLists.txt
 @@ -77,6 +77,22 @@ add_library(roc::hipblaslt ALIAS hipblaslt)
@@ -924,7 +924,7 @@ index 9fa3efc2..4886e819 100644
  
          /*! \ingroup library_module
 diff --git a/library/include/hipblaslt.h b/library/include/hipblaslt.h
-index 7a7cc7bc..1864625c 100644
+index 7a7cc7bc..f0506f7c 100644
 --- a/library/include/hipblaslt.h
 +++ b/library/include/hipblaslt.h
 @@ -55,6 +55,9 @@
@@ -962,7 +962,7 @@ index 7a7cc7bc..1864625c 100644
  // clang-format off
  
 diff --git a/library/src/amd_detail/hipblaslt-ext-op-internal.hpp b/library/src/amd_detail/hipblaslt-ext-op-internal.hpp
-index b9f3b7fa..60066999 100644
+index b9f3b7fa..84696617 100644
 --- a/library/src/amd_detail/hipblaslt-ext-op-internal.hpp
 +++ b/library/src/amd_detail/hipblaslt-ext-op-internal.hpp
 @@ -33,12 +33,21 @@
@@ -989,7 +989,7 @@ index b9f3b7fa..60066999 100644
  
  class SoftmaxProblem;
 diff --git a/library/src/amd_detail/hipblaslt-ext-op.cpp b/library/src/amd_detail/hipblaslt-ext-op.cpp
-index a953de4c..f0faf9d3 100644
+index a953de4c..3a9aba3d 100644
 --- a/library/src/amd_detail/hipblaslt-ext-op.cpp
 +++ b/library/src/amd_detail/hipblaslt-ext-op.cpp
 @@ -35,7 +35,6 @@
@@ -1036,7 +1036,7 @@ index a953de4c..f0faf9d3 100644
          }
  
 diff --git a/library/src/amd_detail/hipblaslt-ext.cpp b/library/src/amd_detail/hipblaslt-ext.cpp
-index 8bcc3064..4f48e826 100644
+index 8bcc3064..591bb00e 100644
 --- a/library/src/amd_detail/hipblaslt-ext.cpp
 +++ b/library/src/amd_detail/hipblaslt-ext.cpp
 @@ -300,8 +300,8 @@ namespace hipblaslt_ext
@@ -1078,7 +1078,7 @@ index 8bcc3064..4f48e826 100644
          rocblaslt::Debug::Instance().markerStop();
          return status;
 diff --git a/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h b/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h
-index e024617b..5f9b5f6e 100644
+index e024617b..02b08b03 100644
 --- a/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h
 +++ b/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h
 @@ -270,6 +270,7 @@ typedef enum rocblaslt_status_
@@ -1106,7 +1106,7 @@ index e024617b..5f9b5f6e 100644
  /*! \ingroup types_module
   *  \brief Specify the additional attributes of a matrix descriptor
 diff --git a/library/src/amd_detail/rocblaslt/src/include/logging.h b/library/src/amd_detail/rocblaslt/src/include/logging.h
-index ffc32cfb..989395f9 100644
+index ffc32cfb..c899d43a 100644
 --- a/library/src/amd_detail/rocblaslt/src/include/logging.h
 +++ b/library/src/amd_detail/rocblaslt/src/include/logging.h
 @@ -44,10 +44,13 @@
@@ -1165,7 +1165,7 @@ index c40c7002..06e97b74 100644
      additional_options="-O3 -g"
  elif [ "$build_type" = "Debug" ]; then
 diff --git a/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp b/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
-index 3c00c9dc..2ada1463 100644
+index 3c00c9dc..8da78403 100644
 --- a/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
 +++ b/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
 @@ -33,13 +33,17 @@
@@ -1224,7 +1224,7 @@ index 3c00c9dc..2ada1463 100644
  
  void rocblaslt_log_error(const char* func, const char* var, const char* msg)
 diff --git a/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp b/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
-index be6e6f3d..ba552005 100644
+index be6e6f3d..b01a85df 100644
 --- a/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
 +++ b/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
 @@ -32,7 +32,15 @@
@@ -1277,7 +1277,7 @@ index be6e6f3d..ba552005 100644
          }
  
 diff --git a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
-index 1e2271e8..8a425ff3 100644
+index 1e2271e8..80f4a66a 100644
 --- a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
 +++ b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
 @@ -64,12 +64,17 @@
@@ -1369,7 +1369,7 @@ index 1e2271e8..8a425ff3 100644
              WIN32_FIND_DATAA finddata;
              HANDLE           hfine = FindFirstFileA(dir.c_str(), &finddata);
 diff --git a/library/src/amd_detail/rocblaslt/src/utility.cpp b/library/src/amd_detail/rocblaslt/src/utility.cpp
-index 76013ead..deade2a3 100644
+index 76013ead..9bb8680c 100644
 --- a/library/src/amd_detail/rocblaslt/src/utility.cpp
 +++ b/library/src/amd_detail/rocblaslt/src/utility.cpp
 @@ -25,7 +25,11 @@
@@ -1385,7 +1385,7 @@ index 76013ead..deade2a3 100644
  {
      LoggerSingleton& s = LoggerSingleton::getInstance();
 diff --git a/library/src/hipblaslt_ostream.cpp b/library/src/hipblaslt_ostream.cpp
-index 549772e8..adbd7b37 100644
+index 549772e8..a4cf1b81 100644
 --- a/library/src/hipblaslt_ostream.cpp
 +++ b/library/src/hipblaslt_ostream.cpp
 @@ -30,7 +30,7 @@ static void hipblaslt_abort_once [[noreturn]] ();
@@ -1443,7 +1443,7 @@ index 549772e8..adbd7b37 100644
  #else
      fd = fcntl(fd, F_DUPFD_CLOEXEC, 0);
 diff --git a/library/src/include/hipblaslt_ostream.hpp b/library/src/include/hipblaslt_ostream.hpp
-index 1b50f011..87b7583c 100644
+index 1b50f011..6857fd2e 100644
 --- a/library/src/include/hipblaslt_ostream.hpp
 +++ b/library/src/include/hipblaslt_ostream.hpp
 @@ -47,7 +47,7 @@
@@ -1457,7 +1457,7 @@ index 1b50f011..87b7583c 100644
  #include <sstream>
 diff --git a/rdeps.py b/rdeps.py
 new file mode 100644
-index 00000000..b64c9f61
+index 00000000..0ca6d288
 --- /dev/null
 +++ b/rdeps.py
 @@ -0,0 +1,226 @@
@@ -1690,7 +1690,7 @@ index 00000000..b64c9f61
 \ No newline at end of file
 diff --git a/rdeps.xml b/rdeps.xml
 new file mode 100644
-index 00000000..95950126
+index 00000000..d444f392
 --- /dev/null
 +++ b/rdeps.xml
 @@ -0,0 +1,11 @@
@@ -2070,7 +2070,7 @@ index 00000000..aebe391f
 +if __name__ == '__main__':
 +    main()
 diff --git a/rtest.py b/rtest.py
-index 2be28e3d..81ab3210 100644
+index 2be28e3d..c89275c4 100644
 --- a/rtest.py
 +++ b/rtest.py
 @@ -55,10 +55,11 @@ def parse_args():
@@ -2088,7 +2088,7 @@ index 2be28e3d..81ab3210 100644
      if not os.path.isfile(test_binary):
          return
 diff --git a/tensilelite/Tensile/Activation.py b/tensilelite/Tensile/Activation.py
-index cce55031..916e9e40 100644
+index cce55031..379b121e 100644
 --- a/tensilelite/Tensile/Activation.py
 +++ b/tensilelite/Tensile/Activation.py
 @@ -555,6 +555,7 @@ class ActivationModule:
@@ -2108,7 +2108,7 @@ index cce55031..916e9e40 100644
                  module.add(self.getTanhModule(cDataType, Holder(idx=vgprTemp), Holder(idx=vgprTemp), "", ""))
                  module.add(VAddPKF16(dst=vgpr(Holder(idx=vgprTemp)), src0=1.0, src1=vgpr(Holder(idx=vgprTemp)), \
 diff --git a/tensilelite/Tensile/ClientExecutable.py b/tensilelite/Tensile/ClientExecutable.py
-index 27b5baba..17ff3d6e 100644
+index 27b5baba..9f1370db 100644
 --- a/tensilelite/Tensile/ClientExecutable.py
 +++ b/tensilelite/Tensile/ClientExecutable.py
 @@ -31,6 +31,10 @@ from pathlib import Path
@@ -2310,7 +2310,7 @@ index 58dd69f4..56c38629 100644
          for line in output.split("\n"):
              if "HIP version" in line:
 diff --git a/tensilelite/Tensile/Common/Parallel.py b/tensilelite/Tensile/Common/Parallel.py
-index 77adfd26..4f5a5a1c 100644
+index 77adfd26..e2a5debd 100644
 --- a/tensilelite/Tensile/Common/Parallel.py
 +++ b/tensilelite/Tensile/Common/Parallel.py
 @@ -53,9 +53,10 @@ def CPUThreadCount(enable=True):
@@ -2328,7 +2328,7 @@ index 77adfd26..4f5a5a1c 100644
  
  
 diff --git a/tensilelite/Tensile/Common/Utilities.py b/tensilelite/Tensile/Common/Utilities.py
-index 2111fbee..64142470 100644
+index 2111fbee..da2e41fc 100644
 --- a/tensilelite/Tensile/Common/Utilities.py
 +++ b/tensilelite/Tensile/Common/Utilities.py
 @@ -90,11 +90,12 @@ def isExe(filePath):
@@ -2426,7 +2426,7 @@ index 9329f848..1956a427 100755
  
  deactivate
 diff --git a/tensilelite/Tensile/Source/CMakeLists.txt b/tensilelite/Tensile/Source/CMakeLists.txt
-index 21b8cdae..bf7481af 100644
+index 21b8cdae..816fec94 100644
 --- a/tensilelite/Tensile/Source/CMakeLists.txt
 +++ b/tensilelite/Tensile/Source/CMakeLists.txt
 @@ -28,6 +28,10 @@ cmake_minimum_required(VERSION 3.22...3.25.2)
@@ -2441,7 +2441,7 @@ index 21b8cdae..bf7481af 100644
  
  option(Tensile_ENABLE_MARKER "ENable roctx marker in Tensile" OFF)
 diff --git a/tensilelite/Tensile/Source/client/CMakeLists.txt b/tensilelite/Tensile/Source/client/CMakeLists.txt
-index 8dc74015..87e03a47 100644
+index 8dc74015..5133edbf 100644
 --- a/tensilelite/Tensile/Source/client/CMakeLists.txt
 +++ b/tensilelite/Tensile/Source/client/CMakeLists.txt
 @@ -27,7 +27,6 @@ set(client_sources
@@ -2504,7 +2504,7 @@ index 8dc74015..87e03a47 100644
      target_link_libraries(TensileClient PRIVATE custom_openmp_cxx)
  endif()
 diff --git a/tensilelite/Tensile/Source/client/include/DataInitialization.hpp b/tensilelite/Tensile/Source/client/include/DataInitialization.hpp
-index ed1fca90..97a8a791 100644
+index ed1fca90..1e80ad5d 100644
 --- a/tensilelite/Tensile/Source/client/include/DataInitialization.hpp
 +++ b/tensilelite/Tensile/Source/client/include/DataInitialization.hpp
 @@ -2593,13 +2593,25 @@ namespace TensileLite
@@ -2534,7 +2534,7 @@ index ed1fca90..97a8a791 100644
  
          template <>
 diff --git a/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp b/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp
-index f82c8101..e3724c6e 100644
+index f82c8101..93cb26d2 100644
 --- a/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp
 +++ b/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp
 @@ -35,6 +35,7 @@
@@ -2587,7 +2587,7 @@ index f82c8101..e3724c6e 100644
              void assertActive();
 diff --git a/tensilelite/Tensile/Source/client/include/HardwareMonitorType.hpp b/tensilelite/Tensile/Source/client/include/HardwareMonitorType.hpp
 new file mode 100644
-index 00000000..e140893f
+index 00000000..012a829b
 --- /dev/null
 +++ b/tensilelite/Tensile/Source/client/include/HardwareMonitorType.hpp
 @@ -0,0 +1,45 @@
@@ -2639,7 +2639,7 @@ index 00000000..e140893f
 \ No newline at end of file
 diff --git a/tensilelite/Tensile/Source/client/include/HardwareMonitorWindows.hpp b/tensilelite/Tensile/Source/client/include/HardwareMonitorWindows.hpp
 new file mode 100644
-index 00000000..76c2437c
+index 00000000..5f11a024
 --- /dev/null
 +++ b/tensilelite/Tensile/Source/client/include/HardwareMonitorWindows.hpp
 @@ -0,0 +1,109 @@
@@ -2754,7 +2754,7 @@ index 00000000..76c2437c
 +} // namespace Tensile
 \ No newline at end of file
 diff --git a/tensilelite/Tensile/Source/client/main.cpp b/tensilelite/Tensile/Source/client/main.cpp
-index 33a856cb..e9f2b448 100644
+index 33a856cb..e21bf8b9 100644
 --- a/tensilelite/Tensile/Source/client/main.cpp
 +++ b/tensilelite/Tensile/Source/client/main.cpp
 @@ -602,7 +602,11 @@ int main(int argc, const char* argv[])
@@ -2770,7 +2770,7 @@ index 33a856cb..e9f2b448 100644
      if(directoryPos != std::string::npos)
          libraryDirectory.resize(directoryPos + 1);
 diff --git a/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp b/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp
-index 44a4af47..6b08fa1b 100644
+index 44a4af47..baafe9de 100644
 --- a/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp
 +++ b/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp
 @@ -29,7 +29,9 @@
@@ -2872,7 +2872,7 @@ index 44a4af47..6b08fa1b 100644
                      uint64_t rawValue = m_clockValues[i];
                      if(rawValue == std::numeric_limits<uint64_t>::max())
 diff --git a/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp b/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp
-index ad17ad98..69f1f2ff 100644
+index ad17ad98..b1cc2f48 100644
 --- a/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp
 +++ b/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp
 @@ -24,9 +24,11 @@
@@ -2923,7 +2923,7 @@ index ad17ad98..69f1f2ff 100644
              m_reporter->report(ResultKey::HardwareSampleCount, m_monitor->getSamples());
              m_reporter->report(ResultKey::GfxFrequency,
 diff --git a/tensilelite/Tensile/Source/client/source/ProgressListener.cpp b/tensilelite/Tensile/Source/client/source/ProgressListener.cpp
-index ea75f2a9..7959197f 100644
+index ea75f2a9..7f6b6b05 100644
 --- a/tensilelite/Tensile/Source/client/source/ProgressListener.cpp
 +++ b/tensilelite/Tensile/Source/client/source/ProgressListener.cpp
 @@ -27,9 +27,10 @@
@@ -3003,7 +3003,7 @@ index 813f4848..2d4db8f4 100644
  endif()
  
 diff --git a/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp b/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp
-index 4794f3ab..99d327d4 100644
+index 4794f3ab..432b5db1 100644
 --- a/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp
 +++ b/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp
 @@ -29,6 +29,7 @@
@@ -3015,7 +3015,7 @@ index 4794f3ab..99d327d4 100644
  #include "DataTypes_Half.hpp"
  
 diff --git a/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp b/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
-index cdf30551..53a846ae 100644
+index cdf30551..aad8ae92 100644
 --- a/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
 +++ b/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
 @@ -32,7 +32,7 @@
@@ -3037,7 +3037,7 @@ index cdf30551..53a846ae 100644
  #else
                          if(fnmatch(pattern.c_str(), lib.filePrefix.c_str(), 0) == 0)
 diff --git a/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp b/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp
-index c17b7dea..4ab0efa4 100644
+index c17b7dea..2e5a51d7 100644
 --- a/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp
 +++ b/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp
 @@ -2283,8 +2283,13 @@ namespace TensileLite
@@ -3055,7 +3055,7 @@ index c17b7dea..4ab0efa4 100644
          name += "_VW" + std::to_string(vw);
  
 diff --git a/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp b/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp
-index 17e501b9..5b1ac3f1 100644
+index 17e501b9..235bcaee 100644
 --- a/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp
 +++ b/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp
 @@ -35,7 +35,7 @@
@@ -3068,7 +3068,7 @@ index 17e501b9..5b1ac3f1 100644
  #endif
  #include <regex>
 diff --git a/tensilelite/Tensile/Tensile.py b/tensilelite/Tensile/Tensile.py
-index 90b8af31..a38ced73 100644
+index 90b8af31..612d4457 100644
 --- a/tensilelite/Tensile/Tensile.py
 +++ b/tensilelite/Tensile/Tensile.py
 @@ -205,7 +205,7 @@ def addCommonArguments(argParser):
@@ -3081,7 +3081,7 @@ index 90b8af31..a38ced73 100644
      argParser.add_argument("--prebuilt-client", default=None)
  
 diff --git a/tensilelite/Tensile/TensileBenchmarkCluster.py b/tensilelite/Tensile/TensileBenchmarkCluster.py
-index 84c0f185..ea6503a2 100644
+index 84c0f185..e0bc9c78 100644
 --- a/tensilelite/Tensile/TensileBenchmarkCluster.py
 +++ b/tensilelite/Tensile/TensileBenchmarkCluster.py
 @@ -73,7 +73,7 @@ class BenchmarkImplSLURM(object):
@@ -3103,7 +3103,7 @@ index 84c0f185..ea6503a2 100644
      @classmethod
      def postInvokeBenchmark(cls, benchmarkObj):
 diff --git a/tensilelite/Tensile/Toolchain/Component.py b/tensilelite/Tensile/Toolchain/Component.py
-index 5faf4c1e..7811babf 100644
+index 5faf4c1e..5bb76b1b 100644
 --- a/tensilelite/Tensile/Toolchain/Component.py
 +++ b/tensilelite/Tensile/Toolchain/Component.py
 @@ -262,13 +262,14 @@ class Bundler(Component):
@@ -3223,7 +3223,7 @@ index 2f4ff044..2919bdd7 100644
  deps =
 diff --git a/toolchain-windows.cmake b/toolchain-windows.cmake
 new file mode 100644
-index 00000000..bd9eb5ba
+index 00000000..b36fd1ca
 --- /dev/null
 +++ b/toolchain-windows.cmake
 @@ -0,0 +1,73 @@
