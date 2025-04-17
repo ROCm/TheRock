@@ -26,7 +26,6 @@ on:
         required: true
         type: string
       runner_type:
-        description: "Runner type to use"
         required: true
         type: string
 jobs:
