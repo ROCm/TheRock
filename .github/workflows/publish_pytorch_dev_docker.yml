@@ -99,6 +99,7 @@ jobs:
   verify-image:
     needs: build-and-push-image
     strategy:
+      fail-fast: false
       matrix:
         include:
           - amdgpu_target: gfx942
@@ -118,6 +119,7 @@ jobs:
     needs: [build-and-push-image, verify-image]
     if: ${{ success() }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - amdgpu_target: "gfx942"
@@ -166,6 +168,7 @@ jobs:
     needs: verify-image
     if: ${{ failure() }}
     strategy:
+      fail-fast: false
       matrix:
         targets:
           - amdgpu_target: "gfx942"

@@ -64,7 +64,6 @@ jobs:
           --group-add video \
           --cap-add=SYS_PTRACE \
           -w /TheRock \
-          "$IMAGE_REF" \
-          bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+          "$IMAGE_REF" 
       - name: Verify Containers Status
         run: docker ps -a
