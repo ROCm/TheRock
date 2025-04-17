@@ -6,10 +6,16 @@ on:
       amdgpu_target:
         description: "AMDGPU target to verify"
         required: true
+        default: "gfx942"
         type: string
       image_digest:
         description: "Digest of image to verify"
         required: true
+        type: string
+      runner_type:
+        description: "Runner type to use"
+        required: true
+        default: "linux-mi300-1gpu-ossci-rocm"
         type: string
   workflow_call:
     inputs:
@@ -19,7 +25,10 @@ on:
       image_digest:
         required: true
         type: string
-
+      runner_type:
+        description: "Runner type to use"
+        required: true
+        type: string
 jobs:
   pull-and-build-image:
     name: Verify ${{ inputs.amdgpu_target }} Docker Image

@@ -97,16 +97,21 @@ jobs:
           echo "Exported digest: $digest for ${{ matrix.targets.amdgpu_target }}"
 
   verify-image:
-      needs: build-and-push-image
-      strategy:
-        matrix:
-          include:
-            - amdgpu_target: gfx942
-              image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
-      uses: ./.github/workflows/verify_docker_image.yml
-      with:
-        amdgpu_target: ${{ matrix.amdgpu_target }}
-        image_digest: ${{ matrix.image_digest }}
+    needs: build-and-push-image
+    strategy:
+      matrix:
+        include:
+          - amdgpu_target: gfx942
+            image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
+            runner: "azure-linux-scale-rocm"  # Default runner for gfx942
+          - amdgpu_target: gfx1201
+            image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
+            runner: "linux-rx9070-gpu-rocm"  # Specialized runner for gfx1201
+    uses: ./.github/workflows/verify_docker_image.yml
+    with:
+      amdgpu_target: ${{ matrix.amdgpu_target }}
+      image_digest: ${{ matrix.image_digest }}
+      runner_type: ${{ matrix.runner }}
 
   on-success:
     needs: [build-and-push-image, verify-image]
