@@ -104,6 +104,7 @@ jobs:
           - amdgpu_target: gfx942
             image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
             runner: "azure-linux-scale-rocm"  # Default runner for gfx942
+            #TODO Add digest and runner param for gfx1100 when the runner available 
           - amdgpu_target: gfx1201
             image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
             runner: "linux-rx9070-gpu-rocm"  # Specialized runner for gfx1201
@@ -119,8 +120,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - amdgpu_target: gfx942
+          - amdgpu_target: "gfx942"
             image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
+             #TODO Add digest param for gfx1100 when the runner available
+          - amdgpu_target: "gfx1201"
+            image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Set version from build job
@@ -165,6 +169,7 @@ jobs:
       matrix:
         targets:
           - amdgpu_target: "gfx942"
+          - amdgpu_target: "gfx1201"
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Print failure message
