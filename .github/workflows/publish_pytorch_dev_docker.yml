@@ -17,9 +17,6 @@ jobs:
 
     name: ${{ matrix.targets.amdgpu_target }}::Build
     runs-on: azure-linux-scale-rocm
-    outputs:
-      digests: ${{ steps.export.outputs.digests }}
-      version: ${{ env.VERSION }}
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
@@ -81,73 +78,33 @@ jobs:
             org.opencontainers.image.created=${{ steps.meta.outputs.created }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Export digest
-        id: export
+      - name: Log digest
         run: |
-          # Get the target name
-          TARGET="${{ matrix.targets.amdgpu_target }}"
-          # Get the digest 
-          DIGEST="${{ steps.build_push.outputs.digest }}"
-          
-          # Create an output variable with target-specific key
-          echo "digests={\"target\":\"$TARGET\",\"digest\":\"$DIGEST\"}" >> $GITHUB_OUTPUT
-          echo "Exported digest: $DIGEST for $TARGET"
+          echo "Built image with digest: ${{ steps.build_push.outputs.digest }}"
 
-  verify-image:
-    needs: build-and-push-image
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-           - amdgpu_target: gfx942
-             runner: "linux-mi300-1gpu-ossci-rocm"  # Default runner for gfx942
-            #TODO Add runner param for gfx1100 when the runner available
-           - amdgpu_target: gfx1201
-             runner: "linux-rx9070-gpu-rocm"  # Specialized runner for gfx1201
-    uses: ./.github/workflows/verify_docker_image.yml
-    with:
-      amdgpu_target: ${{ matrix.amdgpu_target }}
-      image_digest: ${{ fromJson(needs.build-and-push-image.outputs.digests).target == matrix.amdgpu_target && fromJson(needs.build-and-push-image.outputs.digests).digest || '' }}
-      runner_type: ${{ matrix.runner }}
-
-  on-success:
-    needs: [build-and-push-image, verify-image]
-    if: ${{ success() }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - amdgpu_target: "gfx942"
-            #TODO Add param for gfx1100 when the runner available
-          - amdgpu_target: "gfx1201"
-    runs-on: azure-linux-scale-rocm
-    steps:
-      - name: Set version from build job
-        run: |
-          echo "VERSION=${{ needs.build-and-push-image.outputs.version }}" >> "$GITHUB_ENV"
-          echo "Using version: ${{ needs.build-and-push-image.outputs.version }}"
-
-      - name: Log in to registry
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      # Trigger verification workflow with digest
+      - name: Trigger verification workflow
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          workflow: verify_docker_image.yml
+          inputs: '{"amdgpu_target": "${{ matrix.targets.amdgpu_target }}", "image_digest": "${{ steps.build_push.outputs.digest }}", "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm' || 'linux-mi300-1gpu-ossci-rocm' }}"}'
 
+      # Using the workflow_id output from workflow-dispatch to track completion
+      - name: Wait for verification to complete
+        id: wait-for-workflow
+        uses: fountainhead/action-wait-for-check@v1.1.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use the run ID from the benc-uk/workflow-dispatch action
+          checkName: verify_docker_image
+          ref: ${{ github.sha }}
+          timeoutSeconds: 900  # 15 minutes timeout
+
+      # Tag and push verified image
       - name: Tag and push verified image
         run: |
-          TARGET="${{ matrix.amdgpu_target }}"
-          DIGESTS='${{ needs.build-and-push-image.outputs.digests }}'
-          
-          # Parse the JSON to get the digest for the current target
-          if [[ $(echo $DIGESTS | jq -r '.target') == "$TARGET" ]]; then
-            DIGEST=$(echo $DIGESTS | jq -r '.digest')
-          else
-            echo "Error: Could not find digest for target $TARGET"
-            exit 1
-          fi
-          
-          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_$TARGET
+          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
+          DIGEST=${{ steps.build_push.outputs.digest }}
           VERSION=${{ env.VERSION }}
 
           echo "Using image: $IMAGE"
