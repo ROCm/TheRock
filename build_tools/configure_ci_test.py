@@ -39,7 +39,11 @@ class ConfigureCITest(TestCase):
             False, True, False, {}, build_families, False
         )
         linux_target_to_compare = [
-            {"target": "gfx94X-dcgpu", "test-runs-on": "linux-mi300-1gpu-ossci-rocm"}
+            {
+                "family": "gfx94X-dcgpu",
+                "pytorch-target": "gfx942",
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+            }
         ]
         self.assertEqual(linux_target_output, linux_target_to_compare)
         self.assertEqual(windows_target_output, [])
@@ -64,10 +68,14 @@ class ConfigureCITest(TestCase):
         )
 
         linux_target_to_compare = [
-            {"test-runs-on": "", "target": "gfx110X-dgpu"},
-            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"},
+            {"test-runs-on": "", "family": "gfx110X-dgpu", "pytorch-target": "gfx1100"},
+            {
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "family": "gfx94X-dcgpu",
+                "pytorch-target": "gfx942",
+            },
         ]
-        windows_target_to_compare = [{"test-runs-on": "", "target": "gfx110X-dgpu"}]
+        windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(linux_target_output, linux_target_to_compare)
         self.assertEqual(windows_target_output, windows_target_to_compare)
 
@@ -79,10 +87,14 @@ class ConfigureCITest(TestCase):
             True, False, False, base_args, {}, False
         )
         linux_target_to_compare = [
-            {"test-runs-on": "", "target": "gfx110X-dgpu"},
-            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"},
+            {"test-runs-on": "", "family": "gfx110X-dgpu", "pytorch-target": "gfx1100"},
+            {
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "family": "gfx94X-dcgpu",
+                "pytorch-target": "gfx942",
+            },
         ]
-        windows_target_to_compare = [{"test-runs-on": "", "target": "gfx110X-dgpu"}]
+        windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(linux_target_output, linux_target_to_compare)
         self.assertEqual(windows_target_output, windows_target_to_compare)
 
@@ -94,10 +106,14 @@ class ConfigureCITest(TestCase):
             True, False, False, base_args, {}, False
         )
         linux_target_to_compare = [
-            {"test-runs-on": "", "target": "gfx110X-dgpu"},
-            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"},
+            {"test-runs-on": "", "family": "gfx110X-dgpu", "pytorch-target": "gfx1100"},
+            {
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "family": "gfx94X-dcgpu",
+                "pytorch-target": "gfx942",
+            },
         ]
-        windows_target_to_compare = [{"test-runs-on": "", "target": "gfx110X-dgpu"}]
+        windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(linux_target_output, linux_target_to_compare)
         self.assertEqual(windows_target_output, windows_target_to_compare)
 
@@ -107,10 +123,14 @@ class ConfigureCITest(TestCase):
             True, False, False, base_args, {}, False
         )
         linux_target_to_compare = [
-            {"test-runs-on": "", "target": "gfx110X-dgpu"},
-            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"},
+            {"test-runs-on": "", "family": "gfx110X-dgpu", "pytorch-target": "gfx1100"},
+            {
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "family": "gfx94X-dcgpu",
+                "pytorch-target": "gfx942",
+            },
         ]
-        windows_target_to_compare = [{"test-runs-on": "", "target": "gfx110X-dgpu"}]
+        windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(linux_target_output, linux_target_to_compare)
         self.assertEqual(windows_target_output, windows_target_to_compare)
 
@@ -120,10 +140,10 @@ class ConfigureCITest(TestCase):
             False, False, True, base_args, {}, False
         )
         linux_target_to_compare = [
-            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "target": "gfx94X-dcgpu"},
-            {"test-runs-on": "", "target": "gfx110X-dgpu"},
+            {"test-runs-on": "linux-mi300-1gpu-ossci-rocm", "family": "gfx94X-dcgpu"},
+            {"test-runs-on": "", "family": "gfx110X-dgpu"},
         ]
-        windows_target_to_compare = [{"test-runs-on": "", "target": "gfx110X-dgpu"}]
+        windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(linux_target_output, linux_target_to_compare)
         self.assertEqual(windows_target_output, windows_target_to_compare)
 
