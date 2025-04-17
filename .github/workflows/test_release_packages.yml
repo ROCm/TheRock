@@ -94,16 +94,17 @@ jobs:
       - name: Append results to markdown file
         if: '!cancelled()'
         run: |
-          echo "" >> ${{ github.workspace }}/test_notes.md
           echo "[${{ inputs.version }}] Test results for ${{ env.FILE_NAME }}" >> ${{ github.workspace }}/test_notes.md
           echo "* SANITY_CHECK=${{ steps.sanity-check.outcome }}" >> ${{ github.workspace }}/test_notes.md
           echo "* HIPBLASLT_CHECK=${{ steps.hipblaslt-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
           echo "* ROCBLAS_CHECK=${{ steps.rocblas-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
+          echo "" >> ${{ github.workspace }}/test_notes.md
+          echo "For previous test results, refer to the summary tab for the previous 'Test release package' workflow run" >> ${{ github.workspace }}/test_notes.md
+          echo "$(<${{ github.workspace }}/test_notes.md )" >> $GITHUB_STEP_SUMMARY
 
       - name: Report test notes to the release body
         if: '!cancelled()'
         uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           tag_name: ${{ env.TAG_NAME }}
-          append_body: true
           body_path: ${{ github.workspace }}/test_notes.md
