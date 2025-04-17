@@ -163,17 +163,3 @@ jobs:
           docker pull $IMAGE@$DIGEST
           docker tag $IMAGE@$DIGEST $IMAGE:$VERSION
           docker push $IMAGE:$VERSION
-
-  on-failure:
-    needs: verify-image
-    if: ${{ failure() }}
-    strategy:
-      fail-fast: false
-      matrix:
-        targets:
-          - amdgpu_target: "gfx942"
-          - amdgpu_target: "gfx1201"
-    runs-on: azure-linux-scale-rocm
-    steps:
-      - name: Print failure message
-        run: echo "Verification failed for ${{ matrix.targets.amdgpu_target }}"
