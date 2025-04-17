@@ -1,7 +1,7 @@
 From 2d08714ca3cd25f466a46f4926313a0121799de3 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Thu, 17 Apr 2025 04:12:56 +0100
-Subject: [PATCH 3/3] [WIP] tensilelite compilation w/ git bash
+Subject: [PATCH 3/4] [WIP] tensilelite compilation w/ git bash
 
 ---
  tensilelite/Tensile/Ops/gen_assembly.sh       | 7 +++++++
