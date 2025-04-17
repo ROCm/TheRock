@@ -71,6 +71,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64:main
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
+      AMDGPU_FAMILIES: ${{ matrix.target_bundle.amdgpu_family }}
     strategy:
       fail-fast: false
       matrix:
@@ -92,9 +93,9 @@ jobs:
         uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
-          key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+          key: portable-linux-package-matrix-v1-${{ env.AMDGPU_FAMILIES }}-${{ github.sha }}
           restore-keys: |
-            portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
+            portable-linux-package-matrix-v1-${{ env.AMDGPU_FAMILIES }}-
 
       - name: Fetch sources
         run: |
@@ -111,10 +112,20 @@ jobs:
             --image=${{ env.BUILD_IMAGE }} \
             --output-dir=${{ env.OUTPUT_DIR }} \
             -- \
-            "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}"
+            "-DTHEROCK_AMDGPU_FAMILIES=${{ env.AMDGPU_FAMILIES }}"
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
+
+      - name: Build Python Packages
+        run: |
+          ./build_tools/linux_portable_build.py \
+            --image=${{ env.BUILD_IMAGE }} \
+            --output-dir=${{ env.OUTPUT_DIR }}/packages \
+            --build-python-only \
+            --artifact-dir=${{ env.OUTPUT_DIR }}/build/artifacts \
+            -- \
+            "--version=${{ needs.setup_metadata.outputs.version }}"
 
       - name: Upload Nightly Release
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
@@ -142,6 +153,18 @@ jobs:
           replacesArtifacts: true
           makeLatest: false
 
+      - name: Upload Python Packages
+        uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
+        with:
+          artifacts: "${{ env.OUTPUT_DIR }}/packages/dist/*.whl,${{ env.OUTPUT_DIR }}/packages/dist/*.tar.gz"
+          tag: "dev-wheels-${{ env.AMDGPU_FAMILIES }}"
+          name: "dev-wheels-${{ env.AMDGPU_FAMILIES }}"
+          body: "Automatic Python package release of TheRock for ${{ env.AMDGPU_FAMILIES }}."
+          removeArtifacts: false
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: false
+
       - name: Report
         if: ${{ !cancelled() }}
         run: |
@@ -154,4 +177,4 @@ jobs:
         if: always()
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
-          key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+          key: portable-linux-package-matrix-v1-${{ env.AMDGPU_FAMILIES }}-${{ github.sha }}
