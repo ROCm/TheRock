@@ -17,6 +17,18 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
+def s3_bucket_exists(run_id):
+    cmd = [
+        "aws",
+        "s3",
+        "ls",
+        f"s3://therock-artifacts/{run_id}",
+        "--no-sign-request",
+    ]
+    process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
+    return process.returncode == 0
+
+
 def s3_exec(variant, package, run_id, build_dir):
     cmd = [
         "aws",
@@ -47,7 +59,7 @@ def retrieve_base_artifacts(args, run_id, build_dir):
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
-    if args.blas or args.all:
+    if args.all or args.blas:
         base_artifacts.append("host-blas_lib")
 
     for base_artifact in base_artifacts:
@@ -56,17 +68,17 @@ def retrieve_base_artifacts(args, run_id, build_dir):
 
 def retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir):
     base_artifact_path = []
-    if args.blas or args.all:
+    if args.all or args.blas:
         base_artifact_path.append("blas")
-    if args.fft or args.all:
+    if args.all or args.fft:
         base_artifact_path.append("fft")
-    if args.miopen or args.all:
+    if args.all or args.miopen:
         base_artifact_path.append("miopen")
-    if args.prim or args.all:
+    if args.all or args.prim:
         base_artifact_path.append("prim")
-    if args.rand or args.all:
+    if args.all or args.rand:
         base_artifact_path.append("rand")
-    if args.rccl or args.all:
+    if args.all or args.rccl:
         base_artifact_path.append("rccl")
 
     enabled_artifacts = []
@@ -84,6 +96,9 @@ def run(args):
     target = args.target
     build_dir = args.build_dir
     test_enabled = args.test
+    if not s3_bucket_exists(run_id):
+        print(f"S3 artifacts for {run_id} does not exist. Exiting...")
+        return
     retrieve_base_artifacts(args, run_id, build_dir)
     retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir)
 
