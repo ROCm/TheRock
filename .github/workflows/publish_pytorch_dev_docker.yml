@@ -18,9 +18,7 @@ jobs:
     name: ${{ matrix.targets.amdgpu_target }}::Build
     runs-on: azure-linux-scale-rocm
     outputs:
-      gfx942_digest: ${{ steps.export.outputs.gfx942 }}
-      gfx1100_digest: ${{ steps.export.outputs.gfx1100 }}
-      gfx1201_digest: ${{ steps.export.outputs.gfx1201 }}
+      digests: ${{ steps.export.outputs.digests }}
       version: ${{ env.VERSION }}
     env:
       REGISTRY: ghcr.io
@@ -65,9 +63,7 @@ jobs:
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.9
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-      # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
-      # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
-      # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
+      
       - name: Build and push Docker image
         id: build_push
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
@@ -88,13 +84,14 @@ jobs:
       - name: Export digest
         id: export
         run: |
-          digest="${{ steps.build_push.outputs.digest }}"
-          case "${{ matrix.targets.amdgpu_target }}" in
-            gfx942) echo "gfx942=$digest" >> $GITHUB_OUTPUT ;;
-            gfx1100) echo "gfx1100=$digest" >> $GITHUB_OUTPUT ;;
-            gfx1201) echo "gfx1201=$digest" >> $GITHUB_OUTPUT ;;
-          esac
-          echo "Exported digest: $digest for ${{ matrix.targets.amdgpu_target }}"
+          # Get the target name
+          TARGET="${{ matrix.targets.amdgpu_target }}"
+          # Get the digest 
+          DIGEST="${{ steps.build_push.outputs.digest }}"
+          
+          # Create an output variable with target-specific key
+          echo "digests={\"target\":\"$TARGET\",\"digest\":\"$DIGEST\"}" >> $GITHUB_OUTPUT
+          echo "Exported digest: $DIGEST for $TARGET"
 
   verify-image:
     needs: build-and-push-image
@@ -103,16 +100,14 @@ jobs:
       matrix:
         include:
            - amdgpu_target: gfx942
-             image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
              runner: "linux-mi300-1gpu-ossci-rocm"  # Default runner for gfx942
-            #TODO Add digest and runner param for gfx1100 when the runner available
+            #TODO Add runner param for gfx1100 when the runner available
            - amdgpu_target: gfx1201
-             image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
              runner: "linux-rx9070-gpu-rocm"  # Specialized runner for gfx1201
     uses: ./.github/workflows/verify_docker_image.yml
     with:
       amdgpu_target: ${{ matrix.amdgpu_target }}
-      image_digest: ${{ matrix.image_digest }}
+      image_digest: ${{ fromJson(needs.build-and-push-image.outputs.digests).target == matrix.amdgpu_target && fromJson(needs.build-and-push-image.outputs.digests).digest || '' }}
       runner_type: ${{ matrix.runner }}
 
   on-success:
@@ -123,10 +118,8 @@ jobs:
       matrix:
         include:
           - amdgpu_target: "gfx942"
-            image_digest: ${{ needs.build-and-push-image.outputs.gfx942_digest }}
-             #TODO Add digest param for gfx1100 when the runner available
+            #TODO Add param for gfx1100 when the runner available
           - amdgpu_target: "gfx1201"
-            image_digest: ${{ needs.build-and-push-image.outputs.gfx1201_digest }}
     runs-on: azure-linux-scale-rocm
     steps:
       - name: Set version from build job
@@ -143,8 +136,18 @@ jobs:
 
       - name: Tag and push verified image
         run: |
-          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.amdgpu_target }}
-          DIGEST=${{ matrix.image_digest }}
+          TARGET="${{ matrix.amdgpu_target }}"
+          DIGESTS='${{ needs.build-and-push-image.outputs.digests }}'
+          
+          # Parse the JSON to get the digest for the current target
+          if [[ $(echo $DIGESTS | jq -r '.target') == "$TARGET" ]]; then
+            DIGEST=$(echo $DIGESTS | jq -r '.digest')
+          else
+            echo "Error: Could not find digest for target $TARGET"
+            exit 1
+          fi
+          
+          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_$TARGET
           VERSION=${{ env.VERSION }}
 
           echo "Using image: $IMAGE"
