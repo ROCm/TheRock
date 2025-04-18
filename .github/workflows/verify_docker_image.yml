@@ -43,8 +43,9 @@ jobs:
           sudo apt-get install -y skopeo jq
       - name: Construct image reference
         id: image_ref
+        env:
+          IMAGE_REF: "ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
         run: |
-          IMAGE_REF="ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
           echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
           echo "Image to verify: $IMAGE_REF"
       - name: Pull Docker Image
