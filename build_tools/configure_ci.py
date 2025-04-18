@@ -203,6 +203,16 @@ amdgpu_family_info_matrix = {
             "target": "gfx110X-dgpu",
         },
     },
+    "gfx103x": {
+        "linux": {
+            "test-runs-on": "linux-rx6950-gpu-rocm",
+            "target": "gfx103X-dgpu",
+        },
+        "windows": {
+            "test-runs-on": "",
+            "target": "gfx103X-dgpu",
+        },
+    }
 }
 
 DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
