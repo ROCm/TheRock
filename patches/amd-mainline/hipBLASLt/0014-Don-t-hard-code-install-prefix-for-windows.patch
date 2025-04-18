@@ -1,0 +1,36 @@
+From b40da4349104be07692a18c372bacd71534ba2d1 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Fri, 18 Apr 2025 22:06:00 +0100
+Subject: [PATCH] Don't hard-code install prefix for windows
+
+---
+ CMakeLists.txt | 13 ++-----------
+ 1 file changed, 2 insertions(+), 11 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7759a482..341f1052 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -405,17 +405,8 @@ endif( )
+ set( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
+ set( CPACK_RPM_PACKAGE_LICENSE "MIT")
+ 
+-if (WIN32)
+-  SET( CMAKE_INSTALL_PREFIX "C:/hipSDK" CACHE PATH "Install path" FORCE )
+-  SET( INSTALL_PREFIX "C:/hipSDK" )
+-  SET( CPACK_SET_DESTDIR FALSE )
+-  SET( CPACK_PACKAGE_INSTALL_DIRECTORY "C:/hipSDK" )
+-  SET( CPACK_PACKAGING_INSTALL_PREFIX "" )
+-  set( CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF )
+-else()
+-  if( NOT CPACK_PACKAGING_INSTALL_PREFIX )
+-      set( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}" )
+-  endif()
++if( NOT CPACK_PACKAGING_INSTALL_PREFIX )
++    set( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}" )
+ endif()
+ 
+ set( CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "\${CPACK_PACKAGING_INSTALL_PREFIX}" "\${CPACK_PACKAGING_INSTALL_PREFIX}/include" "\${CPACK_PACKAGING_INSTALL_PREFIX}/lib" )
+-- 
+2.49.0.windows.1
+
