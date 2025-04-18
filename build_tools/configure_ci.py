@@ -212,7 +212,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "target": "gfx103X-dgpu",
         },
-    }
+    },
 }
 
 DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
