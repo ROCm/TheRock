@@ -37,10 +37,16 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 
 set(hipBLASLt_optional_deps)
 if(THEROCK_BUILD_TESTING)
-  list(APPEND hipBLASLt_optional_deps
-    therock-host-blas
-    rocm_smi_lib
-  )
+  if(WIN32)
+    list(APPEND hipBLASLt_optional_deps
+      therock-host-blas
+    )
+  else()
+    list(APPEND hipBLASLt_optional_deps
+      therock-host-blas
+      rocm_smi_lib
+    )
+  endif()
 endif()
 
 therock_cmake_subproject_declare(hipBLASLt
@@ -86,12 +92,15 @@ list(APPEND _blas_subproject_names hipBLASLt)
 
 set(rocBLAS_optional_runtime_deps)
 if(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+  if(NOT WIN32)
+    list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+  endif()
 endif()
 
 if(WIN32)
-  set(rocBLAS_build_with_tensile "OFF")
-  set(rocBLAS_build_with_hipblaslt "OFF")
+  set(rocBLAS_build_with_tensile "ON")
+  set(rocBLAS_build_with_hipblaslt "ON")
+  list(APPEND rocBLAS_optional_runtime_deps hipBLASLt)
 else()
   set(rocBLAS_build_with_tensile "ON")
   set(rocBLAS_build_with_hipblaslt "ON")
@@ -109,7 +118,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_WITH_TENSILE=${rocBLAS_build_with_tensile}
     -DBUILD_WITH_HIPBLASLT=${rocBLAS_build_with_hipblaslt}
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
-    "-DTensile_TEST_LOCAL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/Tensile"
+    -DTensile_TEST_LOCAL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/Tensile
     # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
     # doing a strict check of exact version.
     -DTENSILE_VERSION=

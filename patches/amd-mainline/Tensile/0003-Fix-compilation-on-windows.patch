@@ -1,0 +1,64 @@
+From dd6314880f71cc00784296176b67a58af74baf84 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Fri, 18 Apr 2025 01:23:15 +0100
+Subject: [PATCH] Fix compilation on windows
+
+---
+ Tensile/Utilities/Toolchain.py    | 10 ++++++++--
+ Tensile/cmake/TensileConfig.cmake |  5 ++++-
+ 2 files changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/Tensile/Utilities/Toolchain.py b/Tensile/Utilities/Toolchain.py
+index de80025c..fad3fccf 100644
+--- a/Tensile/Utilities/Toolchain.py
++++ b/Tensile/Utilities/Toolchain.py
+@@ -87,7 +87,10 @@ class ToolchainDefaults(NamedTuple):
+     OFFLOAD_BUNDLER = osSelect(linux="clang-offload-bundler", windows="clang-offload-bundler.exe")
+     ASSEMBLER = osSelect(linux="amdclang++", windows="clang++.exe")
+     HIP_CONFIG = osSelect(linux="hipconfig", windows="hipconfig")
+-    DEVICE_ENUMERATOR = osSelect(linux="rocm_agent_enumerator", windows="hipinfo.exe")
++    # TODO: Revert back to hipinfo.exe once it's included in TheRock build
++    # not sure where hipinfo.exe comes from exactly, but it's bundled with the Windows HIP SDK and was also found here on GitHub:
++    # https://github.com/ROCm/hip-tests/tree/amd-staging/samples/1_Utils/hipInfo
++    DEVICE_ENUMERATOR = osSelect(linux="rocm_agent_enumerator", windows="clinfo.exe")
+ 
+ 
+ def _supportedComponent(component: str, targets: List[str]) -> bool:
+@@ -157,7 +160,10 @@ def supportedDeviceEnumerator(enumerator: str) -> bool:
+         If supported True; otherwise, False.
+     """
+     if os.name == "nt":
+-        return _supportedComponent(enumerator, ["hipinfo", "hipInfo"])
++        # TODO: Revert back to hipinfo.exe once it's included in TheRock build
++        # not sure where hipinfo.exe comes from exactly, but it's bundled with the Windows HIP SDK and was also found here on GitHub:
++        # https://github.com/ROCm/hip-tests/tree/amd-staging/samples/1_Utils/hipInfo
++        return _supportedComponent(enumerator, ["clinfo", "clInfo"])
+     return _supportedComponent(enumerator, ["rocm_agent_enumerator", "amdgpu-arch"])
+ 
+ 
+diff --git a/Tensile/cmake/TensileConfig.cmake b/Tensile/cmake/TensileConfig.cmake
+index c2312c14..b67acd7e 100644
+--- a/Tensile/cmake/TensileConfig.cmake
++++ b/Tensile/cmake/TensileConfig.cmake
+@@ -84,6 +84,9 @@ endif()
+ 
+ add_subdirectory("${Tensile_ROOT}/Source" "Tensile")
+ 
++string(REPLACE ";" "$<SEMICOLON>" ESC_PATH "$ENV{PATH}")
++set(ENV_PATH_ARG "PATH=${ESC_PATH}")
++
+ # Output target: ${Tensile_VAR_PREFIX}_LIBRARY_TARGET. Ensures that the libs get built in Tensile_OUTPUT_PATH/library.
+ # Output symbol: ${Tensile_VAR_PREFIX}_ALL_FILES. List of full paths of all expected library files in manifest.
+ function(TensileCreateLibraryFiles
+@@ -223,7 +226,7 @@ function(TensileCreateLibraryFiles
+   # path. It would be better if this were explicit, but that would be a pretty 
+   # big change.
+   set(CommandLine 
+-    "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --
++    "${CMAKE_COMMAND}" -E env "${ENV_PATH_ARG}" --
+     ${CommandLine})
+   message(STATUS "Tensile_CREATE_COMMAND: ${CommandLine}")
+ 
+-- 
+2.49.0.windows.1
+

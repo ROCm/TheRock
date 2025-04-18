@@ -1,7 +1,7 @@
 From c7b325c3a2ffcd8d01bfeeaac630110188bcb5da Mon Sep 17 00:00:00 2001
 From: "From: Milica Trifunovic" <milica.trifunovic@amd.com>
 Date: Wed, 16 Apr 2025 23:45:41 +0100
-Subject: [PATCH 2/4] Windows enablement patch
+Subject: [PATCH 2/5] Windows enablement patch
 
 jam: Trying to rebase https://github.com/ROCm/hipBLASLt/pull/1864
 

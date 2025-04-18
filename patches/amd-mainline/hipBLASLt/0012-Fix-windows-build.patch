@@ -1,7 +1,7 @@
 From e3ecce0e28fb9820fa9353fe2a690f1f49896a64 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Thu, 17 Apr 2025 20:49:36 +0100
-Subject: [PATCH 4/4] Fix windows build
+Subject: [PATCH 4/5] Fix windows build
 
 ---
  .../src/kernels/CompileSourceKernel.cmake     |   4 +-
