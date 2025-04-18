@@ -105,10 +105,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          echo "Waiting for workflow 'verify_docker_image.yml' on commit $COMMIT_SHA..."
+          echo "🔍 Waiting for workflow 'verify_docker_image.yml' on commit $COMMIT_SHA..."
 
           for attempt in {1..30}; do
-            echo "Polling attempt $attempt..."
+            echo "⏱️  Polling attempt $attempt..."
 
             RUN_ID=$(gh run list \
               --workflow="verify_docker_image.yml" \
@@ -117,14 +117,15 @@ jobs:
               -q "[.[] | select(.headSha == \"$COMMIT_SHA\")][0].databaseId")
 
             if [ -z "$RUN_ID" ]; then
-              echo "No workflow run found yet. Retrying in 30s..."
+              echo "⚠️  No workflow run found yet. Retrying in 30 seconds..."
               sleep 30
               continue
             fi
+
             STATUS=$(gh run view "$RUN_ID" --json status -q '.status')
             CONCLUSION=$(gh run view "$RUN_ID" --json conclusion -q '.conclusion')
 
-            echo "Run ID: $RUN_ID | Status: $STATUS | Conclusion: $CONCLUSION"
+            echo "🔄 Run ID: $RUN_ID | Status: $STATUS | Conclusion: $CONCLUSION"
 
             if [[ "$STATUS" == "completed" ]]; then
               if [[ "$CONCLUSION" == "success" ]]; then
@@ -132,11 +133,17 @@ jobs:
                 exit 0
               else
                 echo "❌ Verification failed."
+                echo ""
+                echo "📋 Fetching logs for failed workflow run $RUN_ID..."
+                gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs. You may need to inspect the run manually on GitHub."
                 exit 1
               fi
             fi
+
+            echo "⏳ Workflow still in progress. Sleeping for 30 seconds..."
             sleep 30
           done
+
           echo "❌ Timed out after waiting 15 minutes for verification."
           exit 1
 

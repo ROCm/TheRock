@@ -49,14 +49,14 @@ jobs:
           echo "Image to verify: $IMAGE_REF"
       - name: Pull Docker Image
         run: |
-          docker pull "$IMAGE_REF"
+          sudo docker pull "$IMAGE_REF"
       - name: Pre-download pytest wheel
         run: |
           mkdir -p pytest_wheels
           pip download pytest -d pytest_wheels
       - name: Run Docker Container and Execute Commands
         run: |
-          docker run --rm \
+          sudo docker run --rm \
           --device=/dev/kfd \
           --device=/dev/dri \
           --mount type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
@@ -67,4 +67,4 @@ jobs:
           "$IMAGE_REF" \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
       - name: Verify Containers Status
-        run: docker ps -a
+        run: sudo docker ps -a
