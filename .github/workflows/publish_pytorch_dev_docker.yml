@@ -121,7 +121,6 @@ jobs:
               sleep 30
               continue
             fi
-
             STATUS=$(gh run view "$RUN_ID" --json status -q '.status')
             CONCLUSION=$(gh run view "$RUN_ID" --json conclusion -q '.conclusion')
 
@@ -136,10 +135,8 @@ jobs:
                 exit 1
               fi
             fi
-
             sleep 30
           done
-
           echo "❌ Timed out after waiting 15 minutes for verification."
           exit 1
 
