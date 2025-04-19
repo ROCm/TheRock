@@ -115,9 +115,9 @@ jobs:
 
             RUN_ID=$(gh run list \
               --workflow="verify_docker_image.yml" \
-              --json databaseId,headSha,displayTitle \
+              --json databaseId,headSha,name \
               --limit 20 \
-              -q "[.[] | select(.headSha == \"$COMMIT_SHA\" and .displayTitle == \"$TITLE\")][0].databaseId")
+              -q "[.[] | select(.headSha == \"$COMMIT_SHA\" and .name == \"$TITLE\")][0].databaseId")
 
             if [[ -z "$RUN_ID" ]]; then
               echo "⚠️  No workflow run found yet for $TITLE. Retrying in 30 seconds..."
