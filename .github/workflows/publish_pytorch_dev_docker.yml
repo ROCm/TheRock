@@ -105,19 +105,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          echo "🔍 Waiting for workflow 'verify_docker_image.yml' on commit $COMMIT_SHA..."
+          TARGET="${{ matrix.targets.amdgpu_target }}"
+          TITLE="verify_docker_image - $TARGET"
+
+          echo "🔍 Waiting for '$TITLE' on commit $COMMIT_SHA..."
 
           for attempt in {1..30}; do
             echo "⏱️  Polling attempt $attempt..."
 
             RUN_ID=$(gh run list \
               --workflow="verify_docker_image.yml" \
-              --json databaseId,headSha \
-              --limit 10 \
-              -q "[.[] | select(.headSha == \"$COMMIT_SHA\")][0].databaseId")
+              --json databaseId,headSha,displayTitle \
+              --limit 20 \
+              -q "[.[] | select(.headSha == \"$COMMIT_SHA\" and .displayTitle == \"$TITLE\")][0].databaseId")
 
-            if [ -z "$RUN_ID" ]; then
-              echo "⚠️  No workflow run found yet. Retrying in 30 seconds..."
+            if [[ -z "$RUN_ID" ]]; then
+              echo "⚠️  No workflow run found yet for $TITLE. Retrying in 30 seconds..."
               sleep 30
               continue
             fi
@@ -134,8 +137,8 @@ jobs:
               else
                 echo "❌ Verification failed."
                 echo ""
-                echo "📋 Fetching logs for failed workflow run $RUN_ID..."
-                gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs. You may need to inspect the run manually on GitHub."
+                echo "📋 Logs for $TITLE:"
+                gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs. Please check manually."
                 exit 1
               fi
             fi
