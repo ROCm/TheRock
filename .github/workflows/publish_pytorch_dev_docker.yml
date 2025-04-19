@@ -20,10 +20,11 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
+    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
       packages: write
-      actions: write
+      actions: write  # Added permission to trigger workflows
 
     steps:
       - name: Checkout repository
@@ -63,7 +64,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build_push
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+        uses: docker/build-push-action@v6.15.0
         with:
           context: .
           file: dockerfiles/pytorch-dev/pytorch_dev_ubuntu_24.04.Dockerfile
@@ -79,66 +80,36 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Log digest
-        run: |
+        run: | 
           echo "Built image with digest: ${{ steps.build_push.outputs.digest }}"
 
       - name: Trigger verification workflow
-        id: dispatch_verify
-        uses: benc-uk/workflow-dispatch@v1
+        id: trigger_verification
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc
         with:
           workflow: verify_docker_image.yml
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           inputs: |
             {
               "amdgpu_target": "${{ matrix.targets.amdgpu_target }}",
               "image_digest": "${{ steps.build_push.outputs.digest }}",
-              "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') || 'linux-mi300-1gpu-ossci-rocm' }}"
+              "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') || 'linux-mi300-1gpu-ossci-rocm' }}",
+              "dispatch_id": "dispatch-${{ matrix.targets.amdgpu_target }}-${{ github.run_id }}"
             }
-
       - name: Install GitHub CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y gh
 
-      - name: Wait for verification to complete using run ID
+      - name: Wait for verification to complete using GitHub CLI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_ID: ${{ steps.dispatch_verify.outputs.workflow_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          DISPATCH_ID: dispatch-${{ matrix.targets.amdgpu_target }}-${{ github.run_id }}
         run: |
-          set -euo pipefail
-
-          if [[ -z "$RUN_ID" ]]; then
-            echo "❌ No workflow run ID was captured. Aborting."
-            exit 1
-          fi
-
-          echo "📡 Monitoring workflow run ID: $RUN_ID"
-
-          for attempt in {1..30}; do
-            STATUS=$(gh run view "$RUN_ID" --json status -q '.status')
-            CONCLUSION=$(gh run view "$RUN_ID" --json conclusion -q '.conclusion')
-
-            echo "🔄 Attempt $attempt → Status: $STATUS | Conclusion: $CONCLUSION"
-
-            if [[ "$STATUS" == "completed" ]]; then
-              if [[ "$CONCLUSION" == "success" ]]; then
-                echo "✅ Verification succeeded."
-                exit 0
-              else
-                echo "❌ Verification failed."
-                echo "📋 Fetching logs from run $RUN_ID:"
-                gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs."
-                exit 1
-              fi
-            fi
-
-            echo "⏳ Still running... sleeping for 30 seconds."
-            sleep 30
-          done
-
-          echo "❌ Timed out waiting for verification to finish."
-          exit 1
-
+          echo "🔍 Waiting for workflow 'verify_docker_image.yml' with dispatch ID $DISPATCH_ID..."
+          bash external-builds/pytorch/wait_for_verification.sh
+      # Tag and push verified image
       - name: Tag and push verified image
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}

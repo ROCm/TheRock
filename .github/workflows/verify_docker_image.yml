@@ -17,22 +17,32 @@ on:
         required: true
         default: "linux-mi300-1gpu-ossci-rocm"
         type: string
+      dispatch_id:
+        type: string
+        required: true
   workflow_call:
     inputs:
       amdgpu_target:
-        required: true
         type: string
+        required: true
       image_digest:
-        required: true
         type: string
+        required: true
       runner_type:
-        required: true
         type: string
+        required: true
+      dispatch_id:
+        type: string
+        required: true
+
 jobs:
   pull-and-build-image:
-    name: Verify ${{ inputs.amdgpu_target }} Docker Image
+    name: Verify ${{ inputs.dispatch_id }} Docker Image
     runs-on: ${{ inputs.runner_type }}
     steps:
+      - name: Identifier ${{ inputs.dispatch_id }}
+        run: |
+           echo "Dispatched for: ${{ inputs.dispatch_id }}"
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -41,6 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo jq
+
       - name: Construct image reference
         id: image_ref
         env:
@@ -48,13 +59,16 @@ jobs:
         run: |
           echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
           echo "Image to verify: $IMAGE_REF"
+
       - name: Pull Docker Image
         run: |
           sudo docker pull "$IMAGE_REF"
+
       - name: Pre-download pytest wheel
         run: |
           mkdir -p pytest_wheels
           pip download pytest -d pytest_wheels
+
       - name: Run Docker Container and Execute Commands
         run: |
           sudo docker run --rm \
@@ -67,5 +81,6 @@ jobs:
           -w /TheRock \
           "$IMAGE_REF" \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+
       - name: Verify Containers Status
         run: sudo docker ps -a
