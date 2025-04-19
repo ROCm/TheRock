@@ -37,10 +37,10 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install skopeo and jq
-        # Ensure the tools for image inspection and JSON parsing are available
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo jq
+
       - name: Construct image reference
         id: image_ref
         env:
@@ -48,14 +48,18 @@ jobs:
         run: |
           echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
           echo "Image to verify: $IMAGE_REF"
+
       - name: Pull Docker Image
         run: |
           sudo docker pull "$IMAGE_REF"
+
       - name: Pre-download pytest wheel
         run: |
           mkdir -p pytest_wheels
           pip download pytest -d pytest_wheels
+
       - name: Run Docker Container and Execute Commands
+        id: smoke_tests
         run: |
           sudo docker run --rm \
           --device=/dev/kfd \
@@ -67,5 +71,18 @@ jobs:
           -w /TheRock \
           "$IMAGE_REF" \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+
       - name: Verify Containers Status
-        run: sudo docker ps -a
+        run: |
+          sudo docker ps -a
+
+      - name: Capture verification status
+        run: |
+          if [ ${{ steps.smoke_tests.outcome }} == "success" ]; then
+            echo "Smoke tests for ${{ inputs.amdgpu_target }} passed"
+            echo "VERIFICATION_STATUS=success" >> $GITHUB_ENV
+          else
+            echo "Smoke tests for ${{ inputs.amdgpu_target }} failed"
+            echo "VERIFICATION_STATUS=failure" >> $GITHUB_ENV
+            exit 1
+          fi

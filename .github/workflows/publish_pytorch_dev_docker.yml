@@ -55,95 +55,59 @@ jobs:
           BASE_VERSION=$(jq -r '.["rocm-version"]' version.json)
           echo "VERSION=${BASE_VERSION}rc$(date +'%Y%m%d')" >> "$GITHUB_ENV"
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.9
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Build and push Docker image
-        id: build_push
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
-        with:
-          context: .
-          file: dockerfiles/pytorch-dev/pytorch_dev_ubuntu_24.04.Dockerfile
-          build-args: |
-            AMDGPU_TARGETS=${{ matrix.targets.amdgpu_target }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: |
-            org.opencontainers.image.title=PyTorch ROCm Dev Image
-            org.opencontainers.image.description=Nightly ROCm PyTorch Dev Docker for target ${{ matrix.targets.amdgpu_target }}
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
-            org.opencontainers.image.revision=${{ github.sha }}
-
       - name: Log digest
         run: |
-          echo "Built image with digest: ${{ steps.build_push.outputs.digest }}"
+          echo "Built image with digest: sha256:e9264097876429cea59f3dd6eedc0e7e22647cc1ba74c479fba84c5b12f8bc23"
 
       - name: Trigger verification workflow
-        id: dispatch_verify
-        uses: benc-uk/workflow-dispatch@v1
+        id: trigger_verification
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc
         with:
           workflow: verify_docker_image.yml
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           inputs: |
             {
               "amdgpu_target": "${{ matrix.targets.amdgpu_target }}",
-              "image_digest": "${{ steps.build_push.outputs.digest }}",
+              "image_digest": "sha256:e9264097876429cea59f3dd6eedc0e7e22647cc1ba74c479fba84c5b12f8bc23",
               "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') || 'linux-mi300-1gpu-ossci-rocm' }}"
             }
+
+      - name: Print WORKFLOW_RUN_ID
+        run: echo "WORKFLOW_RUN_ID for ${{ matrix.targets.amdgpu_target }} is ${{ steps.trigger_verification.outputs.workflow_run_id }}"
 
       - name: Install GitHub CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y gh
 
-      - name: Wait for verification to complete using run ID
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_ID: ${{ steps.dispatch_verify.outputs.workflow_id }}
+      - name: Check verification workflow status
         run: |
-          set -euo pipefail
-
-          if [[ -z "$RUN_ID" ]]; then
-            echo "❌ No workflow run ID was captured. Aborting."
-            exit 1
-          fi
-
-          echo "📡 Monitoring workflow run ID: $RUN_ID"
-
-          for attempt in {1..30}; do
-            STATUS=$(gh run view "$RUN_ID" --json status -q '.status')
-            CONCLUSION=$(gh run view "$RUN_ID" --json conclusion -q '.conclusion')
-
-            echo "🔄 Attempt $attempt → Status: $STATUS | Conclusion: $CONCLUSION"
-
-            if [[ "$STATUS" == "completed" ]]; then
-              if [[ "$CONCLUSION" == "success" ]]; then
-                echo "✅ Verification succeeded."
-                exit 0
-              else
-                echo "❌ Verification failed."
-                echo "📋 Fetching logs from run $RUN_ID:"
-                gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs."
-                exit 1
-              fi
+          WORKFLOW_RUN_ID=${{ steps.trigger_verification.outputs.workflow_run_id }}
+          echo "Checking status of verification workflow for ${{ matrix.targets.amdgpu_target }} with ID $WORKFLOW_RUN_ID"
+          STATUS=""
+          for i in {1..30}; do
+            STATUS=$(gh run view $WORKFLOW_RUN_ID --json conclusion --jq '.conclusion')
+            if [ "$STATUS" = "success" ]; then
+              echo "Verification workflow succeeded"
+              exit 0
+            elif [ "$STATUS" = "failure" ] || [ "$STATUS" = "cancelled" ]; then
+              echo "Verification workflow failed or was cancelled: $STATUS"
+              exit 1
             fi
-
-            echo "⏳ Still running... sleeping for 30 seconds."
+            echo "Verification workflow still running, waiting... (Attempt $i/30)"
             sleep 30
           done
-
-          echo "❌ Timed out waiting for verification to finish."
+          echo "Error: Verification workflow did not complete in time"
           exit 1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Tag and push verified image
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
-          DIGEST=${{ steps.build_push.outputs.digest }}
-          VERSION=${{ env.VERSION }}
+          DIGEST="sha256:e9264097876429cea59f3dd6eedc0e7e22647cc1ba74c479fba84c5b12f8bc23"
+          VERSION=test-version002
+
 
           echo "Using image: $IMAGE"
           echo "Using digest: $DIGEST"
