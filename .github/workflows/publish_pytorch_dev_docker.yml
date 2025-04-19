@@ -20,11 +20,10 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ROCm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
-    # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
       packages: write
-      actions: write  # Added permission to trigger workflows
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -83,74 +82,63 @@ jobs:
         run: |
           echo "Built image with digest: ${{ steps.build_push.outputs.digest }}"
 
-      # Trigger verification workflow with digest
       - name: Trigger verification workflow
-        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc
+        id: dispatch_verify
+        uses: benc-uk/workflow-dispatch@v1
         with:
-          workflow: verify_docker_image.yml  # Just the filename, not the full path
-          token: ${{ github.token }}
+          workflow: verify_docker_image.yml
+          token: ${{ secrets.GITHUB_TOKEN }}
           inputs: |
             {
               "amdgpu_target": "${{ matrix.targets.amdgpu_target }}",
               "image_digest": "${{ steps.build_push.outputs.digest }}",
               "runner_type": "${{ matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' || (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') || 'linux-mi300-1gpu-ossci-rocm' }}"
             }
+
       - name: Install GitHub CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y gh
 
-      - name: Wait for verification to complete using GitHub CLI
+      - name: Wait for verification to complete using run ID
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ steps.dispatch_verify.outputs.workflow_id }}
         run: |
-          TARGET="${{ matrix.targets.amdgpu_target }}"
-          TITLE="verify_docker_image - $TARGET"
+          set -euo pipefail
 
-          echo "🔍 Waiting for '$TITLE' on commit $COMMIT_SHA..."
+          if [[ -z "$RUN_ID" ]]; then
+            echo "❌ No workflow run ID was captured. Aborting."
+            exit 1
+          fi
+
+          echo "📡 Monitoring workflow run ID: $RUN_ID"
 
           for attempt in {1..30}; do
-            echo "⏱️  Polling attempt $attempt..."
-
-            RUN_ID=$(gh run list \
-              --workflow="verify_docker_image.yml" \
-              --json databaseId,headSha,name \
-              --limit 20 \
-              -q "[.[] | select(.headSha == \"$COMMIT_SHA\" and .name == \"$TITLE\")][0].databaseId")
-
-            if [[ -z "$RUN_ID" ]]; then
-              echo "⚠️  No workflow run found yet for $TITLE. Retrying in 30 seconds..."
-              sleep 30
-              continue
-            fi
-
             STATUS=$(gh run view "$RUN_ID" --json status -q '.status')
             CONCLUSION=$(gh run view "$RUN_ID" --json conclusion -q '.conclusion')
 
-            echo "🔄 Run ID: $RUN_ID | Status: $STATUS | Conclusion: $CONCLUSION"
+            echo "🔄 Attempt $attempt → Status: $STATUS | Conclusion: $CONCLUSION"
 
             if [[ "$STATUS" == "completed" ]]; then
               if [[ "$CONCLUSION" == "success" ]]; then
-                echo "✅ Verification passed."
+                echo "✅ Verification succeeded."
                 exit 0
               else
                 echo "❌ Verification failed."
-                echo ""
-                echo "📋 Logs for $TITLE:"
-                gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs. Please check manually."
+                echo "📋 Fetching logs from run $RUN_ID:"
+                gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs."
                 exit 1
               fi
             fi
 
-            echo "⏳ Workflow still in progress. Sleeping for 30 seconds..."
+            echo "⏳ Still running... sleeping for 30 seconds."
             sleep 30
           done
 
-          echo "❌ Timed out after waiting 15 minutes for verification."
+          echo "❌ Timed out waiting for verification to finish."
           exit 1
 
-      # Tag and push verified image
       - name: Tag and push verified image
         run: |
           IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
