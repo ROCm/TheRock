@@ -105,6 +105,7 @@ block()
     LLVM_OBJDUMP
     OPT
     YAML2OBJ
+    LLC
   )
   therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
 

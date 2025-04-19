@@ -20,6 +20,12 @@ if(NOT TARGET SQLite::SQLite3)
       IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/@CMAKE_STATIC_LIBRARY_PREFIX@rocm_sysdeps_sqlite3@CMAKE_STATIC_LIBRARY_SUFFIX@"
     )
   endif()
+  if(WIN32)
+      get_target_property(_loc SQLite::SQLite3 IMPORTED_LOCATION)
+    if(_loc)
+        set_target_properties(SQLite::SQLite3 PROPERTIES IMPORTED_IMPLIB "${_loc}")
+    endif()
+  endif()
 endif()
 
 set(_IMPORT_PREFIX)

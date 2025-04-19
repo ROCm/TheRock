@@ -10,7 +10,10 @@ if("OpenBLAS" IN_LIST THEROCK_PROVIDED_PACKAGES)
   # See: https://cmake.org/cmake/help/latest/module/FindBLAS.html
   set(LAPACK_LINKER_FLAGS)
   set(LAPACK_LIBRARIES OpenBLAS::OpenBLAS)
-  add_library(LAPACK::LAPACK ALIAS OpenBLAS::OpenBLAS)
+  # On windows, this was causing a duplicate conflict with the LAPACK::LAPACK alias.
+  if(NOT WIN32)
+    add_library(LAPACK::LAPACK ALIAS OpenBLAS::OpenBLAS)
+  endif()
   set(LAPACK95_LIBRARIES)
   set(LAPACK95_FOUND FALSE)
   set(LAPACK_FOUND TRUE)

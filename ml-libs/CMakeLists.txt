@@ -3,6 +3,10 @@ if(THEROCK_ENABLE_MIOPEN)
   # MIOpen
   ##############################################################################
 
+  if(WIN32)
+    set(THEROCK_OVERRIDE_BOOST_COMPILER vc143)
+  endif()
+
   therock_cmake_subproject_declare(MIOpen
     EXTERNAL_SOURCE_DIR "MIOpen"
     BACKGROUND_BUILD
@@ -15,6 +19,8 @@ if(THEROCK_ENABLE_MIOPEN)
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
       -DMIOPEN_USE_ROCTRACER=OFF # TODO: enable
+      -DMIOPEN_USE_HIPBLASLT=ON
+      -DBoost_COMPILER=${THEROCK_OVERRIDE_BOOST_COMPILER}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS

@@ -1,0 +1,119 @@
+From 01bdaf610f457b959346e31926bde5e7a529f9e3 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Fri, 18 Apr 2025 03:20:53 +0100
+Subject: [PATCH] Fix compilation on windows with tests enabled
+
+---
+ CMakeLists.txt               |  6 +++++-
+ clients/CMakeLists.txt       | 19 +++++++++----------
+ clients/common/utility.cpp   |  4 +++-
+ clients/gtest/CMakeLists.txt | 23 -----------------------
+ 4 files changed, 17 insertions(+), 35 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b7d06bf..9850f68 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -52,7 +52,11 @@ endif( )
+ project( hipblas LANGUAGES CXX ${fortran_language} )
+ 
+ if (NOT python)
+-    set(python "python3") # default for linux
++  if(NOT WIN32)
++      set(python "python3") # default for linux
++  else()
++      set(python "python.exe") # default for windows
++  endif()
+ endif()
+ 
+ # Append our library helper cmake path and the cmake path for hip (for convenience)
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 983951b..dfb5f7f 100644
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -72,6 +72,12 @@ if( NOT DEFINED CMAKE_CONFIGURATION_TYPES AND NOT DEFINED CMAKE_BUILD_TYPE )
+   set( CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." )
+ endif()
+ 
++if(WIN32)
++  # HACK: (jam): flang.exe didn't work, so use gfortran.exe bundled with Strawberry Perl
++  set(CMAKE_Fortran_COMPILER "C:/Strawberry/c/bin/gfortran.exe")  
++  set(CMAKE_Fortran_PREPROCESS_SOURCE "<CMAKE_Fortran_COMPILER> -E <INCLUDES> <FLAGS> -cpp <SOURCE> -o <PREPROCESSED_SOURCE>")
++endif()
++
+ # This project may compile dependencies for clients
+ project( hipblas-clients LANGUAGES CXX Fortran )
+ 
+@@ -178,16 +184,9 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+       set( FLAME_INCLUDE_DIR "C:/Program\ Files/AMD/AOCL-Windows/amd-libflame/include/ILP64" )
+       set( BLIS_DEFINES BLIS_ENABLE_NO_UNDERSCORE_API BLIS_ENABLE_CBLAS )
+     else()
+-      set( BLAS_INCLUDE_DIR ${OPENBLAS_DIR}/include CACHE PATH "OpenBLAS library include path" )
+-      find_library( BLAS_LIBRARY libopenblas
+-                    PATHS ${OPENBLAS_DIR}/lib
+-                    NO_DEFAULT_PATH
+-                  )
+-      if (NOT BLAS_LIBRARY)
+-        find_package( OPENBLAS CONFIG REQUIRED )
+-        set( BLAS_LIBRARY OpenBLAS::OpenBLAS )
+-        set( BLAS_INCLUDE_DIR "" )
+-      endif()
++      find_package( BLAS REQUIRED )
++      set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
++      set( BLAS_INCLUDE_DIR "" )
+     endif()
+   endif()
+ 
+diff --git a/clients/common/utility.cpp b/clients/common/utility.cpp
+index 41dae29..d7843a9 100644
+--- a/clients/common/utility.cpp
++++ b/clients/common/utility.cpp
+@@ -23,8 +23,10 @@
+  * ************************************************************************ */
+ 
+ #ifdef WIN32
++// HACK: (jam): "error: attempt to use a poisoned identifier" if this ole2.h header was included within windows.h
++// skip that header by defining _OLE2_H_
++#define _OLE2_H_
+ #include <windows.h>
+-//
+ #include <random>
+ #endif
+ 
+diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
+index 4b5a2c6..cf0d131 100644
+--- a/clients/gtest/CMakeLists.txt
++++ b/clients/gtest/CMakeLists.txt
+@@ -202,29 +202,6 @@ else( )
+   target_link_libraries( hipblas_v2-test PRIVATE ${CUDA_LIBRARIES} )
+ endif( )
+ 
+-if (WIN32)
+-# for now adding in all .dll as dependency chain is not cmake based on win32
+-  file( GLOB third_party_dlls
+-    LIST_DIRECTORIES OFF
+-    CONFIGURE_DEPENDS
+-    ${LAPACK_DIR}/bin/*.dll
+-    ${BLIS_DIR}/lib/*.dll
+-    ${OPENBLAS_DIR}/bin/*.dll
+-    ${HIP_DIR}/bin/amd*.dll
+-    ${HIP_DIR}/bin/hiprt*.dll
+-    ${HIP_DIR}/bin/hipinfo.exe
+-    ${ROCBLAS_PATH}/bin/rocblas*.dll
+-    ${ROCSOLVER_PATH}/bin/rocsolver*.dll
+-    ${CMAKE_SOURCE_DIR}/rtest.*
+-    C:/Windows/System32/libomp140*.dll
+-  )
+-  foreach( file_i ${third_party_dlls})
+-    add_custom_command( TARGET hipblas-test POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy ${file_i} ${PROJECT_BINARY_DIR}/staging/ )
+-  endforeach( file_i )
+-
+-  add_custom_command( TARGET hipblas-test POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${ROCBLAS_PATH}/bin/rocblas/library/ ${PROJECT_BINARY_DIR}/staging/library/)
+-endif()
+-
+ set_target_properties( hipblas-test PROPERTIES
+     CXX_STANDARD 17
+     CXX_STANDARED_REQUIRED ON
+-- 
+2.49.0.windows.1
+

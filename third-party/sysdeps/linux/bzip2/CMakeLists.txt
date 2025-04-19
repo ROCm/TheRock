@@ -47,9 +47,16 @@ project(BZIP2_BUILD)
 # bzip2's build barely qualifies as such (it doesn't even install the shared
 # library). So we just code it in cmake.
 
+set(BUILD_SHARED_LIBS ON)
+set(INSTALL_SHLIB_DIR "lib")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  set(BUILD_SHARED_LIBS OFF)
+  set(INSTALL_SHLIB_DIR "bin")
+endif()
+
 add_library(
   rocm_sysdeps_bz2
-  SHARED
   ${SOURCE_DIR}/blocksort.c
   ${SOURCE_DIR}/huffman.c
   ${SOURCE_DIR}/crctable.c
@@ -59,20 +66,27 @@ add_library(
   ${SOURCE_DIR}/bzlib.c
 )
 
-add_custom_command(
-  TARGET rocm_sysdeps_bz2
-  POST_BUILD
-  COMMAND
-    "${CMAKE_COMMAND}" -E create_symlink librocm_sysdeps_bz2.so
-      ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so
-  BYPRODUCTS libbz2.so
-)
+if(NOT WIN32)
+  add_custom_command(
+    TARGET rocm_sysdeps_bz2
+    POST_BUILD
+    COMMAND
+      "${CMAKE_COMMAND}" -E create_symlink librocm_sysdeps_bz2.so
+        ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so
+    BYPRODUCTS libbz2.so
+  )
+endif()
+
 target_link_options(rocm_sysdeps_bz2 PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
 
 install(
   TARGETS rocm_sysdeps_bz2
 )
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so TYPE LIB)
+
+if(NOT WIN32)
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so TYPE LIB)
+endif()
+
 install(FILES "${SOURCE_DIR}/bzlib.h" TYPE INCLUDE)
 
 configure_file(

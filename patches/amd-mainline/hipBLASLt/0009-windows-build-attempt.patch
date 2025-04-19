@@ -1,0 +1,306 @@
+From 1bea14596d1bc49a464b44c5ddd07e6ab1567986 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Wed, 16 Apr 2025 18:21:31 +0100
+Subject: [PATCH 1/5] windows build attempt
+
+---
+ clients/common/efficiency_monitor.cpp         |   4 +-
+ .../Source/lib/include/Tensile/Macros.hpp     |   2 +-
+ tensilelite/rocisa/rocisa/include/code.hpp    |   2 +-
+ tensilelite/rocisa/rocisa/include/enum.hpp    |   4 +-
+ tensilelite/rocisa/rocisa/include/helper.hpp  | 133 +++++++++++++++++-
+ tensilelite/rocisa/rocisa/include/label.hpp   |   7 +
+ tensilelite/rocisa/rocisa/src/code.cpp        |   2 +
+ tensilelite/rocisa/rocisa/src/enum.cpp        |   2 +-
+ 8 files changed, 145 insertions(+), 11 deletions(-)
+
+diff --git a/clients/common/efficiency_monitor.cpp b/clients/common/efficiency_monitor.cpp
+index 9202707a..ab9828ee 100644
+--- a/clients/common/efficiency_monitor.cpp
++++ b/clients/common/efficiency_monitor.cpp
+@@ -32,7 +32,7 @@
+ #include <thread>
+ #include <vector>
+ 
+-#ifndef _WIN32
++#ifndef WIN32
+ 
+ #include <hip/hip_runtime.h>
+ #include <rocm_smi/rocm_smi.h>
+@@ -103,7 +103,7 @@ public:
+     // deleting copy constructor
+     EfficiencyMonitorImp(const EfficiencyMonitorImp& obj) = delete;
+ 
+-#ifndef _WIN32
++#ifndef WIN32
+ 
+     bool enabled()
+     {
+diff --git a/tensilelite/Tensile/Source/lib/include/Tensile/Macros.hpp b/tensilelite/Tensile/Source/lib/include/Tensile/Macros.hpp
+index 6ac6c1d1..6ac64704 100644
+--- a/tensilelite/Tensile/Source/lib/include/Tensile/Macros.hpp
++++ b/tensilelite/Tensile/Source/lib/include/Tensile/Macros.hpp
+@@ -33,7 +33,7 @@
+  * Marks a symbol as being visible from outside of a shared library which
+  * Tensile is a part of.
+  */
+-#ifdef _WIN32
++#ifdef WIN32
+ #define TENSILE_API __declspec(dllexport)
+ #else
+ #define TENSILE_API __attribute__((visibility("default")))
+diff --git a/tensilelite/rocisa/rocisa/include/code.hpp b/tensilelite/rocisa/rocisa/include/code.hpp
+index 94354c29..d9d474fc 100644
+--- a/tensilelite/rocisa/rocisa/include/code.hpp
++++ b/tensilelite/rocisa/rocisa/include/code.hpp
+@@ -262,7 +262,7 @@ namespace rocisa
+             return item;
+         }
+ 
+-        const void addItems(const std::vector<std::shared_ptr<Item>>& items)
++        const void addItems(const std::vector<std::shared_ptr<Item>>& items, int unused = -1)
+         {
+             for(const auto& item : items)
+             {
+diff --git a/tensilelite/rocisa/rocisa/include/enum.hpp b/tensilelite/rocisa/rocisa/include/enum.hpp
+index 15e3e931..52de9c0e 100644
+--- a/tensilelite/rocisa/rocisa/include/enum.hpp
++++ b/tensilelite/rocisa/rocisa/include/enum.hpp
+@@ -75,7 +75,7 @@ typedef enum
+ typedef enum
+ {
+     SEL_NONE = 0,
+-    DWORD    = 1,
++    _DWORD    = 1,
+     BYTE_0   = 2,
+     BYTE_1   = 3,
+     BYTE_2   = 4,
+@@ -130,7 +130,7 @@ inline std::string toString(SelectBit bit)
+ {
+     switch(bit)
+     {
+-    case DWORD:
++    case _DWORD:
+         return "DWORD";
+     case BYTE_0:
+         return "BYTE_0";
+diff --git a/tensilelite/rocisa/rocisa/include/helper.hpp b/tensilelite/rocisa/rocisa/include/helper.hpp
+index 7c31b0e0..439026c6 100644
+--- a/tensilelite/rocisa/rocisa/include/helper.hpp
++++ b/tensilelite/rocisa/rocisa/include/helper.hpp
+@@ -23,8 +23,14 @@
+ #pragma once
+ #include <stdexcept>
+ #include <string>
++#ifdef WIN32
++#include <windows.h>
++#include <dbghelp.h>
++#pragma comment(lib, "dbghelp.lib")
++#else
+ #include <sys/wait.h>
+ #include <unistd.h>
++#endif
+ #include <vector>
+ #ifdef __GNUG__
+ #include <cxxabi.h>
+@@ -47,9 +53,118 @@ inline std::string getGfxNameTuple(const IsaVersion& isaVersion)
+            + int_to_hex[isaVersion[2]];
+ }
+ 
+-inline std::pair<int, std::string>
+-    run(const std::vector<char*>& cmd, const std::string& input, bool debug = false)
++inline std::pair<int, std::string> run(const std::vector<char*>& cmd, const std::string& input, bool debug = false)
+ {
++#ifdef WIN32
++    // Windows implementation using CreateProcess and pipes.
++    SECURITY_ATTRIBUTES saAttr;
++    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
++    saAttr.bInheritHandle = TRUE;
++    saAttr.lpSecurityDescriptor = NULL;
++
++    // Create a pipe for the child process's STDOUT.
++    HANDLE hChildStd_OUT_Rd = NULL;
++    HANDLE hChildStd_OUT_Wr = NULL;
++    if (!CreatePipe(&hChildStd_OUT_Rd, &hChildStd_OUT_Wr, &saAttr, 0))
++        throw std::runtime_error("Stdout pipe creation failed");
++    // Ensure the read handle is NOT inherited.
++    if (!SetHandleInformation(hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0))
++        throw std::runtime_error("Stdout SetHandleInformation failed");
++
++    // Create a pipe for the child process's STDIN.
++    HANDLE hChildStd_IN_Rd = NULL;
++    HANDLE hChildStd_IN_Wr = NULL;
++    if (!CreatePipe(&hChildStd_IN_Rd, &hChildStd_IN_Wr, &saAttr, 0))
++        throw std::runtime_error("Stdin pipe creation failed");
++    if (!SetHandleInformation(hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0))
++        throw std::runtime_error("Stdin SetHandleInformation failed");
++
++    // Build a command-line string from the vector of arguments.
++    std::string commandLine;
++    for (size_t i = 0; i < cmd.size(); ++i)
++    {
++        if (i > 0)
++            commandLine += " ";
++        std::string arg(cmd[i]);
++        // Quote the argument if it contains spaces.
++        if (arg.find(' ') != std::string::npos)
++            commandLine += "\"" + arg + "\"";
++        else
++            commandLine += arg;
++    }
++    // Create a mutable command-line buffer as required by CreateProcess.
++    std::vector<char> cmdLineMutable(commandLine.begin(), commandLine.end());
++    cmdLineMutable.push_back('\0');
++
++    PROCESS_INFORMATION piProcInfo;
++    ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
++
++    STARTUPINFOA siStartInfo;
++    ZeroMemory(&siStartInfo, sizeof(STARTUPINFOA));
++    siStartInfo.cb = sizeof(STARTUPINFOA);
++    siStartInfo.hStdInput = hChildStd_IN_Rd;
++    if (!debug)
++    {
++        siStartInfo.hStdOutput = hChildStd_OUT_Wr;
++        siStartInfo.hStdError  = hChildStd_OUT_Wr;
++    }
++    else
++    {
++        siStartInfo.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
++        siStartInfo.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
++    }
++    siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
++
++    if (!CreateProcessA(
++            NULL,
++            cmdLineMutable.data(),
++            NULL,
++            NULL,
++            TRUE,
++            0,
++            NULL,
++            NULL,
++            &siStartInfo,
++            &piProcInfo))
++    {
++        throw std::runtime_error("CreateProcess failed");
++    }
++
++    // Write the input string to the child's STDIN.
++    DWORD dwWritten = 0;
++    if (!WriteFile(hChildStd_IN_Wr, input.c_str(), static_cast<DWORD>(input.size()), &dwWritten, NULL))
++        throw std::runtime_error("Failed to write to child's stdin");
++    CloseHandle(hChildStd_IN_Wr);
++    CloseHandle(hChildStd_IN_Rd);
++
++    std::string result;
++    if (!debug)
++    {
++        const int BUFSIZE = 128;
++        char buffer[BUFSIZE];
++        DWORD dwRead = 0;
++        while (true)
++        {
++            BOOL bRead = ReadFile(hChildStd_OUT_Rd, buffer, BUFSIZE, &dwRead, NULL);
++            if(!bRead || dwRead == 0)
++                break;
++            result.append(buffer, dwRead);
++        }
++    }
++    CloseHandle(hChildStd_OUT_Wr);
++    CloseHandle(hChildStd_OUT_Rd);
++
++    // Wait for the child process to finish.
++    WaitForSingleObject(piProcInfo.hProcess, INFINITE);
++    DWORD exitCode = 0;
++    if (!GetExitCodeProcess(piProcInfo.hProcess, &exitCode))
++        exitCode = static_cast<DWORD>(-1);
++
++    CloseHandle(piProcInfo.hProcess);
++    CloseHandle(piProcInfo.hThread);
++    return { static_cast<int>(exitCode), result };
++#else
++    // Linux implementation using fork, pipe, and execvp.
+     int   p[2];
+     pid_t pid;
+     if(pipe(p) == -1)
+@@ -91,6 +206,7 @@ inline std::pair<int, std::string>
+     }
+     // Should not go here.
+     return {0, "0"};
++#endif
+ }
+ 
+ template <typename T>
+@@ -108,13 +224,22 @@ bool checkNotInList(const T& a, const std::vector<T> b)
+ inline std::string demangle(const char* name)
+ {
+     std::string result = name;
+-#ifdef __GNUG__
++#if defined(__GNUG__)
+     int   status    = -1;
+     char* demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+     result          = (status == 0) ? demangled : name;
+     free(demangled);
++#elif defined(WIN32)
++    char demangledName[1024] = {0};
++    // UNDNAME_COMPLETE flag produces the full undecorated name.
++    if (UnDecorateSymbolName(name, demangledName, sizeof(demangledName), UNDNAME_COMPLETE))
++    {
++        result = demangledName;
++    }
++    // Note: Ensure that dbghelp.lib is linked in your project settings.
+ #else
+-#error "Windows not supported"
++    // Fallback: no demangling support available, return the original name.
+ #endif
+     return result;
+ }
++// End of Selectio
+diff --git a/tensilelite/rocisa/rocisa/include/label.hpp b/tensilelite/rocisa/rocisa/include/label.hpp
+index b026e807..a4cacf8c 100644
+--- a/tensilelite/rocisa/rocisa/include/label.hpp
++++ b/tensilelite/rocisa/rocisa/include/label.hpp
+@@ -24,6 +24,13 @@
+ #include <map>
+ #include <stdexcept>
+ #include <time.h>
++#if defined(WIN32)
++#include <string>
++#endif
++
++
++
++
+ 
+ #define LABEL_NAME_LENGTH 17
+ 
+diff --git a/tensilelite/rocisa/rocisa/src/code.cpp b/tensilelite/rocisa/rocisa/src/code.cpp
+index 3a1194df..f6bb56e4 100644
+--- a/tensilelite/rocisa/rocisa/src/code.cpp
++++ b/tensilelite/rocisa/rocisa/src/code.cpp
+@@ -143,6 +143,8 @@ void init_code(nb::module_ m)
+                  self.name = std::get<0>(state);
+              });
+ 
++//private: virtual void __cdecl rocisa::Module::def(class std::vector<class std::shared_ptr<struct rocisa::Item>,class std::allocator<class std::shared_ptr<struct rocisa::Item> > > const & __ptr64)
++
+     nb::class_<rocisa::Module, rocisa::Item>(m_code, "Module")
+         .def(nb::init<const std::string&>(), nb::arg("name") = "")
+         .def("setParent", &rocisa::Module::setParent)
+diff --git a/tensilelite/rocisa/rocisa/src/enum.cpp b/tensilelite/rocisa/rocisa/src/enum.cpp
+index b09e5508..7af8f2b6 100644
+--- a/tensilelite/rocisa/rocisa/src/enum.cpp
++++ b/tensilelite/rocisa/rocisa/src/enum.cpp
+@@ -82,7 +82,7 @@ void init_enum(nb::module_ m)
+ 
+     nb::enum_<SelectBit>(m_enum, "SelectBit")
+         .value("SEL_NONE", SelectBit::SEL_NONE)
+-        .value("DWORD", SelectBit::DWORD)
++        .value("DWORD", SelectBit::_DWORD)
+         .value("BYTE_0", SelectBit::BYTE_0)
+         .value("BYTE_1", SelectBit::BYTE_1)
+         .value("BYTE_2", SelectBit::BYTE_2)
+-- 
+2.49.0.windows.1
+
