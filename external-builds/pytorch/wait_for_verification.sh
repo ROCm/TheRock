@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -xeuo pipefail
 
 if [ -z "${GH_TOKEN:-}" ] || [ -z "${DISPATCH_ID:-}" ] || [ -z "${START_TIME:-}" ] || [ -z "${GITHUB_REPOSITORY:-}" ]; then
   echo "❌ Required environment variables: GH_TOKEN, DISPATCH_ID, START_TIME, GITHUB_REPOSITORY"
