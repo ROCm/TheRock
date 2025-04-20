@@ -1,19 +1,12 @@
-#!/bin/bash
-set -xeuo pipefail
+#!/usr/bin/env bash
+set -euo pipefail
 
-if [ -z "$GH_TOKEN" ]; then
-  echo "❌ GH_TOKEN is not set. Cannot authenticate with GitHub CLI."
+if [ -z "${GH_TOKEN:-}" ] || [ -z "${DISPATCH_ID:-}" ] || [ -z "${START_TIME:-}" ] || [ -z "${GITHUB_REPOSITORY:-}" ]; then
+  echo "❌ Required environment variables: GH_TOKEN, DISPATCH_ID, START_TIME, GITHUB_REPOSITORY"
   exit 1
 fi
 
-if [ -z "$DISPATCH_ID" ]; then
-  echo "❌ DISPATCH_ID is required."
-  exit 1
-fi
-
-REPO=${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}
-
-echo "🔍 Waiting for workflow 'verify_docker_image.yml' with dispatch ID $DISPATCH_ID..."
+echo "🔍 Waiting for run matching DISPATCH_ID=$DISPATCH_ID, after $START_TIME..."
 
 RUN_ID=""
 
@@ -21,10 +14,10 @@ for attempt in {1..30}; do
   echo "⏱️  Polling attempt $attempt..."
 
   if [ -z "$RUN_ID" ]; then
-    RUN_ID=$(gh api "/repos/${REPO}/actions/runs?event=workflow_dispatch&per_page=10" \
+    RUN_ID=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?event=workflow_dispatch&per_page=20&created=>=$START_TIME" \
       --jq ".workflow_runs[] | .id" |
       while read run_id; do
-        gh api "/repos/${REPO}/actions/runs/$run_id/jobs" \
+        gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/jobs" \
           --jq ".jobs[].steps[]? | select(.name == \"Identifier $DISPATCH_ID\") | \"$run_id\"" || true
       done | head -n 1)
 
@@ -42,13 +35,13 @@ for attempt in {1..30}; do
 
   echo "🔄 Run ID: $RUN_ID | Status: $STATUS | Conclusion: $CONCLUSION"
 
-  if [[ "$STATUS" == 'completed' ]]; then
-    if [[ "$CONCLUSION" == 'success' ]]; then
+  if [[ "$STATUS" == "completed" ]]; then
+    if [[ "$CONCLUSION" == "success" ]]; then
       echo "✅ Verification passed for $DISPATCH_ID"
       exit 0
     else
       echo "❌ Verification failed for $DISPATCH_ID"
-      gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs. Check manually."
+      gh run view "$RUN_ID" --log || echo "⚠️ Could not fetch logs."
       exit 1
     fi
   fi
@@ -57,5 +50,5 @@ for attempt in {1..30}; do
   sleep 30
 done
 
-echo "❌ Timed out after waiting 15 minutes for verification."
+echo "❌ Timed out after waiting 15 minutes for verification.."
 exit 1

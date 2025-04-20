@@ -24,7 +24,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      actions: write  # Added permission to trigger workflows
+      actions: write # Added permission to trigger workflows
 
     steps:
       - name: Checkout repository
@@ -39,6 +39,16 @@ jobs:
           git config fetch.parallel 10
           git config --global user.email "nobody@amd.com"
           git config --global user.name "Nobody"
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y uuid-runtime gh
+
+      - name: Generate unique dispatch ID
+        id: uuid
+        run: echo "DISPATCH_ID=dispatch-${{ matrix.targets.amdgpu_target }}-$(uuidgen)" >> $GITHUB_ENV
+
+      - name: Capture dispatch start timestamp
+        run: echo "START_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
 
       - name: Fetch sources
         run: |
@@ -64,6 +74,7 @@ jobs:
       # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
+
       - name: Build and push Docker image
         id: build_push
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
@@ -82,11 +93,10 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Log digest
-        run: | 
+        run: |
           echo "Built image with digest: ${{ steps.build_push.outputs.digest }}"
 
       - name: Trigger verification workflow
-        id: trigger_verification
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc
         with:
           workflow: verify_docker_image.yml
@@ -96,27 +106,20 @@ jobs:
               "amdgpu_target": "${{ matrix.targets.amdgpu_target }}",
               "image_digest": "${{ steps.build_push.outputs.digest }}",
               "runner_type": "${{
-                (matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm') ||
-                (matrix.targets.amdgpu_target == 'gfx1100' && 'linux-rx7900-gpu-rocm-1') ||
+                matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' ||
                 (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') ||
                 'linux-mi300-1gpu-ossci-rocm'
               }}",
-              "dispatch_id": "dispatch-${{ matrix.targets.amdgpu_target }}-${{ github.run_id }}"
+              "dispatch_id": "${{ env.DISPATCH_ID }}"
             }
 
-      - name: Install GitHub CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gh
-
-      - name: Wait for verification to complete using GitHub CLI
+      - name: Wait for verification to complete
+        run: ./scripts/wait_for_verification.sh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMMIT_SHA: ${{ github.sha }}
-          DISPATCH_ID: dispatch-${{ matrix.targets.amdgpu_target }}-${{ github.run_id }}
-        run: |
-          echo "🔍 Waiting for workflow 'verify_docker_image.yml' with dispatch ID $DISPATCH_ID..."
-          bash external-builds/pytorch/wait_for_verification.sh
+          DISPATCH_ID: ${{ env.DISPATCH_ID }}
+          START_TIME: ${{ env.START_TIME }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
 
       # Tag and push verified image
       - name: Tag and push verified image

@@ -1,25 +1,6 @@
 name: Pull and Verify Docker Image
 
 on:
-  workflow_dispatch:
-    inputs:
-      amdgpu_target:
-        description: "AMDGPU target to verify"
-        required: true
-        default: "gfx942"
-        type: string
-      image_digest:
-        description: "Digest of image to verify"
-        required: true
-        type: string
-      runner_type:
-        description: "Runner type to use"
-        required: true
-        default: "linux-mi300-1gpu-ossci-rocm"
-        type: string
-      dispatch_id:
-        type: string
-        required: true
   workflow_call:
     inputs:
       amdgpu_target:
@@ -42,7 +23,7 @@ jobs:
     steps:
       - name: Identifier ${{ inputs.dispatch_id }}
         run: |
-           echo "Dispatched for: ${{ inputs.dispatch_id }}"
+           echo "Verifying for dispatch_id ${{ inputs.dispatch_id }}"
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
