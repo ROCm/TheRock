@@ -86,6 +86,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
+            ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.title=PyTorch ROCm Dev Image
             org.opencontainers.image.description=Nightly ROCm PyTorch Dev Docker for target ${{ matrix.targets.amdgpu_target }}
             org.opencontainers.image.version=${{ env.VERSION }}
