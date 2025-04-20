@@ -108,6 +108,7 @@ jobs:
               "runner_type": "${{
                 matrix.targets.amdgpu_target == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' ||
                 (matrix.targets.amdgpu_target == 'gfx1201' && 'linux-rx9070-gpu-rocm') ||
+                (matrix.targets.amdgpu_target == 'gfx1100' && 'linux-rx7900-gpu-rocm-1') ||
                 'linux-mi300-1gpu-ossci-rocm'
               }}",
               "dispatch_id": "${{ env.DISPATCH_ID }}"
