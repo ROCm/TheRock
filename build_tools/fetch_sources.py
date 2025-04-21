@@ -90,7 +90,7 @@ def apply_patches(args):
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches")
-        exec(["git", "am", "--whitespace=nowarn"] + patch_files, cwd=project_dir)
+        exec(["git", "-c", "user.name=therockbot", "-c", "user.email=therockbot@amd.com", "am", "--whitespace=nowarn"] + patch_files, cwd=project_dir)
         # Since it is in a patched state, make it invisible to changes.
         exec(
             ["git", "update-index", "--skip-worktree", "--", submodule_path],
