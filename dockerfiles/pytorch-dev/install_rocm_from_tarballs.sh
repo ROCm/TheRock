@@ -1,46 +1,65 @@
 #!/bin/bash
 set -euo pipefail
 
-# Path to the directory containing ROCm tarballs
-# TODO find the correct path for the artifact tarballs
-TARBALL_DIR="${1:-/rocm-tarballs}"
+# === Configuration ===
+ARTIFACT_RUN_ID="${ARTIFACT_RUN_ID:-}"
+AMDGPU_FAMILIES="${AMDGPU_FAMILIES:-gfx942 gfx1100 gfx1201}"
+OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
+FETCH_ARTIFACT_ARGS="${FETCH_ARTIFACT_ARGS:-"--all"}"
 INSTALL_PREFIX="/opt/rocm"
 
-echo "Installing ROCm from tarballs in $TARBALL_DIR"
+if [[ -z "$ARTIFACT_RUN_ID" ]]; then
+  echo "[ERROR] ARTIFACT_RUN_ID must be set"
+  exit 1
+fi
 
-# 1. Create installation directory
-sudo mkdir -p "$INSTALL_PREFIX"
+echo "[INFO] Installing ROCm artifacts for: $AMDGPU_FAMILIES"
+echo "[INFO] Artifact run ID: $ARTIFACT_RUN_ID"
+echo "[INFO] Destination directory: $OUTPUT_ARTIFACTS_DIR"
 
-# 2. Extract all tarballs to /opt/rocm
-for tarball in "$TARBALL_DIR"/rocm-*.tar.gz; do
-  echo "Extracting: $tarball"
-  sudo tar -xvzf "$tarball" -C "$INSTALL_PREFIX"
+# === Step 1: Fetch and Extract for each GPU target ===
+for target in $AMDGPU_FAMILIES; do
+  TARGET_DIR="${OUTPUT_ARTIFACTS_DIR}/${target}"
+  echo "[INFO] Fetching artifacts for target: $target -> $TARGET_DIR"
+  mkdir -p "$TARGET_DIR"
+
+  python3 ./build_tools/fetch_artifacts.py \
+    --run-id="$ARTIFACT_RUN_ID" \
+    --target="$target" \
+    --build-dir="$TARGET_DIR" \
+    $FETCH_ARTIFACT_ARGS
+
+  echo "[INFO] Installing ROCm from tarballs for $target"
+  for tarball in "$TARGET_DIR"/*.tar.*; do
+    echo "[INFO] Extracting $tarball"
+    case "$tarball" in
+      *.tar.gz) sudo tar -xvzf "$tarball" -C "$INSTALL_PREFIX" ;;
+      *.tar.xz) sudo tar -xvJf "$tarball" -C "$INSTALL_PREFIX" ;;
+      *) echo "[WARN] Skipping unknown archive format: $tarball" ;;
+    esac
+  done
 done
 
-# 3. Set up environment variables
+# === Step 2: Setup Environment Variables ===
 ROCM_ENV_FILE="/etc/profile.d/rocm.sh"
-echo "Writing environment variables to $ROCM_ENV_FILE"
-
+echo "[INFO] Writing environment config to $ROCM_ENV_FILE"
 sudo tee "$ROCM_ENV_FILE" > /dev/null <<EOF
 export PATH=$INSTALL_PREFIX/bin:\$PATH
-export LD_LIBRARY_PATH=$INSTALL_PREFIX/lib:$INSTALL_PREFIX/lib64:\$LD_LIBRARY_PATH
 export ROCM_PATH=$INSTALL_PREFIX
 EOF
 
-# 4. Configure dynamic linker
+# === Step 3: Configure Dynamic Linker ===
 ROCM_LDCONF_FILE="/etc/ld.so.conf.d/rocm.conf"
-echo "Writing dynamic linker config to $ROCM_LDCONF_FILE"
-
+echo "[INFO] Writing dynamic linker config to $ROCM_LDCONF_FILE"
 sudo tee "$ROCM_LDCONF_FILE" > /dev/null <<EOF
 $INSTALL_PREFIX/lib
 $INSTALL_PREFIX/lib64
 EOF
 
-echo "Running ldconfig"
+echo "[INFO] Running ldconfig..."
 sudo ldconfig
 
-# 5. Confirm installation
-echo "ROCm installed to $INSTALL_PREFIX"
-echo "ROCm tools:"
-which hipcc || echo "hipcc not found (ROCm toolchain missing?)"
-which rocminfo || echo "rocminfo not found (might not be in your PATH yet)"
+# === Step 4: Validation ===
+echo "[INFO] ROCm installed to $INSTALL_PREFIX"
+which hipcc || echo "[WARN] hipcc not found"
+which rocminfo || echo "[WARN] rocminfo not found"
