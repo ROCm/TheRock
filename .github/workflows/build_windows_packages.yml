@@ -28,8 +28,8 @@ jobs:
       fail-fast: true
     env:
       BASE_BUILD_DIR_POWERSHELL: C:\tmpbuild
-      CACHE_DIR: ${{ github.workspace }}/.cache
-      CCACHE_DIR: "${{ github.workspace }}/.cache/ccache"
+      CACHE_DIR: "ccache-dir/.cache"
+      CCACHE_DIR: "ccache-dir/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
     steps:
       - name: "Create build dir"
