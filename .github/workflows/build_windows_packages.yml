@@ -28,8 +28,8 @@ jobs:
       fail-fast: true
     env:
       BASE_BUILD_DIR_POWERSHELL: C:\tmpbuild
-      CACHE_DIR: ${{ github.workspace }}/.cache
-      CCACHE_DIR: "${{ github.workspace }}/.cache/ccache"
+      CACHE_DIR: /tmpbuild/.cache
+      CCACHE_DIR: /tmpbuild/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
     steps:
       - name: "Create build dir"
@@ -63,7 +63,6 @@ jobs:
         run: |
           echo "CCACHE_DIR=${CCACHE_DIR}"
           df -h
-          ccache -z
           mkdir -p $CCACHE_DIR
           cmake --version
           echo "python: $(which python), python3: $(which python3)"
@@ -91,6 +90,9 @@ jobs:
 
       - name: Configure Projects
         run: |
+          # clear cache before build and after download
+          ccache -z
+
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
           amdgpu_families="${{ inputs.amdgpu_families }}"
