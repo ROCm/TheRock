@@ -38,7 +38,7 @@ jobs:
           $currentTime = (Get-Date).ToString('HHmmss')
           $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
           echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
-          mkdir "$buildDir"
+          dir "$buildDir"
           Write-Host "Generated Build Directory: $buildDir"
           $bashBuildDir = $buildDir -replace '\\', '/' -replace '^C:', '/c'
           echo  "BUILD_DIR_BASH=$bashBuildDir" >> $env:GITHUB_ENV
@@ -46,7 +46,7 @@ jobs:
           $fs = Get-PSDrive -PSProvider "FileSystem"
           $fsout = $fs | Select-Object -Property Name,Used,Free,Root
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
-          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}}
+          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -143,9 +143,8 @@ jobs:
         if: always()
         run: |
           $fs = Get-PSDrive -PSProvider "FileSystem"
-          $g = [Math]::Pow(2,30) 
           $fsout = $fs | Select-Object -Property Name,Used,Free,Root
-          $fsout | % {$_.Used/=$g;$_.Free/=$g;$_} | Write-Host
-          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}}
+          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
+          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
           if (Test-Path -Path "$Env:BUILD_DIR_POWERSHELL") {Remove-Item -Path "$Env:BUILD_DIR_POWERSHELL" -Recurse -Force}
         shell: powershell
