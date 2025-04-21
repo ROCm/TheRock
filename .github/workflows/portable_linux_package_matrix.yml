@@ -101,8 +101,6 @@ jobs:
         run: |
           # Prefetch docker container in background.
           docker pull ${{ env.BUILD_IMAGE }} &
-          git config --global user.email "nobody@amd.com"
-          git config --global user.name "Nobody"
           ./build_tools/fetch_sources.py --jobs 10
           wait
 
