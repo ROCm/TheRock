@@ -38,7 +38,7 @@ jobs:
           $currentTime = (Get-Date).ToString('HHmmss')
           $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
           echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
-          dir "$buildDir"
+          mkdir "$buildDir"
           Write-Host "Generated Build Directory: $buildDir"
           $bashBuildDir = $buildDir -replace '\\', '/' -replace '^B:', '/b'
           echo  "BUILD_DIR_BASH=$bashBuildDir" >> $env:GITHUB_ENV
