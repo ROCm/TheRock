@@ -27,22 +27,26 @@ jobs:
     strategy:
       fail-fast: true
     env:
-      BASE_BUILD_DIR_POWERSHELL: C:\mnt\azure\b
+      BASE_BUILD_DIR_POWERSHELL: C:\tmpbuild
       CACHE_DIR: ${{ github.workspace }}/.cache
       CCACHE_DIR: "${{ github.workspace }}/.cache/ccache"
-      CCACHE_MAXSIZE: "700M"
+      CCACHE_MAXSIZE: "4000M"
     steps:
       - name: "Create build dir"
         shell: powershell
         run: |
           $currentTime = (Get-Date).ToString('HHmmss')
-          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\$currentTime"
+          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
           echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
           mkdir "$buildDir"
           Write-Host "Generated Build Directory: $buildDir"
           $bashBuildDir = $buildDir -replace '\\', '/' -replace '^C:', '/c'
           echo  "BUILD_DIR_BASH=$bashBuildDir" >> $env:GITHUB_ENV
           Write-Host "Converted Build Directory For Bash: $bashBuildDir"
+          $fs = Get-PSDrive -PSProvider "FileSystem"
+          $g = [Math]::Pow(2,30) 
+          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
+          $fsout | % {$_.Used/=$g;$_.Free/=$g;$_} | Write-Host
 
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
