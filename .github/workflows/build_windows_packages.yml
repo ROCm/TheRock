@@ -142,5 +142,11 @@ jobs:
 
       - name: "Clean up build dir"
         if: always()
-        run: if (Test-Path -Path "$Env:BUILD_DIR_POWERSHELL") {Remove-Item -Path "$Env:BUILD_DIR_POWERSHELL" -Recurse -Force}
+        run: |
+          $fs = Get-PSDrive -PSProvider "FileSystem"
+          $g = [Math]::Pow(2,30) 
+          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
+          $fsout | % {$_.Used/=$g;$_.Free/=$g;$_} | Write-Host
+          echo "lis dis" | diskpart
+          if (Test-Path -Path "$Env:BUILD_DIR_POWERSHELL") {Remove-Item -Path "$Env:BUILD_DIR_POWERSHELL" -Recurse -Force}
         shell: powershell
