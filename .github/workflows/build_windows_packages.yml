@@ -97,7 +97,6 @@ jobs:
           amdgpu_families="${{ inputs.amdgpu_families }}"
           echo "Building package ${package_version}"
 
-          
           # Build.
           cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
