@@ -68,7 +68,7 @@ jobs:
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
           nthreads=$(nproc --all)
-          echo [*] Logical Processors to be used: $nthreads... 
+          echo [*] Logical Processors to be used: $nthreads...
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
