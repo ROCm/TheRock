@@ -3,7 +3,6 @@ import os
 
 import configure_ci
 
-
 class ConfigureCITest(TestCase):
     def test_run_ci_if_source_file_edited(self):
         paths = ["source_file.h"]
@@ -40,9 +39,9 @@ class ConfigureCITest(TestCase):
         )
         linux_target_to_compare = [
             {
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
                 "family": "gfx94X-dcgpu",
                 "pytorch-target": "gfx942",
-                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
             }
         ]
         self.assertEqual(linux_target_output, linux_target_to_compare)

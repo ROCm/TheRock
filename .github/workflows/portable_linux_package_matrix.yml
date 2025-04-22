@@ -65,7 +65,7 @@ jobs:
         id: configure
         env:
           PYTORCH_DEV_DOCKER: "false"
-        run: python ./build_tools/fetch_package_targets.py
+        run: python ./build_tools/github_action/fetch_package_targets.py
 
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux

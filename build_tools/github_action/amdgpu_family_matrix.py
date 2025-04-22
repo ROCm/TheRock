@@ -1,3 +1,7 @@
+"""
+This AMD GPU Family Matrix is the "source of truth" for GitHub workflows, indicating which families and test runners are available to use
+"""
+
 amdgpu_family_info_matrix = {
     "gfx94x": {
         "linux": {

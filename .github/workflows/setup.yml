@@ -57,4 +57,4 @@ jobs:
           INPUT_BUILD_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.build_windows_amdgpu_families }}
           INPUT_TEST_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.test_linux_amdgpu_families }}
           INPUT_TEST_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.test_windows_amdgpu_families }}
-        run: ./build_tools/configure_ci.py
+        run: ./build_tools/github_action/configure_ci.py
