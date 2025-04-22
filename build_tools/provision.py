@@ -14,7 +14,7 @@ import tarfile
 from tqdm import tqdm
 from _therock_utils.artifacts import ArtifactPopulator
 import requests
-import re
+from packaging.version import Version
 
 
 def log(*args, **kwargs):
@@ -163,18 +163,18 @@ def retrieve_artifacts_by_run_id(args):
 
 def retrieve_artifacts_by_release(args):
     """
-    If the user requested TheRock artifacts by release tag (github.run_id), this function will retrieve those assets
+    If the user requested TheRock artifacts by release version, this function will retrieve those assets
     """
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    # Searching for X.X.XrcYYYYMMDD format to see if this is a nightly-release or dev-release
-    regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
-    nightly_release = re.search(regex_expression, args.release) != None
-    release_tag = "nightly-release" if nightly_release else "dev-release"
-    release_version = args.release
     # In the case that the user passes in latest, we will get the latest nightly-release
     if args.release == "latest":
         release_tag = "nightly-release"
+    # Otherwise, determine if version is nightly-release or dev-release
+    else:
+        version = Version(args.release)
+        release_tag = "dev-release" if version.is_devrelease else "nightly-release"
+    release_version = args.release
 
     log(f"Retrieving artifacts for release tag {release_tag}")
     asset_data = _get_github_release_assets(release_tag, amdgpu_family, release_version)
