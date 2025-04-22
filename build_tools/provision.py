@@ -53,12 +53,12 @@ def _create_output_directory(args):
     log(f"Created directory {output_dir_path}")
 
 
-def _get_github_release_assets(release_id, amdgpu_family):
+def _get_github_release_assets(release_tag, amdgpu_family, args):
     """
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
     """
     github_release_url = (
-        f"https://api.github.com/repos/ROCm/TheRock/releases/tags/{release_id}"
+        f"https://api.github.com/repos/ROCm/TheRock/releases/tags/{release_tag}"
     )
     headers = {
         "Accept": "application/vnd.github+json",
@@ -67,25 +67,41 @@ def _get_github_release_assets(release_id, amdgpu_family):
     response = requests.get(github_release_url, headers=headers)
     if response.status_code == 403:
         log(
-            f"Error when retrieving GitHub release assets for release ID {release_id}. This is most likely a rate limiting issue, so please try again"
+            f"Error when retrieving GitHub release assets for release tag {release_tag}. This is most likely a rate limiting issue, so please try again"
         )
         return
     elif response.status_code != 200:
         log(
-            f"Error when retrieving GitHub release assets for release ID {release_id}. Exiting..."
+            f"Error when retrieving GitHub release assets for release tag {release_tag}. Exiting..."
         )
         return
 
     release_data = response.json()
 
     # We retrieve the most recent release asset that matches the amdgpu_family
-    # In the cases of "nightly-release" or "dev-release", this will retrieve the most recent release asset
+    # In the cases of "nightly-release" or "dev-release", this will retrieve the the specified version or latest
     asset_data = sorted(
         release_data["assets"], key=lambda item: item["updated_at"], reverse=True
     )
-    for asset in asset_data:
-        if amdgpu_family in asset["name"]:
-            return asset
+
+    # If the user passed in YYYYMMDD for nightly version
+    if args.nightly_version and args.nightly_version != "latest":
+        datestamp = args.nightly_version
+        for asset in asset_data:
+            if amdgpu_family in asset["name"] and datestamp in asset["name"]:
+                return asset
+    # If the user passed in X.X.X for dev version
+    elif args.dev_version and args.dev_version != "latest":
+        dev_version = args.dev_version
+        for asset in asset_data:
+            if amdgpu_family in asset["name"] and dev_version in asset["name"]:
+                return asset
+    # Otherwise, return the latest and amdgpu-matched asset available
+    else:
+        for asset in asset_data:
+            if amdgpu_family in asset["name"]:
+                return asset
+
     return None
 
 
@@ -114,26 +130,26 @@ def _download_github_release_asset(asset_data, output_dir):
     _untar_files(output_dir, destination)
 
 
-def retrieve_artifacts_by_ci(args):
+def retrieve_artifacts_by_run_id(args):
     """
-    If the user requested TheRock artifacts by CI (runner ID), this function will retrieve those assets
+    If the user requested TheRock artifacts by CI (run ID), this function will retrieve those assets
     """
-    runner_id = args.runner_id
+    run_id = args.run_id
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    log(f"Retrieving artifacts for runner ID {runner_id}")
-    if not s3_bucket_exists(runner_id):
-        log(f"S3 artifacts for {runner_id} does not exist. Exiting...")
+    log(f"Retrieving artifacts for run ID {run_id}")
+    if not s3_bucket_exists(run_id):
+        log(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
 
     args.all = True
 
     # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
-    retrieve_base_artifacts(args, runner_id, output_dir)
-    retrieve_enabled_artifacts(args, True, amdgpu_family, runner_id, output_dir)
+    retrieve_base_artifacts(args, run_id, output_dir)
+    retrieve_enabled_artifacts(args, True, amdgpu_family, run_id, output_dir)
 
     # Flattening artifacts from .tar* files then removing .tar* files
-    log(f"Untar-ing artifacts for {runner_id}")
+    log(f"Untar-ing artifacts for {run_id}")
     output_dir_path = Path(output_dir).resolve()
     tar_file_paths = list(output_dir_path.glob("*.tar.*"))
     flattener = ArtifactPopulator(
@@ -143,32 +159,32 @@ def retrieve_artifacts_by_ci(args):
     for file_path in tar_file_paths:
         file_path.unlink()
 
-    log(f"Retrieved artifacts for runner ID {runner_id}")
+    log(f"Retrieved artifacts for run ID {run_id}")
 
 
 def retrieve_artifacts_by_release(args):
     """
-    If the user requested TheRock artifacts by release tag (release ID), this function will retrieve those assets
+    If the user requested TheRock artifacts by release tag (github.run_id), this function will retrieve those assets
     """
-    release_id = args.release_id
+    release_tag = args.release_tag
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    log(f"Retrieving artifacts for release ID {release_id}")
-    asset_data = _get_github_release_assets(release_id, amdgpu_family)
+    log(f"Retrieving artifacts for release tag {release_tag}")
+    asset_data = _get_github_release_assets(release_tag, amdgpu_family, args)
     if not asset_data:
-        log(f"GitHub release asset for {release_id} not found. Exiting...")
+        log(f"GitHub release asset for {release_tag} not found. Exiting...")
         return
     _download_github_release_asset(asset_data, output_dir)
-    log(f"Retrieving artifacts for runner ID {release_id}")
+    log(f"Retrieving artifacts for run ID {release_tag}")
 
 
 def run(args):
     log("### Provisioning TheRock 🪨 ###")
     _create_output_directory(args)
-    if args.runner_id:
-        retrieve_artifacts_by_ci(args)
+    if args.run_id:
+        retrieve_artifacts_by_run_id(args)
 
-    if args.release_id:
+    if args.release_tag:
         retrieve_artifacts_by_release(args)
 
 
@@ -191,11 +207,25 @@ def main(argv):
     # This mutually exclusive group will ensure that only one argument is present
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--runner-id", type=str, help="GitHub runner ID of TheRock to provision"
+        "--run-id", type=str, help="GitHub run ID of TheRock to provision"
     )
 
     group.add_argument(
-        "--release-id", type=str, help="Github release ID of TheRock to provision"
+        "--release-tag", type=str, help="Github release tag of TheRock to provision"
+    )
+
+    parser.add_argument(
+        "--nightly-version",
+        type=str,
+        required="nightly-release" in sys.argv,
+        help="If the release tag is 'nightly-release', pass the nightly version to use (YYYYMMDD or latest)",
+    )
+
+    parser.add_argument(
+        "--dev-version",
+        type=str,
+        required="dev-release" in sys.argv,
+        help="If the release tag is 'dev-release', pass the dev version to use (X.X.X or latest)",
     )
 
     args = parser.parse_args(argv)
