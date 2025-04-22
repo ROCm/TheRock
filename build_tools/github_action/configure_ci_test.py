@@ -3,6 +3,7 @@ import os
 
 import configure_ci
 
+
 class ConfigureCITest(TestCase):
     def test_run_ci_if_source_file_edited(self):
         paths = ["source_file.h"]
