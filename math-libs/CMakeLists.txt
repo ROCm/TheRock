@@ -86,6 +86,7 @@ if(THEROCK_ENABLE_PRIM)
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      therock-googletest
     RUNTIME_DEPS
       hip-clr
   )
@@ -109,6 +110,7 @@ if(THEROCK_ENABLE_PRIM)
     BUILD_DEPS
       rocm-cmake
       rocPRIM
+      therock-googletest
     RUNTIME_DEPS
       hip-clr
   )
@@ -132,6 +134,7 @@ if(THEROCK_ENABLE_PRIM)
     BUILD_DEPS
       rocm-cmake
       rocPRIM
+      therock-googletest
     RUNTIME_DEPS
       hip-clr
   )

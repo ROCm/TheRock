@@ -10,9 +10,10 @@ if(THEROCK_ENABLE_MIOPEN)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       -DMIOPEN_USE_COMPOSABLEKERNEL=OFF  # TODO: enable
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
-      -DMIOPEN_BUILD_DRIVER=OFF # TODO: enable
+      -DMIOPEN_BUILD_DRIVER=ON
       -DMIOPEN_USE_ROCTRACER=OFF # TODO: enable
     COMPILER_TOOLCHAIN
       amd-hip
@@ -23,6 +24,7 @@ if(THEROCK_ENABLE_MIOPEN)
       therock-boost
       therock-eigen
       therock-frugally-deep
+      therock-googletest
       therock-nlohmann-json
       therock-FunctionalPlus
     RUNTIME_DEPS

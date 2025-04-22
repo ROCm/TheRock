@@ -45,8 +45,6 @@ jobs:
           echo "Git version: $(git --version)"
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
-          git config --global user.email "nobody@amd.com"
-          git config --global user.name "Nobody"
       - name: Fetch sources
         run: |
           python3 ./build_tools/fetch_sources.py --jobs 10

@@ -8,6 +8,12 @@ function(therock_test_validate_shared_lib)
     "PATH"
     "LIB_NAMES"
   )
+  if(WIN32)
+    # This helper is Linux only. In the future, we can have separate DLL_NAMES
+    # and verify.
+    return()
+  endif()
+
   if(NOT IS_ABSOLUTE ARG_PATH)
     cmake_path(ABSOLUTE_PATH ARG_PATH BASE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endif()

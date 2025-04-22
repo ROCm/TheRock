@@ -1,0 +1,40 @@
+From 20010c047414123378fb2fe4220847a426551543 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Mon, 14 Apr 2025 15:03:29 -0700
+Subject: [PATCH 3/3] Add StrixHalo/Strix1 PAL enums and selectors.
+
+* Matches existing support in PAL which will be added to upstream CLR in due time.
+---
+ rocclr/device/pal/paldevice.cpp   | 2 ++
+ rocclr/device/pal/palsettings.cpp | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/rocclr/device/pal/paldevice.cpp b/rocclr/device/pal/paldevice.cpp
+index cf302053e..f58ff21ae 100644
+--- a/rocclr/device/pal/paldevice.cpp
++++ b/rocclr/device/pal/paldevice.cpp
+@@ -100,6 +100,8 @@ static constexpr PalDevice supportedPalDevices[] = {
+   {11, 0,  3,  Pal::GfxIpLevel::GfxIp11_0, "gfx1103",       Pal::AsicRevision::Phoenix2},
+   {11, 0,  3,  Pal::GfxIpLevel::GfxIp11_0, "gfx1103",       Pal::AsicRevision::HawkPoint1},
+   {11, 0,  3,  Pal::GfxIpLevel::GfxIp11_0, "gfx1103",       Pal::AsicRevision::HawkPoint2},
++  {11, 5,  0,  Pal::GfxIpLevel::GfxIp11_5, "gfx1150",       Pal::AsicRevision::Strix1},
++  {11, 5,  1,  Pal::GfxIpLevel::GfxIp11_5, "gfx1151",       Pal::AsicRevision::StrixHalo},  
+ };
+ 
+ static std::tuple<const amd::Isa*, const char*> findIsa(Pal::AsicRevision asicRevision,
+diff --git a/rocclr/device/pal/palsettings.cpp b/rocclr/device/pal/palsettings.cpp
+index c4b2cf509..4673d578b 100644
+--- a/rocclr/device/pal/palsettings.cpp
++++ b/rocclr/device/pal/palsettings.cpp
+@@ -167,6 +167,8 @@ bool Settings::create(const Pal::DeviceProperties& palProp,
+     case Pal::AsicRevision::Navi31:
+       gwsInitSupported_ = false;
+     // Fall through for Navi2x ...
++    case Pal::AsicRevision::StrixHalo:
++    case Pal::AsicRevision::Strix1:    
+     case Pal::AsicRevision::Phoenix1:
+     case Pal::AsicRevision::Phoenix2:
+     case Pal::AsicRevision::HawkPoint1:
+-- 
+2.41.0.windows.1
+

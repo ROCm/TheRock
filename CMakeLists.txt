@@ -60,6 +60,8 @@ option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds in
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 
+set(THEROCK_AMDGPU_WINDOWS_INTEROP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../amdgpu-windows-interop" CACHE PATH "Directory containing the Windows AMDGPU/ROCm driver interop support files")
+
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "${THEROCK_SOURCE_DIR}/install" CACHE PATH "" FORCE)
@@ -259,6 +261,12 @@ if(CMAKE_CXX_VISIBILITY_PRESET)
   list(APPEND DEFAULT_CMAKE_ARGS ${CMAKE_CXX_VISIBILITY_PRESET})
 endif()
 
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+  message(
+    FATAL_ERROR
+    "Cannot build 32-bit ROCm with MSVC: You must enable the Windows x64 "
+    "development tools and rebuild (detected compiler ${CMAKE_CXX_COMPILER})")
+endif()
 
 ################################################################################
 # Sysdep bundling
@@ -362,7 +370,4 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
-if(NOT WIN32)
-  # TODO(#36): Enable on Windows (base/artifact.toml includes rocm_smi_lib that is excluded on Windows)
-  therock_create_dist()
-endif()
+therock_create_dist()
