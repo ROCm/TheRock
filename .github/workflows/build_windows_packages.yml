@@ -67,11 +67,9 @@ jobs:
           echo "python: $(which python), python3: $(which python3)"
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
-          git config --global user.email "nobody@amd.com"
-          git config --global user.name "Nobody"
           nthreads=$(nproc --all)
           echo [*] Logical Processors to be used: $nthreads... 
-
+          
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
