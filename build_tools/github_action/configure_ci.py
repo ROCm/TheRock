@@ -345,10 +345,10 @@ def main(base_args, build_families, test_families):
     write_job_summary(
         f"""## Workflow configure results
 
-* `build_linux_amdgpu_families`: {str([item.get("target") for item in build_linux_target_output])}
-* `build_windows_amdgpu_families`: {str([item.get("target") for item in build_windows_target_output])}
-* `test_linux_amdgpu_families`: {str([item.get("target") for item in test_linux_target_output])}
-* `test_windows_amdgpu_families`: {str([item.get("target") for item in test_windows_target_output])}
+* `build_linux_amdgpu_families`: {str([item.get("family") for item in build_linux_target_output])}
+* `build_windows_amdgpu_families`: {str([item.get("family") for item in build_windows_target_output])}
+* `test_linux_amdgpu_families`: {str([item.get("family") for item in test_linux_target_output])}
+* `test_windows_amdgpu_families`: {str([item.get("family") for item in test_windows_target_output])}
     """
     )
 

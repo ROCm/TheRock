@@ -1,6 +1,4 @@
 from unittest import TestCase, main
-import os
-
 import configure_ci
 
 
