@@ -14,7 +14,7 @@ import tarfile
 from tqdm import tqdm
 from _therock_utils.artifacts import ArtifactPopulator
 import requests
-from packaging.version import Version
+from packaging.version import Version, InvalidVersion
 
 
 def log(*args, **kwargs):
@@ -172,8 +172,12 @@ def retrieve_artifacts_by_release(args):
         release_tag = "nightly-release"
     # Otherwise, determine if version is nightly-release or dev-release
     else:
-        version = Version(args.release)
-        release_tag = "dev-release" if version.is_devrelease else "nightly-release"
+        try:
+            version = Version(args.release)
+            release_tag = "dev-release" if version.is_devrelease else "nightly-release"
+        except InvalidVersion:
+            log(f"Invalid release type {args.release}. Exiting...")
+            return
     release_version = args.release
 
     log(f"Retrieving artifacts for release tag {release_tag}")
