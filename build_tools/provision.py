@@ -174,9 +174,14 @@ def retrieve_artifacts_by_release(args):
     else:
         try:
             version = Version(args.release)
+            if not version.is_devrelease and not version.is_prerelease:
+                log(
+                    f"This script requires a nightly-release or dev-release version. Exiting..."
+                )
+                return
             release_tag = "dev-release" if version.is_devrelease else "nightly-release"
         except InvalidVersion:
-            log(f"Invalid release type {args.release}. Exiting...")
+            log(f"Invalid release version {args.release}. Exiting...")
             return
     release_version = args.release
 
