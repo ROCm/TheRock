@@ -14,6 +14,7 @@ import tarfile
 from tqdm import tqdm
 from _therock_utils.artifacts import ArtifactPopulator
 import requests
+import re
 
 
 def log(*args, **kwargs):
@@ -53,7 +54,7 @@ def _create_output_directory(args):
     log(f"Created directory {output_dir_path}")
 
 
-def _get_github_release_assets(release_tag, amdgpu_family, args):
+def _get_github_release_assets(release_tag, amdgpu_family, release_version):
     """
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
     """
@@ -84,20 +85,18 @@ def _get_github_release_assets(release_tag, amdgpu_family, args):
         release_data["assets"], key=lambda item: item["updated_at"], reverse=True
     )
 
-    # If the user passed in YYYYMMDD for nightly version
-    if args.nightly_version and args.nightly_version != "latest":
-        datestamp = args.nightly_version
+    # For nightly-release
+    if release_tag == "nightly-release" and release_version != "latest":
         for asset in asset_data:
-            if amdgpu_family in asset["name"] and datestamp in asset["name"]:
+            if amdgpu_family in asset["name"] and release_version in asset["name"]:
                 return asset
-    # If the user passed in X.X.X for dev version
-    elif args.dev_version and args.dev_version != "latest":
-        dev_version = args.dev_version
+    # For dev-release
+    elif release_tag == "dev-release":
         for asset in asset_data:
-            if amdgpu_family in asset["name"] and dev_version in asset["name"]:
+            if amdgpu_family in asset["name"] and release_version in asset["name"]:
                 return asset
-    # Otherwise, return the latest and amdgpu-matched asset available
-    else:
+    # Otherwise, return the latest and amdgpu-matched asset available from the tag nightly-release
+    elif release_tag == "nightly-release" and release_version == "latest":
         for asset in asset_data:
             if amdgpu_family in asset["name"]:
                 return asset
@@ -166,11 +165,19 @@ def retrieve_artifacts_by_release(args):
     """
     If the user requested TheRock artifacts by release tag (github.run_id), this function will retrieve those assets
     """
-    release_tag = args.release_tag
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
+    # Searching for X.X.XrcYYYYMMDD format to see if this is a nightly-release or dev-release
+    regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+    nightly_release = re.search(regex_expression, args.release) != None
+    release_tag = "nightly-release" if nightly_release else "dev-release"
+    release_version = args.release
+    # In the case that the user passes in latest, we will get the latest nightly-release
+    if args.release == "latest":
+        release_tag = "nightly-release"
+
     log(f"Retrieving artifacts for release tag {release_tag}")
-    asset_data = _get_github_release_assets(release_tag, amdgpu_family, args)
+    asset_data = _get_github_release_assets(release_tag, amdgpu_family, release_version)
     if not asset_data:
         log(f"GitHub release asset for {release_tag} not found. Exiting...")
         return
@@ -184,7 +191,7 @@ def run(args):
     if args.run_id:
         retrieve_artifacts_by_run_id(args)
 
-    if args.release_tag:
+    if args.release:
         retrieve_artifacts_by_release(args)
 
 
@@ -211,21 +218,9 @@ def main(argv):
     )
 
     group.add_argument(
-        "--release-tag", type=str, help="Github release tag of TheRock to provision"
-    )
-
-    parser.add_argument(
-        "--nightly-version",
+        "--release",
         type=str,
-        required="nightly-release" in sys.argv,
-        help="If the release tag is 'nightly-release', pass the nightly version to use (YYYYMMDD or latest)",
-    )
-
-    parser.add_argument(
-        "--dev-version",
-        type=str,
-        required="dev-release" in sys.argv,
-        help="If the release tag is 'dev-release', pass the dev version to use (X.X.X or latest)",
+        help="Github release version of TheRock to provision, from the nightly-release (X.Y.ZrcYYYYMMDD) or dev-release (X.Y.Z.dev0+{hash})",
     )
 
     args = parser.parse_args(argv)

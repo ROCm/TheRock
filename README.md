@@ -125,7 +125,7 @@ separately.
 
 ## Provisioning TheRock 🪨
 
-In order to provision TheRock using either the latest developer/automated nightly release or a specific CI runner build, use the `build_tool/provision.py` script.
+In order to provision TheRock using either a developer/automated nightly release or a specific CI runner build, use the `build_tool/provision.py` script.
 
 Provisioning script setup:
 
@@ -140,18 +140,14 @@ Examples:
 
 <br/>
 
-- `python build_tools/provision.py --release-tag nightly-release --nightly-version latest --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`
+- `python build_tools/provision.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`
 
 <br/>
 
-- `python build_tools/provision.py --release-tag 1.2.3 --amdgpu-family gfx110X-dgpu`: Downloads the gfx110X artifacts from GitHub release tag `1.2.3` to the default output directory `therock-build`
+- `python build_tools/provision.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`
 
 <br/>
 
-- `python build_tools/provision.py --release-tag nightly-release --nightly-version 20250416 --amdgpu-family gfx110X-dgpu`: Downloads the gfx110X artifacts on 2025-04-16 from GitHub release tag `nightly-release` to the default output directory `therock-build`
-
-<br/>
-
-- `python build_tools/provision.py --release-tag dev-release --dev-version 6.4.0 --amdgpu-family gfx120X-all`: Downloads the version 6.4.0 gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`
+- `python build_tools/provision.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`: Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
