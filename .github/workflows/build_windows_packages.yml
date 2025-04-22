@@ -100,6 +100,7 @@ jobs:
           amdgpu_families="${{ inputs.amdgpu_families }}"
           echo "Building package ${package_version}"
 
+          
           # Build.
           cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -124,7 +125,7 @@ jobs:
             -DTHEROCK_ENABLE_ML_LIBS=OFF
 
       - name: Build Projects
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}"
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all)
 
       - name: Report
         if: ${{ !cancelled() }}
