@@ -35,7 +35,6 @@ jobs:
       - name: "Create build dir"
         shell: powershell
         run: |
-          $currentTime = (Get-Date).ToString('HHmmss')
           $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
           echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
           mkdir "$buildDir"
@@ -144,7 +143,7 @@ jobs:
           path: ${{ env.CACHE_DIR }}
           key: windows-build-packages-v2-${{ github.sha }}
 
-      - name: "Clean up build dir"
+      - name: "Build size report"
         if: always()
         run: |
           $fs = Get-PSDrive -PSProvider "FileSystem"
