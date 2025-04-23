@@ -61,7 +61,7 @@ jobs:
 
       - name: Authenticate with GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      
+
       - name: Construct image reference
         id: image_ref
         env:
