@@ -50,6 +50,8 @@ permissions:
 jobs:
   setup_metadata:
     runs-on: ubuntu-24.04
+    outputs:
+      image_ref: ${{ steps.image_ref.outputs.image_ref }}
     steps:
     - name: Construct image reference
       id: image_ref
@@ -57,7 +59,6 @@ jobs:
       env:
         IMAGE_REF: "ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
       run: |
-        echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
         echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
 
   pull-and-verify-image:
@@ -77,7 +78,7 @@ jobs:
 
       - name: Pull Docker Image
         run: |
-          docker pull ${{ env.IMAGE_REF }}
+          docker pull ${{ needs.setup_metadata.outputs.image_ref }}
 
       - name: Pre-download pytest wheel
         run: |
@@ -94,7 +95,7 @@ jobs:
           --group-add video \
           --cap-add=SYS_PTRACE \
           -w /TheRock \
-          ${{ env.IMAGE_REF }} \
+          ${{ needs.setup_metadata.outputs.image_ref }} \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
 
       - name: Verify Containers Status
