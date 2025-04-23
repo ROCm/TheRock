@@ -1,7 +1,7 @@
 From 20010c047414123378fb2fe4220847a426551543 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 14 Apr 2025 15:03:29 -0700
-Subject: [PATCH 3/3] Add StrixHalo/Strix1 PAL enums and selectors.
+Subject: [PATCH 2/2] Add StrixHalo/Strix1 PAL enums and selectors.
 
 * Matches existing support in PAL which will be added to upstream CLR in due time.
 ---
