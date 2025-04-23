@@ -2,7 +2,7 @@ name: Publish PyTorch Dev Dockers
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *" # Runs Nightly at 2 AM UTC
+    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
 
 jobs:
   setup_metadata:
