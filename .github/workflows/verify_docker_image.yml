@@ -57,7 +57,6 @@ jobs:
         IMAGE_REF: "ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
       run: |
         echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
-        echo "Image to verify: ${{ env.IMAGE_REF }}"
 
   pull-and-verify-image:
     name: Verify ${{ version }}/${{ env.IMAGE_REF }} Docker Image
@@ -99,16 +98,16 @@ jobs:
       - name: Verify Containers Status
         run: |
           docker ps -a
-      # Tag and push verified image
+
       - name: Tag and push verified image
         run: |
-          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}
+          IMAGEBASE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}
           DIGEST=${{ inputs.image_digest  }}
           VERSION=${{ inputs.version }}
 
-          echo "Using image: $IMAGE"
+          echo "Using image: $IMAGEBASE"
           echo "Using digest: $DIGEST"
           echo "Using version: $VERSION"
 
-          docker tag $IMAGE@$DIGEST $IMAGE:$VERSION
+          docker tag $IMAGEBASE@$DIGEST $IMAGEBASE:$VERSION
           docker push $IMAGE:$VERSION
