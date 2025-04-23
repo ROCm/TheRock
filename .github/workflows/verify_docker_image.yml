@@ -72,11 +72,11 @@ jobs:
           IMAGE_REF: "ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
         run: |
           echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
-          echo "Image to verify: $IMAGE_REF"
+          echo "Image to verify: ${{ env.IMAGE_REF }}"
 
       - name: Pull Docker Image
         run: |
-          docker pull "$IMAGE_REF"
+          docker pull ${{ env.IMAGE_REF }}
 
       - name: Pre-download pytest wheel
         run: |
@@ -93,7 +93,7 @@ jobs:
           --group-add video \
           --cap-add=SYS_PTRACE \
           -w /TheRock \
-          "$IMAGE_REF" \
+          ${{ env.IMAGE_REF }} \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
 
       - name: Verify Containers Status
@@ -110,6 +110,5 @@ jobs:
           echo "Using digest: $DIGEST"
           echo "Using version: $VERSION"
 
-          docker pull $IMAGE@$DIGEST
           docker tag $IMAGE@$DIGEST $IMAGE:$VERSION
           docker push $IMAGE:$VERSION
