@@ -29,6 +29,8 @@ jobs:
 
 
   test_release_packages:
+    # If there is a test machine available
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     runs-on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     needs: generate_target_to_run
     permissions:
