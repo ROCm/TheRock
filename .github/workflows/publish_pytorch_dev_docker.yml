@@ -111,6 +111,6 @@ jobs:
                 (matrix.targets.amdgpu_family == 'gfx1100' && 'linux-rx7900-gpu-rocm') ||
                 'linux-mi300-1gpu-ossci-rocm'
               }}",
-              "dispatch_id": "${{ env.DISPATCH_ID }}"
+              "dispatch_id": "${{ env.DISPATCH_ID }}",
               "version": "${{ env.VERSION }}"
             }
