@@ -75,7 +75,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   set(HIP_CLR_RUNTIME_DEPS)
   if(WIN32)
     # Windows CLR options
-    set(_compute_pal_dir "${THEROCK_AMDGPU_WINDOWS_INTEROP_DIR}/pal-static-lib/compute-win")
+    set(_compute_pal_dir "${THEROCK_AMDGPU_WINDOWS_INTEROP_DIR}/20250414a")
     cmake_path(NORMAL_PATH _compute_pal_dir)
     set(_compute_pal_probe "${_compute_pal_dir}/pal/CMakeLists.txt")
     if(NOT EXISTS "${_compute_pal_probe}")
@@ -83,7 +83,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         "Can't build CLR: missing closed source AMDGPU/ROCm interop library folder "
         "expected at '${_compute_pal_dir}': "
         "This can be obtained by cloning this repository adjacent to TheRock: "
-        "https://github.com/nod-ai/amdgpu-windows-interop.git")
+        "https://github.com/nod-ai/amdgpu-windows-interop.git (and ensuring it is "
+        "updated to include the referenced version directory)")
     endif()
     message(STATUS "Found Winows AMDGPU/ROCm interop library: ${_compute_pal_dir}")
 

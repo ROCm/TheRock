@@ -218,8 +218,10 @@ class ArtifactPopulator:
                                         ) as out_file:
                                             out_file.write(member_file.read())
                                             st = os.fstat(out_file.fileno())
-                                            new_mode = st.st_mode | exec_mask
-                                            os.fchmod(out_file.fileno(), new_mode)
+                                            if hasattr(os, "fchmod"):
+                                                # Windows has no fchmod.
+                                                new_mode = st.st_mode | exec_mask
+                                                os.fchmod(out_file.fileno(), new_mode)
                                 elif member.isdir():
                                     dest_path.mkdir(parents=True, exist_ok=True)
                                 elif member.issym():

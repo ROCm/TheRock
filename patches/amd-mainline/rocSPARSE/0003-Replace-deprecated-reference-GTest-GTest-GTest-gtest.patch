@@ -1,0 +1,26 @@
+From 0ede7ef275102af91769c6ee4af58111fa1c8b49 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Fri, 11 Apr 2025 18:11:11 -0700
+Subject: [PATCH 3/3] Replace deprecated reference GTest::GTest ->
+ GTest::gtest.
+
+---
+ clients/tests/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/clients/tests/CMakeLists.txt b/clients/tests/CMakeLists.txt
+index db8e3f32..e3a02198 100644
+--- a/clients/tests/CMakeLists.txt
++++ b/clients/tests/CMakeLists.txt
+@@ -383,7 +383,7 @@ target_compile_options(rocsparse-test PRIVATE -ffp-contract=on -mfma -Wno-deprec
+ target_include_directories(rocsparse-test PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>)
+ 
+ # Target link libraries
+-target_link_libraries(rocsparse-test PRIVATE GTest::GTest roc::rocsparse hip::host hip::device)
++target_link_libraries(rocsparse-test PRIVATE GTest::gtest roc::rocsparse hip::host hip::device)
+ 
+ # Add OpenMP if available
+ if(OPENMP_FOUND)
+-- 
+2.43.0
+

@@ -2,68 +2,73 @@
 
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
-The HIP Environment and ROCm Kit - A lightweight open source build system for HIP and ROCm.
+## Description
 
-We are currently in an **early preview state** but welcome contributors. Come try us out!
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
+TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
-If you're looking to quickly see how far along we are, check the [Releases Page](RELEASES.md).
+Currently, the platform offers developers the option to build HIP and ROCm from source. Additionally, a GitHub actions pipeline will offer a nightly build with compiled ROCm/HIP software available in S3 and in the GitHub releases section.
 
-# Install Deps
+## Table of Contents
 
-By default on Linux, the project builds with -DTHEROCK_BUNDLE_SYSDEPS=ON, which
-builds low-level system libraries from source and private links to them. This
-requires some additional development tools, which are included below.
+- [Installation From Source](#installation-from-source)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Tests](#tests)
+- [Development Manuals](#development-manuals)
 
-## Common
+## Installation From Source
 
+### Ubuntu
+
+```bash
+# Clone the repository
+git clone https://github.com/ROCm/TheRock.git
+cd TheRock
+
+# Install dependencies
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+sudo apt install gfortran git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake
+python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
 ```
+
+### Windows
+
+```bash
+# Clone the repository
+git clone https://github.com/ROCm/TheRock.git
+cd TheRock
+
+# Install dependencies
+python3 -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
-
-## On Ubuntu
-
-Dev tools:
-
-```
-sudo apt install gfortran git-lfs ninja-build cmake g++ pkg-config xxd libgmock-dev libgtest-dev patchelf automake
-```
-
-## On Windows
 
 > [!WARNING]
 > Windows support is still early in development. Not all subprojects or packages build for Windows yet.
 
 See [windows_support.md](./docs/development/windows_support.md).
 
-# Checkout Sources
-
-```
-python ./build_tools/fetch_sources.py
+```bash
+python ./build_tools/fetch_sources.py  # Downloads submodules and applies patches
 ```
 
-This uses a custom procedure to download submodules and apply patches while
-we are transitioning from the [repo](https://source.android.com/docs/setup/reference/repo).
-It will eventually be replaced by a normal `git submodule update` command.
+## Configuration
 
-This will also apply the patches to the downloaded source files.
+The build can be customized through cmake feature flags.
 
-# Build
+**Required Flags:**
 
-Note that you must specify GPU targets or families to build for with either
-`-DTHEROCK_AMDGPU_FAMILIES=` or `-DTHEROCK_AMDGPU_TARGETS=` and will get an
-error if there is an issue. Supported families and targets are in the
-[therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file. Not
-all combinations are presently supported.
+- `-DTHEROCK_AMDGPU_FAMILIES=`
 
-```
-cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
-# Or if iterating and wishing to cache:
-#   cmake -Bbuild -GNinja -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .
-cmake --build build
-```
+  or
 
-## Feature Flags
+- `-DTHEROCK_AMDGPU_TARGETS=`
+
+Note: *Not all family and targets are currently supported. See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file for available options*
+
+**Optional Flags**
 
 By default, the project builds everything available. The following group flags
 allow enable/disable of selected subsets:
@@ -97,7 +102,23 @@ be enabled manually if enabling/disabling individual features.
 A report of enabled/disabled features and flags will be printed on every
 CMake configure.
 
-## Testing
+## Usage
+
+To build ROCm/HIP:
+
+```bash
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+cmake --build build
+```
+
+To build with cacheing:
+
+```bash
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .
+cmake --build build
+```
+
+## Tests
 
 Project-wide testing can be controlled with the standard CMake `-DBUILD_TESTING=ON|OFF` flag. This gates both setup of build tests and compilation of installed testing artifacts.
 
@@ -122,3 +143,32 @@ separately.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
 - [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
+
+## Provisioning TheRock 🪨
+
+In order to provision TheRock using either a developer/automated nightly release or a specific CI runner build, use the `build_tool/provision.py` script.
+
+Provisioning script setup:
+
+- `python3 -m venv venv`
+- `source venv/bin/activate`
+- `pip install -r requirements.txt`
+- `python build_tools/provision.py --help`
+
+Examples:
+
+- `python build_tools/provision.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu`: Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 to the default output directory `therock-build`
+
+<br/>
+
+- `python build_tools/provision.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`
+
+<br/>
+
+- `python build_tools/provision.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`
+
+<br/>
+
+- `python build_tools/provision.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`: Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`
+
+Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)

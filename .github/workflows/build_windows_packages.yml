@@ -27,22 +27,25 @@ jobs:
     strategy:
       fail-fast: true
     env:
-      BASE_BUILD_DIR_POWERSHELL: C:\mnt\azure\b
-      CACHE_DIR: ${{ github.workspace }}/.cache
-      CCACHE_DIR: "${{ github.workspace }}/.cache/ccache"
-      CCACHE_MAXSIZE: "700M"
+      BASE_BUILD_DIR_POWERSHELL: B:\tmpbuild
+      CACHE_DIR: "${{github.workspace}}/.cache"
+      CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
+      CCACHE_MAXSIZE: "4000M"
     steps:
       - name: "Create build dir"
         shell: powershell
         run: |
-          $currentTime = (Get-Date).ToString('HHmmss')
-          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\$currentTime"
+          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
           echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
           mkdir "$buildDir"
           Write-Host "Generated Build Directory: $buildDir"
-          $bashBuildDir = $buildDir -replace '\\', '/' -replace '^C:', '/c'
+          $bashBuildDir = $buildDir -replace '\\', '/' -replace '^B:', '/b'
           echo  "BUILD_DIR_BASH=$bashBuildDir" >> $env:GITHUB_ENV
           Write-Host "Converted Build Directory For Bash: $bashBuildDir"
+          $fs = Get-PSDrive -PSProvider "FileSystem"
+          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
+          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
+          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -59,14 +62,13 @@ jobs:
         run: |
           echo "CCACHE_DIR=${CCACHE_DIR}"
           df -h
-          ccache -z
           mkdir -p $CCACHE_DIR
           cmake --version
           echo "python: $(which python), python3: $(which python3)"
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
-          git config --global user.email "nobody@amd.com"
-          git config --global user.name "Nobody"
+          nthreads=$(nproc --all)
+          echo [*] Logical Processors to be used: $nthreads...
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -80,13 +82,16 @@ jobs:
 
       - name: Fetch sources
         run: |
-          python ./build_tools/fetch_sources.py --jobs 12
+          python ./build_tools/fetch_sources.py --jobs 96
 
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Configure Projects
         run: |
+          # clear cache before build and after download
+          ccache -z
+
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
           amdgpu_families="${{ inputs.amdgpu_families }}"
@@ -116,7 +121,7 @@ jobs:
             -DTHEROCK_ENABLE_ML_LIBS=OFF
 
       - name: Build Projects
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}"
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all)
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -135,7 +140,11 @@ jobs:
           path: ${{ env.CACHE_DIR }}
           key: windows-build-packages-v2-${{ github.sha }}
 
-      - name: "Clean up build dir"
+      - name: "Build size report"
         if: always()
-        run: if (Test-Path -Path "$Env:BUILD_DIR_POWERSHELL") {Remove-Item -Path "$Env:BUILD_DIR_POWERSHELL" -Recurse -Force}
+        run: |
+          $fs = Get-PSDrive -PSProvider "FileSystem"
+          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
+          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
+          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
         shell: powershell
