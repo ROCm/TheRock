@@ -53,6 +53,7 @@ jobs:
     steps:
     - name: Construct image reference
       id: image_ref
+      # Use the IMAGE_REF for pulling purposes using the embedded digest SHA in it
       env:
         IMAGE_REF: "ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
       run: |
@@ -100,14 +101,15 @@ jobs:
           docker ps -a
 
       - name: Tag and push verified image
+      # Use the IMAGE_BASE for tagging reference
         run: |
-          IMAGEBASE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}
+          IMAGE_BASE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}
           DIGEST=${{ inputs.image_digest  }}
           VERSION=${{ inputs.version }}
 
-          echo "Using image: $IMAGEBASE"
+          echo "Using image: $IMAGE_BASE"
           echo "Using digest: $DIGEST"
           echo "Using version: $VERSION"
 
-          docker tag $IMAGEBASE@$DIGEST $IMAGEBASE:$VERSION
+          docker tag $IMAGE_BASE@$DIGEST $IMAGE_BASE:$VERSION
           docker push $IMAGE:$VERSION
