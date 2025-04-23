@@ -90,7 +90,7 @@ jobs:
       # Tag and push verified image
       - name: Tag and push verified image
         run: |
-          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ matrix.targets.amdgpu_target }}
+          IMAGE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}
           DIGEST=${{ inputs.image_digest  }}
           VERSION=${{ inputs.version }}
 
