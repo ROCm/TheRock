@@ -18,11 +18,11 @@ on:
         default: "linux-mi300-1gpu-ossci-rocm"
         type: string
       dispatch_id:
-        description: "Auto Generated Id for a dispatch"
+        description: "Auto generated id for a dispatch"
         type: string
         required: true
       version:
-        description: "Version Number as X.Y.ZrcYYYYMMDD format"
+        description: "Version number string"
         type: string
         required: true
   workflow_call:
