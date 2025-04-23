@@ -76,7 +76,7 @@ jobs:
 
       - name: Pull Docker Image
         run: |
-          sudo docker pull "$IMAGE_REF"
+          docker pull "$IMAGE_REF"
 
       - name: Pre-download pytest wheel
         run: |
@@ -85,7 +85,7 @@ jobs:
 
       - name: Run Docker Container and Execute Commands
         run: |
-          sudo docker run --rm \
+          docker run --rm \
           --device=/dev/kfd \
           --device=/dev/dri \
           --mount type=bind,source="$GITHUB_WORKSPACE/pytest_wheels",target=/wheels \
@@ -97,7 +97,8 @@ jobs:
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
 
       - name: Verify Containers Status
-        run: sudo docker ps -a
+        run: |
+          docker ps -a
       # Tag and push verified image
       - name: Tag and push verified image
         run: |
