@@ -210,11 +210,17 @@ def apply_all_patches(root_repo_path: Path, patches_path: Path, patchset_name: s
 
 # pytorch_ref_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
 def pytorch_ref_to_patches_dir_name(version_ref: str) -> str:
-    pos = version_ref.index("-")
-    if pos != -1:
-        return version_ref[:pos]
-    return version_ref
-
+    #print("version_ref: " + version_ref)
+    ret = version_ref
+    try:
+        pos = version_ref.index("-")
+        if pos != -1:
+            ret = version_ref[:pos]
+    except ValueError:
+        # no '-' found from string
+        pass
+    #print("ret: " + ret)
+    return ret
 
 def do_checkout(args: argparse.Namespace):
     repo_dir: Path = args.repo
