@@ -10,8 +10,10 @@
   * GITHUB_EVENT_NAME    : GitHub event name, e.g. pull_request.
   * GITHUB_OUTPUT        : path to write workflow output variables.
   * GITHUB_STEP_SUMMARY  : path to write workflow summary output.
-  * INPUT_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families
-  * INPUT_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families
+  * INPUT_BUILD_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families to build
+  * INPUT_BUILD_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families to build
+  * INPUT_TEST_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families to test
+  * INPUT_TEST_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families to test
   * BRANCH_NAME (optional): The branch name
 
   Environment variables (for pull requests):
@@ -25,9 +27,10 @@
 -----------
 
   Written to GITHUB_OUTPUT:
-  * enable_build_jobs : true/false
-  * linux_amdgpu_families : List of valid Linux AMD GPU families to execute jobs
-  * windows_amdgpu_families : List of valid Windows AMD GPU families to execute jobs
+  * build_linux_amdgpu_families : List of valid Linux AMD GPU families to execute build jobs
+  * build_windows_amdgpu_families : List of valid Windows AMD GPU families to execute build jobs
+  * test_linux_amdgpu_families : List of valid Linux AMD GPU families to execute test jobs
+  * test_windows_amdgpu_families : List of valid Windows AMD GPU families to execute test jobs
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -43,6 +46,7 @@ import subprocess
 import sys
 from typing import Iterable, List, Mapping, Optional
 import string
+from amdgpu_family_matrix import amdgpu_family_info_matrix
 
 # --------------------------------------------------------------------------- #
 # General utilities
@@ -182,25 +186,6 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 # --------------------------------------------------------------------------- #
 # Matrix creation logic based on PR, push or workflow_dispatch
 # --------------------------------------------------------------------------- #
-
-amdgpu_family_info_matrix = {
-    "gfx94x": {
-        "linux": {
-            "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
-            "target": "gfx94X-dcgpu",
-        }
-    },
-    "gfx110x": {
-        "linux": {
-            "test-runs-on": "linux-rx7900-gpu-rocm",
-            "target": "gfx110X-dgpu",
-        },
-        "windows": {
-            "test-runs-on": "",
-            "target": "gfx110X-dgpu",
-        },
-    },
-}
 
 DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
 DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110X"]
@@ -351,13 +336,19 @@ def main(base_args, build_families, test_families):
         build_linux_target_output = []
         build_windows_target_output = []
 
+        # If this enable_build_jobs flag is set to false and the trigger is either a main push or pull request,
+        # skip the tests since there is no build to use.
+        if not is_workflow_dispatch:
+            test_linux_target_output = []
+            test_windows_target_output = []
+
     write_job_summary(
         f"""## Workflow configure results
 
-* `build_linux_amdgpu_families`: {str([item.get("target") for item in build_linux_target_output])}
-* `build_windows_amdgpu_families`: {str([item.get("target") for item in build_windows_target_output])}
-* `test_linux_amdgpu_families`: {str([item.get("target") for item in test_linux_target_output])}
-* `test_windows_amdgpu_families`: {str([item.get("target") for item in test_windows_target_output])}
+* `build_linux_amdgpu_families`: {str([item.get("family") for item in build_linux_target_output])}
+* `build_windows_amdgpu_families`: {str([item.get("family") for item in build_windows_target_output])}
+* `test_linux_amdgpu_families`: {str([item.get("family") for item in test_linux_target_output])}
+* `test_windows_amdgpu_families`: {str([item.get("family") for item in test_windows_target_output])}
     """
     )
 

@@ -1,22 +1,90 @@
 name: Pull and Verify Docker Image
 
 on:
-  workflow_call:
   workflow_dispatch:
+    inputs:
+      amdgpu_target:
+        description: "AMDGPU target to verify"
+        required: true
+        default: "gfx942"
+        type: string
+      image_digest:
+        description: "Digest of image to verify"
+        required: true
+        type: string
+      runner_type:
+        description: "Runner type to use"
+        required: true
+        default: "linux-mi300-1gpu-ossci-rocm"
+        type: string
+      dispatch_id:
+        description: "Auto generated id for a dispatch"
+        type: string
+        required: true
+      version:
+        description: "Version number string"
+        type: string
+        required: true
+  workflow_call:
+    inputs:
+      amdgpu_target:
+        type: string
+        required: true
+      image_digest:
+        type: string
+        required: true
+      runner_type:
+        type: string
+        required: true
+      dispatch_id:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  pull-and-build-image:
-    name: Verify Docker Image
-    runs-on: linux-mi300-1gpu-ossci-rocm
+  setup_metadata:
+    runs-on: ubuntu-24.04
+    outputs:
+      image_ref: ${{ steps.construct_image_ref.outputs.image_ref }}
+    steps:
+    - name: Construct image reference
+      id: construct_image_ref
+      # Use the IMAGE_REF for pulling purposes using the embedded digest SHA in it
+      env:
+        IMAGE_REF: "ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
+      run: |
+        echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+
+  pull-and-verify-image:
+    name: Verify ${{ inputs.version }}/${{ needs.setup_metadata.outputs.image_ref }} Docker Image
+    runs-on: ${{ inputs.runner_type }}
+    needs: [setup_metadata]
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Pull Docker Image
         run: |
-          docker pull ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main
+          docker pull ${{ needs.setup_metadata.outputs.image_ref }}
+
       - name: Pre-download pytest wheel
         run: |
           mkdir -p pytest_wheels
           pip download pytest -d pytest_wheels
+
       - name: Run Docker Container and Execute Commands
         run: |
           docker run --rm \
@@ -27,7 +95,23 @@ jobs:
           --group-add video \
           --cap-add=SYS_PTRACE \
           -w /TheRock \
-          ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_gfx942:main \
+          ${{ needs.setup_metadata.outputs.image_ref }} \
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+
       - name: Verify Containers Status
-        run: docker ps -a
+        run: |
+          docker ps -a
+
+      - name: Tag and push verified image
+      # Use the IMAGE_BASE for tagging reference
+        run: |
+          IMAGE_BASE=ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}
+          DIGEST=${{ inputs.image_digest  }}
+          VERSION=${{ inputs.version }}
+
+          echo "Using image: $IMAGE_BASE"
+          echo "Using digest: $DIGEST"
+          echo "Using version: $VERSION"
+
+          docker tag $IMAGE_BASE@$DIGEST $IMAGE_BASE:$VERSION
+          docker push $IMAGE_BASE:$VERSION

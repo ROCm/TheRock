@@ -23,7 +23,7 @@ The checkout process combines the following activities:
 * Configures PyTorch submodules to be ignored for any local changes (so that
   the result is suitable for development with local patches).
 * Applies "base" patches to the pytorch repo and any submodules (by using
-  `git am` with patches from `patches/<pytorch-ref>/<repo-name>/base`).
+  `git am` with patches from `patches/pytorch_ref_to_patches_dir_name(<pytorch-ref>)/<repo-name>/base`).
 * Runs `hipify` to prepare sources for AMD GPU and commits the result to the
   main repo and any modified submodules.
 * Applies "hipified" patches to the pytorch repo and any submodules (by using
@@ -208,6 +208,14 @@ def apply_all_patches(root_repo_path: Path, patches_path: Path, patchset_name: s
         )
 
 
+# pytorch_ref_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
+def pytorch_ref_to_patches_dir_name(version_ref: str) -> str:
+    pos = version_ref.find("-")
+    if pos != -1:
+        return version_ref[:pos]
+    return version_ref
+
+
 def do_checkout(args: argparse.Namespace):
     repo_dir: Path = args.repo
     check_git_dir = repo_dir / ".git"
@@ -248,7 +256,11 @@ def do_checkout(args: argparse.Namespace):
 
     # Base patches.
     if args.patch:
-        apply_all_patches(repo_dir, PATCHES_DIR / args.pytorch_ref, "base")
+        apply_all_patches(
+            repo_dir,
+            PATCHES_DIR / pytorch_ref_to_patches_dir_name(args.pytorch_ref),
+            "base",
+        )
 
     # Hipify.
     if args.hipify:
@@ -256,7 +268,11 @@ def do_checkout(args: argparse.Namespace):
 
     # Hipified patches.
     if args.patch:
-        apply_all_patches(repo_dir, PATCHES_DIR / args.pytorch_ref, "hipified")
+        apply_all_patches(
+            repo_dir,
+            PATCHES_DIR / pytorch_ref_to_patches_dir_name(args.pytorch_ref),
+            "hipified",
+        )
 
 
 def do_hipify(args: argparse.Namespace):
@@ -278,7 +294,7 @@ def do_hipify(args: argparse.Namespace):
 
 
 def do_save_patches(args: argparse.Namespace):
-    patches_dir = PATCHES_DIR / args.pytorch_ref
+    patches_dir = PATCHES_DIR / pytorch_ref_to_patches_dir_name(args.pytorch_ref)
     save_repo_patches(args.repo, patches_dir / "pytorch")
     relative_sm_paths = list_submodules(args.repo, relative=True)
     for relative_sm_path in relative_sm_paths:
