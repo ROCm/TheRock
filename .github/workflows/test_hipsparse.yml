@@ -1,0 +1,60 @@
+name: TheRock hipSPARSE math-lib tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+        default: ""
+      test_runs_on:
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+        default: ""
+      test_runs_on:
+        type: string
+        default: ""
+  push:
+    branches:
+      - ADHOCBUILD
+
+jobs:
+  test_hipsparse:
+    name: "hipSPARSE math-lib test"
+    runs-on: ${{ inputs.test_runs_on }}
+    strategy:
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run setup test environment workflow
+        uses: './.github/actions/setup_test_environment'
+        with:
+          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: "--test --blas"
+
+      - name: Run hipsparse tests
+        run: |
+          echo hello
