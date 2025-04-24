@@ -21,14 +21,16 @@ Currently, the platform offers developers the option to build HIP and ROCm from 
 ### Ubuntu
 
 ```bash
+# Install Ubuntu dependencies
+sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake python3-venv python3-dev libegl1-mesa-dev
+
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
 
-# Install dependencies
+# Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-sudo apt install gfortran git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake
 python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
 ```
 
