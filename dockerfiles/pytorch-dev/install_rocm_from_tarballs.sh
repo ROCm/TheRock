@@ -2,42 +2,35 @@
 set -euo pipefail
 
 # === Configuration ===
-ARTIFACT_RUN_ID="${ARTIFACT_RUN_ID:-}"
+RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
+ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date +'%Y%m%d')}"
+ROCM_VERSION_PREFIX="6.4.0rc"
 AMDGPU_FAMILIES="${AMDGPU_FAMILIES:-gfx942 gfx1100 gfx1201}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
-FETCH_ARTIFACT_ARGS="${FETCH_ARTIFACT_ARGS:-"--all"}"
 INSTALL_PREFIX="/opt/rocm"
-
-if [[ -z "$ARTIFACT_RUN_ID" ]]; then
-  echo "[ERROR] ARTIFACT_RUN_ID must be set"
-  exit 1
-fi
+GITHUB_RELEASE_BASE_URL="https://github.com/ROCm/TheRock/releases/download"
 
 echo "[INFO] Installing ROCm artifacts for: $AMDGPU_FAMILIES"
-echo "[INFO] Artifact run ID: $ARTIFACT_RUN_ID"
-echo "[INFO] Destination directory: $OUTPUT_ARTIFACTS_DIR"
+echo "[INFO] Using ROCm version date: $ROCM_VERSION_DATE"
+echo "[INFO] Output directory: $OUTPUT_ARTIFACTS_DIR"
 
-# === Step 1: Fetch and Extract for each GPU target ===
+mkdir -p "$OUTPUT_ARTIFACTS_DIR"
+
+# === Step 1: Download and Extract for each GPU target ===
 for target in $AMDGPU_FAMILIES; do
   TARGET_DIR="${OUTPUT_ARTIFACTS_DIR}/${target}"
-  echo "[INFO] Fetching artifacts for target: $target -> $TARGET_DIR"
+  echo "[INFO] Fetching tarball for target: $target"
   mkdir -p "$TARGET_DIR"
 
-  python3 ./build_tools/fetch_artifacts.py \
-    --run-id="$ARTIFACT_RUN_ID" \
-    --target="$target" \
-    --build-dir="$TARGET_DIR" \
-    $FETCH_ARTIFACT_ARGS
+  TARBALL_NAME="therock-dist-linux-${target}-dgpu-${ROCM_VERSION_PREFIX}${ROCM_VERSION_DATE}.tar.gz"
+  TARBALL_URL="${GITHUB_RELEASE_BASE_URL}/${RELEASE_TAG}/${TARBALL_NAME}"
+  TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
-  echo "[INFO] Installing ROCm from tarballs for $target"
-  for tarball in "$TARGET_DIR"/*.tar.*; do
-    echo "[INFO] Extracting $tarball"
-    case "$tarball" in
-      *.tar.gz) sudo tar -xvzf "$tarball" -C "$INSTALL_PREFIX" ;;
-      *.tar.xz) sudo tar -xvJf "$tarball" -C "$INSTALL_PREFIX" ;;
-      *) echo "[WARN] Skipping unknown archive format: $tarball" ;;
-    esac
-  done
+  echo "[INFO] Downloading from: $TARBALL_URL"
+  wget -q --show-progress -O "$TARBALL_PATH" "$TARBALL_URL"
+
+  echo "[INFO] Extracting $TARBALL_PATH to $INSTALL_PREFIX"
+  sudo tar -xvzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
 done
 
 # === Step 2: Setup Environment Variables ===
