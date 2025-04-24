@@ -1,0 +1,76 @@
+From 2d08714ca3cd25f466a46f4926313a0121799de3 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Thu, 17 Apr 2025 04:12:56 +0100
+Subject: [PATCH 3/5] [WIP] tensilelite compilation w/ git bash
+
+---
+ tensilelite/Tensile/Ops/gen_assembly.sh       | 7 +++++++
+ tensilelite/Tensile/cmake/TensileConfig.cmake | 9 +++++++--
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/tensilelite/Tensile/Ops/gen_assembly.sh b/tensilelite/Tensile/Ops/gen_assembly.sh
+index 1956a427..ed06a227 100755
+--- a/tensilelite/Tensile/Ops/gen_assembly.sh
++++ b/tensilelite/Tensile/Ops/gen_assembly.sh
+@@ -31,8 +31,15 @@ build_id_kind=$4
+ toolchain=$5
+ python_exe_name=$6
+ 
++orig_PATH="$PATH"
++
+ . ${venv}/activate
+ 
++# Prepend the virtual environment path to the original PATH
++# This is needed for git bash. For some reason the PATH is not set correctly with otherwise.
++# The activate script should inherit the original PATH, but it doesn't, and this only happens when running as a script, not when running interactively.
++PATH="${venv}:$orig_PATH"
++
+ IFS=';' read -r -a archs <<< "$archStr"
+ 
+ for arch in "${archs[@]}"; do
+diff --git a/tensilelite/Tensile/cmake/TensileConfig.cmake b/tensilelite/Tensile/cmake/TensileConfig.cmake
+index 70b2b1b2..b3529e34 100644
+--- a/tensilelite/Tensile/cmake/TensileConfig.cmake
++++ b/tensilelite/Tensile/cmake/TensileConfig.cmake
+@@ -72,6 +72,9 @@ endif()
+ add_subdirectory("${Tensile_ROOT}/Source" "Tensile")
+ include("${Tensile_ROOT}/Source/TensileCreateLibrary.cmake")
+ 
++string(REPLACE ";" "$<SEMICOLON>" ESC_PATH "$ENV{PATH}")
++set(ENV_PATH_ARG "PATH=${ESC_PATH}")
++
+ function(TensileCreateLibraryFiles
+          Tensile_LOGIC_PATH
+          Tensile_OUTPUT_PATH
+@@ -209,7 +212,7 @@ function(TensileCreateLibraryFiles
+     set(Options ${Options} "--build-id=${Tensile_BUILD_ID}")
+   endif()
+ 
+-  set(CommandLine ${CMAKE_COMMAND} -E env PYTHONPATH=${PROJECT_BINARY_DIR}/lib -- ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
++  set(CommandLine ${CMAKE_COMMAND} -E env "${ENV_PATH_ARG}" PYTHONPATH=${PROJECT_BINARY_DIR}/lib -- ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
+   # Tensile relies on the tools from the path, so capture the configure time
+   # path. It would be better if tool paths were explicit, but that would be a pretty
+   # big change.
+@@ -238,6 +241,7 @@ function(TensileCreateLibraryFiles
+         COMMENT "Generating Tensile Libraries"
+         OUTPUT ${Tensile_OUTPUT_PATH}/library
+         COMMAND ${CommandLine}
++        VERBATIM
+       )
+ 
+       add_custom_target(
+@@ -280,9 +284,10 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr TensileExt_LIBRARY_TAR
+     COMMAND ${CMAKE_COMMAND} -E rm -rf ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${OutputFolder}
+-    COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH="${PROJECT_BINARY_DIR}/lib" bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_BIN_DIR}" "${Tensile_BUILD_ID}" "${toolchain}" "${VIRTUALENV_PYTHON_EXENAME}"
++    COMMAND ${CMAKE_COMMAND} -E env "${ENV_PATH_ARG}" PYTHONPATH=${PROJECT_BINARY_DIR}/lib -- bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_BIN_DIR}" "${Tensile_BUILD_ID}" "${toolchain}" "${VIRTUALENV_PYTHON_EXENAME}"
+     COMMAND bash -c "cp ${build_tmp_dir}/extop_*.co ${OutputFolder}"
+     COMMAND ${CMAKE_COMMAND} -E copy ${ext_op_library_path} ${OutputFolder}
++    VERBATIM
+   )
+ 
+   add_custom_target(
+-- 
+2.49.0.windows.1
+

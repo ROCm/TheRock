@@ -1,0 +1,40 @@
+From bd270ed93702b42ab0d8228b3b6b9ac83f6821a8 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Sat, 19 Apr 2025 13:45:30 +0100
+Subject: [PATCH] [rocBLAS] Fix install path on windows
+
+---
+ CMakeLists.txt | 17 +++--------------
+ 1 file changed, 3 insertions(+), 14 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 41c07462..ca548b73 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -361,20 +361,9 @@ endif()
+ set( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
+ set( CPACK_RPM_PACKAGE_LICENSE "MIT and BSD")
+ 
+-if (WIN32)
+-  if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
+-    SET( CMAKE_INSTALL_PREFIX "C:/hipSDK" CACHE PATH "Install path" FORCE )
+-  endif()
+-  SET( INSTALL_PREFIX "C:/hipSDK" )
+-  SET( CPACK_SET_DESTDIR FALSE )
+-  SET( CPACK_PACKAGE_INSTALL_DIRECTORY "C:/hipSDK" )
+-  SET( CPACK_PACKAGING_INSTALL_PREFIX "" )
+-  set( CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF )
+-else()
+-  if( NOT CPACK_PACKAGING_INSTALL_PREFIX )
+-    set( CPACK_PACKAGING_INSTALL_PREFIX ${ROCM_PATH} )
+-  endif()
+-endif( )
++if( NOT CPACK_PACKAGING_INSTALL_PREFIX )
++  set( CPACK_PACKAGING_INSTALL_PREFIX ${ROCM_PATH} )
++endif()
+ 
+ set( CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "\${CPACK_PACKAGING_INSTALL_PREFIX}" )
+ 
+-- 
+2.49.0.windows.1
+

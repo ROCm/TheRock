@@ -1,0 +1,109 @@
+From b9f5c0c68554753d5b87c370b0bf6fdab2cd24bc Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Fri, 18 Apr 2025 01:19:35 +0100
+Subject: [PATCH 5/5] Fix compilation after enabling tests
+
+---
+ clients/CMakeLists.txt       | 13 +++----------
+ clients/common/utility.cpp   |  3 +++
+ clients/gtest/CMakeLists.txt | 29 ++++++++++-------------------
+ 3 files changed, 16 insertions(+), 29 deletions(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index fdb797ee..4f5b505b 100755
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -101,16 +101,9 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+       set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
+     endif()
+   else() #WIN32
+-    set( BLAS_INCLUDE_DIR ${OPENBLAS_DIR}/include CACHE PATH "OpenBLAS library include path" )
+-    find_library( BLAS_LIBRARY libopenblas
+-                  PATHS ${OPENBLAS_DIR}/lib
+-                  NO_DEFAULT_PATH
+-                )
+-    if (NOT BLAS_LIBRARY)
+-      find_package( OPENBLAS CONFIG REQUIRED )
+-      set( BLAS_LIBRARY OpenBLAS::OpenBLAS )
+-      set( BLAS_INCLUDE_DIR "" )
+-    endif()
++    find_package( BLAS REQUIRED )
++    set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
++    set( BLAS_INCLUDE_DIR "" )
+   endif()
+ 
+   # Find the package ROCmSMI
+diff --git a/clients/common/utility.cpp b/clients/common/utility.cpp
+index a7f7e10d..4cf8d1be 100644
+--- a/clients/common/utility.cpp
++++ b/clients/common/utility.cpp
+@@ -33,6 +33,9 @@
+ #include <stdlib.h>
+ 
+ #ifdef _WIN32
++// HACK: (jam): "error: attempt to use a poisoned identifier" if this ole2.h header was included within windows.h
++// skip that header by defining _OLE2_H_
++#define _OLE2_H_
+ #include <windows.h>
+ #include <libloaderapi.h>
+ #else
+diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
+index 054ee9d3..8e46e5ca 100644
+--- a/clients/gtest/CMakeLists.txt
++++ b/clients/gtest/CMakeLists.txt
+@@ -62,9 +62,13 @@ target_include_directories( hipblaslt-test
+     $<BUILD_INTERFACE:${HIP_INCLUDE_DIRS}>
+     $<BUILD_INTERFACE:${BLAS_INCLUDE_DIR}>
+     $<BUILD_INTERFACE:${BLIS_INCLUDE_DIR}> # may be blank if not used
++    $<BUILD_INTERFACE:${HIPBLAS-COMMON_INCLUDE_DIRS}>
+ )
+ message("BLIS_INCLUDE_DIR=" ${BLIS_INCLUDE_DIR})
+-target_link_libraries( hipblaslt-test PRIVATE ${if(WIN32)
++target_link_libraries( hipblaslt-test PRIVATE ${BLAS_LIBRARY} 
++  GTest::gtest GTest::gtest_main roc::hipblaslt )
++
++if(WIN32)
+   find_package(lapack REQUIRED)
+   target_link_libraries( hipblaslt-test PRIVATE ${LAPACK_LIBRARIES})
+ endif()
+@@ -109,16 +113,6 @@ else()
+   list( APPEND COMMON_LINK_LIBS "libomp")
+ endif()
+ 
+-#if (NOT WIN32)
+-#  target_link_libraries( hipblaslt-test PRIVATE lapack cblas )
+-#  list( APPEND COMMON_LINK_LIBS "-lm -lstdc++fs")
+-#  if (NOT BUILD_FORTRAN_CLIENTS)
+-#    list( APPEND COMMON_LINK_LIBS "-lgfortran") # for lapack
+-#  endif()
+-#else()
+-#  list( APPEND COMMON_LINK_LIBS "libomp")
+-#endif()
+-
+ target_link_libraries( hipblaslt-test PRIVATE ${COMMON_LINK_LIBS} )
+ 
+ if (WIN32)
+@@ -137,15 +131,12 @@ if (WIN32)
+     add_custom_command( TARGET hipblaslt-test POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy ${file_i} ${PROJECT_BINARY_DIR}/staging/ )
+   endforeach( file_i )
+ endif()
+-PPEND COMMON_LINK_LIBS "libomp")
+-#endif()
+ 
+-target_link_libraries( hipblaslt-test PRIVATE ${COMMON_LINK_LIBS} )
+-( APPEND COMMON_LINK_LIBS "libomp")
+-#endif()
+-
+-target_link_libraries( hipblaslt-test PRIVATE ${COMMON_LINK_LIBS} )
+-{PROJECT_BINARY_DIR}/staging"
++set_target_properties( hipblaslt-test PROPERTIES
++  IMPORT_PREFIX ""
++  IMPORT_SUFFIX ".lib"
++  LINKER_LANGUAGE CXX
++  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/staging"
+ )
+ 
+ set( HIPBLASLT_TEST_DATA "${PROJECT_BINARY_DIR}/staging/hipblaslt_gtest.data")
+-- 
+2.49.0.windows.1
+

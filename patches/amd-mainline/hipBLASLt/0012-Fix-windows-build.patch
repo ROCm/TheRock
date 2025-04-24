@@ -1,0 +1,344 @@
+From e3ecce0e28fb9820fa9353fe2a690f1f49896a64 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Thu, 17 Apr 2025 20:49:36 +0100
+Subject: [PATCH 4/5] Fix windows build
+
+---
+ .../src/kernels/CompileSourceKernel.cmake     |   4 +-
+ .../src/kernels/compile_code_object.sh        |  11 +-
+ tensilelite/Tensile/cmake/TensileConfig.cmake |   2 +-
+ tensilelite/rocisa/rocisa/include/helper.hpp  | 190 +++++++++---------
+ tensilelite/rocisa/rocisa/src/code.cpp        |   2 +-
+ 5 files changed, 101 insertions(+), 108 deletions(-)
+
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+index 406335f1..f4ceff88 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
++++ b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+@@ -22,7 +22,7 @@
+ #
+ ################################################################################
+ if(WIN32)
+-    SET(clang_path "${ROCM_PATH}\\bin\\clang++.exe")
++    SET(clang_path "clang++.exe")
+ else()
+     SET(clang_path "${ROCM_PATH}/bin/amdclang++")
+ endif()
+@@ -38,7 +38,7 @@ function(CompileSourceKernel source archs buildIdKind outputFolder)
+                       VERBATIM)
+     add_custom_command(OUTPUT ${outputFolder}/hipblasltTransform.hsaco
+                        COMMAND
+-                         "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --
++                         "${CMAKE_COMMAND}" -E env "PATH=$ENV{PATH}" --
+                          bash  ${CMAKE_CURRENT_SOURCE_DIR}/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh ${source} ${archs} ${CMAKE_BUILD_TYPE} ${buildIdKind} ${outputFolder}/hipblasltTransform.hsaco ${clang_path}
+                        COMMENT "Compiling source kernels")
+ endfunction()
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+index 06e97b74..fe871eb2 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
++++ b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+@@ -21,6 +21,7 @@
+ #
+ # ########################################################################
+ set -e
++set -x
+ 
+ sources=$1
+ archs=$2
+@@ -37,14 +38,4 @@ elif [ "$build_type" = "Debug" ]; then
+     additional_options="-O0 -g"
+ fi
+ 
+-if [[ -z "$ROCM_PATH" ]]; then
+-    clang_path="$(which amdclang++)"
+-    if [[ -z "$clang_path" ]]; then
+-        echo "error: amdclang++ not found on path"
+-        exit 1
+-    fi
+-else
+-    clang_path="${ROCM_PATH}/bin/amdclang++"
+-fi
+-
+ $clang_path -x hip "$sources" --offload-arch="${archs}" -c --offload-device-only -Xoffload-linker --build-id=$build_id_kind $additional_options -o "$dest"
+diff --git a/tensilelite/Tensile/cmake/TensileConfig.cmake b/tensilelite/Tensile/cmake/TensileConfig.cmake
+index b3529e34..9cabd43b 100644
+--- a/tensilelite/Tensile/cmake/TensileConfig.cmake
++++ b/tensilelite/Tensile/cmake/TensileConfig.cmake
+@@ -284,7 +284,7 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr TensileExt_LIBRARY_TAR
+     COMMAND ${CMAKE_COMMAND} -E rm -rf ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${OutputFolder}
+-    COMMAND ${CMAKE_COMMAND} -E env "${ENV_PATH_ARG}" PYTHONPATH=${PROJECT_BINARY_DIR}/lib -- bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_BIN_DIR}" "${Tensile_BUILD_ID}" "${toolchain}" "${VIRTUALENV_PYTHON_EXENAME}"
++    COMMAND ${CMAKE_COMMAND} -E env "${ENV_PATH_ARG}" "PYTHONPATH=${PROJECT_BINARY_DIR}/lib$<SEMICOLON>${CMAKE_SOURCE_DIR}/tensilelite$<SEMICOLON>${VIRTUALENV_HOME_DIR}/Lib/site-packages" -- bash "${script}" "${Archs}" "${build_tmp_dir}" "${VIRTUALENV_BIN_DIR}" "${Tensile_BUILD_ID}" "${toolchain}" "${VIRTUALENV_PYTHON_EXENAME}"
+     COMMAND bash -c "cp ${build_tmp_dir}/extop_*.co ${OutputFolder}"
+     COMMAND ${CMAKE_COMMAND} -E copy ${ext_op_library_path} ${OutputFolder}
+     VERBATIM
+diff --git a/tensilelite/rocisa/rocisa/include/helper.hpp b/tensilelite/rocisa/rocisa/include/helper.hpp
+index 439026c6..a05ec023 100644
+--- a/tensilelite/rocisa/rocisa/include/helper.hpp
++++ b/tensilelite/rocisa/rocisa/include/helper.hpp
+@@ -56,128 +56,129 @@ inline std::string getGfxNameTuple(const IsaVersion& isaVersion)
+ inline std::pair<int, std::string> run(const std::vector<char*>& cmd, const std::string& input, bool debug = false)
+ {
+ #ifdef WIN32
+-    // Windows implementation using CreateProcess and pipes.
+-    SECURITY_ATTRIBUTES saAttr;
+-    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+-    saAttr.bInheritHandle = TRUE;
+-    saAttr.lpSecurityDescriptor = NULL;
+-
+-    // Create a pipe for the child process's STDOUT.
+-    HANDLE hChildStd_OUT_Rd = NULL;
+-    HANDLE hChildStd_OUT_Wr = NULL;
+-    if (!CreatePipe(&hChildStd_OUT_Rd, &hChildStd_OUT_Wr, &saAttr, 0))
+-        throw std::runtime_error("Stdout pipe creation failed");
+-    // Ensure the read handle is NOT inherited.
+-    if (!SetHandleInformation(hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0))
+-        throw std::runtime_error("Stdout SetHandleInformation failed");
+-
+-    // Create a pipe for the child process's STDIN.
+-    HANDLE hChildStd_IN_Rd = NULL;
+-    HANDLE hChildStd_IN_Wr = NULL;
+-    if (!CreatePipe(&hChildStd_IN_Rd, &hChildStd_IN_Wr, &saAttr, 0))
+-        throw std::runtime_error("Stdin pipe creation failed");
+-    if (!SetHandleInformation(hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0))
+-        throw std::runtime_error("Stdin SetHandleInformation failed");
+-
+-    // Build a command-line string from the vector of arguments.
+-    std::string commandLine;
+-    for (size_t i = 0; i < cmd.size(); ++i)
++    // Windows implementation using CreateProcess and anonymous pipes.
++    SECURITY_ATTRIBUTES sa{ sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
++    HANDLE hStdInRead = nullptr, hStdInWrite = nullptr;
++    HANDLE hStdOutRead = nullptr, hStdOutWrite = nullptr;
++
++    if (!CreatePipe(&hStdOutRead, &hStdOutWrite, &sa, 0))
++        throw std::runtime_error("CreatePipe stdout failed");
++    if (!SetHandleInformation(hStdOutRead, HANDLE_FLAG_INHERIT, 0))
++        throw std::runtime_error("SetHandleInformation failed");
++    if (!CreatePipe(&hStdInRead, &hStdInWrite, &sa, 0))
++        throw std::runtime_error("CreatePipe stdin failed");
++    if (!SetHandleInformation(hStdInWrite, HANDLE_FLAG_INHERIT, 0))
++        throw std::runtime_error("SetHandleInformation failed");
++
++    // Build a single command line string
++    std::string cmdLine;
++    for (size_t i = 0; i < cmd.size() && cmd[i]; ++i)
+     {
+-        if (i > 0)
+-            commandLine += " ";
+-        std::string arg(cmd[i]);
+-        // Quote the argument if it contains spaces.
+-        if (arg.find(' ') != std::string::npos)
+-            commandLine += "\"" + arg + "\"";
+-        else
+-            commandLine += arg;
++        if (i) cmdLine += ' ';
++        cmdLine += cmd[i];
+     }
+-    // Create a mutable command-line buffer as required by CreateProcess.
+-    std::vector<char> cmdLineMutable(commandLine.begin(), commandLine.end());
+-    cmdLineMutable.push_back('\0');
+-
+-    PROCESS_INFORMATION piProcInfo;
+-    ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
+-
+-    STARTUPINFOA siStartInfo;
+-    ZeroMemory(&siStartInfo, sizeof(STARTUPINFOA));
+-    siStartInfo.cb = sizeof(STARTUPINFOA);
+-    siStartInfo.hStdInput = hChildStd_IN_Rd;
+-    if (!debug)
+-    {
+-        siStartInfo.hStdOutput = hChildStd_OUT_Wr;
+-        siStartInfo.hStdError  = hChildStd_OUT_Wr;
+-    }
+-    else
+-    {
+-        siStartInfo.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+-        siStartInfo.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
+-    }
+-    siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
++
++    STARTUPINFOA si;
++    PROCESS_INFORMATION pi;
++    ZeroMemory(&si, sizeof(si));
++    ZeroMemory(&pi, sizeof(pi));
++    si.cb         = sizeof(si);
++    si.dwFlags    = STARTF_USESTDHANDLES;
++    si.hStdInput  = hStdInRead;
++    si.hStdOutput = debug ? GetStdHandle(STD_OUTPUT_HANDLE) : hStdOutWrite;
++    si.hStdError  = debug ? GetStdHandle(STD_ERROR_HANDLE)  : hStdOutWrite;
+ 
+     if (!CreateProcessA(
+-            NULL,
+-            cmdLineMutable.data(),
+-            NULL,
+-            NULL,
++            nullptr,
++            cmdLine.data(),
++            nullptr,
++            nullptr,
+             TRUE,
+             0,
+-            NULL,
+-            NULL,
+-            &siStartInfo,
+-            &piProcInfo))
++            nullptr,
++            nullptr,
++            &si,
++            &pi))
+     {
++        CloseHandle(hStdInRead);
++        CloseHandle(hStdInWrite);
++        CloseHandle(hStdOutRead);
++        CloseHandle(hStdOutWrite);
+         throw std::runtime_error("CreateProcess failed");
+     }
+ 
+-    // Write the input string to the child's STDIN.
+-    DWORD dwWritten = 0;
+-    if (!WriteFile(hChildStd_IN_Wr, input.c_str(), static_cast<DWORD>(input.size()), &dwWritten, NULL))
+-        throw std::runtime_error("Failed to write to child's stdin");
+-    CloseHandle(hChildStd_IN_Wr);
+-    CloseHandle(hChildStd_IN_Rd);
++    // Write to child's stdin and close to signal EOF
++    if (!input.empty())
++    {
++        DWORD written = 0;
++        WriteFile(hStdInWrite, input.data(), static_cast<DWORD>(input.size()), &written, nullptr);
++    }
++    CloseHandle(hStdInWrite);
++    CloseHandle(hStdInRead);
+ 
++    // Read from child's stdout/stderr
+     std::string result;
+-    if (!debug)
++    char buffer[128];
++    DWORD readBytes = 0;
++    while (true)
+     {
+-        const int BUFSIZE = 128;
+-        char buffer[BUFSIZE];
+-        DWORD dwRead = 0;
+-        while (true)
++        // See how many bytes are waiting (non‐blocking)
++        DWORD available = 0;
++        if (!PeekNamedPipe(hStdOutRead, nullptr, 0, nullptr, &available, nullptr))
+         {
+-            BOOL bRead = ReadFile(hChildStd_OUT_Rd, buffer, BUFSIZE, &dwRead, NULL);
+-            if(!bRead || dwRead == 0)
+-                break;
+-            result.append(buffer, dwRead);
++            DWORD err = GetLastError();
++            throw std::runtime_error("PeekNamedPipe failed with error " + std::to_string(err));
+         }
++
++        // If no data is pending, check if the child has exited
++        if (available == 0)
++        {
++            if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0)
++                break;               // child is done and no more output
++            Sleep(1);                // back off briefly to avoid spinning
++            continue;                // retry
++        }
++
++        // Read up to what's available (capped to buffer size)
++        DWORD toRead = (available < sizeof(buffer)) ? available : sizeof(buffer);
++        DWORD bytesRead = 0;
++        BOOL success = ReadFile(hStdOutRead, buffer, toRead, &bytesRead, nullptr);
++        if (!success)
++        {
++            DWORD err = GetLastError();
++            if (err == ERROR_BROKEN_PIPE)
++                break;               // pipe closed by child
++            throw std::runtime_error("ReadFile failed with error " + std::to_string(err));
++        }
++
++        result.append(buffer, bytesRead);
+     }
+-    CloseHandle(hChildStd_OUT_Wr);
+-    CloseHandle(hChildStd_OUT_Rd);
++    CloseHandle(hStdOutRead);
++    CloseHandle(hStdOutWrite);
+ 
+-    // Wait for the child process to finish.
+-    WaitForSingleObject(piProcInfo.hProcess, INFINITE);
++    // Wait for process to finish and get exit code
++    WaitForSingleObject(pi.hProcess, INFINITE);
+     DWORD exitCode = 0;
+-    if (!GetExitCodeProcess(piProcInfo.hProcess, &exitCode))
+-        exitCode = static_cast<DWORD>(-1);
++    GetExitCodeProcess(pi.hProcess, &exitCode);
++    CloseHandle(pi.hProcess);
++    CloseHandle(pi.hThread);
+ 
+-    CloseHandle(piProcInfo.hProcess);
+-    CloseHandle(piProcInfo.hThread);
+     return { static_cast<int>(exitCode), result };
+ #else
+     // Linux implementation using fork, pipe, and execvp.
+     int   p[2];
+     pid_t pid;
+-    if(pipe(p) == -1)
++    if (pipe(p) == -1)
+     {
+         throw std::runtime_error("cmd failed!");
+     }
+ 
+     pid = fork();
+-    if(pid == 0)
++    if (pid == 0)
+     {
+         close(p[1]);
+         dup2(p[0], STDIN_FILENO);
+-        if(!debug)
++        if (!debug)
+         {
+             dup2(p[0], STDERR_FILENO);
+             dup2(p[0], STDOUT_FILENO);
+@@ -190,7 +191,8 @@ inline std::pair<int, std::string> run(const std::vector<char*>& cmd, const std:
+     else
+     {
+         close(p[0]);
+-        write(p[1], input.c_str(), input.size());
++        if (!input.empty())
++            write(p[1], input.c_str(), input.size());
+         close(p[1]);
+         char        buf[128] = {0};
+         std::string result;
+@@ -198,15 +200,15 @@ inline std::pair<int, std::string> run(const std::vector<char*>& cmd, const std:
+         result += buf;
+         int rcode;
+         waitpid(pid, &rcode, 0);
+-        if(WIFEXITED(rcode))
++        if (WIFEXITED(rcode))
+         {
+             rcode = WEXITSTATUS(rcode);
+         }
+-        return {rcode, result};
++        return { rcode, result };
+     }
++#endif
+     // Should not go here.
+     return {0, "0"};
+-#endif
+ }
+ 
+ template <typename T>
+diff --git a/tensilelite/rocisa/rocisa/src/code.cpp b/tensilelite/rocisa/rocisa/src/code.cpp
+index f6bb56e4..b1ea81c6 100644
+--- a/tensilelite/rocisa/rocisa/src/code.cpp
++++ b/tensilelite/rocisa/rocisa/src/code.cpp
+@@ -154,7 +154,7 @@ void init_code(nb::module_ m)
+         .def("setInlineAsmPrintMode", &rocisa::Module::setInlineAsmPrintMode)
+         .def("addSpaceLine", &rocisa::Module::addSpaceLine)
+         .def("add", &rocisa::Module::add, nb::arg("item"), nb::arg("pos") = -1)
+-        .def("addItems", &rocisa::Module::addItems)
++        .def("addItems", &rocisa::Module::addItems, nb::arg("items"), nb::arg("unused") = -1)
+         .def("appendModule", &rocisa::Module::appendModule)
+         .def("addModuleAsFlatItems", &rocisa::Module::addModuleAsFlatItems)
+         .def("findIndex", &rocisa::Module::findIndex)
+-- 
+2.49.0.windows.1
+

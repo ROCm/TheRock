@@ -1,0 +1,3306 @@
+From c7b325c3a2ffcd8d01bfeeaac630110188bcb5da Mon Sep 17 00:00:00 2001
+From: "From: Milica Trifunovic" <milica.trifunovic@amd.com>
+Date: Wed, 16 Apr 2025 23:45:41 +0100
+Subject: [PATCH 2/5] Windows enablement patch
+
+jam: Trying to rebase https://github.com/ROCm/hipBLASLt/pull/1864
+
+Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+---
+ CMakeLists.txt                                |  60 ++-
+ clients/CMakeLists.txt                        |  34 +-
+ clients/benchmarks/CMakeLists.txt             |   3 +
+ clients/common/blis_interface.cpp             |   2 +-
+ clients/common/hipblaslt_init_device.cpp      |  18 +-
+ clients/common/hipblaslt_parse_data.cpp       |   2 +-
+ clients/common/utility.cpp                    |  51 ++-
+ clients/gtest/CMakeLists.txt                  |  58 ++-
+ clients/gtest/hipblaslt_test.cpp              |  16 +-
+ clients/include/TensorDataManipulation.hpp    |   4 +
+ clients/include/datatype_interface.hpp        |   1 +
+ clients/include/hipblaslt_arguments.hpp       |   2 +-
+ clients/include/hipblaslt_init.hpp            |   4 +-
+ clients/include/hipblaslt_random.hpp          |  13 +
+ clients/include/testing_matmul.hpp            |  10 +-
+ cmake/virtualenv.cmake                        |  19 +-
+ deps/requirements.txt                         |  10 +
+ library/CMakeLists.txt                        |  31 +-
+ library/include/hipblaslt-ext.hpp             |  23 +-
+ library/include/hipblaslt.h                   |  20 +
+ .../amd_detail/hipblaslt-ext-op-internal.hpp  |  11 +-
+ library/src/amd_detail/hipblaslt-ext-op.cpp   |  13 +-
+ library/src/amd_detail/hipblaslt-ext.cpp      |  10 +-
+ .../rocblaslt/include/rocblaslt-types.h       |  10 +
+ .../rocblaslt/src/include/logging.h           |   5 +-
+ .../src/kernels/CompileSourceKernel.cmake     |   8 +-
+ .../src/kernels/compile_code_object.sh        |   2 +
+ .../rocblaslt/src/rocblaslt_auxiliary.cpp     |  20 +-
+ .../rocblaslt/src/rocblaslt_transform.cpp     |  20 +-
+ .../amd_detail/rocblaslt/src/tensile_host.cpp |  40 +-
+ .../src/amd_detail/rocblaslt/src/utility.cpp  |   4 +
+ library/src/hipblaslt_ostream.cpp             |  12 +-
+ library/src/include/hipblaslt_ostream.hpp     |   2 +-
+ rdeps.py                                      | 226 +++++++++++
+ rdeps.xml                                     |  11 +
+ rmake.py                                      | 357 ++++++++++++++++++
+ rtest.py                                      |   5 +-
+ tensilelite/Tensile/Activation.py             |   2 +-
+ tensilelite/Tensile/ClientExecutable.py       |  26 +-
+ tensilelite/Tensile/ClientWriter.py           |  35 +-
+ .../Tensile/Common/GlobalParameters.py        |  34 +-
+ tensilelite/Tensile/Common/Parallel.py        |   7 +-
+ tensilelite/Tensile/Common/Utilities.py       |  11 +-
+ tensilelite/Tensile/Ops/gen_assembly.sh       |  26 +-
+ tensilelite/Tensile/Source/CMakeLists.txt     |   4 +
+ .../Tensile/Source/client/CMakeLists.txt      |  29 +-
+ .../client/include/DataInitialization.hpp     |  12 +
+ .../Source/client/include/HardwareMonitor.hpp |  20 +-
+ .../client/include/HardwareMonitorType.hpp    |  45 +++
+ .../client/include/HardwareMonitorWindows.hpp | 109 ++++++
+ tensilelite/Tensile/Source/client/main.cpp    |   4 +
+ .../Source/client/source/HardwareMonitor.cpp  |  44 ++-
+ .../client/source/HardwareMonitorListener.cpp |  23 +-
+ .../Source/client/source/ProgressListener.cpp |  12 +-
+ tensilelite/Tensile/Source/lib/CMakeLists.txt |  28 +-
+ .../lib/include/Tensile/MLPClassification.hpp |   1 +
+ .../Serialization/PlaceholderLibrary.hpp      |   4 +-
+ .../Source/lib/source/ContractionSolution.cpp |   5 +
+ .../lib/source/hip/HipSolutionAdapter.cpp     |   2 +-
+ tensilelite/Tensile/Tensile.py                |   2 +-
+ .../Tensile/TensileBenchmarkCluster.py        |   4 +-
+ tensilelite/Tensile/Toolchain/Component.py    |   5 +-
+ tensilelite/Tensile/Toolchain/Validators.py   |   2 +-
+ tensilelite/Tensile/cmake/TensileConfig.cmake |  15 +-
+ tensilelite/tox.ini                           |  17 +-
+ toolchain-windows.cmake                       |  73 ++++
+ 66 files changed, 1502 insertions(+), 236 deletions(-)
+ create mode 100644 deps/requirements.txt
+ create mode 100644 rdeps.py
+ create mode 100644 rdeps.xml
+ create mode 100644 rmake.py
+ create mode 100644 tensilelite/Tensile/Source/client/include/HardwareMonitorType.hpp
+ create mode 100644 tensilelite/Tensile/Source/client/include/HardwareMonitorWindows.hpp
+ create mode 100644 toolchain-windows.cmake
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 2ad200e6..7759a482 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -62,11 +62,19 @@ else()
+ endif()
+ 
+ if (NOT DEFINED ENV{CXX} AND NOT CMAKE_CXX_COMPILER)
+-  set(CMAKE_CXX_COMPILER "${rocm_bin}/amdclang++")
++  if(WIN32)
++    set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
++  else()
++    set(CMAKE_CXX_COMPILER "${rocm_bin}/amdclang++")
++  endif()
+ endif()
+ 
+ if (NOT DEFINED ENV{CC} AND NOT CMAKE_C_COMPILER)
+-  set(CMAKE_C_COMPILER "${rocm_bin}/amdclang")
++  if(WIN32)
++    set(CMAKE_C_COMPILER "${rocm_bin}/clang")
++  else()
++    set(CMAKE_C_COMPILER "${rocm_bin}/amdclang")
++  endif()
+ endif()
+ 
+ # TODO: move FC and CXX and CC compiler vars above to new toolchain-linux.cmake (Fortran for clients)
+@@ -116,9 +124,14 @@ option(Tensile_SEPARATE_ARCHITECTURES "Tensile to use GPU architecture specific
+ option(Tensile_NO_LAZY_LIBRARY_LOADING "Diasble loading kernels on demand?" OFF)
+ # For roctx
+ include(CMakeDependentOption)
+-cmake_dependent_option(HIPBLASLT_ENABLE_MARKER "Enable roctx marker in hipBLASLt" ON "BUILD_SHARED_LIBS" OFF)
+-# For rocRoller
+-option(USE_ROCROLLER "Build with the rocRoller library" ON)
++if(WIN32)
++  cmake_dependent_option(HIPBLASLT_ENABLE_MARKER "Disable roctx marker in hipBLASLt - roctracer does not support on Windows" OFF "BUILD_SHARED_LIBS" OFF)
++  option(USE_ROCROLLER "Build with the rocRoller library" OFF)
++else()
++  cmake_dependent_option(HIPBLASLT_ENABLE_MARKER "Enable roctx marker in hipBLASLt" ON "BUILD_SHARED_LIBS" OFF)
++  # For rocRoller
++  option(USE_ROCROLLER "Build with the rocRoller library" ON)
++endif()
+ 
+ if(BUILD_CODE_COVERAGE)
+   add_compile_options(-fprofile-arcs -ftest-coverage)
+@@ -200,7 +213,11 @@ else()
+ 
+     set( Tensile_LOGIC "asm_full" CACHE STRING "Tensile to use which logic?")
+     set( Tensile_CODE_OBJECT_VERSION "4" CACHE STRING "Tensile code_object_version")
+-    set( Tensile_COMPILER "amdclang++" CACHE STRING "Tensile compiler")
++    if(WIN32)
++      set( Tensile_COMPILER "clang++.exe" CACHE STRING "Tensile compiler")
++    else()
++      set( Tensile_COMPILER "amdclang++" CACHE STRING "Tensile compiler")
++    endif()
+     set( Tensile_LIBRARY_FORMAT "msgpack" CACHE STRING "Tensile library format")
+     set( Tensile_CPU_THREADS "" CACHE STRING "Number of threads for Tensile parallel build")
+ 
+@@ -266,9 +283,17 @@ if(Boost_VERSION VERSION_LESS "1.74.0")
+ endif()
+ 
+ if( LEGACY_HIPBLAS_DIRECT )
+-  find_package( hipblas REQUIRED CONFIG PATHS ${HIP_DIR} ${ROCM_PATH} /opt/rocm)
++  if (NOT WIN32)
++    find_package( hipblas REQUIRED CONFIG PATHS ${HIP_DIR} ${ROCM_PATH} /opt/rocm)
++  else()
++    find_package( hipblas REQUIRED CONFIG PATHS ${HIP_DIR})
++  endif()
+ else()
+-  find_package( hipblas-common REQUIRED CONFIG PATHS ${HIP_DIR} ${ROCM_PATH} /opt/rocm)
++    if (NOT WIN32)
++      find_package( hipblas-common REQUIRED CONFIG PATHS ${HIP_DIR} ${ROCM_PATH} /opt/rocm)
++    else()
++      find_package( hipblas-common REQUIRED CONFIG PATHS ${HIP_DIR})
++    endif()
+ endif()
+ 
+ if(HIPBLASLT_ENABLE_MARKER)
+@@ -370,12 +395,27 @@ if(BUILD_DOCS)
+   add_subdirectory(docs)
+ endif()
+ 
++# The following code is setting variables to control the behavior of CPack to generate our
++if( WIN32 )
++    set( CPACK_SOURCE_GENERATOR "ZIP" )
++    set( CPACK_GENERATOR "ZIP" )
++endif( )
++
+ # Package specific CPACK vars
+ set( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
+ set( CPACK_RPM_PACKAGE_LICENSE "MIT")
+ 
+-if( NOT CPACK_PACKAGING_INSTALL_PREFIX )
+-    set( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}" )
++if (WIN32)
++  SET( CMAKE_INSTALL_PREFIX "C:/hipSDK" CACHE PATH "Install path" FORCE )
++  SET( INSTALL_PREFIX "C:/hipSDK" )
++  SET( CPACK_SET_DESTDIR FALSE )
++  SET( CPACK_PACKAGE_INSTALL_DIRECTORY "C:/hipSDK" )
++  SET( CPACK_PACKAGING_INSTALL_PREFIX "" )
++  set( CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF )
++else()
++  if( NOT CPACK_PACKAGING_INSTALL_PREFIX )
++      set( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}" )
++  endif()
+ endif()
+ 
+ set( CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "\${CPACK_PACKAGING_INSTALL_PREFIX}" "\${CPACK_PACKAGING_INSTALL_PREFIX}/include" "\${CPACK_PACKAGING_INSTALL_PREFIX}/lib" )
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index f69dee9f..fdb797ee 100755
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -51,7 +51,10 @@ find_package(OpenMP)
+ 
+ if (TARGET OpenMP::OpenMP_CXX)
+   set( COMMON_LINK_LIBS "OpenMP::OpenMP_CXX")
+-  list( APPEND COMMON_LINK_LIBS "-L${HIP_CLANG_ROOT}/lib;-Wl,-rpath=${HIP_CLANG_ROOT}/lib")
++  list( APPEND COMMON_LINK_LIBS "-L\"${HIP_CLANG_ROOT}/lib\"")
++  if (NOT WIN32)
++    list( APPEND COMMON_LINK_LIBS "-Wl,-rpath=${HIP_CLANG_ROOT}/lib")
++  endif()
+ endif()
+ 
+ if (TARGET Threads::Threads)
+@@ -87,14 +90,27 @@ endif( )
+ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+ 
+   # Linking lapack library requires fortran flags
+-  find_package( cblas REQUIRED CONFIG )
+-  if(${BLIS_FOUND})
+-    set( BLAS_LIBRARY ${BLIS_LIB} )
+-    set( BLIS_CPP ../common/blis_interface.cpp )
+-  else()
+-    find_package( LAPACK REQUIRED )
+-    find_package( BLAS REQUIRED )
+-    set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
++  if ( NOT WIN32 )
++    find_package( cblas REQUIRED CONFIG )
++    if(${BLIS_FOUND})
++      set( BLAS_LIBRARY ${BLIS_LIB} )
++      set( BLIS_CPP ../common/blis_interface.cpp )
++    else()
++      find_package( LAPACK REQUIRED )
++      find_package( BLAS REQUIRED )
++      set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
++    endif()
++  else() #WIN32
++    set( BLAS_INCLUDE_DIR ${OPENBLAS_DIR}/include CACHE PATH "OpenBLAS library include path" )
++    find_library( BLAS_LIBRARY libopenblas
++                  PATHS ${OPENBLAS_DIR}/lib
++                  NO_DEFAULT_PATH
++                )
++    if (NOT BLAS_LIBRARY)
++      find_package( OPENBLAS CONFIG REQUIRED )
++      set( BLAS_LIBRARY OpenBLAS::OpenBLAS )
++      set( BLAS_INCLUDE_DIR "" )
++    endif()
+   endif()
+ 
+   # Find the package ROCmSMI
+diff --git a/clients/benchmarks/CMakeLists.txt b/clients/benchmarks/CMakeLists.txt
+index 1e0f8940..c5377358 100644
+--- a/clients/benchmarks/CMakeLists.txt
++++ b/clients/benchmarks/CMakeLists.txt
+@@ -92,6 +92,9 @@ if (NOT WIN32)
+     list( APPEND COMMON_LINK_LIBS "-lflang -lflangrti") # for lapack
+   endif()
+ else()
++  find_package(lapack REQUIRED)
++  message("LAPACK: ${LAPACK_LIBRARIES}")
++  target_link_libraries(hipblaslt-bench PRIVATE ${LAPACK_LIBRARIES})
+   list( APPEND COMMON_LINK_LIBS "libomp")
+ endif()
+ target_link_libraries( hipblaslt-bench PRIVATE ${COMMON_LINK_LIBS} )
+diff --git a/clients/common/blis_interface.cpp b/clients/common/blis_interface.cpp
+index ad747b4b..5d62cc08 100644
+--- a/clients/common/blis_interface.cpp
++++ b/clients/common/blis_interface.cpp
+@@ -29,7 +29,7 @@
+ 
+ void setup_blis()
+ {
+-#ifndef WIN32
++#ifndef _WIN32
+     bli_init();
+ #endif
+ }
+diff --git a/clients/common/hipblaslt_init_device.cpp b/clients/common/hipblaslt_init_device.cpp
+index 5f4443ed..73506b0e 100644
+--- a/clients/common/hipblaslt_init_device.cpp
++++ b/clients/common/hipblaslt_init_device.cpp
+@@ -116,7 +116,7 @@ __device__ int8_t random_hpl(size_t idx)
+ }
+ 
+ template <typename T>
+-void hipblaslt_init_device(ABC                      abc,
++void hipblaslt_init_device(ABC_dims                      abc,
+                            hipblaslt_initialization init,
+                            bool                     is_nan,
+                            T*                       A,
+@@ -140,11 +140,11 @@ void hipblaslt_init_device(ABC                      abc,
+         switch(init)
+         {
+         case hipblaslt_initialization::rand_int:
+-            if(abc == ABC::A || abc == ABC::C)
++            if(abc == ABC_dims::A || abc == ABC_dims::C)
+                 fill_batch(A, M, N, lda, stride, batch_count, [](size_t idx) -> T {
+                     return random_int<T>(idx);
+                 });
+-            else if(abc == ABC::B)
++            else if(abc == ABC_dims::B)
+             {
+                 stride = std::max(lda * N, stride);
+                 fill_batch(A, M, N, lda, stride, batch_count, [stride, lda](size_t idx) -> T {
+@@ -158,14 +158,14 @@ void hipblaslt_init_device(ABC                      abc,
+             break;
+         case hipblaslt_initialization::trig_float:
+             stride = std::max(lda * N, stride);
+-            if(abc == ABC::A || abc == ABC::C)
++            if(abc == ABC_dims::A || abc == ABC_dims::C)
+                 fill_batch(A, M, N, lda, stride, batch_count, [M, N, stride, lda](size_t idx) -> T {
+                     auto b = idx / stride;
+                     auto j = (idx - b * stride) / lda;
+                     auto i = (idx - b * stride) - j * lda;
+                     return T(sin(double(i + j * M + b * M * N)));
+                 });
+-            else if(abc == ABC::B)
++            else if(abc == ABC_dims::B)
+                 fill_batch(A, M, N, lda, stride, batch_count, [M, N, stride, lda](size_t idx) -> T {
+                     auto b = idx / stride;
+                     auto j = (idx - b * stride) / lda;
+@@ -179,15 +179,15 @@ void hipblaslt_init_device(ABC                      abc,
+             });
+             break;
+         case hipblaslt_initialization::special:
+-            if(abc == ABC::A)
++            if(abc == ABC_dims::A)
+                 fill_batch(A, M, N, lda, stride, batch_count, [](size_t idx) -> T {
+                     return T(hipblasLtHalf(65280.0));
+                 });
+-            else if(abc == ABC::B)
++            else if(abc == ABC_dims::B)
+                 fill_batch(A, M, N, lda, stride, batch_count, [](size_t idx) -> T {
+                     return T(hipblasLtHalf(0.0000607967376708984375));
+                 });
+-            else if(abc == ABC::C)
++            else if(abc == ABC_dims::C)
+                 fill_batch(A, M, N, lda, stride, batch_count, [](size_t idx) -> T {
+                     return T(pseudo_random_device(idx) % 10 + 1.f);
+                 });
+@@ -213,7 +213,7 @@ void hipblaslt_init_device(ABC                      abc,
+     }
+ }
+ 
+-void hipblaslt_init_device(ABC                      abc,
++void hipblaslt_init_device(ABC_dims                      abc,
+                            hipblaslt_initialization init,
+                            bool                     is_nan,
+                            void*                    A,
+diff --git a/clients/common/hipblaslt_parse_data.cpp b/clients/common/hipblaslt_parse_data.cpp
+index 2f42d841..f945248e 100644
+--- a/clients/common/hipblaslt_parse_data.cpp
++++ b/clients/common/hipblaslt_parse_data.cpp
+@@ -43,7 +43,7 @@ static std::string hipblaslt_parse_yaml(const std::string& yaml)
+                + "hipblaslt_template.yaml -o " + tmp + " " + yaml;
+     hipblaslt_cerr << cmd << std::endl;
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+     int status = std::system(cmd.c_str());
+     if(status == -1)
+         exit(EXIT_FAILURE);
+diff --git a/clients/common/utility.cpp b/clients/common/utility.cpp
+index 917dee32..a7f7e10d 100644
+--- a/clients/common/utility.cpp
++++ b/clients/common/utility.cpp
+@@ -32,7 +32,12 @@
+ #include <stdexcept>
+ #include <stdlib.h>
+ 
++#ifdef _WIN32
++#include <windows.h>
++#include <libloaderapi.h>
++#else
+ #include <fcntl.h>
++#endif
+ 
+ #include "Tensile/Source/client/include/Utility.hpp"
+ 
+@@ -50,6 +55,27 @@ namespace fs = std::experimental::filesystem;
+ // Return path of this executable
+ std::string hipblaslt_exepath()
+ {
++#ifdef _WIN32
++    std::vector<TCHAR> result(MAX_PATH + 1);
++    // Ensure result is large enough to accommodate the path
++    DWORD length = 0;
++    for(;;)
++    {
++        length = GetModuleFileNameA(nullptr, result.data(), result.size());
++        if(length < result.size() - 1)
++        {
++            result.resize(length + 1);
++            break;
++        }
++        result.resize(result.size() * 2);
++    }
++
++    fs::path exepath(result.begin(), result.end());
++    exepath = exepath.remove_filename();
++    // Add trailing "/" to exepath if required
++    exepath += exepath.empty() ? "" : "/";
++    return exepath.string();
++#else
+     std::string pathstr;
+     char*       path = realpath("/proc/self/exe", 0);
+     if(path)
+@@ -63,12 +89,26 @@ std::string hipblaslt_exepath()
+         free(path);
+     }
+     return pathstr;
++#endif
+ }
+ 
+ /* ============================================================================================ */
+ // Temp directory rooted random path
+ std::string hipblaslt_tempname()
+ {
++#ifdef _WIN32
++    // Generate "/tmp/rocblas-XXXXXX" like file name
++    const std::string alphanum     = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv";
++    int               stringlength = alphanum.length() - 1;
++    std::string       uniquestr    = "hipblaslt-";
++
++    for(auto n : {0, 1, 2, 3, 4, 5})
++        uniquestr += alphanum.at(rand() % stringlength);
++
++    fs::path tmpname = fs::temp_directory_path() / uniquestr;
++
++    return tmpname.string();
++#else
+     char tmp[] = "/tmp/hipblaslt-XXXXXX";
+     int  fd    = mkostemp(tmp, O_CLOEXEC);
+     if(fd == -1)
+@@ -78,6 +118,7 @@ std::string hipblaslt_tempname()
+     }
+ 
+     return std::string(tmp);
++#endif
+ }
+ 
+ /* ============================================================================================ */
+@@ -239,7 +280,11 @@ hipblaslt_local_handle::hipblaslt_local_handle(const Arguments& arg)
+         if(sol_selec_env)
+             m_sol_selec_saved_status = std::string(sol_selec_env);
+         m_sol_selec_env_set = true;
++#ifdef _WIN32
++        _putenv_s("TENSILE_SOLUTION_SELECTION_METHOD", std::to_string(arg.tensile_solution_selection_method).c_str());
++#else
+         setenv("TENSILE_SOLUTION_SELECTION_METHOD", std::to_string(arg.tensile_solution_selection_method).c_str(), true);
++#endif    
+     }
+     // memory guard control, with multi-threading should not change values across threads
+     d_vector_set_pad_length(arg.pad);
+@@ -249,7 +294,11 @@ hipblaslt_local_handle::~hipblaslt_local_handle()
+ {
+     if(m_sol_selec_env_set)
+     {
+-        setenv("TENSILE_SOLUTION_SELECTION_METHOD", m_sol_selec_saved_status.c_str(), true);
++#ifdef _WIN32
++        _putenv_s("TENSILE_SOLUTION_SELECTION_METHOD", m_sol_selec_saved_status.c_str());
++#else
++setenv("TENSILE_SOLUTION_SELECTION_METHOD", m_sol_selec_saved_status.c_str(), true);
++#endif  
+     }
+     hipblasLtDestroy(m_handle);
+ }
+diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
+index a57100f2..054ee9d3 100644
+--- a/clients/gtest/CMakeLists.txt
++++ b/clients/gtest/CMakeLists.txt
+@@ -64,8 +64,10 @@ target_include_directories( hipblaslt-test
+     $<BUILD_INTERFACE:${BLIS_INCLUDE_DIR}> # may be blank if not used
+ )
+ message("BLIS_INCLUDE_DIR=" ${BLIS_INCLUDE_DIR})
+-target_link_libraries( hipblaslt-test PRIVATE ${BLAS_LIBRARY} 
+-  GTest::gtest GTest::gtest_main roc::hipblaslt )
++target_link_libraries( hipblaslt-test PRIVATE ${if(WIN32)
++  find_package(lapack REQUIRED)
++  target_link_libraries( hipblaslt-test PRIVATE ${LAPACK_LIBRARIES})
++endif()
+ 
+ if( NOT BUILD_CUDA )
+   target_link_libraries( hipblaslt-test PRIVATE hip::host hip::device )
+@@ -89,18 +91,22 @@ target_compile_definitions( hipblaslt-test PRIVATE ROCM_USE_FLOAT16 HIPBLASLT_IN
+ target_compile_options(hipblaslt-test PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${COMMON_CXX_OPTIONS}>)
+ # target_compile_options does not go to linker like CMAKE_CXX_FLAGS does, so manually add
+ 
+-if (BUILD_CUDA)
+-  target_link_libraries( hipblaslt-test PRIVATE -l${LAPACK_LIBRARIES} -lcblas )
+-else()
+-  target_link_libraries( hipblaslt-test PRIVATE ${LAPACK_LIBRARIES} cblas )
+-endif()
++if (NOT WIN32)
++  if (BUILD_CUDA)
++    target_link_libraries( hipblaslt-test PRIVATE -l${LAPACK_LIBRARIES} -lcblas )
++  else()
++    target_link_libraries( hipblaslt-test PRIVATE ${LAPACK_LIBRARIES} cblas )
++  endif()
+ 
+-list( APPEND COMMON_LINK_LIBS "-lm -lstdc++fs")
++  list( APPEND COMMON_LINK_LIBS "-lm -lstdc++fs")
+ 
+-if (CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+-  list( APPEND COMMON_LINK_LIBS "-lgfortran") # for lapack
++  if (CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
++    list( APPEND COMMON_LINK_LIBS "-lgfortran") # for lapack
++  else()
++    list( APPEND COMMON_LINK_LIBS "-lflang -lflangrti") # for lapack
++  endif()
+ else()
+-  list( APPEND COMMON_LINK_LIBS "-lflang -lflangrti") # for lapack
++  list( APPEND COMMON_LINK_LIBS "libomp")
+ endif()
+ 
+ #if (NOT WIN32)
+@@ -115,11 +121,31 @@ endif()
+ 
+ target_link_libraries( hipblaslt-test PRIVATE ${COMMON_LINK_LIBS} )
+ 
+-set_target_properties( hipblaslt-test PROPERTIES
+-  IMPORT_PREFIX ""
+-  IMPORT_SUFFIX ".lib"
+-  LINKER_LANGUAGE CXX
+-  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/staging"
++if (WIN32)
++  # for now adding in all .dll as dependency chain is not cmake based on win32
++  file( GLOB third_party_dlls
++    LIST_DIRECTORIES OFF
++    CONFIGURE_DEPENDS
++    ${OPENBLAS_DIR}/bin/*.dll
++    ${HIP_DIR}/bin/amd*.dll
++    ${HIP_DIR}/bin/hiprt*.dll
++    ${HIP_DIR}/bin/hipinfo.exe
++    ${CMAKE_SOURCE_DIR}/rtest.*
++    C:/Windows/System32/libomp140*.dll
++  )
++  foreach( file_i ${third_party_dlls})
++    add_custom_command( TARGET hipblaslt-test POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy ${file_i} ${PROJECT_BINARY_DIR}/staging/ )
++  endforeach( file_i )
++endif()
++PPEND COMMON_LINK_LIBS "libomp")
++#endif()
++
++target_link_libraries( hipblaslt-test PRIVATE ${COMMON_LINK_LIBS} )
++( APPEND COMMON_LINK_LIBS "libomp")
++#endif()
++
++target_link_libraries( hipblaslt-test PRIVATE ${COMMON_LINK_LIBS} )
++{PROJECT_BINARY_DIR}/staging"
+ )
+ 
+ set( HIPBLASLT_TEST_DATA "${PROJECT_BINARY_DIR}/staging/hipblaslt_gtest.data")
+diff --git a/clients/gtest/hipblaslt_test.cpp b/clients/gtest/hipblaslt_test.cpp
+index 73cfa5c8..caaaf76a 100644
+--- a/clients/gtest/hipblaslt_test.cpp
++++ b/clients/gtest/hipblaslt_test.cpp
+@@ -30,7 +30,7 @@
+ #include <cstdlib>
+ #include <exception>
+ #include <regex>
+-#ifdef WIN32
++#ifdef _WIN32
+ #include <windows.h>
+ #define strcasecmp(A, B) _stricmp(A, B)
+ #else
+@@ -135,7 +135,7 @@ static thread_local struct
+     volatile sig_atomic_t enabled = false;
+ 
+     // sigjmp_buf describing stack frame to go back to
+-#ifndef WIN32
++#ifndef _WIN32
+     sigjmp_buf sigjmp_buf_;
+ #else
+     jmp_buf sigjmp_buf_;
+@@ -161,7 +161,7 @@ extern "C" void hipblaslt_test_signal_handler(int sig)
+         return;
+     }
+ 
+-#ifndef WIN32
++#ifndef _WIN32
+     // If this is an alarm timeout, we abort
+     if(sig == SIGALRM)
+     {
+@@ -180,7 +180,7 @@ extern "C" void hipblaslt_test_signal_handler(int sig)
+     // it is better than crashing.
+     t_handler.signal = sig;
+     errno            = saved_errno;
+-#ifndef WIN32
++#ifndef _WIN32
+     siglongjmp(t_handler.sigjmp_buf_, true);
+ #else
+     longjmp(t_handler.sigjmp_buf_, true);
+@@ -190,7 +190,7 @@ extern "C" void hipblaslt_test_signal_handler(int sig)
+ // Set up signal handlers
+ void hipblaslt_test_sigaction()
+ {
+-#ifndef WIN32
++#ifndef _WIN32
+     struct sigaction act;
+     act.sa_flags = 0;
+     sigfillset(&act.sa_mask);
+@@ -219,7 +219,7 @@ void catch_signals_and_exceptions_as_failures(std::function<void()> test, bool s
+     // Save the current handler (to allow nested calls to this function)
+     auto old_handler = t_handler;
+ 
+-#ifndef WIN32
++#ifndef _WIN32
+     // Set up the return point, and handle siglongjmp returning back to here
+     if(sigsetjmp(t_handler.sigjmp_buf_, true))
+     {
+@@ -237,7 +237,7 @@ void catch_signals_and_exceptions_as_failures(std::function<void()> test, bool s
+ #endif
+     else
+     {
+-#ifndef WIN32
++#ifndef _WIN32
+         // Alarm to detect deadlocks or hangs
+         if(set_alarm)
+             alarm(test_timeout);
+@@ -260,7 +260,7 @@ void catch_signals_and_exceptions_as_failures(std::function<void()> test, bool s
+         }
+     }
+ 
+-#ifndef WIN32
++#ifndef _WIN32
+     // Cancel the alarm if it was set
+     if(set_alarm)
+         alarm(0);
+diff --git a/clients/include/TensorDataManipulation.hpp b/clients/include/TensorDataManipulation.hpp
+index 227a9d51..6c53fc5b 100644
+--- a/clients/include/TensorDataManipulation.hpp
++++ b/clients/include/TensorDataManipulation.hpp
+@@ -29,6 +29,10 @@
+ #include <iosfwd>
+ #include <memory>
+ #include <vector>
++#ifdef _WIN32
++#include <BaseTsd.h>
++typedef SSIZE_T ssize_t;
++#endif
+ 
+ namespace Tensor
+ {
+diff --git a/clients/include/datatype_interface.hpp b/clients/include/datatype_interface.hpp
+index 1430647d..dad51fb0 100644
+--- a/clients/include/datatype_interface.hpp
++++ b/clients/include/datatype_interface.hpp
+@@ -26,6 +26,7 @@
+ 
+ #pragma once
+ #include <hipblaslt/hipblaslt.h>
++#include <map>
+ 
+ union computeTypeInterface
+ {
+diff --git a/clients/include/hipblaslt_arguments.hpp b/clients/include/hipblaslt_arguments.hpp
+index 0b39f0ae..9ccccec6 100644
+--- a/clients/include/hipblaslt_arguments.hpp
++++ b/clients/include/hipblaslt_arguments.hpp
+@@ -296,7 +296,7 @@ struct Arguments
+     // Function to read Arguments data from stream
+     friend std::istream& operator>>(std::istream& str, Arguments& arg);
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+     // Clang specific code
+     template <typename T>
+     friend hipblaslt_internal_ostream& operator<<(hipblaslt_internal_ostream& os,
+diff --git a/clients/include/hipblaslt_init.hpp b/clients/include/hipblaslt_init.hpp
+index ce685476..93df1e8a 100644
+--- a/clients/include/hipblaslt_init.hpp
++++ b/clients/include/hipblaslt_init.hpp
+@@ -36,14 +36,14 @@
+ #include <omp.h>
+ #include <vector>
+ 
+-enum class ABC
++enum class ABC_dims
+ {
+     A,
+     B,
+     C
+ };
+ 
+-void hipblaslt_init_device(ABC                      abc,
++void hipblaslt_init_device(ABC_dims                      abc,
+                            hipblaslt_initialization init,
+                            bool                     is_nan,
+                            void*                    A,
+diff --git a/clients/include/hipblaslt_random.hpp b/clients/include/hipblaslt_random.hpp
+index 05e9c287..7771a4ed 100644
+--- a/clients/include/hipblaslt_random.hpp
++++ b/clients/include/hipblaslt_random.hpp
+@@ -93,6 +93,19 @@ public:
+     {
+         return std::uniform_int_distribution<T>{}(t_hipblaslt_rng);
+     }
++#ifdef _WIN32
++    // // Random unsigned char
++    explicit operator unsigned char()
++    {
++        return static_cast<char>(std::uniform_int_distribution<uint>{}(t_hipblaslt_rng));
++    }
++
++    // Random signed char
++    explicit operator char()
++    {
++        return static_cast<signed char>(std::uniform_int_distribution<int>{}(t_hipblaslt_rng));
++    }
++#endif
+ 
+     // Random signed char
+     explicit operator signed char()
+diff --git a/clients/include/testing_matmul.hpp b/clients/include/testing_matmul.hpp
+index f63856ef..fc47b32f 100644
+--- a/clients/include/testing_matmul.hpp
++++ b/clients/include/testing_matmul.hpp
+@@ -51,6 +51,10 @@
+ #include <map>
+ #include <omp.h>
+ #include <set>
++#ifdef _WIN32
++#include <cstdlib>
++#include <numeric>
++#endif
+ 
+ extern "C" __global__ void flush_icache()
+ {
+@@ -1815,7 +1819,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+         else
+         {
+ #endif
+-            hipblaslt_init_device(ABC::A,
++            hipblaslt_init_device(ABC_dims::A,
+                               arg.initialization,
+                               alpha_isnan_type(arg, Talpha),
+                               dA[i].buf(),
+@@ -1865,7 +1869,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+         else
+         {
+ #endif
+-            hipblaslt_init_device(ABC::B,
++            hipblaslt_init_device(ABC_dims::B,
+                               arg.initialization,
+                               alpha_isnan_type(arg, Talpha),
+                               dB[i].buf(),
+@@ -1878,7 +1882,7 @@ void testing_matmul_with_bias(const Arguments& arg,
+ #ifdef USE_ROCROLLER
+         }
+ #endif
+-        hipblaslt_init_device(ABC::C,
++        hipblaslt_init_device(ABC_dims::C,
+                               arg.initialization,
+                               beta_isnan_type(arg, Talpha),
+                               dC[i].buf(),
+diff --git a/cmake/virtualenv.cmake b/cmake/virtualenv.cmake
+index 96531ad2..2cb1e3ba 100644
+--- a/cmake/virtualenv.cmake
++++ b/cmake/virtualenv.cmake
+@@ -8,21 +8,38 @@ find_package(Python REQUIRED COMPONENTS Interpreter)
+ 
+ set(VIRTUALENV_PYTHON_EXE ${Python_EXECUTABLE})
+ 
+-get_filename_component(VIRTUALENV_PYTHON_EXENAME ${VIRTUALENV_PYTHON_EXE} NAME CACHE)
+ 
+ set(VIRTUALENV_HOME_DIR ${CMAKE_BINARY_DIR}/virtualenv CACHE PATH "Path to virtual environment")
+ 
+ function(virtualenv_create)
+     execute_process(
++      RESULT_VARIABLE rc
+       COMMAND ${VIRTUALENV_PYTHON_EXE} -m venv ${VIRTUALENV_HOME_DIR} --system-site-packages --clear
+       COMMAND_ECHO STDOUT
+     )
++    if(rc)
++        message(FATAL_ERROR ${rc})
++    endif()
+ 
+     if(WIN32)
+         set(VIRTUALENV_BIN_DIR ${VIRTUALENV_HOME_DIR}/Scripts CACHE PATH "Path to virtualenv bin directory")
+     else()
+         set(VIRTUALENV_BIN_DIR ${VIRTUALENV_HOME_DIR}/bin CACHE PATH "Path to virtualenv bin directory")
+     endif()
++
++     # verify python executable name inside virtualenv as may be python3 or python (even if installed by python3)
++     find_program(VIRTUALENV_INST_PYTHON_EXE python3 PATHS ${VIRTUALENV_BIN_DIR} NO_DEFAULT_PATH)
++     if(NOT VIRTUALENV_INST_PYTHON_EXE)
++         find_program(VIRTUALENV_INST_PYTHON_EXE python PATHS ${VIRTUALENV_BIN_DIR} NO_DEFAULT_PATH)
++     endif()
++ 
++     get_filename_component(VIRTUALENV_PYTHON_EXENAME ${VIRTUALENV_INST_PYTHON_EXE} NAME CACHE)
++ 
++     # report the virtual env python version
++     message("virtualenv python version: ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME}")
++     execute_process(
++         COMMAND ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} --version
++         )
+ endfunction()
+ 
+ function(virtualenv_install)
+diff --git a/deps/requirements.txt b/deps/requirements.txt
+new file mode 100644
+index 00000000..97412d7b
+--- /dev/null
++++ b/deps/requirements.txt
+@@ -0,0 +1,10 @@
++# rmake
++psutil
++# hipblaslt clients use
++pyyaml
++# tensilelite related
++msgpack
++six
++wheel
++virtualenv
++joblib
+\ No newline at end of file
+diff --git a/library/CMakeLists.txt b/library/CMakeLists.txt
+index c5fce09d..6b41a0e1 100644
+--- a/library/CMakeLists.txt
++++ b/library/CMakeLists.txt
+@@ -77,6 +77,22 @@ add_library(roc::hipblaslt ALIAS hipblaslt)
+ 
+ # Target compile definitions
+ if(NOT BUILD_CUDA)
++  if (WIN32)
++    find_package(msgpack-cxx REQUIRED)
++
++    target_compile_definitions(hipblaslt PUBLIC -DTENSILE_MSGPACK=1)
++    get_target_property(msgpack_inc msgpack-cxx INTERFACE_INCLUDE_DIRECTORIES)
++
++    if(DEFINED msgpack_inc)
++        # include C++ headers manually
++        # External header includes included as system files
++        target_include_directories(hipblaslt
++            SYSTEM PRIVATE $<BUILD_INTERFACE:${msgpack_inc}>
++        )
++
++      target_link_libraries(hipblaslt PRIVATE TensileHost shlwapi)
++    endif()
++  endif()
+ 
+   if( BUILD_SHARED_LIBS )
+     target_link_libraries( hipblaslt PRIVATE TensileHost )
+@@ -155,7 +171,11 @@ endif()
+ # Target link libraries
+ if(NOT BUILD_CUDA)
+ # Target link libraries
+-  target_link_libraries(hipblaslt PRIVATE hip::device ${DL_LIB})
++  if (WIN32)
++    target_link_libraries(hipblaslt PRIVATE hip::device ${CMAKE_DL_LIBS})
++  else()
++    target_link_libraries(hipblaslt PRIVATE hip::device ${DL_LIB})
++  endif()
+ endif()
+ 
+ if(HIPBLASLT_ENABLE_MARKER)
+@@ -194,6 +214,13 @@ set_target_properties(hipblaslt PROPERTIES CXX_VISIBILITY_PRESET "hidden" VISIBI
+ set_target_properties(hipblaslt PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/staging")
+ set_target_propertieS(hipblaslt PROPERTIES DEBUG_POSTFIX "-d")
+ 
++if (WIN32 AND BUILD_CLIENTS)
++  add_custom_command( TARGET hipblaslt POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/staging/$<TARGET_FILE_NAME:hipblaslt> ${PROJECT_BINARY_DIR}/clients/staging/$<TARGET_FILE_NAME:hipblaslt> )
++  if( ${CMAKE_BUILD_TYPE} MATCHES "Debug")
++    add_custom_command( TARGET hipblaslt POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/staging/hipblaslt.pdb ${PROJECT_BINARY_DIR}/clients/staging/hipblaslt.pdb )
++  endif()
++endif()
++
+ # TODO ??
+ # Following boost conventions of prefixing 'lib' on static built libraries
+ if(NOT BUILD_SHARED_LIBS)
+@@ -220,7 +247,7 @@ rocm_install_targets(TARGETS hipblaslt
+ 
+ if ( NOT BUILD_CUDA )
+     if (WIN32)
+-      set( HIPBLASLT_TENSILE_LIBRARY_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}hipblaslt/bin" CACHE PATH "path to tensile library" )
++      set( HIPBLASLT_TENSILE_LIBRARY_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}/bin/hipblaslt" CACHE PATH "path to tensile library" )
+     else()
+       set( HIPBLASLT_TENSILE_LIBRARY_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}${CMAKE_INSTALL_LIBDIR}/hipblaslt" CACHE PATH "path to tensile library" )
+     endif()
+diff --git a/library/include/hipblaslt-ext.hpp b/library/include/hipblaslt-ext.hpp
+index 9fa3efc2..4886e819 100644
+--- a/library/include/hipblaslt-ext.hpp
++++ b/library/include/hipblaslt-ext.hpp
+@@ -425,8 +425,13 @@ namespace hipblaslt_ext
+     {
+     public:
+         HIPBLASLT_EXPORT virtual ~GemmInstance(){};
++#ifdef _WIN32
++        GemmInstance(const GemmInstance& rhs) = delete;
++        GemmInstance& operator=(const GemmInstance& rhs) = delete;
++#else
+         HIPBLASLT_EXPORT               GemmInstance(const GemmInstance& rhs) = delete;
+         HIPBLASLT_EXPORT GemmInstance& operator=(const GemmInstance& rhs)    = delete;
++#endif
+         HIPBLASLT_EXPORT               GemmInstance(GemmInstance&& rhs) noexcept;
+         HIPBLASLT_EXPORT GemmInstance& operator=(GemmInstance&& rhs) noexcept;
+ 
+@@ -771,9 +776,14 @@ namespace hipblaslt_ext
+                                        void*                   D,
+                                        hipblasLtMatrixLayout_t matD);
+ 
+-        HIPBLASLT_EXPORT       Gemm(const Gemm&) = delete;
+-        HIPBLASLT_EXPORT       Gemm(Gemm&&) noexcept;
++#ifdef _WIN32
++        Gemm(const Gemm&) = delete;
++        Gemm& operator=(const Gemm&) = delete;
++#else
++        HIPBLASLT_EXPORT Gemm(const Gemm&) = delete;
+         HIPBLASLT_EXPORT Gemm& operator=(const Gemm&) = delete;
++#endif
++        HIPBLASLT_EXPORT Gemm(Gemm&&) noexcept;
+         HIPBLASLT_EXPORT Gemm& operator=(Gemm&&) noexcept;
+ 
+         /*! \ingroup library_module
+@@ -1027,9 +1037,14 @@ namespace hipblaslt_ext
+                                               hipDataType          typeC,
+                                               hipDataType          typeD,
+                                               hipblasComputeType_t typeCompute);
+-        HIPBLASLT_EXPORT              GroupedGemm(const GroupedGemm&) = delete;
+-        HIPBLASLT_EXPORT              GroupedGemm(GroupedGemm&&) noexcept;
++#ifdef _WIN32
++        GroupedGemm(const GroupedGemm&) = delete;
++        GroupedGemm& operator=(const GroupedGemm&) = delete;
++#else
++        HIPBLASLT_EXPORT GroupedGemm(const GroupedGemm&) = delete;
+         HIPBLASLT_EXPORT GroupedGemm& operator=(const GroupedGemm&) = delete;
++#endif
++        HIPBLASLT_EXPORT              GroupedGemm(GroupedGemm&&) noexcept;
+         HIPBLASLT_EXPORT GroupedGemm& operator=(GroupedGemm&&) noexcept;
+ 
+         /*! \ingroup library_module
+diff --git a/library/include/hipblaslt.h b/library/include/hipblaslt.h
+index 7a7cc7bc..f0506f7c 100644
+--- a/library/include/hipblaslt.h
++++ b/library/include/hipblaslt.h
+@@ -55,6 +55,9 @@
+ #include <regex>
+ #include <vector>
+ 
++#ifdef _WIN32
++#include <hip/hip_version.h>
++#endif
+ #include <hip/hip_bfloat16.h>
+ #include <hip/hip_complex.h>
+ #include <hip/hip_runtime.h>
+@@ -65,6 +68,23 @@
+ #include "hipblaslt-types.h"
+ #endif
+ 
++#ifdef _WIN32
++#if (HIP_VERSION_MAJOR < 6)
++typedef hipblasDatatype_t hipblasComputeType_t;
++#define HIPBLAS_COMPUTE_64F HIPBLAS_R_64F
++#define HIPBLAS_COMPUTE_32F HIPBLAS_R_32F
++#define HIPBLAS_COMPUTE_16F HIPBLAS_R_16F
++#define HIPBLAS_COMPUTE_8I HIPBLAS_R_8I
++#define HIPBLAS_COMPUTE_8U HIPBLAS_R_8U
++#define HIPBLAS_COMPUTE_32I HIPBLAS_R_32I
++#define HIPBLAS_COMPUTE_32U HIPBLAS_R_32U
++#define HIPBLAS_COMPUTE_16B HIPBLAS_R_16B
++#define HIPBLASLT_DATATYPE_INVALID static_cast<hipDataType>(31)
++#else
++#define HIPBLASLT_DATATYPE_INVALID static_cast<hipDataType>(255)
++#endif
++#endif
++
+ /* Opaque structures holding information */
+ // clang-format off
+ 
+diff --git a/library/src/amd_detail/hipblaslt-ext-op-internal.hpp b/library/src/amd_detail/hipblaslt-ext-op-internal.hpp
+index b9f3b7fa..84696617 100644
+--- a/library/src/amd_detail/hipblaslt-ext-op-internal.hpp
++++ b/library/src/amd_detail/hipblaslt-ext-op-internal.hpp
+@@ -33,12 +33,21 @@
+ #include <algorithm>
+ #include <cstdint>
+ #include <fstream>
+-#include <libgen.h>
+ #include <msgpack.hpp>
+ #include <sstream>
+ #include <stdexcept>
+ #include <string>
+ 
++#ifdef _WIN32
++inline std::string dirname(const std::string &dir)
++{
++    const auto pos = dir.find_last_of('\\');
++    return dir.substr(0, pos);
++}
++#else
++#include <libgen.h>
++#endif
++
+ namespace hipblaslt_ext {
+ 
+ class SoftmaxProblem;
+diff --git a/library/src/amd_detail/hipblaslt-ext-op.cpp b/library/src/amd_detail/hipblaslt-ext-op.cpp
+index a953de4c..3a9aba3d 100644
+--- a/library/src/amd_detail/hipblaslt-ext-op.cpp
++++ b/library/src/amd_detail/hipblaslt-ext-op.cpp
+@@ -35,7 +35,6 @@
+ #include <fstream>
+ #include <hip/hip_ext.h>
+ #include <hip/hip_runtime_api.h>
+-#include <libgen.h>
+ #include <memory>
+ #include <rocblaslt-auxiliary.h>
+ #include <sstream>
+@@ -138,8 +137,13 @@ hipblasStatus_t hipblasltExtAMaxWithScale(const hipDataType datatype,
+ 
+ namespace
+ {
++#ifdef WIN32
++    constexpr char DEFAULT_EXT_OP_LIBRARY_PATH[]
++        = "C:\\opt\\rocm\\bin\\hipblaslt\\library\\hipblasltExtOpLibrary.dat";
++#else
+     constexpr char DEFAULT_EXT_OP_LIBRARY_PATH[]
+         = "/opt/rocm/lib/hipblaslt/library/hipblasltExtOpLibrary.dat";
++#endif
+     constexpr uint32_t SUPPORTED_MAX_N = 256;
+     constexpr uint32_t WORKGROUP_SIZE  = 256;
+ 
+@@ -167,7 +171,9 @@ namespace
+ 
+         if(rocblaslt_internal_test_path(libPath + "/../Tensile/library"))
+             libPath += "/../Tensile/library";
+-        else if(rocblaslt_internal_test_path(libPath + "library"))
++        if(rocblaslt_internal_test_path(libPath + "/../../Tensile/library"))
++            libPath += "/../../Tensile/library";
++        else if(rocblaslt_internal_test_path(libPath + "/library"))
+             libPath += "/library";
+         else
+             libPath += "/hipblaslt/library";
+@@ -176,6 +182,9 @@ namespace
+ 
+         if(rocblaslt_internal_test_path(libPath))
+         {
++#ifdef WIN32
++            std::replace(libPath.begin(), libPath.end(), '/', '\\');
++#endif
+             return libPath;
+         }
+ 
+diff --git a/library/src/amd_detail/hipblaslt-ext.cpp b/library/src/amd_detail/hipblaslt-ext.cpp
+index 8bcc3064..591bb00e 100644
+--- a/library/src/amd_detail/hipblaslt-ext.cpp
++++ b/library/src/amd_detail/hipblaslt-ext.cpp
+@@ -300,8 +300,8 @@ namespace hipblaslt_ext
+     class GemmTuningV2::GemmTuningImpl
+     {
+     public:
+-        u_int16_t splitK = 0;
+-        int16_t   wgm    = 0;
++        uint16_t splitK = 0;
++        int16_t wgm = 0;
+     };
+ 
+     GemmTuningV2::GemmTuningV2()
+@@ -325,7 +325,7 @@ namespace hipblaslt_ext
+     GemmTuningV2::GemmTuningV2(GemmTuningV2&& tuning)            = default;
+     GemmTuningV2& GemmTuningV2::operator=(GemmTuningV2&& tuning) = default;
+ 
+-    void GemmTuningV2::setSplitK(u_int16_t splitK)
++    void GemmTuningV2::setSplitK(uint16_t splitK)
+     {
+         pimpl->splitK = splitK;
+     }
+@@ -335,7 +335,7 @@ namespace hipblaslt_ext
+         pimpl->wgm = wgm;
+     }
+ 
+-    u_int16_t GemmTuningV2::getSplitK() const
++    uint16_t GemmTuningV2::getSplitK() const
+     {
+         return pimpl->splitK;
+     }
+@@ -1369,7 +1369,7 @@ namespace hipblaslt_ext
+                                              m_gemm_count));
+         if(status == HIPBLAS_STATUS_SUCCESS)
+         {
+-            m_problem_types = tmptype;
++            m_problem_types = std::move(tmptype);
+         }
+         rocblaslt::Debug::Instance().markerStop();
+         return status;
+diff --git a/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h b/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h
+index e024617b..02b08b03 100644
+--- a/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h
++++ b/library/src/amd_detail/rocblaslt/include/rocblaslt-types.h
+@@ -270,6 +270,7 @@ typedef enum rocblaslt_status_
+  *
+  *  \details
+  */
++#if (HIP_VERSION_MAJOR >= 6)
+ typedef enum rocblaslt_compute_type_
+ {
+     rocblaslt_compute_f16          = 0, /**< 16-bit floating-point precision. */
+@@ -298,6 +299,15 @@ typedef enum rocblaslt_compute_type_
+     rocblaslt_compute_f32_fast_bf8f8
+     = 107, /**< 32-bit input can use bf8 for A and fp8 for B compute */
+ } rocblaslt_compute_type;
++#else
++typedef enum rocblaslt_compute_type_
++{
++    rocblaslt_compute_f32           = 151, /**< 32-bit floating-point precision. */
++    rocblaslt_compute_f64           = 152, /**< 64-bit floating-point precision. */
++    rocblaslt_compute_i32           = 166, /**< 32-bit floating-point precision. */
++    rocblaslt_compute_f32_fast_xf32 = 167
++} rocblaslt_compute_type;
++#endif
+ 
+ /*! \ingroup types_module
+  *  \brief Specify the additional attributes of a matrix descriptor
+diff --git a/library/src/amd_detail/rocblaslt/src/include/logging.h b/library/src/amd_detail/rocblaslt/src/include/logging.h
+index ffc32cfb..c899d43a 100644
+--- a/library/src/amd_detail/rocblaslt/src/include/logging.h
++++ b/library/src/amd_detail/rocblaslt/src/include/logging.h
+@@ -44,10 +44,13 @@
+ #include <sys/types.h>
+ #include <tuple>
+ #include <type_traits>
+-#include <unistd.h>
+ #include <unordered_map>
+ #include <utility>
+ 
++#ifndef _WIN32
++#include <unistd.h>
++#endif
++
+ /************************************************************************************
+  * Profile kernel arguments
+  ************************************************************************************/
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+index ed20e560..406335f1 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
++++ b/library/src/amd_detail/rocblaslt/src/kernels/CompileSourceKernel.cmake
+@@ -21,6 +21,12 @@
+ # SOFTWARE.
+ #
+ ################################################################################
++if(WIN32)
++    SET(clang_path "${ROCM_PATH}\\bin\\clang++.exe")
++else()
++    SET(clang_path "${ROCM_PATH}/bin/amdclang++")
++endif()
++
+ function(CompileSourceKernel source archs buildIdKind outputFolder)
+     message("Setup source kernel targets")
+     string(REGEX MATCHALL "gfx[a-z0-9]+" archs "${archs}")
+@@ -33,6 +39,6 @@ function(CompileSourceKernel source archs buildIdKind outputFolder)
+     add_custom_command(OUTPUT ${outputFolder}/hipblasltTransform.hsaco
+                        COMMAND
+                          "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --
+-                         bash  ${CMAKE_CURRENT_SOURCE_DIR}/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh ${source} ${archs} ${CMAKE_BUILD_TYPE} ${buildIdKind} ${outputFolder}/hipblasltTransform.hsaco
++                         bash  ${CMAKE_CURRENT_SOURCE_DIR}/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh ${source} ${archs} ${CMAKE_BUILD_TYPE} ${buildIdKind} ${outputFolder}/hipblasltTransform.hsaco ${clang_path}
+                        COMMENT "Compiling source kernels")
+ endfunction()
+diff --git a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+index c40c7002..06e97b74 100644
+--- a/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
++++ b/library/src/amd_detail/rocblaslt/src/kernels/compile_code_object.sh
+@@ -27,8 +27,10 @@ archs=$2
+ build_type=$3
+ build_id_kind=$4
+ dest=$5
++clang_path=$6
+ additional_options="-O3"
+ 
++
+ if [ "$build_type" = "RelWithDebInfo" ]; then
+     additional_options="-O3 -g"
+ elif [ "$build_type" = "Debug" ]; then
+diff --git a/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp b/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
+index 3c00c9dc..8da78403 100644
+--- a/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
++++ b/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
+@@ -33,13 +33,17 @@
+ #include "tensile_host.hpp"
+ #include "utility.hpp"
+ 
+-#ifndef WIN32
++#if _WIN32
++#include <Windows.h>
++#include <libloaderapi.h>
++#include <io.h>
++#else
+ #include <link.h>
++#include <unistd.h>
+ #endif
+ 
+ #include <hip/hip_runtime_api.h>
+ #include <map>
+-#include <unistd.h>
+ #include <utility>
+ 
+ #define TO_STR2(x) #x
+@@ -2119,14 +2123,15 @@ std::string rocblaslt_internal_get_arch_name()
+ 
+ bool rocblaslt_internal_test_path(const std::string& path)
+ {
+-#ifdef WIN32
++#ifdef _WIN32
+     return ((_access(path.c_str(), 4) != -1) || (_access(path.c_str(), 6) != -1));
+ #else
+     return access(path.c_str(), R_OK) == 0;
+ #endif
+ }
+ 
+-#ifndef WIN32
++#ifdef _WIN32
++#else
+ int hipblaslt_dl_iterate_phdr_callback(struct dl_phdr_info* hdr_info, size_t size, void* data)
+ {
+     // uncomment to see all dependent .so files
+@@ -2144,9 +2149,16 @@ int hipblaslt_dl_iterate_phdr_callback(struct dl_phdr_info* hdr_info, size_t siz
+ 
+ std::string rocblaslt_internal_get_so_path(const std::string& keyword)
+ {
++#ifdef _WIN32
++    HMODULE mod = GetModuleHandle("hipblaslt.dll");
++    CHAR path[_MAX_PATH] = {};
++    GetModuleFileNameA(mod, path, _MAX_PATH);
++    return std::string(path);
++#else
+     std::pair<std::string, std::string> result{"", keyword};
+     dl_iterate_phdr(hipblaslt_dl_iterate_phdr_callback, &result);
+     return result.first;
++#endif
+ }
+ 
+ void rocblaslt_log_error(const char* func, const char* var, const char* msg)
+diff --git a/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp b/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
+index be6e6f3d..b01a85df 100644
+--- a/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
++++ b/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
+@@ -32,7 +32,15 @@
+ #include <Tensile/hip/HipUtils.hpp>
+ #include <functional>
+ #include <hipblaslt/hipblaslt-types.h>
++#ifdef _WIN32
++inline std::string dirname(const std::string &dir)
++{
++    const auto pos = dir.find_last_of('\\');
++    return dir.substr(0, pos);
++}
++#else
+ #include <libgen.h>
++#endif
+ #include <map>
+ #include <memory>
+ #include <string>
+@@ -43,14 +51,21 @@ namespace
+ {
+     std::string transformCodeObjectPath()
+     {
++#ifdef WIN32
++        constexpr char DEFAULT_CO_PATH[]
++        = "C:\\opt\\rocm\\bin\\hipblaslt\\library\\hipblasltTransform.hsaco";
++#else
+         constexpr char DEFAULT_CO_PATH[]
+             = "/opt/rocm/lib/hipblaslt/library/hipblasltTransform.hsaco";
++#endif
+         auto        soPath = rocblaslt_internal_get_so_path("hipblaslt");
+         std::string libPath(dirname(&soPath[0]));
+ 
+         if(rocblaslt_internal_test_path(libPath + "/../Tensile/library"))
+             libPath += "/../Tensile/library";
+-        else if(rocblaslt_internal_test_path(libPath + "library"))
++        if(rocblaslt_internal_test_path(libPath + "/../../Tensile/library"))
++            libPath += "/../../Tensile/library";
++        else if(rocblaslt_internal_test_path(libPath + "/library"))
+             libPath += "/library";
+         else
+             libPath += "/hipblaslt/library";
+@@ -59,6 +74,9 @@ namespace
+ 
+         if(rocblaslt_internal_test_path(libPath))
+         {
++#ifdef WIN32
++            std::replace(libPath.begin(), libPath.end(), '/', '\\');
++#endif
+             return libPath;
+         }
+ 
+diff --git a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+index 1e2271e8..80f4a66a 100644
+--- a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
++++ b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+@@ -64,12 +64,17 @@
+ #include <type_traits>
+ #include <vector>
+ 
++#ifdef _WIN32
++#include <windows.h>
++#include <io.h>
++#else
++#include <link.h>
+ #include <glob.h>
+ #include <libgen.h>
+-#include <link.h>
++#include <unistd.h>
++#endif
+ #include <regex>
+ #include <string_view>
+-#include <unistd.h>
+ 
+ #define HIPBLASLT_LIB_PATH "/opt/rocm/lib"
+ 
+@@ -79,6 +84,17 @@
+ 
+ #define INTERNAL_HIPHOSTMEM_SIZE 32768
+ 
++#ifdef _WIN32
++#if __has_include(<filesystem>)
++#include <filesystem>
++namespace fs = std::filesystem;
++#elif __has_include(<experimental/filesystem>)
++#include <experimental/filesystem>
++namespace fs = std::experimental::filesystem;
++#else
++#error no filesystem found
++#endif
++#endif
+ RocblasltContractionProblem::RocblasltContractionProblem(hipblasOperation_t     trans_a,
+                                                          hipblasOperation_t     trans_b,
+                                                          int64_t                m,
+@@ -1922,7 +1938,7 @@ namespace
+         void initialize(TensileLite::hip::SolutionAdapter& adapter, int32_t deviceId)
+         {
+             std::string path;
+-#ifndef WIN32
++#ifndef _WIN32
+             path.reserve(PATH_MAX);
+ #endif
+ 
+@@ -1944,15 +1960,31 @@ namespace
+                 // Fall back on hard-coded path if static library or not found
+ 
+ #ifndef HIPBLASLT_STATIC_LIB
++#ifdef _WIN32
++                std::vector<TCHAR> dll_path(MAX_PATH + 1);
++                if(GetModuleFileNameA(
++                       GetModuleHandleA("hipblaslt.dll"), dll_path.data(), MAX_PATH + 1))
++                {
++                    std::string tmp(dll_path.begin(), dll_path.end());
++                    std::filesystem::path exepath = tmp;
++                    if(exepath.has_filename())
++                    {
++                        path = exepath.remove_filename().string();
++                    }
++                }
++#else
+                 auto hipblaslt_so_path = getHipblasltSoPath();
+ 
+                 if(hipblaslt_so_path.size())
+                     path = std::string{dirname(&hipblaslt_so_path[0])};
++#endif
+ #endif // ifndef HIPBLASLT_STATIC_LIB
+ 
+                 // Find the location of the libraries
+                 if(TestPath(path + "/../Tensile/library"))
+                     path += "/../Tensile/library";
++                else if(TestPath(path + "/../../Tensile/library"))
++                    path += "/../../Tensile/library";
+                 else if(TestPath(path + "library"))
+                     path += "/library";
+                 else
+@@ -1969,7 +2001,7 @@ namespace
+             auto dir = path + "/*" + processor + "*co";
+ #if ROCBLASLT_TENSILE_LAZY_LOAD == 0
+             bool no_match = false;
+-#ifdef WIN32
++#ifdef _WIN32
+             std::replace(dir.begin(), dir.end(), '/', '\\');
+             WIN32_FIND_DATAA finddata;
+             HANDLE           hfine = FindFirstFileA(dir.c_str(), &finddata);
+diff --git a/library/src/amd_detail/rocblaslt/src/utility.cpp b/library/src/amd_detail/rocblaslt/src/utility.cpp
+index 76013ead..9bb8680c 100644
+--- a/library/src/amd_detail/rocblaslt/src/utility.cpp
++++ b/library/src/amd_detail/rocblaslt/src/utility.cpp
+@@ -25,7 +25,11 @@
+  *******************************************************************************/
+ #include "utility.hpp"
+ #include <sys/types.h>
++#ifdef _WIN32
++#include <windows.h>
++#else
+ #include <unistd.h>
++#endif
+ std::ostream* get_logger_os()
+ {
+     LoggerSingleton& s = LoggerSingleton::getInstance();
+diff --git a/library/src/hipblaslt_ostream.cpp b/library/src/hipblaslt_ostream.cpp
+index 549772e8..a4cf1b81 100644
+--- a/library/src/hipblaslt_ostream.cpp
++++ b/library/src/hipblaslt_ostream.cpp
+@@ -30,7 +30,7 @@ static void hipblaslt_abort_once [[noreturn]] ();
+ #include <fcntl.h>
+ #include <iostream>
+ #include <type_traits>
+-#ifdef WIN32
++#ifdef _WIN32
+ #include <io.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
+@@ -52,7 +52,7 @@ static void hipblaslt_abort_once [[noreturn]] ();
+ // Abort function which is called only once by hipblaslt_abort
+ static void hipblaslt_abort_once()
+ {
+-#ifndef WIN32
++#ifndef _WIN32
+     // Make sure the alarm and abort actions are default
+     signal(SIGALRM, SIG_DFL);
+     signal(SIGABRT, SIG_DFL);
+@@ -108,7 +108,7 @@ std::shared_ptr<hipblaslt_internal_ostream::worker> hipblaslt_internal_ostream::
+                       && std::is_same<decltype(file_id_t::st_ino), decltype(stat::st_ino)>{},
+                   "struct stat and file_id_t are not layout-compatible");
+ 
+-#ifndef WIN32
++#ifndef _WIN32
+     // Get the device ID and inode, to detect common files
+     if(fstat(fd, &statbuf))
+     {
+@@ -226,7 +226,7 @@ void hipblaslt_internal_ostream::worker::send(std::string str)
+     // The future indicating when the operation has completed
+     auto future = promise.get_future();
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+     // Passing an empty string will make the worker thread exit.
+     // The below flag will be used to handle worker thread exit condition for Windows
+     bool empty_string = str.empty();
+@@ -247,7 +247,7 @@ void hipblaslt_internal_ostream::worker::send(std::string str)
+     }
+ 
+ // Wait for the task to be completed, to ensure flushed IO
+-#ifdef WIN32
++#ifdef _WIN32
+     if(empty_string)
+         // Occassionaly this thread is not getting the promise set by the 'worker' thread during exit condition.
+         // Added a timed wait to exit after one second, if we do not get the promise from worker thread.
+@@ -313,7 +313,7 @@ void hipblaslt_internal_ostream::worker::thread_function()
+ hipblaslt_internal_ostream::worker::worker(int fd)
+ {
+     // The worker duplicates the file descriptor (RAII)
+-#ifdef WIN32
++#ifdef _WIN32
+     fd = _dup(fd);
+ #else
+     fd = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+diff --git a/library/src/include/hipblaslt_ostream.hpp b/library/src/include/hipblaslt_ostream.hpp
+index 1b50f011..6857fd2e 100644
+--- a/library/src/include/hipblaslt_ostream.hpp
++++ b/library/src/include/hipblaslt_ostream.hpp
+@@ -47,7 +47,7 @@
+ #include <sys/stat.h>
+ #include <thread>
+ #include <utility>
+-#ifdef WIN32
++#ifdef _WIN32
+ #include <io.h>
+ #include <iostream>
+ #include <sstream>
+diff --git a/rdeps.py b/rdeps.py
+new file mode 100644
+index 00000000..0ca6d288
+--- /dev/null
++++ b/rdeps.py
+@@ -0,0 +1,226 @@
++#!/usr/bin/python3
++
++"""Copyright (C) 2021-2023 Advanced Micro Devices, Inc. All rights reserved.
++   Permission is hereby granted, free of charge, to any person obtaining a copy
++   of this software and associated documentation files (the "Software"), to deal
++   in the Software without restriction, including without limitation the rights
++   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell cop-
++   ies of the Software, and to permit persons to whom the Software is furnished
++   to do so, subject to the following conditions:
++   The above copyright notice and this permission notice shall be included in all
++   copies or substantial portions of the Software.
++   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IM-
++   PLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
++   FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
++   COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
++   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNE-
++   CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++"""
++
++import os
++import platform
++import subprocess
++import argparse
++import pathlib
++from xml.dom import minidom
++import shutil
++
++SCRIPT_VERSION = 0.1
++
++args = {}
++param = {}
++OS_info = {}
++var_subs = {}
++
++vcpkg_script = ['tdir %IDIR%', 
++                'git clone -b 2024.03.25 https://github.com/microsoft/vcpkg %IDIR%', 'cd %IDIR%', 'bootstrap-vcpkg.bat -disableMetrics' ]
++
++xml_script = [ '%XML%' ]
++
++
++def parse_args():
++    """Parse command-line arguments"""
++    parser = argparse.ArgumentParser(description="""
++    Checks build arguments
++    """)
++    # parser.add_argument('--install', required=False, default = True,  action='store_true',
++    #                     help='Install dependencies (optional, default: True)')
++    parser.add_argument('-i', '--install_dir', type=str, required=False, default = ("" if os.name == "nt" else "./build/deps"),
++
++                        help='Install directory path (optional, windows default: C:\\github\\vcpkg, linux default: ./build/deps)')
++    # parser.add_argument('-v', '--verbose', required=False, default = False, action='store_true',
++    #                     help='Verbose install (optional, default: False)')
++    return parser.parse_args()
++
++def os_detect():
++    global OS_info
++    OS_info["ID"] = platform.system()
++    OS_info["NUM_PROC"] = os.cpu_count()
++    print(OS_info)
++
++def create_dir(dir_path):
++    if os.path.isabs(dir_path):
++        full_path = dir_path
++    else:
++        full_path = os.path.join( os.getcwd(), dir_path )
++    return pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
++
++def delete_dir(dir_path) :
++    if (not os.path.exists(dir_path)):
++        return
++    return shutil.rmtree(dir_path, True)
++
++def run_cmd(cmd):
++    global args
++    if (cmd.startswith('cd ')):
++        return os.chdir(cmd[3:])
++    if (cmd.startswith('mkdir ')):
++        return create_dir(cmd[6:])
++    cmdline = f"{cmd}"
++    print(cmdline)
++    proc = subprocess.run(cmdline, check=True, stderr=subprocess.STDOUT, shell=True)
++    return proc.returncode
++
++
++def install_deps( os_node ):
++    global var_subs
++
++    cwd = pathlib.Path.absolute(pathlib.Path(os.curdir))
++
++    vc_node = os_node.getElementsByTagName('vcpkg')
++    if vc_node:
++        cmdline = "cd %IDIR%"
++        cd_vcpkg = cmdline.replace('%IDIR%', args.install_dir)
++        run_cmd(cd_vcpkg)
++        for p in vc_node[0].getElementsByTagName('pkg'):
++            name = p.getAttribute('name')
++            package = p.firstChild.data
++            if name:
++                print( f'***\n*** VCPKG Installing: {name}\n***' )
++            raw_cmd = p.firstChild.data
++            var_cmd = raw_cmd.format_map(var_subs)
++            error = run_cmd( f'vcpkg.exe install {var_cmd}')
++    os.chdir(cwd)
++
++    pip_node = os_node.getElementsByTagName('pip')
++    if pip_node:
++        for p in pip_node[0].getElementsByTagName('pkg'):
++            name = p.getAttribute('name')
++            package = p.firstChild.data
++            if name:
++                print( f'***\n*** Pip Installing: {name}\n***' )
++            raw_cmd = p.firstChild.data
++            var_cmd = raw_cmd.format_map(var_subs)
++            error = run_cmd( f'pip install {var_cmd}')
++        for p in pip_node[0].getElementsByTagName('req'):
++            name = p.getAttribute('name')
++            package = p.firstChild.data
++            if name:
++                print( f'***\n*** Pip Requirements: {name}\n***' )
++            raw_cmd = p.firstChild.data
++            var_cmd = raw_cmd.format_map(var_subs)
++            requirements_file = os.path.abspath( os.path.join( cwd, var_cmd ) )
++            error = run_cmd( f'pip install -r {requirements_file}')
++
++def run_install_script(script, xml):
++    '''executes a simple batch style install script, the scripts are defined at top of file'''
++    global OS_info
++    global args
++    global var_subs
++    #
++    cwd = pathlib.Path.absolute(pathlib.Path(os.getcwd()))
++
++    fail = False
++    last_cmd_index = 0
++    for i in range(len(script)):
++        last_cmd_index = i
++        cmdline = script[i]
++        cmd = cmdline.replace('%IDIR%', args.install_dir)
++        if cmd.startswith('tdir '):
++            if pathlib.Path(cmd[5:]).exists():
++                break # all further cmds skipped
++            else:
++                continue
++        error = False
++        if cmd.startswith('%XML%'):
++            fileversion = xml.getElementsByTagName('fileversion')
++            if len(fileversion) == 0:
++                print("WARNING: Could not find the version of this xml configuration file.")
++            elif len(fileversion) > 1:
++                print("WARNING: Multiple version tags found.")
++            else:
++                version = float(fileversion[0].firstChild.data)
++                if version > SCRIPT_VERSION:
++                    print(f"ERROR: This xml requires script version >= {version}, running script version {SCRIPT_VERSION}")
++                    exit(1)
++
++            for var in xml.getElementsByTagName('var'):
++                name = var.getAttribute('name')
++                if var.hasAttribute('value'):
++                    val = var.getAttribute('value')
++                elif var.firstChild is not None:
++                    val = var.firstChild.data
++                else:
++                    val = ""
++                var_subs[name] = val
++
++            for os_node in xml.getElementsByTagName('os'):
++                os_names = os_node.getAttribute('names')
++                os_list = os_names.split(',')
++                if (OS_info['ID'] in os_list) or ("all" in os_list):
++                    error = install_deps( os_node )
++        else:
++            error = run_cmd(cmd)
++        fail = fail or error
++        if fail:
++            break
++
++    os.chdir( cwd )
++    if (fail):
++        if (script[last_cmd_index] == "%XML%"):
++            print(f"FAILED xml dependency installation!")
++        else:
++            print(f"ERROR running: {script[last_cmd_index]}")
++        return 1
++    else:
++        return 0
++
++def installation():
++    global vcpkg_script
++    global xml_script
++    global xmlDoc
++
++    # install
++    cwd = os.getcwd()
++
++    xmlPath = os.path.join( cwd, 'rdeps.xml')
++    xmlDoc = minidom.parse( xmlPath )
++
++    scripts = []
++
++    if xmlDoc.getElementsByTagName('vcpkg'):
++        scripts.append( vcpkg_script )
++    scripts.append( xml_script )
++
++    for i in scripts:
++        if (run_install_script(i, xmlDoc)):
++            #print("Failure in script. ABORTING")
++            os.chdir( cwd )
++            return 1
++    os.chdir( cwd )
++    return 0
++
++def main():
++    global args
++
++    os_detect()
++    args = parse_args()
++
++    if not args.install_dir:
++        vcpkg_root = os.getenv( 'VCPKG_PATH', "C:\\github\\vcpkg")
++        args.install_dir = vcpkg_root
++
++    installation()
++
++if __name__ == '__main__':
++    main()
+\ No newline at end of file
+diff --git a/rdeps.xml b/rdeps.xml
+new file mode 100644
+index 00000000..d444f392
+--- /dev/null
++++ b/rdeps.xml
+@@ -0,0 +1,11 @@
++<dependencies>
++  <fileversion>0.1</fileversion>
++  <os names="Windows">
++    <vcpkg>
++      <pkg name="google test">gtest:x64-windows</pkg>
++      <pkg name="msgpackc">msgpack:x64-windows</pkg>
++      <pkg name="OpenBLAS">openblas:x64-windows</pkg>
++      <pkg name="lapack">lapack:x64-windows</pkg>
++    </vcpkg>
++  </os>
++</dependencies>
+\ No newline at end of file
+diff --git a/rmake.py b/rmake.py
+new file mode 100644
+index 00000000..aebe391f
+--- /dev/null
++++ b/rmake.py
+@@ -0,0 +1,357 @@
++#!/usr/bin/python3
++"""Copyright (C) 2020-2023 Advanced Micro Devices, Inc. All rights reserved.
++   Permission is hereby granted, free of charge, to any person obtaining a copy
++   of this software and associated documentation files (the "Software"), to deal
++   in the Software without restriction, including without limitation the rights
++   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell cop-
++   ies of the Software, and to permit persons to whom the Software is furnished
++   to do so, subject to the following conditions:
++   The above copyright notice and this permission notice shall be included in all
++   copies or substantial portions of the Software.
++   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IM-
++   PLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
++   FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
++   COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
++   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNE-
++   CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++"""
++
++import os
++import platform
++import subprocess
++import shutil
++import argparse
++import pathlib
++
++try:
++  import psutil
++  psutil_imported = True
++except ImportError:
++  psutil_imported = False
++
++args = {}
++OS_info = {}
++
++
++# yapf: disable
++def parse_args():
++    """Parse command-line arguments"""
++    global OS_info
++
++    parser = argparse.ArgumentParser(description="""Checks build arguments""")
++
++    parser.add_argument('-a', '--architecture', dest='gpu_architecture', required=False, default="all",
++                        help='Set GPU architectures, e.g. all, auto, "gfx803;gfx906:xnack-", gfx1030, gfx1101 (optional, default: all)')
++
++    parser.add_argument(       '--address-sanitizer', dest='address_sanitizer', required=False, default=False, action='store_true',
++                        help='Build with address sanitizer enabled. (optional, default: False')
++
++    parser.add_argument(      '--build_dir', type=str, required=False, default = "build",
++                        help='Configure & build process output directory.(optional, default: ./build)')
++
++    parser.add_argument('-b', '--branch', dest='tensile_tag', type=str, required=False, default="",
++                        help='Specify the Tensile repository branch or tag to use. (eg. develop, mybranch or <commit hash> )')
++
++    parser.add_argument('-c', '--clients', dest='build_clients', required=False, default=False, action='store_true',
++                        help='Build the library clients benchmark and gtest (optional, default: False, Generated binaries will be located at <build_dir>/clients/staging)')
++
++    parser.add_argument(      '--codecoverage', required=False, default=False, action='store_true',
++                        help='Code coverage build. Requires Debug (-g|--debug) or RelWithDebInfo mode (-k|--relwithdebinfo), (optional, default: False)')
++
++    parser.add_argument( '-d', '--dependencies', required=False, default=False, action='store_true',
++                        help='Build and install external dependencies. (Handled by install.sh and on Windows rdeps.py')
++
++    parser.add_argument('-f', '--fork', dest='tensile_fork', type=str, required=False, default="",
++                        help='Specify the username to fork the Tensile GitHub repository (e.g., ROCmSoftwarePlatform or MyUserName)')
++
++    parser.add_argument('-g', '--debug', required=False, default=False,  action='store_true',
++                        help='Build in Debug mode (optional, default: False)')
++
++    parser.add_argument('-i', '--install', required=False, default=False, dest='install', action='store_true',
++                        help='Generate and install library package after build. Windows only. Linux use install.sh (optional, default: False)')
++
++    parser.add_argument('-j', '--jobs', type=int, required=False, default=0,
++                        help='Specify number of parallel jobs to launch, increases memory usage (default: heuristic around logical core count)')
++
++    parser.add_argument('-k', '--relwithdebinfo', required=False, default=False, action='store_true',
++                        help='Build in Release with Debug Info (optional, default: False)')
++
++    parser.add_argument('-l', '--logic', dest='tensile_logic', type=str, required=False, default="asm_full",
++                        help='Specify the Tensile logic target, e.g., asm_full, asm_lite, etc. (optional, default: asm_full)')
++
++    parser.add_argument('-n', '--no_tensile', dest='build_tensile', required=False, default=True, action='store_false',
++                        help='Build a subset of hipblaslt library which does not require Tensile.')
++
++    parser.add_argument(     '--msgpack', dest='tensile_msgpack_backend', required=False, default=True, action='store_true',
++                        help='Build Tensile backend to use MessagePack (optional, default: True)')
++
++    parser.add_argument(     '--no-msgpack', dest='tensile_msgpack_backend', required=False, default=True, action='store_false',
++                        help='Build Tensile backend not to use MessagePack and so use YAML (optional)')
++
++    parser.add_argument('-s', '--static', required=False, default=False, dest='static_lib', action='store_true',
++                        help='Build hipblaslt as a static library. (optional, default: False)')
++
++    parser.add_argument('-t', '--test_local_path', dest='tensile_test_local_path', type=str, required=False, default="",
++                        help='Use a local path for Tensile instead of remote GIT repo (optional)')
++
++    parser.add_argument('-u', '--use-custom-version', dest='tensile_version', type=str, required=False, default="",
++                        help='Ignore Tensile version and just use the Tensile tag (optional)')
++
++    parser.add_argument('-v', '--verbose', required=False, default=False, action='store_true',
++                        help='Verbose build (optional, default: False)')
++
++    return parser.parse_args()
++# yapf: enable
++
++def get_ram_GB():
++    """
++    Total amount of GB RAM available or zero if unknown
++    """
++    if psutil_imported:
++        gb = round(psutil.virtual_memory().total / pow(1024, 3))
++    else:
++        gb = 0
++    return gb
++
++def strip_ECC(token):
++    return token.replace(':sramecc+', '').replace(':sramecc-', '').strip()
++
++def gpu_detect():
++    global OS_info
++    OS_info["GPU"] = ""
++    cmd = "hipinfo.exe"
++
++    process = subprocess.run([cmd], stdout=subprocess.PIPE)
++    for line_in in process.stdout.decode().splitlines():
++        if 'gcnArchName' in line_in:
++            OS_info["GPU"] = strip_ECC( line_in.split(":")[1] )
++            break
++
++def os_detect():
++    global OS_info
++    OS_info["ID"] = platform.system()
++    OS_info["NUM_PROC"] = os.cpu_count()
++    OS_info["RAM_GB"] = get_ram_GB()
++
++def jobs_heuristic():
++    # auto jobs heuristics
++    jobs = min(OS_info["NUM_PROC"], 128) # disk limiter
++    ram = OS_info["RAM_GB"]
++    if (ram >= 16): # don't apply if below minimum RAM
++        jobs = min(round(ram/2), jobs) # RAM limiter
++    hipcc_flags = os.getenv('HIPCC_COMPILE_FLAGS_APPEND', "")
++    pjstr = hipcc_flags.split("parallel-jobs=")
++    if (len(pjstr) > 1):
++        pjobs = int(pjstr[1][0])
++        if (pjobs > 1 and pjobs < jobs):
++            jobs = round(jobs / pjobs)
++    jobs = min(61, jobs) # multiprocessing limit (used by tensile)
++    return int(jobs)
++
++def create_dir(dir_path):
++    full_path = ""
++    if os.path.isabs(dir_path):
++        full_path = dir_path
++    else:
++        full_path = os.path.join(os.getcwd(), dir_path)
++    pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
++    return
++
++
++def delete_dir(dir_path):
++    if (not os.path.exists(dir_path)):
++        return
++    shutil.rmtree(dir_path)
++
++def cmake_path(os_path):
++    return os_path.replace("\\", "/")
++
++def fatal(msg, code=1):
++    print(msg)
++    exit(code)
++
++
++def deps_cmd():
++    exe = f"python rdeps.py"
++    all_args = ""
++    return exe, all_args
++
++
++def config_cmd():
++    global args
++    global OS_info
++    cwd_path = os.getcwd()
++    cmake_executable = "cmake"
++    cmake_options = []
++    src_path = cmake_path(cwd_path)
++    cmake_platform_opts = []
++    generator = f"-G Ninja"
++    cmake_options.append(generator)
++
++    # CMAKE_PREFIX_PATH set to rocm_path and HIP_PATH set BY SDK Installer
++    raw_rocm_path = cmake_path(os.getenv('HIP_PATH', "C:/hip"))
++
++    if raw_rocm_path:
++        os.environ["HIP_PATH"] = raw_rocm_path
++    
++
++    rocm_path = f'"{raw_rocm_path}"' # guard against spaces in path
++    # CPACK_PACKAGING_INSTALL_PREFIX= defined as blank as it is appended to end of path for archive creation
++    #cmake_platform_opts.append(f"-DCPACK_PACKAGING_INSTALL_PREFIX=")
++    #cmake_platform_opts.append(f'-DCMAKE_INSTALL_PREFIX="C:/hipSDK"')
++    cmake_platform_opts.append( f"-DCPACK_PACKAGING_INSTALL_PREFIX=" )
++    cmake_platform_opts.append( f"-DCMAKE_INSTALL_PREFIX=\"C:/hipSDK\"" )
++    toolchain = os.path.join(src_path, "toolchain-windows.cmake")
++    print(f"Build source path: {src_path}")
++
++    tools = f"-DCMAKE_TOOLCHAIN_FILE={toolchain}"
++    cmake_options.append(tools)
++
++    cmake_options.extend(cmake_platform_opts)
++
++    cmake_base_options = f"-DROCM_PATH={rocm_path} -DCMAKE_PREFIX_PATH:PATH={rocm_path}"
++    cmake_options.append(cmake_base_options)
++
++    # packaging options
++    cmake_pack_options = f"-DCPACK_SET_DESTDIR=OFF"
++    cmake_options.append(cmake_pack_options)
++
++    if os.getenv('CMAKE_CXX_COMPILER_LAUNCHER'):
++        cmake_options.append(f'-DCMAKE_CXX_COMPILER_LAUNCHER={os.getenv("CMAKE_CXX_COMPILER_LAUNCHER")}')
++
++    # build type
++    cmake_config = ""
++    build_dir = os.path.realpath(args.build_dir)
++    if args.debug:
++        build_path = os.path.join(build_dir, "debug")
++        cmake_config = "Debug"
++    elif args.relwithdebinfo:
++        build_path = os.path.join(build_dir, "release-debug")
++        cmake_config = "RelWithDebInfo"
++    else:
++        build_path = os.path.join(build_dir, "release")
++        cmake_config = "Release"
++
++    cmake_options.append(f"-DCMAKE_BUILD_TYPE={cmake_config}")
++
++    if args.codecoverage:
++        if args.debug or args.relwithdebinfo:
++            cmake_options.append(f"-DBUILD_CODE_COVERAGE=ON")
++        else:
++            fatal("*** Code coverage is not supported for Release build! Aborting. ***")
++
++    if args.address_sanitizer:
++        cmake_options.append(f"-DBUILD_ADDRESS_SANITIZER=ON")
++
++    # clean
++    delete_dir(build_path)
++
++    create_dir(os.path.join(build_path, "clients"))
++    os.chdir(build_path)
++
++    if args.static_lib:
++        cmake_options.append(f"-DBUILD_SHARED_LIBS=OFF")
++
++    if args.build_clients:
++        cmake_build_dir = cmake_path(build_dir)
++        cmake_options.append(
++            f"-DBUILD_CLIENTS_TESTS=ON -DBUILD_CLIENTS_BENCHMARKS=ON -DBUILD_CLIENTS_SAMPLES=ON -DBUILD_DIR={cmake_build_dir}"
++        )
++
++    if args.gpu_architecture == "auto":
++        gpu_detect()
++        if len(OS_info["GPU"]):
++            args.gpu_architecture = OS_info["GPU"]
++        else:
++            fatal("Could not detect GPU as requested. Not continuing.")
++    # not just for tensile
++    cmake_options.append(f'-DAMDGPU_TARGETS=\"{args.gpu_architecture}\"')
++
++    if not args.build_tensile:
++        cmake_options.append(f"-DBUILD_WITH_TENSILE=OFF")
++    else:
++        cmake_options.append(f"-DTensile_CODE_OBJECT_VERSION=4")
++        if args.tensile_logic:
++            cmake_options.append(f"-DTensile_LOGIC={args.tensile_logic}")
++        if args.tensile_fork:
++            cmake_options.append(f"-Dtensile_fork={args.tensile_fork}")
++        if args.tensile_tag:
++            cmake_options.append(f"-Dtensile_tag={args.tensile_tag}")
++        if args.tensile_test_local_path:
++            cmake_options.append(f"-DTensile_TEST_LOCAL_PATH={args.tensile_test_local_path}")
++        if args.tensile_version:
++            cmake_options.append(f"-DTENSILE_VERSION={args.tensile_version}")
++        if args.tensile_msgpack_backend:
++            cmake_options.append(f"-DTensile_LIBRARY_FORMAT=msgpack")
++        else:
++            cmake_options.append(f"-DTensile_LIBRARY_FORMAT=yaml")
++        if args.jobs != OS_info["NUM_PROC"]:
++            cmake_options.append(f"-DTensile_CPU_THREADS={str(args.jobs)}")
++
++    cmake_options.append(f"{src_path}")
++    cmd_opts = " ".join(cmake_options)
++
++    return cmake_executable, cmd_opts
++
++
++def make_cmd():
++    global args
++    global OS_info
++
++    make_options = []
++
++    # the CMAKE_BUILD_PARALLEL_LEVEL currently doesn't work for windows build, so using -j
++    # make_executable = f"cmake.exe -DCMAKE_BUILD_PARALLEL_LEVEL=4 --build . " # ninja
++    make_executable = f"ninja.exe -j {args.jobs}"
++    if args.verbose:
++        make_options.append("--verbose")
++    make_options.append("all")  # for cmake "--target all" )
++    if args.install:
++        make_options.append("package install")  # for cmake "--target package --target install" )
++    cmd_opts = " ".join(make_options)
++
++    return make_executable, cmd_opts
++
++
++def run_cmd(exe, opts):
++    program = f"{exe} {opts}"
++    print(program)
++    proc = subprocess.run(program, check=True, stderr=subprocess.STDOUT, shell=True)
++    return proc.returncode
++
++
++def main():
++    global args
++    os_detect()
++    args = parse_args()
++
++    if args.jobs == 0:
++        args.jobs = jobs_heuristic()
++    if args.jobs > 61:
++        print( f"WARNING: jobs > 61 may fail on windows python multiprocessing (jobs = {args.jobs}).")
++
++    print(OS_info)
++
++    root_dir = os.curdir
++
++    # depdendency install
++    if (args.dependencies):
++        exe, opts = deps_cmd()
++        if run_cmd(exe, opts):
++            fatal("Dependency install failed. Not continuing.")
++
++    # configure
++    exe, opts = config_cmd()
++    if run_cmd(exe, opts):
++        fatal("Configuration failed. Not continuing.")
++
++    # make
++    exe, opts = make_cmd()
++    if run_cmd(exe, opts):
++        fatal("Build failed. Not continuing.")
++
++    # Linux install and cleanup not supported from rmake yet
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/rtest.py b/rtest.py
+index 2be28e3d..c89275c4 100644
+--- a/rtest.py
++++ b/rtest.py
+@@ -55,10 +55,11 @@ def parse_args():
+ def run_cmd(args, filter):
+ 
+     test_binary = ""
++    test_file = "hipblaslt-test.exe" if (os.name == 'nt') else "hipblaslt-test"
+     if args.install_dir :
+-        test_binary = os.path.join(args.install_dir, "hipblaslt-test")
++        test_binary = os.path.join(args.install_dir, test_file)
+     else:
+-        test_binary = os.path.join(pathlib.os.curdir, "hipblaslt-test")
++        test_binary = os.path.join(os.curdir, test_file)
+ 
+     if not os.path.isfile(test_binary):
+         return
+diff --git a/tensilelite/Tensile/Activation.py b/tensilelite/Tensile/Activation.py
+index cce55031..379b121e 100644
+--- a/tensilelite/Tensile/Activation.py
++++ b/tensilelite/Tensile/Activation.py
+@@ -555,6 +555,7 @@ class ActivationModule:
+             flt16GeluK1Str = HexToStr(cDataType, self.usePK, ActivationMagicNumbers["Float16GeluK1"])
+             sgprMagicK1 = self.getSgpr(1)
+             sgprPKLiteral = self.getSgpr(1)
++            coef = floatUnion(u=ActivationMagicNumbers["FloatGeluK0"])
+             module.add(SMovB32(dst=sgpr(Holder(idx=sgprMagicK1)), src=flt16GeluK1Str, comment="Float16GeluK1" ))
+             module.add(SMovB32(dst=sgpr(Holder(idx=sgprPKLiteral)), src=coef.f))
+             vgprTemp = self.getVgpr(1)
+@@ -563,7 +564,6 @@ class ActivationModule:
+                 module.add(VFmaPKF16(dst=vgpr(Holder(idx=vgprTemp)), src0=vgpr(Holder(idx=vgprTemp)), src1=sgpr(Holder(idx=sgprMagicK1)), src2=1.0, \
+                                      vop3=VOP3PModifiers(op_sel_hi=[1,1,0,1]), comment="x^2 * k1 + 1"))
+                 module.add(VMulPKF16(dst=vgpr(Holder(idx=vgprTemp)), src0=self.vgprPrefix(vgprIn), src1=vgpr(Holder(idx=vgprTemp)), comment="x * (x^2 * k1 + 1)"))
+-                coef = floatUnion(u=ActivationMagicNumbers["FloatGeluK0"])
+                 module.add(VMulPKF16(dst=vgpr(Holder(idx=vgprTemp)), src0=sgpr(Holder(idx=sgprPKLiteral)), src1=vgpr(Holder(idx=vgprTemp)), comment="k0 * x * (x^2 * k1 + 1)"))
+                 module.add(self.getTanhModule(cDataType, Holder(idx=vgprTemp), Holder(idx=vgprTemp), "", ""))
+                 module.add(VAddPKF16(dst=vgpr(Holder(idx=vgprTemp)), src0=1.0, src1=vgpr(Holder(idx=vgprTemp)), \
+diff --git a/tensilelite/Tensile/ClientExecutable.py b/tensilelite/Tensile/ClientExecutable.py
+index 27b5baba..9f1370db 100644
+--- a/tensilelite/Tensile/ClientExecutable.py
++++ b/tensilelite/Tensile/ClientExecutable.py
+@@ -31,6 +31,10 @@ from pathlib import Path
+ from . import SOURCE_PATH
+ from Tensile.Common import print2, ClientExecutionLock, ensurePath, CLIENT_BUILD_DIR
+ from Tensile.Common.GlobalParameters import globalParameters
++from Tensile.Toolchain.Validators import validateToolchain, ToolchainDefaults
++
++def cmake_path(os_path):
++    return (os_path.replace("\\", "/") if (os.name == "nt") else os_path)
+ 
+ class CMakeEnvironment:
+     def __init__(self, sourceDir, buildDir, **options):
+@@ -41,19 +45,29 @@ class CMakeEnvironment:
+     def generate(self):
+ 
+         args = ['cmake']
+-        args += itertools.chain.from_iterable([ ['-D', '{}={}'.format(key, value)] for key,value in self.options.items()])
++        args += ['-G', 'Ninja'] if (os.name == 'nt') else []
++        args += itertools.chain.from_iterable([ ['-D{}={}'.format(key, value)] for key,value in self.options.items()])
+         args += [self.sourceDir]
++        args = [cmake_path(arg) for arg in args]
+ 
+         print2(' '.join(args))
+         with ClientExecutionLock(globalParameters["ClientExecutionLockPath"]):
+             subprocess.check_call(args, cwd=ensurePath(self.buildDir))
+ 
+     def build(self):
+-        args = ['make', '-j']
++        makeProgram = CMakeEnvironment.getBuildProgramPath()
++        args = [makeProgram, '-j']
+         print2(' '.join(args))
+         with ClientExecutionLock(globalParameters["ClientExecutionLockPath"]):
+             subprocess.check_call(args, cwd=self.buildDir)
+ 
++    @staticmethod
++    def getBuildProgramPath() -> str:
++        if os.name == "nt":
++            return os.environ.get("NINJA_PATH")
++        else:
++            return "make"
++
+     def builtPath(self, path, *paths):
+         return os.path.join(self.buildDir, path, *paths)
+ 
+@@ -67,8 +81,8 @@ def clientExecutableEnvironment(builddir: Optional[str], cxxCompiler: str, cComp
+                'TENSILE_USE_LLVM': 'OFF' if (os.name == "nt") else 'ON',
+                'Tensile_LIBRARY_FORMAT': globalParameters["LibraryFormat"],
+                'Tensile_ENABLE_MARKER' : globalParameters["EnableMarker"],
+-               'CMAKE_CXX_COMPILER': os.path.join(globalParameters["ROCmBinPath"], cxxCompiler),
+-               'CMAKE_C_COMPILER': os.path.join(globalParameters["ROCmBinPath"], cCompiler)}
++               'CMAKE_CXX_COMPILER': validateToolchain(ToolchainDefaults.CXX_COMPILER),
++               'CMAKE_C_COMPILER': validateToolchain(ToolchainDefaults.C_COMPILER)}
+ 
+     if "CCACHE_BASEDIR" in os.environ:
+         options.update({'CMAKE_C_COMPILER_LAUNCHER': 'ccache', 'CMAKE_CXX_COMPILER_LAUNCHER': 'ccache'})
+@@ -90,4 +104,6 @@ def getClientExecutable(cxxCompiler: str, cCompiler: str, builddir: Path):
+         buildEnv.generate()
+         buildEnv.build()
+ 
+-    return buildEnv.builtPath("client/tensile_client")
++    ext = ".exe" if os.name == "nt" else ""
++    return buildEnv.builtPath("client", f"tensile_client{ext}")
++
+diff --git a/tensilelite/Tensile/ClientWriter.py b/tensilelite/Tensile/ClientWriter.py
+index 8a4afa5d..a66d5fe0 100644
+--- a/tensilelite/Tensile/ClientWriter.py
++++ b/tensilelite/Tensile/ClientWriter.py
+@@ -116,7 +116,7 @@ def main(config, assembler: Assembler, cCompiler: str, isaInfoMap, outputPath: P
+     env["PYTHONPATH"] = module_path
+ 
+   createLibraryScript = getBuildClientLibraryScript(clientLibraryPath, libraryLogicPath, str(assembler.path), isaToGfx(list(isaInfoMap.keys())[0]), useShortNames)
+-  subprocess.run(shlex.split(createLibraryScript), env=env, cwd=clientLibraryPath)
++  subprocess.run(createLibraryScript, cwd=clientLibraryPath)
+   coList = glob(os.path.join(clientLibraryPath, "library/*.co"))
+   yamlList = glob(os.path.join(clientLibraryPath, "library/*.yaml"))
+ 
+@@ -231,36 +231,31 @@ def runClient(libraryLogicPath, forBenchmark, enableTileSelection, cxxCompiler:
+   return process.returncode
+ 
+ def getBuildClientLibraryScript(buildPath, libraryLogicPath, cxxCompiler, targetGfx, useShortNames: bool=False):
+-  import io
+-  runScriptFile = io.StringIO()
+-
+-  callCreateLibraryCmd = ROOT_PATH + "/bin/TensileCreateLibrary"
++  callCreateLibraryCmd = ["python"] if os.name == "nt" else []
++  callCreateLibraryCmd += [ROOT_PATH + "/bin/TensileCreateLibrary"]
+ 
+   if not globalParameters["LazyLibraryLoading"]:
+-    callCreateLibraryCmd += " --no-lazy-library-loading"
++    callCreateLibraryCmd += ["--no-lazy-library-loading"]
+ 
+   if useShortNames:
+-    callCreateLibraryCmd += " --short-file-names"
++    callCreateLibraryCmd += ["--short-file-names"]
+ 
+   if globalParameters.get("AsmDebug", False):
+-    callCreateLibraryCmd += " --asm-debug"
++    callCreateLibraryCmd += ["--asm-debug",]
+ 
+   if globalParameters["KeepBuildTmp"]:
+-    callCreateLibraryCmd += " --keep-build-tmp"
+-
+-  callCreateLibraryCmd += " --architecture=" + targetGfx
+-  callCreateLibraryCmd += " --code-object-version=" + globalParameters["CodeObjectVersion"]
+-  callCreateLibraryCmd += " --cxx-compiler=" + cxxCompiler
+-  callCreateLibraryCmd += " --library-format=" + globalParameters["LibraryFormat"]
+-
+-  callCreateLibraryCmd += " %s" % libraryLogicPath
+-  callCreateLibraryCmd += " %s" % buildPath #" ../source"
+-  callCreateLibraryCmd += " %s\n" % globalParameters["RuntimeLanguage"]
++    callCreateLibraryCmd += ["--keep-build-tmp"]
+ 
+-  runScriptFile.write(callCreateLibraryCmd)
++  callCreateLibraryCmd += ["--architecture=" + targetGfx]
++  callCreateLibraryCmd += ["--code-object-version=" + globalParameters["CodeObjectVersion"]]
++  callCreateLibraryCmd += ["--cxx-compiler=" + cxxCompiler]
++  callCreateLibraryCmd += ["--library-format=" + globalParameters["LibraryFormat"]]
+ 
+-  return runScriptFile.getvalue()
++  callCreateLibraryCmd += ["%s" % libraryLogicPath]
++  callCreateLibraryCmd += ["%s" % buildPath] #" ../source"
++  callCreateLibraryCmd += ["%s" % globalParameters["RuntimeLanguage"]]
+ 
++  return callCreateLibraryCmd
+ 
+ def writeRunScript(path, forBenchmark, enableTileSelection, cxxCompiler: str, cCompiler: str, buildDir, configPaths=None):
+   if configPaths is None:
+diff --git a/tensilelite/Tensile/Common/GlobalParameters.py b/tensilelite/Tensile/Common/GlobalParameters.py
+index 58dd69f4..56c38629 100644
+--- a/tensilelite/Tensile/Common/GlobalParameters.py
++++ b/tensilelite/Tensile/Common/GlobalParameters.py
+@@ -29,6 +29,7 @@ import os.path
+ import subprocess
+ import sys
+ import time
++import shutil
+ from collections import OrderedDict
+ from copy import deepcopy
+ from typing import Dict
+@@ -40,6 +41,7 @@ from .Types import IsaVersion, IsaInfo
+ from .Utilities import locateExe, versionIsCompatible, print1, print2, printExit, printWarning, \
+      getVerbosity
+ from .ValidParameters import validParameters
++from ..Toolchain.Validators import ToolchainDefaults, _windowsSearchPaths, _posixSearchPaths, _validateExecutable, osSelect
+ 
+ startTime = time.time()
+ 
+@@ -535,27 +537,16 @@ def assignGlobalParameters(config, isaInfoMap: Dict[IsaVersion, IsaInfo]):
+         else:
+             print2(" %24s: %8s (unspecified)" % (key, defaultValue))
+ 
+-    globalParameters["ROCmPath"] = "/opt/rocm"
+-    if "ROCM_PATH" in os.environ:
+-        globalParameters["ROCmPath"] = os.environ.get("ROCM_PATH")
+-    if "TENSILE_ROCM_PATH" in os.environ:
+-        globalParameters["ROCmPath"] = os.environ.get("TENSILE_ROCM_PATH")
+-    if os.name == "nt" and "HIP_DIR" in os.environ:
+-        globalParameters["ROCmPath"] = os.environ.get("HIP_DIR")  # windows has no ROCM
+     globalParameters["CmakeCxxCompiler"] = None
+     if "CMAKE_CXX_COMPILER" in os.environ:
+         globalParameters["CmakeCxxCompiler"] = os.environ.get("CMAKE_CXX_COMPILER")
+     if "CMAKE_C_COMPILER" in os.environ:
+         globalParameters["CmakeCCompiler"] = os.environ.get("CMAKE_C_COMPILER")
+ 
+-    globalParameters["ROCmBinPath"] = os.path.join(globalParameters["ROCmPath"], "bin")
+-    try:
+-        globalParameters["ROCmSMIPath"] = locateExe(globalParameters["ROCmBinPath"], "rocm-smi")
+-    except OSError:
+-        printWarning("Could not find rocm-smi: features relying on it will be ignored")
+-    globalParameters["ROCmLdPath"] = locateExe(
+-        os.path.join(globalParameters["ROCmPath"], "llvm/bin"), "ld.lld"
+-    )
++    searchPaths = _windowsSearchPaths() if os.name == "nt" else _posixSearchPaths()
++    if os.name != "nt":
++        globalParameters["ROCmSMIPath"] = locateExe(searchPaths, "rocm-smi")
++    globalParameters["ROCmLdPath"] = locateExe(searchPaths, osSelect(linux="ld.lld", windows="ld.lld.exe"))
+ 
+     if "AsanBuild" in config:
+         globalParameters["AsanBuild"] = config["AsanBuild"]
+@@ -583,10 +574,15 @@ def assignGlobalParameters(config, isaInfoMap: Dict[IsaVersion, IsaInfo]):
+     # The following try except block computes the hipcc version
+     # TODO: hipcc is deprecated, this block should be removed.
+     try:
+-        compiler = "hipcc"
+-        output = subprocess.run(
+-            [compiler, "--version"], check=True, stdout=subprocess.PIPE
+-        ).stdout.decode()
++        if os.name == "nt":
++            compiler = _validateExecutable("hipcc", searchPaths)
++            compileArgs = ['--version']
++            output = subprocess.run([compiler] + compileArgs, check=True, stdout=subprocess.PIPE).stdout.decode()
++        else:
++            compiler = "hipcc"
++            output = subprocess.run(
++                [compiler, "--version"], check=True, stdout=subprocess.PIPE
++            ).stdout.decode()
+ 
+         for line in output.split("\n"):
+             if "HIP version" in line:
+diff --git a/tensilelite/Tensile/Common/Parallel.py b/tensilelite/Tensile/Common/Parallel.py
+index 77adfd26..e2a5debd 100644
+--- a/tensilelite/Tensile/Common/Parallel.py
++++ b/tensilelite/Tensile/Common/Parallel.py
+@@ -53,9 +53,10 @@ def CPUThreadCount(enable=True):
+             cpu_count = len(os.sched_getaffinity(0))
+         cpuThreads = globalParameters["CpuThreads"]
+         if cpuThreads == -1:
+-            return min(
+-                cpu_count, 64
+-            )  # Temporarily hack to fix oom issue, remove this after jenkin is fixed.
++            if os.name == "nt":
++                return min(cpu_count, 61) #jobs > 61 may fail on windows python multiprocessing
++            else:
++                return min(cpu_count, 64)  # Temporarily hack to fix oom issue, remove this after jenkin is fixed.
+         return min(cpu_count, cpuThreads)
+ 
+ 
+diff --git a/tensilelite/Tensile/Common/Utilities.py b/tensilelite/Tensile/Common/Utilities.py
+index 2111fbee..da2e41fc 100644
+--- a/tensilelite/Tensile/Common/Utilities.py
++++ b/tensilelite/Tensile/Common/Utilities.py
+@@ -90,11 +90,12 @@ def isExe(filePath):
+     return os.path.isfile(filePath) and os.access(filePath, os.X_OK)
+ 
+ 
+-def locateExe(defaultPath, exeName):  # /opt/rocm/bin, hip-clang
+-    # look in defaultPath first
+-    exePath = os.path.join(defaultPath, exeName)
+-    if isExe(exePath):
+-        return exePath
++def locateExe(defaultPaths, exeName):  # /opt/rocm/bin, hip-clang
++    # look in defaultPaths first
++    for p in defaultPaths:
++        exePath = os.path.join(p, exeName)
++        if isExe(exePath):
++            return exePath
+     # look in PATH second
+     for path in os.environ["PATH"].split(os.pathsep):
+         exePath = os.path.join(path, exeName)
+diff --git a/tensilelite/Tensile/Ops/gen_assembly.sh b/tensilelite/Tensile/Ops/gen_assembly.sh
+index 9329f848..1956a427 100755
+--- a/tensilelite/Tensile/Ops/gen_assembly.sh
++++ b/tensilelite/Tensile/Ops/gen_assembly.sh
+@@ -28,18 +28,10 @@ archStr=$1
+ dst=$2
+ venv=$3
+ build_id_kind=$4
++toolchain=$5
++python_exe_name=$6
+ 
+-if [[ -z "$ROCM_PATH" ]]; then
+-    toolchain="$(which amdclang++)"
+-    if [[ -z "$toolchain" ]]; then
+-        echo "error: amdclang++ not found on path"
+-        exit 1
+-    fi
+-else
+-    toolchain="${ROCM_PATH}/bin/amdclang++"
+-fi
+-
+-. ${venv}/bin/activate
++. ${venv}/activate
+ 
+ IFS=';' read -r -a archs <<< "$archStr"
+ 
+@@ -50,21 +42,21 @@ for arch in "${archs[@]}"; do
+         set -- $i
+         s=$dst/L_$1_$2_$3_$arch.s
+         o=$dst/L_$1_$2_$3_$arch.o
+-        python3 ./LayerNormGenerator.py -o $s -w $1 -c $2 --sweep-once $3 --arch $arch --toolchain $toolchain &
++        ${python_exe_name} ./LayerNormGenerator.py -o $s -w $1 -c $2 --sweep-once $3 --arch $arch --toolchain $toolchain &
+         objs+=($o)
+     done
+     for i in "16 16" "8 32" "4 64" "2 128" "1 256"; do
+         set -- $i
+         s=$dst/S_$1_$2_$arch.s
+         o=$dst/S_$1_$2_$arch.o
+-        python3 ./SoftmaxGenerator.py -o $s -m $1 -n $2 --arch $arch --toolchain $toolchain &
++        ${python_exe_name} ./SoftmaxGenerator.py -o $s -m $1 -n $2 --arch $arch --toolchain $toolchain &
+         objs+=($o)
+     done
+     for i in "S S 256 4" "H H 256 4" "H S 256 4" "S H 256 4"; do
+         set -- $i
+         s=$dst/A_$1_$2_$3_$4_$arch.s
+         o=$dst/A_$1_$2_$3_$4_$arch.o
+-        python3 ./AMaxGenerator.py -o $s -t $1 -d $2 -w $3 -c $4 --arch $arch --toolchain $toolchain &
++        ${python_exe_name} ./AMaxGenerator.py -o $s -t $1 -d $2 -w $3 -c $4 --arch $arch --toolchain $toolchain &
+         objs+=($o)
+     done
+     if [[ $arch =~ gfx94[0-9] ]]; then
+@@ -72,7 +64,7 @@ for arch in "${archs[@]}"; do
+             set -- $i
+             s=$dst/A_$1_$2_$3_$4_$5_$arch.s
+             o=$dst/A_$1_$2_$3_$4_$5_$arch.o
+-            python3 ./AMaxGenerator.py --is-scale -o $s -t $1 -d $2 -s $3 -w $4 -c $5 --arch $arch --toolchain $toolchain &
++            ${python_exe_name} ./AMaxGenerator.py --is-scale -o $s -t $1 -d $2 -s $3 -w $4 -c $5 --arch $arch --toolchain $toolchain &
+             objs+=($o)
+         done
+     fi
+@@ -81,13 +73,13 @@ for arch in "${archs[@]}"; do
+             set -- $i
+             s=$dst/A_$1_$2_$3_$4_$5_$arch.s
+             o=$dst/A_$1_$2_$3_$4_$5_$arch.o
+-            python3 ./AMaxGenerator.py --is-scale -o $s -t $1 -d $2 -s $3 -w $4 -c $5 --arch $arch --toolchain $toolchain &
++            ${python_exe_name} ./AMaxGenerator.py --is-scale -o $s -t $1 -d $2 -s $3 -w $4 -c $5 --arch $arch --toolchain $toolchain &
+             objs+=($o)
+         done
+     fi
+     wait
+     ${toolchain} -target amdgcn-amdhsa -Xlinker --build-id=$build_id_kind -o $dst/extop_$arch.co ${objs[@]}
+-    python3 ./ExtOpCreateLibrary.py --src=$dst --co=$dst/extop_$arch.co --output=$dst --arch=$arch
++    ${python_exe_name} ./ExtOpCreateLibrary.py --src=$dst --co=$dst/extop_$arch.co --output=$dst --arch=$arch
+ done
+ 
+ deactivate
+diff --git a/tensilelite/Tensile/Source/CMakeLists.txt b/tensilelite/Tensile/Source/CMakeLists.txt
+index 21b8cdae..816fec94 100644
+--- a/tensilelite/Tensile/Source/CMakeLists.txt
++++ b/tensilelite/Tensile/Source/CMakeLists.txt
+@@ -28,6 +28,10 @@ cmake_minimum_required(VERSION 3.22...3.25.2)
+ file(TO_CMAKE_PATH "$ENV{ROCM_PATH}" ROCM_PATH_ENV_VALUE)
+ list(APPEND CMAKE_PREFIX_PATH ${ROCM_PATH_ENV_VALUE} /opt/rocm /opt/rocm/lib/llvm)
+ 
++if(WIN32)
++    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_PATH}/scripts/buildsystems/vcpkg.cmake")
++endif()
++
+ project(Tensile)
+ 
+ option(Tensile_ENABLE_MARKER "ENable roctx marker in Tensile" OFF)
+diff --git a/tensilelite/Tensile/Source/client/CMakeLists.txt b/tensilelite/Tensile/Source/client/CMakeLists.txt
+index 8dc74015..5133edbf 100644
+--- a/tensilelite/Tensile/Source/client/CMakeLists.txt
++++ b/tensilelite/Tensile/Source/client/CMakeLists.txt
+@@ -27,7 +27,6 @@ set(client_sources
+     source/CSVStackFile.cpp
+     source/ClientProblemFactory.cpp
+     source/DataInitialization.cpp
+-    source/HardwareMonitor.cpp
+     source/HardwareMonitorListener.cpp
+     source/LibraryUpdateReporter.cpp
+     source/MetaRunListener.cpp
+@@ -43,6 +42,12 @@ set(client_sources
+     source/TypedId.cpp
+     )
+ 
++if(NOT WIN32)
++    set(client_sources ${client_sources}
++        source/HardwareMonitor.cpp
++    )
++endif()
++
+ find_package(Boost COMPONENTS program_options filesystem REQUIRED)
+ 
+ add_library(TensileClient STATIC ${client_sources})
+@@ -53,20 +58,32 @@ set_target_properties(TensileClient
+                       CXX_STANDARD_REQUIRED ON
+                       CXX_EXTENSIONS OFF)
+ 
+-find_package(ROCmSMI QUIET)
+-if(NOT ROCmSMI_FOUND)
+-    set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${Tensile_DIR}" "${Tensile_DIR}/../Source/cmake" "${CMAKE_HOME_DIRECTORY}/cmake")
+-    find_package(ROCmSMI REQUIRED)
++if (NOT WIN32)
++    find_package(ROCmSMI QUIET)
++    if(NOT ROCmSMI_FOUND)
++        set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${Tensile_DIR}" "${Tensile_DIR}/../Source/cmake" "${CMAKE_HOME_DIRECTORY}/cmake")
++        find_package(ROCmSMI REQUIRED)
++    endif()
+ endif()
+ 
++include_directories(${Boost_INCLUDE_DIR})
++
+ target_include_directories(TensileClient PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")# "${rocm_smi_root}/include")
+ 
+-target_link_libraries(TensileClient PRIVATE TensileHost Boost::program_options Boost::filesystem rocm_smi)
++target_link_libraries(TensileClient PRIVATE TensileHost Boost::program_options Boost::filesystem)
+ 
+ if(Tensile_ENABLE_MARKER)
+     target_link_libraries(TensileClient PRIVATE -lroctx64)
+ endif()
+ 
++if (WIN32)
++    target_link_libraries(TensileClient PRIVATE TensileHost shlwapi)
++endif()
++
++if(NOT WIN32)
++    target_link_libraries(TensileClient PRIVATE TensileHost rocm_smi)
++endif()
++
+ if(TENSILE_USE_OPENMP)
+     target_link_libraries(TensileClient PRIVATE custom_openmp_cxx)
+ endif()
+diff --git a/tensilelite/Tensile/Source/client/include/DataInitialization.hpp b/tensilelite/Tensile/Source/client/include/DataInitialization.hpp
+index ed1fca90..1e80ad5d 100644
+--- a/tensilelite/Tensile/Source/client/include/DataInitialization.hpp
++++ b/tensilelite/Tensile/Source/client/include/DataInitialization.hpp
+@@ -2593,13 +2593,25 @@ namespace TensileLite
+         template <>
+         inline Float8 DataInitialization::getValue<Float8, InitMode::RandomNarrow>()
+         {
++#if _WIN32
++            //msvc's STL implementation follows [rand.req.genl](1.5), so Float8 as template arg
++            //is not allowed
++            return Float8(rocm_random_narrow_range<float>{}());
++#else
+             return rocm_random_narrow_range<Float8>{}();
++#endif
+         }
+ 
+         template <>
+         inline BFloat8 DataInitialization::getValue<BFloat8, InitMode::RandomNarrow>()
+         {
++#if _WIN32
++            //msvc's STL implementation follows [rand.req.genl](1.5), so BFloat8 as template arg
++            //is not allowed
++            return BFloat8(rocm_random_narrow_range<float>{}());
++#else
+             return rocm_random_narrow_range<BFloat8>{}();
++#endif
+         }
+ 
+         template <>
+diff --git a/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp b/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp
+index f82c8101..93cb26d2 100644
+--- a/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp
++++ b/tensilelite/Tensile/Source/client/include/HardwareMonitor.hpp
+@@ -35,6 +35,7 @@
+ 
+ #include <hip/hip_runtime.h>
+ #include <rocm_smi/rocm_smi.h>
++#include "HardwareMonitorType.hpp"
+ #include <rocm_smi/rocm_smi64Config.h>
+ 
+ namespace TensileLite
+@@ -54,26 +55,18 @@ namespace TensileLite
+         public:
+             /** Translates the Hip device index into the corresponding device index for
+    * ROCm-SMI. */
+-            static uint32_t GetROCmSMIIndex(int hipDeviceIndex);
+-
+-            using rsmi_temperature_type_t = int;
+-            using clock                   = std::chrono::steady_clock;
+-
++            using clock = std::chrono::steady_clock;
+             // Monitor at the maximum possible rate.
+             HardwareMonitor(int hipDeviceIndex);
+             // Limit collection to once per minPeriod.
+             HardwareMonitor(int hipDeviceIndex, clock::duration minPeriod);
+ 
+             ~HardwareMonitor();
+-
+-            void addTempMonitor(rsmi_temperature_type_t   sensorType = 0,
+-                                rsmi_temperature_metric_t metric     = RSMI_TEMP_CURRENT);
+-            void addClockMonitor(rsmi_clk_type_t clockType);
++            void addTempMonitor();
++            void addClockMonitor(ClockType clockType);
+             void addFanSpeedMonitor(uint32_t sensorIndex = 0);
+-
+-            double getAverageTemp(rsmi_temperature_type_t   sensorIndex = 0,
+-                                  rsmi_temperature_metric_t metric      = RSMI_TEMP_CURRENT);
+-            double getAverageClock(rsmi_clk_type_t clockType);
++            double getAverageTemp();
++            double getAverageClock(ClockType clockType);
+             double getAverageFanSpeed(uint32_t sensorIndex = 0);
+             int    getDeviceIndex()
+             {
+@@ -109,6 +102,7 @@ namespace TensileLite
+             void wait();
+ 
+         private:
++            static uint32_t GetROCmSMIIndex(int hipDeviceIndex);
+             static void InitROCmSMI();
+ 
+             void assertActive();
+diff --git a/tensilelite/Tensile/Source/client/include/HardwareMonitorType.hpp b/tensilelite/Tensile/Source/client/include/HardwareMonitorType.hpp
+new file mode 100644
+index 00000000..012a829b
+--- /dev/null
++++ b/tensilelite/Tensile/Source/client/include/HardwareMonitorType.hpp
+@@ -0,0 +1,45 @@
++/*******************************************************************************
++ *
++ * MIT License
++ *
++ * Copyright (C) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ *
++ *******************************************************************************/
++
++#pragma once
++
++namespace TensileLite
++{
++    namespace Client
++    {
++        typedef enum
++        {
++            CLK_TYPE_SYS   = 0x0,
++            CLK_TYPE_FIRST = CLK_TYPE_SYS,
++            CLK_TYPE_DF,
++            CLK_TYPE_DCEF,
++            CLK_TYPE_SOC,
++            CLK_TYPE_MEM,
++            CLK_TYPE_LAST = CLK_TYPE_MEM,
++            CLK_INVALID   = 0xFFFFFFFF
++        } ClockType;
++    }
++}
+\ No newline at end of file
+diff --git a/tensilelite/Tensile/Source/client/include/HardwareMonitorWindows.hpp b/tensilelite/Tensile/Source/client/include/HardwareMonitorWindows.hpp
+new file mode 100644
+index 00000000..5f11a024
+--- /dev/null
++++ b/tensilelite/Tensile/Source/client/include/HardwareMonitorWindows.hpp
+@@ -0,0 +1,109 @@
++/*******************************************************************************
++ *
++ * MIT License
++ *
++ * Copyright (C) 2019-2023 Advanced Micro Devices, Inc. All rights reserved.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ *
++ *******************************************************************************/
++
++#pragma once
++
++#include <chrono>
++#include <cstddef>
++#include <future>
++#include <thread>
++#include <tuple>
++#include <vector>
++
++#include <hip/hip_runtime.h>
++
++#include "HardwareMonitorType.hpp"
++
++namespace TensileLite
++{
++    namespace Client
++    {
++        /**
++ * Monitors properties of a particular GPU in a separate thread.
++ *
++ * The thread is manually managed because the thread creation overhead is too
++ * high to create a thread every time.
++ *
++ * The interface to this class is not thread-safe.
++ */
++        class HardwareMonitor
++        {
++        public:
++            /** Translates the Hip device index into the corresponding device index for
++   * ROCm-SMI. */
++            using clock = std::chrono::steady_clock;
++
++            // Monitor at the maximum possible rate.
++            HardwareMonitor(int hipDeviceIndex){};
++            // Limit collection to once per minPeriod.
++            HardwareMonitor(int hipDeviceIndex, clock::duration minPeriod){};
++
++            ~HardwareMonitor(){};
++
++            void addTempMonitor(){};
++            void addClockMonitor(ClockType clockType){};
++            void addFanSpeedMonitor(uint32_t sensorIndex = 0){};
++
++            double getAverageTemp()
++            {
++                return 0.0;
++            };
++            double getAverageClock(ClockType clockType)
++            {
++                return 0.0;
++            };
++            double getAverageFanSpeed(uint32_t sensorIndex = 0)
++            {
++                return 0.0;
++            };
++            int getDeviceIndex()
++            {
++                return 0;
++            }
++            size_t getSamples()
++            {
++                return 1;
++            }
++
++            /// Begins monitoring until stop() is called.
++            void start(){};
++
++            /// Sends a signal to the monitoring thread to end monitoring.
++            void stop(){};
++
++            /// Begins monitoring immediately, until the event has occurred.
++            void runUntilEvent(hipEvent_t event){};
++
++            /// Monitoring will occur from startEvent until stopEvent.
++            void runBetweenEvents(hipEvent_t startEvent, hipEvent_t stopEvent){};
++
++            /// Waits until monitoring has finished.
++            /// Throws an exception if monitoring was started without a stop event
++            /// and stop() has not been called.
++            void wait(){};
++        };
++    } // namespace Client
++} // namespace Tensile
+\ No newline at end of file
+diff --git a/tensilelite/Tensile/Source/client/main.cpp b/tensilelite/Tensile/Source/client/main.cpp
+index 33a856cb..e21bf8b9 100644
+--- a/tensilelite/Tensile/Source/client/main.cpp
++++ b/tensilelite/Tensile/Source/client/main.cpp
+@@ -602,7 +602,11 @@ int main(int argc, const char* argv[])
+ 
+     auto filename = args["library-file"].as<std::string>();
+ 
++#if _WIN32
++    size_t      directoryPos     = filename.rfind('\\');
++#else
+     size_t      directoryPos     = filename.rfind('/');
++#endif
+     std::string libraryDirectory = filename;
+     if(directoryPos != std::string::npos)
+         libraryDirectory.resize(directoryPos + 1);
+diff --git a/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp b/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp
+index 44a4af47..baafe9de 100644
+--- a/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp
++++ b/tensilelite/Tensile/Source/client/source/HardwareMonitor.cpp
+@@ -29,7 +29,9 @@
+ #include <chrono>
+ #include <cstddef>
+ #include <iomanip>
++#ifndef _WIN32
+ #include <unistd.h>
++#endif
+ 
+ #include <hip/hip_runtime.h>
+ 
+@@ -57,6 +59,28 @@ namespace TensileLite
+ {
+     namespace Client
+     {
++        rsmi_clk_type_t toSMIClockType(ClockType type)
++        {
++            switch(type)
++            {
++            case CLK_TYPE_SYS:
++                return RSMI_CLK_TYPE_SYS;
++            case CLK_TYPE_DF:
++                return RSMI_CLK_TYPE_DF;
++            case CLK_TYPE_DCEF:
++                return RSMI_CLK_TYPE_DCEF;
++            case CLK_TYPE_SOC:
++                return RSMI_CLK_TYPE_SOC;
++            case CLK_TYPE_MEM:
++                return RSMI_CLK_TYPE_MEM;
++            case CLK_INVALID:
++                return RSMI_CLK_INVALID;
++            default:
++                return RSMI_CLK_TYPE_SYS;
++            }
++            return RSMI_CLK_TYPE_SYS;
++        }
++
+         uint32_t HardwareMonitor::GetROCmSMIIndex(int hipDeviceIndex)
+         {
+             InitROCmSMI();
+@@ -182,20 +206,23 @@ namespace TensileLite
+             m_thread = std::thread([this]() { this->runLoop(); });
+         }
+ 
+-        void HardwareMonitor::addTempMonitor(rsmi_temperature_type_t   sensorType,
+-                                             rsmi_temperature_metric_t metric)
++        void HardwareMonitor::addTempMonitor()
+         {
++            rsmi_temperature_type_t   sensorType = RSMI_TEMP_TYPE_EDGE;
++            rsmi_temperature_metric_t metric     = RSMI_TEMP_CURRENT;
+             assertNotActive();
+ 
+             m_tempMetrics.emplace_back(sensorType, metric);
+             m_tempValues.resize(m_tempMetrics.size());
+         }
+ 
+-        void HardwareMonitor::addClockMonitor(rsmi_clk_type_t clockType)
++        void HardwareMonitor::addClockMonitor(ClockType clockType)
+         {
++            rsmi_temperature_type_t   sensorType = RSMI_TEMP_TYPE_EDGE;
++            rsmi_temperature_metric_t metric     = RSMI_TEMP_CURRENT;
+             assertNotActive();
+ 
+-            m_clockMetrics.push_back(clockType);
++            m_clockMetrics.push_back(toSMIClockType(clockType));
+             m_clockValues.resize(m_clockMetrics.size());
+         }
+ 
+@@ -207,9 +234,10 @@ namespace TensileLite
+             m_fanValues.resize(m_fanMetrics.size());
+         }
+ 
+-        double HardwareMonitor::getAverageTemp(rsmi_temperature_type_t   sensorType,
+-                                               rsmi_temperature_metric_t metric)
++        double HardwareMonitor::getAverageTemp()
+         {
++            rsmi_temperature_type_t   sensorType = RSMI_TEMP_TYPE_EDGE;
++            rsmi_temperature_metric_t metric     = RSMI_TEMP_CURRENT;
+             assertNotActive();
+ 
+             if(m_dataPoints == 0)
+@@ -231,7 +259,7 @@ namespace TensileLite
+                 "Can't read temp value that wasn't requested: ", sensorType, " - ", metric));
+         }
+ 
+-        double HardwareMonitor::getAverageClock(rsmi_clk_type_t clockType)
++        double HardwareMonitor::getAverageClock(ClockType clockType)
+         {
+             assertNotActive();
+ 
+@@ -240,7 +268,7 @@ namespace TensileLite
+ 
+             for(size_t i = 0; i < m_clockMetrics.size(); i++)
+             {
+-                if(m_clockMetrics[i] == clockType)
++                if(m_clockMetrics[i] == toSMIClockType(clockType))
+                 {
+                     uint64_t rawValue = m_clockValues[i];
+                     if(rawValue == std::numeric_limits<uint64_t>::max())
+diff --git a/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp b/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp
+index ad17ad98..b1cc2f48 100644
+--- a/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp
++++ b/tensilelite/Tensile/Source/client/source/HardwareMonitorListener.cpp
+@@ -24,9 +24,11 @@
+  *
+  *******************************************************************************/
+ 
++#ifdef _WIN32
++#include "HardwareMonitorWindows.hpp"
++#else
+ #include "HardwareMonitor.hpp"
+-
+-#include <unistd.h>
++#endif
+ 
+ #include <hip/hip_runtime.h>
+ 
+@@ -47,11 +49,11 @@ namespace TensileLite
+                 return;
+ 
+             m_monitor = std::make_shared<HardwareMonitor>(args["device-idx"].as<int>());
+-            m_monitor->addTempMonitor(0);
++            m_monitor->addTempMonitor();
+ 
+-            m_monitor->addClockMonitor(RSMI_CLK_TYPE_SYS);
+-            m_monitor->addClockMonitor(RSMI_CLK_TYPE_SOC);
+-            m_monitor->addClockMonitor(RSMI_CLK_TYPE_MEM);
++            m_monitor->addClockMonitor(CLK_TYPE_SYS);
++            m_monitor->addClockMonitor(CLK_TYPE_SOC);
++            m_monitor->addClockMonitor(CLK_TYPE_MEM);
+ 
+             m_monitor->addFanSpeedMonitor();
+         }
+@@ -89,12 +91,11 @@ namespace TensileLite
+             m_monitor->wait();
+ 
+             m_reporter->report(ResultKey::DeviceIndex, m_monitor->getDeviceIndex());
+-            m_reporter->report(ResultKey::TempEdge, m_monitor->getAverageTemp(0));
+-
+-            m_reporter->report(ResultKey::ClockRateSys, m_monitor->getAverageClock(RSMI_CLK_TYPE_SYS));
+-            m_reporter->report(ResultKey::ClockRateSOC, m_monitor->getAverageClock(RSMI_CLK_TYPE_SOC));
+-            m_reporter->report(ResultKey::ClockRateMem, m_monitor->getAverageClock(RSMI_CLK_TYPE_MEM));
++            m_reporter->report(ResultKey::TempEdge, m_monitor->getAverageTemp());
+ 
++            m_reporter->report(ResultKey::ClockRateSys, m_monitor->getAverageClock(CLK_TYPE_SYS));
++            m_reporter->report(ResultKey::ClockRateSOC, m_monitor->getAverageClock(CLK_TYPE_SOC));
++            m_reporter->report(ResultKey::ClockRateMem, m_monitor->getAverageClock(CLK_TYPE_MEM));
+             m_reporter->report(ResultKey::FanSpeedRPMs, m_monitor->getAverageFanSpeed());
+             m_reporter->report(ResultKey::HardwareSampleCount, m_monitor->getSamples());
+             m_reporter->report(ResultKey::GfxFrequency,
+diff --git a/tensilelite/Tensile/Source/client/source/ProgressListener.cpp b/tensilelite/Tensile/Source/client/source/ProgressListener.cpp
+index ea75f2a9..7f6b6b05 100644
+--- a/tensilelite/Tensile/Source/client/source/ProgressListener.cpp
++++ b/tensilelite/Tensile/Source/client/source/ProgressListener.cpp
+@@ -27,9 +27,10 @@
+ #include <ProgressListener.hpp>
+ 
+ #include <cstddef>
++#include <ctime>
+ #include <iomanip>
+ 
+-#include <sys/time.h>
++#include <sstream>
+ 
+ namespace TensileLite
+ {
+@@ -180,18 +181,15 @@ namespace TensileLite
+                                                 TimingEvents const&            startEvents,
+                                                 TimingEvents const&            stopEvents)
+         {
+-            struct timeval tmnow;
+-            struct tm*     tm;
+-            gettimeofday(&tmnow, NULL); // microsecond resolution
+-            tm = localtime(&tmnow.tv_sec);
+-            std::cout.fill('0');
++            std::time_t result = std::time(nullptr);
++            std::tm*    tm     = std::localtime(&result);
+ 
+             std::ostringstream msg;
+             msg.fill('0');
+             msg << (tm->tm_year + 1900) << "-" << std::setw(2) << (tm->tm_mon + 1) << "-"
+                 << std::setw(2) << tm->tm_mday << " " << std::setw(2) << tm->tm_hour << ":"
+                 << std::setw(2) << tm->tm_min << ":" << std::setw(2) << tm->tm_sec << "."
+-                << std::setw(6) << static_cast<int>(tmnow.tv_usec);
++                << std::setw(6);
+ 
+             m_reporter->report(ResultKey::EnqueueTime, msg.str());
+         }
+diff --git a/tensilelite/Tensile/Source/lib/CMakeLists.txt b/tensilelite/Tensile/Source/lib/CMakeLists.txt
+index 813f4848..2d4db8f4 100644
+--- a/tensilelite/Tensile/Source/lib/CMakeLists.txt
++++ b/tensilelite/Tensile/Source/lib/CMakeLists.txt
+@@ -105,19 +105,27 @@ if(TENSILE_USE_LLVM OR TENSILE_USE_MSGPACK)
+ endif()
+ 
+ if(TENSILE_USE_MSGPACK)
+-    # See: https://github.com/msgpack/msgpack-c/wiki/Q%26A#how-to-support-both-msgpack-c-c-version-5x-and-6x-
+-    # Prefer 6.x (msgpack-cxx) as that is what we bundle in the build.
+-    find_package(msgpack-cxx CONFIG)
+-    if(msgpack-cxx_FOUND)
+-        # Version 6.x
+-        message(STATUS "Found msgpack-cxx (>=6.x)")
+-        target_link_libraries(TensileHost PUBLIC msgpack-cxx)
++    if (WIN32)
++        find_package(msgpack-cxx REQUIRED)
+     else()
+-        # Fallback to <= 5.x
+-        find_package(msgpackc-cxx CONFIG REQUIRED NAMES msgpackc-cxx msgpack)
+-        message(STATUS "Found msgpack (<=5.x)")
++        find_package(msgpack REQUIRED)
++    endif()
++
++    if(TARGET msgpack-cxx)
++        get_target_property(msgpack_inc msgpack-cxx INTERFACE_INCLUDE_DIRECTORIES)
++        target_link_libraries(TensileHost PUBLIC msgpack-cxx)
++    elseif(TARGET msgpackc)
++        get_target_property(msgpack_inc msgpackc INTERFACE_INCLUDE_DIRECTORIES)
+         target_link_libraries(TensileHost PUBLIC msgpackc)
+     endif()
++
++    if(DEFINED msgpack_inc)
++        # include C++ headers manually
++        # External header includes included as system files
++        target_include_directories(TensileHost
++            SYSTEM PRIVATE $<BUILD_INTERFACE:${msgpack_inc}>
++        )
++    endif()
+     target_compile_definitions(TensileHost PUBLIC -DTENSILE_MSGPACK=1)
+ endif()
+ 
+diff --git a/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp b/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp
+index 4794f3ab..432b5db1 100644
+--- a/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp
++++ b/tensilelite/Tensile/Source/lib/include/Tensile/MLPClassification.hpp
+@@ -29,6 +29,7 @@
+ #include <array>
+ #include <memory>
+ #include <vector>
++#include <functional>
+ 
+ #include "DataTypes_Half.hpp"
+ 
+diff --git a/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp b/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
+index cdf30551..aad8ae92 100644
+--- a/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
++++ b/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
+@@ -32,7 +32,7 @@
+ #include <Tensile/MasterSolutionLibrary.hpp>
+ #include <Tensile/PlaceholderLibrary.hpp>
+ //Replace std::regex, as it crashes when matching long lines(GCC Bug #86164).
+-#ifdef WIN32
++#ifdef _WIN32
+ #include "shlwapi.h"
+ #else
+ #include <fnmatch.h>
+@@ -73,7 +73,7 @@ namespace TensileLite
+                     for(auto condition : ctx->preloaded)
+                     {
+                         std::string pattern = RegexPattern(condition);
+-#ifdef WIN32
++#ifdef _WIN32
+                         if(PathMatchSpecA(lib.filePrefix.c_str(), pattern.c_str()))
+ #else
+                         if(fnmatch(pattern.c_str(), lib.filePrefix.c_str(), 0) == 0)
+diff --git a/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp b/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp
+index c17b7dea..2e5a51d7 100644
+--- a/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp
++++ b/tensilelite/Tensile/Source/lib/source/ContractionSolution.cpp
+@@ -2283,8 +2283,13 @@ namespace TensileLite
+         gsuTemp |= gsuTemp >> 16;
+         gsuTemp++;
+ 
++#ifdef _WIN32
++        name += "_PostGSU"
++                + std::to_string(std::min((unsigned long long)gsuTemp, sizeMapping.globalSplitUPGR));
++#else
+         name += "_PostGSU"
+                 + std::to_string(std::min((unsigned long)gsuTemp, sizeMapping.globalSplitUPGR));
++#endif
+ 
+         name += "_VW" + std::to_string(vw);
+ 
+diff --git a/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp b/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp
+index 17e501b9..235bcaee 100644
+--- a/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp
++++ b/tensilelite/Tensile/Source/lib/source/hip/HipSolutionAdapter.cpp
+@@ -35,7 +35,7 @@
+ #include <Tensile/hip/HipUtils.hpp>
+ 
+ //@TODO add alternative for windows
+-#ifndef WIN32
++#ifndef _WIN32
+ #include <glob.h>
+ #endif
+ #include <regex>
+diff --git a/tensilelite/Tensile/Tensile.py b/tensilelite/Tensile/Tensile.py
+index 90b8af31..612d4457 100644
+--- a/tensilelite/Tensile/Tensile.py
++++ b/tensilelite/Tensile/Tensile.py
+@@ -205,7 +205,7 @@ def addCommonArguments(argParser):
+     argParser.add_argument("--logic-format", dest="LogicFormat", choices=["yaml", "json"], \
+         action="store", default="yaml", help="select which logic format to use")
+     argParser.add_argument("--library-format", dest="LibraryFormat", choices=["yaml", "msgpack"], \
+-        action="store", default="yaml", help="select which library format to use")
++        action="store", help="select which library format to use")
+     argParser.add_argument("--client-lock", default=None)
+     argParser.add_argument("--prebuilt-client", default=None)
+ 
+diff --git a/tensilelite/Tensile/TensileBenchmarkCluster.py b/tensilelite/Tensile/TensileBenchmarkCluster.py
+index 84c0f185..e0bc9c78 100644
+--- a/tensilelite/Tensile/TensileBenchmarkCluster.py
++++ b/tensilelite/Tensile/TensileBenchmarkCluster.py
+@@ -73,7 +73,7 @@ class BenchmarkImplSLURM(object):
+             # Build container and save output streams
+             print("Building docker image: {0} ...".format(tag))
+             print(buildCmd)
+-            subprocess.check_call(shlex.split(buildCmd), stdout=logFile, stderr=logFile)
++            subprocess.check_output(shlex.split(buildCmd), stdout=logFile, stderr=logFile)
+             print("Done building docker image!")
+ 
+             # Docker save command
+@@ -219,7 +219,7 @@ class BenchmarkImplSLURM(object):
+                 -t {5}").format(runScriptPath, imageDir, logsDir, resultsDir, enqueueScriptPath, tasksDir)
+ 
+         with open(logFilePath, "wt") as logFile:
+-            subprocess.check_call(shlex.split(invokeCmd), stdout=logFile, stderr=logFile)
++            subprocess.check_output(shlex.split(invokeCmd), stdout=logFile, stderr=logFile)
+ 
+     @classmethod
+     def postInvokeBenchmark(cls, benchmarkObj):
+diff --git a/tensilelite/Tensile/Toolchain/Component.py b/tensilelite/Tensile/Toolchain/Component.py
+index 5faf4c1e..5bb76b1b 100644
+--- a/tensilelite/Tensile/Toolchain/Component.py
++++ b/tensilelite/Tensile/Toolchain/Component.py
+@@ -262,13 +262,14 @@ class Bundler(Component):
+         Raises:
+             RuntimeError: If compressing the code object file fails.
+         """
++        devnull = "/dev/null" if os_name != "nt" else "NUL"
+         args = [
+             self._component_path,
+             "--compress",
+             "--type=o",
+             "--bundle-align=4096",
+             f"--targets=host-x86_64-unknown-linux-gnu,hipv4-amdgcn-amd-amdhsa-unknown-{target}",
+-            "--input=/dev/null",
++            f"--input={devnull}",
+             f"--input={srcPath}",
+             f"--output={destPath}",
+         ]
+@@ -335,7 +336,7 @@ class Linker(Component):
+         if os_name == "nt":
+             # Use args file on Windows b/c the command may exceed the limit of 8191 characters
+             with open(Path.cwd() / "clang_args.txt", "wt") as file:
+-                file.write(" ".join(srcPaths))
++                file.write(" ".join(srcPaths).replace('\\', '\\\\'))
+                 file.flush()
+             args = [*(self.default_args), "-o", destPath, "@clang_args.txt"]
+         else:
+diff --git a/tensilelite/Tensile/Toolchain/Validators.py b/tensilelite/Tensile/Toolchain/Validators.py
+index 316a0fc2..3911a2d1 100644
+--- a/tensilelite/Tensile/Toolchain/Validators.py
++++ b/tensilelite/Tensile/Toolchain/Validators.py
+@@ -113,7 +113,7 @@ class ToolchainDefaults(NamedTuple):
+     OFFLOAD_BUNDLER = osSelect(linux="clang-offload-bundler", windows="clang-offload-bundler.exe")
+     DEVICE_ENUMERATOR = osSelect(linux="rocm_agent_enumerator" if isRhel8() else "amdgpu-arch", windows="hipinfo")
+     ASSEMBLER = osSelect(linux="amdclang++", windows="clang++.exe")
+-    HIP_CONFIG = osSelect(linux="hipconfig", windows="hipconfig")
++    HIP_CONFIG = osSelect(linux="hipconfig", windows="hipconfig.exe")
+ 
+ 
+ def _supportedComponent(component: str, targets: List[str]) -> bool:
+diff --git a/tensilelite/Tensile/cmake/TensileConfig.cmake b/tensilelite/Tensile/cmake/TensileConfig.cmake
+index 1d57885f..70b2b1b2 100644
+--- a/tensilelite/Tensile/cmake/TensileConfig.cmake
++++ b/tensilelite/Tensile/cmake/TensileConfig.cmake
+@@ -213,9 +213,7 @@ function(TensileCreateLibraryFiles
+   # Tensile relies on the tools from the path, so capture the configure time
+   # path. It would be better if tool paths were explicit, but that would be a pretty
+   # big change.
+-  set(CommandLine
+-     "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --
+-      ${CommandLine})
++
+   message(STATUS "Tensile_CREATE_COMMAND: ${CommandLine}")
+ 
+   if(Tensile_EMBED_LIBRARY)
+@@ -259,6 +257,12 @@ function(TensileCreateLibraryFiles
+ 
+ endfunction()
+ 
++if(WIN32)
++    SET(toolchain "clang++")
++else()
++    SET(toolchain "${ROCM_PATH}/bin/amdclang++")
++endif()
++
+ function(TensileCreateExtOpLibraries OutputFolder ArchStr TensileExt_LIBRARY_TARGET)
+   string(REGEX MATCHALL "gfx[a-z0-9]+" Archs "${ArchStr}")
+   list(REMOVE_DUPLICATES Archs)
+@@ -276,8 +280,9 @@ function(TensileCreateExtOpLibraries OutputFolder ArchStr TensileExt_LIBRARY_TAR
+     COMMAND ${CMAKE_COMMAND} -E rm -rf ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${build_tmp_dir}
+     COMMAND ${CMAKE_COMMAND} -E make_directory ${OutputFolder}
+-    COMMAND ${CMAKE_COMMAND} -E env "'PATH=$ENV{PATH}'" PYTHONPATH=${PROJECT_BINARY_DIR}/lib -- bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_HOME_DIR}" "${Tensile_BUILD_ID}"
+-    COMMAND ${CMAKE_COMMAND} -E copy ${ext_op_library_path} ${build_tmp_dir}/extop_*.co ${OutputFolder}
++    COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH="${PROJECT_BINARY_DIR}/lib" bash "${script}" "\"${Archs}\"" "${build_tmp_dir}" "${VIRTUALENV_BIN_DIR}" "${Tensile_BUILD_ID}" "${toolchain}" "${VIRTUALENV_PYTHON_EXENAME}"
++    COMMAND bash -c "cp ${build_tmp_dir}/extop_*.co ${OutputFolder}"
++    COMMAND ${CMAKE_COMMAND} -E copy ${ext_op_library_path} ${OutputFolder}
+   )
+ 
+   add_custom_target(
+diff --git a/tensilelite/tox.ini b/tensilelite/tox.ini
+index 2f4ff044..2919bdd7 100644
+--- a/tensilelite/tox.ini
++++ b/tensilelite/tox.ini
+@@ -1,9 +1,11 @@
+ [tox]
+-envlist = py35,py36,py27,lint
++#envlist = py35,py36,py27,lint
++envlist = {py35,py36,py27}{,-win},lint
+ labels =
+     static = format, isort
+ 
+ [testenv]
++platform = linux
+ # Some versions of Pytest versions have a bug:
+ # https://github.com/pytest-dev/pytest/issues/5971 which causes the whole test
+ # process to crash if a multiprocessing job has an exception. Fixed in 5.3.3.
+@@ -28,6 +30,19 @@ allowlist_externals =
+     mkdir
+     sh
+     cmake
++
++[testenv:{py35,py36,py27}-win]
++platform = win32
++passenv = *
++deps =
++    -r{toxinidir}/requirements.txt
++    pytest>=5.4.1
++    pytest-xdist>=1.32.0
++    filelock
++commands =
++    python ./Tensile/bin/Tensile Tensile/Configs/build_client.yaml {envdir}/client
++    py.test -v --basetemp={envtmpdir} --junit-xml={toxinidir}/python_tests.xml --junit-prefix={envname} --color=yes -n 4 --prebuilt-client={envdir}/client/0_Build/client/tensile_client {posargs}
++
+ [testenv:lint]
+ basepython = python3
+ deps =
+diff --git a/toolchain-windows.cmake b/toolchain-windows.cmake
+new file mode 100644
+index 00000000..b36fd1ca
+--- /dev/null
++++ b/toolchain-windows.cmake
+@@ -0,0 +1,73 @@
++# ########################################################################
++# Copyright (C) 2022-2023 Advanced Micro Devices, Inc.
++#
++# Permission is hereby granted, free of charge, to any person obtaining a copy
++# of this software and associated documentation files (the "Software"), to deal
++# in the Software without restriction, including without limitation the rights
++# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++# copies of the Software, and to permit persons to whom the Software is
++# furnished to do so, subject to the following conditions:
++#
++# The above copyright notice and this permission notice shall be included in
++# all copies or substantial portions of the Software.
++#
++# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++# THE SOFTWARE.
++#
++# ########################################################################
++
++if (DEFINED ENV{HIP_PATH})
++  file(TO_CMAKE_PATH "$ENV{HIP_PATH}" HIP_DIR)
++  set(rocm_bin "${HIP_DIR}/bin")
++elseif (DEFINED ENV{HIP_DIR})
++  file(TO_CMAKE_PATH "$ENV{HIP_DIR}" HIP_DIR)
++  set(rocm_bin "${HIP_DIR}/bin")
++else()
++  set(HIP_DIR "C:/hip")
++  set(rocm_bin "C:/hip/bin")
++endif()
++
++set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
++set(CMAKE_C_COMPILER "${rocm_bin}/clang.exe")
++
++if (NOT python)
++  set(python "python") # take default for windows
++endif()
++
++# our usage flags
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWIN32 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING")
++
++# flags for clang direct use
++
++# -Wno-ignored-attributes to avoid warning: __declspec attribute 'dllexport' is not supported [-Wignored-attributes] which is used by msvc compiler
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-ignored-attributes")
++
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHIP_CLANG_HCC_COMPAT_MODE=1")
++
++# args also in hipcc.bat
++set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions -fms-compatibility -D__HIP_ROCclr__=1 -D__HIP_PLATFORM_AMD__=1 ")
++
++if (DEFINED ENV{OPENBLAS_DIR})
++  file(TO_CMAKE_PATH "$ENV{OPENBLAS_DIR}" OPENBLAS_DIR)
++else()
++  set(OPENBLAS_DIR "C:/OpenBLAS/OpenBLAS-0.3.18-x64")
++endif()
++
++if (DEFINED ENV{VCPKG_PATH})
++  file(TO_CMAKE_PATH "$ENV{VCPKG_PATH}" VCPKG_PATH)
++else()
++  set(VCPKG_PATH "C:/github/vcpkg")
++endif()
++include("${VCPKG_PATH}/scripts/buildsystems/vcpkg.cmake")
++
++set(CMAKE_STATIC_LIBRARY_SUFFIX ".a")
++set(CMAKE_STATIC_LIBRARY_PREFIX "static_")
++set(CMAKE_SHARED_LIBRARY_SUFFIX ".dll")
++set(CMAKE_SHARED_LIBRARY_PREFIX "")
++
++set(BUILD_FORTRAN_CLIENTS OFF)
+\ No newline at end of file
+-- 
+2.49.0.windows.1
+

@@ -1,0 +1,42 @@
+From 9d567ed7d2269addea6f3539cca0e271d62fb915 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Fri, 18 Apr 2025 01:21:32 +0100
+Subject: [PATCH] Fix build for windows when tests are enabled
+
+---
+ clients/CMakeLists.txt         | 4 ++--
+ clients/gtest/rocblas_test.cpp | 3 +++
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index dc61a102..414905c0 100644
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -173,8 +173,8 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+                     NO_DEFAULT_PATH
+                   )
+       if (NOT BLAS_LIBRARY)
+-        find_package( OPENBLAS CONFIG REQUIRED )
+-        set( BLAS_LIBRARY OpenBLAS::OpenBLAS )
++        find_package( BLAS REQUIRED )
++        set( BLAS_LIBRARY "${BLAS_LIBRARIES}" )
+         set( BLAS_INCLUDE_DIR "" )
+       endif()
+       set( WARN_NOT_ILP64_PREFERRED true )
+diff --git a/clients/gtest/rocblas_test.cpp b/clients/gtest/rocblas_test.cpp
+index f9f13ae1..eaeadfdb 100644
+--- a/clients/gtest/rocblas_test.cpp
++++ b/clients/gtest/rocblas_test.cpp
+@@ -27,6 +27,9 @@
+ #include <exception>
+ #include <regex>
+ #ifdef WIN32
++// HACK: (jam): "error: attempt to use a poisoned identifier" if this ole2.h header was included within windows.h
++// skip that header by defining _OLE2_H_
++#define _OLE2_H_
+ #include <windows.h>
+ #define strcasecmp(A, B) _stricmp(A, B)
+ #else
+-- 
+2.49.0.windows.1
+
