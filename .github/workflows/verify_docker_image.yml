@@ -51,10 +51,10 @@ jobs:
   setup_metadata:
     runs-on: ubuntu-24.04
     outputs:
-      image_ref: ${{ steps.image_ref.outputs.image_ref }}
+      image_ref: ${{ steps.construct_image_ref.outputs.image_ref }}
     steps:
     - name: Construct image reference
-      id: image_ref
+      id: construct_image_ref
       # Use the IMAGE_REF for pulling purposes using the embedded digest SHA in it
       env:
         IMAGE_REF: "ghcr.io/rocm/therock_pytorch_dev_ubuntu_24_04_${{ inputs.amdgpu_target }}@${{ inputs.image_digest }}"
@@ -114,4 +114,4 @@ jobs:
           echo "Using version: $VERSION"
 
           docker tag $IMAGE_BASE@$DIGEST $IMAGE_BASE:$VERSION
-          docker push $IMAGE:$VERSION
+          docker push $IMAGE_BASE:$VERSION
