@@ -5,8 +5,8 @@ set -euo pipefail
 if ! command -v wget >/dev/null 2>&1; then
   echo "[INFO] wget not found. Attempting to install it..."
   if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y wget
+    apt-get update
+    apt-get install -y wget
   else
     echo "[ERROR] Cannot install wget: unsupported package manager. Please install it manually."
     exit 1
@@ -47,13 +47,13 @@ for target in $AMDGPU_TARGETS; do
   wget -q --show-progress -O "$TARBALL_PATH" "$TARBALL_URL"
 
   echo "[INFO] Extracting $TARBALL_PATH to $INSTALL_PREFIX"
-  sudo tar -xvzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
+  tar -xvzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
 done
 
 # === Step 2: Setup Environment Variables ===
 ROCM_ENV_FILE="/etc/profile.d/rocm.sh"
 echo "[INFO] Writing environment config to $ROCM_ENV_FILE"
-sudo tee "$ROCM_ENV_FILE" > /dev/null <<EOF
+tee "$ROCM_ENV_FILE" > /dev/null <<EOF
 export PATH=$INSTALL_PREFIX/bin:\$PATH
 export ROCM_PATH=$INSTALL_PREFIX
 EOF
@@ -61,13 +61,13 @@ EOF
 # === Step 3: Configure Dynamic Linker ===
 ROCM_LDCONF_FILE="/etc/ld.so.conf.d/rocm.conf"
 echo "[INFO] Writing dynamic linker config to $ROCM_LDCONF_FILE"
-sudo tee "$ROCM_LDCONF_FILE" > /dev/null <<EOF
+tee "$ROCM_LDCONF_FILE" > /dev/null <<EOF
 $INSTALL_PREFIX/lib
 $INSTALL_PREFIX/lib64
 EOF
 
 echo "[INFO] Running ldconfig..."
-sudo ldconfig
+ldconfig
 
 # === Step 4: Validation ===
 echo "[INFO] ROCm installed to $INSTALL_PREFIX"
