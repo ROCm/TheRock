@@ -53,7 +53,7 @@ for target in $AMDGPU_TARGETS; do
   TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
   echo "[INFO] Trying to download: $TARBALL_URL"
-  if ! wget -q --show-progress -O "$TARBALL_PATH" "$TARBALL_URL"; then
+  if ! wget -q -O "$TARBALL_PATH" "$TARBALL_URL"; then
     echo "[WARN] Primary tarball not found for $target. Trying fallback encoding..."
 
     fallback=$(fallback_target_name "$target")
