@@ -86,18 +86,7 @@ export PATH=$INSTALL_PREFIX/bin:\$PATH
 export ROCM_PATH=$INSTALL_PREFIX
 EOF
 
-# Step 3: Dynamic Linker
-ROCM_LDCONF_FILE="/etc/ld.so.conf.d/rocm.conf"
-echo "[INFO] Writing dynamic linker config to $ROCM_LDCONF_FILE"
-tee "$ROCM_LDCONF_FILE" > /dev/null <<EOF
-$INSTALL_PREFIX/lib
-$INSTALL_PREFIX/lib64
-EOF
-
-echo "[INFO] Running ldconfig..."
-ldconfig
-
-# Step 4: Validate
+# Step 3: Validate
 echo "[INFO] ROCm installed to $INSTALL_PREFIX"
 which hipcc || echo "[WARN] hipcc not found"
 which rocminfo || echo "[WARN] rocminfo not found"
