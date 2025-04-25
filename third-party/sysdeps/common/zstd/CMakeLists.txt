@@ -67,7 +67,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         "PATCHELF=${PATCHELF}"
         "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
         "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-      "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+      bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
   )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # On Windows, we build static.
