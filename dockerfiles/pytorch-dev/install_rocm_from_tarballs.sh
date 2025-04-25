@@ -1,6 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 
+# -----------------------------------------------------------------------------
+# install_rocm_from_tarballs.sh
+#
+# Download and install ROCm tarballs for specified AMDGPU targets from
+# TheRock's nightly GitHub releases.
+#
+# Usage:
+#   ./install_rocm_from_tarballs.sh "gfx942 gfx1100"
+#
+# Environment Variables (optional):
+#   RELEASE_TAG, ROCM_VERSION_DATE, ROCM_VERSION_PREFIX, INSTALL_PREFIX, OUTPUT_ARTIFACTS_DIR
+#
+# Requirements:
+#   curl (auto-installed if missing), bash
+# -----------------------------------------------------------------------------
+
 # Ensure curl is installed
 if ! command -v curl >/dev/null 2>&1; then
   echo "[INFO] curl not found. Installing..."
