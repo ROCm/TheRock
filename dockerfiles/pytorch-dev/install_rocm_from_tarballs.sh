@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -xeuo pipefail
 
 # -----------------------------------------------------------------------------
 # install_rocm_from_tarballs.sh
