@@ -28,7 +28,7 @@ else
   AMDGPU_TARGETS="gfx942"
 fi
 
-mkdir -p "$OUTPUT_ARTIFACTS_DIR"
+mkdir -p "${OUTPUT_ARTIFACTS_DIR}"
 echo "[INFO] Installing ROCm for targets: $AMDGPU_TARGETS"
 echo "[INFO] Date: $ROCM_VERSION_DATE | Output Dir: $OUTPUT_ARTIFACTS_DIR"
 
@@ -45,7 +45,7 @@ fallback_target_name() {
 # Step 1: Download and Extract
 for target in $AMDGPU_TARGETS; do
   TARGET_DIR="${OUTPUT_ARTIFACTS_DIR}/${target}"
-  mkdir -p "$TARGET_DIR"
+  mkdir -p "${TARGET_DIR}"
 
   # Try primary format
   TARBALL_NAME="therock-dist-linux-${target}-${ROCM_VERSION_PREFIX}${ROCM_VERSION_DATE}.tar.gz"
@@ -73,7 +73,7 @@ for target in $AMDGPU_TARGETS; do
     fi
   fi
 
-  mkdir -p "$INSTALL_PREFIX"
+  mkdir -p "${INSTALL_PREFIX}"
   echo "[INFO] Extracting $TARBALL_PATH to $INSTALL_PREFIX"
   tar -xzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
 done
