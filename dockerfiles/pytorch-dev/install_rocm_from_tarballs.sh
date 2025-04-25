@@ -5,28 +5,33 @@ set -euo pipefail
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date +'%Y%m%d')}"
 ROCM_VERSION_PREFIX="6.4.0rc"
-AMDGPU_FAMILIES="${AMDGPU_FAMILIES:-gfx94X gfx110X gfx1201}"
+INSTALL_PREFIX="${INSTALL_PREFIX:-/opt/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
-INSTALL_PREFIX="/opt/rocm"
 GITHUB_RELEASE_BASE_URL="https://github.com/ROCm/TheRock/releases/download"
 
-echo "[INFO] Installing ROCm artifacts for: $AMDGPU_FAMILIES"
+# === Parse AMDGPU targets from input ===
+if [[ $# -ge 1 ]]; then
+  AMDGPU_TARGETS="$1"
+else
+  AMDGPU_TARGETS="gfx94X gfx110X gfx1201"
+fi
+
+echo "[INFO] Installing ROCm artifacts for: $AMDGPU_TARGETS"
 echo "[INFO] Using ROCm version date: $ROCM_VERSION_DATE"
 echo "[INFO] Output directory: $OUTPUT_ARTIFACTS_DIR"
 
 mkdir -p "$OUTPUT_ARTIFACTS_DIR"
 
 # === Step 1: Download and Extract for each GPU target ===
-for target in $AMDGPU_FAMILIES; do
+for target in $AMDGPU_TARGETS; do
   TARGET_DIR="${OUTPUT_ARTIFACTS_DIR}/${target}"
-  echo "[INFO] Fetching tarball for target: $target"
   mkdir -p "$TARGET_DIR"
 
   TARBALL_NAME="therock-dist-linux-${target}-dgpu-${ROCM_VERSION_PREFIX}${ROCM_VERSION_DATE}.tar.gz"
   TARBALL_URL="${GITHUB_RELEASE_BASE_URL}/${RELEASE_TAG}/${TARBALL_NAME}"
   TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
-  echo "[INFO] Downloading from: $TARBALL_URL"
+  echo "[INFO] Downloading: $TARBALL_URL"
   wget -q --show-progress -O "$TARBALL_PATH" "$TARBALL_URL"
 
   echo "[INFO] Extracting $TARBALL_PATH to $INSTALL_PREFIX"
