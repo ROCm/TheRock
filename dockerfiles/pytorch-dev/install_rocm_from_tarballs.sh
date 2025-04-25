@@ -15,7 +15,7 @@ fi
 
 # Configuration
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
-ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d 'yesterday' +'%Y%m%d')}"
+ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d '3 days ago' +'%Y%m%d')}"
 ROCM_VERSION_PREFIX="6.4.0rc"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/therock/build/dist/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
