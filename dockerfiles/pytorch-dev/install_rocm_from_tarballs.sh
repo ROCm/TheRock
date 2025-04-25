@@ -11,7 +11,8 @@ set -xeuo pipefail
 #   ./install_rocm_from_tarballs.sh "gfx942 gfx1100"
 #
 # Environment Variables (optional):
-#   RELEASE_TAG, ROCM_VERSION_DATE, ROCM_VERSION_PREFIX, INSTALL_PREFIX, OUTPUT_ARTIFACTS_DIR
+#   RELEASE_TAG, ROCM_VERSION_DATE, ROCM_VERSION_PREFIX, INSTALL_PREFIX,
+#   OUTPUT_ARTIFACTS_DIR
 #
 # Requirements:
 #   curl (auto-installed if missing), bash
