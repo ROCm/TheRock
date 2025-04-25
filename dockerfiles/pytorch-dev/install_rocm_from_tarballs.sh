@@ -5,7 +5,7 @@ set -euo pipefail
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date +'%Y%m%d')}"
 ROCM_VERSION_PREFIX="6.4.0rc"
-AMDGPU_FAMILIES="${AMDGPU_FAMILIES:-gfx942 gfx1100 gfx1201}"
+AMDGPU_FAMILIES="${AMDGPU_FAMILIES:-gfx94X gfx110X gfx1201}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
 INSTALL_PREFIX="/opt/rocm"
 GITHUB_RELEASE_BASE_URL="https://github.com/ROCm/TheRock/releases/download"
