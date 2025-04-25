@@ -75,7 +75,7 @@ for target in $AMDGPU_TARGETS; do
 
   mkdir -p "$INSTALL_PREFIX"
   echo "[INFO] Extracting $TARBALL_PATH to $INSTALL_PREFIX"
-  tar -xvzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
+  tar -xzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
 done
 
 # Step 2: Setup Environment Variables
