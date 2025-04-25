@@ -1,14 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-# Ensure wget is installed
-if ! command -v wget >/dev/null 2>&1; then
-  echo "[INFO] wget not found. Installing..."
+# Ensure curl is installed
+if ! command -v curl >/dev/null 2>&1; then
+  echo "[INFO] curl not found. Installing..."
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
-    apt-get install -y wget
+    apt-get install -y curl
   else
-    echo "[ERROR] wget installation not supported on this OS. Please install it manually."
+    echo "[ERROR] curl installation not supported on this OS. Please install it manually."
     exit 1
   fi
 fi
@@ -53,7 +53,7 @@ for target in $AMDGPU_TARGETS; do
   TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
   echo "[INFO] Trying to download: $TARBALL_URL"
-  if ! wget -q -O "$TARBALL_PATH" "$TARBALL_URL"; then
+  if ! curl -sSL --fail -o "$TARBALL_PATH" "$TARBALL_URL"; then
     echo "[WARN] Primary tarball not found for $target. Trying fallback encoding..."
 
     fallback=$(fallback_target_name "$target")
@@ -67,7 +67,7 @@ for target in $AMDGPU_TARGETS; do
     TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
     echo "[INFO] Trying fallback: $TARBALL_URL"
-    if ! wget -q --show-progress -O "$TARBALL_PATH" "$TARBALL_URL"; then
+    if ! curl -sSL --fail -o "$TARBALL_PATH" "$TARBALL_URL"; then
       echo "[ERROR] Could not download tarball for $target (fallback: $fallback)"
       exit 1
     fi
