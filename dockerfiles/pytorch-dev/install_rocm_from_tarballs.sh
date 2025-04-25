@@ -1,6 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
+# === Ensure wget is installed ===
+if ! command -v wget >/dev/null 2>&1; then
+  echo "[INFO] wget not found. Attempting to install it..."
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y wget
+  else
+    echo "[ERROR] Cannot install wget: unsupported package manager. Please install it manually."
+    exit 1
+  fi
+fi
+
 # === Configuration ===
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date +'%Y%m%d')}"
