@@ -49,8 +49,35 @@ project(ZSTD_BUILD)
 include(ProcessorCount)
 ProcessorCount(PAR_JOBS)
 
-if(NOT PATCHELF)
-  message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
+  message(FATAL_ERROR "Missing PATCHELF from super-project")
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # On Linux we do a shared library build with post-install patching for symbol
+  # versioning and SONAME privatizing.
+  set(CONFIGURE_ARGS
+    -DZSTD_BUILD_STATIC=OFF
+    -DZSTD_BUILD_SHARED=ON
+    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+  )
+  set(POST_INSTALL_COMMANDS
+    COMMAND
+      "${CMAKE_COMMAND}" -E env
+        "PATCHELF=${PATCHELF}"
+        "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
+        "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+      "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+  )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  # On Windows, we build static.
+  set(CONFIGURE_ARGS
+    -DZSTD_BUILD_STATIC=ON
+    -DZSTD_BUILD_SHARED=OFF
+  )
+  set(POST_INSTALL_COMMANDS)
+else()
+  message(FATAL_ERROR "System not recognized")
 endif()
 
 add_custom_target(
@@ -59,29 +86,19 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}"
+    "${CMAKE_COMMAND}" "-G${CMAKE_GENERATOR}"
+        "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+        -S "${SOURCE_DIR}/build/cmake"
+        -B "${CMAKE_CURRENT_BINARY_DIR}/b"
+        "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+        "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/zstd_include.cmake"
+        -DZSTD_BUILD_TESTS=OFF
+        -DZSTD_LEGACY_SUPPORT=OFF
+        -DZSTD_BUILD_PROGRAMS=OFF
+        ${CONFIGURE_ARGS}
   COMMAND
-    make -j "${PAR_JOBS}" install
-        V=1
-        PREFIX=${CMAKE_INSTALL_PREFIX}
-        # NOTE: This is sloppy: this should be LDFLAGS_DYNLIB, but there is a
-        # bug in the Makefiles where it includes those options twice, causing
-        # errors. Since CPPFLAGS are always also added to the link command, this
-        # works, at the expense of adding a do-nothing flag to the compile
-        # commands.
-        "CPPFLAGS_DYNLIB=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+    "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"
   COMMAND
-  "${CMAKE_COMMAND}" -E env
-    "PATCHELF=${PATCHELF}"
-    "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-    "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-  "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+    "${CMAKE_COMMAND}" --install "${CMAKE_CURRENT_BINARY_DIR}/b"
+  ${POST_INSTALL_COMMANDS}
 )
-
-configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/zstd-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/zstd-config.cmake
-  @ONLY
-)
-
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/zstd-config.cmake" DESTINATION lib/cmake/zstd)

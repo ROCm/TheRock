@@ -14,3 +14,7 @@ include = [
 # zlib
 [components.dev."third-party/sysdeps/windows/zlib/build/stage"]
 [components.lib."third-party/sysdeps/windows/zlib/build/stage"]
+
+# zstd
+[components.dev."third-party/sysdeps/windows/zstd/build/stage"]
+[components.lib."third-party/sysdeps/windows/zstd/build/stage"]
