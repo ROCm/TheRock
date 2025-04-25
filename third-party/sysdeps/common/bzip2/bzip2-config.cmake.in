@@ -7,10 +7,10 @@ if(_IMPORT_PREFIX STREQUAL "/")
 endif()
 
 if(NOT TARGET BZip2::BZip2)
-  add_library(BZip2::BZip2 SHARED IMPORTED)
+  add_library(BZip2::BZip2 @BZ2_TYPE@ IMPORTED)
   set_target_properties(BZip2::BZip2 PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
-    IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libbz2.so"
+    IMPORTED_LOCATION "${_IMPORT_PREFIX}/@BZ2_IMPORTED_LOCATION@"
   )
 endif()
 
