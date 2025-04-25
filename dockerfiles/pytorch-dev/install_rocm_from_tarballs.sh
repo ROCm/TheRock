@@ -25,7 +25,7 @@ GITHUB_RELEASE_BASE_URL="https://github.com/ROCm/TheRock/releases/download"
 if [[ $# -ge 1 ]]; then
   AMDGPU_TARGETS="$1"
 else
-  AMDGPU_TARGETS="gfx942 gfx1100 gfx1201"
+  AMDGPU_TARGETS="gfx942"
 fi
 
 mkdir -p "$OUTPUT_ARTIFACTS_DIR"
