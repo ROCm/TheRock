@@ -32,7 +32,7 @@ mkdir -p "$OUTPUT_ARTIFACTS_DIR"
 echo "[INFO] Installing ROCm for targets: $AMDGPU_TARGETS"
 echo "[INFO] Date: $ROCM_VERSION_DATE | Output Dir: $OUTPUT_ARTIFACTS_DIR"
 
-# === Fallback encoding map ===
+# Fallback encoding map
 fallback_target_name() {
   case "$1" in
     gfx942) echo "gfx94X-dcgpu" ;;
@@ -48,7 +48,7 @@ for target in $AMDGPU_TARGETS; do
   mkdir -p "$TARGET_DIR"
 
   # Try primary format
-  TARBALL_NAME="therock-dist-linux-${target}-dgpu-${ROCM_VERSION_PREFIX}${ROCM_VERSION_DATE}.tar.gz"
+  TARBALL_NAME="therock-dist-linux-${target}-${ROCM_VERSION_PREFIX}${ROCM_VERSION_DATE}.tar.gz"
   TARBALL_URL="${GITHUB_RELEASE_BASE_URL}/${RELEASE_TAG}/${TARBALL_NAME}"
   TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
