@@ -15,7 +15,7 @@ fi
 
 # Configuration
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
-ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date +'%Y%m%d')}"
+ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d 'yesterday' +'%Y%m%d')}"
 ROCM_VERSION_PREFIX="6.4.0rc"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/opt/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
@@ -74,7 +74,7 @@ for target in $AMDGPU_TARGETS; do
   fi
 
   echo "[INFO] Extracting $TARBALL_PATH to $INSTALL_PREFIX"
-  sudo tar -xvzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
+  tar -xvzf "$TARBALL_PATH" -C "$INSTALL_PREFIX"
 done
 
 # Step 2: Setup Environment Variables
