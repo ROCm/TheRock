@@ -18,7 +18,7 @@ Currently, the platform offers developers the option to build HIP and ROCm from 
 
 ## Installation From Source
 
-We keep the following instructions for recent, commonly used operating system versions. Most build failures are due to minor operating system differences in dependencies and project setup. Refer to the [Environment Setup Guide](docs/environment_setup_guide.md) guide for contributed instructions and configurations for alternatives.
+We keep the following instructions for recent, commonly used operating system versions. Most build failures are due to minor operating system differences in dependencies and project setup. Refer to the [Environment Setup Guide](docs/environment_setup_guide.md) for contributed instructions and configurations for alternatives.
 
 ### Ubuntu (24.04)
 
@@ -141,6 +141,7 @@ separately.
 - [Contribution Guidelines](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
 - [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).
 - [Build System](docs/development/build_system.md): More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc.
+- [Environment Setup Guide](docs/environment_setup_guide.md): Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information.
 - [Git Chores](docs/development/git_chores.md): Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc.
 - [Dependencies](docs/development/dependencies.md): Further specifications on ROCm-wide standards for depending on various components.
 - [Build Containers](docs/development/build_containers.md): Further information about containers used for building TheRock on CI.
