@@ -18,7 +18,9 @@ Currently, the platform offers developers the option to build HIP and ROCm from 
 
 ## Installation From Source
 
-### Ubuntu
+We keep the following instructions for recent, commonly used operating system versions. Most build failures are due to minor operating system differences in dependencies and project setup. Refer to the [Environment Setup Guide](docs/environment_setup_guide.md) guide for contributed instructions and configurations for alternatives.
+
+### Ubuntu (24.04)
 
 ```bash
 # Install Ubuntu dependencies
@@ -34,7 +36,7 @@ pip install -r requirements.txt
 python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
 ```
 
-### Windows
+### Windows 11 (VS 2022)
 
 ```bash
 # Clone the repository
