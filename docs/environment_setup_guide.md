@@ -46,9 +46,12 @@ Based on upstream: AlmaLinux 8 with gcc toolset 12
 
 While this generally implies that the project should build on similarly versioned alternative EL distributions, do note that we install several upgraded tools (see dockerfile above) in our standard CI pipelines.
 
-- Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64:main`
+Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64:main`
 
 ### Ubuntu 22.04
 
-- Reference image: `ubuntu:22.04`
-- Shipping CMake is too old (3.22): see above
+Reference image: `ubuntu:22.04`
+
+Workarounds:
+
+- Shipping CMake is too old (3.22): see above advice for CMake
