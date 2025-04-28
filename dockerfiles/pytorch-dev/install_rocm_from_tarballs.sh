@@ -34,12 +34,15 @@ fi
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d '3 days ago' +'%Y%m%d')}"
 
-# Read only the base version (like "6.4.0") from version.json
-: "${VERSION_JSON_PATH:= TheRock/version.json}"
+# Determine current working directory
+WORKING_DIR="$(pwd)"
+echo "[INFO] Running from directory: $WORKING_DIR"
+
+# Default: version.json relative to working directory
+: "${VERSION_JSON_PATH:=/therock/src/version.json}"
 
 if [[ ! -f "$VERSION_JSON_PATH" ]]; then
   echo "[ERROR] version.json not found at $VERSION_JSON_PATH"
-  
   exit 1
 fi
 
