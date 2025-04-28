@@ -5,24 +5,35 @@ set -xeuo pipefail
 # install_rocm_from_tarballs.sh
 #
 # Download and install ROCm tarballs for specified AMDGPU targets from
-# TheRock's nightly GitHub releases.
+# TheRock's nightly GitHub releases (or a forked repository).
 #
 # Usage:
-#   INSTALL_PREFIX=/pathToTheRock RELEASE_VERSION=6.4.0rc20250420 ./install_rocm_from_tarballs.sh "gfx942 gfx1100"
+#   INSTALL_PREFIX=/pathToInstall RELEASE_VERSION=6.4.0rc20250424 ./install_rocm_from_tarballs.sh "gfx942 gfx1100"
 #
 # Environment Variables (optional):
-#   RELEASE_VERSION   - Full version like 6.4.0rc20250420 (required if no version.json)
-#   ROCM_VERSION      - Base version like 6.4.0 (optional, auto-extracted from RELEASE_VERSION or version.json)
-#   RELEASE_TAG       - GitHub release tag (default: nightly-release)
-#   ROCM_VERSION_DATE - Build date (default: 1 day ago)
-#   INSTALL_PREFIX    - Installation path (default: /therock/build/dist/rocm)
-#   OUTPUT_ARTIFACTS_DIR - Downloaded tarballs location (default: /rocm-tarballs)
+#   RELEASE_VERSION       - Full version string like 6.4.0rc20250424 (required if no version.json)
+#   ROCM_VERSION          - Base ROCm version like 6.4.0 (optional, auto-extracted from RELEASE_VERSION)
+#   RELEASE_TAG           - GitHub release tag to pull from (default: nightly-release)
+#   ROCM_VERSION_DATE     - Build date (default: 1 days ago)
+#   INSTALL_PREFIX        - Installation path (default: /therock/build/dist/rocm)
+#   OUTPUT_ARTIFACTS_DIR  - Directory to store downloaded tarballs (default: /rocm-tarballs)
+#   GITHUB_ORG            - GitHub organization name (default: ROCm)
+#   GITHUB_REPO           - GitHub repository name (default: TheRock)
 #
 # Requirements:
 #   curl (auto-installed if missing)
 #   jq (auto-installed if missing)
 #   bash
+#
+# Notes:
+#   - Setting GITHUB_ORG and GITHUB_REPO allows installing from forks or custom repositories.
+#   - RELEASE_VERSION controls tarball naming. ROCM_VERSION is used for internal environment setup.
+#
+# Example:
+#   GITHUB_ORG=myorg GITHUB_REPO=myrock RELEASE_VERSION=6.4.0rc20250425 ./install_rocm_from_tarballs.sh gfx942
+#
 # -----------------------------------------------------------------------------
+
 
 # Ensure required tools
 for tool in curl jq; do
@@ -43,7 +54,10 @@ RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d '1 days ago' +'%Y%m%d')}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/therock/build/dist/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
-GITHUB_RELEASE_BASE_URL="https://github.com/ROCm/TheRock/releases/download"
+
+GITHUB_ORG="${GITHUB_ORG:-ROCm}"
+GITHUB_REPO="${GITHUB_REPO:-TheRock}"
+GITHUB_RELEASE_BASE_URL="https://github.com/${GITHUB_ORG}/${GITHUB_REPO}/releases/download"
 
 # Determine current working directory
 WORKING_DIR="$(pwd)"
