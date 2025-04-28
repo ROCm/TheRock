@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """provision_machine.py
 
-This script  helps CI workflows, developers and testing suites easily provision TheRock to their environment. 
+This script  helps CI workflows, developers and testing suites easily provision TheRock to their environment.
 It provisions TheRock to an output directory from one of these sources:
 - GitHub CI workflow run
 - GitHub release tag
@@ -205,20 +205,26 @@ def retrieve_artifacts_by_release(args):
         try:
             version = Version(args.release)
             if not version.is_devrelease and not version.is_prerelease:
-                log(
-                    f"This script requires a nightly-release or dev-release version."
-                )
+                log(f"This script requires a nightly-release or dev-release version.")
                 log("Please retrieve the correct release version from:")
-                log("\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)")
-                log("\t - https://github.com/ROCm/TheRock/releases/tag/dev-release (dev-release example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)")
+                log(
+                    "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)"
+                )
+                log(
+                    "\t - https://github.com/ROCm/TheRock/releases/tag/dev-release (dev-release example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+                )
                 log("Exiting...")
                 return
             release_tag = "dev-release" if version.is_devrelease else "nightly-release"
         except InvalidVersion:
             log(f"Invalid release version '{args.release}'")
             log("Please retrieve the correct release version from:")
-            log("\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)")
-            log("\t - https://github.com/ROCm/TheRock/releases/tag/dev-release (dev-release example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)")
+            log(
+                "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)"
+            )
+            log(
+                "\t - https://github.com/ROCm/TheRock/releases/tag/dev-release (dev-release example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+            )
             log("Exiting...")
             return
     release_version = args.release
