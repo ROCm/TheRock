@@ -17,7 +17,7 @@ RUN apt install -y python3-venv
 
 RUN python3 -m pip install --break-system-packages \
   CppHeaderParser==2.7.4 meson==1.7.0 PyYAML==6.0.2
-COPY install_rocm_from_release.sh /
+COPY dockerfiles/pytorch-dev/install_rocm_from_release.sh /
 # TODO: The ROCM components still output some things to the source dir. Remove
 # "rw" when fixed. See https://github.com/ROCm/TheRock/issues/159
 RUN --mount=type=bind,target=/therock/src,rw bash /install_rocm_from_release.sh "$AMDGPU_TARGETS"
