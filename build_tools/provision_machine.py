@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """provision_machine.py
 
-This script  helps CI workflows, developers and testing suites easily provision TheRock to their environment.
+This script helps CI workflows, developers and testing suites easily provision TheRock to their environment.
 It provisions TheRock to an output directory from one of these sources:
 - GitHub CI workflow run
 - GitHub release tag
@@ -243,7 +243,6 @@ def run(args):
     _create_output_directory(args)
     if args.run_id:
         retrieve_artifacts_by_run_id(args)
-
     elif args.release:
         retrieve_artifacts_by_release(args)
 
