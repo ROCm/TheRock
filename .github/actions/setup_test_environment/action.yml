@@ -50,7 +50,7 @@ runs:
       run: |
         source ${VENV_DIR}/bin/activate
 
-        python ./build_tools/provision.py \
+        python ./build_tools/provision_machine.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --amdgpu-family=${AMDGPU_FAMILIES} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
