@@ -15,20 +15,23 @@ set -xeuo pipefail
 #   OUTPUT_ARTIFACTS_DIR
 #
 # Requirements:
-#   curl (auto-installed if missing), bash
+#   curl (auto-installed if missing),
+#   jq (auto-installed if missing),
+#   bash
 # -----------------------------------------------------------------------------
 
-# Ensure curl is installed
-if ! command -v curl >/dev/null 2>&1; then
-  echo "[INFO] curl not found. Installing..."
-  if command -v apt-get >/dev/null 2>&1; then
-    apt-get update
-    apt-get install -y curl
-  else
-    echo "[ERROR] curl installation not supported on this OS. Please install it manually."
-    exit 1
+for tool in curl jq; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "[INFO] $tool not found. Installing..."
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get update
+      apt-get install -y "$tool"
+    else
+      echo "[ERROR] $tool installation not supported on this OS. Please install it manually."
+      exit 1
+    fi
   fi
-fi
+done
 
 # Configuration
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
