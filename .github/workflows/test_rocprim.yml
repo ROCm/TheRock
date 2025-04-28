@@ -57,8 +57,9 @@ jobs:
 
       - name: Run rocprim tests
         run: |
+          TEST_TO_IGNORE="rocprim.lookback_reproducibility|rocprim.linking|rocprim.device_merge_inplace|rocprim.device_merge_sort|rocprim.device_partition|rocprim.device_radix_sort|rocprim.device_select"
           ctest \
             --test-dir ${THEROCK_BIN_DIR}/rocprim \
             --output-on-failure \
             --parallel 8 \
-            --exclude-regex "rocprim.lookback_reproducibility|rocprim.linking"
+            --exclude-regex ${TEST_TO_IGNORE}

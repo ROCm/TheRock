@@ -29,7 +29,7 @@ amdgpu_family_info_matrix = {
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-rx9070-gpu-rocm",
             "family": "gfx120X-all",
             "pytorch-target": "gfx1201",
         }

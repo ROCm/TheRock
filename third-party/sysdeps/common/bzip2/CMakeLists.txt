@@ -21,6 +21,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         "-DSOURCE_DIR=${_source_dir}"
       INSTALL_DESTINATION
         lib/rocm_sysdeps
+      INTERFACE_PROGRAM_DIRS
+        lib/rocm_sysdeps/bin
       INTERFACE_LINK_DIRS
         lib/rocm_sysdeps/lib
       INTERFACE_INSTALL_RPATH_DIRS
@@ -47,9 +49,19 @@ project(BZIP2_BUILD)
 # bzip2's build barely qualifies as such (it doesn't even install the shared
 # library). So we just code it in cmake.
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(BZ2_TYPE "SHARED")
+  set(BZ2_IMPORTED_LOCATION "lib/librocm_sysdeps_bz2.so")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(BZ2_TYPE "STATIC")
+  set(BZ2_IMPORTED_LOCATION "lib/bz2.lib")
+else()
+  message(FATAL_ERROR "Unrecognized system type")
+endif()
+
 add_library(
-  rocm_sysdeps_bz2
-  SHARED
+  bz2_objects
+  OBJECT
   ${SOURCE_DIR}/blocksort.c
   ${SOURCE_DIR}/huffman.c
   ${SOURCE_DIR}/crctable.c
@@ -59,20 +71,43 @@ add_library(
   ${SOURCE_DIR}/bzlib.c
 )
 
-add_custom_command(
-  TARGET rocm_sysdeps_bz2
-  POST_BUILD
-  COMMAND
-    "${CMAKE_COMMAND}" -E create_symlink librocm_sysdeps_bz2.so
-      ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so
-  BYPRODUCTS libbz2.so
-)
-target_link_options(rocm_sysdeps_bz2 PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+# Build as PIC no matter whether shared/static, since we want it consumable
+# in shared libs.
+set_target_properties(bz2_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-install(
-  TARGETS rocm_sysdeps_bz2
+add_library(
+  rocm_sysdeps_bz2
+  "${BZ2_TYPE}"
 )
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so TYPE LIB)
+target_link_libraries(rocm_sysdeps_bz2 PRIVATE bz2_objects)
+
+# We also provide linked bzip2 executables that we include in the
+# development package. This will hardly ever be needed on Linux but is somewhat
+# harder to ensure on Windows, so we just build it.
+foreach(bz2_exe_name bzip2 bzcat bunzip2)
+  add_executable(
+    "${bz2_exe_name}"
+    ${SOURCE_DIR}/bzip2.c
+  )
+  target_link_libraries("${bz2_exe_name}" PRIVATE rocm_sysdeps_bz2)
+  set_target_properties("${bz2_exe_name}" PROPERTIES INSTALL_RPATH "\$ORIGIN/../lib")
+  install(TARGETS "${bz2_exe_name}")
+endforeach()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_custom_command(
+    TARGET rocm_sysdeps_bz2
+    POST_BUILD
+    COMMAND
+      "${CMAKE_COMMAND}" -E create_symlink librocm_sysdeps_bz2.so
+        ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so
+    BYPRODUCTS libbz2.so
+  )
+  target_link_options(rocm_sysdeps_bz2 PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so TYPE LIB)
+endif()
+
+install(TARGETS rocm_sysdeps_bz2)
 install(FILES "${SOURCE_DIR}/bzlib.h" TYPE INCLUDE)
 
 configure_file(
