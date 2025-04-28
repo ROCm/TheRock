@@ -8,11 +8,11 @@ set -xeuo pipefail
 # TheRock's nightly GitHub releases.
 #
 # Usage:
-#   INSTALL_PREFIX=/pathToTheRock VERSION=6.4.0rc20250420 ./install_rocm_from_tarballs.sh "gfx942 gfx1100"
+#   INSTALL_PREFIX=/pathToTheRock RELEASE_VERSION=6.4.0rc20250420 ./install_rocm_from_tarballs.sh "gfx942 gfx1100"
 #
 # Environment Variables (optional):
-#   VERSION           - Full version like 6.4.0rc20250420 (required if no version.json)
-#   ROCM_VERSION      - Base version like 6.4.0 (optional, auto-extracted from VERSION or version.json)
+#   RELEASE_VERSION   - Full version like 6.4.0rc20250420 (required if no version.json)
+#   ROCM_VERSION      - Base version like 6.4.0 (optional, auto-extracted from RELEASE_VERSION or version.json)
 #   RELEASE_TAG       - GitHub release tag (default: nightly-release)
 #   ROCM_VERSION_DATE - Build date (default: 1 day ago)
 #   INSTALL_PREFIX    - Installation path (default: /therock/build/dist/rocm)
@@ -49,9 +49,9 @@ GITHUB_RELEASE_BASE_URL="https://github.com/ROCm/TheRock/releases/download"
 WORKING_DIR="$(pwd)"
 echo "[INFO] Running from directory: $WORKING_DIR"
 
-# Determine VERSION and ROCM_VERSION
-if [[ -z "${VERSION:-}" ]]; then
-  echo "[INFO] VERSION not set. Reading version.json..."
+# Determine RELEASE_VERSION and ROCM_VERSION
+if [[ -z "${RELEASE_VERSION:-}" ]]; then
+  echo "[INFO] RELEASE_VERSION not set. Reading version.json..."
   : "${VERSION_JSON_PATH:=/therock/src/version.json}"
 
   if [[ ! -f "$VERSION_JSON_PATH" ]]; then
@@ -60,14 +60,14 @@ if [[ -z "${VERSION:-}" ]]; then
   fi
 
   ROCM_VERSION=$(jq -r '.["rocm-version"]' "$VERSION_JSON_PATH")
-  VERSION="${ROCM_VERSION}rc${ROCM_VERSION_DATE}"
-  echo "[INFO] Constructed VERSION from version.json: $VERSION"
+  RELEASE_VERSION="${ROCM_VERSION}rc${ROCM_VERSION_DATE}"
+  echo "[INFO] Constructed RELEASE_VERSION from version.json: $RELEASE_VERSION"
   echo "[INFO] Using ROCM_VERSION from version.json: $ROCM_VERSION"
 else
-  echo "[INFO] Using user-provided VERSION: $VERSION"
+  echo "[INFO] Using user-provided RELEASE_VERSION: $RELEASE_VERSION"
 
   if [[ -z "${ROCM_VERSION:-}" ]]; then
-    ROCM_VERSION="$(echo "$VERSION" | sed -E 's/rc[0-9]+$//')"
+    ROCM_VERSION="$(echo "$RELEASE_VERSION" | sed -E 's/rc[0-9]+$//')"
     echo "[INFO] Auto-derived ROCM_VERSION: $ROCM_VERSION"
   else
     echo "[INFO] Using user-provided ROCM_VERSION: $ROCM_VERSION"
@@ -102,7 +102,7 @@ for target in $AMDGPU_TARGETS; do
   mkdir -p "${TARGET_DIR}"
 
   # Primary attempt
-  TARBALL_NAME="therock-dist-linux-${target}-${VERSION}.tar.gz"
+  TARBALL_NAME="therock-dist-linux-${target}-${RELEASE_VERSION}.tar.gz"
   TARBALL_URL="${GITHUB_RELEASE_BASE_URL}/${RELEASE_TAG}/${TARBALL_NAME}"
   TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
@@ -116,7 +116,7 @@ for target in $AMDGPU_TARGETS; do
       exit 1
     fi
 
-    TARBALL_NAME="therock-dist-linux-${fallback}-${VERSION}.tar.gz"
+    TARBALL_NAME="therock-dist-linux-${fallback}-${RELEASE_VERSION}.tar.gz"
     TARBALL_URL="${GITHUB_RELEASE_BASE_URL}/${RELEASE_TAG}/${TARBALL_NAME}"
     TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
