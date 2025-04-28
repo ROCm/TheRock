@@ -33,7 +33,18 @@ fi
 # Configuration
 RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d '3 days ago' +'%Y%m%d')}"
-ROCM_VERSION_PREFIX="6.4.0rc"
+
+# Read only the base version (like "6.4.0") from version.json
+VERSION_JSON_PATH="${VERSION_JSON_PATH: version.json}"
+
+if [[ ! -f "$VERSION_JSON_PATH" ]]; then
+  echo "[ERROR] version.json not found at $VERSION_JSON_PATH"
+  exit 1
+fi
+
+ROCM_VERSION=$(jq -r '.["rocm-version"]' "$VERSION_JSON_PATH")
+ROCM_VERSION_PREFIX="${ROCM_VERSION}rc"
+
 INSTALL_PREFIX="${INSTALL_PREFIX:-/therock/build/dist/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
 GITHUB_RELEASE_BASE_URL="https://github.com/ROCm/TheRock/releases/download"
