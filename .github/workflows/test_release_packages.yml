@@ -63,11 +63,13 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Create Python venv
+      - name: Create Python venv and other dependencies
         run: |
           python -m venv ${VENV_DIR}
           source ${VENV_DIR}/bin/activate
           pip install -r requirements-test.txt
+          sudo apt install libgfortran5 -y
+          pip freeze
 
       - name: Run Sanity check
         if: '!cancelled()'

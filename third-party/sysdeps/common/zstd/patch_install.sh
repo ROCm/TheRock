@@ -13,6 +13,9 @@ Python3_EXECUTABLE="${Python3_EXECUTABLE:?Python3_EXECUTABLE not defined}"
 # pc files are not output with a relative prefix. Sed it to relative.
 sed -i -E 's|^prefix=.+|prefix=${pcfiledir}/../..|' $PREFIX/lib/pkgconfig/*.pc
 
-# We don't want the static libs or programs.
-rm $PREFIX/lib/libzstd.a
-rm -Rf $PREFIX/bin
+# Rename -lzstd in the pc file.
+sed -i -E 's|-lzstd|-lrocm_sysdeps_zstd|' $PREFIX/lib/pkgconfig/*.pc
+
+# Rename the IMPORTED_LOCATION and SONAME in the CMake target files.
+sed -i -E 's|lib/libzstd\.so\.[0-9\.]+|lib/librocm_sysdeps_zstd.so.1|' $PREFIX/lib/cmake/zstd/zstdTargets-*.cmake
+sed -i -E 's|libzstd\.so\.1|librocm_sysdeps_zstd\.so\.1|' $PREFIX/lib/cmake/zstd/zstdTargets-*.cmake

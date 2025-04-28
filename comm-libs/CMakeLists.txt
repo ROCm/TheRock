@@ -15,6 +15,7 @@ if(THEROCK_ENABLE_RCCL)
       # TODO(#56): Enable once reworked.
       -DENABLE_MSCCLPP=OFF
       -DENABLE_MSCCL_KERNEL=OFF
+      -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -40,6 +41,7 @@ if(THEROCK_ENABLE_RCCL)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       rccl
   )

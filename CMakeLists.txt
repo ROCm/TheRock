@@ -2,7 +2,7 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "In-source builds are not allowed. Please create a separate build directory.")
 endif()
 
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)  # Also update in alternative_os_setup.md
 
 # Set the default build type to Release if not specified
 if(NOT CMAKE_BUILD_TYPE)
@@ -306,8 +306,10 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
+    set(THEROCK_BUNDLED_ZSTD therock-zstd)
   else()
     message(FATAL_ERROR "Bundled system deps not supported on this platform (THEROCK_BUNDLE_SYSDEPS=ON)")
   endif()
