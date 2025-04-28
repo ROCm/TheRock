@@ -141,11 +141,9 @@ def retrieve_artifacts_by_run_id(args):
         log(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
 
-    args.all = True
-
     # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
     retrieve_base_artifacts(args, run_id, output_dir)
-    retrieve_enabled_artifacts(args, True, amdgpu_family, run_id, output_dir)
+    retrieve_enabled_artifacts(args, amdgpu_family, run_id, output_dir)
 
     # Flattening artifacts from .tar* files then removing .tar* files
     log(f"Untar-ing artifacts for {run_id}")
@@ -230,6 +228,56 @@ def main(argv):
         "--release",
         type=str,
         help="Github release version of TheRock to provision, from the nightly-release (X.Y.ZrcYYYYMMDD) or dev-release (X.Y.Z.dev0+{hash})",
+    )
+
+    artifacts_group = parser.add_argument_group("artifacts_group")
+    artifacts_group.add_argument(
+        "--blas",
+        default=True,
+        help="If flagged, blas artifacts will be retrieved",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--fft",
+        default=True,
+        help="If flagged, fft artifacts will be retrieved",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--miopen",
+        default=True,
+        help="If flagged, miopen artifacts will be retrieved",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--prim",
+        default=True,
+        help="If flagged, prim artifacts will be retrieved",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rand",
+        default=True,
+        help="If flagged, rand artifacts will be retrieved",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rccl",
+        default=True,
+        help="If flagged, rccl artifacts will be retrieved",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--test",
+        default=True,
+        help="If flagged, test artifacts will be retrieved",
+        action=argparse.BooleanOptionalAction,
     )
 
     args = parser.parse_args(argv)

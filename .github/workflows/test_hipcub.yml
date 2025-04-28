@@ -40,7 +40,7 @@ jobs:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/bin"
 
     steps:
       - name: Checkout Repository
@@ -53,7 +53,7 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: "--test --prim"
+          FETCH_ARTIFACT_ARGS: "--no-blas --no-fft --no-miopen --no-rand --no-rccl"
 
       - name: Run hipcub tests
         run: |
