@@ -73,7 +73,7 @@ fallback_target_name() {
   case "$1" in
     gfx942) echo "gfx94X-dcgpu" ;;
     gfx1100) echo "gfx110X-dgpu" ;;
-    gfx1201) echo "gfx120X-dgpu" ;;
+    gfx1201) echo "gfx120X-all" ;;
     *) echo "" ;;
   esac
 }
