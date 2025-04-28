@@ -20,6 +20,9 @@ RUN python3 -m pip install --break-system-packages \
 COPY dockerfiles/pytorch-dev/install_rocm_from_tarballs.sh /
 # TODO: The ROCM components still output some things to the source dir. Remove
 # "rw" when fixed. See https://github.com/ROCm/TheRock/issues/159
+
+# === Set VERSION for test ===
+ENV VERSION=6.4.0rc20250424
 RUN --mount=type=bind,target=/therock/src,rw bash /install_rocm_from_tarballs.sh "$AMDGPU_TARGETS"
 
 
