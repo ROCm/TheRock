@@ -5,6 +5,7 @@
 # NOTE: This script currently only retrieves the requested artifacts,
 # but those artifacts may not have all required dependencies.
 
+import argparse
 import subprocess
 import sys
 
@@ -58,7 +59,7 @@ def retrieve_base_artifacts(args, run_id, build_dir):
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
-    if args.blas:
+    if args.all or args.blas:
         base_artifacts.append("host-blas_lib")
 
     for base_artifact in base_artifacts:
@@ -67,17 +68,17 @@ def retrieve_base_artifacts(args, run_id, build_dir):
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
     base_artifact_path = []
-    if args.blas:
+    if args.all or args.blas:
         base_artifact_path.append("blas")
-    if args.fft:
+    if args.all or args.fft:
         base_artifact_path.append("fft")
-    if args.miopen:
+    if args.all or args.miopen:
         base_artifact_path.append("miopen")
-    if args.prim:
+    if args.all or args.prim:
         base_artifact_path.append("prim")
-    if args.rand:
+    if args.all or args.rand:
         base_artifact_path.append("rand")
-    if args.rccl:
+    if args.all or args.rccl:
         base_artifact_path.append("rccl")
 
     enabled_artifacts = []
@@ -88,3 +89,99 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
 
     for enabled_artifact in enabled_artifacts:
         s3_exec(f"{target}", enabled_artifact, run_id, build_dir)
+
+
+def run(args):
+    run_id = args.run_id
+    target = args.target
+    build_dir = args.build_dir
+    if not s3_bucket_exists(run_id):
+        print(f"S3 artifacts for {run_id} does not exist. Exiting...")
+        return
+    retrieve_base_artifacts(args, run_id, build_dir)
+    retrieve_enabled_artifacts(args, target, run_id, build_dir)
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog="fetch_artifacts")
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        required=True,
+        help="GitHub run ID to retrieve artifacts from",
+    )
+
+    parser.add_argument(
+        "--target",
+        type=str,
+        required=True,
+        help="Target variant for specific GPU target",
+    )
+
+    parser.add_argument(
+        "--build-dir",
+        type=str,
+        default="build/artifacts",
+        help="Path to the artifact build directory",
+    )
+
+    artifacts_group = parser.add_argument_group("artifacts_group")
+    artifacts_group.add_argument(
+        "--blas",
+        default=False,
+        help="Include 'blas' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--fft",
+        default=False,
+        help="Include 'fft' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--miopen",
+        default=False,
+        help="Include 'miopen' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--prim",
+        default=False,
+        help="Include 'prim' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rand",
+        default=False,
+        help="Include 'rand' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rccl",
+        default=False,
+        help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--test",
+        default=False,
+        help="Include all test artifacts for enabled libraries",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--all", help="Include all artifacts", action="store_true"
+    )
+
+    args = parser.parse_args(argv)
+    run(args)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

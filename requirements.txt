@@ -5,5 +5,3 @@ python-magic>=0.4.27
 PyYAML==6.0.2
 requests==2.32.3
 tomli==2.2.1; python_version <= '3.10'
-tqdm==4.67.1
-packaging==25.0
