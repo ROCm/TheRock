@@ -9,10 +9,16 @@ It provisions TheRock to an output directory from one of these sources:
 
 Usage:
 python build_tools/provision_machine.py [--output-dir OUTPUT_DIR] [--amdgpu-family AMDGPU_FAMILY] (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
+                                        [--blas | --no-blas] [--fft | --no-fft] [--miopen | --no-miopen] [--prim | --no-prim]
+                                        [--rand | --no-rand] [--rccl | --no-rccl] [--test | --no-test]
 
 Examples:
-- Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
+- Downloads the all gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
     - `python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu`
+- Downloads the gfx94X S3 artifacts (except for test artifacts) from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
+    - `python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --no-test`
+- Downloads the gfx94X S3 artifacts (except for prim and miopen artifacts) from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
+    - `python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --no-prim --no-miopen`
 - Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
     - `python build_tools/provision_machine.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build`
 - Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
@@ -21,6 +27,8 @@ Examples:
     - `python build_tools/provision_machine.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`
 
 You can select your AMD GPU family from this file https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81
+
+For GitHub CI workflow artifact retrieval, all artifacts will be downloaded. If you want to exclude specific artifacts, please pass in the correct flag such as `--no-rand` (no RAND artifacts) or `--no-test` (no test artifacts)
 
 Note: the script will overwrite the output directory argument. If no argument is passed, it will overwrite the default "therock-build" directory.
 """

@@ -160,6 +160,12 @@ Examples:
   python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu
   ```
 
+- Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215)) to the default output directory `therock-build` with no test artifacts:
+
+  ```
+  python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --no-test
+  ```
+
 - Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
 
   ```
@@ -179,3 +185,5 @@ Examples:
   ```
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
+
+By default, all artifacts will be downloaded. If you want to exclude specific artifacts, please pass in the correct flag such as `--no-rand` (no RAND artifacts) or `--no-test` (no test artifacts)
