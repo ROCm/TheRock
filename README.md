@@ -10,11 +10,17 @@ Currently, the platform offers developers the option to build HIP and ROCm from 
 
 ## Table of Contents
 
-- [Installation From Source](#installation-from-source)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Tests](#tests)
-- [Development Manuals](#development-manuals)
+- [TheRock](#therock)
+  - [Description](#description)
+  - [Table of Contents](#table-of-contents)
+  - [Installation From Source](#installation-from-source)
+    - [Ubuntu (24.04)](#ubuntu-2404)
+    - [Windows 11 (VS 2022)](#windows-11-vs-2022)
+  - [Configuration](#configuration)
+  - [Usage](#usage)
+  - [Tests](#tests)
+  - [Development Manuals](#development-manuals)
+  - [Provisioning TheRock 🪨](#provisioning-therock-)
 
 ## Installation From Source
 
@@ -151,29 +157,39 @@ separately.
 
 ## Provisioning TheRock 🪨
 
-In order to provision TheRock using either a developer/automated nightly release or a specific CI runner build, use the `build_tool/provision.py` script.
+In order to provision TheRock using either a developer/automated nightly release, a specific CI runner build or already existing installation of TheRock, use the `build_tool/provision_machine.py` script.
 
 Provisioning script setup:
 
 - `python3 -m venv venv`
 - `source venv/bin/activate`
 - `pip install -r requirements.txt`
-- `python build_tools/provision.py --help`
+- `python build_tools/provision_machine.py --help`
 
 Examples:
 
-- `python build_tools/provision.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu`: Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 to the default output directory `therock-build`
+- Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
 
-<br/>
+```
+python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu
+```
 
-- `python build_tools/provision.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`
+- Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
 
-<br/>
+```
+python build_tools/provision_machine.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build
+```
 
-- `python build_tools/provision.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`: Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`
+- Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
 
-<br/>
+```
+python build_tools/provision_machine.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build
+```
 
-- `python build_tools/provision.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`: Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`
+- Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`:
+
+```
+python build_tools/provision_machine.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all
+```
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
