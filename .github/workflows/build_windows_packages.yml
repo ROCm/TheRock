@@ -112,6 +112,7 @@ jobs:
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
+            -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
             -DTHEROCK_ENABLE_COMPILER=ON \
             -DTHEROCK_ENABLE_HIPIFY=ON \
             -DTHEROCK_ENABLE_CORE=ON \
