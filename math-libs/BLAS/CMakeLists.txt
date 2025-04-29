@@ -36,10 +36,15 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 ##############################################################################
 
 set(hipBLASLt_optional_deps)
+if(NOT WIN32)
+  # hipBLASLt is hard-coded to not expect rocm-smi on Windows.
+  list(APPEND hipBLASLt_optional_deps
+    rocm_smi_lib
+  )
+endif()
 if(THEROCK_BUILD_TESTING)
   list(APPEND hipBLASLt_optional_deps
     therock-host-blas
-    rocm_smi_lib
   )
 endif()
 
@@ -78,7 +83,8 @@ list(APPEND _blas_subproject_names hipBLASLt)
 ##############################################################################
 
 set(rocBLAS_optional_runtime_deps)
-if(THEROCK_BUILD_TESTING)
+if(NOT WIN32)
+  # rocBLAS is hard-coded to not expect rocm-smi on Windows.
   list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
 endif()
 
