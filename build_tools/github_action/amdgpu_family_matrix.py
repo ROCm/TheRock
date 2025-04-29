@@ -21,7 +21,7 @@ amdgpu_family_info_matrix = {
             "family": "gfx110X-dgpu",
         },
     },
-    "gfx115x": {
+    "gfx1151": {
         "linux": {
             "test-runs-on": "linux-strix-halo-gpu-rocm",
             # Specifying gfx1151, since rocBLAS doesn't have gfx1150 (https://github.com/ROCm/rocBLAS/blob/d93e919f945e76ee89457c83d72aac4cb473f492/CMakeLists.txt#L84-L88)
