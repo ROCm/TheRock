@@ -23,8 +23,9 @@ amdgpu_family_info_matrix = {
     },
     "gfx115x": {
         "linux": {
-            "test-runs-on": "",
-            "family": "gfx1151",
+            "test-runs-on": "linux-strix-halo-gpu-rocm",
+            "family": "gfx115X-igpu",
+            "pytorch-target": "gfx1151",
         }
     },
     "gfx120x": {
