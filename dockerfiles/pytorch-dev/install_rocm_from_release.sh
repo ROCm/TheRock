@@ -2,7 +2,7 @@
 set -xeuo pipefail
 
 # -----------------------------------------------------------------------------
-# install_rocm_from_tarballs.sh
+# install_rocm_from_release.sh
 #
 # Download and install ROCm tarballs for specified AMDGPU targets from
 # TheRock's nightly GitHub releases (or a forked repository).
