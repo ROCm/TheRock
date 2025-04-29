@@ -17,8 +17,7 @@ set -xeuo pipefail
 #   ROCM_VERSION_DATE     - Build date (default: 1 days ago)
 #   INSTALL_PREFIX        - Installation path (default: /therock/build/dist/rocm)
 #   OUTPUT_ARTIFACTS_DIR  - Directory to store downloaded tarballs (default: /rocm-tarballs)
-#   GITHUB_ORG            - GitHub organization name (default: ROCm)
-#   GITHUB_REPO           - GitHub repository name (default: TheRock)
+#   GITHUB_REPO           - GitHub repository name (default: ROCm/TheRock)
 #
 # Requirements:
 #   curl (auto-installed if missing)
