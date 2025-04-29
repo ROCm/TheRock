@@ -57,7 +57,7 @@ OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
 
 GITHUB_ORG="${GITHUB_ORG:-ROCm}"
 GITHUB_REPO="${GITHUB_REPO:-TheRock}"
-GITHUB_RELEASE_BASE_URL="https://github.com/${GITHUB_ORG}/${GITHUB_REPO}/releases/download"
+GITHUB_RELEASE_BASE_URL="https://github.com/${GITHUB_REPO}/releases/download"
 
 # Determine current working directory
 WORKING_DIR="$(pwd)"
