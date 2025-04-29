@@ -55,8 +55,7 @@ ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d '1 days ago' +'%Y%m%d')}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/therock/build/dist/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
 
-GITHUB_ORG="${GITHUB_ORG:-ROCm}"
-GITHUB_REPO="${GITHUB_REPO:-TheRock}"
+GITHUB_REPO="${GITHUB_REPO:-ROCm/TheRock}"
 GITHUB_RELEASE_BASE_URL="https://github.com/${GITHUB_REPO}/releases/download"
 
 # Determine current working directory
