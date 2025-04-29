@@ -61,6 +61,8 @@ endif()
 # issues.
 # TODO: Clean up warning flags (https://github.com/ROCm/TheRock/issues/47)
 set(THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS
+  -Wno-deprecated-declarations
+  -Wno-deprecated-pragma
   -Wno-documentation-unknown-command
   -Wno-documentation-pedantic
   -Wno-unused-command-line-argument
