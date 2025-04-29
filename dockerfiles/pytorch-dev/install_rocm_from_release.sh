@@ -30,7 +30,7 @@ set -xeuo pipefail
 #   - RELEASE_VERSION controls tarball naming. ROCM_VERSION is used for internal environment setup.
 #
 # Example:
-#   GITHUB_ORG=myorg GITHUB_REPO=myrock RELEASE_VERSION=6.4.0rc20250425 ./install_rocm_from_tarballs.sh gfx942
+#   GITHUB_REPO="myorg/myrock" RELEASE_VERSION=6.4.0rc20250425 ./install_rocm_from_tarballs.sh gfx942
 #
 # -----------------------------------------------------------------------------
 
