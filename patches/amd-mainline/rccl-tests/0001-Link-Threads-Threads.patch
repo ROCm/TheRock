@@ -1,0 +1,43 @@
+From 30ed1d38c47d382098d96a1e4664bf9a552d418c Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Tue, 29 Apr 2025 12:11:04 +0000
+Subject: [PATCH] Link `Threads::Threads`
+
+`pthread.h` is included in `src/common.h` but lib is not properly
+linked, resulting in the build failing with unresolved symbols when
+trying to link.
+---
+ CMakeLists.txt     | 3 ---
+ src/CMakeLists.txt | 2 +-
+ 2 files changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f4ae1c7..c87ce44 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -124,9 +124,6 @@ endif()
+ set(THREADS_PREFER_PTHREAD_FLAG ON)
+ find_package(Threads REQUIRED)
+ 
+-##Adding pthread flag for linking
+-#set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+-
+ ## Check for HIP
+ find_package(hip REQUIRED)
+ message(STATUS "HIP compiler:     ${HIP_COMPILER}")
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 05824a4..6fe6823 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -126,7 +126,7 @@ add_custom_target(git_version_check
+ add_custom_target(hipify DEPENDS ${HIP_COMMON_SOURCES})
+ add_library(rccl_common OBJECT ${HIP_COMMON_SOURCES})
+ add_dependencies(rccl_common hipify git_version_check)
+-target_link_libraries(rccl_common roc::rccl hip::device)
++target_link_libraries(rccl_common roc::rccl hip::device Threads::Threads)
+ if(USE_MPI)
+   target_link_libraries(rccl_common MPI::MPI_CXX)
+ endif()
+-- 
+2.43.0
+
