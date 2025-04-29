@@ -1,7 +1,7 @@
-From 4c8e8b9d0a2687dc637f83e775c9ce8594a7d060 Mon Sep 17 00:00:00 2001
+From e778093683a32d4e3e139f664aa289e55faac7db Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 11 Apr 2025 17:51:29 -0700
-Subject: [PATCH 7/7] Change refs to GTEST_BOTH_LIBRARIES to explicit
+Subject: [PATCH 7/9] Change refs to GTEST_BOTH_LIBRARIES to explicit
  libraries.
 
 * This variable is old and only comes from the GTest find module, not by the upstream module itself.
@@ -55,5 +55,5 @@ index 7ab67d91..f49231b4 100644
  
  
 -- 
-2.43.0
+2.45.1.windows.1
 
