@@ -93,6 +93,8 @@ set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi on Windows.
   list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+elseif(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
 
 if(WIN32)
