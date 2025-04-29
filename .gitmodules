@@ -61,7 +61,7 @@
 [submodule "hipBLASLt"]
 	path = math-libs/BLAS/hipBLASLt
 	url = https://github.com/ROCm/hipBLASLt.git
-	branch = mainline
+	branch = develop
 [submodule "hipCUB"]
 	path = math-libs/hipCUB
 	url = https://github.com/ROCm/hipCUB.git
@@ -118,3 +118,7 @@
 	path = math-libs/BLAS/Tensile
 	url = https://github.com/ROCm/Tensile.git
 	branch = master
+[submodule "rccl-tests"]
+	path = comm-libs/rccl-tests
+	url = https://github.com/ROCm/rccl-tests.git
+	branch = develop

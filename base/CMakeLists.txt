@@ -62,6 +62,8 @@ therock_cmake_subproject_declare(rocm_smi_lib
     "lib"
   INTERFACE_INSTALL_RPATH_DIRS
     "lib"
+  INTERFACE_PROGRAM_DIRS
+    "bin"
   RUNTIME_DEPS
     ${THEROCK_BUNDLED_LIBDRM}
 )
