@@ -160,7 +160,7 @@ Examples:
   python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all
   ```
 
-- Downloads all gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215)) to the default output directory `therock-build` with no test artifacts:
+- Downloads all gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215)) to the default output directory `therock-build` including test artifacts:
 
   ```
   python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests
@@ -192,4 +192,4 @@ Examples:
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
 
-By default, only the base artifacts will be downloaded. If you want to include specific artifacts, please pass in the correct flag such as `--rand` (include RAND artifacts) or `--tests` (include test artifacts). For all artifacts, please include `--all`.
+By default, only the base artifacts will be downloaded. If you want to include specific artifacts, please pass in the correct flag such as `--rand` (include RAND artifacts) or `--tests` (include test artifacts). For all artifacts (except tests), please include `--all`.
