@@ -1,7 +1,7 @@
-From dc6344fd018e3031775e5cc7ba8db3080ad736d6 Mon Sep 17 00:00:00 2001
+From 54a58cb63efa76322fbc7393939f37c5b75faae0 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Wed, 19 Feb 2025 17:14:59 -0800
-Subject: [PATCH 2/3] Generate composable_kernel ck/config.h as part of main
+Subject: [PATCH 2/7] Generate composable_kernel ck/config.h as part of main
  build.
 
 Without this, the ck/config.h comes from somewhere, most probably a ROCM SDK that has it installed as a sibling to the HIP headers. Not all ROCM SDKs include this, and even so, it is dangerous to have a sheared header dependency like this.
@@ -10,10 +10,10 @@ Without this, the ck/config.h comes from somewhere, most probably a ROCM SDK tha
  1 file changed, 21 insertions(+)
 
 diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
-index f0868ea048..293fa8ace3 100644
+index 085af373ec2..67322e8f56e 100644
 --- a/aten/src/ATen/CMakeLists.txt
 +++ b/aten/src/ATen/CMakeLists.txt
-@@ -311,9 +311,30 @@ if(USE_CUDA)
+@@ -343,9 +343,30 @@ if(USE_CUDA)
  endif()
  
  if(USE_ROCM)

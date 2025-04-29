@@ -1,7 +1,7 @@
-From d4b67827c2dafda5be6fbe6446b422ef542102a0 Mon Sep 17 00:00:00 2001
+From eda46d25881f072c6ea2c2a96c500819ba18bbe9 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 17 Feb 2025 16:47:57 -0800
-Subject: [PATCH 1/6] Rework LoadHIP.cmake to be based purely on
+Subject: [PATCH 1/7] Rework LoadHIP.cmake to be based purely on
  CMAKE_PREFIX_PATH.
 
 * Eliminates dependence on `/opt/rocm` and path based heuristics.
@@ -9,13 +9,12 @@ Subject: [PATCH 1/6] Rework LoadHIP.cmake to be based purely on
 * Workaround cmake >= 4.0 for hiprtc
 
 Co-authored-by: Scott Tsai <scottt.tw@gmail.com>
-
 ---
  cmake/public/LoadHIP.cmake | 303 ++++++++++++++-----------------------
  1 file changed, 111 insertions(+), 192 deletions(-)
 
 diff --git a/cmake/public/LoadHIP.cmake b/cmake/public/LoadHIP.cmake
-index 58c74ddda3..57910495fc 100644
+index 58c74ddda35..57910495fcc 100644
 --- a/cmake/public/LoadHIP.cmake
 +++ b/cmake/public/LoadHIP.cmake
 @@ -1,206 +1,125 @@
@@ -337,5 +336,5 @@ index 58c74ddda3..57910495fc 100644
 +  pytorch_load_hip()
  endif()
 -- 
-2.49.0
+2.43.0
 
