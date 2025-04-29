@@ -118,3 +118,7 @@
 	path = math-libs/BLAS/Tensile
 	url = https://github.com/ROCm/Tensile.git
 	branch = master
+[submodule "rccl-tests"]
+	path = comm-libs/rccl-tests
+	url = https://github.com/ROCm/rccl-tests.git
+	branch = develop

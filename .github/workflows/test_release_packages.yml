@@ -25,10 +25,12 @@ jobs:
         id: configure
         env:
           TARGET: ${{ inputs.target }}
-        run: python ./build_tools/configure_target_run.py
+        run: python ./build_tools/github_action/configure_target_run.py
 
 
   test_release_packages:
+    # If there is a test machine available
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     runs-on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     needs: generate_target_to_run
     permissions:
@@ -61,11 +63,13 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Create Python venv
+      - name: Create Python venv and other dependencies
         run: |
           python -m venv ${VENV_DIR}
           source ${VENV_DIR}/bin/activate
           pip install -r requirements-test.txt
+          sudo apt install libgfortran5 -y
+          pip freeze
 
       - name: Run Sanity check
         if: '!cancelled()'
