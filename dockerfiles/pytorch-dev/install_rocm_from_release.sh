@@ -26,7 +26,7 @@ set -xeuo pipefail
 #   bash
 #
 # Notes:
-#   - Setting GITHUB_ORG and GITHUB_REPO allows installing from forks or custom repositories.
+#   - Setting GITHUB_REPO allows installing from forks or custom repositories.
 #   - RELEASE_VERSION controls tarball naming. ROCM_VERSION is used for internal environment setup.
 #
 # Example:
