@@ -10,3 +10,5 @@ packaging==25.0
 
 # hipBLASLt deps
 joblib>=1.4.2
+msgpack>=1.1.0
+
