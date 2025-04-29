@@ -84,6 +84,14 @@ jobs:
         run: |
           python ./build_tools/fetch_sources.py --jobs 96
 
+      - name: Checkout closed source AMDGPU/ROCm interop library folder
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: nod-ai/amdgpu-windows-interop
+          ref: d3de388d2bd4977ffc9b0284c822ca839d20f364
+          path: amdgpu-windows-interop
+          lfs: true
+
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
@@ -104,16 +112,17 @@ jobs:
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
+            -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
             -DTHEROCK_ENABLE_COMPILER=ON \
             -DTHEROCK_ENABLE_HIPIFY=ON \
-            -DTHEROCK_ENABLE_CORE=OFF \
+            -DTHEROCK_ENABLE_CORE=ON \
             -DTHEROCK_ENABLE_CORE_RUNTIME=OFF \
-            -DTHEROCK_ENABLE_HIP_RUNTIME=OFF \
+            -DTHEROCK_ENABLE_HIP_RUNTIME=ON \
             -DTHEROCK_ENABLE_PROFILER_SDK=OFF \
             -DTHEROCK_ENABLE_COMM_LIBS=OFF \
             -DTHEROCK_ENABLE_MATH_LIBS=OFF \
-            -DTHEROCK_ENABLE_RAND=OFF \
-            -DTHEROCK_ENABLE_PRIM=OFF \
+            -DTHEROCK_ENABLE_RAND=ON \
+            -DTHEROCK_ENABLE_PRIM=ON \
             -DTHEROCK_ENABLE_FFT=OFF \
             -DTHEROCK_ENABLE_BLAS=OFF \
             -DTHEROCK_ENABLE_SPARSE=OFF \
