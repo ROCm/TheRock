@@ -37,10 +37,10 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 
 set(hipBLASLt_optional_deps)
 if(THEROCK_BUILD_TESTING)
-  list(APPEND hipBLASLt_optional_deps
-    therock-host-blas
-    rocm_smi_lib
-  )
+  list(APPEND hipBLASLt_optional_deps therock-host-blas)
+  if(NOT WIN32)
+    list(APPEND hipBLASLt_optional_deps rocm_smi_lib)
+  endif()
 endif()
 
 therock_cmake_subproject_declare(hipBLASLt
@@ -85,7 +85,7 @@ list(APPEND _blas_subproject_names hipBLASLt)
 ##############################################################################
 
 set(rocBLAS_optional_runtime_deps)
-if(THEROCK_BUILD_TESTING)
+if(THEROCK_BUILD_TESTING AND NOT WIN32)
   list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
 endif()
 
