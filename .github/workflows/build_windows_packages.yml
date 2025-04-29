@@ -123,7 +123,7 @@ jobs:
             -DTHEROCK_ENABLE_MATH_LIBS=OFF \
             -DTHEROCK_ENABLE_RAND=ON \
             -DTHEROCK_ENABLE_PRIM=ON \
-            -DTHEROCK_ENABLE_FFT=ON \
+            -DTHEROCK_ENABLE_FFT=OFF \
             -DTHEROCK_ENABLE_BLAS=OFF \
             -DTHEROCK_ENABLE_SPARSE=OFF \
             -DTHEROCK_ENABLE_SOLVER=OFF \
