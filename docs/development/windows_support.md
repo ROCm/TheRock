@@ -49,7 +49,7 @@ mainline, in open source, using MSVC, etc.).
 | math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ✅        | No shared libraries                           |
 | math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ✅        |                                               |
 | math-libs (blas) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ❔        | Under evaluation                              |
-| math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ❔        | In progress                                   |
+| math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Running tests needs PyYAML and a dll copied   |
 | math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ❔        |                                               |
 | math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ❔        |                                               |
 | math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ❔        |                                               |
