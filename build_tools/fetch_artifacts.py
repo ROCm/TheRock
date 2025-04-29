@@ -84,7 +84,7 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
     enabled_artifacts = []
     for base_path in base_artifact_path:
         enabled_artifacts.append(f"{base_path}_lib")
-        if args.test:
+        if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
     for enabled_artifact in enabled_artifacts:
@@ -169,7 +169,7 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--test",
+        "--tests",
         default=False,
         help="Include all test artifacts for enabled libraries",
         action=argparse.BooleanOptionalAction,
