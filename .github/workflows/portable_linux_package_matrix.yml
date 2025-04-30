@@ -20,7 +20,7 @@ on:
       package_suffix:
         type: string
       families:
-        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x). Please note that docker builds only work for prebuilds availabe here [nightly-release](https://github.com/ROCm/TheRock/releases/tag/nightly-release)"
+        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x)"
         type: string
   # Trigger on a schedule to build nightly release candidates.
   schedule:
