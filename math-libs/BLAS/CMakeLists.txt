@@ -13,9 +13,7 @@ set(_blas_subproject_names)
 therock_cmake_subproject_declare(hipBLAS-common
 EXTERNAL_SOURCE_DIR "hipBLAS-common"
 BACKGROUND_BUILD
-CMAKE_ARGS
-  -DROCM_PATH=
-  -DROCM_DIR=
+CMAKE_LISTS_RELPATH "next-cmake"
 COMPILER_TOOLCHAIN
   amd-hip
 BUILD_DEPS
