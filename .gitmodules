@@ -57,7 +57,7 @@
 [submodule "hipBLAS"]
 	path = math-libs/BLAS/hipBLAS
 	url = https://github.com/ROCm/hipBLAS.git
-	branch = mainline
+	branch = develop
 [submodule "hipBLASLt"]
 	path = math-libs/BLAS/hipBLASLt
 	url = https://github.com/ROCm/hipBLASLt.git
