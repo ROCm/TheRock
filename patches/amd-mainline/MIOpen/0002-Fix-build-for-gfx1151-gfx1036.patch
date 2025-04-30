@@ -1,7 +1,7 @@
-From c153d55908baf6bcce4048b8a773bd97252b8d4f Mon Sep 17 00:00:00 2001
+From 4143ecec54d8f1b2b343f25db60b038c8ac63087 Mon Sep 17 00:00:00 2001
 From: Scott Tsai <scottt.tw@gmail.com>
 Date: Thu, 10 Apr 2025 17:49:49 +0800
-Subject: [PATCH 2/4] Fix build for gfx1151, gfx1036
+Subject: [PATCH 2/5] Fix build for gfx1151, gfx1036
 
 ---
  .../include/utility/config.hpp                |  9 ++++-
@@ -95,10 +95,10 @@ index 92352a6c6..e2f4086af 100644
      // buffer atomic-fadd
      compiler_flag << " -DCK_USE_AMD_BUFFER_ATOMIC_FADD="
 diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
-index d607040c7..45b0c611c 100755
+index c4368fba7..be8567d34 100755
 --- a/test/CMakeLists.txt
 +++ b/test/CMakeLists.txt
-@@ -117,19 +117,13 @@ if(NOT (MIOPEN_TEST_GFX900 OR MIOPEN_TEST_GFX906 OR MIOPEN_TEST_GFX908 OR MIOPEN
+@@ -120,19 +120,13 @@ if(NOT (MIOPEN_TEST_GFX900 OR MIOPEN_TEST_GFX906 OR MIOPEN_TEST_GFX908 OR MIOPEN
          elseif (NOT ROCMINFO_EXIT_STATUS EQUAL 0)
              message(WARNING "ROCMINFO FAILED, GPU TYPE UNKNOWN. Manually set respective MIOPEN_TEST_GFX* CMake variable to specify target GPU for testing.")
              set(MIOPEN_TEST_GPU_DETECTION_FAILED TRUE)
@@ -123,4 +123,5 @@ index d607040c7..45b0c611c 100755
          elseif(ROCMINFO_OUTPUT MATCHES "gfx900")
              set(MIOPEN_TEST_GFX900 ON)
 -- 
-2.49.0
+2.41.0.windows.1
+

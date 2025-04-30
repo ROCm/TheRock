@@ -1,7 +1,7 @@
-From ec2685bc654cdf093579782a0ce0a0eb71738aa5 Mon Sep 17 00:00:00 2001
+From b28dadd5094d254c4c52c8819aa067e81a56f620 Mon Sep 17 00:00:00 2001
 From: Scott Tsai <scottt.tw@gmail.com>
 Date: Thu, 10 Apr 2025 18:16:19 +0800
-Subject: [PATCH 4/4] MIOpenDriver: exit with status 1 on usage error
+Subject: [PATCH 4/5] MIOpenDriver: exit with status 1 on usage error
 
 This makes inspecting MIOpenDriver exit status after light manual testing easier.
 ---
@@ -10,10 +10,10 @@ This makes inspecting MIOpenDriver exit status after light manual testing easier
  2 files changed, 6 insertions(+), 7 deletions(-)
 
 diff --git a/driver/driver.hpp b/driver/driver.hpp
-index f3ae8fa03..a94c1c3fd 100644
+index 12ebc8536..f5f3a6d18 100644
 --- a/driver/driver.hpp
 +++ b/driver/driver.hpp
-@@ -303,7 +303,7 @@ inline void PadBufferSize(size_t& sz, int datatype_sz)
+@@ -351,7 +351,7 @@ inline void PadBufferSize(size_t& sz, int datatype_sz)
      }
  }
  
@@ -22,7 +22,7 @@ index f3ae8fa03..a94c1c3fd 100644
  {
      printf("Usage: ./driver *base_arg* *other_args*\n");
      printf("Supported Base Arguments: conv[fp16|int8|bfp16], pool[fp16], lrn[fp16], "
-@@ -315,7 +315,7 @@ inline void PadBufferSize(size_t& sz, int datatype_sz)
+@@ -363,7 +363,7 @@ inline void PadBufferSize(size_t& sz, int datatype_sz)
             "getitem[bfp16|fp16], reducecalculation[bfp16|fp16], rope[bfp16|fp16], "
             "prelu[bfp16|fp16], kthvalue[bfp16|fp16], glu[bfp16|fp16], softmarginloss[bfp16|fp16], "
             "multimarginloss[bfp16|fp16]\n");
@@ -31,7 +31,7 @@ index f3ae8fa03..a94c1c3fd 100644
  }
  
  inline std::string ParseBaseArg(int argc, char* argv[])
-@@ -323,7 +323,7 @@ inline std::string ParseBaseArg(int argc, char* argv[])
+@@ -371,7 +371,7 @@ inline std::string ParseBaseArg(int argc, char* argv[])
      if(argc < 2)
      {
          printf("FAILED: Invalid Number of Input Arguments\n");
@@ -40,7 +40,7 @@ index f3ae8fa03..a94c1c3fd 100644
      }
  
      std::string arg = argv[1];
-@@ -355,10 +355,10 @@ inline std::string ParseBaseArg(int argc, char* argv[])
+@@ -403,10 +403,10 @@ inline std::string ParseBaseArg(int argc, char* argv[])
         arg != "--version")
      {
          printf("FAILED: Invalid Base Input Argument\n");
@@ -68,4 +68,5 @@ index 34a84cd3b..677303e99 100644
      }
      return miopenStatusSuccess;
 -- 
-2.49.0
+2.41.0.windows.1
+
