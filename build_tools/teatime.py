@@ -118,23 +118,33 @@ class OutputSink:
             self.log_file.write(line)
             self.log_file.flush()
 
-def upload_log_to_s3(self):
-        if not self.log_path or not self.upload_to_s3:
-            return
-        if not self.s3_bucket or not self.s3_subdir:
-            print("[teatime] S3 upload requested but TEATIME_S3_BUCKET or TEATIME_S3_SUBDIR not set", file=sys.stderr)
-            return
 
-        dst_path = f"s3://{self.s3_bucket}/{self.s3_subdir}/{self.log_path.name}"
-        cmd = [
-            "aws", "s3", "cp", str(self.log_path), dst_path,
-            "--content-type", "text/plain"
-        ]
-        try:
-            subprocess.run(cmd, check=True)
-            print(f"[teatime] Uploaded log to {dst_path}", file=sys.stderr)
-        except subprocess.CalledProcessError as e:
-            print(f"[teatime] Failed to upload log to S3: {e}", file=sys.stderr)
+def upload_log_to_s3(self):
+    if not self.log_path or not self.upload_to_s3:
+        return
+    if not self.s3_bucket or not self.s3_subdir:
+        print(
+            "[teatime] S3 upload requested but TEATIME_S3_BUCKET or TEATIME_S3_SUBDIR not set",
+            file=sys.stderr,
+        )
+        return
+
+    dst_path = f"s3://{self.s3_bucket}/{self.s3_subdir}/{self.log_path.name}"
+    cmd = [
+        "aws",
+        "s3",
+        "cp",
+        str(self.log_path),
+        dst_path,
+        "--content-type",
+        "text/plain",
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+        print(f"[teatime] Uploaded log to {dst_path}", file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        print(f"[teatime] Failed to upload log to S3: {e}", file=sys.stderr)
+
 
 def run(args: argparse.Namespace, child_arg_list: list[str] | None, sink: OutputSink):
     child: subprocess.Popen | None = None
