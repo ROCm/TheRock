@@ -29,8 +29,8 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       CCACHE_DIR: "${{ github.workspace }}/.container-cache/ccache"
       CCACHE_MAXSIZE: "700M"
-      TEATIME_LABEL_GH_GROUP: 1
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEATIME_FORCE_INTERACTIVE: 0
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -80,9 +80,7 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_VERBOSE=ON \
             -DBUILD_TESTING=ON
-          ./build_tools/watch_top_processes.sh &
           cmake --build build --target therock-archives therock-dist
-          kill %1
 
       - name: Test Packaging
         run: |
