@@ -50,7 +50,7 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ✅        |                                               |
 | math-libs (blas) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ✅        |                                               |
 | math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Running tests needs PyYAML and a dll copied   |
-| math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ❔        |                                               |
+| math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ✅        | Tests need rocblas.dll and can't find files   |
 | math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ❔        |                                               |
 | math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ❔        |                                               |
 | math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ❔        |                                               |
