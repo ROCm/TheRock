@@ -81,6 +81,11 @@ class OutputSink:
             self.log_file = open(self.log_path, "wb")
         self.log_timestamps: bool = args.log_timestamps
 
+        # S3 upload settings
+        self.upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
+        self.s3_bucket = os.getenv("TEATIME_S3_BUCKET")
+        self.s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
+
     def start(self):
         if self.gh_group_label is not None:
             self.out.write(b"::group::" + self.gh_group_label + b"\n")
