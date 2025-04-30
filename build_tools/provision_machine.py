@@ -26,21 +26,21 @@ Note: the script will overwrite the output directory argument. If no argument is
 """
 
 import argparse
-import sys
-import os
-import shutil
 from fetch_artifacts import (
     retrieve_base_artifacts,
     retrieve_enabled_artifacts,
     s3_bucket_exists,
 )
-from pathlib import Path
-import tarfile
-from tqdm import tqdm
-from _therock_utils.artifacts import ArtifactPopulator
-import requests
+import os
 from packaging.version import Version, InvalidVersion
+from pathlib import Path
+import requests
+import shutil
 import subprocess
+import sys
+import tarfile
+from _therock_utils.artifacts import ArtifactPopulator
+from tqdm import tqdm
 
 
 def log(*args, **kwargs):
