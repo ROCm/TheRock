@@ -1,7 +1,7 @@
-From ad1edcc0049752ffd94beef545ba6b8831089044 Mon Sep 17 00:00:00 2001
+From 909dbe87ae3da0b94d551bb0d580d9d2c63c5612 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 1 Apr 2025 20:58:38 +0000
-Subject: [PATCH 3/5] Install `libhipblas_fortran.so`
+Subject: [PATCH 3/6] Install `libhipblas_fortran.so`
 
 This is required by the test and benchmark clients but was not part of
 the installation so far.
@@ -22,5 +22,5 @@ index ceee022..5da9875 100755
  
  if(BUILD_ADDRESS_SANITIZER)
 -- 
-2.43.0
+2.45.1.windows.1
 

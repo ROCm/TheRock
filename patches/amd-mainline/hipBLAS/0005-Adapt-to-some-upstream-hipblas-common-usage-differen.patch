@@ -1,8 +1,7 @@
-From 9487f34166389d781c5b441823cdc21fbf67b262 Mon Sep 17 00:00:00 2001
+From b37f4ffd49ba0f819907dbf183db773017c1e9d5 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Tue, 29 Apr 2025 22:13:17 -0700
-Subject: [PATCH 5/5] [temporary] Adapt to some upstream hipblas-common usage
- differences.
+Subject: [PATCH 5/6] Adapt to some upstream hipblas-common usage differences.
 
 * The hipblas-common library seems to be in the process of being renamed to hip::hipblas-common but not uniformly yet.
 * This was coming from a dependency in a prior state, thus INTERFACE was ok. However, it is needed within the library and with the dependent not advertising it anymore, compilation fails to find hipblas-common.h.
@@ -24,5 +23,5 @@ index 5da9875..0b3b6f1 100755
  # Build hipblas from source on AMD platform
  if(HIP_PLATFORM STREQUAL amd)
 -- 
-2.43.0
+2.45.1.windows.1
 
