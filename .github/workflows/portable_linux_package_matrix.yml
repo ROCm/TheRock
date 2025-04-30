@@ -19,6 +19,9 @@ on:
         default: "rc"
       package_suffix:
         type: string
+      families:
+        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x). Please note that docker builds only work for prebuilds availabe here [nightly-release](https://github.com/ROCm/TheRock/releases/tag/nightly-release)"
+        type: string
   # Trigger on a schedule to build nightly release candidates.
   schedule:
     # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
@@ -65,6 +68,7 @@ jobs:
         id: configure
         env:
           PYTORCH_DEV_DOCKER: "false"
+          AMDGPU_FAMILIES: ${{ inputs.families }}
         run: python ./build_tools/github_action/fetch_package_targets.py
 
   portable_linux_packages:
