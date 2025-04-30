@@ -1,7 +1,7 @@
-From 0ede7ef275102af91769c6ee4af58111fa1c8b49 Mon Sep 17 00:00:00 2001
+From aa3c65907c4b27683ee76ed360e0991693c2fe77 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 11 Apr 2025 18:11:11 -0700
-Subject: [PATCH 3/3] Replace deprecated reference GTest::GTest ->
+Subject: [PATCH 3/4] Replace deprecated reference GTest::GTest ->
  GTest::gtest.
 
 ---
@@ -22,5 +22,5 @@ index db8e3f32..e3a02198 100644
  # Add OpenMP if available
  if(OPENMP_FOUND)
 -- 
-2.43.0
+2.45.1.windows.1
 
