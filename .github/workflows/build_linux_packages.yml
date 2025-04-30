@@ -31,6 +31,9 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+      TEATIME_S3_UPLOAD: "1"
+      TEATIME_S3_BUCKET: "therock-artifacts"
+      TEATIME_S3_SUBDIR: "${{ github.run_id }}/logs/${{ env.AMDGPU_FAMILIES }}"
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -133,16 +136,6 @@ jobs:
             --exclude "*" \
             --include "*.tar.xz*"
           aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html
-
-      # TODO: Move to script
-      - name: Upload Logs
-        run: |
-          aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
-            --recursive \
-            --content-type="text/plain" \
-            --exclude "*" \
-            --include "*.log"
-          aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/
 
       - name: Add Links to Job Summary
         run: |
