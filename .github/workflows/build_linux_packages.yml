@@ -26,6 +26,12 @@ jobs:
       contents: read       # Required by checkout and most steps
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
+      env:
+        AWS_REGION: us-east-2
+        AWS_DEFAULT_REGION: us-east-2
+        AWS_ACCESS_KEY_ID: ${{ steps.aws-creds.outputs.aws-access-key-id }} 
+        AWS_SECRET_ACCESS_KEY: ${{ steps.aws-creds.outputs.aws-secret-access-key }}
+        AWS_SESSION_TOKEN: ${{ steps.aws-creds.outputs.aws-session-token }}
     strategy:
       fail-fast: true
     env:
