@@ -8,7 +8,7 @@ set -xeuo pipefail
 # TheRock's nightly GitHub releases (or a forked repository).
 #
 # Usage:
-#   INSTALL_PREFIX=/pathToInstall RELEASE_VERSION=6.4.0rc20250424 ./install_rocm_from_tarballs.sh "gfx942 gfx1100"
+#   INSTALL_PREFIX=/pathToInstall RELEASE_VERSION=6.4.0rc20250424 ./install_rocm_from_release.sh "gfx942 gfx1100"
 #
 # Environment Variables (optional):
 #   RELEASE_VERSION       - Full version string like 6.4.0rc20250424 (required if no version.json)
@@ -29,7 +29,7 @@ set -xeuo pipefail
 #   - RELEASE_VERSION controls tarball naming. ROCM_VERSION is used for internal environment setup.
 #
 # Example:
-#   GITHUB_REPO="myorg/myrock" RELEASE_VERSION=6.4.0rc20250425 ./install_rocm_from_tarballs.sh gfx942
+#   GITHUB_REPO="myorg/myrock" RELEASE_VERSION=6.4.0rc20250425 ./install_rocm_from_release.sh gfx942
 #
 # -----------------------------------------------------------------------------
 
