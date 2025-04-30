@@ -33,7 +33,7 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       TEATIME_S3_UPLOAD: "1"
       TEATIME_S3_BUCKET: "therock-artifacts"
-      TEATIME_S3_SUBDIR: "${{ github.run_id }}/logs/${{ input.amdgpu_families }}"
+      TEATIME_S3_SUBDIR: "${{ github.run_id }}/logs/${{ inputs.amdgpu_families }}"
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
