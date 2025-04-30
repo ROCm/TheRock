@@ -42,6 +42,53 @@ import sys
 import time
 
 
+def upload_logs_to_s3(log_path: Path):
+    upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
+    s3_bucket = os.getenv("TEATIME_S3_BUCKET")
+    s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
+    if not (upload_to_s3 and s3_bucket and s3_subdir):
+        return
+
+    logs_dir = log_path.parent.resolve()
+    try:
+        print(
+            f"[teatime] Uploading logs from {logs_dir} to s3://{s3_bucket}/{s3_subdir}/"
+        )
+        subprocess.run(
+            [
+                "aws",
+                "s3",
+                "cp",
+                str(logs_dir),
+                f"s3://{s3_bucket}/{s3_subdir}/",
+                "--recursive",
+                "--content-type=text/plain",
+                "--exclude",
+                "*",
+                "--include",
+                "*.log",
+            ],
+            check=True,
+        )
+
+        index_path = logs_dir / "index.html"
+        if index_path.exists():
+            subprocess.run(
+                [
+                    "aws",
+                    "s3",
+                    "cp",
+                    str(index_path),
+                    f"s3://{s3_bucket}/{s3_subdir}/index.html",
+                    "--content-type=text/html",
+                ],
+                check=True,
+            )
+
+    except Exception as e:
+        print(f"[teatime] S3 upload failed: {e}", file=sys.stderr)
+
+
 class OutputSink:
     def __init__(self, args: argparse.Namespace):
         self.start_time = time.time()
@@ -50,7 +97,6 @@ class OutputSink:
             self.out = sys.stdout.buffer
         else:
             self.out = io.BytesIO()
-
         # Label management.
         self.label: str | None = args.label
         if self.label is not None:
@@ -81,11 +127,6 @@ class OutputSink:
             self.log_file = open(self.log_path, "wb")
         self.log_timestamps: bool = args.log_timestamps
 
-        # S3 upload settings
-        self.upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
-        self.s3_bucket = os.getenv("TEATIME_S3_BUCKET")
-        self.s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
-
     def start(self):
         if self.gh_group_label is not None:
             self.out.write(b"::group::" + self.gh_group_label + b"\n")
@@ -100,6 +141,7 @@ class OutputSink:
                     f"END\t{end_time}\t{end_time - self.start_time}\n".encode()
                 )
             self.log_file.close()
+            upload_logs_to_s3(self.log_path)
         if self.gh_group_label is not None:
             self.out.write(b"::endgroup::\n")
         elif self.interactive_prefix is not None and self.label is not None:
@@ -122,33 +164,6 @@ class OutputSink:
                 )
             self.log_file.write(line)
             self.log_file.flush()
-
-
-def upload_log_to_s3(self):
-    if not self.log_path or not self.upload_to_s3:
-        return
-    if not self.s3_bucket or not self.s3_subdir:
-        print(
-            "[teatime] S3 upload requested but TEATIME_S3_BUCKET or TEATIME_S3_SUBDIR not set",
-            file=sys.stderr,
-        )
-        return
-
-    dst_path = f"s3://{self.s3_bucket}/{self.s3_subdir}/{self.log_path.name}"
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        str(self.log_path),
-        dst_path,
-        "--content-type",
-        "text/plain",
-    ]
-    try:
-        subprocess.run(cmd, check=True)
-        print(f"[teatime] Uploaded log to {dst_path}", file=sys.stderr)
-    except subprocess.CalledProcessError as e:
-        print(f"[teatime] Failed to upload log to S3: {e}", file=sys.stderr)
 
 
 def run(args: argparse.Namespace, child_arg_list: list[str] | None, sink: OutputSink):
