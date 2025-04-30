@@ -92,7 +92,6 @@ if(WIN32)
   set(rocBLAS_build_with_tensile "OFF")
 else()
   set(rocBLAS_build_with_tensile "ON")
-  list(APPEND rocBLAS_optional_runtime_deps hipBLASLt)
   list(APPEND rocBLAS_optional_runtime_deps roctracer-compat)
 endif()
 
@@ -122,6 +121,7 @@ therock_cmake_subproject_declare(rocBLAS
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
+    hipBLASLt
     ${rocBLAS_optional_runtime_deps}
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
