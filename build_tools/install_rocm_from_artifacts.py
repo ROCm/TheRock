@@ -265,9 +265,7 @@ def main(argv):
 
     # This mutually exclusive group will ensure that only one argument is present
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--run-id", type=str, help="GitHub run ID of TheRock to install"
-    )
+    group.add_argument("--run-id", type=str, help="GitHub run ID of TheRock to install")
 
     group.add_argument(
         "--release",
