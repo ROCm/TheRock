@@ -35,12 +35,6 @@ jobs:
       TEATIME_S3_BUCKET: "therock-artifacts"
       TEATIME_S3_SUBDIR: "${{ github.run_id }}/logs/${{ inputs.amdgpu_families }}"
 
-      # Forward AWS credentials
-      AWS_REGION: us-east-2
-      AWS_DEFAULT_REGION: us-east-2
-      AWS_ACCESS_KEY_ID: ${{ steps.aws-creds.outputs.aws-access-key-id }}
-      AWS_SECRET_ACCESS_KEY: ${{ steps.aws-creds.outputs.aws-secret-access-key }}
-      AWS_SESSION_TOKEN: ${{ steps.aws-creds.outputs.aws-session-token }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -78,6 +72,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build Projects
+        env:
+          AWS_REGION: us-east-2
+          AWS_DEFAULT_REGION: us-east-2
+          AWS_ACCESS_KEY_ID: ${{ steps.aws-creds.outputs.aws-access-key-id }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.aws-creds.outputs.aws-secret-access-key }}
+          AWS_SESSION_TOKEN: ${{ steps.aws-creds.outputs.aws-session-token }}
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
