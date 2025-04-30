@@ -141,55 +141,37 @@ separately.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
 - [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
 
-## Provisioning TheRock 🪨
+## Installing TheRock from artifacts 🪨
 
-In order to provision TheRock using either a developer/automated nightly release, a specific CI runner build or an already existing installation of TheRock, use the `build_tool/provision_machine.py` script.
+In order to install TheRock using either a developer/nightly release, a specific CI runner build or an already existing installation of TheRock, use the `build_tool/install_rocm_from_artifacts.py`. This script is used by CI to install TheRock to test machines and can be used locally to install TheRock from a specified source.
 
-Provisioning script setup:
+Script setup:
 
 - `python3 -m venv venv`
 - `source venv/bin/activate`
 - `pip install -r requirements.txt`
-- `python build_tools/provision_machine.py --help`
+- `python build_tools/install_rocm_from_artifacts.py --help`
 
 Examples:
 
-- Downloads the gfx94X S3 artifacts (except test artifacts) from GitHub CI workflow run 14474448215 (from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215)) to the default output directory `therock-build`:
+- Downloads the gfx94X S3 all artifacts from GitHub CI workflow run 14474448215 (from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215)) to the default output directory `therock-build`:
 
   ```
-  python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all
-  ```
-
-- Downloads all gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215)) to the default output directory `therock-build` including test artifacts:
-
-  ```
-  python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests
-  ```
-
-- Downloads the gfx94X S3 prim and miopen artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
-
-  ```
-  python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --prim --miopen
-  ```
-
-- Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
-
-  ```
-  python build_tools/provision_machine.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build
+  python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests
   ```
 
 - Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
 
   ```
-  python build_tools/provision_machine.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build
   ```
 
 - Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`:
 
   ```
-  python build_tools/provision_machine.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all
   ```
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
 
-By default, only the base artifacts will be downloaded. If you want to include specific artifacts, please pass in the correct flag such as `--rand` (include RAND artifacts) or `--tests` (include test artifacts). For all artifacts (except tests), please include `--all`.
+By default for CI workflow artifact retrieval, only the base artifacts will be downloaded. If you want to include specific artifacts, please pass in the correct flag such as `--rand` (include RAND artifacts) or `--tests` (include test artifacts). For all artifacts (except tests), please include `--all`.

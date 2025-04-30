@@ -1,30 +1,24 @@
 #!/usr/bin/env python
-"""provision_machine.py
+"""install_rocm_from_artifacts.py
 
-This script helps CI workflows, developers and testing suites easily provision TheRock to their environment.
-It provisions TheRock to an output directory from one of these sources:
+This script helps CI workflows, developers and testing suites easily install TheRock to their environment using artifacts.
+It installs TheRock to an output directory from one of these sources:
 - GitHub CI workflow run
 - GitHub release tag
 - An existing installation of TheRock
 
 Usage:
-python build_tools/provision_machine.py [--output-dir OUTPUT_DIR] [--amdgpu-family AMDGPU_FAMILY] (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
+python build_tools/install_rocm_from_artifacts.py [--output-dir OUTPUT_DIR] [--amdgpu-family AMDGPU_FAMILY] (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
                                         [--blas | --no-blas] [--fft | --no-fft] [--miopen | --no-miopen] [--prim | --no-prim]
                                         [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--all]
 
 Examples:
-- Downloads the all gfx94X S3 artifacts (except test artifacts) from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
-    - `python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu` --all
 - Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
-    - `python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests`
-- Downloads the gfx94X S3 prim and miopen artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
-    - `python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --prim --miopen`
-- Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
-    - `python build_tools/provision_machine.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build`
+    - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests`
 - Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
-    - `python build_tools/provision_machine.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`
+    - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`
 - Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`:
-    - `python build_tools/provision_machine.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`
+    - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`
 
 You can select your AMD GPU family from this file https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81
 
@@ -245,7 +239,7 @@ def retrieve_artifacts_by_release(args):
 
 
 def run(args):
-    log("### Provisioning TheRock 🪨 ###")
+    log("### Installing TheRock using artifacts 🪨 ###")
     _create_output_directory(args)
     if args.run_id:
         retrieve_artifacts_by_run_id(args)
@@ -266,19 +260,19 @@ def main(argv):
         "--amdgpu-family",
         type=str,
         default="gfx94X-dcgpu",
-        help="AMD GPU family to provision (please refer to this: https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81 for family choices)",
+        help="AMD GPU family to install (please refer to this: https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81 for family choices)",
     )
 
     # This mutually exclusive group will ensure that only one argument is present
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--run-id", type=str, help="GitHub run ID of TheRock to provision"
+        "--run-id", type=str, help="GitHub run ID of TheRock to install"
     )
 
     group.add_argument(
         "--release",
         type=str,
-        help="Github release version of TheRock to provision, from the nightly-release (X.Y.ZrcYYYYMMDD) or dev-release (X.Y.Z.dev0+{hash})",
+        help="Github release version of TheRock to install, from the nightly-release (X.Y.ZrcYYYYMMDD) or dev-release (X.Y.Z.dev0+{hash})",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")

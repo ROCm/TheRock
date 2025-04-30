@@ -49,7 +49,7 @@ runs:
       run: |
         source ${VENV_DIR}/bin/activate
 
-        python ./build_tools/provision_machine.py \
+        python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --amdgpu-family=${AMDGPU_FAMILIES} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
