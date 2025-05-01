@@ -52,8 +52,8 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Running tests needs PyYAML and a dll copied   |
 | math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ✅        | Tests need rocblas.dll and can't find files   |
 | math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ✅        | Same as rocSPARSE + also needs rocsparse.dll  |
-| math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ❔        |                                               |
-| math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ❔        |                                               |
+| math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ✅        |                                               |
+| math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ✅        | Tests need dlls                               |
 | math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ❔        |                                               |
 |                  |                                                                              |           |                                               |
 | ml-libs          | [MIOpen](https://github.com/ROCm/MIOpen)                                     | ❔        |                                               |

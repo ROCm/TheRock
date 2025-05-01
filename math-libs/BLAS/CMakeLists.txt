@@ -243,6 +243,15 @@ if(THEROCK_ENABLE_SOLVER)
     list(APPEND hipSOLVER_optional_deps therock-host-blas)
   endif()
 
+  if(WIN32)
+    set(hipSOLVER_build_with_sparse "OFF")
+  else()
+    # Note: BUILD_WITH_SPARSE converts rocSPARSE and cholmod to build time vs
+    # runtime/dlopen deps.
+    set(hipSOLVER_build_with_sparse "ON")
+    list(APPEND hipSOLVER_optional_deps therock-SuiteSparse)
+  endif()
+
   therock_cmake_subproject_declare(hipSOLVER
       EXTERNAL_SOURCE_DIR "hipSOLVER"
       BACKGROUND_BUILD
@@ -251,9 +260,7 @@ if(THEROCK_ENABLE_SOLVER)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_HIPSPARSE_TESTS=OFF
-        # BUILD_WITH_SPARSE converts rocsparse and cholmod to build time vs
-        # runtime/dlopen deps.
-        -DBUILD_WITH_SPARSE=ON
+        -DBUILD_WITH_SPARSE=${hipSOLVER_build_with_sparse}
         -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
         -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
         -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
@@ -267,7 +274,6 @@ if(THEROCK_ENABLE_SOLVER)
         rocBLAS
         rocSOLVER
         rocSPARSE
-        therock-SuiteSparse
         ${hipSOLVER_optional_deps}
   )
   therock_cmake_subproject_glob_c_sources(hipSOLVER
