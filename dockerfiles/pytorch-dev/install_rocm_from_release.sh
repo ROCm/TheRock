@@ -101,8 +101,12 @@ echo "[INFO] Output dir: $OUTPUT_ARTIFACTS_DIR"
 # === Fallback encoding map ===
 fallback_target_name() {
   case "$1" in
+    gfx90a) echo "gfx90X-dcgpu" ;;
     gfx942) echo "gfx94X-dcgpu" ;;
+    gfx1010) echo "gfx101X-dgpu" ;;
+    gfx1030) echo "gfx103X-dgpu" ;;
     gfx1100) echo "gfx110X-dgpu" ;;
+    gfx1151) echo "gfx115X-igpu" ;;
     gfx1201) echo "gfx120X-all" ;;
     *) echo "" ;;
   esac
