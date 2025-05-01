@@ -201,10 +201,15 @@ therock_add_feature(SPARSE
   DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
   REQUIRES COMPILER HIP_RUNTIME BLAS PRIM
 )
+if(NOT WIN32)
+  set(_solver_platform_requirements "HOST_SUITE_SPARSE")
+else()
+  set(_solver_platform_requirements "")
+endif()
 therock_add_feature(SOLVER
   GROUP MATH_LIBS
   DESCRIPTION "Enables solver libraries (hipsolver, rocsolver)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE HOST_SUITE_SPARSE
+  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
 # ML-Libs Features.
