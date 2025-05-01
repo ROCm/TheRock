@@ -108,11 +108,14 @@ therock_add_feature(HOST_BLAS
   GROUP HOST_MATH
   DESCRIPTION "Bundled host BLAS library"
 )
-therock_add_feature(HOST_SUITE_SPARSE
-  GROUP HOST_MATH
-  DESCRIPTION "Bundled SuiteSparse library"
-  REQUIRES HOST_BLAS
-)
+if(NOT WIN32)
+  # Currently unsupported on Windows.
+  therock_add_feature(HOST_SUITE_SPARSE
+    GROUP HOST_MATH
+    DESCRIPTION "Bundled SuiteSparse library"
+    REQUIRES HOST_BLAS
+  )
+endif()
 
 # Base Features.
 therock_add_feature(COMPILER
