@@ -106,7 +106,7 @@ fallback_target_name() {
     gfx1010) echo "gfx101X-dgpu" ;;
     gfx1030) echo "gfx103X-dgpu" ;;
     gfx1100) echo "gfx110X-dgpu" ;;
-    gfx1151) echo "gfx115X-igpu" ;;
+    gfx1151) echo "gfx1151" ;;
     gfx1201) echo "gfx120X-all" ;;
     *) echo "" ;;
   esac
