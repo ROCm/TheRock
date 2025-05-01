@@ -34,6 +34,7 @@ from fetch_artifacts import (
 import os
 from packaging.version import Version, InvalidVersion
 from pathlib import Path
+import platform
 import requests
 import shutil
 import subprocess
@@ -243,8 +244,16 @@ def retrieve_artifacts_by_input_dir(args):
     input_dir = args.input_dir
     output_dir = args.output_dir
     log(f"Retrieving artifacts from input dir {input_dir}")
+
+    # Check to make sure rsync exists
+    if not shutil.which("rsync"):
+        log("Error: rsync command not found.")
+        if platform.system() == "Windows":
+            log("Please install rsync via MSYS2 or WSL to your Windows system")
+        return
+
     cmd = [
-        "hello",
+        "rsync",
         "-azP",  # archive, compress and progress indicator
         input_dir,
         output_dir,
@@ -254,19 +263,8 @@ def retrieve_artifacts_by_input_dir(args):
         log(f"Retrieved artifacts from input dir {input_dir} to {output_dir}")
     except Exception as ex:
         # rsync is not available
-        if "The system cannot find the file specified" in str(
-            ex
-        ) or "No such file or directory" in str(ex):
-            log("rsync command is not available.")
-            log(
-                "For Linux users, rsync is an official part of many Linux distributions and should be available."
-            )
-            log(
-                "For Windows users, please install rsync here: https://www.itefix.net/cwrsync/client/downloads"
-            )
-        else:
-            log(f"Error when running [{cmd}]")
-            log(str(ex))
+        log(f"Error when running [{cmd}]")
+        log(str(ex))
 
 
 def run(args):
