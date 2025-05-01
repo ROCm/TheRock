@@ -54,7 +54,7 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ❔        |                                               |
 | math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ✅        |                                               |
 | math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ✅        | Tests need dlls                               |
-| math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ❔        |                                               |
+| math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ✅        | Tests need dlls                               |
 |                  |                                                                              |           |                                               |
 | ml-libs          | [MIOpen](https://github.com/ROCm/MIOpen)                                     | ❔        |                                               |
 

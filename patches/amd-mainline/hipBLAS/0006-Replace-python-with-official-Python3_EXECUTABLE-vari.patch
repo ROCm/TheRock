@@ -1,7 +1,7 @@
-From 341468c4728fd6864facdd27d79cd20778e63aa4 Mon Sep 17 00:00:00 2001
+From 1738a27c0be4ae694b8994adb4987d0cd6b5658b Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Wed, 30 Apr 2025 12:03:23 -0700
-Subject: [PATCH 6/6] Replace ${python} with official ${Python3_EXECUTABLE}
+Subject: [PATCH 6/9] Replace ${python} with official ${Python3_EXECUTABLE}
  variable.
 
 ---
@@ -22,5 +22,5 @@ index 9434c4d..82d97da 100644
                      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" )
  
 -- 
-2.45.1.windows.1
+2.47.1.windows.2
 

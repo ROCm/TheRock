@@ -1,0 +1,29 @@
+From 64608856f3523027dc80b934f2f73647422c5f6b Mon Sep 17 00:00:00 2001
+From: Scott <scott.todd0@gmail.com>
+Date: Thu, 1 May 2025 11:30:15 -0700
+Subject: [PATCH 9/9] Check if ROCBLAS_PATH var is set before using it.
+
+---
+ clients/gtest/CMakeLists.txt | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
+index 82d97da..467e7ec 100644
+--- a/clients/gtest/CMakeLists.txt
++++ b/clients/gtest/CMakeLists.txt
+@@ -192,7 +192,11 @@ if (WIN32)
+     add_custom_command( TARGET hipblas-test POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy ${file_i} ${PROJECT_BINARY_DIR}/staging/ )
+   endforeach( file_i )
+ 
+-  add_custom_command( TARGET hipblas-test POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${ROCBLAS_PATH}/bin/rocblas/library/ ${PROJECT_BINARY_DIR}/staging/library/)
++  if(DEFINED ${ROCBLAS_PATH})
++    add_custom_command( TARGET hipblas-test POST_BUILD COMMAND ${CMAKE_COMMAND} ARGS -E copy_directory ${ROCBLAS_PATH}/bin/rocblas/library/ ${PROJECT_BINARY_DIR}/staging/library/)
++  else()
++    message(WARNING "ROCBLAS_PATH not set, tests may be missing .dlls")
++  endif()
+ endif()
+ 
+ set_target_properties( hipblas-test PROPERTIES
+-- 
+2.47.1.windows.2
+
