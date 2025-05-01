@@ -244,7 +244,7 @@ def retrieve_artifacts_by_input_dir(args):
     output_dir = args.output_dir
     log(f"Retrieving artifacts from input dir {input_dir}")
     cmd = [
-        "rsync",
+        "hello",
         "-azP",  # archive, compress and progress indicator
         input_dir,
         output_dir,
@@ -253,8 +253,20 @@ def retrieve_artifacts_by_input_dir(args):
         subprocess.run(cmd, check=True)
         log(f"Retrieved artifacts from input dir {input_dir} to {output_dir}")
     except Exception as ex:
-        log(f"Error when running [{cmd}]")
-        log(str(ex))
+        # rsync is not available
+        if "The system cannot find the file specified" in str(
+            ex
+        ) or "No such file or directory" in str(ex):
+            log("rsync command is not available.")
+            log(
+                "For Linux users, rsync is an official part of many Linux distributions and should be available."
+            )
+            log(
+                "For Windows users, please install rsync here: https://www.itefix.net/cwrsync/client/downloads"
+            )
+        else:
+            log(f"Error when running [{cmd}]")
+            log(str(ex))
 
 
 def run(args):
