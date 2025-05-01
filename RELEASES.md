@@ -48,5 +48,40 @@ popd
 ## Where to get artifacts
 
 - [Releases](https://github.com/ROCm/TheRock/releases): Our releases page has the latest "developer" release of our tarball artifacts and source code.
+
 - [Packages](https://github.com/orgs/ROCm/packages?repo_name=TheRock): We currently publish docker images for LLVM targets we support (as well as a container for our build machines)
+
 - [Per-commit CI builds](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess): Each of our latest passing CI builds has its own artifacts you can leverage. This is the latest and greatest! We will eventually support a nightly release that is at a higher quality bar than CI. Note a quick recipe for getting all of these from the s3 bucket is to use this quick command `aws s3 cp s3://therock-artifacts . --recursive --exclude "*" --include "${RUN_ID}/*.tar.xz" --no-sign-request` where ${RUN_ID} is the runner id you selected (see the URL). Check the [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to get the aws cli.
+
+- `build_tools/install_rocm_from_artifacts.py` install script:
+  This script installs ROCm community builds produced by TheRock from either a developer/nightly release, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally.
+
+  Script setup:
+
+  - `python3 -m venv venv && source venv/bin/activate`
+  - `pip install -r requirements.txt`
+  - `python build_tools/install_rocm_from_artifacts.py --help`
+
+  Examples:
+
+  - Downloads all gfx94X S3 artifacts from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
+
+  ```
+  python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests
+  ```
+
+  - Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
+
+  ```
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build
+  ```
+
+  - Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`:
+
+  ```
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all
+  ```
+
+  Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
+
+  By default for CI workflow retrieval, only the base artifacts will be downloaded. If you want to include specific artifacts, pass in the flag such as `--rand` (RAND artifacts) or `--tests` (test artifacts). For all artifacts (except tests), use `--all`.
