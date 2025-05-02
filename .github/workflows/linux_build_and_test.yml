@@ -1,0 +1,42 @@
+name: Linux Build and Test
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        type: string
+      artifact_run_id:
+        type: string
+      test_runs_on:
+        type: string
+      run_linux_tests_only:
+        type: boolean
+
+jobs:
+  build_linux_packages:
+    name: Build Linux Packages
+    if: ${{ !inputs.run_linux_tests_only }}
+    strategy:
+      fail-fast: true
+    uses: ./.github/workflows/build_linux_packages.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+    permissions:
+      id-token: write
+
+  test_linux_packages:
+    needs: [build_linux_packages]
+    name: Test Linux Packages
+    # If the dependent job failed/cancelled, this job will not be run
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+      }}
+    strategy:
+      fail-fast: false
+    uses: ./.github/workflows/test_linux_packages.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
