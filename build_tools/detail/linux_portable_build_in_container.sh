@@ -5,6 +5,8 @@ set -e
 set -o pipefail
 trap 'kill -TERM 0' INT
 
+pip install -r requirements.txt
+
 OUTPUT_DIR="/therock/output"
 mkdir -p "$OUTPUT_DIR/caches"
 
