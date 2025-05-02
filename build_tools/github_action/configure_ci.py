@@ -311,9 +311,7 @@ def main(base_args, linux_families, windows_families):
     )
 
     enable_build_jobs = False
-    print(
-        f"Checking modified files since this had a {github_event_name} trigger"
-    )
+    print(f"Checking modified files since this had a {github_event_name} trigger")
     # TODO(#199): other behavior changes
     #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
     enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
@@ -322,18 +320,16 @@ def main(base_args, linux_families, windows_families):
         f"""## Workflow configure results
 
 * `linux_amdgpu_families`: {str([item.get("family") for item in linux_target_output])}
-* `run_linux_tests_only`: {base_args.get("run_linux_tests_only")}
+* `run_linux_tests_only`: {json.dumps(base_args.get("run_linux_tests_only"))}
 * `windows_amdgpu_families`: {str([item.get("family") for item in windows_target_output])}
-* `run_windows_tests_only`: {base_args.get("run_windows_tests_only")}
-* `enable_build_jobs`: {enable_build_jobs}
+* `run_windows_tests_only`: {json.dumps(base_args.get("run_windows_tests_only"))}
+* `enable_build_jobs`: {json.dumps(enable_build_jobs)}
     """
     )
 
     output = {
         "linux_amdgpu_families": json.dumps(linux_target_output),
-        "run_linux_tests_only": json.dumps(base_args.get("run_linux_tests_only")),
         "windows_amdgpu_families": json.dumps(windows_target_output),
-        "run_windows_tests_only": json.dumps(base_args.get("run_windows_tests_only")),
         "enable_build_jobs": json.dumps(enable_build_jobs),
     }
     set_github_output(output)
