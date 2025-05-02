@@ -15,7 +15,7 @@ on:
 jobs:
   build_linux_packages:
     name: Build Linux Packages
-    if: inputs.run_linux_tests_only == 'false'
+    if: github.event.inputs.run_linux_tests_only == 'false'
     uses: ./.github/workflows/build_linux_packages.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
