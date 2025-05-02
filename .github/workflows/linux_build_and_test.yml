@@ -10,12 +10,12 @@ on:
       test_runs_on:
         type: string
       run_linux_tests_only:
-        type: boolean
+        type: string
 
 jobs:
   build_linux_packages:
     name: Build Linux Packages
-    if: ${{ ! inputs.run_linux_tests_only }}
+    if: ${{ inputs.run_linux_tests_only == 'false' }}
     strategy:
       fail-fast: true
     uses: ./.github/workflows/build_linux_packages.yml
