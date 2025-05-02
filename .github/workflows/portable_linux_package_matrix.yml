@@ -105,15 +105,23 @@ jobs:
           restore-keys: |
             portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
+      - name: Setup python virtual environment and install python packages
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
       - name: Fetch sources
         run: |
           # Prefetch docker container in background.
+          source venv/bin/activate
           docker pull ${{ env.BUILD_IMAGE }} &
           ./build_tools/fetch_sources.py --jobs 10
           wait
 
       - name: Build Projects
         run: |
+          source venv/bin/activate
           ./build_tools/linux_portable_build.py \
             --image=${{ env.BUILD_IMAGE }} \
             --output-dir=${{ env.OUTPUT_DIR }} \
