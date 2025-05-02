@@ -138,6 +138,11 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
   set(_sparse_subproject_names)
 
+  set(rocSPARSE_optional_runtime_deps)
+  if(NOT WIN32)
+    list(APPEND rocSPARSE_optional_runtime_deps roctracer-compat)
+  endif()
+
   therock_cmake_subproject_declare(rocSPARSE
     EXTERNAL_SOURCE_DIR "rocSPARSE"
     BACKGROUND_BUILD
@@ -149,8 +154,6 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
-      # TODO: Enable as it defaults to `ON`.
-      -DBUILD_WITH_ROCTX=OFF
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -160,6 +163,7 @@ if(THEROCK_ENABLE_SPARSE)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      ${rocSPARSE_optional_runtime_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS
