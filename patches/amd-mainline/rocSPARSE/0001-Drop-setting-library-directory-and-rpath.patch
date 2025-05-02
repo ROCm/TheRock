@@ -1,7 +1,7 @@
 From 7b2e5815945b152d80aedb0da38f8939895c6498 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Thu, 20 Mar 2025 13:19:39 +0000
-Subject: [PATCH 1/4] Drop setting library directory and rpath
+Subject: [PATCH 1/2] Drop setting library directory and rpath
 
 ---
  clients/CMakeLists.txt     | 2 +-
