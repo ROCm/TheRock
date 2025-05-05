@@ -38,7 +38,7 @@ mainline, in open source, using MSVC, etc.).
 |                  |                                                                              |           |                                               |
 | profiler         | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❔        |                                               |
 |                  |                                                                              |           |                                               |
-| comm-libs        | [rccl](https://github.com/ROCm/rccl)                                         | ❔        |                                               |
+| comm-libs        | [rccl](https://github.com/ROCm/rccl)                                         | ❌        | Unsupported                                   |
 |                  |                                                                              |           |                                               |
 | math-libs        | [rocRAND](https://github.com/ROCm/rocRAND)                                   | ✅        |                                               |
 | math-libs        | [hipRAND](https://github.com/ROCm/hipRAND)                                   | ✅        |                                               |

@@ -166,11 +166,14 @@ else()
 endif()
 
 # Comm-libs Features.
-therock_add_feature(RCCL
-  GROUP COMM_LIBS
-  DESCRIPTION "Enables rccl"
-  REQUIRES COMPILER HIP_RUNTIME HIPIFY
-)
+if(NOT WIN32)
+  # RCCL is Linux-only.
+  therock_add_feature(RCCL
+    GROUP COMM_LIBS
+    DESCRIPTION "Enables rccl"
+    REQUIRES COMPILER HIP_RUNTIME HIPIFY
+  )
+endif()
 
 # Math-libs Features.
 therock_add_feature(PRIM
