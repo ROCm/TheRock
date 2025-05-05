@@ -128,6 +128,16 @@ jobs:
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
 
+      - name: Build Python Packages
+        run: |
+          ./build_tools/linux_portable_build.py \
+            --image=${{ env.BUILD_IMAGE }} \
+            --output-dir=${{ env.OUTPUT_DIR }}/packages \
+            --build-python-only \
+            --artifact-dir=${{ env.OUTPUT_DIR }}/build/artifacts \
+            -- \
+            "--version=${{ needs.setup_metadata.outputs.version }}"
+
       - name: Upload Tarball to GitHub
         uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
         with:
@@ -139,6 +149,24 @@ jobs:
           allowUpdates: true
           replacesArtifacts: true
           makeLatest: false
+
+      - name: Configure AWS Credentials
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
+
+      - name: Upload Releases to S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          # TODO: Append uploaded files to an index
+          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://therock-${{ env.RELEASE_TYPE }}-tarball/
+          aws s3 cp "${{ env.OUTPUT_DIR }}/packages/dist/ s3://therock-${{ env.RELEASE_TYPE }}-python/${{ matrix.target_bundle.amdgpu_family }}/ \
+          --recursive --no-follow-symlinks \
+          --exclude "*" \
+          --include "*.whl" \
+          --include "*.tar.xz*"
 
       - name: Trigger testing nightly tarball
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
