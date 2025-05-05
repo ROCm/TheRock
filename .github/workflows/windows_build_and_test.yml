@@ -1,0 +1,21 @@
+name: Windows Build and Test
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        type: string
+      artifact_run_id:
+        type: string
+      test_runs_on:
+        type: string
+      run_windows_tests_only:
+        type: string
+
+jobs:
+  build_windows_packages:
+    name: Build Windows Packages
+    if: ${{ inputs.run_windows_tests_only == 'false' }}
+    uses: ./.github/workflows/build_windows_packages.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}

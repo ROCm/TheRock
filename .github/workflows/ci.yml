@@ -66,8 +66,8 @@ jobs:
     permissions:
       id-token: write
 
-  build_windows_packages:
-    name: Build Windows Packages
+  windows_build_and_test:
+    name: Build And Test Windows Packages
     needs: setup
     if: >-
       ${{
@@ -78,9 +78,10 @@ jobs:
       fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.windows_amdgpu_families) }}
-    uses: ./.github/workflows/build_windows_packages.yml
+    uses: ./.github/workflows/windows_build_and_test.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
+      run_windows_tests_only: ${{ inputs.run_windows_tests_only == 'true' && 'true' || 'false' }}
 
   # build_python_packages:
   #   name: Build Python Packages
