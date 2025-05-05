@@ -51,7 +51,7 @@ jobs:
     if: >-
       ${{
         needs.setup.outputs.linux_amdgpu_families != '[]' &&
-        needs.setup.outputs.enable_build_jobs
+        needs.setup.outputs.enable_build_jobs == 'true'
       }}
     strategy:
       fail-fast: false
@@ -72,7 +72,7 @@ jobs:
     if: >-
       ${{
         needs.setup.outputs.windows_amdgpu_families != '[]' &&
-        needs.setup.outputs.enable_build_jobs
+        needs.setup.outputs.enable_build_jobs == 'true'
       }}
     strategy:
       fail-fast: false
