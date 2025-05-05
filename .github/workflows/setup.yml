@@ -9,9 +9,15 @@ on:
       linux_amdgpu_families:
         description: Linux families to run builds and tests on.
         value: ${{ jobs.setup.outputs.linux_amdgpu_families }}
+      run_linux_tests_only:
+        description: If enabled, CI will only run Linux tests
+        value: ${{ jobs.setup.outputs.run_linux_tests_only }}
       windows_amdgpu_families:
         description: Windows families to run builds and tests for.
         value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
+      run_windows_tests_only:
+        description: If enabled, CI will only run Windows tests
+        value: ${{ jobs.setup.outputs.run_windows_tests_only }}
 
 permissions:
   contents: read
@@ -26,7 +32,9 @@ jobs:
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_amdgpu_families: ${{ steps.configure.outputs.linux_amdgpu_families }}
+      run_linux_tests_only: ${{ steps.configure.outputs.run_linux_tests_only }}
       windows_amdgpu_families: ${{ steps.configure.outputs.windows_amdgpu_families }}
+      run_windows_tests_only: ${{ steps.configure.outputs.run_windows_tests_only }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
