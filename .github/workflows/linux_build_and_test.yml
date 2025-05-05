@@ -30,7 +30,10 @@ jobs:
       ${{
         !failure() &&
         !cancelled() &&
-        (github.event.inputs.run_linux_tests_only == 'false' || github.event.inputs.run_linux_tests_only == 'true')
+        (
+          github.event.inputs.run_linux_tests_only == 'false' ||
+          github.event.inputs.run_linux_tests_only == 'true'
+        )
       }}
     strategy:
       fail-fast: false
