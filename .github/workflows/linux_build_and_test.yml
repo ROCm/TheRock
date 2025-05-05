@@ -15,7 +15,7 @@ on:
 jobs:
   build_linux_packages:
     name: Build Linux Packages
-    if: ${{ github.event.inputs.run_linux_tests_only == 'false' }}
+    if: ${{ inputs.run_linux_tests_only == 'false' }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
@@ -32,8 +32,8 @@ jobs:
         !failure() &&
         !cancelled() &&
         (
-          github.event.inputs.run_linux_tests_only == 'false' ||
-          github.event.inputs.run_linux_tests_only == 'true'
+          inputs.run_linux_tests_only == 'false' ||
+          inputs.run_linux_tests_only == 'true'
         )
       }}
     strategy:

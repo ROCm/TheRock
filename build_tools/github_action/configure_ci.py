@@ -28,9 +28,7 @@
 
   Written to GITHUB_OUTPUT:
   * linux_amdgpu_families : List of valid Linux AMD GPU families to execute build and test jobs
-  * run_linux_tests_only: If enabled, CI will only run Linux tests
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
-  * run_windows_tests_only: If enabled, CI will only run Windows tests
   * enable_build_jobs: If true, builds will be enabled
 
   Written to GITHUB_STEP_SUMMARY:
@@ -331,9 +329,7 @@ def main(base_args, linux_families, windows_families):
 
     output = {
         "linux_amdgpu_families": json.dumps(linux_target_output),
-        "run_linux_tests_only": json.dumps(base_args.get("run_linux_tests_only")),
         "windows_amdgpu_families": json.dumps(windows_target_output),
-        "run_windows_tests_only": json.dumps(base_args.get("run_windows_tests_only")),
         "enable_build_jobs": json.dumps(enable_build_jobs),
     }
     set_github_output(output)
