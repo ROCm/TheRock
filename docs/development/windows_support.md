@@ -3,9 +3,6 @@
 TheRock aims to support as many subprojects as possible on "native" Windows
 (as opposed to WSL 1 or WSL 2) using standard build tools like MSVC.
 
-> [!WARNING]
-> This is still under development. Not all subprojects build for Windows yet.
-
 ## Supported subprojects
 
 ROCm is composed of many subprojects, some of which are supported on Windows:
@@ -36,7 +33,7 @@ mainline, in open source, using MSVC, etc.).
 | core             | [rocminfo](https://github.com/ROCm/rocminfo)                                 | ❌        | Unsupported                                   |
 | core             | [clr](https://github.com/ROCm/clr)                                           | ⭕        | Needs a folder with prebuilt static libraries |
 |                  |                                                                              |           |                                               |
-| profiler         | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❔        |                                               |
+| profiler         | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❌        | Unsupported                                   |
 |                  |                                                                              |           |                                               |
 | comm-libs        | [rccl](https://github.com/ROCm/rccl)                                         | ❌        | Unsupported                                   |
 |                  |                                                                              |           |                                               |
@@ -71,6 +68,9 @@ These instructions mostly mirror the instructions in the root
   terminal application. Some developers report good experiences with
   [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/)
   and [Cmder](https://cmder.app/).
+
+- You will need at least 200GB of storage space for the build. More is
+  recommended.
 
 - A Dev Drive is recommended, due to how many source and build files are used.
   See the
@@ -132,6 +132,8 @@ You will need:
   https://learn.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170.
   (typically run the appropriate `vcvarsall.bat`)
 
+- Strawberry Perl, which comes with gfortran: https://strawberryperl.com/.
+
 > [!TIP]
 > Some of these tools are available via package managers like
 > https://github.com/chocolatey/choco
@@ -159,28 +161,22 @@ cd TheRock
 python ./build_tools/fetch_sources.py
 ```
 
-### Configure
-
-Some components do not build for Windows yet, so disable them:
+### Install Python dependencies
 
 ```bash
-cmake -B build -GNinja . \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
-  -DTHEROCK_ENABLE_COMPILER=ON \
-  -DTHEROCK_ENABLE_HIPIFY=ON \
-  -DTHEROCK_ENABLE_CORE=OFF \
-  -DTHEROCK_ENABLE_CORE_RUNTIME=OFF \
-  -DTHEROCK_ENABLE_HIP_RUNTIME=ON \
-  -DTHEROCK_ENABLE_PROFILER_SDK=OFF \
-  -DTHEROCK_ENABLE_COMM_LIBS=OFF \
-  -DTHEROCK_ENABLE_MATH_LIBS=OFF \
-  -DTHEROCK_ENABLE_RAND=ON \
-  -DTHEROCK_ENABLE_PRIM=ON \
-  -DTHEROCK_ENABLE_FFT=ON \
-  -DTHEROCK_ENABLE_BLAS=OFF \
-  -DTHEROCK_ENABLE_SPARSE=OFF \
-  -DTHEROCK_ENABLE_SOLVER=OFF \
-  -DTHEROCK_ENABLE_ML_LIBS=OFF
+python3 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### Configure
+
+Unsupported subprojects like RCCL are automatically disabled on Windows. See
+the [instructions in the root README](../../README.md#configuration) for other
+options you may want to set.
+
+```bash
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 
 # If iterating and wishing to cache, add these:
 #  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -211,18 +207,16 @@ Ensure that MSVC is used by looking for lines like these in the logs:
 cmake --build build
 ```
 
-At the moment this should build some projects in [`base/`](../../base/) as well
-as [`compiler/`](../../compiler/).
-
 ### Building CLR from partial sources
 
-We are actively working on enabling source builds of
+We are working on enabling flexible open source builds of
 https://github.com/ROCm/clr (notably for `amdhip64_6.dll`) on Windows.
 Historically this has been a closed source component due to the dependency on
 [Platform Abstraction Library (PAL)](https://github.com/GPUOpen-Drivers/pal)
 and providing a fully open source build will take more time. As an incremental
-step towards a fully open source build, we will use an interop folder containing
-header files and static library `.lib` files for PAL and related components.
+step towards a fully open source build, we are using an interop folder
+containing header files and static library `.lib` files for PAL and related
+components.
 
 An incremental rollout is planned:
 
@@ -245,10 +239,8 @@ features should be turned off:
 
 ```bash
 -DTHEROCK_ENABLE_CORE=OFF \
--DTHEROCK_ENABLE_HIP_RUNTIME=OFF \
--DTHEROCK_ENABLE_RAND=OFF \
--DTHEROCK_ENABLE_PRIM=OFF \
--DTHEROCK_ENABLE_FFT=OFF \
+-DTHEROCK_ENABLE_MATH_LIBS=OFF \
+-DTHEROCK_ENABLE_ML_LIBS=OFF \
 ```
 
 ### Testing

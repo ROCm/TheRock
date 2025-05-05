@@ -30,23 +30,25 @@ python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
 
 ### Windows 11 (VS 2022)
 
+See [windows_support.md](./docs/development/windows_support.md), in particular
+the section for
+[installing tools](./docs/development/windows_support.md#install-tools).
+
 ```bash
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
+
+# Clone interop library from https://github.com/nod-ai/amdgpu-windows-interop
+# for CLR (the "HIP runtime") on Windows. The path used can also be configured
+# using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable.
+git clone https://github.com/nod-ai/amdgpu-windows-interop.git
+
 cd TheRock
 
-# Install dependencies
+# Init python virtual environment and install python dependencies
 python3 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-> [!WARNING]
-> Windows support is still early in development. Not all subprojects or packages build for Windows yet.
-
-See [windows_support.md](./docs/development/windows_support.md).
-
-```bash
 python ./build_tools/fetch_sources.py  # Downloads submodules and applies patches
 ```
 
@@ -107,10 +109,17 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 cmake --build build
 ```
 
-To build with cacheing:
+To build with the [ccache](https://ccache.dev/) compiler cache:
 
 ```bash
-cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+  .
+
+# On Windows, also add
+#   -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+
 cmake --build build
 ```
 
