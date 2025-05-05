@@ -10,16 +10,16 @@ on:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
-      run_linux_tests_only:
+      linux_use_prebuilt_artifacts:
         type: boolean
-        description: "If run_linux_tests_only is enabled, the CI will pull linux artifacts using artifact_run_id and only run tests"
+        description: "If linux_use_prebuilt_artifacts is enabled, the CI will pull linux artifacts using artifact_run_id and only run tests"
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
-      run_windows_tests_only:
+      windows_use_prebuilt_artifacts:
         type: boolean
-        description: "If run_windows_tests_only is enabled, the CI will pull windows artifacts using artifact_run_id and only run tests"
+        description: "If windows_use_prebuilt_artifacts is enabled, the CI will pull windows artifacts using artifact_run_id and only run tests"
       artifact_run_id:
         type: string
         description: "If provided, the tests will run on this artifact ID"
@@ -46,7 +46,7 @@ jobs:
     uses: ./.github/workflows/setup.yml
 
   linux_build_and_test:
-    name: Build And Test Linux Packages
+    name: Linux
     needs: setup
     if: >-
       ${{
@@ -62,12 +62,12 @@ jobs:
       amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      run_linux_tests_only: ${{ inputs.run_linux_tests_only == 'true' && 'true' || 'false' }}
+      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == 'true' && 'true' || 'false' }}
     permissions:
       id-token: write
 
   windows_build_and_test:
-    name: Build And Test Windows Packages
+    name: Windows
     needs: setup
     if: >-
       ${{
@@ -81,7 +81,7 @@ jobs:
     uses: ./.github/workflows/windows_build_and_test.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
-      run_windows_tests_only: ${{ inputs.run_windows_tests_only == 'true' && 'true' || 'false' }}
+      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == 'true' && 'true' || 'false' }}
 
   # build_python_packages:
   #   name: Build Python Packages

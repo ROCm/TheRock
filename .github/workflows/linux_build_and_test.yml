@@ -9,13 +9,13 @@ on:
         type: string
       test_runs_on:
         type: string
-      run_linux_tests_only:
-        type: string
+      linux_use_prebuilt_artifacts:
+        type: boolean
 
 jobs:
   build_linux_packages:
-    name: Build Linux Packages
-    if: ${{ inputs.run_linux_tests_only == 'false' }}
+    name: Build
+    if: ${{ inputs.linux_use_prebuilt_artifacts == 'false' }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
@@ -24,16 +24,16 @@ jobs:
 
   test_linux_packages:
     needs: [build_linux_packages]
-    name: Test Linux Packages
+    name: Test
     # If the dependent job failed/cancelled, this job will not be run
-    # The run_linux_tests_only "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
+    # The linux_use_prebuilt_artifacts "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
         (
-          inputs.run_linux_tests_only == 'false' ||
-          inputs.run_linux_tests_only == 'true'
+          inputs.linux_use_prebuilt_artifacts == 'false' ||
+          inputs.linux_use_prebuilt_artifacts == 'true'
         )
       }}
     strategy:

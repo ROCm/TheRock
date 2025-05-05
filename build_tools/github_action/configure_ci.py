@@ -11,9 +11,9 @@
   * GITHUB_OUTPUT        : path to write workflow output variables.
   * GITHUB_STEP_SUMMARY  : path to write workflow summary output.
   * INPUT_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families
-  * RUN_LINUX_TESTS_ONLY (optional): If enabled, CI will only run Linux tests
+  * LINUX_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Linux tests
   * INPUT_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families
-  * RUN_WINDOWS_TESTS_ONLY (optional): If enabled, CI will only run Windows tests
+  * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
 
   Environment variables (for pull requests):
@@ -320,9 +320,9 @@ def main(base_args, linux_families, windows_families):
         f"""## Workflow configure results
 
 * `linux_amdgpu_families`: {str([item.get("family") for item in linux_target_output])}
-* `run_linux_tests_only`: {json.dumps(base_args.get("run_linux_tests_only"))}
+* `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
 * `windows_amdgpu_families`: {str([item.get("family") for item in windows_target_output])}
-* `run_windows_tests_only`: {json.dumps(base_args.get("run_windows_tests_only"))}
+* `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
     """
     )
@@ -353,9 +353,11 @@ if __name__ == "__main__":
     base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
-    base_args["run_linux_tests_only"] = os.environ.get("RUN_LINUX_TESTS_ONLY") == "true"
-    base_args["run_windows_tests_only"] = (
-        os.environ.get("RUN_WINDOWS_TESTS_ONLY") == "true"
+    base_args["linux_use_prebuilt_artifacts"] = (
+        os.environ.get("LINUX_USE_PREBUILT_ARTIFACTS") == "true"
+    )
+    base_args["windows_use_prebuilt_artifacts"] = (
+        os.environ.get("WINDOWS_USE_PREBUILT_ARTIFACTS") == "true"
     )
 
     main(base_args, linux_families, windows_families)
