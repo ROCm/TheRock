@@ -175,7 +175,8 @@ def retrieve_artifacts_by_run_id(args):
 
     # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
     retrieve_base_artifacts(args, run_id, output_dir)
-    retrieve_enabled_artifacts(args, amdgpu_family, run_id, output_dir)
+    if not args.base_only:
+        retrieve_enabled_artifacts(args, amdgpu_family, run_id, output_dir)
 
     # Flattening artifacts from .tar* files then removing .tar* files
     log(f"Untar-ing artifacts for {run_id}")
@@ -324,7 +325,7 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--all", help="Include all artifacts", action="store_true"
+        "--base-only", help="Include only base artifacts", action="store_true"
     )
 
     args = parser.parse_args(argv)

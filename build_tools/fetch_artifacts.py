@@ -59,7 +59,7 @@ def retrieve_base_artifacts(args, run_id, build_dir):
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
-    if args.all or args.blas:
+    if args.blas:
         base_artifacts.append("host-blas_lib")
 
     for base_artifact in base_artifacts:
@@ -67,22 +67,28 @@ def retrieve_base_artifacts(args, run_id, build_dir):
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
-    base_artifact_path = []
-    if args.all or args.blas:
-        base_artifact_path.append("blas")
-    if args.all or args.fft:
-        base_artifact_path.append("fft")
-    if args.all or args.miopen:
-        base_artifact_path.append("miopen")
-    if args.all or args.prim:
-        base_artifact_path.append("prim")
-    if args.all or args.rand:
-        base_artifact_path.append("rand")
-    if args.all or args.rccl:
-        base_artifact_path.append("rccl")
+    artifact_paths = []
+    all_artifacts = ["blas", "fft", "miopen", "prim", "rand", "rccl"]
+    if args.blas:
+        artifact_paths.append("blas")
+    if args.fft:
+        artifact_paths.append("fft")
+    if args.miopen:
+        artifact_paths.append("miopen")
+    if args.prim:
+        artifact_paths.append("prim")
+    if args.rand:
+        artifact_paths.append("rand")
+    if args.rccl:
+        artifact_paths.append("rccl")
 
     enabled_artifacts = []
-    for base_path in base_artifact_path:
+
+    # In the case that no library arguments were passed and base_only args is false, we install all artifacts
+    if not artifact_paths and not args.base_only:
+        artifact_paths = all_artifacts
+
+    for base_path in artifact_paths:
         enabled_artifacts.append(f"{base_path}_lib")
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
@@ -99,7 +105,8 @@ def run(args):
         print(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
     retrieve_base_artifacts(args, run_id, build_dir)
-    retrieve_enabled_artifacts(args, target, run_id, build_dir)
+    if not args.base_only:
+        retrieve_enabled_artifacts(args, target, run_id, build_dir)
 
 
 def main(argv):
@@ -176,7 +183,7 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--all", help="Include all artifacts", action="store_true"
+        "--base-only", help="Include only base artifacts", action="store_true"
     )
 
     args = parser.parse_args(argv)
