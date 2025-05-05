@@ -26,6 +26,7 @@ jobs:
     needs: [build_linux_packages]
     name: Test Linux Packages
     # If the dependent job failed/cancelled, this job will not be run
+    # The run_linux_tests_only "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
     if: >-
       ${{
         !failure() &&
