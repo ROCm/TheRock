@@ -1,7 +1,7 @@
-From 2da1e65ba8b479efc656c633d899b5617107a61d Mon Sep 17 00:00:00 2001
+From 55fc80d889a2bd4894251c180a9cb5526f4099f4 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 17 Feb 2025 16:47:57 -0800
-Subject: [PATCH 1/5] Rework LoadHIP.cmake to be based purely on
+Subject: [PATCH 1/6] Rework LoadHIP.cmake to be based purely on
  CMAKE_PREFIX_PATH.
 
 * Eliminates dependence on `/opt/rocm` and path based heuristics.

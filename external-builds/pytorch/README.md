@@ -1,5 +1,12 @@
 # Build ROCM PyTorch
 
+## Build Pytorch, Pytorch vision and pytorch audio on Linux
+
+- cd external-builds/pytorch
+- ./checkout_and_build_all.sh
+
+## Build pytorch on Windows or on old way in Linux
+
 There is nothing special about this build procedure except that it is meant
 to run as part of the ROCM CI and development flow and leaves less room for
 interpretation with respect to golden path in upstream docs.
@@ -12,7 +19,7 @@ This incorporates advice from:
 Note that the above statement is currently aspirational as we contain some
 patches locally until they can be upstreamed. See the `patches` directory.
 
-## Step 0: Prep venv
+### Step 0: Prep venv
 
 It is highly recommended to use a virtual environment unless if in a throw-away
 container/CI environment.
@@ -22,7 +29,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-## Step 1: Preparing sources
+### Step 1: Preparing sources
 
 ```
 # Checks out the most recent stable release branch of PyTorch, hipifies and
@@ -30,7 +37,7 @@ source .venv/bin/activate
 ./ptbuild.py checkout
 ```
 
-## Step 2: Install Deps
+### Step 2: Install Deps
 
 Python deps:
 
@@ -39,7 +46,7 @@ pip install -r src/requirements.txt
 pip install mkl-static mkl-include
 ```
 
-## Step 3: Setup and Build
+### Step 3: Setup and Build
 
 ```
 export CMAKE_PREFIX_PATH="$(realpath ../../build/dist/rocm)"

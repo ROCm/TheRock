@@ -227,6 +227,7 @@ def main(argv):
             "HIPIFY",
             "llvm-project",
             "rccl",
+            "rccl-tests",
             "rocm_smi_lib",
             "rocm-cmake",
             "rocm-core",

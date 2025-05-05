@@ -1,7 +1,7 @@
-From f177e4c066b796990b950d9739149dcba7070b37 Mon Sep 17 00:00:00 2001
+From 4c446b9ea5171a14e15ce17fbc58b05df5b29025 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Tue, 1 Apr 2025 18:49:42 -0700
-Subject: [PATCH 5/5] Preload rocm-sdk binaries if available.
+Subject: [PATCH 5/6] Preload rocm-sdk binaries if available.
 
 ---
  torch/__init__.py | 27 ++++++++++++++++++++++++++-

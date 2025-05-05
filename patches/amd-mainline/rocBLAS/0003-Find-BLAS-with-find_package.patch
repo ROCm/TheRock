@@ -1,7 +1,7 @@
-From 7fcef8049c4e0171531750e53cd3cf1a3e9085e0 Mon Sep 17 00:00:00 2001
+From ca1db68c1a86de91f2a7b865a08db295761bd102 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Mon, 24 Mar 2025 22:01:01 +0000
-Subject: [PATCH 3/6] Find BLAS with `find_package()`
+Subject: [PATCH 3/9] Find BLAS with `find_package()`
 
 Switches to `find_package()` insteaf of assuming that the reference BLAS
 is available without any check. This also allows to use OpenBLAS.
@@ -33,5 +33,5 @@ index 33b71d0d..12bd44d7 100644
    if ( WARN_NOT_ILP64_PREFERRED )
      message( WARNING "Using ${BLAS_LIBRARY} as reference library, 64-bit tests may fail. Test suite should be run with --gtest_filter=-*stress*")
 -- 
-2.47.1.windows.2
+2.45.1.windows.1
 

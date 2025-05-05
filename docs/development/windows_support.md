@@ -48,13 +48,13 @@ mainline, in open source, using MSVC, etc.).
 | math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ✅        | No shared libraries                           |
 | math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ✅        | No shared libraries                           |
 | math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ✅        |                                               |
-| math-libs (blas) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ❔        | Under evaluation                              |
-| math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ❔        | In progress                                   |
-| math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ❔        |                                               |
-| math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ❔        |                                               |
-| math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ❔        |                                               |
-| math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ❔        |                                               |
-| math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ❔        |                                               |
+| math-libs (blas) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ✅        |                                               |
+| math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Running tests needs PyYAML and a dll copied   |
+| math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ✅        | Tests need rocblas.dll and can't find files   |
+| math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ✅        | Same as rocSPARSE + also needs rocsparse.dll  |
+| math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ✅        |                                               |
+| math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ✅        | Tests need dlls                               |
+| math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ✅        | Tests need dlls                               |
 |                  |                                                                              |           |                                               |
 | ml-libs          | [MIOpen](https://github.com/ROCm/MIOpen)                                     | ❔        |                                               |
 
@@ -149,6 +149,13 @@ You will need:
 
 ```bash
 git clone https://github.com/ROCm/TheRock.git
+
+# Clone interop library from https://github.com/nod-ai/amdgpu-windows-interop
+# for CLR (the "HIP runtime") on Windows. The path used can also be configured
+# using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable.
+git clone https://github.com/nod-ai/amdgpu-windows-interop.git
+
+cd TheRock
 python ./build_tools/fetch_sources.py
 ```
 
@@ -163,13 +170,13 @@ cmake -B build -GNinja . \
   -DTHEROCK_ENABLE_HIPIFY=ON \
   -DTHEROCK_ENABLE_CORE=OFF \
   -DTHEROCK_ENABLE_CORE_RUNTIME=OFF \
-  -DTHEROCK_ENABLE_HIP_RUNTIME=OFF \
+  -DTHEROCK_ENABLE_HIP_RUNTIME=ON \
   -DTHEROCK_ENABLE_PROFILER_SDK=OFF \
   -DTHEROCK_ENABLE_COMM_LIBS=OFF \
   -DTHEROCK_ENABLE_MATH_LIBS=OFF \
-  -DTHEROCK_ENABLE_RAND=OFF \
-  -DTHEROCK_ENABLE_PRIM=OFF \
-  -DTHEROCK_ENABLE_FFT=OFF \
+  -DTHEROCK_ENABLE_RAND=ON \
+  -DTHEROCK_ENABLE_PRIM=ON \
+  -DTHEROCK_ENABLE_FFT=ON \
   -DTHEROCK_ENABLE_BLAS=OFF \
   -DTHEROCK_ENABLE_SPARSE=OFF \
   -DTHEROCK_ENABLE_SOLVER=OFF \
@@ -214,38 +221,34 @@ https://github.com/ROCm/clr (notably for `amdhip64_6.dll`) on Windows.
 Historically this has been a closed source component due to the dependency on
 [Platform Abstraction Library (PAL)](https://github.com/GPUOpen-Drivers/pal)
 and providing a fully open source build will take more time. As an incremental
-step towards a fully open source build, we will use a `compute-win` folder
-containing header files and static library `.lib` files for PAL and related
-components.
+step towards a fully open source build, we will use an interop folder containing
+header files and static library `.lib` files for PAL and related components.
 
 An incremental rollout is planned:
 
-1. *(We are here today)* The `compute-win` folder must be manually copied into
-   place at `core/compute-win`. This will allow AMD developers to iterate on
-   integration into TheRock while we work on making this folder or more source
-   files available.
-1. The `compute-win` folder will be available publicly and will be included
-   automatically from either a git repository or cloud storage (like the
-   existing third party dep mirrors in [`third-party/`](../../third-party/)).
+1. The interop folder must be manually copied into place in the source tree.
+   This will allow AMD developers to iterate on integration into TheRock while
+   we work on making this folder or more source files available.
+1. *(We are here today)* The interop folder will be available publicly
+   (currently at https://github.com/nod-ai/amdgpu-windows-interop).
+1. The interop folder will be included automatically from either a git
+   repository or cloud storage (like the existing third party dep mirrors in
+   [`third-party/`](../../third-party/)).
 1. A more permanent open source strategy for building the CLR (the HIP runtime)
    from source on Windows will eventually be available.
 
-With the `compute-win` folder available, build by configuring CMake with these
-options set:
+If configured correctly, outputs like
+`build/core/clr/dist/bin/amdhip64_6.dll` should be generated by the build.
+
+If the interop folder is _not_ available, sub-project support is limited and
+features should be turned off:
 
 ```bash
--DTHEROCK_ENABLE_CORE=ON \
--DTHEROCK_ENABLE_HIP_RUNTIME=ON \
-```
-
-then look for `build/core/clr/dist/bin/amdhip64_6.dll` and related outputs.
-
-With the HIP runtime building, these flags can also now be enabled:
-
-```bash
--DTHEROCK_ENABLE_RAND=ON \
--DTHEROCK_ENABLE_PRIM=ON \
--DTHEROCK_ENABLE_FFT=ON \
+-DTHEROCK_ENABLE_CORE=OFF \
+-DTHEROCK_ENABLE_HIP_RUNTIME=OFF \
+-DTHEROCK_ENABLE_RAND=OFF \
+-DTHEROCK_ENABLE_PRIM=OFF \
+-DTHEROCK_ENABLE_FFT=OFF \
 ```
 
 ### Testing
