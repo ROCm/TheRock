@@ -42,6 +42,34 @@ import sys
 import time
 
 
+def periodic_log_sync(
+    log_path: Path, s3_bucket: str, s3_subdir: str, interval: int = 30
+):
+    def sync():
+        while True:
+            time.sleep(interval)
+            if not log_path.exists():
+                continue
+            try:
+                subprocess.run(
+                    [
+                        "aws",
+                        "s3",
+                        "cp",
+                        str(log_path),
+                        f"s3://{s3_bucket}/{s3_subdir}/{log_path.name}",
+                        "--content-type",
+                        "text/plain",
+                    ],
+                    check=True,
+                )
+            except Exception as e:
+                print(f"[teatime] periodic upload failed: {e}", file=sys.stderr)
+
+    thread = threading.Thread(target=sync, daemon=True)
+    thread.start()
+
+
 def upload_logs_to_s3(log_path: Path):
     upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
     s3_bucket = os.getenv("TEATIME_S3_BUCKET")
@@ -84,7 +112,6 @@ def upload_logs_to_s3(log_path: Path):
                 ],
                 check=True,
             )
-
     except Exception as e:
         print(f"[teatime] S3 upload failed: {e}", file=sys.stderr)
 
