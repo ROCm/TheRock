@@ -31,6 +31,7 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+      S3_BUCKET: therock-artifacts
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -109,11 +110,27 @@ jobs:
           path: ${{ env.CACHE_DIR }}
           key: linux-build-packages-manylinux-v2-${{ github.sha }}
 
+      # AWS credentials for non-forked pull requests
       - name: Configure AWS Credentials
+        if: ${{ github.event.pull_request.head.repo.full_name == 'org/repo' }}
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+
+      # AWS credentials for forked pull requests
+      - name: Configure AWS Credentials for forked repos
+        if: ${{ github.event.pull_request.head.repo.full_name != 'org/repo' }}
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+
+      # Update S3_BUCKET ENV variable if it's a forked repo
+      - name: Update S3_BUCKET variable for forked repo
+        if: ${{ github.event.pull_request.head.repo.full_name != 'org/repo' }}
+        run: |
+          echo "S3_BUCKET=therock-artifacts-external" >> $GITHUB_ENV
 
       # TODO: Move to script
       - name: Create Index Files
@@ -128,23 +145,23 @@ jobs:
       # TODO: Move to script
       - name: Upload Artifacts
         run: |
-          aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}/ \
+          aws s3 cp build/artifacts/ s3://${{ env.S3_BUCKET }}/${{github.run_id}}/ \
             --recursive --no-follow-symlinks \
             --exclude "*" \
             --include "*.tar.xz*"
-          aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html
+          aws s3 cp build/artifacts/index.html s3://${{ env.S3_BUCKET }}/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html
 
       # TODO: Move to script
       - name: Upload Logs
         run: |
-          aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
+          aws s3 cp build/logs/ s3://${{ env.S3_BUCKET }}/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
             --recursive \
             --content-type="text/plain" \
             --exclude "*" \
             --include "*.log"
-          aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/
+          aws s3 cp build/logs/index.html s3://${{ env.S3_BUCKET }}/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/
 
       - name: Add Links to Job Summary
         run: |
-          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
-          echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY
+          echo '* [Artifacts](https://${{ env.S3_BUCKET }}.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
+          echo '* [Build logs](https://${{ env.S3_BUCKET }}.s3.us-east-2.amazonaws.com/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY
