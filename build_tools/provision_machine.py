@@ -26,20 +26,22 @@ Note: the script will overwrite the output directory argument. If no argument is
 """
 
 import argparse
-import sys
-import os
-import shutil
 from fetch_artifacts import (
     retrieve_base_artifacts,
     retrieve_enabled_artifacts,
     s3_bucket_exists,
 )
-from pathlib import Path
-import tarfile
-from tqdm import tqdm
-from _therock_utils.artifacts import ArtifactPopulator
-import requests
+import os
 from packaging.version import Version, InvalidVersion
+from pathlib import Path
+import platform
+import requests
+import shutil
+import subprocess
+import sys
+import tarfile
+from _therock_utils.artifacts import ArtifactPopulator
+from tqdm import tqdm
 
 
 def log(*args, **kwargs):
@@ -238,6 +240,33 @@ def retrieve_artifacts_by_release(args):
     log(f"Retrieving artifacts for run ID {release_tag}")
 
 
+def retrieve_artifacts_by_input_dir(args):
+    input_dir = args.input_dir
+    output_dir = args.output_dir
+    log(f"Retrieving artifacts from input dir {input_dir}")
+
+    # Check to make sure rsync exists
+    if not shutil.which("rsync"):
+        log("Error: rsync command not found.")
+        if platform.system() == "Windows":
+            log("Please install rsync via MSYS2 or WSL to your Windows system")
+        return
+
+    cmd = [
+        "rsync",
+        "-azP",  # archive, compress and progress indicator
+        input_dir,
+        output_dir,
+    ]
+    try:
+        subprocess.run(cmd, check=True)
+        log(f"Retrieved artifacts from input dir {input_dir} to {output_dir}")
+    except Exception as ex:
+        # rsync is not available
+        log(f"Error when running [{cmd}]")
+        log(str(ex))
+
+
 def run(args):
     log("### Provisioning TheRock 🪨 ###")
     _create_output_directory(args)
@@ -245,6 +274,9 @@ def run(args):
         retrieve_artifacts_by_run_id(args)
     elif args.release:
         retrieve_artifacts_by_release(args)
+
+    if args.input_dir:
+        retrieve_artifacts_by_input_dir(args)
 
 
 def main(argv):
@@ -273,6 +305,12 @@ def main(argv):
         "--release",
         type=str,
         help="Github release version of TheRock to provision, from the nightly-release (X.Y.ZrcYYYYMMDD) or dev-release (X.Y.Z.dev0+{hash})",
+    )
+
+    group.add_argument(
+        "--input-dir",
+        type=str,
+        help="Pass in an existing directory of TheRock to provision and test",
     )
 
     args = parser.parse_args(argv)
