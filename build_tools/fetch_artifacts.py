@@ -6,10 +6,12 @@
 # but those artifacts may not have all required dependencies.
 
 import argparse
+import platform
 import subprocess
 import sys
 
 GENERIC_VARIANT = "generic"
+PLATFORM = platform.system()
 
 
 def log(*args, **kwargs):
@@ -68,7 +70,11 @@ def retrieve_base_artifacts(args, run_id, build_dir):
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
     artifact_paths = []
-    all_artifacts = ["blas", "fft", "miopen", "prim", "rand", "rccl"]
+    all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
+    # RCCL is disabled for Windows
+    if PLATFORM != "Windows":
+        all_artifacts.append("rccl")
+
     if args.blas:
         artifact_paths.append("blas")
     if args.fft:
@@ -79,7 +85,7 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
         artifact_paths.append("prim")
     if args.rand:
         artifact_paths.append("rand")
-    if args.rccl:
+    if args.rccl and PLATFORM != "Windows":
         artifact_paths.append("rccl")
 
     enabled_artifacts = []

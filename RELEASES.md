@@ -38,20 +38,12 @@ popd
 
 This script installs ROCm community builds produced by TheRock from either a developer/nightly release, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally.
 
-Script setup:
-
-```
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python build_tools/install_rocm_from_artifacts.py --help
-```
-
 Examples:
 
 - Downloads all gfx94X S3 artifacts from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
 
   ```
-  python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests
+  python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --tests
   ```
 
 - Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:

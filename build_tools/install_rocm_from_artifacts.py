@@ -10,11 +10,11 @@ It installs TheRock to an output directory from one of these sources:
 Usage:
 python build_tools/install_rocm_from_artifacts.py [--output-dir OUTPUT_DIR] [--amdgpu-family AMDGPU_FAMILY] (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
                                         [--blas | --no-blas] [--fft | --no-fft] [--miopen | --no-miopen] [--prim | --no-prim]
-                                        [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--all]
+                                        [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
 
 Examples:
 - Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
-    - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --all --tests`
+    - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --tests`
 - Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`
 - Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`:
@@ -22,7 +22,7 @@ Examples:
 
 You can select your AMD GPU family from this file https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81
 
-For GitHub CI workflow artifact retrieval, only the base artifacts will be downloaded. If you want to include specific artifacts, please pass in the correct flag such as `--rand` (include RAND artifacts) or `--tests` (include test artifacts). For all artifacts, please include `--all`.
+By default for CI workflow retrieval, all artifacts (excluding test artifacts) will be downloaded. For specific artifacts, pass in the flag such as `--rand` (RAND artifacts) For test artifacts, pass in the flag `--tests` (test artifacts). For base artifacts only, pass in the flag `--base-only`
 
 Note: the script will overwrite the output directory argument. If no argument is passed, it will overwrite the default "therock-build" directory.
 """
@@ -33,17 +33,17 @@ from fetch_artifacts import (
     retrieve_enabled_artifacts,
     s3_bucket_exists,
 )
+import json
 import os
-from packaging.version import Version, InvalidVersion
 from pathlib import Path
 import platform
-import requests
+import re
 import shutil
 import subprocess
 import sys
 import tarfile
 from _therock_utils.artifacts import ArtifactPopulator
-from tqdm import tqdm
+from urllib.request import urlopen, Request
 
 
 def log(*args, **kwargs):
@@ -56,14 +56,9 @@ def _untar_files(output_dir, destination):
     Retrieves all tar files in the output_dir, then extracts all files to the output_dir
     """
     output_dir_path = Path(output_dir).resolve()
-    # In order to get better visibility on untar-ing status, tqdm adds a progress bar
     log(f"Extracting {destination.name} to {output_dir}")
     with tarfile.open(destination) as extracted_tar_file:
-        for member in tqdm(
-            iterable=extracted_tar_file.getmembers(),
-            total=len(extracted_tar_file.getmembers()),
-        ):
-            extracted_tar_file.extract(member=member, path=output_dir_path)
+        extracted_tar_file.extractall(output_dir_path)
     destination.unlink()
 
 
@@ -99,19 +94,20 @@ def _get_github_release_assets(release_tag, amdgpu_family, release_version):
     if gh_token:
         headers["Authentication"] = f"Bearer {gh_token}"
 
-    response = requests.get(github_release_url, headers=headers)
-    if response.status_code == 403:
-        log(
-            f"Error when retrieving GitHub release assets for release tag '{release_tag}'. This is most likely a rate limiting issue, so please try again"
-        )
-        return
-    elif response.status_code != 200:
-        log(
-            f"Error when retrieving GitHub release assets for release tag '{release_tag}'. Exiting..."
-        )
-        return
+    request = Request(github_release_url, headers=headers)
+    with urlopen(request) as response:
+        if response.status == 403:
+            log(
+                f"Error when retrieving GitHub release assets for release tag '{release_tag}'. This is most likely a rate limiting issue, so please try again"
+            )
+            return
+        elif response.status != 200:
+            log(
+                f"Error when retrieving GitHub release assets for release tag '{release_tag}'. Exiting..."
+            )
+            return
 
-    release_data = response.json()
+        release_data = json.loads(response.read().decode("utf-8"))
 
     # We retrieve the most recent release asset that matches the amdgpu_family
     # In the cases of "nightly-release" or "dev-release", this will retrieve the the specified version or latest
@@ -147,17 +143,12 @@ def _download_github_release_asset(asset_data, output_dir):
     destination = Path(output_dir) / asset_name
     headers = {"Accept": "application/octet-stream"}
     # Making the API call to retrieve the asset
-    response = requests.get(asset_url, stream=True, headers=headers)
+    request = Request(asset_url, headers=headers)
 
-    # Downloading the asset in chunks to destination
-    # In order to get better visibility on downloading status, tqdm adds a progress bar
-    total_size = int(response.headers.get("content-length", 0))
-    block_size = 1024
-    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
-        with open(destination, "wb") as file:
-            for chunk in response.iter_content(block_size * block_size):
-                progress_bar.update(len(chunk))
-                file.write(chunk)
+    with urlopen(request) as response_obj, open(destination, "wb") as file:
+        # Downloading the asset to destination
+        log(f"Downloading tar file to {str(destination)}")
+        shutil.copyfileobj(response_obj, file)
 
     # After downloading the asset, untar-ing the file
     _untar_files(output_dir, destination)
@@ -205,22 +196,15 @@ def retrieve_artifacts_by_release(args):
         release_tag = "nightly-release"
     # Otherwise, determine if version is nightly-release or dev-release
     else:
-        try:
-            version = Version(args.release)
-            if not version.is_devrelease and not version.is_prerelease:
-                log(f"This script requires a nightly-release or dev-release version.")
-                log("Please retrieve the correct release version from:")
-                log(
-                    "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)"
-                )
-                log(
-                    "\t - https://github.com/ROCm/TheRock/releases/tag/dev-release (dev-release example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
-                )
-                log("Exiting...")
-                return
-            release_tag = "dev-release" if version.is_devrelease else "nightly-release"
-        except InvalidVersion:
-            log(f"Invalid release version '{args.release}'")
+        # Searching for nightly-release or dev-release format
+        nightly_regex_expression = (
+            "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+        )
+        dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
+        nightly_release = re.search(nightly_regex_expression, args.release) != None
+        dev_release = re.search(dev_regex_expression, args.release) != None
+        if not nightly_release and not dev_release:
+            log(f"This script requires a nightly-release or dev-release version.")
             log("Please retrieve the correct release version from:")
             log(
                 "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)"
@@ -230,6 +214,8 @@ def retrieve_artifacts_by_release(args):
             )
             log("Exiting...")
             return
+
+        release_tag = "nightly-release" if nightly_release else "dev-release"
     release_version = args.release
 
     log(f"Retrieving artifacts for release tag {release_tag}")
