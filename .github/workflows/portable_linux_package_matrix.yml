@@ -123,38 +123,38 @@ jobs:
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
 
-      - name: Upload Nightly Release
+      - name: Upload Nightly Tarball to GitHub
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
         uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
         with:
           artifacts: "${{ env.DIST_ARCHIVE }}"
-          tag: "nightly-release"
-          name: "nightly-release"
-          body: "Automatic nightly release of TheRock."
+          tag: "nightly-tarball"
+          name: "nightly-tarball"
+          body: "Automatic nightly tarball of TheRock."
           removeArtifacts: false
           allowUpdates: true
           replacesArtifacts: true
           makeLatest: false
 
-      - name: Upload Development Release
+      - name: Upload Development Tarball to GitHub
         if: ${{ inputs.build_type == 'dev'}}
         uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
         with:
           artifacts: "${{ env.DIST_ARCHIVE }}"
-          tag: "dev-release"
-          name: "dev-release"
-          body: "Development release of TheRock."
+          tag: "dev-tarball"
+          name: "dev-tarball"
+          body: "Development tarball of TheRock."
           removeArtifacts: false
           allowUpdates: true
           replacesArtifacts: true
           makeLatest: false
 
-      - name: Trigger test nightly release package workflow
+      - name: Trigger testing nightly tarball
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
           workflow: test_release_packages.yml
-          inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-release", "file_name": "${{ env.FILE_NAME }}", "target": "${{ matrix.target_bundle.amdgpu_family }}" }'
+          inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-tarball", "file_name": "${{ env.FILE_NAME }}", "target": "${{ matrix.target_bundle.amdgpu_family }}" }'
 
       - name: Report
         if: ${{ !cancelled() }}
