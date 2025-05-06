@@ -11,7 +11,8 @@ on:
         default: gfx110X-dgpu
       build_testing:
         type: string
-        default: ON
+        description: "Value for -DBUILD_TESTING CMake option (ON/OFF)"
+        default: "ON"
 
   workflow_call:
     inputs:
@@ -22,7 +23,7 @@ on:
         type: string
       build_testing:
         type: string
-        default: ON
+        default: "ON"
 
 jobs:
   build_windows_packages:
