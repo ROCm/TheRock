@@ -10,12 +10,12 @@ on:
       test_runs_on:
         type: string
       linux_use_prebuilt_artifacts:
-        type: string
+        type: boolean
 
 jobs:
   build_linux_packages:
     name: Build
-    if: ${{ inputs.linux_use_prebuilt_artifacts == 'false' }}
+    if: ${{ inputs.linux_use_prebuilt_artifacts == false }}
     uses: ./.github/workflows/build_linux_packages.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
@@ -32,8 +32,8 @@ jobs:
         !failure() &&
         !cancelled() &&
         (
-          inputs.linux_use_prebuilt_artifacts == 'false' ||
-          inputs.linux_use_prebuilt_artifacts == 'true'
+          inputs.linux_use_prebuilt_artifacts == false ||
+          inputs.linux_use_prebuilt_artifacts == true
         )
       }}
     strategy:
