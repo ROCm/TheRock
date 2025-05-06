@@ -57,7 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.linux_amdgpu_families) }}
-    uses: ./.github/workflows/linux_build_and_test.yml
+    uses: ./.github/workflows/ci_linux.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
@@ -78,7 +78,7 @@ jobs:
       fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.windows_amdgpu_families) }}
-    uses: ./.github/workflows/windows_build_and_test.yml
+    uses: ./.github/workflows/ci_windows.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
       windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == 'true' && 'true' || 'false' }}
