@@ -128,7 +128,7 @@ jobs:
           python build/indexer.py -f '*.log' build/logs/
           sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}.html",g' build/logs/index.html
 
-      - name: Re-authenticate AWS credentials (before artifact upload)
+      - name: Configure AWS Credentials
         if: ${{ !cancelled() }}
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
