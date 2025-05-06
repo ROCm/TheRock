@@ -60,6 +60,7 @@ jobs:
       amdgpu_families: ${{ matrix.families.family }}
     permissions:
       id-token: write
+      contents: read
 
   build_windows_packages:
     name: Build Windows Packages
