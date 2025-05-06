@@ -75,7 +75,9 @@ jobs:
           perl-version: "5.40"
           distribution: strawberry
 
-      # Must be after other installs, so MSVC get priority in the PATH.
+      # After other installs, so MSVC get priority in the PATH.
+      # Ordering may still matter even if we install Strawberry Perl directly
+      # and drop the explicit CC/CXX env vars below.
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
