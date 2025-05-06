@@ -31,10 +31,7 @@ jobs:
       ${{
         !failure() &&
         !cancelled() &&
-        (
-          inputs.linux_use_prebuilt_artifacts == false ||
-          inputs.linux_use_prebuilt_artifacts == true
-        )
+        true
       }}
     strategy:
       fail-fast: false
