@@ -10,7 +10,7 @@ on:
       test_runs_on:
         type: string
       linux_use_prebuilt_artifacts:
-        type: boolean
+        type: string
 
 jobs:
   build_linux_packages:
