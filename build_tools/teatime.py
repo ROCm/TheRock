@@ -154,6 +154,13 @@ class OutputSink:
             self.log_file = open(self.log_path, "wb")
         self.log_timestamps: bool = args.log_timestamps
 
+        # Start background uploader
+        if self.log_path and os.getenv("TEATIME_S3_UPLOAD", "0") == "1":
+            s3_bucket = os.getenv("TEATIME_S3_BUCKET")
+            s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
+            if s3_bucket and s3_subdir:
+                periodic_log_sync(self.log_path, s3_bucket, s3_subdir)
+
     def start(self):
         if self.gh_group_label is not None:
             self.out.write(b"::group::" + self.gh_group_label + b"\n")
