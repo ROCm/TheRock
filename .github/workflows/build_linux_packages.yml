@@ -18,9 +18,30 @@ on:
         type: string
 
 jobs:
+  setup_metadata:
+    runs-on: ubuntu-24.04
+    outputs:
+      experimental: ${{ steps.experimental.outputs.experimental }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Python
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        with:
+          python-version: 3.12
+      - name: Determine if amdgpu family is experimental
+        id: experimental
+        env:
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          PLATFORM: "linux"
+        run: python ./build_tools/github_action/determine_experimental_machine.py
+
   build_linux_packages:
     name: Build Linux Packages
+    needs: [setup_metadata]
     runs-on: azure-linux-scale-rocm
+    # In the case that the amdgpu family is experimental, allow errors
+    continue-on-error: ${{ needs.setup_metadata.outputs.experimental == 'true' }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     strategy:

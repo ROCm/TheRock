@@ -32,6 +32,8 @@ jobs:
 
     name: ${{ matrix.targets.amdgpu_family }}::Build
     runs-on: azure-linux-scale-rocm
+    # In the case that the amdgpu family is experimental, allow errors
+    continue-on-error: ${{ matrix.targets.experimental == 'true' }}
     needs: [setup_metadata]
     env:
       REGISTRY: ghcr.io

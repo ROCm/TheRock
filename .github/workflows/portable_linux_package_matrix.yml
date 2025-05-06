@@ -74,6 +74,8 @@ jobs:
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    # In the case that the amdgpu family is experimental, allow errors
+    continue-on-error: ${{ matrix.target_bundle.experimental == 'true' }}
     permissions:
       contents: write
       actions: write # Added permission to trigger workflows

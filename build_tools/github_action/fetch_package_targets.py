@@ -33,7 +33,17 @@ def main(args):
         else:
             family = amdgpu_family_info_matrix.get(key).get("linux").get("family")
 
-        package_targets.append({"amdgpu_family": family})
+        experimental_amdgpu_family = (
+            amdgpu_family_info_matrix.get(key).get("linux").get("experimental")
+        )
+        if experimental_amdgpu_family:
+            experimental = True
+        else:
+            experimental = False
+
+        package_targets.append(
+            {"amdgpu_family": family, "experimental": json.dumps(experimental)}
+        )
 
     set_github_output({"package_targets": json.dumps(package_targets)})
 

@@ -8,6 +8,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "pytorch-target": "gfx90a",
+            "experimental": True,
         }
     },
     "gfx94x": {
@@ -22,6 +23,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "pytorch-target": "gfx1010",
+            "experimental": True,
         }
     },
     "gfx103x": {
@@ -29,6 +31,7 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "pytorch-target": "gfx1030",
+            "experimental": True,
         }
     },
     "gfx110x": {
