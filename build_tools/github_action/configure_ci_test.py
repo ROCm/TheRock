@@ -31,7 +31,7 @@ class ConfigureCITest(TestCase):
     def test_valid_linux_workflow_dispatch_matrix_generator(self):
         build_families = {"amdgpu_families": "   gfx94X ,|.\\,  gfx1200"}
         linux_target_output = configure_ci.matrix_generator(
-            False, True, False, {}, build_families, True
+            False, True, False, {}, build_families, "linux"
         )
         target_to_compare = [
             {
@@ -47,7 +47,7 @@ class ConfigureCITest(TestCase):
             "amdgpu_families": "",
         }
         linux_target_output = configure_ci.matrix_generator(
-            False, True, False, {}, build_families, True
+            False, True, False, {}, build_families, "linux"
         )
         self.assertEqual(linux_target_output, [])
 
@@ -56,7 +56,7 @@ class ConfigureCITest(TestCase):
             "pr_labels": '{"labels":[{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"}]}'
         }
         linux_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, True
+            True, False, False, base_args, {}, "linux"
         )
         linux_target_output.sort(key=lambda item: item["family"])
         linux_target_to_compare = [
@@ -75,7 +75,7 @@ class ConfigureCITest(TestCase):
             "pr_labels": '{"labels":[{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"gfx110X-windows"}]}'
         }
         windows_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, False
+            True, False, False, base_args, {}, "windows"
         )
         windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(windows_target_output, windows_target_to_compare)
@@ -85,7 +85,7 @@ class ConfigureCITest(TestCase):
             "pr_labels": '{"labels":[{"name":"gfx10000X-linux"},{"name":"gfx110000X-windows"}]}'
         }
         linux_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, True
+            True, False, False, base_args, {}, "linux"
         )
         linux_target_output.sort(key=lambda item: item["family"])
         linux_target_to_compare = [
@@ -102,7 +102,7 @@ class ConfigureCITest(TestCase):
     def test_empty_windows_pull_request_matrix_generator(self):
         base_args = {"pr_labels": "{}"}
         windows_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, False
+            True, False, False, base_args, {}, "windows"
         )
         windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(windows_target_output, windows_target_to_compare)
@@ -110,7 +110,7 @@ class ConfigureCITest(TestCase):
     def test_main_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
         linux_target_output = configure_ci.matrix_generator(
-            False, False, True, base_args, {}, True
+            False, False, True, base_args, {}, "linux"
         )
         linux_target_output.sort(key=lambda item: item["family"])
         linux_target_to_compare = [
@@ -136,7 +136,7 @@ class ConfigureCITest(TestCase):
     def test_main_windows_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
         windows_target_output = configure_ci.matrix_generator(
-            False, False, True, base_args, {}, False
+            False, False, True, base_args, {}, "windows"
         )
         windows_target_output.sort(key=lambda item: item["family"])
         windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
@@ -149,7 +149,7 @@ class ConfigureCITest(TestCase):
             "amdgpu_families": "   gfx94X ,|.\\,  gfx1201X, --   gfx90X",
         }
         linux_target_output = configure_ci.matrix_generator(
-            False, False, True, base_args, build_families, True
+            False, False, True, base_args, build_families, "linux"
         )
         self.assertEqual(linux_target_output, [])
 

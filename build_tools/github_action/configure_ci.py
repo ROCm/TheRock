@@ -200,7 +200,12 @@ def get_pr_labels(args) -> List[str]:
 
 
 def matrix_generator(
-    is_pull_request, is_workflow_dispatch, is_push, base_args, families, is_linux=True
+    is_pull_request,
+    is_workflow_dispatch,
+    is_push,
+    base_args,
+    families,
+    platform="linux",
 ):
     """Parses and generates build matrix with build requirements"""
     potential_targets = []
@@ -228,7 +233,7 @@ def matrix_generator(
                 potential_targets.append(target)
 
         # Add the linux and windows default labels to the potential target lists
-        if is_linux:
+        if platform == "linux":
             potential_targets.extend(DEFAULT_LINUX_CONFIGURATIONS)
         else:
             potential_targets.extend(DEFAULT_WINDOWS_CONFIGURATIONS)
@@ -237,9 +242,9 @@ def matrix_generator(
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
         # Add all options
         for key in amdgpu_family_info_matrix:
-            if "linux" in amdgpu_family_info_matrix[key] and is_linux:
+            if "linux" in amdgpu_family_info_matrix[key] and platform == "linux":
                 potential_targets.append(key)
-            if "windows" in amdgpu_family_info_matrix[key] and not is_linux:
+            if "windows" in amdgpu_family_info_matrix[key] and platform == "windows":
                 potential_targets.append(key)
 
     # Ensure the targets in the list are unique
@@ -254,13 +259,13 @@ def matrix_generator(
         if (
             target in amdgpu_family_info_matrix
             and "linux" in amdgpu_family_info_matrix.get(target)
-            and is_linux
+            and platform == "linux"
         ):
             target_output.append(amdgpu_family_info_matrix.get(target).get("linux"))
         elif (
             target in amdgpu_family_info_matrix
             and "windows" in amdgpu_family_info_matrix.get(target)
-            and not is_linux
+            and platform == "windows"
         ):
             target_output.append(amdgpu_family_info_matrix.get(target).get("windows"))
 
@@ -297,7 +302,7 @@ def main(base_args, linux_families, windows_families):
         is_push,
         base_args,
         linux_families,
-        is_linux=True,
+        platform="linux",
     )
 
     print(f"Generating test matrix for Windows: {str(windows_families)}")
@@ -307,7 +312,7 @@ def main(base_args, linux_families, windows_families):
         is_push,
         base_args,
         windows_families,
-        is_linux=False,
+        platform="windows",
     )
 
     enable_build_jobs = False
