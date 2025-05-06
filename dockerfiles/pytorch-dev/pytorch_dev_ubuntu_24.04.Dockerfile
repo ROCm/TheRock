@@ -79,7 +79,7 @@ WORKDIR /therock/pytorch
 # configure it manually for now.
 RUN python3 setup.py build --cmake-only
 RUN (cd build && cmake "-DPYTORCH_ROCM_ARCH=$AMDGPU_TARGETS" .)
-RUN MAX_JOBS=8 python3 setup.py bdist_wheel
+RUN python3 setup.py bdist_wheel
 
 
 ################################################################################
