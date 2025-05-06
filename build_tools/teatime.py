@@ -40,6 +40,7 @@ import shlex
 import subprocess
 import sys
 import time
+import threading
 
 
 def periodic_log_sync(
