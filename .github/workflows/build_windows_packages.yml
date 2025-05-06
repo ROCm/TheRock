@@ -8,6 +8,10 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+        default: gfx110X-dgpu
+      build_testing:
+        type: string
+        default: ON
 
   workflow_call:
     inputs:
@@ -16,6 +20,9 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      build_testing:
+        type: string
+        default: ON
 
 jobs:
   build_windows_packages:
@@ -104,6 +111,7 @@ jobs:
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
           amdgpu_families="${{ inputs.amdgpu_families }}"
+          build_testing="${{ inputs.build_testing }}"
           echo "Building package ${package_version}"
 
           # Build.
@@ -113,6 +121,7 @@ jobs:
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
+            -DBUILD_TESTING="${build_testing}" \
             -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
             -DTHEROCK_ENABLE_BLAS=OFF \
             -DTHEROCK_ENABLE_SPARSE=OFF \
