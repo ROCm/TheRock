@@ -103,7 +103,7 @@ def _get_github_release_assets(release_tag, amdgpu_family, release_version):
             return
         elif response.status != 200:
             log(
-                f"Error when retrieving GitHub release assets for release tag '{release_tag}'. Exiting..."
+                f"Error when retrieving GitHub release assets for release tag '{release_tag}' with status code {response.status}. Exiting..."
             )
             return
 
@@ -204,7 +204,7 @@ def retrieve_artifacts_by_release(args):
         nightly_release = re.search(nightly_regex_expression, args.release) != None
         dev_release = re.search(dev_regex_expression, args.release) != None
         if not nightly_release and not dev_release:
-            log(f"This script requires a nightly-release or dev-release version.")
+            log("This script requires a nightly-release or dev-release version.")
             log("Please retrieve the correct release version from:")
             log(
                 "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)"
