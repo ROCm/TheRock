@@ -69,11 +69,13 @@ jobs:
       fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.build_windows_amdgpu_families) }}
-        build_testing: [ON, OFF]
+        extra_cmake_options:
+          - "-DBUILD_TESTING=ON"
+          - "-DBUILD_TESTING=OFF"
     uses: ./.github/workflows/build_windows_packages.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
-      build_testing: ${{ matrix.build_testing }}
+      extra_cmake_options: ${{ matrix.extra_cmake_options }}
 
   test_linux_packages:
     needs: [setup, build_linux_packages]
