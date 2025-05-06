@@ -10,7 +10,7 @@ on:
       test_runs_on:
         type: string
       linux_use_prebuilt_artifacts:
-        type: boolean
+        type: string
 
 jobs:
   build_linux_packages:
@@ -31,7 +31,10 @@ jobs:
       ${{
         !failure() &&
         !cancelled() &&
-        inputs.linux_use_prebuilt_artifacts != null
+        (
+          inputs.linux_use_prebuilt_artifacts == 'false' ||
+          inputs.linux_use_prebuilt_artifacts == 'true'
+        )
       }}
     strategy:
       fail-fast: false

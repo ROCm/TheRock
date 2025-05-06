@@ -62,7 +62,7 @@ jobs:
       amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == 'true' && true || false }}
+      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == 'true' && 'true' || 'false' }}
     permissions:
       id-token: write
 
