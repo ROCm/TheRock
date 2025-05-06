@@ -66,6 +66,19 @@ jobs:
           choco install ccache --yes
           choco install ninja --yes
 
+      # Note: this has side effects we may not want, such as setting the C/C++
+      # compiler to gcc! We could instead install Strawberry Perl
+      # (including gfortran.exe) directly.
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@22423f01bde48fb88785c007e3166fbbbd8e892a # v1.34.0
+        with:
+          perl-version: "5.40"
+          distribution: strawberry
+
+      # Must be after other installs, so MSVC get priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
       - name: Runner Health Settings
         run: |
           echo "CCACHE_DIR=${CCACHE_DIR}"
@@ -73,6 +86,9 @@ jobs:
           mkdir -p $CCACHE_DIR
           cmake --version
           echo "python: $(which python), python3: $(which python3)"
+          echo "perl: $(which perl), gfortran: $(which gfortran)"
+          perl --version
+          gfortran --version
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
           nthreads=$(nproc --all)
@@ -100,10 +116,14 @@ jobs:
           path: amdgpu-windows-interop
           lfs: true
 
-      - name: Configure MSVC
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
 
       - name: Configure Projects
+        env:
+          CC: ${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe   # Set to MSVC explicitly
+          CXX: ${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe  # Set to MSVC explicitly
         run: |
           # clear cache before build and after download
           ccache -z
@@ -122,10 +142,6 @@ jobs:
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
-            -DTHEROCK_ENABLE_BLAS=OFF \
-            -DTHEROCK_ENABLE_SPARSE=OFF \
-            -DTHEROCK_ENABLE_SOLVER=OFF \
-            -DTHEROCK_ENABLE_ML_LIBS=OFF \
             ${extra_cmake_options}
 
       - name: Build Projects
