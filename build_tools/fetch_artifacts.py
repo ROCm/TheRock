@@ -31,7 +31,7 @@ def s3_bucket_exists(run_id):
     return process.returncode == 0
 
 
-def s3_exec(variant, package, run_id, build_dir):
+def s3_cmd(variant, package, run_id, build_dir):
     cmd = [
         "aws",
         "s3",
@@ -41,11 +41,13 @@ def s3_exec(variant, package, run_id, build_dir):
         "--no-sign-request",
     ]
     log(f"++ Exec [{cmd}]")
-    try:
-        subprocess.run(cmd, check=True)
-    except Exception as ex:
-        log(f"Exception when executing [{cmd}]")
-        log(str(ex))
+    return " ".join(cmd)
+
+
+def s3_parallel_exec(cmds):
+    procs = [subprocess.Popen(cmd, check=False) for cmd in cmds]
+    for p in procs:
+        p.wait()
 
 
 def retrieve_base_artifacts(args, run_id, build_dir):
@@ -63,9 +65,12 @@ def retrieve_base_artifacts(args, run_id, build_dir):
     ]
     if args.blas:
         base_artifacts.append("host-blas_lib")
-
+    
+    cmds = []
     for base_artifact in base_artifacts:
-        s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
+        cmds.append(s3_cmd(GENERIC_VARIANT, base_artifact, run_id, build_dir))
+    s3_parallel_exec(cmds)
+    
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
@@ -99,8 +104,10 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
+    cmds = []
     for enabled_artifact in enabled_artifacts:
-        s3_exec(f"{target}", enabled_artifact, run_id, build_dir)
+        cmds.append(s3_cmd(f"{target}", enabled_artifact, run_id, build_dir))
+    s3_parallel_exec(cmds)
 
 
 def run(args):
