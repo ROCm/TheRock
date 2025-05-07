@@ -146,3 +146,4 @@ jobs:
       - name: Add Links to Job Summary
         run: |
           echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
+          echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY
