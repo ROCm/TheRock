@@ -77,7 +77,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        families: ${{ fromJSON(needs.setup.outputs.build_windows_amdgpu_families) }}
+        families: ${{ fromJSON(needs.setup.outputs.windows_amdgpu_families) }}
         extra_cmake_options:
           - "-DBUILD_TESTING=ON"
           - "-DBUILD_TESTING=OFF"
