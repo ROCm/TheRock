@@ -1,0 +1,263 @@
+From ec463aebc2d715101ee638e0a553d7385ebd89a7 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Wed, 7 May 2025 12:33:30 +0000
+Subject: [PATCH] Revert "SWDEV-506467 - Skip Abort in case of crash from the
+ device. (#60)"
+
+This reverts commit b2388dfb88443fe4773c789740368051662f0e68.
+
+See https://github.com/ROCm/clr/issues/161.
+---
+ hipamd/src/hip_internal.hpp       | 10 ++-----
+ rocclr/device/device.cpp          |  2 --
+ rocclr/device/device.hpp          |  5 ----
+ rocclr/device/rocm/rocdevice.cpp  | 46 +------------------------------
+ rocclr/device/rocm/rocdevice.hpp  |  7 -----
+ rocclr/device/rocm/rocvirtual.hpp | 46 +++++++++++--------------------
+ rocclr/utils/flags.hpp            |  2 --
+ 7 files changed, 19 insertions(+), 99 deletions(-)
+
+diff --git a/hipamd/src/hip_internal.hpp b/hipamd/src/hip_internal.hpp
+index 45d7dbe22..fe3b5498d 100644
+--- a/hipamd/src/hip_internal.hpp
++++ b/hipamd/src/hip_internal.hpp
+@@ -160,10 +160,7 @@ const char* ihipGetErrorName(hipError_t hip_error);
+ 
+ #define HIP_RETURN_DURATION(ret, ...)                                                              \
+   hip::tls.last_command_error_ = ret;                                                              \
+-  if (amd::Device::IsDeviceNotUsable()) {                                                          \
+-    hip::tls.last_error_ = hipErrorNoDevice;                                                       \
+-    hip::tls.last_command_error_ = hipErrorNoDevice;                                               \
+-  } else if (DEBUG_HIP_7_PREVIEW & amd::CHANGE_HIP_GET_LAST_ERROR) {                               \
++  if (DEBUG_HIP_7_PREVIEW & amd::CHANGE_HIP_GET_LAST_ERROR) {                                      \
+     if (hip::tls.last_command_error_ != hipSuccess &&                                              \
+            hip::tls.last_command_error_ != hipErrorNotReady) {                                     \
+       hip::tls.last_error_ = hip::tls.last_command_error_;                                         \
+@@ -178,10 +175,7 @@ const char* ihipGetErrorName(hipError_t hip_error);
+ 
+ #define HIP_RETURN(ret, ...)                                                                       \
+   hip::tls.last_command_error_ = ret;                                                              \
+-  if (amd::Device::IsDeviceNotUsable()) {                                                          \
+-    hip::tls.last_error_ = hipErrorNoDevice;                                                       \
+-    hip::tls.last_command_error_ = hipErrorNoDevice;                                               \
+-  } else if (DEBUG_HIP_7_PREVIEW & amd::CHANGE_HIP_GET_LAST_ERROR) {                               \
++  if (DEBUG_HIP_7_PREVIEW & amd::CHANGE_HIP_GET_LAST_ERROR) {                                      \
+     if (hip::tls.last_command_error_ != hipSuccess &&                                              \
+            hip::tls.last_command_error_ != hipErrorNotReady) {                                     \
+       hip::tls.last_error_ = hip::tls.last_command_error_;                                         \
+diff --git a/rocclr/device/device.cpp b/rocclr/device/device.cpp
+index f02d5b7ac..2e9ef8155 100644
+--- a/rocclr/device/device.cpp
++++ b/rocclr/device/device.cpp
+@@ -336,8 +336,6 @@ Context* Device::glb_ctx_ = nullptr;
+ Monitor Device::p2p_stage_ops_(true);
+ Memory* Device::p2p_stage_ = nullptr;
+ 
+-bool Device::device_not_usable_ = false;
+-
+ std::shared_mutex MemObjMap::AllocatedLock_ ROCCLR_INIT_PRIORITY(101);
+ std::map<uintptr_t, amd::Memory*> MemObjMap::MemObjMap_ ROCCLR_INIT_PRIORITY(101);
+ std::map<uintptr_t, amd::Memory*> MemObjMap::VirtualMemObjMap_ ROCCLR_INIT_PRIORITY(101);
+diff --git a/rocclr/device/device.hpp b/rocclr/device/device.hpp
+index 45e0ac1df..95d818427 100644
+--- a/rocclr/device/device.hpp
++++ b/rocclr/device/device.hpp
+@@ -2163,9 +2163,6 @@ class Device : public RuntimeObject {
+   virtual device::UriLocator* createUriLocator() const = 0;
+ #endif
+ #endif
+-
+-  static bool IsDeviceNotUsable() { return device_not_usable_; }
+-
+  protected:
+   //! Enable the specified extension
+   char* getExtensionString();
+@@ -2200,8 +2197,6 @@ class Device : public RuntimeObject {
+   uint64_t initial_heap_size_{HIP_INITIAL_DM_SIZE};  //!< Initial device heap size
+   amd::Monitor activeQueuesLock_ {}; //!< Guards access to the activeQueues set
+   std::unordered_set<amd::CommandQueue*> activeQueues; //!< The set of active queues
+-  static bool device_not_usable_; //!< If set, we should not launch any commands anymore.
+-
+  private:
+   const Isa *isa_;                //!< Device isa
+   bool IsTypeMatching(cl_device_type type, bool offlineDevices);
+diff --git a/rocclr/device/rocm/rocdevice.cpp b/rocclr/device/rocm/rocdevice.cpp
+index 6cbf80f74..6f121ec74 100644
+--- a/rocclr/device/rocm/rocdevice.cpp
++++ b/rocclr/device/rocm/rocdevice.cpp
+@@ -559,10 +559,6 @@ bool Device::init() {
+     }
+   }
+ 
+-  if (amd::IS_HIP) {
+-    RegisterBackendErrorCb();
+-  }
+-
+   return true;
+ }
+ 
+@@ -3393,41 +3389,6 @@ device::Signal* Device::createSignal() const {
+   return new roc::Signal();
+ }
+ 
+-// ================================================================================================
+-hsa_status_t Device::BackendErrorCallBackHandler(const hsa_amd_event_t* event, void* data) {
+-  switch (event->event_type) {
+-    case HSA_AMD_GPU_MEMORY_FAULT_EVENT:
+-      LogError("Memory Fault Error");
+-      break;
+-    case HSA_AMD_GPU_HW_EXCEPTION_EVENT:
+-      LogError("HW Exception Error");
+-      break;
+-    case HSA_AMD_GPU_MEMORY_ERROR_EVENT:
+-      LogError("GPU Memory Error");
+-      break;
+-    default:
+-      LogError("Unknown Event Type ");
+-      break;
+-  }
+-
+-  if (HIP_SKIP_ABORT_ON_GPU_ERROR) {
+-    device_not_usable_ = true;
+-  } else {
+-    abort();
+-  }
+-
+-  return HSA_STATUS_SUCCESS;
+-}
+-
+-// ================================================================================================
+-void Device::RegisterBackendErrorCb() {
+-  // Register ROCclr Error Callback
+-  hsa_status_t hsa_error = HSA_STATUS_SUCCESS;
+-  hsa_error = hsa_amd_register_system_event_handler(BackendErrorCallBackHandler, nullptr);
+-  if (hsa_error != HSA_STATUS_SUCCESS) {
+-    LogError("Cannot Register Call back event handler");
+-  }
+-}
+ // ================================================================================================
+ amd::Memory* Device::GetArenaMemObj(const void* ptr, size_t& offset, size_t size) {
+   // Only create arena_mem_object if CPU memory is accessible from HMM
+@@ -3595,12 +3556,7 @@ void callbackQueue(hsa_status_t status, hsa_queue_t* queue, void* data) {
+         "Callback: Queue %p aborting with error : %s code: 0x%x", queue->base_address,
+         errorMsg, status);
+     }
+-
+-    if (HIP_SKIP_ABORT_ON_GPU_ERROR) {
+-      amd::Device::device_not_usable_ = true;
+-    } else {
+-      abort();
+-    }
++    abort();
+   }
+ }
+ 
+diff --git a/rocclr/device/rocm/rocdevice.hpp b/rocclr/device/rocm/rocdevice.hpp
+index c1a7c3b92..f42b692f3 100644
+--- a/rocclr/device/rocm/rocdevice.hpp
++++ b/rocclr/device/rocm/rocdevice.hpp
+@@ -541,10 +541,6 @@ class Device : public NullDevice {
+ 
+   void getGlobalCUMask(std::string cuMaskStr);
+ 
+-  static hsa_status_t BackendErrorCallBackHandler(const hsa_amd_event_t* event, void* data);
+-
+-  static void RegisterBackendErrorCb();
+-
+   virtual amd::Memory* GetArenaMemObj(const void* ptr, size_t& offset, size_t size = 0);
+ 
+   const uint32_t getPreferredNumaNode() const { return preferred_numa_node_; }
+@@ -657,9 +653,6 @@ class Device : public NullDevice {
+   //! Code object to kernel info map (used in the crash dump analysis)
+   mutable std::map<uint64_t, Kernel&> kernel_map_;
+ 
+-  //! Friend function callbackQueue can access and set device class variables.
+-  friend void callbackQueue(hsa_status_t status, hsa_queue_t* queue, void* data);
+-
+  public:
+   std::atomic<uint> numOfVgpus_;  //!< Virtual gpu unique index
+ 
+diff --git a/rocclr/device/rocm/rocvirtual.hpp b/rocclr/device/rocm/rocvirtual.hpp
+index 83f80824b..0cbb9b4fe 100644
+--- a/rocclr/device/rocm/rocvirtual.hpp
++++ b/rocclr/device/rocm/rocvirtual.hpp
+@@ -23,7 +23,6 @@
+ #include "platform/commandqueue.hpp"
+ #include "rocdefs.hpp"
+ #include "rocdevice.hpp"
+-#include "utils/flags.hpp"
+ #include "utils/util.hpp"
+ #include "hsa/hsa.h"
+ #include "hsa/hsa_ext_image.h"
+@@ -47,39 +46,26 @@ constexpr static hsa_signal_value_t kInitSignalValueOne = 1;
+ constexpr static uint64_t kTimeout100us = 100 * K;
+ constexpr static uint64_t kUnlimitedWait = std::numeric_limits<uint64_t>::max();
+ 
+-constexpr static uint64_t kTimeout4Secs = 4 * M;
+-
+ inline bool WaitForSignal(hsa_signal_t signal, bool active_wait = false) {
+-
+-  hsa_wait_state_t wait_state = HSA_WAIT_STATE_BLOCKED;
+-  if (active_wait) {
+-    wait_state = HSA_WAIT_STATE_ACTIVE;
+-  }
+-
+   if (hsa_signal_load_relaxed(signal) > 0) {
+-    // When it is blocked wait, we wait in active state for 100 us before proceeding to wait in
+-    // blocked state indefinitely.
+-    if (!active_wait) {
+-      ClPrint(amd::LOG_INFO, amd::LOG_SIG, "Host active wait for Signal = (0x%lx) for %d ns",
+-              signal.handle, kTimeout100us);
+-      if (hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, kInitSignalValueOne,
+-                                    kTimeout100us, HSA_WAIT_STATE_ACTIVE) != 0) {
+-        if (HIP_SKIP_ABORT_ON_GPU_ERROR && amd::Device::IsDeviceNotUsable()) {
+-          ClPrint(amd::LOG_INFO, amd::LOG_SIG, "Device not Stable, while waiting for Signal ="
+-                  "(0x%lx) for %d ns", signal.handle, kTimeout100us);
+-          return true;
+-        }
+-      }
++    uint64_t timeout = kTimeout100us;
++    if (active_wait) {
++      timeout = kUnlimitedWait;
+     }
+ 
+-    // This is unlimited wait, but we wait for 4 secs and check if the device is
+-    // unstable, if so we return, otherwise we continue to wait in the while loop.
+-    while (hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, kInitSignalValueOne,
+-                                     kTimeout4Secs, wait_state) != 0) {
+-      if (HIP_SKIP_ABORT_ON_GPU_ERROR && amd::Device::IsDeviceNotUsable()) {
+-          ClPrint(amd::LOG_INFO, amd::LOG_SIG, "Device not Stable, while waiting for Signal ="
+-                  "(0x%lx) for %d ns", signal.handle, kTimeout4Secs);
+-        return true;
++    ClPrint(amd::LOG_INFO, amd::LOG_SIG, "Host active wait for Signal = (0x%lx) for %d ns",
++            signal.handle, timeout);
++
++    // Active wait with a timeout
++    if (hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, kInitSignalValueOne,
++                                  timeout, HSA_WAIT_STATE_ACTIVE) != 0) {
++      ClPrint(amd::LOG_INFO, amd::LOG_SIG, "Host blocked wait for Signal = (0x%lx)",
++              signal.handle);
++
++      // Wait until the completion with CPU suspend
++      if (hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, kInitSignalValueOne,
++                                    kUnlimitedWait, HSA_WAIT_STATE_BLOCKED) != 0) {
++        return false;
+       }
+     }
+   }
+diff --git a/rocclr/utils/flags.hpp b/rocclr/utils/flags.hpp
+index 459381ead..ddd427ef6 100644
+--- a/rocclr/utils/flags.hpp
++++ b/rocclr/utils/flags.hpp
+@@ -276,8 +276,6 @@ release(bool, DEBUG_HIP_DYNAMIC_QUEUES, false,                                \
+ release(uint, DEBUG_HIP_7_PREVIEW, 0,                                         \
+         "Enables specific backward incompatible changes support before 7.0,"  \
+         "using the mask. By default the changes are disabled and is set to 0")\
+-release(uint, HIP_SKIP_ABORT_ON_GPU_ERROR, false,                             \
+-        "Set this to true, to avoid host side abort for GPU errors")          \
+ release(bool, HIP_FORCE_SPIRV_CODEOBJECT, false,                              \
+          "Force use of SPIRV instead of device specific code object.")        \
+ 
+-- 
+2.43.0
+
