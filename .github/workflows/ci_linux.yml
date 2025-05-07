@@ -10,7 +10,7 @@ on:
       test_runs_on:
         type: string
       experimental:
-        type: string
+        type: boolean
       linux_use_prebuilt_artifacts:
         type: string
 
