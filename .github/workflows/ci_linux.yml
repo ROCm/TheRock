@@ -9,6 +9,8 @@ on:
         type: string
       test_runs_on:
         type: string
+      experimental:
+        type: string
       linux_use_prebuilt_artifacts:
         type: string
 
@@ -19,6 +21,7 @@ jobs:
     uses: ./.github/workflows/build_linux_packages.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      experimental: ${{ inputs.experimental }}
     permissions:
       id-token: write
 
