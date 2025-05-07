@@ -6,6 +6,7 @@
 # but those artifacts may not have all required dependencies.
 
 import argparse
+import concurrent.futures
 import platform
 import subprocess
 import sys
@@ -31,23 +32,36 @@ def s3_bucket_exists(run_id):
     return process.returncode == 0
 
 
-def s3_cmd(variant, package, run_id, build_dir):
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        f"s3://therock-artifacts/{run_id}/{package}_{variant}.tar.xz",
-        build_dir,
-        "--no-sign-request",
-    ]
-    log(f"++ Exec [{cmd}]")
-    return " ".join(cmd)
+def s3_collect_cmds(artifacts, run_id, build_dir, variant):
+    cmds = []
+    for artifact in artifacts:
+        cmds.append(
+            [
+                "aws",
+                "s3",
+                "cp",
+                f"s3://therock-artifacts/{run_id}/{artifact}_{variant}.tar.xz",
+                build_dir,
+                "--no-sign-request",
+                "--quiet",
+            ]
+        )
+    return cmds
+
+
+def s3_exec(cmd):
+    try:
+        subprocess.run(cmd, check=True)
+        return f"++ Exec completed: {cmd}"
+    except Exception as ex:
+        return {str(ex)}
 
 
 def s3_parallel_exec(cmds):
-    procs = [subprocess.Popen(cmd, check=False) for cmd in cmds]
-    for p in procs:
-        p.wait()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(s3_exec, cmd) for cmd in cmds]
+        for future in concurrent.futures.as_completed(futures):
+            log(future.result())
 
 
 def retrieve_base_artifacts(args, run_id, build_dir):
@@ -65,12 +79,9 @@ def retrieve_base_artifacts(args, run_id, build_dir):
     ]
     if args.blas:
         base_artifacts.append("host-blas_lib")
-    
-    cmds = []
-    for base_artifact in base_artifacts:
-        cmds.append(s3_cmd(GENERIC_VARIANT, base_artifact, run_id, build_dir))
+
+    cmds = s3_collect_cmds(base_artifacts, run_id, build_dir, GENERIC_VARIANT)
     s3_parallel_exec(cmds)
-    
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
@@ -104,9 +115,7 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
-    cmds = []
-    for enabled_artifact in enabled_artifacts:
-        cmds.append(s3_cmd(f"{target}", enabled_artifact, run_id, build_dir))
+    cmds = s3_collect_cmds(enabled_artifacts, run_id, build_dir, target)
     s3_parallel_exec(cmds)
 
 
