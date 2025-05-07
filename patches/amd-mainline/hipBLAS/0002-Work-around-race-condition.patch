@@ -1,7 +1,7 @@
 From 3e3beb694b8ba9ba78856e070f76133001337eeb Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Fri, 21 Mar 2025 17:01:20 +0000
-Subject: [PATCH 2/9] Work around race condition
+Subject: [PATCH 2/8] Work around race condition
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
