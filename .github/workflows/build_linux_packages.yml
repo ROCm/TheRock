@@ -26,7 +26,6 @@ jobs:
   build_linux_packages:
     name: Build Linux Packages
     runs-on: azure-linux-scale-rocm
-    continue-on-error: ${{ inputs.expect_failure }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     strategy:
@@ -74,6 +73,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build Projects
+        continue-on-error: ${{ inputs.expect_failure }}
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"

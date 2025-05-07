@@ -74,7 +74,6 @@ jobs:
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
-    continue-on-error: ${{ matrix.target_bundle.expect_failure == 'true' }}
     permissions:
       contents: write
       actions: write # Added permission to trigger workflows
@@ -114,6 +113,7 @@ jobs:
           wait
 
       - name: Build Projects
+        continue-on-error: ${{ matrix.target_bundle.expect_failure == 'true' }}
         run: |
           ./build_tools/linux_portable_build.py \
             --image=${{ env.BUILD_IMAGE }} \
