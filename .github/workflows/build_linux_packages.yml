@@ -8,7 +8,7 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
-      experimental:
+      expect_failure:
         type: boolean
         default: false
 
@@ -19,15 +19,15 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
-      experimental:
+      expect_failure:
         type: boolean
 
 jobs:
   build_linux_packages:
     name: Build Linux Packages
     runs-on: azure-linux-scale-rocm
-    # In the case that the amdgpu family is experimental, allow errors
-    continue-on-error: ${{ inputs.experimental }}
+    # In the case that the amdgpu family is expect_failure, allow errors
+    continue-on-error: ${{ inputs.expect_failure }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     strategy:

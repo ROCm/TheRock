@@ -33,16 +33,13 @@ def main(args):
         else:
             family = amdgpu_family_info_matrix.get(key).get("linux").get("family")
 
-        experimental_amdgpu_family = (
-            amdgpu_family_info_matrix.get(key).get("linux").get("experimental")
+        expect_failure_amdgpu_family = (
+            amdgpu_family_info_matrix.get(key).get("linux").get("expect_failure")
         )
-        if experimental_amdgpu_family:
-            experimental = True
-        else:
-            experimental = False
+        expect_failure = True if expect_failure_amdgpu_family else False
 
         package_targets.append(
-            {"amdgpu_family": family, "experimental": json.dumps(experimental)}
+            {"amdgpu_family": family, "expect_failure": json.dumps(expect_failure)}
         )
 
     set_github_output({"package_targets": json.dumps(package_targets)})
