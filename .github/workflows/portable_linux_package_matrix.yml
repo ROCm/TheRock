@@ -126,6 +126,7 @@ jobs:
 
       - name: Upload Nightly Release
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
+        continue-on-error: ${{ matrix.target_bundle.expect_failure == 'true' }}
         uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
         with:
           artifacts: "${{ env.DIST_ARCHIVE }}"
@@ -139,6 +140,7 @@ jobs:
 
       - name: Upload Development Release
         if: ${{ inputs.build_type == 'dev'}}
+        continue-on-error: ${{ matrix.target_bundle.expect_failure == 'true' }}
         uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
         with:
           artifacts: "${{ env.DIST_ARCHIVE }}"
@@ -152,6 +154,7 @@ jobs:
 
       - name: Trigger test nightly release package workflow
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
+        continue-on-error: ${{ matrix.target_bundle.expect_failure == 'true' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
           workflow: test_release_packages.yml
@@ -159,6 +162,7 @@ jobs:
 
       - name: Report
         if: ${{ !cancelled() }}
+        continue-on-error: ${{ matrix.target_bundle.expect_failure == 'true' }}
         run: |
           echo "Full SDK du:"
           echo "------------"

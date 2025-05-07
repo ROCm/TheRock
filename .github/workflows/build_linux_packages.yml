@@ -73,6 +73,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build Projects
+        id: build
         continue-on-error: ${{ inputs.expect_failure }}
         run: |
           # Generate a new build id.
@@ -89,10 +90,12 @@ jobs:
           cmake --build build --target therock-archives therock-dist
 
       - name: Test Packaging
+        continue-on-error: ${{ inputs.expect_failure }}
         run: |
           ctest --test-dir build --output-on-failure
 
       - name: Report
+        continue-on-error: ${{ inputs.expect_failure }}
         if: ${{ !cancelled() }}
         run: |
           echo "Full SDK du:"
@@ -109,6 +112,7 @@ jobs:
           ccache -s
 
       - name: Save cache
+        continue-on-error: ${{ inputs.expect_failure }}
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         if: always()
         with:
@@ -123,6 +127,7 @@ jobs:
 
       # TODO: Move to script
       - name: Create Index Files
+        continue-on-error: ${{ inputs.expect_failure }}
         run: |
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
@@ -133,6 +138,7 @@ jobs:
 
       # TODO: Move to script
       - name: Upload Artifacts
+        continue-on-error: ${{ inputs.expect_failure }}
         run: |
           aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}/ \
             --recursive --no-follow-symlinks \
@@ -142,6 +148,7 @@ jobs:
 
       # TODO: Move to script
       - name: Upload Logs
+        continue-on-error: ${{ inputs.expect_failure }}
         run: |
           aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
             --recursive \
@@ -151,6 +158,7 @@ jobs:
           aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/
 
       - name: Add Links to Job Summary
+        continue-on-error: ${{ inputs.expect_failure }}
         run: |
           echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
           echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY
