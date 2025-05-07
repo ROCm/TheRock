@@ -1,7 +1,7 @@
-From 64608856f3523027dc80b934f2f73647422c5f6b Mon Sep 17 00:00:00 2001
+From 9ec6d93ee40fb6c03b8b1de741da9c4510340ad4 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Thu, 1 May 2025 11:30:15 -0700
-Subject: [PATCH 8/8] Check if ROCBLAS_PATH var is set before using it.
+Subject: [PATCH 8/9] Check if ROCBLAS_PATH var is set before using it.
 
 ---
  clients/gtest/CMakeLists.txt | 6 +++++-
@@ -25,5 +25,5 @@ index 82d97da..467e7ec 100644
  
  set_target_properties( hipblas-test PROPERTIES
 -- 
-2.47.1.windows.2
+2.43.0
 

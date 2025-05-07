@@ -1,0 +1,28 @@
+From 50094256d86bdcda4f2de275ced310cacbca45a5 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Wed, 7 May 2025 13:17:25 -0700
+Subject: [PATCH 9/9] Change dep on `roc::hipblas-common` to PUBLIC.
+
+This was INTERFACE, but the library internally includes `hipblas-common.h`, which means that is should be PUBLIC (which is a superset of INTERFACE like PRIVATE+INTERFACE, advertising the dep to dependents and using its requirements to compile the library itself).
+
+There is some work ongoing on the upstream projects which tightened requirements for this dep, causing something that was accidentally working to fail. This change should be forward+backward compatible with that work.
+---
+ library/src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
+index 5da9875..a1bad50 100755
+--- a/library/src/CMakeLists.txt
++++ b/library/src/CMakeLists.txt
+@@ -71,7 +71,7 @@ add_library( roc::hipblas ALIAS hipblas )
+ set(static_depends)
+ 
+ find_package( hipblas-common REQUIRED CONFIG PATHS ${ROCM_PATH})
+-target_link_libraries( hipblas INTERFACE roc::hipblas-common )
++target_link_libraries( hipblas PUBLIC roc::hipblas-common )
+ 
+ # Build hipblas from source on AMD platform
+ if(HIP_PLATFORM STREQUAL amd)
+-- 
+2.43.0
+
