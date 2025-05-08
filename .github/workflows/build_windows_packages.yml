@@ -127,9 +127,6 @@ jobs:
           lfs: true
 
       - name: Configure Projects
-        env:
-          CC: ${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe   # Set to MSVC explicitly
-          CXX: ${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe  # Set to MSVC explicitly
         run: |
           # clear cache before build and after download
           ccache -z
@@ -142,8 +139,8 @@ jobs:
 
           # Build.
           cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
-            -DCMAKE_C_COMPILER=${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe
-            -DCMAKE_CXX_COMPILER=${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe
+            -DCMAKE_C_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
+            -DCMAKE_CXX_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
