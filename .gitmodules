@@ -81,7 +81,7 @@
 [submodule "hipSPARSE"]
 	path = math-libs/BLAS/hipSPARSE
 	url = https://github.com/ROCm/hipSPARSE.git
-	branch = mainline
+	branch = develop
 [submodule "rocBLAS"]
 	path = math-libs/BLAS/rocBLAS
 	url = https://github.com/ROCm/rocBLAS.git
