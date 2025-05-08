@@ -85,7 +85,7 @@
 [submodule "rocBLAS"]
 	path = math-libs/BLAS/rocBLAS
 	url = https://github.com/ROCm/rocBLAS.git
-	branch = mainline
+	branch = develop
 [submodule "rocFFT"]
 	path = math-libs/rocFFT
 	url = https://github.com/ROCm/rocFFT.git
@@ -117,7 +117,7 @@
 [submodule "Tensile"]
 	path = math-libs/BLAS/Tensile
 	url = https://github.com/ROCm/Tensile.git
-	branch = master
+	branch = develop
 [submodule "rccl-tests"]
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
