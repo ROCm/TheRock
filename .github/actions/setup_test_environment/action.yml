@@ -13,6 +13,8 @@ inputs:
     type: string
   FETCH_ARTIFACT_ARGS:
     type: string
+  PLATFORM:
+    type: string
 
 runs:
   using: "composite"
@@ -23,7 +25,8 @@ runs:
       with:
         python-version: 3.11
 
-    - name: Create Python venv
+    - name: Create Python venv for Linux
+      if: ${{ inputs.PLATFORM == "linux" }}
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
@@ -33,9 +36,26 @@ runs:
         pip install -r requirements-test.txt
         pip freeze
 
-    - name: Install the AWS tool
+    - name: Create Python venv for Windows
+      if: ${{ inputs.PLATFORM == "windows" }}
+      shell: bash
+      env:
+        VENV_DIR: ${{ inputs.VENV_DIR }}
+      run: |
+        python -m venv ${VENV_DIR}
+        ${VENV_DIR}\Scripts\activate
+        pip install -r requirements-test.txt
+        pip freeze
+
+    - name: Install the AWS tool for Linux
+      if: ${{ inputs.PLATFORM == "linux" }}
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
+
+    - name: Install the AWS tool for Windows
+      if: ${{ inputs.PLATFORM == "windows" }}
+      shell: bash
+      run: msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi /qn
 
     - name: Download and Unpack Artifacts
       shell: bash
@@ -47,7 +67,7 @@ runs:
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        source ${VENV_DIR}/bin/activate
+        $([ "${{ inputs.platform }}" == "linux" ] && source ${VENV_DIR}/bin/activate || ${VENV_DIR}\Scripts\activate)
 
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \

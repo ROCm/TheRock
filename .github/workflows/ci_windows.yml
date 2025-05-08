@@ -30,14 +30,14 @@ jobs:
     needs: [build_windows_packages]
     name: Test
     # If the dependent job failed/cancelled, this job will not be run
-    # The linux_use_prebuilt_artifacts "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
+    # The windows_use_prebuilt_artifacts "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
         (
-          inputs.linux_use_prebuilt_artifacts == 'false' ||
-          inputs.linux_use_prebuilt_artifacts == 'true'
+          inputs.windows_use_prebuilt_artifacts == 'false' ||
+          inputs.windows_use_prebuilt_artifacts == 'true'
         )
       }}
     strategy:
@@ -47,3 +47,4 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      platform: "windows"

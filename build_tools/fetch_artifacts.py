@@ -24,7 +24,7 @@ def s3_bucket_exists(run_id):
         "aws",
         "s3",
         "ls",
-        f"s3://therock-artifacts/{run_id}",
+        f"s3://therock-artifacts/{run_id}-{PLATFORM.lower()}",
         "--no-sign-request",
     ]
     process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
@@ -36,7 +36,7 @@ def s3_exec(variant, package, run_id, build_dir):
         "aws",
         "s3",
         "cp",
-        f"s3://therock-artifacts/{run_id}/{package}_{variant}.tar.xz",
+        f"s3://therock-artifacts/{run_id}-{PLATFORM.lower()}/{package}_{variant}.tar.xz",
         build_dir,
         "--no-sign-request",
     ]

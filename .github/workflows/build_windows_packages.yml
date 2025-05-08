@@ -157,7 +157,7 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
         shell: powershell
-      
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
@@ -169,9 +169,9 @@ jobs:
         run: |
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output build/indexer.py
-          python build/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
-          python build/indexer.py -f '*.log' ${{ env.BUILD_DIR_BASH }}/logs/
+            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
+          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
+          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.log' ${{ env.BUILD_DIR_BASH }}/logs/
           sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}-windows.html",g' ${{ env.BUILD_DIR_BASH }}/logs/index.html
 
       # TODO: Move to script
