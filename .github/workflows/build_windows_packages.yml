@@ -38,7 +38,7 @@ jobs:
       CACHE_DIR: "${{github.workspace}}/.cache"
       CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
-      TEATIME_FORCE_INTERACTIVE: 0
+      TEATIME_FORCE_INTERACTIVE: 1
     steps:
       - name: "Create build dir"
         shell: powershell
