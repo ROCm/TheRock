@@ -108,11 +108,14 @@ therock_add_feature(HOST_BLAS
   GROUP HOST_MATH
   DESCRIPTION "Bundled host BLAS library"
 )
-therock_add_feature(HOST_SUITE_SPARSE
-  GROUP HOST_MATH
-  DESCRIPTION "Bundled SuiteSparse library"
-  REQUIRES HOST_BLAS
-)
+if(NOT WIN32)
+  # Currently unsupported on Windows.
+  therock_add_feature(HOST_SUITE_SPARSE
+    GROUP HOST_MATH
+    DESCRIPTION "Bundled SuiteSparse library"
+    REQUIRES HOST_BLAS
+  )
+endif()
 
 # Base Features.
 therock_add_feature(COMPILER
@@ -163,11 +166,14 @@ else()
 endif()
 
 # Comm-libs Features.
-therock_add_feature(RCCL
-  GROUP COMM_LIBS
-  DESCRIPTION "Enables rccl"
-  REQUIRES COMPILER HIP_RUNTIME HIPIFY
-)
+if(NOT WIN32)
+  # RCCL is Linux-only.
+  therock_add_feature(RCCL
+    GROUP COMM_LIBS
+    DESCRIPTION "Enables rccl"
+    REQUIRES COMPILER HIP_RUNTIME HIPIFY
+  )
+endif()
 
 # Math-libs Features.
 therock_add_feature(PRIM
@@ -198,10 +204,15 @@ therock_add_feature(SPARSE
   DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
   REQUIRES COMPILER HIP_RUNTIME BLAS PRIM
 )
+if(NOT WIN32)
+  set(_solver_platform_requirements "HOST_SUITE_SPARSE")
+else()
+  set(_solver_platform_requirements "")
+endif()
 therock_add_feature(SOLVER
   GROUP MATH_LIBS
   DESCRIPTION "Enables solver libraries (hipsolver, rocsolver)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE HOST_SUITE_SPARSE
+  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
 # ML-Libs Features.

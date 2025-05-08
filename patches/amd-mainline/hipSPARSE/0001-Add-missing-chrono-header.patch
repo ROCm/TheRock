@@ -1,0 +1,24 @@
+From cbf526d4afea8dab83f617c50e4c0e9c6be1fd83 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Mon, 5 May 2025 18:44:46 -0700
+Subject: [PATCH] Add missing chrono header.
+
+---
+ clients/benchmarks/hipsparse_bench_app.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/clients/benchmarks/hipsparse_bench_app.cpp b/clients/benchmarks/hipsparse_bench_app.cpp
+index 70025fe..f961da8 100644
+--- a/clients/benchmarks/hipsparse_bench_app.cpp
++++ b/clients/benchmarks/hipsparse_bench_app.cpp
+@@ -25,6 +25,7 @@
+ #include "hipsparse_bench_app.hpp"
+ #include "hipsparse_bench.hpp"
+ 
++#include <chrono>
+ #include <fstream>
+ #include <random>
+ 
+-- 
+2.49.0.windows.1
+

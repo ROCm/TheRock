@@ -8,6 +8,10 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+        default: gfx110X-dgpu
+      extra_cmake_options:
+        type: string
+        default: "-DBUILD_TESTING=ON"
 
   workflow_call:
     inputs:
@@ -16,6 +20,9 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      extra_cmake_options:
+        type: string
+        default: "-DBUILD_TESTING=ON"
 
 jobs:
   build_windows_packages:
@@ -104,6 +111,7 @@ jobs:
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
           amdgpu_families="${{ inputs.amdgpu_families }}"
+          extra_cmake_options="${{ inputs.extra_cmake_options }}"
           echo "Building package ${package_version}"
 
           # Build.
@@ -114,21 +122,11 @@ jobs:
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
-            -DTHEROCK_ENABLE_COMPILER=ON \
-            -DTHEROCK_ENABLE_HIPIFY=ON \
-            -DTHEROCK_ENABLE_CORE=ON \
-            -DTHEROCK_ENABLE_CORE_RUNTIME=OFF \
-            -DTHEROCK_ENABLE_HIP_RUNTIME=ON \
-            -DTHEROCK_ENABLE_PROFILER_SDK=OFF \
-            -DTHEROCK_ENABLE_COMM_LIBS=OFF \
-            -DTHEROCK_ENABLE_MATH_LIBS=OFF \
-            -DTHEROCK_ENABLE_RAND=ON \
-            -DTHEROCK_ENABLE_PRIM=ON \
-            -DTHEROCK_ENABLE_FFT=OFF \
             -DTHEROCK_ENABLE_BLAS=OFF \
             -DTHEROCK_ENABLE_SPARSE=OFF \
             -DTHEROCK_ENABLE_SOLVER=OFF \
-            -DTHEROCK_ENABLE_ML_LIBS=OFF
+            -DTHEROCK_ENABLE_ML_LIBS=OFF \
+            ${extra_cmake_options}
 
       - name: Build Projects
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all)

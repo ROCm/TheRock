@@ -1,7 +1,7 @@
-From 2748b7af8ff0c7e8d1911900eb1558cf1072d7a2 Mon Sep 17 00:00:00 2001
+From 1b21d3bbf8234df5067d44d90bedacdf57341c97 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 1 Apr 2025 14:41:28 +0000
-Subject: [PATCH 2/3] Install `hipsolver_client.so`
+Subject: [PATCH 2/5] Install `hipsolver_client.so`
 
 This is required by the test and benchmark clients but was not part of
 the installation so far.

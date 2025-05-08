@@ -30,23 +30,25 @@ python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
 
 ### Windows 11 (VS 2022)
 
+See [windows_support.md](./docs/development/windows_support.md), in particular
+the section for
+[installing tools](./docs/development/windows_support.md#install-tools).
+
 ```bash
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
+
+# Clone interop library from https://github.com/nod-ai/amdgpu-windows-interop
+# for CLR (the "HIP runtime") on Windows. The path used can also be configured
+# using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable.
+git clone https://github.com/nod-ai/amdgpu-windows-interop.git
+
 cd TheRock
 
-# Install dependencies
+# Init python virtual environment and install python dependencies
 python3 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-> [!WARNING]
-> Windows support is still early in development. Not all subprojects or packages build for Windows yet.
-
-See [windows_support.md](./docs/development/windows_support.md).
-
-```bash
 python ./build_tools/fetch_sources.py  # Downloads submodules and applies patches
 ```
 
@@ -107,10 +109,17 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 cmake --build build
 ```
 
-To build with cacheing:
+To build with the [ccache](https://ccache.dev/) compiler cache:
 
 ```bash
-cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+  .
+
+# On Windows, also add
+#   -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+
 cmake --build build
 ```
 
@@ -140,42 +149,3 @@ separately.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
 - [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
-
-## Provisioning TheRock 🪨
-
-In order to provision TheRock using either a developer/automated nightly release, a specific CI runner build or an already existing installation of TheRock, use the `build_tool/provision_machine.py` script.
-
-Provisioning script setup:
-
-- `python3 -m venv venv`
-- `source venv/bin/activate`
-- `pip install -r requirements.txt`
-- `python build_tools/provision_machine.py --help`
-
-Examples:
-
-- Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from [GitHub CI workflow run 14474448215](https://github.com/ROCm/TheRock/actions/runs/14474448215)) to the default output directory `therock-build`:
-
-  ```
-  python build_tools/provision_machine.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu
-  ```
-
-- Downloads the latest gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
-
-  ```
-  python build_tools/provision_machine.py --release latest --amdgpu-family gfx110X-dgpu --output-dir build
-  ```
-
-- Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
-
-  ```
-  python build_tools/provision_machine.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build
-  ```
-
-- Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`:
-
-  ```
-  python build_tools/provision_machine.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all
-  ```
-
-Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)

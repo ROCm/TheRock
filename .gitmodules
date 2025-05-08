@@ -37,7 +37,7 @@
 [submodule "rocminfo"]
 	path = core/rocminfo
 	url = https://github.com/ROCm/rocminfo.git
-	branch = amd-master
+	branch = amd-staging
 [submodule "rocprofiler-register"]
 	path = base/rocprofiler-register
 	url = https://github.com/ROCm/rocprofiler-register.git

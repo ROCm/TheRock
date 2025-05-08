@@ -82,17 +82,10 @@ list(APPEND _blas_subproject_names hipBLASLt)
 
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
-  # rocBLAS is hard-coded to not expect rocm-smi on Windows.
-  list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+  # rocBLAS is hard-coded to not expect rocm-smi and roctx64 on Windows.
+  list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib roctracer-compat)
 elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
-endif()
-
-if(WIN32)
-  set(rocBLAS_build_with_tensile "OFF")
-else()
-  set(rocBLAS_build_with_tensile "ON")
-  list(APPEND rocBLAS_optional_runtime_deps roctracer-compat)
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
@@ -102,7 +95,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DHIP_PLATFORM=amd
     -DROCM_PATH=
     -DROCM_DIR=
-    -DBUILD_WITH_TENSILE=${rocBLAS_build_with_tensile}
+    -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
     "-DTensile_TEST_LOCAL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/Tensile"
@@ -138,6 +131,11 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
   set(_sparse_subproject_names)
 
+  set(rocSPARSE_optional_runtime_deps)
+  if(NOT WIN32)
+    list(APPEND rocSPARSE_optional_runtime_deps roctracer-compat)
+  endif()
+
   therock_cmake_subproject_declare(rocSPARSE
     EXTERNAL_SOURCE_DIR "rocSPARSE"
     BACKGROUND_BUILD
@@ -158,6 +156,7 @@ if(THEROCK_ENABLE_SPARSE)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      ${rocSPARSE_optional_runtime_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS
@@ -243,6 +242,15 @@ if(THEROCK_ENABLE_SOLVER)
     list(APPEND hipSOLVER_optional_deps therock-host-blas)
   endif()
 
+  if(WIN32)
+    set(hipSOLVER_build_with_sparse "OFF")
+  else()
+    # Note: BUILD_WITH_SPARSE converts rocSPARSE and cholmod to build time vs
+    # runtime/dlopen deps.
+    set(hipSOLVER_build_with_sparse "ON")
+    list(APPEND hipSOLVER_optional_deps therock-SuiteSparse)
+  endif()
+
   therock_cmake_subproject_declare(hipSOLVER
       EXTERNAL_SOURCE_DIR "hipSOLVER"
       BACKGROUND_BUILD
@@ -251,9 +259,7 @@ if(THEROCK_ENABLE_SOLVER)
         -DROCM_PATH=
         -DROCM_DIR=
         -DBUILD_HIPSPARSE_TESTS=OFF
-        # BUILD_WITH_SPARSE converts rocsparse and cholmod to build time vs
-        # runtime/dlopen deps.
-        -DBUILD_WITH_SPARSE=ON
+        -DBUILD_WITH_SPARSE=${hipSOLVER_build_with_sparse}
         -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
         -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
         -DHIPSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
@@ -267,7 +273,6 @@ if(THEROCK_ENABLE_SOLVER)
         rocBLAS
         rocSOLVER
         rocSPARSE
-        therock-SuiteSparse
         ${hipSOLVER_optional_deps}
   )
   therock_cmake_subproject_glob_c_sources(hipSOLVER

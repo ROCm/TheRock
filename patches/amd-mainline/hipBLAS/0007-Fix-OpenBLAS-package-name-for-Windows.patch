@@ -1,0 +1,25 @@
+From b5e8d4e07e124b22ae7939ccdb74521e225a470d Mon Sep 17 00:00:00 2001
+From: Scott <scott.todd0@gmail.com>
+Date: Thu, 1 May 2025 11:29:55 -0700
+Subject: [PATCH 7/9] Fix OpenBLAS package name for Windows.
+
+---
+ clients/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 983951b..39afb06 100644
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -184,7 +184,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+                     NO_DEFAULT_PATH
+                   )
+       if (NOT BLAS_LIBRARY)
+-        find_package( OPENBLAS CONFIG REQUIRED )
++        find_package( OpenBLAS CONFIG REQUIRED )
+         set( BLAS_LIBRARY OpenBLAS::OpenBLAS )
+         set( BLAS_INCLUDE_DIR "" )
+       endif()
+-- 
+2.43.0
+

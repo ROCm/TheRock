@@ -30,6 +30,9 @@ include = [
 # hipBLASLt
 [components.dbg."math-libs/BLAS/hipBLASLt/stage"]
 [components.dev."math-libs/BLAS/hipBLASLt/stage"]
+include = [
+  "bin/sample_*",
+]
 [components.doc."math-libs/BLAS/hipBLASLt/stage"]
 [components.lib."math-libs/BLAS/hipBLASLt/stage"]
 include = [
