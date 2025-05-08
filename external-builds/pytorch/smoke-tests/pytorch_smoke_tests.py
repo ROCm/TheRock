@@ -81,3 +81,30 @@ class TestMatrixOperations:
         result = torch.matmul(matrix1, matrix2)
         assert torch.allclose(result, expected)
         assert result.device.type == "cuda"
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="ROCm is not available")
+class TestConvolutions:
+    def test_conv_transpose2d(self):
+        inputs = torch.randn(1, 4, 5, 5, device="cuda")
+        weights = torch.randn(4, 8, 3, 3, device="cuda")
+        # Simply running any conv op exercises MIOpen and library loading.
+        # On Windows, this may fail if `amd_comgr_3.dll` (from build output) is
+        # used instead of `amd_comgr0605.dll` that is expected at runtime.
+        result = torch.nn.functional.conv_transpose2d(inputs, weights, padding=1)
+
+        # TODO: check conv output values (and don't use randn)
+        assert result.device.type == "cuda"
+
+    # Lifted from
+    # https://github.com/pytorch/pytorch/blob/main/test/nn/test_convolution.py
+    def test_conv_cudnn_nhwc_support(self):
+        input = torch.randn(
+            (1, 16, 1, 1), dtype=torch.float, device="cuda", requires_grad=True
+        )
+        weight = torch.randn(
+            (8, 16, 3, 3), dtype=torch.float, device="cuda", requires_grad=True
+        )
+        weight = weight.to(memory_format=torch.channels_last)
+        o = torch.conv2d(input, weight, None, (2, 1), (1, 1), (1, 1), 1)
+        assert o.is_contiguous(memory_format=torch.channels_last)
