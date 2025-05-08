@@ -1,0 +1,25 @@
+name: Windows Build and Test
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        type: string
+      artifact_run_id:
+        type: string
+      test_runs_on:
+        type: string
+      windows_use_prebuilt_artifacts:
+        type: string
+      extra_cmake_options:
+        type: string
+        default: "-DBUILD_TESTING=ON"
+
+jobs:
+  build_windows_packages:
+    name: Build Windows Packages
+    if: ${{ inputs.windows_use_prebuilt_artifacts == 'false' }}
+    uses: ./.github/workflows/build_windows_packages.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}

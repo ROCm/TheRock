@@ -1,17 +1,17 @@
-From e91d6d9a772448122ff787adc6d9615f857639a4 Mon Sep 17 00:00:00 2001
+From 1ecce254b331df6d6f62dfc47bad677005a4b93f Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Wed, 2 Apr 2025 14:43:19 -0700
-Subject: [PATCH 3/3] Fix CMAKE_INSTALL_PREFIX init behavior on Win32.
+Subject: [PATCH 3/5] Fix CMAKE_INSTALL_PREFIX init behavior on Win32.
 
 ---
  CMakeLists.txt | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 7c04ae3..571dd52 100644
+index 70caba3..ef0262f 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -267,7 +267,9 @@ set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+@@ -264,7 +264,9 @@ set(CPACK_RPM_PACKAGE_LICENSE "MIT")
  if(WIN32)
    set(CPACK_SOURCE_GENERATOR "ZIP")
    set(CPACK_GENERATOR "ZIP")

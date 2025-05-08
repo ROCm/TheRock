@@ -1,7 +1,7 @@
-From 7235f728716519e8f2835ec4d728184cb9d67e08 Mon Sep 17 00:00:00 2001
+From 21ebe883ff82127da5ad9f2bac0123d63b9d706c Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Mon, 24 Mar 2025 21:56:24 +0000
-Subject: [PATCH 2/6] Fail if BLIS is not found but `LINK_BLIS` is set
+Subject: [PATCH 2/9] Fail if BLIS is not found but `LINK_BLIS` is set
 
 Fail if `LINK_BLIS` is set (defaults to `ON`) but the library is not
 found. Insteaf of issung only a warning, return with a fatal error as
@@ -33,5 +33,5 @@ index 51d34060..33b71d0d 100644
          endif()
        endif()
 -- 
-2.47.1.windows.2
+2.45.1.windows.1
 

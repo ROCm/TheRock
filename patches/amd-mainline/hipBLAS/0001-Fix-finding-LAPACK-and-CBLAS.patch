@@ -1,7 +1,7 @@
-From d8a87130e4b9e2c3e2ca7e982c735ccb5f19fed2 Mon Sep 17 00:00:00 2001
+From 00072f39d623703613054f552ace25634df5fbee Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 25 Mar 2025 12:13:13 +0000
-Subject: [PATCH 1/4] Fix finding LAPACK and CBLAS
+Subject: [PATCH 1/9] Fix finding LAPACK and CBLAS
 
 Use target names provided by `find_package()` instead of assuming that
 the reference NETLIB libraries should be used.
@@ -43,5 +43,5 @@ index 4b01cc8..5198853 100644
    if( BUILD_CLIENTS_TESTS )
      add_subdirectory( gtest )
 -- 
-2.47.1.windows.2
+2.43.0
 
