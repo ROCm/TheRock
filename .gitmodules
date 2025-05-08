@@ -77,7 +77,7 @@
 [submodule "hipSOLVER"]
 	path = math-libs/BLAS/hipSOLVER
 	url = https://github.com/ROCm/hipSOLVER.git
-	branch = mainline
+	branch = develop
 [submodule "hipSPARSE"]
 	path = math-libs/BLAS/hipSPARSE
 	url = https://github.com/ROCm/hipSPARSE.git
