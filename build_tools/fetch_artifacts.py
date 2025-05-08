@@ -14,13 +14,16 @@ import sys
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system()
 
-
+# TODO (geomin12): switch out logging library
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
 
 
 def s3_bucket_exists(run_id):
+    """
+    This function checks that the AWS S3 bucket exists
+    """
     cmd = [
         "aws",
         "s3",
@@ -32,7 +35,11 @@ def s3_bucket_exists(run_id):
     return process.returncode == 0
 
 
-def s3_collect_cmds(artifacts, run_id, build_dir, variant):
+def s3_commands_for_artifacts(artifacts, run_id, build_dir, variant):
+    """
+    This function collects AWS S3 copy commands to execute later in parallel, where
+    the commands copy TheRock artifacts from the S3 bucket to an output directory
+    """
     cmds = []
     for artifact in artifacts:
         cmds.append(
@@ -49,7 +56,10 @@ def s3_collect_cmds(artifacts, run_id, build_dir, variant):
     return cmds
 
 
-def s3_exec(cmd):
+def subprocess_run(cmd):
+    """
+    This function runs a command via subprocess run
+    """
     try:
         subprocess.run(cmd, check=True)
         return f"++ Exec completed: {cmd}"
@@ -57,14 +67,20 @@ def s3_exec(cmd):
         return {str(ex)}
 
 
-def s3_parallel_exec(cmds):
+def parallel_exec_commands(cmds):
+    """
+    This function runs parallelized subprocess commands using a thread pool executor, where each command has a timeout of 60s
+    """
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(s3_exec, cmd) for cmd in cmds]
+        futures = [executor.submit(subprocess_run, cmd) for cmd in cmds]
         for future in concurrent.futures.as_completed(futures):
-            log(future.result())
+            log(future.result(timeout=60))
 
 
 def retrieve_base_artifacts(args, run_id, build_dir):
+    """
+    This function retrieves TheRock base artifacts using AWS S3 copy
+    """
     base_artifacts = [
         "core-runtime_run",
         "core-runtime_lib",
@@ -80,11 +96,16 @@ def retrieve_base_artifacts(args, run_id, build_dir):
     if args.blas:
         base_artifacts.append("host-blas_lib")
 
-    cmds = s3_collect_cmds(base_artifacts, run_id, build_dir, GENERIC_VARIANT)
-    s3_parallel_exec(cmds)
+    cmds = s3_commands_for_artifacts(base_artifacts, run_id, build_dir, GENERIC_VARIANT)
+    parallel_exec_commands(cmds)
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
+    """
+    This function retrieves TheRock artifacts using AWS S3 copy, based on the enabled arguments from `args`
+    If no artifacts have been collected, we assume that we want to install all artifacts
+    If `args.tests` have been enabled, we also collect test artifacts
+    """
     artifact_paths = []
     all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
     # RCCL is disabled for Windows
@@ -115,8 +136,8 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
-    cmds = s3_collect_cmds(enabled_artifacts, run_id, build_dir, target)
-    s3_parallel_exec(cmds)
+    cmds = s3_commands_for_artifacts(enabled_artifacts, run_id, build_dir, target)
+    parallel_exec_commands(cmds)
 
 
 def run(args):
