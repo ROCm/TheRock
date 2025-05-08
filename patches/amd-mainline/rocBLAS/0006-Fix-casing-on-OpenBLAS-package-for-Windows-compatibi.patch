@@ -1,7 +1,7 @@
-From 728f858d4fa5c59eac9fa18491773c73db735289 Mon Sep 17 00:00:00 2001
+From 359f9fa37d812c894c7c10ca4de9f050aab1b94d Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Tue, 29 Apr 2025 13:22:42 -0700
-Subject: [PATCH 8/9] Fix casing on OpenBLAS package for Windows compatibility.
+Subject: [PATCH 6/7] Fix casing on OpenBLAS package for Windows compatibility.
 
 ---
  clients/CMakeLists.txt | 2 +-
@@ -21,5 +21,5 @@ index dc61a102..dab0f09c 100644
          set( BLAS_INCLUDE_DIR "" )
        endif()
 -- 
-2.45.1.windows.1
+2.43.0
 
