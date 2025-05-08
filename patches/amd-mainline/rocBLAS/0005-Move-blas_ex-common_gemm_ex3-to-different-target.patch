@@ -1,7 +1,7 @@
-From 8088cae4581d002abc0cf54ab76f2f179a24ffb7 Mon Sep 17 00:00:00 2001
+From 03cb55377ec3edce9ed1ac477f252143501c4b12 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 16:58:59 +0000
-Subject: [PATCH 5/6] Move `blas_ex/common_gemm_ex3` to different target
+Subject: [PATCH 5/9] Move `blas_ex/common_gemm_ex3` to different target
 
 `clients/common/blas_ex/common_gemm_ex3.cpp` pulls in cblas via
 `clients/common/common_helpers.hpp` ->
@@ -36,5 +36,5 @@ index 7fabacf5..7ab67d91 100644
  rocblas_client_library_settings( rocblas_clients_testing_common )
  
 -- 
-2.47.1.windows.2
+2.45.1.windows.1
 

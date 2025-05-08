@@ -1,0 +1,45 @@
+name: Linux Build and Test
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_families:
+        type: string
+      artifact_run_id:
+        type: string
+      test_runs_on:
+        type: string
+      linux_use_prebuilt_artifacts:
+        type: string
+
+jobs:
+  build_linux_packages:
+    name: Build
+    if: ${{ inputs.linux_use_prebuilt_artifacts == 'false' }}
+    uses: ./.github/workflows/build_linux_packages.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+    permissions:
+      id-token: write
+
+  test_linux_packages:
+    needs: [build_linux_packages]
+    name: Test
+    # If the dependent job failed/cancelled, this job will not be run
+    # The linux_use_prebuilt_artifacts "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.linux_use_prebuilt_artifacts == 'false' ||
+          inputs.linux_use_prebuilt_artifacts == 'true'
+        )
+      }}
+    strategy:
+      fail-fast: false
+    uses: ./.github/workflows/test_linux_packages.yml
+    with:
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}

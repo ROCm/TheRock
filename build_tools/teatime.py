@@ -180,6 +180,18 @@ def main(cl_args: list[str]):
     )
     p.add_argument("file", type=Path, help="Also log output to this file")
     args = p.parse_args(cl_args)
+
+    # Allow some things to be overriden by env vars.
+    force_interactive = os.getenv("TEATIME_FORCE_INTERACTIVE")
+    if force_interactive:
+        try:
+            force_interactive = int(force_interactive)
+        except ValueError as e:
+            raise ValueError(
+                "Expected 'TEATIME_FORCE_INTERACTIVE' env var to be an int"
+            ) from e
+        args.interactive = bool(force_interactive)
+
     sink = OutputSink(args)
     sink.start()
     try:

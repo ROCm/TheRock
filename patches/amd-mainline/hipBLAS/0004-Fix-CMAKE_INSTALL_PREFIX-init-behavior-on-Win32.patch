@@ -1,14 +1,14 @@
-From 28fa60fa367e26e8c238ffe0a08149f45e41eb08 Mon Sep 17 00:00:00 2001
+From c4de57acf9a0b56a668e3d30b527614e20990da8 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Tue, 8 Apr 2025 16:10:37 -0700
-Subject: [PATCH 4/4] Fix CMAKE_INSTALL_PREFIX init behavior on Win32.
+Subject: [PATCH 4/9] Fix CMAKE_INSTALL_PREFIX init behavior on Win32.
 
 ---
  CMakeLists.txt | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 9819d7e..61a7fbc 100644
+index 7b60619..f22f44d 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -224,7 +224,9 @@ set( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
@@ -23,5 +23,5 @@ index 9819d7e..61a7fbc 100644
    SET( CPACK_SET_DESTDIR FALSE )
    SET( CPACK_PACKAGE_INSTALL_DIRECTORY "C:/hipSDK" )
 -- 
-2.47.1.windows.2
+2.43.0
 
