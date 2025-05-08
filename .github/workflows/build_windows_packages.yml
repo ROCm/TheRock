@@ -158,6 +158,10 @@ jobs:
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
         shell: powershell
 
+      - name: Install the AWS tool for Windows
+        shell: bash
+        run: msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi /qn
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
@@ -167,11 +171,10 @@ jobs:
       # TODO: Move to script
       - name: Create Index Files
         run: |
-          ls ${{ env.BUILD_DIR_BASH }}/artifacts/
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output ${{ env.BUILD_DIR_BASH }}/indexer.py
-          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
+          python ${{ env.BUILD_DIR_BASH }}/indexer.py ${{ env.BUILD_DIR_BASH }}/artifacts/
           python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.log' ${{ env.BUILD_DIR_BASH }}/logs/
           sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}-windows.html",g' ${{ env.BUILD_DIR_BASH }}/logs/index.html
 
@@ -181,7 +184,7 @@ jobs:
           aws s3 cp ${{ env.BUILD_DIR_BASH }}/artifacts/ s3://therock-artifacts/${{github.run_id}}-windows/ \
             --recursive --no-follow-symlinks \
             --exclude "*" \
-            --include "*.tar.xz*"
+            --include "*"
           aws s3 cp ${{ env.BUILD_DIR_BASH }}/artifacts/index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}-windows.html
 
       # TODO: Move to script
