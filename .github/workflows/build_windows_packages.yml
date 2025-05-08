@@ -61,6 +61,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+
       - name: Install requirements
         run: |
           choco install --no-progress -y ccache
@@ -77,14 +81,24 @@ jobs:
           echo "CCACHE_DIR=${CCACHE_DIR}"
           df -h
           mkdir -p $CCACHE_DIR
+
+          echo "cmake: $(which cmake)"
           cmake --version
+          echo "ninja: $(which ninja)"
+          ninja --version
+          echo "CC: $CC"
+          echo "CXX: $CXX"
+
           echo "python: $(which python), python3: $(which python3)"
+          python --version
+
           echo "gcc: $(which gcc)"
-          echo "perl: $(which perl)"
-          echo "gfortran: $(which gfortran)"
           gcc --version
+          echo "perl: $(which perl)"
           perl --version
+          echo "gfortran: $(which gfortran)"
           gfortran --version
+
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
           nthreads=$(nproc --all)
@@ -112,10 +126,6 @@ jobs:
           path: amdgpu-windows-interop
           lfs: true
 
-      - name: Install python deps
-        run: |
-          pip install -r requirements.txt
-
       - name: Configure Projects
         env:
           CC: ${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe   # Set to MSVC explicitly
@@ -132,6 +142,8 @@ jobs:
 
           # Build.
           cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
+            -DCMAKE_C_COMPILER=${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe
+            -DCMAKE_CXX_COMPILER=${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
@@ -141,9 +153,6 @@ jobs:
             ${extra_cmake_options}
 
       - name: Build Projects
-        env:
-          CC: ${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe   # Set to MSVC explicitly
-          CXX: ${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe  # Set to MSVC explicitly
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all)
 
       - name: Report
