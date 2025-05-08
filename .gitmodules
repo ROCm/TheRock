@@ -105,7 +105,7 @@
 [submodule "rocSPARSE"]
 	path = math-libs/BLAS/rocSPARSE
 	url = https://github.com/ROCm/rocSPARSE.git
-	branch = mainline
+	branch = develop
 [submodule "rocThrust"]
 	path = math-libs/rocThrust
 	url = https://github.com/ROCm/rocThrust.git
