@@ -119,8 +119,6 @@ jobs:
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output build/indexer.py
           python build/indexer.py -f '*.tar.xz*' build/artifacts/
-          python build/indexer.py -f '*.log' build/logs/
-          sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}.html",g' build/logs/index.html
 
       - name: Configure AWS Credentials
         if: ${{ !cancelled() }}
