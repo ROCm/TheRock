@@ -71,7 +71,6 @@ jobs:
           Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
           refreshenv
-          aws
 
       - name: Runner Health Settings
         run: |
@@ -191,7 +190,9 @@ jobs:
 
       # TODO: Move to script
       - name: Upload Artifacts
+        shell: powershell
         run: |
+          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
           aws s3 cp ${{ env.BUILD_DIR_BASH }}/artifacts/ s3://therock-artifacts/${{github.run_id}}-windows/ \
             --recursive --no-follow-symlinks \
             --exclude "*" \
@@ -200,7 +201,9 @@ jobs:
 
       # TODO: Move to script
       - name: Upload Logs
+        shell: powershell
         run: |
+          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
           aws s3 cp ${{ env.BUILD_DIR_BASH }}/logs/ s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/ \
             --recursive \
             --content-type="text/plain" \
