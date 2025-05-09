@@ -14,7 +14,7 @@ set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
 # library to have a versioned output name, but there does not seem to be a
 # public patch to llvm-project/amd/comgr which sets it properly. Therefore,
 # we align it with what LoadLib expects:
-#   amd_comgr_MM_NN.dll
+#   amd_comgrMMNN.dll
 # where MM is the left zero padded HIP_MAJOR_VERSION and NN is the left zero
 # padded HIP_MINOR_VERSION. There is no natural connection between these
 # projects in the codebase, so this is just an action at a distance / must
