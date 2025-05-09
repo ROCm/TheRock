@@ -70,8 +70,8 @@ jobs:
           choco install awscli --yes
           Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          [System.Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\Amazon\AWSCLIV2", [System.EnvironmentVariableTarget]::User)
           refreshenv
+          aws
 
       - name: Runner Health Settings
         run: |
@@ -98,8 +98,9 @@ jobs:
       - name: AWS test
         shell: powershell
         run: |
+          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
           Write-Output $Env:PATH
-          cd "C:\Program Files"
+          cd "C:\Program Files\Amazon"
           ls
           aws
 
