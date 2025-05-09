@@ -14,6 +14,7 @@ on:
         value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
 
 permissions:
+  id-token: write      # Required for OIDC auth
   contents: read
 
 jobs:
