@@ -93,15 +93,6 @@ jobs:
           key: windows-build-packages-v2-${{ github.sha }}
           restore-keys: |
             windows-build-packages-v2-
-        
-      - name: AWS test
-        shell: powershell
-        run: |
-          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          Write-Output $Env:PATH
-          cd "C:\Program Files\Amazon"
-          ls
-          aws
 
       - name: Fetch sources
         run: |
