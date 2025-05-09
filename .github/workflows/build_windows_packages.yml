@@ -67,7 +67,6 @@ jobs:
           choco install ccache --yes
           choco install ninja --yes
           choco install awscli --yes
-          RefreshEnv
 
       - name: Runner Health Settings
         run: |
