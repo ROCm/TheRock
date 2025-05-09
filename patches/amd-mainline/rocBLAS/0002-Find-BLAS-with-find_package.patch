@@ -1,7 +1,7 @@
-From 6cbf235156a96e5864e6275ddee7496c4b450728 Mon Sep 17 00:00:00 2001
+From ef1e3778dc8a1e868ecbceabd4af6a11b8406556 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Mon, 24 Mar 2025 22:01:01 +0000
-Subject: [PATCH 3/7] Find BLAS with `find_package()`
+Subject: [PATCH 2/5] Find BLAS with `find_package()`
 
 Switches to `find_package()` insteaf of assuming that the reference BLAS
 is available without any check. This also allows to use OpenBLAS.

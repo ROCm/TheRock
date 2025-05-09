@@ -1,7 +1,7 @@
-From aa97f0f612dec488f08d1f192123866aae96747c Mon Sep 17 00:00:00 2001
+From e6ff164f077169d608adce19ef25c152f0547ae5 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Tue, 29 Apr 2025 13:25:16 -0700
-Subject: [PATCH 7/7] Fix include ordering for Windows compatibility.
+Subject: [PATCH 5/5] Fix include ordering for Windows compatibility.
 
 ---
  clients/gtest/rocblas_test.cpp | 13 +++++++++----
