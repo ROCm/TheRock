@@ -22,9 +22,7 @@ def log(*args, **kwargs):
 
 
 def s3_bucket_exists(run_id):
-    """
-    Checks that the AWS S3 bucket exists
-    """
+    """Checks that the AWS S3 bucket exists."""
     cmd = [
         "aws",
         "s3",
@@ -37,10 +35,7 @@ def s3_bucket_exists(run_id):
 
 
 def s3_commands_for_artifacts(artifacts, run_id, build_dir, variant):
-    """
-    Collects AWS S3 copy commands to execute later in parallel, where
-    the commands copy TheRock artifacts from the S3 bucket to an output directory
-    """
+    """Collects AWS S3 copy commands to execute later in parallel."""
     cmds = []
     for artifact in artifacts:
         cmds.append(
@@ -58,9 +53,7 @@ def s3_commands_for_artifacts(artifacts, run_id, build_dir, variant):
 
 
 def subprocess_run(cmd):
-    """
-    Runs a command via subprocess run
-    """
+    """Runs a command via subprocess run."""
     try:
         log(f"++ Exec {cmd}")
         subprocess.run(cmd, check=True)
@@ -70,9 +63,7 @@ def subprocess_run(cmd):
 
 
 def parallel_exec_commands(cmds):
-    """
-    Runs parallelized subprocess commands using a thread pool executor, where each command has a timeout of 60s
-    """
+    """Runs parallelized subprocess commands using a thread pool executor, where each command has a timeout of 60s."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [executor.submit(subprocess_run, cmd) for cmd in cmds]
         for future in concurrent.futures.as_completed(futures):
@@ -80,9 +71,7 @@ def parallel_exec_commands(cmds):
 
 
 def retrieve_base_artifacts(args, run_id, build_dir):
-    """
-    Retrieves TheRock base artifacts using AWS S3 copy
-    """
+    """Retrieves TheRock base artifacts using AWS S3 copy."""
     base_artifacts = [
         "core-runtime_run",
         "core-runtime_lib",
@@ -103,7 +92,7 @@ def retrieve_base_artifacts(args, run_id, build_dir):
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
-    """Retrieves TheRock artifacts using AWS S3 copy, based on the enabled arguments from `args`
+    """Retrieves TheRock artifacts using AWS S3 copy, based on the enabled arguments from `args`.
 
     If no artifacts have been collected, we assume that we want to install all artifacts
     If `args.tests` have been enabled, we also collect test artifacts
