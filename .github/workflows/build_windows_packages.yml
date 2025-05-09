@@ -67,7 +67,7 @@ jobs:
           choco install ccache --yes
           choco install ninja --yes
           choco install awscli --yes
-          refreshenv
+          RefreshEnv
 
       - name: Runner Health Settings
         run: |
@@ -90,6 +90,9 @@ jobs:
           key: windows-build-packages-v2-${{ github.sha }}
           restore-keys: |
             windows-build-packages-v2-
+        
+      - name: AWS test
+        run: aws cli --help
 
       - name: Fetch sources
         run: |
