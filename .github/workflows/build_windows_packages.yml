@@ -94,6 +94,7 @@ jobs:
             windows-build-packages-v2-
         
       - name: AWS test
+        shell: powershell
         run: aws cli --help
 
       - name: Fetch sources
