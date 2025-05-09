@@ -148,6 +148,10 @@ jobs:
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
+            -DTHEROCK_ENABLE_BLAS=OFF \
+            -DTHEROCK_ENABLE_SPARSE=OFF \
+            -DTHEROCK_ENABLE_SOLVER=OFF \
+            -DTHEROCK_ENABLE_ML_LIBS=OFF \
             ${extra_cmake_options}
 
       - name: Build Projects
