@@ -1,8 +1,8 @@
-From 1218c51fccedbe81137099ea7360450bbda54beb Mon Sep 17 00:00:00 2001
+From fdc95b042415e5f7bab95025ec61aeed14910fab Mon Sep 17 00:00:00 2001
 From: ikalinic <ilija.kalinic@amd.com>
 Date: Tue, 8 Apr 2025 16:18:11 +0000
-Subject: [PATCH 09/12] [ROCm][Windows] Include AOTriton dependent sources in
- Windows build (#150521)
+Subject: [PATCH 09/11] Include AOTriton dependent sources in Windows build
+ (#150521)
 
 Includes ATen native transformers hipified sources in ROCm+Windows build. This was removed due to Trinton not being available on Windows, but this causes further linker errors. Setting `USE_FLASH_ATTENTION=0` and `USE_MEM_EFF_ATTENTION=0` during the build will mitigate the missing headers, but also not cause any linker errors, so we will use this approach for now.
 
@@ -42,5 +42,5 @@ index 67322e8f56..74e464dda4 100644
  
  if(USE_XPU)
 -- 
-2.49.0.windows.1
+2.47.1.windows.2
 

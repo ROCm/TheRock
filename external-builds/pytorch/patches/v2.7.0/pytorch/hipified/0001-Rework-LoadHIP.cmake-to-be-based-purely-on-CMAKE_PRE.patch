@@ -1,7 +1,7 @@
-From 8e9b9b8cb6fe3b7dc68a95708c7464c594b31ba7 Mon Sep 17 00:00:00 2001
+From 50708329cdb0754dcc793893a57c376888b5401b Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 17 Feb 2025 16:47:57 -0800
-Subject: [PATCH 01/12] Rework LoadHIP.cmake to be based purely on
+Subject: [PATCH 01/11] Rework LoadHIP.cmake to be based purely on
  CMAKE_PREFIX_PATH.
 
 * Eliminates dependence on `/opt/rocm` and path based heuristics.
@@ -336,5 +336,5 @@ index 58c74ddda3..57910495fc 100644
 +  pytorch_load_hip()
  endif()
 -- 
-2.49.0.windows.1
+2.47.1.windows.2
 

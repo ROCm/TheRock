@@ -1,7 +1,7 @@
-From 4bd53dc97ded77f11075941a99d7ff276e82cbac Mon Sep 17 00:00:00 2001
+From 4611feb8b5853ea3054d4790bc22a7ded3f56469 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Mon, 31 Mar 2025 19:27:59 +0100
-Subject: [PATCH 06/12] Support gfx1151 in aotriton
+Subject: [PATCH 06/11] Support gfx1151 in aotriton
 
 ---
  cmake/External/aotriton.cmake | 6 ++++--
@@ -63,5 +63,5 @@ index 57910495fc..7b058199a1 100644
    pytorch_load_hip()
  endif()
 -- 
-2.49.0.windows.1
+2.47.1.windows.2
 

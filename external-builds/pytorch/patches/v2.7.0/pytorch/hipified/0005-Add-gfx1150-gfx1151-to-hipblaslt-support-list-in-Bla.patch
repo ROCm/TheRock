@@ -1,7 +1,7 @@
-From 1db9ca1bc3267b8d10459351ef632a68c1ad841a Mon Sep 17 00:00:00 2001
+From f4414baac689fc264e7d88f66a9aff5993a6da02 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Mon, 31 Mar 2025 19:27:48 +0100
-Subject: [PATCH 05/12] Add gfx1150/gfx1151 to hipblaslt support list in
+Subject: [PATCH 05/11] Add gfx1150/gfx1151 to hipblaslt support list in
  Blas.cpp
 
 ---
@@ -36,5 +36,5 @@ index c1fdaf7f28..734af694b0 100644
  #if ROCM_VERSION >= 60500
          "gfx950"
 -- 
-2.49.0.windows.1
+2.47.1.windows.2
 

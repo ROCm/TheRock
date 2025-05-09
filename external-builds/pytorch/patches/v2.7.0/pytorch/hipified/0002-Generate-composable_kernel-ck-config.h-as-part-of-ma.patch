@@ -1,7 +1,7 @@
-From c1f2f89b71daa5a8bef9573e2d8d8ad07c712b99 Mon Sep 17 00:00:00 2001
+From c7cfca278d64c73740d9a99b439e1a13ded2b348 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Wed, 19 Feb 2025 17:14:59 -0800
-Subject: [PATCH 02/12] Generate composable_kernel ck/config.h as part of main
+Subject: [PATCH 02/11] Generate composable_kernel ck/config.h as part of main
  build.
 
 Without this, the ck/config.h comes from somewhere, most probably a ROCM SDK that has it installed as a sibling to the HIP headers. Not all ROCM SDKs include this, and even so, it is dangerous to have a sheared header dependency like this.
@@ -45,5 +45,5 @@ index 085af373ec..67322e8f56 100644
    list(APPEND ATen_HIP_INCLUDE $<TARGET_PROPERTY:fmt::fmt-header-only,INTERFACE_INCLUDE_DIRECTORIES>)
    list(APPEND ATen_HIP_DEPENDENCY_LIBS fmt::fmt-header-only)
 -- 
-2.49.0.windows.1
+2.47.1.windows.2
 

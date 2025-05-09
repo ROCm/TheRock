@@ -1,8 +1,7 @@
-From df3216927bb5407d60708b58a7787d36feac5ee3 Mon Sep 17 00:00:00 2001
+From e31e0a89e54a0537b6ee0360398e9bc1812fd747 Mon Sep 17 00:00:00 2001
 From: tvukovic-amd <tvukovic@amd.com>
 Date: Tue, 18 Mar 2025 23:37:01 +0000
-Subject: [PATCH 08/12] [ROCm][Windows] Enable torchvision build with ROCm on
- Windows (#147382)
+Subject: [PATCH 08/11] Enable torchvision build with ROCm on Windows (#147382)
 
 - Updated HIP flags for Windows (removed non Windows flags on Windows case, added runtime library)
 - Set hipcc call for Windows case
@@ -274,5 +273,5 @@ index 6cbdf6c7ec..de726e066d 100755
              return m.group(0)
          return repl
 -- 
-2.49.0.windows.1
+2.47.1.windows.2
 
