@@ -95,7 +95,10 @@ jobs:
         
       - name: AWS test
         shell: powershell
-        run: aws cli --help
+        run: |
+          Write-Output $Env:PATH
+          cd "C:\Program Files"
+          ls
 
       - name: Fetch sources
         run: |
