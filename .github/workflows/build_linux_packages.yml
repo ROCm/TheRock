@@ -69,7 +69,6 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
-          role-duration-seconds: 14000  # ~ 4 hours
 
       - name: Build Projects
         run: |
