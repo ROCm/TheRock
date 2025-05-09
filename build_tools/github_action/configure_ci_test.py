@@ -31,7 +31,7 @@ class ConfigureCITest(TestCase):
     def test_valid_linux_workflow_dispatch_matrix_generator(self):
         build_families = {"amdgpu_families": "   gfx94X ,|.\\,  gfx1200"}
         linux_target_output = configure_ci.matrix_generator(
-            False, True, False, {}, build_families, "linux"
+            False, True, False, False, {}, build_families, "linux"
         )
         target_to_compare = [
             {
@@ -47,7 +47,7 @@ class ConfigureCITest(TestCase):
             "amdgpu_families": "",
         }
         linux_target_output = configure_ci.matrix_generator(
-            False, True, False, {}, build_families, "linux"
+            False, True, False, False, {}, build_families, "linux"
         )
         self.assertEqual(linux_target_output, [])
 
@@ -56,7 +56,7 @@ class ConfigureCITest(TestCase):
             "pr_labels": '{"labels":[{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"}]}'
         }
         linux_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, "linux"
+            True, False, False, False, base_args, {}, "linux"
         )
         linux_target_output.sort(key=lambda item: item["family"])
         linux_target_to_compare = [
@@ -75,7 +75,7 @@ class ConfigureCITest(TestCase):
             "pr_labels": '{"labels":[{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"gfx110X-windows"}]}'
         }
         windows_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, "windows"
+            True, False, False, False, base_args, {}, "windows"
         )
         windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(windows_target_output, windows_target_to_compare)
@@ -85,7 +85,7 @@ class ConfigureCITest(TestCase):
             "pr_labels": '{"labels":[{"name":"gfx10000X-linux"},{"name":"gfx110000X-windows"}]}'
         }
         linux_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, "linux"
+            True, False, False, False, base_args, {}, "linux"
         )
         linux_target_output.sort(key=lambda item: item["family"])
         linux_target_to_compare = [
@@ -102,7 +102,7 @@ class ConfigureCITest(TestCase):
     def test_empty_windows_pull_request_matrix_generator(self):
         base_args = {"pr_labels": "{}"}
         windows_target_output = configure_ci.matrix_generator(
-            True, False, False, base_args, {}, "windows"
+            True, False, False, False, base_args, {}, "windows"
         )
         windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
         self.assertEqual(windows_target_output, windows_target_to_compare)
@@ -110,11 +110,10 @@ class ConfigureCITest(TestCase):
     def test_main_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
         linux_target_output = configure_ci.matrix_generator(
-            False, False, True, base_args, {}, "linux"
+            False, False, True, False, base_args, {}, "linux"
         )
         linux_target_output.sort(key=lambda item: item["family"])
         linux_target_to_compare = [
-            {"test-runs-on": "", "family": "gfx90X-dcgpu", "pytorch-target": "gfx90a"},
             {
                 "test-runs-on": "linux-rx9070-gpu-rocm",
                 "family": "gfx120X-all",
@@ -125,8 +124,6 @@ class ConfigureCITest(TestCase):
                 "family": "gfx94X-dcgpu",
                 "pytorch-target": "gfx942",
             },
-            {"test-runs-on": "", "family": "gfx103X-dgpu", "pytorch-target": "gfx1030"},
-            {"test-runs-on": "", "family": "gfx101X-dgpu", "pytorch-target": "gfx1010"},
             {"test-runs-on": "", "family": "gfx110X-dgpu", "pytorch-target": "gfx1100"},
             {"test-runs-on": "", "family": "gfx1151", "pytorch-target": "gfx1151"},
         ]
@@ -136,7 +133,7 @@ class ConfigureCITest(TestCase):
     def test_main_windows_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
         windows_target_output = configure_ci.matrix_generator(
-            False, False, True, base_args, {}, "windows"
+            False, False, True, False, base_args, {}, "windows"
         )
         windows_target_output.sort(key=lambda item: item["family"])
         windows_target_to_compare = [{"test-runs-on": "", "family": "gfx110X-dgpu"}]
@@ -149,9 +146,44 @@ class ConfigureCITest(TestCase):
             "amdgpu_families": "   gfx94X ,|.\\,  gfx1201X, --   gfx90X",
         }
         linux_target_output = configure_ci.matrix_generator(
-            False, False, True, base_args, build_families, "linux"
+            False, False, True, False, base_args, build_families, "linux"
         )
         self.assertEqual(linux_target_output, [])
+
+    def test_linux_schedule_matrix_generator(self):
+        linux_target_output = configure_ci.matrix_generator(
+            False, False, False, True, {}, {}, "linux"
+        )
+        linux_target_output.sort(key=lambda item: item["family"])
+        linux_target_to_compare = [
+            {
+                "test-runs-on": "",
+                "family": "gfx90X-dcgpu",
+                "pytorch-target": "gfx90a",
+                "expect_failure": True,
+            },
+            {
+                "test-runs-on": "",
+                "family": "gfx101X-dgpu",
+                "pytorch-target": "gfx1010",
+                "expect_failure": True,
+            },
+            {
+                "test-runs-on": "",
+                "family": "gfx103X-dgpu",
+                "pytorch-target": "gfx1030",
+                "expect_failure": True,
+            },
+        ]
+        linux_target_to_compare.sort(key=lambda item: item["family"])
+        self.assertEqual(linux_target_output, linux_target_to_compare)
+
+    def test_windows_schedule_matrix_generator(self):
+        windows_target_output = configure_ci.matrix_generator(
+            False, False, False, True, {}, {}, "windows"
+        )
+        windows_target_to_compare = []
+        self.assertEqual(windows_target_output, windows_target_to_compare)
 
 
 if __name__ == "__main__":

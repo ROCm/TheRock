@@ -203,6 +203,7 @@ def matrix_generator(
     is_pull_request,
     is_workflow_dispatch,
     is_push,
+    is_schedule,
     base_args,
     families,
     platform="linux",
@@ -240,11 +241,36 @@ def matrix_generator(
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
-        # Add all options
+        # Add all options except for families that allow failures
         for key in amdgpu_family_info_matrix:
-            if "linux" in amdgpu_family_info_matrix[key] and platform == "linux":
+            if (
+                "linux" in amdgpu_family_info_matrix[key]
+                and platform == "linux"
+                and "expect_failure" not in amdgpu_family_info_matrix[key]["linux"]
+            ):
                 potential_targets.append(key)
-            if "windows" in amdgpu_family_info_matrix[key] and platform == "windows":
+            if (
+                "windows" in amdgpu_family_info_matrix[key]
+                and platform == "windows"
+                and "expect_failure" not in amdgpu_family_info_matrix[key]["windows"]
+            ):
+                potential_targets.append(key)
+
+    if is_schedule:
+        print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
+        # Add all options that allow failures
+        for key in amdgpu_family_info_matrix:
+            if (
+                "linux" in amdgpu_family_info_matrix[key]
+                and platform == "linux"
+                and "expect_failure" in amdgpu_family_info_matrix[key]["linux"]
+            ):
+                potential_targets.append(key)
+            if (
+                "windows" in amdgpu_family_info_matrix[key]
+                and platform == "windows"
+                and "expect_failure" in amdgpu_family_info_matrix[key]["windows"]
+            ):
                 potential_targets.append(key)
 
     # Ensure the targets in the list are unique
@@ -284,6 +310,7 @@ def main(base_args, linux_families, windows_families):
     is_push = github_event_name == "push"
     is_workflow_dispatch = github_event_name == "workflow_dispatch"
     is_pull_request = github_event_name == "pull_request"
+    is_schedule = github_event_name == "schedule"
 
     base_ref = base_args.get("base_ref")
     print("Found metadata:")
@@ -300,6 +327,7 @@ def main(base_args, linux_families, windows_families):
         is_pull_request,
         is_workflow_dispatch,
         is_push,
+        is_schedule,
         base_args,
         linux_families,
         platform="linux",
@@ -310,6 +338,7 @@ def main(base_args, linux_families, windows_families):
         is_pull_request,
         is_workflow_dispatch,
         is_push,
+        is_schedule,
         base_args,
         windows_families,
         platform="windows",
