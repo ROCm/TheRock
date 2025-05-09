@@ -136,14 +136,30 @@ jobs:
 
       # TODO: Move to script
       - name: Upload Logs
+        if: always()
         run: |
-          aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
-            --recursive \
-            --content-type="text/plain" \
-            --exclude "*" \
-            --include "*.log"
-          aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/
+          if [ ! -d build/logs ]; then
+            echo "[INFO] Logs directory missing. Creating build/logs..."
+            mkdir -p build/logs
+          fi
 
+          echo "[INFO] Uploading logs..."
+
+          if compgen -G "build/logs/*.log" > /dev/null; then
+            aws s3 cp build/logs/ s3://therock-artifacts/${{ github.run_id }}/logs/${{ env.AMDGPU_FAMILIES }}/ \
+              --recursive \
+              --content-type="text/plain" \
+              --exclude "*" \
+              --include "*.log"
+          else
+            echo "[WARN] No *.log files to upload."
+          fi
+
+          if [ -f build/logs/index.html ]; then
+            aws s3 cp build/logs/index.html s3://therock-artifacts/${{ github.run_id }}/logs/${{ env.AMDGPU_FAMILIES }}/
+          else
+            echo "[INFO] No index.html file found to upload."
+          fi
       - name: Add Links to Job Summary
         run: |
           echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
