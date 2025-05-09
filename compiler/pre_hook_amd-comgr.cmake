@@ -31,14 +31,13 @@ function(therock_patch_comgr_win_output_name)
     set(THEROCK_HIP_MINOR_VERSION "0${THEROCK_HIP_MINOR_VERSION}")
   endif()
 
-  set(suffix_version "${THEROCK_HIP_MAJOR_VERSION}_${THEROCK_HIP_MINOR_VERSION}")
+  set(suffix_version "${THEROCK_HIP_MAJOR_VERSION}${THEROCK_HIP_MINOR_VERSION}")
   message(STATUS "Versioned comgr suffix: ${suffix_version}")
 
   if(WIN32)
-    set(output_name "amd_comgr_${suffix_version}")
+    set(output_name "amd_comgr${suffix_version}")
     message(STATUS "Override comgr output_name (windows): ${output_name}")
-    set_target_properties(amd_comgr PROPERTIES
-      OUTPUT_NAME "amd_comgr_${suffix_version}")
+    set_target_properties(amd_comgr PROPERTIES OUTPUT_NAME "${output_name}")
   endif()
 endfunction()
 
