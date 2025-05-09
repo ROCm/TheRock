@@ -159,8 +159,7 @@ jobs:
         shell: powershell
 
       - name: Install the AWS tool for Windows
-        shell: bash
-        run: msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi /qn
+        run: choco install awscli --yes
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
