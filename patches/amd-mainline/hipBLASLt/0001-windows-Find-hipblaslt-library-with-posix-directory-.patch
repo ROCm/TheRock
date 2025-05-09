@@ -1,0 +1,273 @@
+From e7268a28776c9ec0b5afbc739ded143bce8cf313 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Thu, 8 May 2025 20:51:09 -0700
+Subject: [PATCH] [windows] Find hipblaslt library with posix directory layout.
+
+---
+ library/src/amd_detail/hipblaslt-ext-op.cpp   | 20 ++-----
+ .../rocblaslt/include/rocblaslt-auxiliary.h   | 17 ++++++
+ .../rocblaslt/src/rocblaslt_auxiliary.cpp     | 57 +++++++++++++++++++
+ .../rocblaslt/src/rocblaslt_transform.cpp     | 21 ++-----
+ .../amd_detail/rocblaslt/src/tensile_host.cpp | 39 +++++--------
+ .../Serialization/PlaceholderLibrary.hpp      |  8 ++-
+ 6 files changed, 103 insertions(+), 59 deletions(-)
+
+diff --git a/library/src/amd_detail/hipblaslt-ext-op.cpp b/library/src/amd_detail/hipblaslt-ext-op.cpp
+index 440a1778..45a9494c 100644
+--- a/library/src/amd_detail/hipblaslt-ext-op.cpp
++++ b/library/src/amd_detail/hipblaslt-ext-op.cpp
+@@ -163,22 +163,10 @@ namespace
+             return libPath;
+         }
+ 
+-        auto                  soPath = rocblaslt_internal_get_so_path();
+-        std::filesystem::path libPath(std::filesystem::path(soPath).parent_path());
+-
+-        auto pathIfExists = [](std::filesystem::path p) -> std::optional<std::filesystem::path> {
+-            if(std::filesystem::exists(p))
+-                return p;
+-            return {};
+-        };
+-
+-        if(auto p
+-           = pathIfExists(libPath / ".." / "Tensile" / "library" / "hipblasltExtOpLibrary.dat"))
+-            return p->string();
+-        if(auto p = pathIfExists(libPath / "library" / "hipblasltExtOpLibrary.dat"))
+-            return p->string();
+-        if(auto p = pathIfExists(libPath / "hipblaslt" / "library" / "hipblasltExtOpLibrary.dat"))
+-            return p->string();
++        auto path = rocblaslt_find_library_relative_path(
++            std::filesystem::path("hipblasltExtOpLibrary.dat"));
++        if(path)
++            return path->string();
+ 
+         return DEFAULT_EXT_OP_LIBRARY_PATH;
+     }
+diff --git a/library/src/amd_detail/rocblaslt/include/rocblaslt-auxiliary.h b/library/src/amd_detail/rocblaslt/include/rocblaslt-auxiliary.h
+index a2eff868..8fe5eebd 100644
+--- a/library/src/amd_detail/rocblaslt/include/rocblaslt-auxiliary.h
++++ b/library/src/amd_detail/rocblaslt/include/rocblaslt-auxiliary.h
+@@ -33,6 +33,8 @@
+ #define _ROCBLASLT_AUXILIARY_H_
+ 
+ #include "rocblaslt-types.h"
++#include <filesystem>
++#include <optional>
+ #include <stdint.h>
+ #include <vector>
+ 
+@@ -406,6 +408,21 @@ bool rocblaslt_internal_test_path(const std::string&);
+ // Gets the absolute path of the so/dll/exe containing this function.
+ std::string rocblaslt_internal_get_so_path();
+ 
++// Finds a path relative to the hipblaslt "library" directory, and returns the full path
++// if it exists.
++// Without `default_lib_dir` specified, this will first attempt to locate a plausible
++// library directory relative to the hosting shared library. On Windows, this will
++// search the containing "bin" directory and its sibling "lib" directory. Searching
++// the "bin" directory is for backwards compatibility with the original Windows
++// build system and should be considered deprecated in favor of the standard Posix
++// layout.
++// If `default_lib_dir` is given, then no shared library relative search heuristic
++// is used and the given directory is taken verbatim.
++std::optional<std::filesystem::path>
++    rocblaslt_find_library_relative_path(const std::optional<std::filesystem::path>& relpath,
++                                         const std::optional<std::filesystem::path>& default_lib_dir
++                                         = std::nullopt);
++
+ void rocblaslt_log_error(const char* func, const char* var, const char* msg);
+ #endif
+ 
+diff --git a/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp b/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
+index bee22eb7..a7d8908c 100644
+--- a/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
++++ b/library/src/amd_detail/rocblaslt/src/rocblaslt_auxiliary.cpp
+@@ -2178,6 +2178,63 @@ std::string rocblaslt_internal_get_so_path()
+ }
+ #endif
+ 
++std::optional<std::filesystem::path> rocblaslt_find_library_relative_path(
++    const std::optional<std::filesystem::path>& relpath,
++    const std::optional<std::filesystem::path>& default_lib_dir)
++{
++    auto pathIfExists
++        = [&](const std::filesystem::path& p) -> std::optional<std::filesystem::path> {
++        if(relpath)
++        {
++            auto full_path = p / (*relpath);
++            if(std::filesystem::exists(full_path))
++                return full_path;
++        }
++
++        if(std::filesystem::exists(p))
++            return p;
++        return {};
++    };
++
++    auto probeLibDir
++        = [&](const std::filesystem::path& lib_dir) -> std::optional<std::filesystem::path> {
++        // There are a few fallback locations that have grown over time:
++        //   {lib_dir}/hipblaslt/library
++        // Legacy:
++        //   {lib_dir}/../Tensile/library
++        //   {lib_dir}/library
++        if(auto p = pathIfExists(lib_dir / "hipblaslt" / "library"))
++            return *p;
++        if(auto p = pathIfExists(lib_dir.parent_path() / "Tensile" / "library"))
++            return *p;
++        if(auto p = pathIfExists(lib_dir / "library"))
++            return *p;
++        return std::nullopt;
++    };
++
++    if(default_lib_dir)
++    {
++        return probeLibDir(*default_lib_dir);
++    }
++
++    auto so_path       = std::filesystem::path(rocblaslt_internal_get_so_path()).parent_path();
++    bool windows_style = false;
++#ifdef _WIN32
++    windows_style = true;
++#endif
++
++    // If on Windows, probe the sibling lib directory first, as that is non-deprecated.
++    // Then fall back to the same-directory (bin) path.
++    if(windows_style)
++    {
++        auto sibling = probeLibDir(so_path.parent_path() / "lib");
++        if(sibling)
++            return sibling;
++    }
++
++    return probeLibDir(so_path);
++}
++
+ void rocblaslt_log_error(const char* func, const char* var, const char* msg)
+ {
+     log_error(func, var, msg);
+diff --git a/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp b/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
+index e209d6ea..48d0d918 100644
+--- a/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
++++ b/library/src/amd_detail/rocblaslt/src/rocblaslt_transform.cpp
+@@ -53,23 +53,10 @@ namespace
+             = "/opt/rocm/lib/hipblaslt/library/hipblasltTransform.hsaco";
+ #endif
+ 
+-        std::string           soPath = rocblaslt_internal_get_so_path();
+-        std::filesystem::path libPath(std::filesystem::path(soPath).parent_path());
+-
+-        auto pathIfExists = [](std::filesystem::path p) -> std::optional<std::filesystem::path> {
+-            if(std::filesystem::exists(p))
+-                return p;
+-            return {};
+-        };
+-
+-        if(auto p
+-           = pathIfExists(libPath / ".." / "Tensile" / "library" / "hipblasltTransform.hsaco"))
+-            return *p;
+-        if(auto p = pathIfExists(libPath / "library" / "hipblasltTransform.hsaco"))
+-            return *p;
+-        if(auto p = pathIfExists(libPath / "hipblaslt" / "library" / "hipblasltTransform.hsaco"))
+-            return *p;
+-
++        auto path = rocblaslt_find_library_relative_path(
++            std::filesystem::path("hipblasltTransform.hsaco"));
++        if(path)
++            return *path;
+         return std::filesystem::path(DEFAULT_CO_PATH);
+     }
+ 
+diff --git a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+index 7b3f8694..d8fd7932 100644
+--- a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
++++ b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+@@ -767,7 +767,8 @@ namespace
+             "--bias_type",
+             hipDataType_to_bench_string(tensile2HipType(problem.bias().dataType())),
+             problem.useE() ? "--aux_type" : "",
+-            problem.useE() ? hipDataType_to_bench_string(tensile2HipType(problem.e().dataType())) : "",
++            problem.useE() ? hipDataType_to_bench_string(tensile2HipType(problem.e().dataType()))
++                           : "",
+             problem.getParams().gsu() ? "--splitk" : "",
+             problem.getParams().gsu() ? std::to_string(problem.getParams().gsu()) : "",
+             problem.getParams().wgm() ? "--wgm" : "",
+@@ -1077,7 +1078,9 @@ namespace
+             "--bias_type",
+             hipDataType_to_bench_string(tensile2HipType(problem.gemms[0].bias().dataType())),
+             problem.gemms[0].useE() ? "--aux_type" : "",
+-            problem.gemms[0].useE() ? hipDataType_to_bench_string(tensile2HipType(problem.gemms[0].e().dataType())) : "",
++            problem.gemms[0].useE()
++                ? hipDataType_to_bench_string(tensile2HipType(problem.gemms[0].e().dataType()))
++                : "",
+             problem.gemms[0].getParams().gsu() ? "--splitk" : "",
+             problem.gemms[0].getParams().gsu() ? std::to_string(problem.gemms[0].getParams().gsu())
+                                                : "",
+@@ -1929,35 +1932,21 @@ namespace
+             {
+                 // Find the location of librocblaslt.so
+                 // Fall back on hard-coded path if static library or not found
++                std::optional<std::filesystem::path> default_lib_path;
+                 if(staticLib)
+                 {
+-                    path = HIPBLASLT_LIB_PATH;
++                    default_lib_path = HIPBLASLT_LIB_PATH;
+                 }
+-                else
++                if(auto maybe_path = rocblaslt_find_library_relative_path(
++                       /*relpath=*/std::nullopt, default_lib_path))
++                    path = std::move(*maybe_path);
++                // Optionally, look for a `processor` sub-directory under the library path.
+                 {
+-                    auto hipblaslt_so_path
+-                        = std::filesystem::path(rocblaslt_internal_get_so_path());
+-                    path = hipblaslt_so_path.parent_path();
++                    auto processor_path = path / processor;
++                    if(std::filesystem::exists(processor_path))
++                        path = std::move(processor_path);
+                 }
+ 
+-                auto pathIfExists
+-                    = [](std::filesystem::path p) -> std::optional<std::filesystem::path> {
+-                    if(std::filesystem::exists(p))
+-                        return p;
+-                    return {};
+-                };
+-
+-                // Find the location of the libraries
+-                if(auto p = pathIfExists(path / ".." / "Tensile" / "library"))
+-                    path = *p;
+-                else if(auto p = pathIfExists(path / "library"))
+-                    path = *p;
+-                else
+-                    path = path / "hipblaslt" / "library";
+-
+-                if(auto p = pathIfExists(path / processor))
+-                    path = *p;
+-
+                 if(get_logger_layer_mode() & rocblaslt_layer_mode_log_info)
+                 {
+                     std::ostringstream msg;
+diff --git a/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp b/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
+index 36235e43..194925b9 100644
+--- a/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
++++ b/tensilelite/Tensile/Source/lib/include/Tensile/Serialization/PlaceholderLibrary.hpp
+@@ -60,8 +60,14 @@ namespace TensileLite
+                     lib.solutionsGuard  = ctx->solutionsGuard;
+ 
+                     //Extract directory where TensileLibrary.dat/yaml file is located
++                    //TODO: Consider refactoring this to use filesystem::path handling instead
++                    //of string munging.
+                     lib.libraryDirectory = ctx->filename;
+-                    size_t directoryPos  = ctx->filename.rfind('/');
++                    size_t directoryPos  = ctx->filename.rfind('/'); // Posix style
++#ifdef _WIN32
++                    if(directoryPos == std::string::npos)
++                        directoryPos = ctx->filename.rfind('\\'); // Windows style
++#endif
+                     if(directoryPos != std::string::npos)
+                         lib.libraryDirectory.resize(directoryPos + 1);
+                     else
+-- 
+2.49.0.windows.1
+
