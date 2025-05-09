@@ -69,8 +69,9 @@ jobs:
           choco install ninja --yes
           choco install awscli --yes
           Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-          refreshenv
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
+          [System.Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\Amazon\AWSCLIV2", [System.EnvironmentVariableTarget]::User)
+          refreshenv
 
       - name: Runner Health Settings
         run: |
