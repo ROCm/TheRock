@@ -180,7 +180,12 @@ class OutputSink:
             # Call log indexing before upload
             amdgpu_families = os.getenv("AMDGPU_FAMILIES", "unknown")
             indexer_script = Path("build_tools/index_logs.sh")
-            indexer_args = [str(indexer_script), amdgpu_families, str(self.log_path.parent), "build/indexer.py"]
+            indexer_args = [
+                str(indexer_script),
+                amdgpu_families,
+                str(self.log_path.parent),
+                "build/indexer.py",
+            ]
             if indexer_script.exists():
                 try:
                     print(f"[teatime] Running {indexer_script} for {amdgpu_families}")
@@ -189,8 +194,6 @@ class OutputSink:
                     print(f"[teatime] index_logs.sh failed: {e}", file=sys.stderr)
 
             upload_logs_to_s3(self.log_path)
-
-
 
         if self.gh_group_label is not None:
             self.out.write(b"::endgroup::\n")
