@@ -86,11 +86,9 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
-  COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"
-      "-S${CMAKE_CURRENT_BINARY_DIR}/s"
+      "-S${SOURCE_DIR}/build/cmake"
       "-B${CMAKE_CURRENT_BINARY_DIR}/b"
       "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/zstd_include.cmake"
       "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
