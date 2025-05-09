@@ -184,8 +184,8 @@ jobs:
         shell: powershell
         run: |
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          aws s3 cp ${{ env.BUILD_DIR_BASH }}/artifacts/ s3://therock-artifacts/${{github.run_id}}-windows/ \
-            --recursive --no-follow-symlinks \
+          aws s3 cp ${{ env.BUILD_DIR_BASH }}/artifacts/ s3://therock-artifacts/${{github.run_id}}-windows/ `
+            --recursive --no-follow-symlinks `
             --include "*"
           aws s3 cp ${{ env.BUILD_DIR_BASH }}/artifacts/index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}-windows.html
 
@@ -194,10 +194,10 @@ jobs:
         shell: powershell
         run: |
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          aws s3 cp ${{ env.BUILD_DIR_BASH }}/logs/ s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/ \
-            --recursive \
-            --content-type="text/plain" \
-            --exclude "*" \
+          aws s3 cp ${{ env.BUILD_DIR_BASH }}/logs/ s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/ `
+            --recursive `
+            --content-type="text/plain" `
+            --exclude "*" `
             --include "*.log"
           aws s3 cp ${{ env.BUILD_DIR_BASH }}/logs/index.html s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/
 
