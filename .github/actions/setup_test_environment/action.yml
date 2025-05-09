@@ -94,8 +94,8 @@ runs:
         ${{ env.VENV_DIR }}\Scripts\activate
         $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
 
-        python ./build_tools/install_rocm_from_artifacts.py \
-          --run-id=${{ env.ARTIFACT_RUN_ID }} \
-          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} \
-          --output-dir=${{ OUTPUT_ARTIFACTS_DIR }} \
+        python ./build_tools/install_rocm_from_artifacts.py `
+          --run-id=${{ env.ARTIFACT_RUN_ID }} `
+          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} `
+          --output-dir=${{ OUTPUT_ARTIFACTS_DIR }} `
           ${{ FETCH_ARTIFACT_ARGS }}
