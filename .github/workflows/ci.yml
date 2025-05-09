@@ -10,7 +10,7 @@
 #
 # For push to main branch, all AMD families will built and tested from `amdgpu_family_matrix.py`.
 #
-# Note: if a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
+# Note: If a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
 
 name: CI
 
