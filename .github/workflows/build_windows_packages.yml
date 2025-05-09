@@ -66,6 +66,8 @@ jobs:
         run: |
           choco install ccache --yes
           choco install ninja --yes
+          choco install awscli --yes
+          refreshenv
 
       - name: Runner Health Settings
         run: |
@@ -157,9 +159,6 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
         shell: powershell
-
-      - name: Install the AWS tool for Windows
-        run: choco install awscli --yes
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
