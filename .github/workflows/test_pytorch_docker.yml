@@ -15,7 +15,7 @@ on:
       runner_type:
         description: "Runner type to use"
         required: true
-        default: "linux-mi300-1gpu-ossci-rocm"
+        default: "linux-mi300-1gpu-ossci-rocm-test"
         type: string
       version:
         description: "Version number string"

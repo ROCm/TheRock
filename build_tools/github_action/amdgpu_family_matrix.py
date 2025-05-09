@@ -12,7 +12,7 @@ amdgpu_family_info_matrix = {
     },
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+            "test-runs-on": "linux-mi300-1gpu-ossci-rocm-test",
             "family": "gfx94X-dcgpu",
             "pytorch-target": "gfx942",
         }
