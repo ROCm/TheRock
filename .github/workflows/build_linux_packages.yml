@@ -21,6 +21,8 @@ jobs:
   build_linux_packages:
     name: Build Linux Packages
     runs-on: azure-linux-scale-rocm
+    # See the details regarding permissions from the link:
+    # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
     permissions:
       id-token: write      # Required for OIDC auth
       contents: read       # Required by checkout and most steps
