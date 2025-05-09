@@ -42,8 +42,14 @@ amdgpu_family_info_matrix = {
             "family": "gfx110X-dgpu",
         },
     },
-    "gfx115x": {
-        "linux": {"test-runs-on": "", "family": "gfx1151", "pytorch-target": "gfx1151"}
+    "gfx1151": {
+        "linux": {
+            "test-runs-on": "linux-strix-halo-gpu-rocm",
+            # Specifying gfx1151, since rocBLAS doesn't have gfx1150 (https://github.com/ROCm/rocBLAS/blob/d93e919f945e76ee89457c83d72aac4cb473f492/CMakeLists.txt#L84-L88)
+            # Using gfx115X-igpu causes build failure because rocBLAS cannot find gfx1150
+            "family": "gfx1151",
+            "pytorch-target": "gfx1151",
+        }
     },
     "gfx120x": {
         "linux": {
