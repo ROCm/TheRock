@@ -13,7 +13,7 @@ set -xeuo pipefail
 # Environment Variables (optional):
 #   RELEASE_VERSION       - Full version string like 6.4.0rc20250424 (required if no version.json)
 #   ROCM_VERSION          - Base ROCm version like 6.4.0 (optional, auto-extracted from RELEASE_VERSION)
-#   RELEASE_TAG           - GitHub release tag to pull from (default: nightly-release)
+#   RELEASE_TAG           - GitHub release tag to pull from (default: nightly-tarball)
 #   ROCM_VERSION_DATE     - Build date (default: 1 days ago)
 #   INSTALL_PREFIX        - Installation path (default: /therock/build/dist/rocm)
 #   OUTPUT_ARTIFACTS_DIR  - Directory to store downloaded tarballs (default: /rocm-tarballs)
@@ -49,7 +49,7 @@ for tool in curl jq; do
 done
 
 # Configuration
-RELEASE_TAG="${RELEASE_TAG:-nightly-release}"
+RELEASE_TAG="${RELEASE_TAG:-nightly-tarball}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d '1 days ago' +'%Y%m%d')}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/therock/build/dist/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
