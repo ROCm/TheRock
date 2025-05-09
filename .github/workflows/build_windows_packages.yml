@@ -63,10 +63,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install requirements
+        shell: powershell
         run: |
           choco install ccache --yes
           choco install ninja --yes
           choco install awscli --yes
+          refreshenv
 
       - name: Runner Health Settings
         run: |
