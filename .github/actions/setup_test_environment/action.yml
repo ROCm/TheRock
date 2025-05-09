@@ -26,7 +26,7 @@ runs:
         python-version: 3.11
 
     - name: Create Python venv for Linux
-      if: ${{ inputs.PLATFORM == "linux" }}
+      if: ${{ inputs.PLATFORM == 'linux' }}
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
@@ -37,7 +37,7 @@ runs:
         pip freeze
 
     - name: Create Python venv for Windows
-      if: ${{ inputs.PLATFORM == "windows" }}
+      if: ${{ inputs.PLATFORM == 'windows' }}
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
@@ -48,12 +48,12 @@ runs:
         pip freeze
 
     - name: Install the AWS tool for Linux
-      if: ${{ inputs.PLATFORM == "linux" }}
+      if: ${{ inputs.PLATFORM == 'linux' }}
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
 
     - name: Install the AWS tool for Windows
-      if: ${{ inputs.PLATFORM == "windows" }}
+      if: ${{ inputs.PLATFORM == 'windows' }}
       shell: powershell
       run: |
         choco install awscli --yes
@@ -62,7 +62,7 @@ runs:
         refreshenv
 
     - name: Download and Unpack Artifacts for Linux
-      if: ${{ inputs.PLATFORM == "linux" }}
+      if: ${{ inputs.PLATFORM == 'linux' }}
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
@@ -81,7 +81,7 @@ runs:
           ${FETCH_ARTIFACT_ARGS}
 
     - name: Download and Unpack Artifacts for Windows
-      if: ${{ inputs.PLATFORM == "windows" }}
+      if: ${{ inputs.PLATFORM == 'windows' }}
       shell: powershell
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}

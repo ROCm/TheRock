@@ -45,6 +45,7 @@ import tarfile
 from _therock_utils.artifacts import ArtifactPopulator
 from urllib.request import urlopen, Request
 
+PLATFORM = platform.system().lower()
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
@@ -235,7 +236,7 @@ def retrieve_artifacts_by_input_dir(args):
     # Check to make sure rsync exists
     if not shutil.which("rsync"):
         log("Error: rsync command not found.")
-        if platform.system() == "Windows":
+        if PLATFORM == "windows":
             log("Please install rsync via MSYS2 or WSL to your Windows system")
         return
 
