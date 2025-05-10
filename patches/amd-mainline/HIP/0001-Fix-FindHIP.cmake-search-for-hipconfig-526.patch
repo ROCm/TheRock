@@ -1,0 +1,34 @@
+From b0d19deaf635520a56cad1726814ba6aec1d6ce5 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Tue, 6 May 2025 15:07:26 +0530
+Subject: [PATCH] Fix FindHIP.cmake search for hipconfig [#526]
+
+---
+ cmake/FindHIP.cmake | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/cmake/FindHIP.cmake b/cmake/FindHIP.cmake
+index 422b7089..3bcc3598 100644
+--- a/cmake/FindHIP.cmake
++++ b/cmake/FindHIP.cmake
+@@ -99,7 +99,7 @@ if(NOT APPLE)
+         # Search in user specified path first
+         find_path(
+             HIP_ROOT_DIR
+-            NAMES bin/hipconfig
++            NAMES bin/hipconfig${CMAKE_EXECUTABLE_SUFFIX}
+             PATHS
+             "$ENV{ROCM_PATH}"
+             "$ENV{ROCM_PATH}/hip"
+@@ -152,7 +152,7 @@ if(NOT APPLE)
+     endif()
+     if(NOT UNIX)
+         get_filename_component(HIPCONFIG_EXECUTABLE_EXT ${HIP_HIPCONFIG_EXECUTABLE} EXT)
+-        if(NOT HIPCONFIG_EXECUTABLE_EXT STREQUAL ".bat")
++        if(NOT (HIPCONFIG_EXECUTABLE_EXT STREQUAL ".bat" OR HIPCONFIG_EXECUTABLE_EXT STREQUAL ".exe"))
+           set(HIP_HIPCONFIG_EXECUTABLE "${HIP_HIPCONFIG_EXECUTABLE}.bat")
+           set(HIP_HIPCC_EXECUTABLE "${HIP_HIPCC_EXECUTABLE}.bat")
+         endif()
+-- 
+2.49.0.windows.1
+
