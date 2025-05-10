@@ -35,7 +35,7 @@ class ConfigureCITest(TestCase):
         )
         target_to_compare = [
             {
-                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm-test",
                 "family": "gfx94X-dcgpu",
                 "pytorch-target": "gfx942",
             }
@@ -62,7 +62,7 @@ class ConfigureCITest(TestCase):
         linux_target_to_compare = [
             {"test-runs-on": "", "family": "gfx110X-dgpu", "pytorch-target": "gfx1100"},
             {
-                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm-test",
                 "family": "gfx94X-dcgpu",
                 "pytorch-target": "gfx942",
             },
@@ -91,7 +91,7 @@ class ConfigureCITest(TestCase):
         linux_target_to_compare = [
             {"test-runs-on": "", "family": "gfx110X-dgpu", "pytorch-target": "gfx1100"},
             {
-                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm-test",
                 "family": "gfx94X-dcgpu",
                 "pytorch-target": "gfx942",
             },
@@ -121,7 +121,7 @@ class ConfigureCITest(TestCase):
                 "pytorch-target": "gfx1201",
             },
             {
-                "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+                "test-runs-on": "linux-mi300-1gpu-ossci-rocm-test",
                 "family": "gfx94X-dcgpu",
                 "pytorch-target": "gfx942",
             },
