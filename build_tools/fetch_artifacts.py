@@ -8,8 +8,16 @@
 import argparse
 import concurrent.futures
 import platform
+import shlex
 import subprocess
 import sys
+
+
+class ArtifactNotFoundException(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system()
@@ -45,7 +53,6 @@ def s3_commands_for_artifacts(artifacts, run_id, build_dir, variant):
                 f"s3://therock-artifacts/{run_id}/{artifact}_{variant}.tar.xz",
                 build_dir,
                 "--no-sign-request",
-                "--quiet",
             ]
         )
     return cmds
@@ -54,11 +61,22 @@ def s3_commands_for_artifacts(artifacts, run_id, build_dir, variant):
 def subprocess_run(cmd):
     """Runs a command via subprocess run."""
     try:
-        log(f"++ Exec {cmd}")
-        subprocess.run(cmd, check=True)
-        log(f"++ Exec complete {cmd}")
+        log(f"++ Exec '{shlex.join(cmd)}'")
+        process = subprocess.run(cmd, capture_output=True)
+        if process.returncode == 1:
+            # Fetching is done at a best effort. If an artifact is not found, it doesn't trigger any errors
+            if "(404)" in str(process.stderr):
+                raise ArtifactNotFoundException(
+                    f"Artifact not found for '{shlex.join(cmd)}'"
+                )
+            else:
+                raise Exception(process.stderr)
+        log(f"++ Exec complete '{shlex.join(cmd)}'")
+    except ArtifactNotFoundException as ex:
+        log(str(ex))
     except Exception as ex:
         log(str(ex))
+        sys.exit(1)
 
 
 def parallel_exec_commands(cmds):
