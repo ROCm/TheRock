@@ -1,0 +1,37 @@
+From 16d8af3a02fd7fcada153e1509f73f3bc9bc2604 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Mon, 12 May 2025 22:43:04 +0000
+Subject: [PATCH] [next-cmake] Find and link CBLAS
+
+---
+ next-cmake/CMakeLists.txt         | 1 +
+ next-cmake/clients/CMakeLists.txt | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index 59d96e45..8400c797 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -97,6 +97,7 @@ endif()
+ if(HIPBLASLT_ENABLE_CLIENT)
+     #find_package(Threads REQUIRED) # TODO: We don't fail to build or link without Threads remove?
+     find_package(BLAS REQUIRED)
++    find_package(cblas REQUIRED)
+     find_package(LAPACK REQUIRED)
+ endif()
+ if(HIPBLASLT_ENABLE_OPENMP)
+diff --git a/next-cmake/clients/CMakeLists.txt b/next-cmake/clients/CMakeLists.txt
+index 668c5267..9f070097 100755
+--- a/next-cmake/clients/CMakeLists.txt
++++ b/next-cmake/clients/CMakeLists.txt
+@@ -49,6 +49,7 @@ target_link_libraries(hipblaslt-clients-common
+         roc::hipblaslt
+         ${LAPACK_LIBRARIES} 
+         ${BLAS_LIBRARIES}
++        ${CBLAS_LIBRARIES}
+     PRIVATE
+         hip::device
+ )
+-- 
+2.43.0
+
