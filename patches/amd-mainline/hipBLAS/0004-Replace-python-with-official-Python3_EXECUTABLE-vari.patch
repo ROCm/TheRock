@@ -1,7 +1,7 @@
-From 9f5835d8c60ed75bb2ea9c670a972c28be0264da Mon Sep 17 00:00:00 2001
+From 1742534e5c6184b9e15b7b9e3da3b0b9584ad61f Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Wed, 30 Apr 2025 12:03:23 -0700
-Subject: [PATCH 5/9] Replace ${python} with official ${Python3_EXECUTABLE}
+Subject: [PATCH 4/7] Replace ${python} with official ${Python3_EXECUTABLE}
  variable.
 
 ---
