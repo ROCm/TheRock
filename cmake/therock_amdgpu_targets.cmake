@@ -66,16 +66,19 @@ therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all g
 therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
 therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu)
 
+therock_add_amdgpu_target(gfx1150 "AMD Strix Point Laptop iGPU" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
+therock_add_amdgpu_target(gfx1151 "AMD Strix Halo Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu)
+
 # gfx115X family
-therock_add_amdgpu_target(gfx1150 "AMD Strix Point iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
-  EXCLUDE_TARGET_PROJECTS
-    hipBLASLt # https://github.com/ROCm/TheRock/issues/154
-    rccl  # https://github.com/ROCm/TheRock/issues/150
-)
-therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
-  EXCLUDE_TARGET_PROJECTS
-    rccl  # https://github.com/ROCm/TheRock/issues/150
-)
+#therock_add_amdgpu_target(gfx1150 "AMD Strix Point iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
+#  EXCLUDE_TARGET_PROJECTS
+#    hipBLASLt # https://github.com/ROCm/TheRock/issues/154
+#    rccl  # https://github.com/ROCm/TheRock/issues/150
+#)
+#therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
+#  EXCLUDE_TARGET_PROJECTS
+#    rccl  # https://github.com/ROCm/TheRock/issues/150
+#)
 
 # gfx120X family
 therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all)

@@ -1,7 +1,7 @@
-From 81306e6c907f515d2d87beb8bc01c1d9242f16a4 Mon Sep 17 00:00:00 2001
+From 5a5965878c38cdb525f13e4e68e7e0dc43908944 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Mon, 28 Apr 2025 14:46:44 +0000
-Subject: [PATCH] Set `GTEST_BOTH_LIBRARIES` appropriately
+Subject: [PATCH 1/2] Set `GTEST_BOTH_LIBRARIES` appropriately
 
 If `find_package()` succeeds to find GTest and `INSTALL_DEPENDENCIES`
 is set to OFF, `GTEST_BOTH_LIBRARIES` is not set and thus

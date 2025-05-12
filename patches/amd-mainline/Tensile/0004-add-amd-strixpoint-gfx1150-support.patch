@@ -1,0 +1,233 @@
+From cbb6cc0784fe8b7924220b43c8f6d0d76f73ddaf Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Wed, 23 Apr 2025 12:33:36 -0700
+Subject: [PATCH 4/4] add amd strixpoint gfx1150 support
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ Tensile/AsmCaps.py                            | 44 +++++++++++++++++++
+ Tensile/Common.py                             |  6 +--
+ Tensile/Source/CMakeLists.txt                 |  4 +-
+ Tensile/Source/lib/include/Tensile/AMDGPU.hpp | 16 ++++++-
+ .../include/Tensile/PlaceholderLibrary.hpp    |  6 +++
+ .../Tensile/Serialization/Predicates.hpp      |  2 +
+ .../preload_kernel_arguments_always_half.yaml |  3 +-
+ pytest.ini                                    |  3 ++
+ 8 files changed, 77 insertions(+), 7 deletions(-)
+
+diff --git a/Tensile/AsmCaps.py b/Tensile/AsmCaps.py
+index ea0a68ae..92a311bf 100644
+--- a/Tensile/AsmCaps.py
++++ b/Tensile/AsmCaps.py
+@@ -741,6 +741,50 @@ def getCapabilitiesCache(rocmVersion: NamedTuple) -> dict:
+                   'v_mov_b64': False,
+                   'v_pk_fma_f16': True,
+                   'v_pk_fmac_f16': False},
++     (11, 5, 0): {'HasAddLshl': True,
++                  'HasAtomicAdd': True,
++                  'HasDirectToLdsDest': False,
++                  'HasDirectToLdsNoDest': False,
++                  'HasExplicitCO': True,
++                  'HasExplicitNC': True,
++                  'HasGLCModifier': True,
++                  'HasNTModifier': False,
++                  'HasLshlOr': True,
++                  'HasMFMA': False,
++                  'HasMFMA_b8': False,
++                  'HasMFMA_bf16_1k': False,
++                  'HasMFMA_bf16_original': False,
++                  'HasMFMA_constSrc': False,
++                  'HasMFMA_f64': False,
++                  'HasMFMA_f8': False,
++                  'HasMFMA_i8_908': False,
++                  'HasMFMA_i8_940': False,
++                  'HasMFMA_vgpr': False,
++                  'HasMFMA_xf32': False,
++                  'HasSMulHi': True,
++                  'HasWMMA': True,
++                  'KernargPreloading': False,
++                  'MaxLgkmcnt': 15,
++                  'MaxVmcnt': 63,
++                  'SupportedISA': True,
++                  'SupportedSource': True,
++                  'VOP3v_dot4_i32_i8': False,
++                  'v_dot2_f32_f16': True,
++                  'v_dot2c_f32_f16': True,
++                  'v_dot4_i32_i8': False,
++                  'v_dot4c_i32_i8': False,
++                  'v_fma_f16': True,
++                  'v_fma_f32': True,
++                  'v_fma_f64': True,
++                  'v_fma_mix_f32': True,
++                  'v_fmac_f16': False,
++                  'v_fmac_f32': True,
++                  'v_mac_f16': False,
++                  'v_mac_f32': False,
++                  'v_mad_mix_f32': False,
++                  'v_mov_b64': False,
++                  'v_pk_fma_f16': True,
++                  'v_pk_fmac_f16': False},
+      (11, 5, 1): {'HasAddLshl': True,
+                   'HasAtomicAdd': True,
+                   'HasDirectToLdsDest': False,
+diff --git a/Tensile/Common.py b/Tensile/Common.py
+index 9ca48e06..6f508e89 100644
+--- a/Tensile/Common.py
++++ b/Tensile/Common.py
+@@ -250,7 +250,7 @@ globalParameters["SupportedISA"] = [(8,0,3),
+                                     (9,4,2), (9,5,0),
+                                     (10,1,0), (10,1,1), (10,1,2), (10,3,0), (10,3,1),
+                                     (11,0,0), (11,0,1), (11,0,2),
+-                                    (11,5,1),
++                                    (11,5,0), (11,5,1),
+                                     (12,0,0), (12,0,1)] # assembly kernels writer supports these architectures
+ 
+ globalParameters["KeepBuildTmp"] = True                           # Do not remove build artifacts during the build process or build_tmp after build completes
+@@ -326,7 +326,7 @@ architectureMap = {
+   'gfx1010':'navi10', 'gfx1011':'navi12', 'gfx1012':'navi14',
+   'gfx1030':'navi21', 'gfx1031':'navi22', 'gfx1032':'navi23', 'gfx1034':'navi24', 'gfx1035':'rembrandt',
+   'gfx1100':'navi31', 'gfx1101':'navi32', 'gfx1102':'navi33',
+-  'gfx1151':'gfx1151',
++  'gfx1150':'strixpoint','gfx1151':'gfx1151',
+   'gfx1200':'gfx1200',
+   'gfx1201':'gfx1201'
+ }
+@@ -2465,7 +2465,7 @@ def assignGlobalParameters( config, capabilitiesCache: Optional[dict] = None ):
+     if os.name == "nt":
+       globalParameters["CurrentISA"] = (9,0,6)
+       printWarning("Failed to detect ISA so forcing (gfx906) on windows")
+-  isasWithDisabledHWMonitor = ((9,4,2), (9,5,0), (11,0,0), (11,0,1), (11,0,2), (12,0,0), (12,0,1))
++  isasWithDisabledHWMonitor = ((9,4,2), (9,5,0), (11,0,0), (11,0,1), (11,0,2), (11,0,50), (11,0,51), (12,0,0), (12,0,1))
+   if globalParameters["CurrentISA"] in isasWithDisabledHWMonitor:
+     isaString = ', '.join(map(gfxName, isasWithDisabledHWMonitor))
+     printWarning(f"HardwareMonitor currently disabled for {isaString}")
+diff --git a/Tensile/Source/CMakeLists.txt b/Tensile/Source/CMakeLists.txt
+index e02b209a..8279cfb0 100644
+--- a/Tensile/Source/CMakeLists.txt
++++ b/Tensile/Source/CMakeLists.txt
+@@ -51,9 +51,9 @@ if(CMAKE_CXX_COMPILER MATCHES ".*/hipcc$" OR CMAKE_CXX_COMPILER MATCHES ".*clang
+ endif()
+ 
+ if(CMAKE_CXX_COMPILER STREQUAL "hipcc")
+-  set(TENSILE_GPU_ARCHS gfx803 gfx900 gfx906:xnack- gfx908:xnack- gfx90a:xnack- gfx1010 gfx1011 gfx1012 gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1100 gfx1101 gfx1102 CACHE STRING "GPU architectures")
++  set(TENSILE_GPU_ARCHS gfx803 gfx900 gfx906:xnack- gfx908:xnack- gfx90a:xnack- gfx1010 gfx1011 gfx1012 gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1100 gfx1101 gfx1102 gfx1150 gfx1151 CACHE STRING "GPU architectures")
+ else()
+-  set(TENSILE_GPU_ARCHS gfx803 gfx900 gfx906 gfx908 gfx90a gfx1010 gfx1011 gfx1012 gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1100 gfx1101 gfx1102 CACHE STRING "GPU architectures")
++  set(TENSILE_GPU_ARCHS gfx803 gfx900 gfx906 gfx908 gfx90a gfx1010 gfx1011 gfx1012 gfx1030 gfx1031 gfx1032 gfx1034 gfx1035 gfx1100 gfx1101 gfx1102 gfx1150 gfx1151 CACHE STRING "GPU architectures")
+ endif()
+ 
+ include(CMakeDependentOption)
+diff --git a/Tensile/Source/lib/include/Tensile/AMDGPU.hpp b/Tensile/Source/lib/include/Tensile/AMDGPU.hpp
+index 0d99a35f..0a1f9e67 100644
+--- a/Tensile/Source/lib/include/Tensile/AMDGPU.hpp
++++ b/Tensile/Source/lib/include/Tensile/AMDGPU.hpp
+@@ -72,7 +72,9 @@ namespace Tensile
+             gfx1035 = 1035,
+             gfx1100 = 1100,
+             gfx1101 = 1101,
+-            gfx1102 = 1102
++            gfx1102 = 1102,
++            gfx1150 = 1150,
++            gfx1151 = 1151
+         };
+ 
+         static std::string toString(Processor p)
+@@ -115,6 +117,10 @@ namespace Tensile
+                 return "gfx1101";
+             case AMDGPU::Processor::gfx1102:
+                 return "gfx1102";
++            case AMDGPU::Processor::gfx1150:
++                return "gfx1150";
++            case AMDGPU::Processor::gfx1151:
++                return "gfx1151";
+             }
+             return "";
+         }
+@@ -177,6 +183,14 @@ namespace Tensile
+             {
+                 return AMDGPU::Processor::gfx1102;
+             }
++            else if(deviceString.find("gfx1150") != std::string::npos)
++            {
++                return AMDGPU::Processor::gfx1150;
++            }
++            else if(deviceString.find("gfx1151") != std::string::npos)
++            {
++                return AMDGPU::Processor::gfx1151;
++            }
+             else
+             {
+                 return static_cast<AMDGPU::Processor>(0);
+diff --git a/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp b/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp
+index 2ea803e1..a7687315 100644
+--- a/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp
++++ b/Tensile/Source/lib/include/Tensile/PlaceholderLibrary.hpp
+@@ -57,6 +57,8 @@ namespace Tensile
+         gfx1100,
+         gfx1101,
+         gfx1102,
++        gfx1150,
++        gfx1151,
+         All
+     };
+ 
+@@ -103,6 +105,10 @@ namespace Tensile
+             return "TensileLibrary_*_gfx1101";
+         case LazyLoadingInit::gfx1102:
+             return "TensileLibrary_*_gfx1102";
++        case LazyLoadingInit::gfx1150:
++            return "TensileLibrary_*_gfx1150";
++        case LazyLoadingInit::gfx1151:
++            return "TensileLibrary_*_gfx1151";
+         case LazyLoadingInit::None:
+             return "";
+         }
+diff --git a/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp b/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp
+index 5480eb54..12d81fc9 100644
+--- a/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp
++++ b/Tensile/Source/lib/include/Tensile/Serialization/Predicates.hpp
+@@ -233,6 +233,8 @@ namespace Tensile
+                 iot::enumCase(io, value, "gfx1100", AMDGPU::Processor::gfx1100);
+                 iot::enumCase(io, value, "gfx1101", AMDGPU::Processor::gfx1101);
+                 iot::enumCase(io, value, "gfx1102", AMDGPU::Processor::gfx1102);
++                iot::enumCase(io, value, "gfx1150", AMDGPU::Processor::gfx1150);
++                iot::enumCase(io, value, "gfx1151", AMDGPU::Processor::gfx1151);
+             }
+         };
+ 
+diff --git a/Tensile/Tests/pre_checkin/preload_kernel_arguments_always_half.yaml b/Tensile/Tests/pre_checkin/preload_kernel_arguments_always_half.yaml
+index cc79458e..e3e5f166 100644
+--- a/Tensile/Tests/pre_checkin/preload_kernel_arguments_always_half.yaml
++++ b/Tensile/Tests/pre_checkin/preload_kernel_arguments_always_half.yaml
+@@ -3,7 +3,8 @@ TestParameters:
+           skip-gfx1010, skip-gfx1011, skip-gfx1012,
+           skip-gfx1030, skip-gfx1031, skip-gfx1032,
+           skip-gfx1034, skip-gfx1035, skip-gfx1100,
+-          skip-gfx1101, skip-gfx1102, skip-gfx1151]
++          skip-gfx1101, skip-gfx1102,
++          skip-gfx1150, skip-gfx1151]
+ 
+ GlobalParameters:
+   MinimumRequiredVersion: 4.2.0
+diff --git a/pytest.ini b/pytest.ini
+index 3614a7f0..57d95ce7 100644
+--- a/pytest.ini
++++ b/pytest.ini
+@@ -107,6 +107,8 @@ markers =
+  xfail-gfx1100: architecture
+  xfail-gfx1101: architecture
+  xfail-gfx1102: architecture
++ xfail-gfx1150: architecture
++ xfail-gfx1151: architecture
+  skip-gfx000:  architecture
+  skip-gfx900:  architecture
+  skip-gfx906:  architecture
+@@ -127,4 +129,5 @@ markers =
+  skip-gfx1100: architecture
+  skip-gfx1101: architecture
+  skip-gfx1102: architecture
++ skip-gfx1150: architecture
+  skip-gfx1151: architecture
+-- 
+2.49.0
+

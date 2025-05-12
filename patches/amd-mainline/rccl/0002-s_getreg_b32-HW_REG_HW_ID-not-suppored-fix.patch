@@ -1,0 +1,30 @@
+From c34a312c928d0bbdc0752cc869b89668c0885042 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <lamikr@gmail.com>
+Date: Wed, 12 Mar 2025 18:59:17 -0700
+Subject: [PATCH 2/2] s_getreg_b32 HW_REG_HW_ID not suppored fix
+
+- this command is not suppored in newer radeon gpus
+  and can not be used for tracing
+- add gfx1103, gfx1150, gfx1151
+
+Signed-off-by: Mika Laitio <lamikr@gmail.com>
+---
+ src/device/common.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/device/common.h b/src/device/common.h
+index 0eb3ea99..f509ea1f 100644
+--- a/src/device/common.h
++++ b/src/device/common.h
+@@ -27,7 +27,7 @@
+   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
+ #endif
+ 
+-#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__)
++#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || defined(__gfx1151__) || defined(__gfx1200__) || defined(__gfx1201__)
+ #define __trace_hwreg()
+ #else
+ #define __trace_hwreg() \
+-- 
+2.43.0
+
