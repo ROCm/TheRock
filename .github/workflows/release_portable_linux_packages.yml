@@ -35,7 +35,8 @@ jobs:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.release_information.outputs.version }}
+      release_type: ${{ steps.release_information.outputs.type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
     steps:
       - name: Checkout repository
@@ -46,23 +47,26 @@ jobs:
           python-version: 3.12
 
       # Compute version suffix based on inputs (default to 'rc')
-      - name: Compute rc version suffix
+      - name: Set variables for nightly release
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
         run: |
           version_suffix="$(printf 'rc%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
+          echo "release_type=nightly" >> $GITHUB_ENV
 
-      - name: Compute dev version suffix
+      - name: Set variables for development release
         if: ${{ inputs.build_type == 'dev' }}
         run: |
           version_suffix=".dev0+${{ github.sha }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
+          echo "release_type=dev" >> $GITHUB_ENV
 
-      - name: Compute version
-        id: version
+      - name: Generate release information
+        id: release_information
         run: |
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
+          echo "type=${release_type}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -85,6 +89,7 @@ jobs:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64:main
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
+      RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
     strategy:
       fail-fast: false
       matrix:
@@ -124,38 +129,52 @@ jobs:
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
 
-      - name: Upload Nightly Release
-        if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
+      - name: Build Python Packages
+        run: |
+          ./build_tools/linux_portable_build.py \
+            --image=${{ env.BUILD_IMAGE }} \
+            --output-dir=${{ env.OUTPUT_DIR }}/packages \
+            --build-python-only \
+            --artifact-dir=${{ env.OUTPUT_DIR }}/build/artifacts \
+            -- \
+            "--version=${{ needs.setup_metadata.outputs.version }}"
+
+      - name: Upload Tarball to GitHub
         uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
         with:
           artifacts: "${{ env.DIST_ARCHIVE }}"
-          tag: "nightly-release"
-          name: "nightly-release"
-          body: "Automatic nightly release of TheRock."
+          tag: "${{ env.RELEASE_TYPE }}-tarball"
+          name: "${{ env.RELEASE_TYPE }}-tarball"
+          body: "Automatic ${{ env.RELEASE_TYPE }} tarball of TheRock."
           removeArtifacts: false
           allowUpdates: true
           replacesArtifacts: true
           makeLatest: false
 
-      - name: Upload Development Release
-        if: ${{ inputs.build_type == 'dev'}}
-        uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
+      - name: Configure AWS Credentials
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
-          artifacts: "${{ env.DIST_ARCHIVE }}"
-          tag: "dev-release"
-          name: "dev-release"
-          body: "Development release of TheRock."
-          removeArtifacts: false
-          allowUpdates: true
-          replacesArtifacts: true
-          makeLatest: false
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
 
-      - name: Trigger test nightly release package workflow
+      - name: Upload Releases to S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          # TODO: Append uploaded files to an index
+          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://therock-${{ env.RELEASE_TYPE }}-tarball/
+          aws s3 cp "${{ env.OUTPUT_DIR }}/packages/dist/ s3://therock-${{ env.RELEASE_TYPE }}-python/${{ matrix.target_bundle.amdgpu_family }}/ \
+          --recursive --no-follow-symlinks \
+          --exclude "*" \
+          --include "*.whl" \
+          --include "*.tar.xz*"
+
+      - name: Trigger testing nightly tarball
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
           workflow: test_release_packages.yml
-          inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-release", "file_name": "${{ env.FILE_NAME }}", "target": "${{ matrix.target_bundle.amdgpu_family }}" }'
+          inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-tarball", "file_name": "${{ env.FILE_NAME }}", "target": "${{ matrix.target_bundle.amdgpu_family }}" }'
 
       - name: Report
         if: ${{ !cancelled() }}

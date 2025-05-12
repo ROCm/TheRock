@@ -21,19 +21,19 @@ if [ -n "${VIRTUAL_ENV}" ]; then
 		echo "THEROCK default Python virtual env not active: ${THEROCK_VENV_DEF_DIR}"
 	fi
 else
-	echo "virtual env not set"
 	if [ -f $SCRIPT_DIR/../../.venv/bin/activate ]; then
 		source $SCRIPT_DIR/../../.venv/bin/activate
 		echo "sourced python VIRTUAL_ENV: ${VIRTUAL_ENV}"
 	else
-		echo "error, no pytorch virtual evn available"
-		exit 1
+		echo "ROCK python virtual env not available"
 	fi
 fi
 
 if [ ! -n "${THEROCK_PATH_SET}" ]; then
 	export THEROCK_PATH_SET=1
-	export ROCM_HOME=$(realpath $SCRIPT_DIR/../../build/dist/rocm)
+	if [ ! -n "${ROCM_HOME}" ]; then
+		export ROCM_HOME=$(realpath $SCRIPT_DIR/../../build/dist/rocm)
+	fi
 	if [ -d ${ROCM_HOME} ]; then
 		export PATH=${ROCM_HOME}/bin:$PATH
 		export LD_LIBRARY_PATH=${ROCM_HOME}/lib

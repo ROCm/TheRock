@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       families:
-        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x). Please note that docker builds only work for prebuilds available here https://github.com/ROCm/TheRock/releases/tag/nightly-release"
+        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x). Please note that docker builds only work for prebuilds available here https://github.com/ROCm/TheRock/releases/tag/nightly-tarball"
         type: string
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC

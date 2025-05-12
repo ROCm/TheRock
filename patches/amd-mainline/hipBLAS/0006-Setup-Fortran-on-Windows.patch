@@ -1,7 +1,7 @@
-From 8977a250af9d757b5e835f3e7a46126b06dbeac4 Mon Sep 17 00:00:00 2001
+From 193350925102e9e834b8b4d4e12dd2e086f4d81c Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Thu, 1 May 2025 11:29:42 -0700
-Subject: [PATCH 7/9] Setup Fortran on Windows.
+Subject: [PATCH 6/9] Setup Fortran on Windows.
 
 ---
  CMakeLists.txt | 11 +++++------
@@ -30,5 +30,5 @@ index f22f44d..938b3fe 100644
  project( hipblas LANGUAGES CXX ${fortran_language} )
  
 -- 
-2.47.1.windows.2
+2.43.0
 

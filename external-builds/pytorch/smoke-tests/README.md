@@ -18,6 +18,7 @@ The following operations are covered in these smoke tests:
 - **Dot Product (`torch.dot`)**
 - **Matrix-Vector Multiplication (`torch.mv`)**
 - **General Matrix Multiplication (`torch.matmul`)**
+- **Convolution (`torch.conv2d` and `torch.nn.functional.conv_transpose2d`)**
 
 ## Running the Tests
 

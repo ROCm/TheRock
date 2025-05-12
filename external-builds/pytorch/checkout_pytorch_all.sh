@@ -7,9 +7,9 @@ set -o pipefail
 
 SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
 if ! source $SCRIPT_DIR/env_init.sh; then
-        echo "Failed to find python virtual-env"
-        echo "Make sure that TheRock has been build first"
-        exit 1
+	echo "Failed to init ROCK build environment"
+	echo "Make sure that TheRock has been build first"
+	exit 1
 fi
 
 if ! $SCRIPT_DIR/pytorch_torch_repo.py checkout; then

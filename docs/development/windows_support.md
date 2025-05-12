@@ -104,9 +104,12 @@ These instructions mostly mirror the instructions in the root
 
 You will need:
 
-- Git: https://git-scm.com/downloads
+- Git: https://git-scm.com/downloads, with suggested config settings:
 
-  - Suggested: enable symlinks with `git config --global core.symlinks true`
+  ```bash
+  git config --global core.symlinks true
+  git config --global core.longpaths true
+  ```
 
 - CMake: https://cmake.org/download/
 

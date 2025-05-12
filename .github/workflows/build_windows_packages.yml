@@ -8,6 +8,10 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+        default: gfx110X-dgpu
+      extra_cmake_options:
+        type: string
+        default: "-DBUILD_TESTING=ON"
 
   workflow_call:
     inputs:
@@ -16,6 +20,9 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      extra_cmake_options:
+        type: string
+        default: "-DBUILD_TESTING=ON"
 
 jobs:
   build_windows_packages:
@@ -54,18 +61,44 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+
       - name: Install requirements
         run: |
-          choco install ccache --yes
-          choco install ninja --yes
+          choco install --no-progress -y ccache
+          choco install --no-progress -y ninja
+          choco install --no-progress -y strawberryperl
+          echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
+
+      # After other installs, so MSVC get priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Runner Health Settings
         run: |
           echo "CCACHE_DIR=${CCACHE_DIR}"
           df -h
           mkdir -p $CCACHE_DIR
+
+          echo "cmake: $(which cmake)"
           cmake --version
+          echo "ninja: $(which ninja)"
+          ninja --version
+          echo "CC: $CC"
+          echo "CXX: $CXX"
+
           echo "python: $(which python), python3: $(which python3)"
+          python --version
+
+          echo "gcc: $(which gcc)"
+          gcc --version
+          echo "perl: $(which perl)"
+          perl --version
+          echo "gfortran: $(which gfortran)"
+          gfortran --version
+
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
           nthreads=$(nproc --all)
@@ -77,9 +110,9 @@ jobs:
         uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: ${{ env.CACHE_DIR }}
-          key: windows-build-packages-v2-${{ github.sha }}
+          key: windows-build-packages-v3-${{ github.sha }}
           restore-keys: |
-            windows-build-packages-v2-
+            windows-build-packages-v3-
 
       - name: Fetch sources
         run: |
@@ -93,9 +126,6 @@ jobs:
           path: amdgpu-windows-interop
           lfs: true
 
-      - name: Configure MSVC
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-
       - name: Configure Projects
         run: |
           # clear cache before build and after download
@@ -104,21 +134,25 @@ jobs:
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
           amdgpu_families="${{ inputs.amdgpu_families }}"
+          extra_cmake_options="${{ inputs.extra_cmake_options }}"
           echo "Building package ${package_version}"
 
           # Build.
           cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
+            -DCMAKE_C_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
+            -DCMAKE_CXX_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
+            -DCMAKE_LINKER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/link.exe" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
-            -DTHEROCK_ENABLE_FFT=OFF \
             -DTHEROCK_ENABLE_BLAS=OFF \
             -DTHEROCK_ENABLE_SPARSE=OFF \
             -DTHEROCK_ENABLE_SOLVER=OFF \
-            -DTHEROCK_ENABLE_ML_LIBS=OFF
+            -DTHEROCK_ENABLE_ML_LIBS=OFF \
+            ${extra_cmake_options}
 
       - name: Build Projects
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all)
@@ -138,7 +172,7 @@ jobs:
         if: always()
         with:
           path: ${{ env.CACHE_DIR }}
-          key: windows-build-packages-v2-${{ github.sha }}
+          key: windows-build-packages-v3-${{ github.sha }}
 
       - name: "Build size report"
         if: always()
