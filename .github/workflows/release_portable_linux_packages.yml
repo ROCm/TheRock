@@ -81,6 +81,7 @@ jobs:
     permissions:
       contents: write
       actions: write # Added permission to trigger workflows
+      id-token: write # Added permission for AWS S3 upload
     needs: [setup_metadata]
     env:
       TEATIME_LABEL_GH_GROUP: 1
