@@ -8,7 +8,6 @@
 import argparse
 import concurrent.futures
 import platform
-import shlex
 import subprocess
 import sys
 
@@ -63,7 +62,7 @@ def subprocess_run(cmd):
 
 
 def parallel_exec_commands(cmds):
-    """Runs parallelized subprocess commands using a thread pool executor, where each command has a timeout of 60s."""
+    """Runs parallelized subprocess commands using a thread pool executor"""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [executor.submit(subprocess_run, cmd) for cmd in cmds]
         for future in concurrent.futures.as_completed(futures):
@@ -92,7 +91,7 @@ def retrieve_base_artifacts(args, run_id, build_dir):
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
-    """Retrieves TheRock artifacts using AWS S3 copy, based on the enabled arguments from `args`.
+    """Retrieves TheRock artifacts using AWS S3 copy, based on the enabled arguments.
 
     If no artifacts have been collected, we assume that we want to install all artifacts
     If `args.tests` have been enabled, we also collect test artifacts
