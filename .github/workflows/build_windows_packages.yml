@@ -67,7 +67,6 @@ jobs:
           pip install -r requirements.txt
 
       - name: Install requirements
-        shell: powershell
         run: |
           choco install --no-progress -y ccache
           choco install --no-progress -y ninja
