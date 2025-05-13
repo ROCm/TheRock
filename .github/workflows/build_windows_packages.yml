@@ -185,12 +185,12 @@ jobs:
 
       - name: "Build size report"
         if: always()
+        shell: powershell
         run: |
           $fs = Get-PSDrive -PSProvider "FileSystem"
           $fsout = $fs | Select-Object -Property Name,Used,Free,Root
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
-        shell: powershell
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
