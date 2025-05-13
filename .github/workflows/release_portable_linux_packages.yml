@@ -76,9 +76,8 @@ jobs:
         run: python ./build_tools/github_action/fetch_package_targets.py
 
   portable_linux_packages:
-    name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux (xfail ${{ matrix.target_bundle.expect_failure }})
+    name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
-    continue-on-error: ${{ matrix.target_bundle.expect_failure == 'true' }}
     permissions:
       contents: write
       actions: write # Added permission to trigger workflows
