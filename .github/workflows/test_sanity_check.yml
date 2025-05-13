@@ -8,12 +8,16 @@ on:
         default: ""
       test_runs_on:
         type: string
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
         type: string
         default: ""
       test_runs_on:
+        type: string
+      platform:
         type: string
   push:
     branches:
@@ -45,6 +49,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--base-only"
+          PLATFORM: ${{ inputs.platform }}
 
       - name: Run rocminfo
         run: |
@@ -52,6 +57,6 @@ jobs:
 
       - name: Run ROCm Sanity Tests
         run: |
-          source ${VENV_DIR}/bin/activate
+          if [ ${{ inputs.platform }} == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           pytest tests/ \
           --log-cli-level=info

@@ -10,6 +10,8 @@ on:
         type: string
       test_runs_on:
         type: string
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -18,6 +20,8 @@ on:
       amdgpu_families:
         type: string
       test_runs_on:
+        type: string
+      platform:
         type: string
   push:
     branches:
@@ -50,11 +54,13 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--blas --tests"
+          PLATFORM: ${{ inputs.platform }}
 
       - name: Install additional packages
+        if: ${{ inputs.platform == 'linux' }}
         run: sudo apt install libgfortran5 -y
 
       - name: Run hipBLASLt tests
         run: |
-          source ${VENV_DIR}/bin/activate
+          if [ ${{ inputs.platform }} == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*

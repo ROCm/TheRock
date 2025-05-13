@@ -12,6 +12,8 @@ on:
       test_runs_on:
         type: string
         default: ""
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -23,6 +25,8 @@ on:
       test_runs_on:
         type: string
         default: ""
+      platform:
+        type: string
   push:
     branches:
       - ADHOCBUILD
@@ -54,6 +58,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--prim --tests"
+          PLATFORM: ${{ inputs.platform }}
 
       - name: Run rocprim tests
         run: |
