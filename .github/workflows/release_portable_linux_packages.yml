@@ -111,6 +111,10 @@ jobs:
           restore-keys: |
             portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
+      - name: Install the AWS tool
+        shell: bash
+        run: ./dockerfiles/cpubuilder/install_awscli.sh
+
       - name: Fetch sources
         run: |
           # Prefetch docker container in background.
