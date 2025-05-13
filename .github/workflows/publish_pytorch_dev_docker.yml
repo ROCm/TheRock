@@ -53,9 +53,6 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      - name: Generate unique dispatch ID
-        run: echo "DISPATCH_ID=dispatch-${{ matrix.targets.amdgpu_family }}-${{ github.run_id }}" >> $GITHUB_ENV
-
       - name: Fetch sources
         run: |
           python3 ./build_tools/fetch_sources.py --jobs 10
@@ -116,6 +113,5 @@ jobs:
                 (matrix.targets.amdgpu_family == 'gfx1100' && 'linux-rx7900-gpu-rocm') ||
                 'linux-mi300-1gpu-ossci-rocm'
               }}",
-              "dispatch_id": "${{ env.DISPATCH_ID }}",
               "version": "${{ env.VERSION }}"
             }

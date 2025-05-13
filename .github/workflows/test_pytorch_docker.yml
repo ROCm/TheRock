@@ -17,10 +17,6 @@ on:
         required: true
         default: "linux-mi300-1gpu-ossci-rocm"
         type: string
-      dispatch_id:
-        description: "Auto generated id for a dispatch"
-        type: string
-        required: true
       version:
         description: "Version number string"
         type: string
@@ -34,9 +30,6 @@ on:
         type: string
         required: true
       runner_type:
-        type: string
-        required: true
-      dispatch_id:
         type: string
         required: true
       version:
