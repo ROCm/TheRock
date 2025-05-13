@@ -105,7 +105,7 @@ jobs:
       - name: Trigger verification workflow
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
-          workflow: verify_docker_images.yml
+          workflow: test_pytorch_docker.yml
           inputs: |
             {
               "amdgpu_target": "${{ matrix.targets.amdgpu_family }}",
