@@ -1,4 +1,3 @@
-import argparse
 from pathlib import Path, PurePosixPath
 import shlex
 import shutil
@@ -165,9 +164,8 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
     )
 
 
-def apply_all_patches(
-    root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
-):
+def apply_all_patches(root_repo_path: Path, patches_path: Path, patchset_name: str):
+    repo_name = root_repo_path.name
     relative_sm_paths = list_submodules(root_repo_path, relative=True)
     # Apply base patches.
     apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
@@ -178,40 +176,47 @@ def apply_all_patches(
         )
 
 
-# repo_ref_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
 def repo_ref_to_patches_dir_name(version_ref: str) -> str:
+    """Converts a git ref like `2.7.0-rc9` to a folder name like `2.7.0`."""
     pos = version_ref.find("-")
     if pos != -1:
         return version_ref[:pos]
     return version_ref
 
 
-def do_checkout(args: argparse.Namespace):
-    repo_dir: Path = args.repo
-    repo_patch_dir_base = args.patch_dir
-    check_git_dir = repo_dir / ".git"
+def do_checkout(
+    src_dir: Path,
+    patch_dir: Path,
+    remote_url: str,
+    ref: str,
+    depth: bool,
+    jobs: int,
+    patch: bool,
+    hipify: bool,
+):
+    check_git_dir = src_dir / ".git"
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
     else:
-        print(f"Cloning repository at {args.repo_ref}")
-        repo_dir.mkdir(parents=True, exist_ok=True)
-        exec(["git", "init", "--initial-branch=main"], cwd=repo_dir)
-        exec(["git", "config", "advice.detachedHead", "false"], cwd=repo_dir)
-        exec(["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir)
+        print(f"Cloning {remote_url} repository at {ref}")
+        src_dir.mkdir(parents=True, exist_ok=True)
+        exec(["git", "init", "--initial-branch=main"], cwd=src_dir)
+        exec(["git", "config", "advice.detachedHead", "false"], cwd=src_dir)
+        exec(["git", "remote", "add", "origin", remote_url], cwd=src_dir)
 
     # Fetch and checkout.
     fetch_args = []
-    if args.depth is not None:
-        fetch_args.extend(["--depth", str(args.depth)])
-    if args.jobs:
-        fetch_args.extend(["-j", str(args.jobs)])
-    exec(["git", "fetch"] + fetch_args + ["origin", args.repo_ref], cwd=repo_dir)
-    exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
-    exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "-m", '""'], cwd=repo_dir)
+    if depth is not None:
+        fetch_args.extend(["--depth", str(depth)])
+    if jobs:
+        fetch_args.extend(["-j", str(jobs)])
+    exec(["git", "fetch"] + fetch_args + ["origin", ref], cwd=src_dir)
+    exec(["git", "checkout", "FETCH_HEAD"], cwd=src_dir)
+    exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "-m", '""'], cwd=src_dir)
     try:
         exec(
             ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
-            cwd=repo_dir,
+            cwd=src_dir,
         )
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
@@ -224,43 +229,40 @@ def do_checkout(args: argparse.Namespace):
             "--recursive",
             f'git tag -f {TAG_UPSTREAM_DIFFBASE} -m ""',
         ],
-        cwd=repo_dir,
+        cwd=src_dir,
         stdout_devnull=True,
     )
-    git_config_ignore_submodules(repo_dir)
+    git_config_ignore_submodules(src_dir)
 
     # Base patches.
-    if args.patch:
+    if patch:
         apply_all_patches(
-            repo_dir,
-            repo_patch_dir_base / repo_ref_to_patches_dir_name(args.repo_ref),
-            args.repo_name,
+            src_dir,
+            patch_dir / repo_ref_to_patches_dir_name(ref),
             "base",
         )
 
     # Hipify.
-    if args.hipify:
-        do_hipify(args)
+    if hipify:
+        do_hipify(src_dir=src_dir)
 
     # Hipified patches.
-    if args.patch:
+    if patch:
         apply_all_patches(
-            repo_dir,
-            repo_patch_dir_base / repo_ref_to_patches_dir_name(args.repo_ref),
-            args.repo_name,
+            src_dir,
+            patch_dir / repo_ref_to_patches_dir_name(ref),
             "hipified",
         )
 
 
-def do_hipify(args: argparse.Namespace):
-    repo_dir: Path = args.repo
-    print(f"Hipifying {repo_dir}")
-    build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
+def do_hipify(src_dir: Path):
+    print(f"Hipifying {src_dir}")
+    build_amd_path = src_dir / "tools" / "amd_build" / "build_amd.py"
     if os.path.exists(build_amd_path):
-        exec([sys.executable, build_amd_path], cwd=repo_dir)
+        exec([sys.executable, build_amd_path], cwd=src_dir)
     # Iterate over the base repository and all submodules. Because we process
     # the root repo first, it will not add submodule changes.
-    all_paths = get_all_repositories(repo_dir)
+    all_paths = get_all_repositories(src_dir)
     for module_path in all_paths:
         status = list_status(module_path)
         if not status:
@@ -271,11 +273,14 @@ def do_hipify(args: argparse.Namespace):
         exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "-m", '""'], cwd=module_path)
 
 
-def do_save_patches(args: argparse.Namespace):
-    repo_name = args.repo_name
-    repo_patch_dir_base = args.patch_dir
-    patches_dir = repo_patch_dir_base / repo_ref_to_patches_dir_name(args.repo_ref)
-    save_repo_patches(args.repo, patches_dir / repo_name)
-    relative_sm_paths = list_submodules(args.repo, relative=True)
+def do_save_patches(
+    src_dir: Path,
+    patch_dir: Path,
+    ref: str,
+):
+    repo_name = src_dir.name
+    patches_dir = patch_dir / repo_ref_to_patches_dir_name(ref)
+    save_repo_patches(src_dir, patches_dir / repo_name)
+    relative_sm_paths = list_submodules(src_dir, relative=True)
     for relative_sm_path in relative_sm_paths:
-        save_repo_patches(args.repo / relative_sm_path, patches_dir / relative_sm_path)
+        save_repo_patches(src_dir / relative_sm_path, patches_dir / relative_sm_path)
