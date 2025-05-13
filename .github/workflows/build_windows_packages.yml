@@ -39,6 +39,7 @@ jobs:
       CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
       TEATIME_FORCE_INTERACTIVE: 0
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
       - name: "Create build dir"
         shell: powershell
@@ -66,11 +67,16 @@ jobs:
           pip install -r requirements.txt
 
       - name: Install requirements
+        shell: powershell
         run: |
           choco install --no-progress -y ccache
           choco install --no-progress -y ninja
           choco install --no-progress -y strawberryperl
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
+          choco install awscli --yes
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+          echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+          refreshenv
 
       # After other installs, so MSVC get priority in the PATH.
       - name: Configure MSVC
@@ -155,7 +161,7 @@ jobs:
             ${extra_cmake_options}
 
       - name: Build Projects
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all)
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -163,6 +169,12 @@ jobs:
           echo "Build dir:"
           echo "------------"
           ls -lh "${{ env.BUILD_DIR_BASH }}"
+          echo "Artifact Archives:"
+          echo "------------------"
+          ls -lh "${{ env.BUILD_DIR_BASH }}"/artifacts/*.tar.xz
+          echo "Artifacts:"
+          echo "----------"
+          du -h -d 1 "${{ env.BUILD_DIR_BASH }}"/artifacts
           echo "CCache Stats:"
           echo "-------------"
           ccache -s
@@ -182,3 +194,47 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
         shell: powershell
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+
+      # TODO: Move to script
+      - name: Create Index Files
+        run: |
+          curl --silent --fail --show-error --location `
+            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py `
+            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
+          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
+          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.log' ${{ env.BUILD_DIR_BASH }}/logs/
+          sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}-windows.html",g' ${{ env.BUILD_DIR_BASH }}/logs/index.html
+
+      # TODO: Move to script
+      - name: Upload Artifacts
+        shell: powershell
+        run: |
+          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
+          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts s3://therock-artifacts/${{github.run_id}}-windows/ `
+            --recursive --no-follow-symlinks `
+            --exclude "*" `
+            --include "*.tar.xz*"
+          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}-windows.html
+
+      # TODO: Move to script
+      - name: Upload Logs
+        shell: powershell
+        run: |
+          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
+          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\logs s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/ `
+            --recursive `
+            --content-type="text/plain" `
+            --exclude "*" `
+            --include "*.log"
+          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\logs\index.html s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/
+
+      - name: Add Links to Job Summary
+        run: |
+          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}-windows.html)' >> $GITHUB_STEP_SUMMARY
+          echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY

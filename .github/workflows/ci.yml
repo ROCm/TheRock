@@ -100,6 +100,8 @@ jobs:
       amdgpu_families: ${{ matrix.families.family }}
       windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == 'true' && 'true' || 'false' }}
       extra_cmake_options: ${{ matrix.extra_cmake_options }}
+    permissions:
+      id-token: write
 
   # build_python_packages:
   #   name: Build Python Packages
