@@ -8,7 +8,7 @@ expect_failure_amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "pytorch-target": "gfx90a",
-            "expect_failure": True
+            "expect_failure": True,
         }
     },
     "gfx101x": {
@@ -16,7 +16,7 @@ expect_failure_amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "pytorch-target": "gfx1010",
-            "expect_failure": True
+            "expect_failure": True,
         }
     },
     "gfx103x": {
@@ -24,7 +24,7 @@ expect_failure_amdgpu_family_info_matrix = {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "pytorch-target": "gfx1030",
-            "expect_failure": True
+            "expect_failure": True,
         }
     },
 }
