@@ -255,7 +255,7 @@ def retrieve_artifacts_by_input_dir(args):
 
 
 def run(args):
-    log("### Installing TheRock using artifacts 🪨 ###")
+    log("### Installing TheRock using artifacts ###")
     _create_output_directory(args)
     if args.run_id:
         retrieve_artifacts_by_run_id(args)

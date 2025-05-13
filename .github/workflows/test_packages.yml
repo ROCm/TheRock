@@ -10,6 +10,8 @@ on:
         type: string
       test_runs_on:
         type: string
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -18,6 +20,8 @@ on:
       amdgpu_families:
         type: string
       test_runs_on:
+        type: string
+      platform:
         type: string
   push:
     branches:
