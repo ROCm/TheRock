@@ -17,13 +17,13 @@ include = [
   "bin/hipblas_*.yaml",
   "lib/libhipblas_fortran.so",
   # Clients benchmarks
-  "bin/hipblas-bench",
-  "bin/hipblas_v2-bench",
+  "bin/hipblas-bench*",
+  "bin/hipblas_v2-bench*",
   # Clients tests
-  "bin/hipblas-test",
+  "bin/hipblas-test*",
   "bin/hipblas_gentest.py",
   "bin/hipblas_gtest.data",
-  "bin/hipblas_v2-test",
+  "bin/hipblas_v2-test*",
   "bin/hipblas_v2_gtest.data",
 ]
 
@@ -41,12 +41,12 @@ include = [
 [components.test."math-libs/BLAS/hipBLASLt/stage"]
 include = [
   # Clients benchmarks
-  "bin/hipblaslt-bench",
+  "bin/hipblaslt-bench*",
   "bin/hipblaslt-bench-*",
   "bin/hipblaslt-sequence",
   "bin/sequence.yaml",
   # Clients tests
-  "bin/hipblaslt-test",
+  "bin/hipblaslt-test*",
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
@@ -58,15 +58,16 @@ include = [
 [components.doc."math-libs/BLAS/rocBLAS/stage"]
 [components.lib."math-libs/BLAS/rocBLAS/stage"]
 include = [
+  "bin/rocblas/library/**",
   "lib/rocblas/library/**",
 ]
 [components.test."math-libs/BLAS/rocBLAS/stage"]
 include = [
   # Clients benchmarks
-  "bin/rocblas-bench",
-  "bin/rocblas-gemm-tune",
+  "bin/rocblas-bench*",
+  "bin/rocblas-gemm-tune*",
   # Clients tests
-  "bin/rocblas-test",
+  "bin/rocblas-test*",
   "bin/rocblas_gentest.py",
   "bin/rocblas_gtest.data",
   "bin/rocblas_*.yaml",
@@ -96,8 +97,8 @@ exclude = [
 optional = true
 [components.test."math-libs/BLAS/hipSOLVER/stage"]
 include = [
-  "bin/hipsolver-bench",
-  "bin/hipsolver-test",
+  "bin/hipsolver-bench*",
+  "bin/hipsolver-test*",
   "lib/libhipsolver_fortran.so",
   "share/hipsolver/test/**",
 ]
@@ -114,8 +115,8 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
-  "bin/rocsparse-bench",
-  "bin/rocsparse-test",
+  "bin/rocsparse-bench*",
+  "bin/rocsparse-test*",
 ]
 optional = true
 
@@ -130,7 +131,7 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
-  "bin/hipsparse-bench",
-  "bin/hipsparse-test",
+  "bin/hipsparse-bench*",
+  "bin/hipsparse-test*",
 ]
 optional = true
