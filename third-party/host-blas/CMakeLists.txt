@@ -59,7 +59,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_test_validate_shared_lib(
       PATH dist/lib/host-math/lib
-      LIB_NAMES libopenblas.so
+      LIB_NAMES librocm-openblas.so
     )
 
     therock_provide_artifact(host-blas
