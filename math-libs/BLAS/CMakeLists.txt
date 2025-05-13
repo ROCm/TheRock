@@ -40,11 +40,6 @@ if(NOT WIN32)
     rocm_smi_lib
   )
 endif()
-if(THEROCK_BUILD_TESTING)
-  list(APPEND hipBLASLt_optional_deps
-    therock-host-blas
-  )
-endif()
 
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "hipBLASLt"
@@ -65,6 +60,7 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
+    therock-host-blas
     ${hipBLASLt_optional_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt

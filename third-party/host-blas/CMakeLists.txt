@@ -2,6 +2,18 @@
 # This will be extended later, including allowing to use the system BLAS of
 # your choice.
 
+# Note that this project is a bit unique in third-party:
+#   a. It builds shared on both Linux and Windows. Most of our third-party
+#      deps, we build static on Windows and use symbol/soname alterations on
+#      Linux to make them cooperate.
+#   b. It populates the lib/host-math directory instead of the root. This
+#      is a self contained prefix.
+#   c. On Windows, it puts runtime files (i.e. DLLs) in the root install bin/
+#      directory. On Windows, all of the DLLs go in the same location, and
+#      only development files are scoped to lib/host-math.
+#   d. It publishes its own cblas package, delegating to the OpenBLAS::OpenBLAS
+#      library.
+
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
@@ -24,7 +36,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
       EXTERNAL_SOURCE_DIR .
-      INSTALL_DESTINATION "lib/host-math"
       INTERFACE_LINK_DIRS "lib/host-math/lib"
       # RPATH logic needs to know that executables/libs for this project are in
       # a non-default location.
@@ -69,11 +80,33 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(OpenBLAS_BUILD)
 
+# Note that we install to the top-level but want our development assets and Posix
+# runfiles to install to lib/host-math. Since we are building shared, on Windows,
+# we want the DLL to go to the root bin/ dir so that it can be dynamically
+# loaded by ROCm binaries. This is a bit of an abuse.
+if(WIN32)
+  set(CMAKE_INSTALL_BINDIR "bin")
+else()
+  set(CMAKE_INSTALL_BINDIR "lib/host-math/bin")
+endif()
+set(CMAKE_INSTALL_LIBDIR "lib/host-math/lib")
+set(CMAKE_INSTALL_INCLUDEDIR "lib/host-math/include")
+
 add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas)
+
+# Alterations.
+# We would like this to be a library scoped to ROCm, so give it a custom
+# name.
+# TODO: Also set Linux symbol versioning flags.
+set_target_properties(openblas_shared PROPERTIES OUTPUT_NAME rocm-openblas)
+# Some of the test targets do not build with an altered library name on
+# Windows. Just uniformly exclude them from the build.
+set_target_properties(openblas_utest PROPERTIES EXCLUDE_FROM_ALL TRUE)
+set_target_properties(openblas_utest_ext PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cblas-config.cmake.in
   ${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake
   @ONLY
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake" DESTINATION lib/cmake/OpenBLAS)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS)
