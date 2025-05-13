@@ -1,15 +1,15 @@
-name: Pull and Verify Docker Image
+name: Pull and Test Docker Image
 
 on:
   workflow_dispatch:
     inputs:
       amdgpu_target:
-        description: "AMDGPU target to verify"
+        description: "AMDGPU target to test"
         required: true
         default: "gfx942"
         type: string
       image_digest:
-        description: "Digest of image to verify"
+        description: "Digest of image to test"
         required: true
         type: string
       runner_type:
@@ -61,8 +61,8 @@ jobs:
       run: |
         echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
 
-  pull-and-verify-image:
-    name: Verify ${{ inputs.version }}/${{ needs.setup_metadata.outputs.image_ref }} Docker Image
+  pull-and-test-image:
+    name: Test ${{ inputs.version }}/${{ needs.setup_metadata.outputs.image_ref }} Docker Image
     runs-on: ${{ inputs.runner_type }}
     needs: [setup_metadata]
     steps:
