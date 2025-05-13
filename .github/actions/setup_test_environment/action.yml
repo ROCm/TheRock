@@ -1,4 +1,4 @@
-name: "Setup Linux test environment"
+name: "Setup test environment"
 
 inputs:
   VENV_DIR:
