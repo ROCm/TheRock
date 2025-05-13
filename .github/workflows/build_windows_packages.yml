@@ -73,10 +73,8 @@ jobs:
           choco install --no-progress -y ninja
           choco install --no-progress -y strawberryperl
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
-          choco install awscli --yes
-          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+          choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
-          refreshenv
 
       # After other installs, so MSVC get priority in the PATH.
       - name: Configure MSVC
