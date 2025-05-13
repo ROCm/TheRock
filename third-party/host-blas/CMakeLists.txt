@@ -98,7 +98,13 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas)
 # We would like this to be a library scoped to ROCm, so give it a custom
 # name.
 # TODO: Also set Linux symbol versioning flags.
-set_target_properties(openblas_shared PROPERTIES OUTPUT_NAME rocm-openblas)
+set_target_properties(openblas_shared PROPERTIES
+  # Private SONAME/DLL name.
+  OUTPUT_NAME rocm-openblas
+  # Install location in the library is hard-coded to include in the install root.
+  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas>
+)
+
 # Some of the test targets do not build with an altered library name on
 # Windows. Just uniformly exclude them from the build.
 set_target_properties(openblas_utest PROPERTIES EXCLUDE_FROM_ALL TRUE)
