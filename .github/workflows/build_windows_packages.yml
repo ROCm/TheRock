@@ -198,7 +198,7 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
-      # TODO (#541): Move to script
+      # TODO: Move to script
       - name: Create Index Files
         run: |
           curl --silent --fail --show-error --location \
@@ -206,9 +206,9 @@ jobs:
             --output ${{ env.BUILD_DIR_BASH }}/indexer.py
           python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
           python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.log' ${{ env.BUILD_DIR_BASH }}/logs/
-          sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}-windows.html",g' ${{ env.BUILD_DIR_BASH }}/logs/index.html
+          sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}.html",g' ${{ env.BUILD_DIR_BASH }}/logs/index.html
 
-      # TODO (#541): Move to script
+      # TODO: Move to script
       - name: Upload Artifacts
         shell: powershell
         run: |
@@ -217,9 +217,9 @@ jobs:
             --recursive --no-follow-symlinks `
             --exclude "*" `
             --include "*.tar.xz*"
-          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}-windows.html
+          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html
 
-      # TODO (#541): Move to script
+      # TODO: Move to script
       - name: Upload Logs
         shell: powershell
         run: |
@@ -233,5 +233,5 @@ jobs:
 
       - name: Add Links to Job Summary
         run: |
-          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}-windows.html)' >> $GITHUB_STEP_SUMMARY
+          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
           echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY

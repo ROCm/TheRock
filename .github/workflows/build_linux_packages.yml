@@ -115,7 +115,7 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
-      # TODO (#541): Move to script
+      # TODO: Move to script
       - name: Create Index Files
         run: |
           curl --silent --fail --show-error --location \
@@ -125,7 +125,7 @@ jobs:
           python build/indexer.py -f '*.log' build/logs/
           sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}.html",g' build/logs/index.html
 
-      # TODO (#541): Move to script
+      # TODO: Move to script
       - name: Upload Artifacts
         run: |
           aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}/ \
@@ -134,7 +134,7 @@ jobs:
             --include "*.tar.xz*"
           aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html
 
-      # TODO (#541): Move to script
+      # TODO: Move to script
       - name: Upload Logs
         run: |
           aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
