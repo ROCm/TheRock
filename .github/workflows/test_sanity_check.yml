@@ -63,5 +63,5 @@ jobs:
         env:
           PLATFORM: ${{ inputs.platform }}
         run: |
-          ${VENV_DIR}/Scripts/activate
+          ${VENV_DIR}\Scripts\activate
           pytest tests --log-cli-level=info

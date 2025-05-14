@@ -69,4 +69,4 @@ jobs:
         shell: powershell
         if: ${{ inputs.platform == 'windows' }}
         run: |
-          ctest --test-dir ${{ env.THEROCK_BIN_DIR }}/hipcub --output-on-failure --parallel 8
+          ctest --test-dir ${{ env.THEROCK_BIN_DIR }}\hipcub --output-on-failure --parallel 8
