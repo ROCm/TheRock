@@ -52,7 +52,15 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run ROCm Sanity Tests
+        if: ${{ inputs.platform == 'linux' }}
         run: |
-          if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
-          pytest tests/ \
-          --log-cli-level=info
+          source ${VENV_DIR}/bin/activate
+          pytest tests/ --log-cli-level=info
+
+      - name: Run ROCm Sanity Tests
+        if: ${{ inputs.platform == 'windows' }}
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          ${VENV_DIR}/Scripts/activate
+          pytest tests --log-cli-level=info
