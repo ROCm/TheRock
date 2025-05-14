@@ -166,7 +166,7 @@ jobs:
         run: |
           # TODO: Append uploaded files to an index
           aws s3 cp ${{ env.DIST_ARCHIVE }} s3://therock-${{ env.RELEASE_TYPE }}-tarball/
-          aws s3 cp "${{ env.OUTPUT_DIR }}/packages/dist/ s3://therock-${{ env.RELEASE_TYPE }}-python/${{ matrix.target_bundle.amdgpu_family }}/ \
+          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://therock-${{ env.RELEASE_TYPE }}-python/${{ matrix.target_bundle.amdgpu_family }}/ \
           --recursive --no-follow-symlinks \
           --exclude "*" \
           --include "*.whl" \

@@ -1,0 +1,24 @@
+From e4ee6caa8309b0685c574a81b7468e6bf57d86ef Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Sun, 4 May 2025 22:31:15 +0530
+Subject: [PATCH] Fix compilation on clang-cl
+
+---
+ include/fbgemm/Fbgemm.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/fbgemm/Fbgemm.h b/include/fbgemm/Fbgemm.h
+index eb1f3a01..4d94e22f 100644
+--- a/include/fbgemm/Fbgemm.h
++++ b/include/fbgemm/Fbgemm.h
+@@ -122,7 +122,7 @@ class PackMatrix {
+    * @return true if this is the first input matrix in GEMM (i.e., A in C = A *
+    *         B)
+    */
+-  static constexpr bool isA() {
++  static bool isA() {
+     return PT::isA();
+   }
+
+--
+2.49.0.windows.1

@@ -23,3 +23,5 @@ jobs:
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       extra_cmake_options: ${{ inputs.extra_cmake_options }}
+    permissions:
+      id-token: write
