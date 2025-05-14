@@ -1,5 +1,7 @@
-.venv
+*.venv
 src/
+
+# These paths were used for source checkout scripts at one point.
 /pytorch
 /pytorch_vision
 /pytorch_audio

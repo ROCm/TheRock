@@ -159,13 +159,13 @@ def main(cl_args: list[str]):
         group_audio.add_argument(
             "--audio-src-dir",
             type=Path,
-            default=THIS_DIR / "src" / "pytorch_audio",
+            default=THIS_DIR / "src" / "audio",
             help="torchaudio repository source directory path to clone into",
         )
         group_audio.add_argument(
             "--audio-patch-dir",
             type=Path,
-            default=THIS_DIR / "patches" / "pytorch_audio",
+            default=THIS_DIR / "patches" / "audio",
             help="torchaudio repository patches root directoryp ath",
         )
         group_audio.add_argument(
@@ -190,13 +190,13 @@ def main(cl_args: list[str]):
         group_vision.add_argument(
             "--vision-src-dir",
             type=Path,
-            default=THIS_DIR / "src" / "pytorch_vision",
+            default=THIS_DIR / "src" / "vision",
             help="torchvision repository source directory path to clone into",
         )
         group_vision.add_argument(
             "--vision-patch-dir",
             type=Path,
-            default=THIS_DIR / "patches" / "pytorch_vision",
+            default=THIS_DIR / "patches" / "vision",
             help="torchvision repository patches root directoryp ath",
         )
         group_vision.add_argument(
