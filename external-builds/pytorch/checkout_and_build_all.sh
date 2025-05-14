@@ -17,6 +17,11 @@ if ! $SCRIPT_DIR/checkout_pytorch_all.sh; then
 	exit 1
 fi
 
+if ! $SCRIPT_DIR/install_deps_pytorch.sh; then
+	echo "Failed to checkout pytorch, pytorch vision and pytorch audio"
+	exit 1
+fi
+
 if ! $SCRIPT_DIR/build_pytorch_all.sh; then
         echo "Failed to build pytorch, pytorch vision and pytorch audio"
         exit 1
