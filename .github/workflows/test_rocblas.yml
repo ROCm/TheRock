@@ -31,6 +31,8 @@ jobs:
   test_rocblas:
     name: "rocBLAS math-lib test"
     runs-on: ${{ inputs.test_runs_on }}
+    # Currently, this test is not working with Windows. This test will be enabled once this library has been enabled
+    if: ${{ inputs.platform == 'linux' }}
     strategy:
       fail-fast: false
     defaults:

@@ -34,6 +34,8 @@ on:
 jobs:
   test_rocthrust:
     name: "rocTHRUST math-lib test"
+    # Currently, this test is not working with Windows. This test will be enabled once this library has been enabled
+    if: ${{ inputs.platform == 'linux' }}
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
