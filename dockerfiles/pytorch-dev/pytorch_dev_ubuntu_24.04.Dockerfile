@@ -104,9 +104,9 @@ ENV ROCM_HOME=/opt/rocm
 ENV PATH="/opt/rocm/bin:$PATH"
 ENV LD_LIBRARY_PATH="/opt/rocm/lib"
 
-RUN ./build_pytorch_torch.sh
-RUN ./build_pytorch_vision.sh
-RUN ./build_pytorch_audio.sh
+RUN ./build_pytorch_torch.sh /therock/pytorch
+RUN ./build_pytorch_vision.sh /therock/pytorch_vision
+RUN ./build_pytorch_audio.sh /therock/pytorch_audio
 
 ################################################################################
 # PyTorch Install

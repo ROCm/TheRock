@@ -1,5 +1,9 @@
 #!/usr/bin/bash
 
+# Usage:
+#   build_pytorch_torch.sh  (uses default source dir of src/pytorch/)
+#   build_pytorch_torch.sh path/to/torch_source_dir
+
 # Causes bash process to die immediately after child process returns error
 # to make sure that script does not continue logic if error has happened.
 set -e
@@ -9,6 +13,8 @@ DO_BUILD_STEP="${DO_BUILD_STEP:-1}"
 DO_INSTALL_STEP="${DO_INSTALL_STEP:-1}"
 
 SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
+SOURCE_DIR="${1:-$SCRIPT_DIR/src/pytorch}"
+
 if ! source $SCRIPT_DIR/env_init.sh; then
     echo "Failed to find python virtual-env"
     echo "Make sure that TheRock has been build first"
@@ -22,7 +28,7 @@ export CMAKE_PREFIX_PATH="$(realpath ${ROCM_HOME})"
 export DEVICE_LIB_PATH=${CMAKE_PREFIX_PATH}/lib/llvm/amdgcn/bitcode
 export HIP_DEVICE_LIB_PATH=${DEVICE_LIB_PATH}
 
-cd $SCRIPT_DIR/pytorch
+cd $SOURCE_DIR
 #USE_KINETO=OFF CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} python setup.py develop
 #USE_KINETO=OFF CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} PYTORCH_BUILD_VERSION=2.7.0 PYTORCH_BUILD_NUMBER=1 python setup.py bdist_wheel
 if [ ${DO_BUILD_STEP} -eq 1 ]; then
@@ -48,7 +54,7 @@ if [ ${DO_INSTALL_STEP} -eq 1 ]; then
 		PIP_BREAK_SYSTEM_PACKAGES=1 pip install "$latest_wheel_file"
 		echo "pip install done for $latest_wheel_file"
 	else
-		echo "Failed to build and find pytorch wheel for pip install in directory $SCRIPT_DIR/pytorch/dist"
+		echo "Failed to build and find pytorch wheel for pip install in directory $SOURCE_DIR/dist"
 		exit 1
 	fi
 fi
