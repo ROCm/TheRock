@@ -67,7 +67,7 @@ def _create_output_directory(args):
     If the output directory already exists, delete it and its contents.
     Then, create the output directory.
     """
-    output_dir_path = Path(args.output_dir).resolve()
+    output_dir_path = Path(args.output_dir)
     log(f"Creating directory {output_dir_path}")
     if os.path.isdir(output_dir_path):
         log(
