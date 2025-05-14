@@ -63,5 +63,5 @@ jobs:
       - name: Run rocBLAS tests
         run: |
           ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
-          if [ ${{ inputs.platform }} == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+          if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml

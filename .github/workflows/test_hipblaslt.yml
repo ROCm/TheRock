@@ -62,5 +62,5 @@ jobs:
 
       - name: Run hipBLASLt tests
         run: |
-          if [ ${{ inputs.platform }} == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+          if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
