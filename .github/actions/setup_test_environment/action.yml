@@ -26,26 +26,25 @@ runs:
         python-version: 3.11
 
     - name: Create Python venv
-      if: ${{ inputs.PLATFORM == 'linux' }}
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
-        python -m venv ${VENV_DIR}
+        if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
         source ${VENV_DIR}/bin/activate
         pip install -r requirements-test.txt
         pip freeze
 
-    - name: Create Python venv
-      if: ${{ inputs.PLATFORM == 'windows' }}
-      shell: powershell
-      env:
-        VENV_DIR: ${{ inputs.VENV_DIR }}
-      run: |
-        python -m venv ${{ env.VENV_DIR }}
-        ${{ env.VENV_DIR }}\Scripts\activate
-        pip install -r requirements-test.txt
-        pip freeze
+    # - name: Create Python venv
+    #   if: ${{ inputs.PLATFORM == 'windows' }}
+    #   shell: powershell
+    #   env:
+    #     VENV_DIR: ${{ inputs.VENV_DIR }}
+    #   run: |
+    #     python -m venv ${{ env.VENV_DIR }}
+    #     ${{ env.VENV_DIR }}\Scripts\activate
+    #     pip install -r requirements-test.txt
+    #     pip freeze
 
     - name: Install the AWS tool
       if: ${{ inputs.PLATFORM == 'linux'}}
