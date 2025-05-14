@@ -51,10 +51,6 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--base-only"
           PLATFORM: ${{ inputs.platform }}
 
-      - name: Run rocminfo
-        run: |
-          ${THEROCK_BIN_DIR}/rocminfo
-
       - name: Run ROCm Sanity Tests
         run: |
           if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
