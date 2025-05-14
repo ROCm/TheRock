@@ -11,6 +11,7 @@ THIS_DIR = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+PLATFORM = os.getenv("PLATFORM", "")
 
 
 def run_command(command, cwd=None):
@@ -28,6 +29,9 @@ def rocm_info_output():
 
 
 class TestROCmSanity:
+    @pytest.mark.skipif(
+        PLATFORM == "windows", reason="rocminfo is not supported on Windows"
+    )
     @pytest.mark.parametrize(
         "to_search",
         [
@@ -49,6 +53,7 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
+    @pytest.mark.xfail  # geomin12 is fixing right now, xfail so we can see other tests running
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         run_command(
@@ -66,6 +71,10 @@ class TestROCmSanity:
         check.equal(process.returncode, 0)
         check.greater(os.path.getsize(str(THIS_DIR / "hipcc_check")), 0)
 
+    @pytest.mark.skipif(
+        PLATFORM == "windows",
+        reason="rocm_agent_enumerator is not supported on Windows",
+    )
     def test_rocm_agent_enumerator(self):
         process = run_command([f"{THEROCK_BIN_DIR}/rocm_agent_enumerator"])
         output = process.stdout

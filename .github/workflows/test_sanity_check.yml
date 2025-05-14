@@ -59,6 +59,7 @@ jobs:
 
       - name: Run ROCm Sanity Tests
         if: ${{ inputs.platform == 'windows' }}
+        shell: powershell
         env:
           PLATFORM: ${{ inputs.platform }}
         run: |
