@@ -23,6 +23,8 @@ jobs:
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       extra_cmake_options: ${{ inputs.extra_cmake_options }}
+    permissions:
+      id-token: write
 
   test_windows_packages:
     needs: [build_windows_packages]
