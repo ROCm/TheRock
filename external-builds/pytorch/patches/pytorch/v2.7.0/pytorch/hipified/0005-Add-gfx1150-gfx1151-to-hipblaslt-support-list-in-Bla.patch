@@ -1,7 +1,8 @@
-From 2957daeeff9ea1bfc0598f0b372850f746ba7342 Mon Sep 17 00:00:00 2001
+From 13ccab3d1bca34c59f2a43a8d88222b3c6eafbfb Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Mon, 31 Mar 2025 19:27:48 +0100
-Subject: [PATCH 5/8] Add gfx1150/gfx1151 to hipblaslt support list in Blas.cpp
+Subject: [PATCH 05/12] Add gfx1150/gfx1151 to hipblaslt support list in
+ Blas.cpp
 
 ---
  aten/src/ATen/native/cuda/Blas.cpp | 2 +-
@@ -22,7 +23,7 @@ index 28936cc034..592c04693c 100644
  #if ROCM_VERSION >= 60500
          "gfx950"
 diff --git a/aten/src/ATen/native/hip/Blas.cpp b/aten/src/ATen/native/hip/Blas.cpp
-index 467ff69892..576bd7f72c 100644
+index c1fdaf7f28..734af694b0 100644
 --- a/aten/src/ATen/native/hip/Blas.cpp
 +++ b/aten/src/ATen/native/hip/Blas.cpp
 @@ -260,7 +260,7 @@ static bool isSupportedHipLtROCmArch(int index) {
@@ -35,5 +36,5 @@ index 467ff69892..576bd7f72c 100644
  #if ROCM_VERSION >= 60500
          "gfx950"
 -- 
-2.43.0
+2.47.1.windows.2
 

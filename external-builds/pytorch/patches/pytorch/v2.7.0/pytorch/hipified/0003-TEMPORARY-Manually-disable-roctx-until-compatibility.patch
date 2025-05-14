@@ -1,7 +1,7 @@
-From 9602dc241c0adb1e4f463a1bbc4b5d60e4e74f76 Mon Sep 17 00:00:00 2001
+From 681b27e46a32ced5a515c716c71fa3cb041a25eb Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 31 Mar 2025 18:54:56 +0100
-Subject: [PATCH 3/8] TEMPORARY: Manually disable roctx until compatibility
+Subject: [PATCH 03/12] TEMPORARY: Manually disable roctx until compatibility
  with rocprofv3 is established.
 
 ---
@@ -109,5 +109,5 @@ index 37364dfc93..0ed35059a1 100644
  #else // ROCM_ON_WINDOWS
    static void printUnavailableWarning() {
 -- 
-2.43.0
+2.47.1.windows.2
 
