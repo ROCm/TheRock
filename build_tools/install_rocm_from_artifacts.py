@@ -55,7 +55,7 @@ def _untar_files(output_dir, destination):
     """
     Retrieves all tar files in the output_dir, then extracts all files to the output_dir
     """
-    output_dir_path = Path(output_dir).resolve()
+    output_dir_path = WindPath(output_dir).resolve()
     log(f"Extracting {destination.name} to {output_dir}")
     with tarfile.open(destination) as extracted_tar_file:
         extracted_tar_file.extractall(output_dir_path)
@@ -67,7 +67,7 @@ def _create_output_directory(args):
     If the output directory already exists, delete it and its contents.
     Then, create the output directory.
     """
-    output_dir_path = Path(args.output_dir)
+    output_dir_path = Path(args.output_dir.replace("\\", "\\\\"))
     log(f"Creating directory {output_dir_path}")
     if os.path.isdir(output_dir_path):
         log(
