@@ -13,7 +13,6 @@ set(_blas_subproject_names)
 therock_cmake_subproject_declare(hipBLAS-common
 EXTERNAL_SOURCE_DIR "hipBLAS-common"
 BACKGROUND_BUILD
-CMAKE_LISTS_RELPATH "next-cmake"
 COMPILER_TOOLCHAIN
   amd-hip
 BUILD_DEPS
@@ -50,6 +49,8 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
     -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    # TODO: Enable once finding rocTracer is more robust.
+    -DHIPBLASLT_ENABLE_MARKER=OFF
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
