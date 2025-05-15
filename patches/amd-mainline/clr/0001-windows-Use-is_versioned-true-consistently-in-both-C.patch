@@ -1,7 +1,7 @@
 From 481d2f44762911a0cd16569b636e73a935fd956e Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 9 May 2025 19:21:34 -0700
-Subject: [PATCH 3/3] [windows] Use is_versioned = true consistently in both
+Subject: [PATCH 1/2] [windows] Use is_versioned = true consistently in both
  Comgr::LoadLib paths.
 
 Prior to this, RTCProgram was using is_version = true and device initialization was using false. On Windows, this was causing us to attempt to load amd_comgr_3.dll at device load and amd_comgr0605.dll for RTC programs. Obviously, there is only one DLL and it must be used consistently.

@@ -17,6 +17,12 @@ class ConfigureCITest(TestCase):
         paths = [".github/workflows/ci.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
+        paths = [".github/workflows/build_package.yml"]
+        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
+        self.assertTrue(run_ci)
+        paths = [".github/workflows/test_some_subproject.yml"]
+        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
+        self.assertTrue(run_ci)
 
     def test_dont_run_ci_if_unrelated_workflow_file_edited(self):
         paths = [".github/workflows/publish_pytorch_dev_docker.yml"]

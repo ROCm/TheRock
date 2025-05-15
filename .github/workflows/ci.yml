@@ -82,6 +82,7 @@ jobs:
       expect_failure: ${{ matrix.families.expect_failure == true }}
       linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
     permissions:
+      contents: read
       id-token: write
 
   windows_build_and_test:
@@ -96,14 +97,13 @@ jobs:
       fail-fast: false
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.windows_amdgpu_families) }}
-        extra_cmake_options:
-          - "-DBUILD_TESTING=ON"
-          - "-DBUILD_TESTING=OFF"
     uses: ./.github/workflows/ci_windows.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
-      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == 'true' && 'true' || 'false' }}
-      extra_cmake_options: ${{ matrix.extra_cmake_options }}
+      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+    permissions:
+      contents: read
+      id-token: write
 
   # build_python_packages:
   #   name: Build Python Packages
