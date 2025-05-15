@@ -12,6 +12,9 @@ on:
       linux_use_prebuilt_artifacts:
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   build_linux_packages:
     name: Build
@@ -20,6 +23,7 @@ jobs:
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
     permissions:
+      contents: read
       id-token: write
 
   test_linux_packages:

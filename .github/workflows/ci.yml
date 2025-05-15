@@ -78,6 +78,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
     permissions:
+      contents: read
       id-token: write
 
   windows_build_and_test:
@@ -97,6 +98,7 @@ jobs:
       amdgpu_families: ${{ matrix.families.family }}
       windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
     permissions:
+      contents: read
       id-token: write
 
   # build_python_packages:
