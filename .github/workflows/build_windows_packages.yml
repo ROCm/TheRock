@@ -162,10 +162,7 @@ jobs:
             ${extra_cmake_options}
 
       - name: Build Projects
-        run: |
-          New-Item -ItemType Directory -Force -Path build\logs
-          New-Item -ItemType File -Force -Path build\logs\test_linux.log
-
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
 
       - name: Report
         if: ${{ !cancelled() }}
