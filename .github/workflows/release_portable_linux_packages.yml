@@ -1,4 +1,4 @@
-name: Build portable Linux packages
+name: Release portable Linux packages
 
 on:
   # Trigger from another workflow (typically to build dev packages and then test them)
@@ -170,7 +170,7 @@ jobs:
           --recursive --no-follow-symlinks \
           --exclude "*" \
           --include "*.whl" \
-          --include "*.tar.xz*"
+          --include "*.tar.gz"
 
       - name: Trigger testing nightly tarball
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}

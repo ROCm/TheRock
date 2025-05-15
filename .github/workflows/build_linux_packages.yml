@@ -18,8 +18,8 @@ on:
         type: string
 
 permissions:
-  id-token: write
   contents: read
+  id-token: write
 
 jobs:
   build_linux_packages:
