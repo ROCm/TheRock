@@ -209,9 +209,9 @@ jobs:
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output ${{ env.BUILD_DIR_BASH }}/indexer.py
           python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
-          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.log' ${{ env.BUILD_DIR_BASH }}/logs/
-          sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}.html",g' ${{ env.BUILD_DIR_BASH }}/logs/index.html
-
+          python build_tools/create_log_index.py `
+            --build-dir=${{ env.BUILD_DIR_BASH }} `
+            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
       # TODO: Move to script
       - name: Upload Artifacts
         shell: powershell
