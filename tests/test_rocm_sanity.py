@@ -2,6 +2,7 @@ import pytest
 import subprocess
 import re
 from pathlib import Path
+import platform
 from pytest_check import check
 import logging
 import os
@@ -10,8 +11,8 @@ THIS_DIR = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
 
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-PLATFORM = os.getenv("PLATFORM", "")
+THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
+PLATFORM = platform.system().lower()
 
 
 def run_command(command, cwd=None):
@@ -56,9 +57,13 @@ class TestROCmSanity:
     @pytest.mark.xfail  # geomin12 is fixing right now, xfail so we can see other tests running
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
+        hipcc_executable = "./hipcc" if PLATFORM == "linux" else "hipcc.exe"
+        hipcc_check_executable = (
+            "./hipcc_check" if PLATFORM == "linux" else "hipcc_check.exe"
+        )
         run_command(
             [
-                "./hipcc",
+                hipcc_executable,
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
                 str(THIS_DIR / "hipcc_check"),
@@ -67,9 +72,9 @@ class TestROCmSanity:
         )
 
         # Running and checking the executable
-        process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
+        process = run_command([hipcc_check_executable], cwd=str(THIS_DIR))
         check.equal(process.returncode, 0)
-        check.greater(os.path.getsize(str(THIS_DIR / "hipcc_check")), 0)
+        check.greater(os.path.getsize(str(THIS_DIR / hipcc_check_executable)), 0)
 
     @pytest.mark.skipif(
         PLATFORM == "windows",

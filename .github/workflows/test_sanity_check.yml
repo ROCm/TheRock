@@ -35,8 +35,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/bin"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
       - name: Checkout Repository
@@ -52,16 +52,6 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run ROCm Sanity Tests
-        if: ${{ inputs.platform == 'linux' }}
         run: |
-          source ${VENV_DIR}/bin/activate
+          if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           pytest tests/ --log-cli-level=info
-
-      - name: Run ROCm Sanity Tests
-        if: ${{ inputs.platform == 'windows' }}
-        shell: powershell
-        env:
-          PLATFORM: ${{ inputs.platform }}
-        run: |
-          ${{ env.VENV_DIR }}/Scripts/activate
-          pytest tests --log-cli-level=info

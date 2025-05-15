@@ -26,24 +26,12 @@ runs:
         python-version: 3.11
 
     - name: Create Python venv
-      if: ${{ inputs.PLATFORM == 'linux' }}
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
-        python -m venv ${VENV_DIR}
-        source ${VENV_DIR}/bin/activate
-        pip install -r requirements-test.txt
-        pip freeze
-
-    - name: Create Python venv
-      if: ${{ inputs.PLATFORM == 'windows' }}
-      shell: powershell
-      env:
-        VENV_DIR: ${{ inputs.VENV_DIR }}
-      run: |
-        python -m venv ${{ env.VENV_DIR }}
-        ${{ env.VENV_DIR }}\Scripts\activate
+        python3 -m venv ${VENV_DIR}
+        if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
         pip install -r requirements-test.txt
         pip freeze
 
@@ -54,13 +42,12 @@ runs:
 
     - name: Install the AWS tool
       if: ${{ inputs.PLATFORM == 'windows'}}
-      shell: powershell
+      shell: bash
       run: |
         choco install --no-progress -y awscli
-        $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
+        echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
     - name: Download and Unpack Artifacts
-      if: ${{ inputs.PLATFORM == 'linux'}}
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
@@ -71,24 +58,7 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
-          --run-id=${{ env.ARTIFACT_RUN_ID }} \
-          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} \
-          --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} \
-          ${{ env.FETCH_ARTIFACT_ARGS }}
-
-    - name: Download and Unpack Artifacts
-      if: ${{ inputs.PLATFORM == 'windows'}}
-      shell: powershell
-      env:
-        VENV_DIR: ${{ inputs.VENV_DIR }}
-        OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
-        ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
-        AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
-        FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
-        GITHUB_TOKEN: ${{ github.token }}
-      run: |
-        python ./build_tools/install_rocm_from_artifacts.py `
-          --run-id=${{ env.ARTIFACT_RUN_ID }} `
-          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} `
-          --output-dir=${{ env.OUTPUT_ARTIFACTS_DIR }} `
-          ${{ env.FETCH_ARTIFACT_ARGS }}
+          --run-id=${ARTIFACT_RUN_ID} \
+          --amdgpu-family=${AMDGPU_FAMILIES} \
+          --output-dir=${OUTPUT_ARTIFACTS_DIR} \
+          ${FETCH_ARTIFACT_ARGS}

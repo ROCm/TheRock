@@ -45,8 +45,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/bin"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
       - name: Checkout Repository
@@ -63,20 +63,9 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run rocthrust tests
-        if: ${{ inputs.platform == 'linux' }}
         run: |
           ctest \
-            --test-dir ${{ env.THEROCK_BIN_DIR }}/rocthrust \
+            --test-dir ${THEROCK_BIN_DIR}/rocthrust \
             --output-on-failure \
             --parallel 8 \
-            --exclude-regex "^copy.hip$"
-
-      - name: Run rocthrust tests
-        if: ${{ inputs.platform == 'windows' }}
-        shell: powershell
-        run: |
-          ctest `
-            --test-dir ${{ env.THEROCK_BIN_DIR }}\rocthrust `
-            --output-on-failure `
-            --parallel 8 `
             --exclude-regex "^copy.hip$"
