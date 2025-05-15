@@ -26,10 +26,15 @@ amdgpu_family_info_matrix = {
     },
     "gfx103x": {
         "linux": {
+            "test-runs-on": "linux-rx6950-gpu-rocm",
+            "family": "gfx103X-dgpu",
+            "pytorch-target": "gfx1030",
+        },
+        "windows": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "pytorch-target": "gfx1030",
-        }
+        },
     },
     "gfx110x": {
         "linux": {
