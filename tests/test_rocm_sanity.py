@@ -76,9 +76,10 @@ class TestROCmSanity:
 
         # Running and checking the executable
         hipcc_output_exec = "./" + hipcc_check_executable if PLATFORM == "linux" else hipcc_check_executable
-        process = run_command([hipcc_output_exec], cwd=str(THEROCK_BIN_DIR))
         run_command(["ls"], cwd=str(THEROCK_BIN_DIR))
         run_command(["ls", str(THEROCK_BIN_DIR)], cwd=str(THEROCK_BIN_DIR))
+        process = run_command([hipcc_output_exec], cwd=str(THEROCK_BIN_DIR))
+        
         check.equal(process.returncode, 0)
         check.greater(os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable)), 0)
 
