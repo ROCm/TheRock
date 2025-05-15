@@ -45,7 +45,11 @@ import subprocess
 import sys
 from typing import Iterable, List, Mapping, Optional
 import string
-from amdgpu_family_matrix import amdgpu_family_info_matrix, DEFAULT_LINUX_CONFIGURATIONS, DEFAULT_WINDOWS_CONFIGURATIONS
+from amdgpu_family_matrix import (
+    amdgpu_family_info_matrix,
+    DEFAULT_LINUX_CONFIGURATIONS,
+    DEFAULT_WINDOWS_CONFIGURATIONS,
+)
 from amdgpu_family_matrix_xfail import amdgpu_family_matrix_xfail
 
 # --------------------------------------------------------------------------- #
