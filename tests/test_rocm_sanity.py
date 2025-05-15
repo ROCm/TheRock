@@ -54,7 +54,10 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    @pytest.mark.xfail  # geomin12 is fixing right now, xfail so we can see other tests running
+    @pytest.mark.xfail(
+        PLATFORM == "windows",
+        reason="hipcc.exe for Windows is failing. Issue noted on #410",
+    )
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         hipcc_executable = "./hipcc" if PLATFORM == "linux" else "hipcc.exe"
