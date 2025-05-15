@@ -16,7 +16,7 @@ PLATFORM = platform.system().lower()
 
 
 def run_command(command, cwd=None):
-    process = subprocess.run(command, capture_output=True, cwd=cwd)
+    process = subprocess.run(command, capture_output=True, cwd=cwd, shell=True)
     return process
 
 
@@ -62,22 +62,22 @@ class TestROCmSanity:
         # Compiling .cpp file using hipcc
         hipcc_executable = "./hipcc" if PLATFORM == "linux" else "hipcc.exe"
         hipcc_check_executable = (
-            "./hipcc_check" if PLATFORM == "linux" else "hipcc_check.exe"
+            "./hipcc_check" if PLATFORM == "linux" else "hipcc_check"
         )
         run_command(
             [
                 hipcc_executable,
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                str(THIS_DIR / "hipcc_check"),
+                str(THEROCK_BIN_DIR / "hipcc_check"),
             ],
             cwd=str(THEROCK_BIN_DIR),
         )
 
         # Running and checking the executable
-        process = run_command([hipcc_check_executable], cwd=str(THIS_DIR))
+        process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
         check.equal(process.returncode, 0)
-        check.greater(os.path.getsize(str(THIS_DIR / hipcc_check_executable)), 0)
+        check.greater(os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable)), 0)
 
     @pytest.mark.skipif(
         PLATFORM == "windows",
