@@ -51,6 +51,10 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--base-only"
           PLATFORM: ${{ inputs.platform }}
 
+      - name: Set HIP_CLANG_PATH for windows
+        if: ${{ inputs.platform == 'windows' }}
+        run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
+
       - name: Run ROCm Sanity Tests
         run: |
           if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
