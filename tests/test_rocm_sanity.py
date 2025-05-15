@@ -17,6 +17,7 @@ PLATFORM = platform.system().lower()
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd, shell=True)
+    print(str(process))
     return process
 
 
@@ -65,7 +66,7 @@ class TestROCmSanity:
                 hipcc_executable,
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                str(THEROCK_BIN_DIR / hipcc_check_executable),
+                hipcc_check_executable,
             ],
             cwd=str(THEROCK_BIN_DIR),
         )
