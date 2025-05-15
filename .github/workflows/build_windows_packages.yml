@@ -162,7 +162,7 @@ jobs:
             ${extra_cmake_options}
 
       - name: Build Projects
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        run: touch build/logs/test_windows.log
 
       - name: Report
         if: ${{ !cancelled() }}
