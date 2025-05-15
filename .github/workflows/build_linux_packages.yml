@@ -151,15 +151,12 @@ jobs:
             --include "*.tar.xz*"
           aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html
 
-      # TODO: Move to script
       - name: Upload Logs
         if: always()
         run: |
-          python3 build_tools/upload_logs_to_s3.py
-        env:
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
-          S3_BUCKET: therock-artifacts
+          python3 build_tools/upload_logs_to_s3.py \
+            --build-dir=build \
+            --s3-base-path="s3://therock-artifacts/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}"
 
       - name: Add Links to Job Summary
         if: always()

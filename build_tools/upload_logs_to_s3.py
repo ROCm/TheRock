@@ -1,3 +1,4 @@
+# === Updated build_tools/upload_logs_to_s3.py ===
 #!/usr/bin/env python3
 """
 upload_logs_to_s3.py
@@ -13,17 +14,14 @@ import argparse
 import subprocess
 from pathlib import Path
 
-
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
-
 
 def check_aws_cli_available():
     if shutil.which("aws") is None:
         log("[ERROR] AWS CLI not found in PATH.")
         sys.exit(1)
-
 
 def run_aws_cp(src: str, dest: str, content_type: str = None):
     cmd = (
@@ -39,12 +37,8 @@ def run_aws_cp(src: str, dest: str, content_type: str = None):
     except subprocess.CalledProcessError as e:
         log(f"[ERROR] Failed to upload {src} to {dest}: {e}")
 
-
-def upload_logs_to_s3(
-    bucket_name: str, run_id: str, amdgpu_family: str, build_dir: Path
-):
+def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
     log_dir = build_dir / "logs"
-    s3_base_path = f"s3://{bucket_name}/{run_id}-linux/logs/{amdgpu_family}"
 
     if not log_dir.is_dir():
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
@@ -66,36 +60,25 @@ def upload_logs_to_s3(
     else:
         log("[INFO] No index.html found. Skipping index upload.")
 
-
 def main():
     check_aws_cli_available()
-
-    # Resolve default directories
-    this_script_dir = Path(__file__).resolve().parent
-    therock_dir = this_script_dir.parent
 
     parser = argparse.ArgumentParser(description="Upload logs to S3.")
     parser.add_argument(
         "--build-dir",
         type=Path,
-        default=Path(os.getenv("BUILD_DIR", therock_dir / "build")),
-        help="Path to the build directory (default: repo_root/build or $BUILD_DIR)",
+        default=Path("build"),
+        help="Path to the build directory (default: build)",
+    )
+    parser.add_argument(
+        "--s3-base-path",
+        type=str,
+        required=True,
+        help="Base S3 path to upload logs to, e.g. s3://bucket/run-id-platform/logs/family",
     )
     args = parser.parse_args()
 
-    bucket = os.getenv("S3_BUCKET", "therock-artifacts")
-    run_id = os.getenv("GITHUB_RUN_ID")
-    amdgpu_family = os.getenv("AMDGPU_FAMILIES")
-
-    if not run_id:
-        log("[ERROR] GITHUB_RUN_ID is required.")
-        sys.exit(1)
-    if not amdgpu_family:
-        log("[ERROR] AMDGPU_FAMILIES is required.")
-        sys.exit(1)
-
-    upload_logs_to_s3(bucket, run_id, amdgpu_family, args.build_dir)
-
+    upload_logs_to_s3(args.s3_base_path, args.build_dir)
 
 if __name__ == "__main__":
     main()
