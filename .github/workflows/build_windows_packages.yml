@@ -24,6 +24,10 @@ on:
         type: string
         default: "-DBUILD_TESTING=ON"
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   build_windows_packages:
     name: Build Windows Packages

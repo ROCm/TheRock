@@ -17,6 +17,10 @@ on:
       amdgpu_families:
         type: string
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   build_linux_packages:
     name: Build Linux Packages
