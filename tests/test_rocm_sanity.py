@@ -2,6 +2,7 @@ import pytest
 import subprocess
 import re
 from pathlib import Path
+import platform
 from pytest_check import check
 import logging
 import os
@@ -11,7 +12,7 @@ THIS_DIR = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
-PLATFORM = os.getenv("PLATFORM", "")
+PLATFORM = platform.system().lower()
 
 
 def run_command(command, cwd=None):

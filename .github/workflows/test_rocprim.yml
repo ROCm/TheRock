@@ -43,8 +43,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/bin"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
       - name: Checkout Repository
@@ -64,7 +64,7 @@ jobs:
         env:
           TEST_TO_IGNORE: "'rocprim.lookback_reproducibility|rocprim.linking|rocprim.device_merge_inplace|rocprim.device_merge_sort|rocprim.device_partition|rocprim.device_radix_sort|rocprim.device_select'"
         run: |
-          ctest --test-dir ${{ env.THEROCK_BIN_DIR }}/rocprim \
+          ctest --test-dir ${THEROCK_BIN_DIR}/rocprim \
             --output-on-failure \
             --parallel 8 \
-            --exclude-regex ${{ env.TEST_TO_IGNORE }}
+            --exclude-regex ${TEST_TO_IGNORE}

@@ -58,7 +58,7 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
-          --run-id=${{ env.ARTIFACT_RUN_ID }} \
-          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} \
+          --run-id=${ARTIFACT_RUN_ID} \
+          --amdgpu-family=${AMDGPU_FAMILIES} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
-          ${{ env.FETCH_ARTIFACT_ARGS }}
+          ${FETCH_ARTIFACT_ARGS}
