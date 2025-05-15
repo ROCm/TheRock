@@ -197,6 +197,7 @@ jobs:
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
       - name: Configure AWS Credentials
+        if: always()
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
           aws-region: us-east-2
@@ -204,6 +205,7 @@ jobs:
 
       # TODO: Move to script
       - name: Create Index Files
+        if: always()
         run: |
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
@@ -212,6 +214,7 @@ jobs:
           python build_tools/create_log_index.py `
             --build-dir=${{ env.BUILD_DIR_BASH }} `
             --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+
       # TODO: Move to script
       - name: Upload Artifacts
         shell: powershell
@@ -224,6 +227,7 @@ jobs:
           aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html
 
       - name: Upload Logs
+        if: always()
         shell: powershell
         run: |
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
@@ -232,6 +236,16 @@ jobs:
             --s3-base-path="s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}"
 
       - name: Add Links to Job Summary
+        if: always()
         run: |
-          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
-          echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY
+          LOG_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/index.html"
+          echo "[Build Logs](${LOG_URL})" >> $GITHUB_STEP_SUMMARY
+
+          ARTIFACT_INDEX=build/artifacts/index.html
+          if [ -f "${ARTIFACT_INDEX}" ]; then
+            ARTIFACT_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html"
+
+            echo "[Artifacts](${ARTIFACT_URL})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "[INFO] No artifacts index found. Skipping artifact link."
+          fi
