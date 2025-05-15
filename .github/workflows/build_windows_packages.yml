@@ -162,7 +162,10 @@ jobs:
             ${extra_cmake_options}
 
       - name: Build Projects
-        run: touch build/logs/test_windows.log
+        run: |
+          New-Item -ItemType Directory -Force -Path build\logs
+          New-Item -ItemType File -Force -Path build\logs\test_linux.log
+
 
       - name: Report
         if: ${{ !cancelled() }}

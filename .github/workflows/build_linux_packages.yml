@@ -86,6 +86,7 @@ jobs:
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
           echo "Building package ${package_version}"
+          mkdir -p build/logs
           touch build/logs/test_linux.log
 
       - name: Test Packaging
