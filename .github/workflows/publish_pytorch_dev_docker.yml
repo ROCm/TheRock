@@ -108,10 +108,10 @@ jobs:
               "amdgpu_target": "${{ matrix.targets.amdgpu_family }}",
               "image_digest": "${{ steps.build_push.outputs.digest }}",
               "runner_type": "${{
-                matrix.targets.amdgpu_family == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm' ||
+                matrix.targets.amdgpu_family == 'gfx942' && 'linux-mi300-1gpu-ossci-rocm-test' ||
                 (matrix.targets.amdgpu_family == 'gfx1201' && 'linux-rx9070-gpu-rocm') ||
                 (matrix.targets.amdgpu_family == 'gfx1100' && 'linux-rx7900-gpu-rocm') ||
-                'linux-mi300-1gpu-ossci-rocm'
+                'linux-mi300-1gpu-ossci-rocm-test'
               }}",
               "version": "${{ env.VERSION }}"
             }
