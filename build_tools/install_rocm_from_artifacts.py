@@ -173,9 +173,7 @@ def retrieve_artifacts_by_run_id(args):
     # Flattening artifacts from .tar* files then removing .tar* files
     log(f"Untar-ing artifacts for {run_id}")
     tar_file_paths = list(output_dir.glob("*.tar.*"))
-    flattener = ArtifactPopulator(
-        output_path=output_dir, verbose=True, flatten=True
-    )
+    flattener = ArtifactPopulator(output_path=output_dir, verbose=True, flatten=True)
     flattener(*tar_file_paths)
     for file_path in tar_file_paths:
         file_path.unlink()

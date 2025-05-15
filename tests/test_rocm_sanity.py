@@ -58,7 +58,9 @@ class TestROCmSanity:
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         hipcc_executable = "./hipcc" if PLATFORM == "linux" else "hipcc.exe"
-        hipcc_check_executable = "./hipcc_check" if PLATFORM == "linux" else "hipcc_check.exe"
+        hipcc_check_executable = (
+            "./hipcc_check" if PLATFORM == "linux" else "hipcc_check.exe"
+        )
         run_command(
             [
                 hipcc_executable,
