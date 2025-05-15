@@ -14,14 +14,17 @@ import argparse
 import subprocess
 from pathlib import Path
 
+
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
+
 
 def check_aws_cli_available():
     if shutil.which("aws") is None:
         log("[ERROR] AWS CLI not found in PATH.")
         sys.exit(1)
+
 
 def run_aws_cp(src: str, dest: str, content_type: str = None):
     cmd = (
@@ -36,6 +39,7 @@ def run_aws_cp(src: str, dest: str, content_type: str = None):
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
         log(f"[ERROR] Failed to upload {src} to {dest}: {e}")
+
 
 def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
     log_dir = build_dir / "logs"
@@ -60,6 +64,7 @@ def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
     else:
         log("[INFO] No index.html found. Skipping index upload.")
 
+
 def main():
     check_aws_cli_available()
 
@@ -79,6 +84,7 @@ def main():
     args = parser.parse_args()
 
     upload_logs_to_s3(args.s3_base_path, args.build_dir)
+
 
 if __name__ == "__main__":
     main()
