@@ -45,8 +45,8 @@ import subprocess
 import sys
 from typing import Iterable, List, Mapping, Optional
 import string
-from amdgpu_family_matrix import amdgpu_family_info_matrix
-from expect_failure_amdgpu_family_matrix import expect_failure_amdgpu_family_info_matrix
+from amdgpu_family_matrix import amdgpu_family_info_matrix, DEFAULT_LINUX_CONFIGURATIONS, DEFAULT_WINDOWS_CONFIGURATIONS
+from amdgpu_family_matrix_xfail import amdgpu_family_matrix_xfail
 
 # --------------------------------------------------------------------------- #
 # General utilities
@@ -187,9 +187,6 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 # Matrix creation logic based on PR, push or workflow_dispatch
 # --------------------------------------------------------------------------- #
 
-DEFAULT_LINUX_CONFIGURATIONS = ["gfx94x", "gfx110x"]
-DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110x"]
-
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
@@ -231,7 +228,7 @@ def matrix_generator(
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
         # For workflow dispatch, user can select an "expect_failure" family or regular family
-        matrix = amdgpu_family_info_matrix | expect_failure_amdgpu_family_info_matrix
+        matrix = amdgpu_family_info_matrix | amdgpu_family_matrix_xfail
 
         input_gpu_targets = families.get("amdgpu_families")
 
@@ -270,10 +267,10 @@ def matrix_generator(
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
         # For schedule runs, we will run build and tests for only expect_failure families
-        matrix = expect_failure_amdgpu_family_info_matrix
+        matrix = amdgpu_family_matrix_xfail
 
         # Add all options that allow failures
-        for key in expect_failure_amdgpu_family_info_matrix:
+        for key in amdgpu_family_matrix_xfail:
             targets.append(key)
 
     # Ensure the targets in the list are unique

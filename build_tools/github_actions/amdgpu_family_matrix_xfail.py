@@ -2,7 +2,7 @@
 This AMD GPU Family Matrix is used to build and test for families that expect failure
 """
 
-expect_failure_amdgpu_family_info_matrix = {
+amdgpu_family_matrix_xfail = {
     "gfx90x": {
         "linux": {
             "test-runs-on": "",
