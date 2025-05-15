@@ -17,6 +17,10 @@ PLATFORM = platform.system().lower()
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd, shell=True)
+    print('\n\n\n\n')
+    print(str(process))
+    print('\n')
+    print(str(process.stderr))
     return process
 
 
@@ -54,15 +58,11 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    @pytest.mark.xfail(
-        PLATFORM == "windows",
-        reason="hipcc.exe for Windows is failing. Issue noted on #410",
-    )
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         hipcc_executable = "./hipcc" if PLATFORM == "linux" else "hipcc.exe"
         hipcc_check_executable = (
-            "./hipcc_check" if PLATFORM == "linux" else "hipcc_check"
+            "./hipcc_check" if PLATFORM == "linux" else "hipcc_check.exe"
         )
         run_command(
             [
