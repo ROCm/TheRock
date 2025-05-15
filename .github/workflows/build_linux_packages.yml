@@ -86,8 +86,15 @@ jobs:
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
           echo "Building package ${package_version}"
-          mkdir -p build/logs
-          touch build/logs/test_linux.log
+
+          # Build.
+          cmake -B build -GNinja . \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DTHEROCK_AMDGPU_FAMILIES=${{env.AMDGPU_FAMILIES}} \
+            -DTHEROCK_PACKAGE_VERSION="${package_version}" \
+            -DTHEROCK_VERBOSE=ON \
+            -DBUILD_TESTING=ON
+          cmake --build build --target therock-archives therock-dist
 
       - name: Test Packaging
         run: |
