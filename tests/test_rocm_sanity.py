@@ -62,20 +62,23 @@ class TestROCmSanity:
         # Compiling .cpp file using hipcc
         hipcc_executable = "./hipcc" if PLATFORM == "linux" else "hipcc.exe"
         hipcc_check_executable = (
-            "./hipcc_check" if PLATFORM == "linux" else "hipcc_check"
+            "hipcc_check" if PLATFORM == "linux" else "hipcc_check.exe"
         )
         run_command(
             [
                 hipcc_executable,
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                str(THEROCK_BIN_DIR / "hipcc_check"),
+                str(THEROCK_BIN_DIR / hipcc_check_executable),
             ],
             cwd=str(THEROCK_BIN_DIR),
         )
 
         # Running and checking the executable
-        process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
+        hipcc_output_exec = "./" + hipcc_check_executable if PLATFORM == "linux" else hipcc_check_executable
+        process = run_command([hipcc_output_exec], cwd=str(THEROCK_BIN_DIR))
+        run_command(["ls"], cwd=str(THEROCK_BIN_DIR))
+        run_command(["ls", str(THEROCK_BIN_DIR)], cwd=str(THEROCK_BIN_DIR))
         check.equal(process.returncode, 0)
         check.greater(os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable)), 0)
 
