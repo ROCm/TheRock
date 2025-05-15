@@ -58,23 +58,27 @@ class TestROCmSanity:
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         platform_executable_suffix = ".exe" if is_windows() else ""
-        hipcc_check_executable = f"hipcc_check{platform_executable_suffix}"
+        hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
         run_command(
             [
                 "hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                hipcc_check_executable,
+                hipcc_check_executable_file,
             ],
             cwd=str(THEROCK_BIN_DIR),
         )
 
         # Running and checking the executable
+        platform_executable_prefix = "./" if not is_windows() else ""
+        hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
         process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
         # TODO(geomin12): Fix Windows 3221225477 error code when running exe.
         if not is_windows():
             check.equal(process.returncode, 0)
-        check.greater(os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable)), 0)
+        check.greater(
+            os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable_file)), 0
+        )
 
     @pytest.mark.skipif(
         is_windows(),
