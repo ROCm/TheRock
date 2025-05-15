@@ -16,7 +16,7 @@ PLATFORM = platform.system().lower()
 
 
 def run_command(command, cwd=None):
-    process = subprocess.run(command, capture_output=True, cwd=cwd, shell=True)
+    process = subprocess.run(command, capture_output=True, cwd=cwd, shell=(PLATFORM == "windows"))
     print(str(process))
     return process
 
