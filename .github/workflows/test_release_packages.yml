@@ -94,6 +94,14 @@ jobs:
           source ${VENV_DIR}/bin/activate
           ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
 
+      - name: Determine to append notes or overwrite
+        if: '!cancelled()'
+        id: release_note
+        env:
+          TAG_NAME: ${{ env.TAG_NAME }}
+          VERSION: ${{ inputs.version }}
+        run: python build_tools/github_action/portable_release_note_script.py
+
       # Creating a markdown file for testing notes since environment variables cannot be resolved in markdown
       - name: Append results to markdown file
         if: '!cancelled()'
@@ -102,8 +110,6 @@ jobs:
           echo "* SANITY_CHECK=${{ steps.sanity-check.outcome }}" >> ${{ github.workspace }}/test_notes.md
           echo "* HIPBLASLT_CHECK=${{ steps.hipblaslt-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
           echo "* ROCBLAS_CHECK=${{ steps.rocblas-tests.outcome }}" >> ${{ github.workspace }}/test_notes.md
-          echo "" >> ${{ github.workspace }}/test_notes.md
-          echo "For previous test results, refer to the summary tab for the previous 'Test release package' workflow run" >> ${{ github.workspace }}/test_notes.md
           echo "$(<${{ github.workspace }}/test_notes.md )" >> $GITHUB_STEP_SUMMARY
 
       - name: Report test notes to the release body
@@ -112,3 +118,4 @@ jobs:
         with:
           tag_name: ${{ env.TAG_NAME }}
           body_path: ${{ github.workspace }}/test_notes.md
+          append_body: ${{ steps.release_note.append == 'true' }}
