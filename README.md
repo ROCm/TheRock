@@ -16,7 +16,7 @@ We keep the following instructions for recent, commonly used operating system ve
 
 ```bash
 # Install Ubuntu dependencies
-sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake python3-venv python3-dev libegl1-mesa-dev
+sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake python3-venv python3-dev libegl1-mesa-dev libdrm-dev
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
