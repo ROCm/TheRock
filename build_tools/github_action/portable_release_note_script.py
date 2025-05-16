@@ -42,9 +42,10 @@ def run():
             )
 
         release_data = json.loads(response.read().decode("utf-8"))
-        # Determine if today's version is in the release body
-        append_release_note = VERSION in release_data["body"]
-        set_github_output({"append": json.dumps(append_release_note)})
+        if VERSION:
+            # Determine if today's version is in the release body
+            append_release_note = VERSION in release_data["body"]
+            set_github_output({"append": json.dumps(append_release_note)})
 
 
 if __name__ == "__main__":
