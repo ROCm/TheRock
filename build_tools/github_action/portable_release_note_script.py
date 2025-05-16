@@ -1,9 +1,12 @@
-# This script determines whether to overwrite or append to the GitHub release body
-# based on if the specific release body contains today's version.
-#
-# Required environment variables:
-#   - TAG_NAME
-#   - VERSION
+"""
+This script determines whether to overwrite or append to the GitHub release body
+based on if the specific release body contains today's version.
+
+Required environment variables:
+  - TAG_NAME
+  - VERSION
+"""
+
 
 from configure_ci import set_github_output
 import json
