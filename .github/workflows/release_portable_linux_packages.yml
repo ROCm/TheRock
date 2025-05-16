@@ -189,7 +189,7 @@ jobs:
             --subdir=${{ matrix.target_bundle.amdgpu_family }} \
             --output=${{ env.OUTPUT_DIR }}/packages/dist/index.html
           # TODO: Integrate upload into `generate_release_index.py`
-          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/index.html s3://therock-${{ env.RELEASE_TYPE }}-python/${{ matrix.target_bundle.amdgpu_family }}/
+          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/index.html s3://${{ env.S3_PYTHON }}/${{ matrix.target_bundle.amdgpu_family }}/
 
       - name: Trigger testing nightly tarball
         if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
