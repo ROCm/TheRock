@@ -30,18 +30,18 @@ def parse_arguments():
     p.add_argument(
         "--bucket",
         required=True,
-        help="S3 bucket name",
+        help="S3 bucket which in which the subdirectory is indexed",
     )
     p.add_argument(
         "--endpoint",
         default="s3.us-east-2.amazonaws.com",
-        help="S3 endpoint",
+        help="S3 endpoint used to form the URL",
     )
     p.add_argument(
         "--subdir",
         "--subdirectory",
         required=True,
-        help="Subdirectory in S3 bucket",
+        help="Subdirectory in S3 bucket which is indexed",
     )
     p.add_argument(
         "--output",
