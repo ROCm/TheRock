@@ -58,6 +58,5 @@ export CMAKE_PREFIX_PATH="$(realpath ../../build/dist/rocm)"
 On Windows:
 
 ```bash
-# First make local edits to e.g. PYTORCH_ROCM_ARCH and PYTORCH_SRC_DIR, then...
-bash build_pytorch_windows.sh
+bash build_pytorch_windows.sh gfx1100
 ```

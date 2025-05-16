@@ -2,8 +2,20 @@
 
 # Windows equivalent to the Linux build_pytorch_torch.sh.
 # TODO: merge into `ptbuild.py develop` or `ptbuild.py bdist_wheel` somehow?
+#
+# Usage (choose your gfx target to match -DTHEROCK_AMDGPU_FAMILIES from the build):
+#   bash build_pytorch_windows.sh gfx1100
+#   bash build_pytorch_windows.sh gfx1151
 
 set -eo pipefail
+
+if [ -n "$1" ]; then
+    export PYTORCH_ROCM_ARCH=$1
+    echo "Setting PYTORCH_ROCM_ARCH to $PYTORCH_ROCM_ARCH"
+elif [ -z "$PYTORCH_ROCM_ARCH" ]; then
+    echo "PYTORCH_ROCM_ARCH must be set as an env var or passed as a script arg"
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
 
@@ -33,11 +45,6 @@ export HIP_CLANG_PATH="${ROCM_HOME?}/lib/llvm/bin"
 export CC=${ROCM_HOME?}/lib/llvm/bin/clang-cl
 export CXX=${ROCM_HOME?}/lib/llvm/bin/clang-cl
 export DISTUTILS_USE_SDK=1
-
-# Match this with `-DTHEROCK_AMDGPU_FAMILIES` used to bulid TheRock.
-# TODO: pull from environment variable, option, etc.?
-export PYTORCH_ROCM_ARCH=gfx1100
-# export PYTORCH_ROCM_ARCH=gfx1151
 
 # Alternate paths relative to this script: 'src/', 'src/pytorch/'.
 PYTORCH_SRC_DIR="${SCRIPT_DIR?}/pytorch"
