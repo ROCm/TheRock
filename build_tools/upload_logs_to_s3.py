@@ -1,4 +1,3 @@
-# === Updated build_tools/upload_logs_to_s3.py ===
 #!/usr/bin/env python3
 """
 upload_logs_to_s3.py
