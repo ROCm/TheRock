@@ -167,7 +167,7 @@ python ./build_tools/fetch_sources.py
 ### Install Python dependencies
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
