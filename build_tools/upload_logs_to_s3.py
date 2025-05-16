@@ -67,12 +67,15 @@ def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
 def main():
     check_aws_cli_available()
 
+    repo_root = Path(__file__).resolve().parent.parent
+    default_build_dir = repo_root / "build"
+
     parser = argparse.ArgumentParser(description="Upload logs to S3.")
     parser.add_argument(
         "--build-dir",
         type=Path,
-        default=Path("build"),
-        help="Path to the build directory (default: build)",
+        default=default_build_dir,
+        help="Path to the build directory (default: <repo_root>/build)",
     )
     parser.add_argument(
         "--s3-base-path",
