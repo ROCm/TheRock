@@ -1,7 +1,7 @@
-From dbb4f0f4452015b674e8db96752464069e51c3ff Mon Sep 17 00:00:00 2001
+From e92b736fbbaffd4b3b128684501a4714ee43c0d2 Mon Sep 17 00:00:00 2001
 From: ikalinic <ilija.kalinic@amd.com>
 Date: Wed, 19 Mar 2025 07:30:50 +0000
-Subject: [PATCH 12/12] Disable hipSPARSE and CK declarations and remove
+Subject: [PATCH 12/13] Disable hipSPARSE and CK declarations and remove
  references for Windows (#149195)
 
 This PR removes references to `hipSPARSE` and `ck` functions and disables declarations which are not supported on Windows.

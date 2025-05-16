@@ -1,7 +1,7 @@
-From db731ac5cb486e5d2c0fe24ea33a7aab2f9950da Mon Sep 17 00:00:00 2001
+From 8cd9e4fec0dbf0337723c8ca9d66846d05774fb4 Mon Sep 17 00:00:00 2001
 From: Mika Laitio <lamikr@gmail.com>
 Date: Sat, 22 Mar 2025 08:51:34 -0700
-Subject: [PATCH 08/12] rocm clang version check fix
+Subject: [PATCH 08/13] rocm clang version check fix
 
 clang in rocm sdk 6.3.3 returns 18.0git as a version.
 fix this by adding a check which converts it to

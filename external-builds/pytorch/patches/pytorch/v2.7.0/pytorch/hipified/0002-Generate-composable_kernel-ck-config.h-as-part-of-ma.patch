@@ -1,7 +1,7 @@
-From 16b6619e27958d06fa5c6d0e7d8d629d1d1636db Mon Sep 17 00:00:00 2001
+From 747afb477a4cbed44296028530298defa6e70808 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Wed, 19 Feb 2025 17:14:59 -0800
-Subject: [PATCH 02/12] Generate composable_kernel ck/config.h as part of main
+Subject: [PATCH 02/13] Generate composable_kernel ck/config.h as part of main
  build.
 
 Without this, the ck/config.h comes from somewhere, most probably a ROCM SDK that has it installed as a sibling to the HIP headers. Not all ROCM SDKs include this, and even so, it is dangerous to have a sheared header dependency like this.

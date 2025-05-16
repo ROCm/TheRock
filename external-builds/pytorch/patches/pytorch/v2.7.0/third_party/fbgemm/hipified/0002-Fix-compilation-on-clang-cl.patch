@@ -1,7 +1,7 @@
-From e4ee6caa8309b0685c574a81b7468e6bf57d86ef Mon Sep 17 00:00:00 2001
+From 2450ff31ba63fb12c709126ae59588109b0a2fcc Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Sun, 4 May 2025 22:31:15 +0530
-Subject: [PATCH] Fix compilation on clang-cl
+Subject: [PATCH 2/2] Fix compilation on clang-cl
 
 ---
  include/fbgemm/Fbgemm.h | 2 +-
@@ -19,6 +19,7 @@ index eb1f3a01..4d94e22f 100644
 +  static bool isA() {
      return PT::isA();
    }
+ 
+-- 
+2.47.1.windows.2
 
---
-2.49.0.windows.1
