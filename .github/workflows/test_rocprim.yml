@@ -26,6 +26,7 @@ on:
   push:
     branches:
       - ADHOCBUILD
+
 permissions:
   contents: read
 
