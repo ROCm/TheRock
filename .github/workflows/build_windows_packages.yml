@@ -217,7 +217,6 @@ jobs:
 
       # TODO: Move to script
       - name: Upload Artifacts
-        if: always()
         shell: powershell
         run: |
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
