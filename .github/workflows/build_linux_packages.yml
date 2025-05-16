@@ -24,13 +24,14 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build_linux_packages:
     name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
     runs-on: azure-linux-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
+    permissions:
+      id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     strategy:

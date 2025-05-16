@@ -12,6 +12,9 @@ on:
       target:
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   generate_target_to_run:
     runs-on: ubuntu-24.04

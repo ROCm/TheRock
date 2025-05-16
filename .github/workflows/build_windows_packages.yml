@@ -26,12 +26,13 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build_windows_packages:
     name: Build Windows Packages
     runs-on: azure-windows-scale-rocm
+    permissions:
+      id-token: write
     defaults:
       run:
         shell: bash

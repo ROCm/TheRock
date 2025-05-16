@@ -27,6 +27,9 @@ on:
     branches:
       - ADHOCBUILD
 
+permissions:
+  contents: read
+
 jobs:
   test_rocthrust:
     name: "rocTHRUST math-lib test"

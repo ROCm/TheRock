@@ -19,6 +19,9 @@ on:
     branches:
       - ADHOCBUILD
 
+permissions:
+  contents: read
+
 jobs:
   test_sanity_check:
     name: "Sanity ROCM Test"
