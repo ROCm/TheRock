@@ -61,7 +61,7 @@ def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
         run_aws_cp(index_path, index_s3_dest, content_type="text/html")
         log(f"[INFO] Uploaded {index_path} to {index_s3_dest}")
     else:
-        log("[INFO] No index.html found. Skipping index upload.")
+        log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
 def main():
