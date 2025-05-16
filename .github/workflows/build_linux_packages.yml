@@ -8,6 +8,16 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+        description: "(etc. gfx110X-dgpu)"
+      project_name:
+        type: string
+        description: "name of subproject (etc. hipBLASLt) to configure remote url and branch to fetch. (disable w/ null name and url)"
+      project_seturl:
+        type: string
+        description: "url of subproject (etc. https://github.com/ROCm/hipBLASLt) (disable w/ null name and url)"
+      project_branch:
+        type: string
+        description: "name of branch (etc. develop) to configure remote url and branch to fetch"
 
   workflow_call:
     inputs:
@@ -16,6 +26,16 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+        description: "(etc. gfx110X-dgpu)"
+      project_name:
+        type: string
+        description: "name of subproject (etc. hipBLASLt) to configure remote url and branch to fetch. (disable w/ null name and url)"
+      project_seturl:
+        type: string
+        description: "url of subproject (etc. https://github.com/ROCm/hipBLASLt) (disable w/ null name and url)"
+      project_branch:
+        type: string
+        description: "name of branch (etc. develop) to configure remote url and branch to fetch"
 
 permissions:
   contents: read
@@ -63,8 +83,65 @@ jobs:
           restore-keys: |
             linux-build-packages-manylinux-v2-
 
+      - name: Fetch submodule from remote
+        run: |
+          proj_name="${{ inputs.project_name }}"
+          proj_branch="${{ inputs.project_branch }}"
+          proj_seturl="${{ inputs.project_seturl }}"
+
+          echo "[*] Fetch submodule from remote using GHA inputs:"
+          echo "     proj_name: [$proj_name]"
+          echo "     proj_path: [$proj_submodule_path]"
+          echo "     proj_seturl: [$proj_seturl]"
+          echo "     proj_branch: [$proj_branch]"
+
+          #Only update submodule if set in github action inputs
+          if [ "$proj_name" ] || [ "$proj_seturl" ]; then
+            if [ ! "$proj_name" ]; then
+              proj_name=$(basename "$proj_seturl")
+              echo "[*] proj_name GHA Input not set, deriving from proj_seturl: [$proj_name]"
+            else
+              echo "[*] proj_name GHA Input set to: [$proj_name]"
+            fi
+
+            proj_submodule_path=$(git config --file .gitmodules --get submodule.$proj_name.path)
+
+            if [ "$proj_submodule_path" ]; then
+              echo "[*] Existing submodule config for [$proj_name]:"
+              git config --file .gitmodules --get-regexp ^submodule.$proj_name\.
+
+              echo "[*] Submodule status [$proj_name]:$(git submodule status -- $proj_submodule_path)"
+
+              echo "[*] Setting remote url and branch for submodule [$proj_name]"
+
+              [ "$proj_seturl" ] && git submodule set-url -- $proj_submodule_path $proj_seturl
+              [ "$proj_branch" ] && git submodule set-branch --branch $proj_branch -- $proj_submodule_path
+
+              echo "[*] Modified submodule config for [$proj_name]:"
+              git config --file .gitmodules --get-regexp ^submodule.$proj_name\.
+
+
+              echo "[*] Fetching latest submodule commit from remote"
+              git submodule sync -- $proj_submodule_path
+              git submodule update --init --remote --force -- $proj_submodule_path
+              if [ $? -gt 0 ]; then
+                echo "[-] Could not update submodule from remote. Aborting..."
+              else
+                echo "[+] Bump submodule [$proj_name]:$(git submodule status -- $proj_submodule_path)"
+                git \
+                  -c user.name=therockbot \
+                  -c user.email=therockbot@amd.com \
+                  commit -a -m "Bump submodule $proj_name with its remote for parent project"
+              fi
+            else
+              echo "[-] Could not find submodule path. Aborting..."
+            fi
+          else
+            echo [*] No project name or url specicfied. Skipping submodule fetch...
+          fi
       - name: Fetch sources
         run: |
+          #Continue with normal fetching of sources
           ./build_tools/fetch_sources.py --jobs 12
 
       - name: Install python deps
