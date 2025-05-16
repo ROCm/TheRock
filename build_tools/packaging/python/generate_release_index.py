@@ -53,7 +53,8 @@ def get_objects(bucket_name: str, subdir: str):
     all_objects = bucket.objects.filter(Prefix=subdir)
 
     objects = [obj.key.split(subdir + "/")[1] for obj in all_objects]
-    objects.remove("index.html")
+    if "index.html" in objects:
+        objects.remove("index.html")
 
     return objects
 
