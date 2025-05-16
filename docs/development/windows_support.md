@@ -44,14 +44,14 @@ mainline, in open source, using MSVC, etc.).
 | math-libs        | [rocThrust](https://github.com/ROCm/rocThrust)                               | ✅        |                                                                                      |
 | math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ✅        | No shared libraries                                                                  |
 | math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ✅        | No shared libraries                                                                  |
-| math-libs (blas) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ✅        |                                                                                      |
-| math-libs (blas) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ✅        |                                                                                      |
-| math-libs (blas) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
-| math-libs (blas) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
-| math-libs (blas) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
-| math-libs (blas) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ✅        |                                                                                      |
-| math-libs (blas) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
-| math-libs (blas) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
+| math-libs (BLAS) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ✅        |                                                                                      |
+| math-libs (BLAS) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ✅        |                                                                                      |
+| math-libs (BLAS) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
+| math-libs (BLAS) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
+| math-libs (BLAS) | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
+| math-libs (BLAS) | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                               | ✅        |                                                                                      |
+| math-libs (BLAS) | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
+| math-libs (BLAS) | [hipBLAS](https://github.com/ROCm/hipBLAS)                                   | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
 |                  |                                                                              |           |                                                                                      |
 | ml-libs          | [MIOpen](https://github.com/ROCm/MIOpen)                                     | ✅        |                                                                                      |
 
