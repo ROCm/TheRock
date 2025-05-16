@@ -15,6 +15,12 @@ pip list
 echo 'Install pytest'
 PIP_BREAK_SYSTEM_PACKAGES=1 pip install --no-index --find-links=/wheels pytest;
 echo 'Run smoke tests'
-pytest -v external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py
+pytest -v external-builds/pytorch/smoke-tests/pytorch_smoke_tests.py | tee pytest_output.log
 
-echo 'Task completed!'
+# Fail if any tests were skipped
+if grep -q "SKIPPED=" pytest_output.log; then
+  echo "One or more tests were skipped. Failing the build."
+  exit 1
+fi
+
+echo 'Task completed successfully with no skipped tests.'
