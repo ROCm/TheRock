@@ -10,6 +10,11 @@ Sample usage:
         --subdir=gfx110X-dgpu \
         --output=index.html
     ```
+
+S3 buckets in `us-east-2` currently used are:
+
+    * `therock-dev-python`
+    * `therock-nightly-python`
 """
 
 import argparse
