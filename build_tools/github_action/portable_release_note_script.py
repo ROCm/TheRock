@@ -23,15 +23,13 @@ def run():
     request = Request(github_release_url, headers=headers)
     with urlopen(request) as response:
         if response.status == 403:
-            print(
+            raise Exception(
                 f"Error when retrieving GitHub release assets for release tag '{TAG_NAME}'. This is most likely a rate limiting issue, so please try again"
             )
-            return
         elif response.status != 200:
-            print(
+            raise Exception(
                 f"Error when retrieving GitHub release assets for release tag '{TAG_NAME}' with status code {response.status}. Exiting..."
             )
-            return
 
         release_data = json.loads(response.read().decode("utf-8"))
         append_release_note = VERSION in release_data["body"]
