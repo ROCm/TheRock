@@ -1,3 +1,10 @@
+# This script determines whether to overwrite or append to the GitHub release body
+# based on if the specific release body contains today's version.
+#
+# Required environment variables:
+#   - TAG_NAME
+#   - VERSION
+
 from configure_ci import set_github_output
 import json
 import os
@@ -32,6 +39,7 @@ def run():
             )
 
         release_data = json.loads(response.read().decode("utf-8"))
+        # Determine if today's version is in the release body
         append_release_note = VERSION in release_data["body"]
         set_github_output({"append": json.dumps(append_release_note)})
 

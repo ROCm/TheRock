@@ -94,7 +94,7 @@ jobs:
           source ${VENV_DIR}/bin/activate
           ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
 
-      - name: Determine to append notes or overwrite
+      - name: Determine to append or overwrite to release body
         if: '!cancelled()'
         id: release_note
         env:
