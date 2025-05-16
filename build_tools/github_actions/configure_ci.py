@@ -117,6 +117,18 @@ SKIPPABLE_PATH_PATTERNS = [
     "*.md",
     "*.pre-commit-config.*",
     "*LICENSE",
+    # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
+    # At time of writing, workflows run in this sequence:
+    #   `ci.yml`
+    #   `ci_linux.yml`
+    #   `build_linux_packages.yml`
+    #   `test_linux_packages.yml`
+    #   `test_[rocm subproject].yml`
+    # If we add external-builds tests there, we can revisit this, maybe leaning
+    # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
+    # workflows efficient when only nodes closer to the edges of the build graph
+    # are changed.
+    "external-builds/*",
 ]
 
 
