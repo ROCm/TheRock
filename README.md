@@ -1,12 +1,6 @@
 # TheRock
 
-[![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml)
-
-[![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml)
-
-[![Publish PyTorch Dev Dockers](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml)
-
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain) [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) [![Publish PyTorch Dev Dockers](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml?query=branch%3Amain)
 
 ## Description
 
