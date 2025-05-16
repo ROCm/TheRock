@@ -6,6 +6,7 @@ from urllib.request import urlopen, Request
 TAG_NAME = os.getenv("TAG_NAME")
 VERSION = os.getenv("VERSION")
 
+
 def run():
     github_release_url = (
         f"https://api.github.com/repos/ROCm/TheRock/releases/tags/{TAG_NAME}"
@@ -35,6 +36,7 @@ def run():
         release_data = json.loads(response.read().decode("utf-8"))
         append_release_note = VERSION in release_data["body"]
         set_github_output({"append": json.dumps(append_release_note)})
+
 
 if __name__ == "__main__":
     run()
