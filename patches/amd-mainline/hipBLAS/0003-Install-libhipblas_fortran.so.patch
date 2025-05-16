@@ -1,7 +1,7 @@
-From dd4f3e3b5673f14199715d1ef9f766b586e17709 Mon Sep 17 00:00:00 2001
+From cbef28b246697fcc9469c12646ea7cb189b1081f Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 1 Apr 2025 20:58:38 +0000
-Subject: [PATCH 3/9] Install `libhipblas_fortran.so`
+Subject: [PATCH 3/7] Install `libhipblas_fortran.so`
 
 This is required by the test and benchmark clients but was not part of
 the installation so far.
@@ -10,7 +10,7 @@ the installation so far.
  1 file changed, 1 insertion(+)
 
 diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
-index ceee022..5da9875 100755
+index 3cb9b77..a1bad50 100755
 --- a/library/src/CMakeLists.txt
 +++ b/library/src/CMakeLists.txt
 @@ -54,6 +54,7 @@ set (hipblas_f90_source
@@ -22,5 +22,5 @@ index ceee022..5da9875 100755
  
  if(BUILD_ADDRESS_SANITIZER)
 -- 
-2.47.1.windows.2
+2.43.0
 

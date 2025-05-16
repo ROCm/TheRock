@@ -1,3 +1,17 @@
+# This CI workflow is triggered by:
+#   - push to main branch
+#   - pull request
+#   - workflow dispatch
+#
+# For pull requests, we run default builds and tests for:
+#   - Linux: gfx94X gfx110X
+#   - Windows: gfx110X
+# If you want to trigger jobs for additional targets, please add a defined label (ex: gfx120X-linux) to the pull request
+#
+# For push to main branch, all AMD families will built and tested from `amdgpu_family_matrix.py`.
+#
+# Note: If a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
+
 name: CI
 
 on:
@@ -64,6 +78,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
     permissions:
+      contents: read
       id-token: write
 
   windows_build_and_test:
@@ -81,7 +96,10 @@ jobs:
     uses: ./.github/workflows/ci_windows.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
-      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == 'true' && 'true' || 'false' }}
+      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+    permissions:
+      contents: read
+      id-token: write
 
   # build_python_packages:
   #   name: Build Python Packages

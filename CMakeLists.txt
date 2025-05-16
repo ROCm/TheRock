@@ -82,6 +82,23 @@ block(PROPAGATE ROCM_MAJOR_VERSION ROCM_MINOR_VERSION ROCM_PATCH_VERSION)
   endif()
 endblock()
 
+# Various things need to be lined up across layers to precisely match the HIP version.
+# The only source of truth for this is from the HIP/VERSION file, so we parse it the
+# same way that clr does. While this *should* generally match the ROCM version, at
+# least from a major/minor perspective, the ROCM version is a "user" version, whereas
+# the HIP version is hardcoded into various places in the code.
+block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
+  set(VERSION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/core/HIP/VERSION")
+  if(NOT EXISTS "${VERSION_PATH}")
+    message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
+  endif()
+  file(STRINGS "${VERSION_PATH}" VERSION_LIST REGEX "^[0-9]+")
+  list(GET VERSION_LIST 0 THEROCK_HIP_MAJOR_VERSION)
+  list(GET VERSION_LIST 1 THEROCK_HIP_MINOR_VERSION)
+  list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
+  message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
+endblock()
+
 ################################################################################
 # Debug Options
 ################################################################################

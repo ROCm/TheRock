@@ -112,6 +112,18 @@ SKIPPABLE_PATH_PATTERNS = [
     "*.md",
     "*.pre-commit-config.*",
     "*LICENSE",
+    # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
+    # At time of writing, workflows run in this sequence:
+    #   `ci.yml`
+    #   `ci_linux.yml`
+    #   `build_linux_packages.yml`
+    #   `test_linux_packages.yml`
+    #   `test_[rocm subproject].yml`
+    # If we add external-builds tests there, we can revisit this, maybe leaning
+    # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
+    # workflows efficient when only nodes closer to the edges of the build graph
+    # are changed.
+    "external-builds/*",
 ]
 
 
@@ -127,12 +139,12 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
     return any(not is_path_skippable(p) for p in paths)
 
 
-# TODO(#199): rename all of these to `ci_*.yml` so this is easier to understand?
 GITHUB_WORKFLOWS_CI_PATTERNS = [
-    "ci.yml",
     "setup.yml",
-    "build_*_packages.yml",
-    "test_*_packages.yml",
+    "ci*.yml",
+    "build*package*.yml",
+    "test*packages.yml",
+    "test*.yml",  # This may be too broad, but there are many test workflows.
 ]
 
 

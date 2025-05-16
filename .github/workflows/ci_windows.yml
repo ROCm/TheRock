@@ -11,6 +11,12 @@ on:
         type: string
       windows_use_prebuilt_artifacts:
         type: string
+      extra_cmake_options:
+        type: string
+        default: "-DBUILD_TESTING=ON"
+
+permissions:
+  contents: read
 
 jobs:
   build_windows_packages:
@@ -19,3 +25,7 @@ jobs:
     uses: ./.github/workflows/build_windows_packages.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      extra_cmake_options: ${{ inputs.extra_cmake_options }}
+    permissions:
+      contents: read
+      id-token: write

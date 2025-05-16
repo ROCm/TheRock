@@ -13,8 +13,19 @@ class ConfigureCITest(TestCase):
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertFalse(run_ci)
 
+    def test_dont_run_ci_if_only_external_builds_edited(self):
+        paths = ["external-builds/pytorch/CMakeLists.txt"]
+        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
+        self.assertFalse(run_ci)
+
     def test_run_ci_if_related_workflow_file_edited(self):
         paths = [".github/workflows/ci.yml"]
+        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
+        self.assertTrue(run_ci)
+        paths = [".github/workflows/build_package.yml"]
+        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
+        self.assertTrue(run_ci)
+        paths = [".github/workflows/test_some_subproject.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
 

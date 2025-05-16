@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       families:
-        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x). Please note that docker builds only work for prebuilds available here https://github.com/ROCm/TheRock/releases/tag/nightly-release"
+        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x). Please note that docker builds only work for prebuilds available here https://github.com/ROCm/TheRock/releases/tag/nightly-tarball"
         type: string
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
@@ -52,9 +52,6 @@ jobs:
           echo "Git version: $(git --version)"
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
-
-      - name: Generate unique dispatch ID
-        run: echo "DISPATCH_ID=dispatch-${{ matrix.targets.amdgpu_family }}-${{ github.run_id }}" >> $GITHUB_ENV
 
       - name: Fetch sources
         run: |
@@ -105,7 +102,7 @@ jobs:
       - name: Trigger verification workflow
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
-          workflow: verify_docker_image.yml
+          workflow: test_pytorch_docker.yml
           inputs: |
             {
               "amdgpu_target": "${{ matrix.targets.amdgpu_family }}",
@@ -116,6 +113,5 @@ jobs:
                 (matrix.targets.amdgpu_family == 'gfx1100' && 'linux-rx7900-gpu-rocm') ||
                 'linux-mi300-1gpu-ossci-rocm'
               }}",
-              "dispatch_id": "${{ env.DISPATCH_ID }}",
               "version": "${{ env.VERSION }}"
             }
