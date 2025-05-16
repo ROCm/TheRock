@@ -26,6 +26,8 @@ on:
   push:
     branches:
       - ADHOCBUILD
+permissions:
+  contents: read
 
 jobs:
   test_rocprim:

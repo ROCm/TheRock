@@ -27,6 +27,9 @@ on:
     branches:
       - ADHOCBUILD
 
+permissions:
+  contents: read
+
 jobs:
   test_hipcub:
     name: "hipCUB math-lib test"
