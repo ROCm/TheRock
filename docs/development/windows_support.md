@@ -182,7 +182,9 @@ cd TheRock
 python -m venv .venv
 .venv\Scripts\Activate.bat
 pip install -r requirements.txt
-python ./build_tools/fetch_sources.py  # Downloads submodules and applies patches
+
+# Download submodules and apply patches
+python ./build_tools/fetch_sources.py
 ```
 
 ### Build configuration
@@ -255,12 +257,16 @@ ctest --test-dir build/math-libs/rocPRIM/dist/bin/rocprim --output-on-failure
 
 #### `No such file or directory: (long path to a source file)`
 
-Ensure that you have long path support enabled in git (see
+If the build looks for a source file with a long path that does not exist,
+ensure that you have long path support enabled in git (see
 [Important tool settings](#important-tool-settings)), then re-run
 
 ```bash
 python ./build_tools/fetch_sources.py
 ```
+
+Once the git operations have run with the new setting, confirm that the missing
+files now exist.
 
 #### `error: directive requires gfx90a+`
 

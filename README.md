@@ -47,7 +47,9 @@ cd TheRock
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
+
+# Download submodules and apply patches
+python ./build_tools/fetch_sources.py
 ```
 
 ### Setup - Windows 11 (VS 2022)
@@ -74,7 +76,9 @@ cd TheRock
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python ./build_tools/fetch_sources.py  # Downloads submodules and applies patches
+
+# Download submodules and apply patches
+python ./build_tools/fetch_sources.py
 ```
 
 ### Build configuration
