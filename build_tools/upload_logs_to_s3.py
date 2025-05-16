@@ -20,7 +20,7 @@ def log(*args, **kwargs):
 
 
 def check_aws_cli_available():
-    if shutil.which("aws") is None:
+    if not shutil.which("aws"):
         log("[ERROR] AWS CLI not found in PATH.")
         sys.exit(1)
 
