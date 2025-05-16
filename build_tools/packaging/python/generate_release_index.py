@@ -30,7 +30,7 @@ def parse_arguments():
     p.add_argument(
         "--bucket",
         required=True,
-        help="S3 bucket which in which the subdirectory is indexed",
+        help="S3 bucket in which the subdirectory is indexed",
     )
     p.add_argument(
         "--endpoint",
