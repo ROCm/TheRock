@@ -73,7 +73,7 @@ jobs:
         env:
           PYTORCH_DEV_DOCKER: "false"
           AMDGPU_FAMILIES: ${{ inputs.families }}
-        run: python ./build_tools/github_action/fetch_package_targets.py
+        run: python ./build_tools/github_actions/fetch_package_targets.py
 
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
