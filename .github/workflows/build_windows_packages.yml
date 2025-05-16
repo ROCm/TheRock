@@ -241,7 +241,7 @@ jobs:
           LOG_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/index.html"
           echo "[Build Logs](${LOG_URL})" >> $GITHUB_STEP_SUMMARY
 
-          ARTIFACT_INDEX=build/artifacts/index.html
+          ARTIFACT_INDEX="${{ env.BASE_BUILD_DIR_POWERSHELL }}/artifacts/index.html"
           if [ -f "${ARTIFACT_INDEX}" ]; then
             ARTIFACT_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html"
 
