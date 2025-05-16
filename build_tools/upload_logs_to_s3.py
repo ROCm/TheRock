@@ -25,11 +25,11 @@ def check_aws_cli_available():
         sys.exit(1)
 
 
-def run_aws_cp(source_directory: Path, s3_destination: str, content_type: str = None):
-    if source_directory.is_dir():
-        cmd = ["aws", "s3", "cp", str(source_directory), s3_destination, "--recursive"]
+def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None):
+    if source_path.is_dir():
+        cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
     else:
-        cmd = ["aws", "s3", "cp", str(source_directory), s3_destination]
+        cmd = ["aws", "s3", "cp", str(source_path), s3_destination]
 
     if content_type:
         cmd += ["--content-type", content_type]
@@ -37,7 +37,7 @@ def run_aws_cp(source_directory: Path, s3_destination: str, content_type: str = 
         log(f"[INFO] Running: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
-        log(f"[ERROR] Failed to upload {source_directory} to {s3_destination}: {e}")
+        log(f"[ERROR] Failed to upload {source_path} to {s3_destination}: {e}")
 
 
 def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
