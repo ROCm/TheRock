@@ -27,7 +27,7 @@ For PyTorch with ROCm:
 
 |         | PyTorch source build                                                | PyTorch Python packages | PyTorch Docker images |
 | ------- | ------------------------------------------------------------------- | ----------------------- | --------------------- |
-| Linux   | ✅ Supported                                                        | ✅ Supported            | ✅ Supported          |
+| Linux   | ✅ Supported                                                        | ⚪ Planned              | ✅ Supported          |
 | Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned              | N/A                   |
 
 ## Building from source
@@ -81,7 +81,7 @@ python ./build_tools/fetch_sources.py  # Downloads submodules and applies patche
 
 The build can be customized through cmake feature flags.
 
-#### Required configure flags
+#### Required configuration flags
 
 - `-DTHEROCK_AMDGPU_FAMILIES=`
 
@@ -94,10 +94,10 @@ The build can be customized through cmake feature flags.
 > See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file
 > for available options.
 
-#### Optional configure flags
+#### Optional configuration flags
 
 By default, the project builds everything available. The following group flags
-allow enable/disable of selected subsets:
+enable/disable selected subsets:
 
 | Group flag                       | Description                          |
 | -------------------------------- | ------------------------------------ |
