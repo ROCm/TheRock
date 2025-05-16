@@ -37,7 +37,7 @@ def s3_exec(variant, package, run_id, build_dir):
         "s3",
         "cp",
         f"s3://therock-artifacts/{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
-        build_dir,
+        str(build_dir),
         "--no-sign-request",
     ]
     log(f"++ Exec [{cmd}]")

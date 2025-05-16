@@ -25,7 +25,12 @@ amdgpu_family_info_matrix = {
         },
     },
     "gfx115x": {
-        "linux": {"test-runs-on": "", "family": "gfx1151", "pytorch-target": "gfx1151"}
+        "linux": {"test-runs-on": "", "family": "gfx1151", "pytorch-target": "gfx1151"},
+        "windows": {
+            "test-runs-on": "windows-strix-halo-gpu-rocm",
+            "family": "gfx1151",
+            "pytorch-target": "gfx1151",
+        },
     },
     "gfx120x": {
         "linux": {
