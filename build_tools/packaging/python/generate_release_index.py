@@ -58,21 +58,26 @@ def get_objects(bucket_name: str, subdir: str):
     return objects
 
 
-def add_releases(objects: list, base_url: str, file: io.TextIOWrapper):
+def add_releases(objects: list, base_url: str, subdir: str, file: io.TextIOWrapper):
 
     file.write(
-        f'    <h2>Packages at <a href="https://{base_url}">{base_url}</a></h2>\n'
+        f'    <h2> <a href="https://github.com/ROCm/TheRock">ROCm/TheRock</a> {subdir} packages</h2>\n'
     )
 
     for obj in objects:
-        url = html.escape(f"https://{base_url}/{obj}")
+        url = html.escape(f"{base_url}/{obj}")
         name = html.escape(obj)
         file.write(f"    <a href={url}>{name}</a><br>\n")
+
+    file.write(
+        "    <br><hr>\n"
+        f'    This file was auto-generated with <a href="https://github.com/ROCm/TheRock/blob/main/build_tools/packaging/python/generate_release_index.py">generate_release_index.py</a>.\n'
+    )
 
 
 def main(args):
     objects = get_objects(args.bucket, args.subdir)
-    url = f"{args.bucket}.{args.endpoint}/{args.subdir}"
+    url = f"https://{args.bucket}.{args.endpoint}/{args.subdir}"
 
     with sys.stdout if args.output == "-" else open(args.output, "w") as f:
         f.write(
@@ -104,7 +109,7 @@ def main(args):
             """
             )
         )
-        add_releases(objects, url, f)
+        add_releases(objects, url, args.subdir, f)
         f.write(
             textwrap.dedent(
                 """\
