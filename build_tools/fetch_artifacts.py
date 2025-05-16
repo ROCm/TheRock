@@ -6,20 +6,30 @@
 # but those artifacts may not have all required dependencies.
 
 import argparse
+import concurrent.futures
 import platform
+import shlex
 import subprocess
 import sys
+
+
+class ArtifactNotFoundException(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
-
+# TODO(geomin12): switch out logging library
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
 
 
 def s3_bucket_exists(run_id):
+    """Checks that the AWS S3 bucket exists."""
     cmd = [
         "aws",
         "s3",
@@ -31,24 +41,54 @@ def s3_bucket_exists(run_id):
     return process.returncode == 0
 
 
-def s3_exec(variant, package, run_id, build_dir):
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        f"s3://therock-artifacts/{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
-        build_dir,
-        "--no-sign-request",
-    ]
-    log(f"++ Exec [{cmd}]")
+def s3_commands_for_artifacts(artifacts, run_id, build_dir, variant):
+    """Collects AWS S3 copy commands to execute later in parallel."""
+    cmds = []
+    for artifact in artifacts:
+        cmds.append(
+            [
+                "aws",
+                "s3",
+                "cp",
+                f"s3://therock-artifacts/{run_id}/{artifact}_{variant}.tar.xz",
+                build_dir,
+                "--no-sign-request",
+            ]
+        )
+    return cmds
+
+
+def subprocess_run(cmd):
+    """Runs a command via subprocess run."""
     try:
-        subprocess.run(cmd, check=True)
-    except Exception as ex:
-        log(f"Exception when executing [{cmd}]")
+        log(f"++ Exec '{shlex.join(cmd)}'")
+        process = subprocess.run(cmd, capture_output=True)
+        if process.returncode == 1:
+            # Fetching is done at a best effort. If an artifact is not found, it doesn't trigger any errors
+            if "(404)" in str(process.stderr):
+                raise ArtifactNotFoundException(
+                    f"Artifact not found for '{shlex.join(cmd)}'"
+                )
+            else:
+                raise Exception(process.stderr)
+        log(f"++ Exec complete '{shlex.join(cmd)}'")
+    except ArtifactNotFoundException as ex:
         log(str(ex))
+    except Exception as ex:
+        log(str(ex))
+        sys.exit(1)
+
+
+def parallel_exec_commands(cmds):
+    """Runs parallelized subprocess commands using a thread pool executor"""
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(subprocess_run, cmd) for cmd in cmds]
+        for future in concurrent.futures.as_completed(futures):
+            future.result(timeout=60)
 
 
 def retrieve_base_artifacts(args, run_id, build_dir):
+    """Retrieves TheRock base artifacts using AWS S3 copy."""
     base_artifacts = [
         "core-runtime_run",
         "core-runtime_lib",
@@ -64,11 +104,16 @@ def retrieve_base_artifacts(args, run_id, build_dir):
     if args.blas:
         base_artifacts.append("host-blas_lib")
 
-    for base_artifact in base_artifacts:
-        s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
+    cmds = s3_commands_for_artifacts(base_artifacts, run_id, build_dir, GENERIC_VARIANT)
+    parallel_exec_commands(cmds)
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir):
+    """Retrieves TheRock artifacts using AWS S3 copy, based on the enabled arguments.
+
+    If no artifacts have been collected, we assume that we want to install all artifacts
+    If `args.tests` have been enabled, we also collect test artifacts
+    """
     artifact_paths = []
     all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
     # RCCL is disabled for Windows
@@ -99,8 +144,8 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
-    for enabled_artifact in enabled_artifacts:
-        s3_exec(f"{target}", enabled_artifact, run_id, build_dir)
+    cmds = s3_commands_for_artifacts(enabled_artifacts, run_id, build_dir, target)
+    parallel_exec_commands(cmds)
 
 
 def run(args):
