@@ -8,6 +8,8 @@ on:
         default: ""
       test_runs_on:
         type: string
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -15,9 +17,14 @@ on:
         default: ""
       test_runs_on:
         type: string
+      platform:
+        type: string
   push:
     branches:
       - ADHOCBUILD
+
+permissions:
+  contents: read
 
 jobs:
   test_sanity_check:
@@ -31,8 +38,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/bin"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
       - name: Checkout Repository
@@ -45,13 +52,13 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--base-only"
+          PLATFORM: ${{ inputs.platform }}
 
-      - name: Run rocminfo
-        run: |
-          ${THEROCK_BIN_DIR}/rocminfo
+      - name: Set HIP_CLANG_PATH for windows
+        if: ${{ inputs.platform == 'windows' }}
+        run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
 
       - name: Run ROCm Sanity Tests
         run: |
-          source ${VENV_DIR}/bin/activate
-          pytest tests/ \
-          --log-cli-level=info
+          if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+          pytest tests/ --log-cli-level=info

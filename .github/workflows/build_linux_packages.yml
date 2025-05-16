@@ -8,6 +8,9 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      expect_failure:
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -16,15 +19,19 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      expect_failure:
+        type: boolean
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build_linux_packages:
-    name: Build Linux Packages
+    name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
     runs-on: azure-linux-scale-rocm
+    continue-on-error: ${{ inputs.expect_failure }}
+    permissions:
+      id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     strategy:
@@ -72,6 +79,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build Projects
+        id: build
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
