@@ -133,6 +133,14 @@ jobs:
           path: amdgpu-windows-interop
           lfs: true
 
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+          role-duration-seconds: 14400  # 4 hours
+
       - name: Configure Projects
         run: |
           # clear cache before build and after download
@@ -195,13 +203,6 @@ jobs:
           $fsout = $fs | Select-Object -Property Name,Used,Free,Root
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
-
-      - name: Configure AWS Credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
       # TODO: Move to script
       - name: Create Index Files
