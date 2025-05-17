@@ -1,5 +1,9 @@
 #!/usr/bin/bash
 
+# Usage:
+#   build_pytorch_vision.sh  (uses default source dir of src/vision/)
+#   build_pytorch_vision.sh path/to/vision_source_dir
+
 # Causes bash process to die immediately after child process returns error
 # to make sure that script does not continue logic if error has happened.
 set -e
@@ -9,6 +13,8 @@ DO_BUILD_STEP="${DO_BUILD_STEP:-1}"
 DO_INSTALL_STEP="${DO_INSTALL_STEP:-1}"
 
 SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
+SOURCE_DIR="${1:-$SCRIPT_DIR/src/vision}"
+
 if ! source $SCRIPT_DIR/env_init.sh; then
         echo "Failed to find python virtual-env"
         echo "Make sure that TheRock has been build first"
@@ -32,7 +38,7 @@ echo "ROCM_HOME: ${ROCM_HOME}"
 echo "CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}"
 echo "DEVICE_LIB_PATH: ${DEVICE_LIB_PATH}"
 
-cd $SCRIPT_DIR/pytorch_vision
+cd $SOURCE_DIR
 ROCM_PATH=${CMAKE_PREFIX_PATH} FORCE_CUDA=1 TORCHVISION_USE_NVJPEG=0 TORCHVISION_USE_VIDEO_CODEC=0 CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} BUILD_VERSION=0.22.0 BUILD_NUMBER=1 VERSION_NAME=0.22.0 python3 setup.py bdist_wheel
 
 if [ ${DO_INSTALL_STEP} -eq 1 ]; then
@@ -54,7 +60,7 @@ if [ ${DO_INSTALL_STEP} -eq 1 ]; then
 		PIP_BREAK_SYSTEM_PACKAGES=1 pip install "$latest_wheel_file"
 		echo "pip install done for $latest_wheel_file"
 	else
-		echo "Failed to build and find pytorch vision wheel for pip install in directory $SCRIPT_DIR/pytorch_vision/dist"
+		echo "Failed to build and find pytorch vision wheel for pip install in directory $SOURCE_DIR/dist"
 		exit 1
 	fi
 	cd $SCRIPT_DIR

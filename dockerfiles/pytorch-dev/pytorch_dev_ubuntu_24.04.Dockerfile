@@ -44,12 +44,14 @@ RUN git config --global user.email "you@example.com" && \
 # /therock/src
 # workaround is to disable selinux (/etc/selinux/config)
 RUN --mount=type=bind,target=/therock/src \
-  python3 /therock/src/external-builds/pytorch/pytorch_vision_repo.py checkout \
-    --repo /therock/pytorch_vision --depth 1 --jobs 10
+  python3 /therock/src/external-builds/pytorch/ptbuild.py checkout \
+    --no-pytorch --no-audio \
+    --vision-src-dir /therock/pytorch_vision --depth 1 --jobs 10
 # 2. audio
 RUN --mount=type=bind,target=/therock/src \
-  python3 /therock/src/external-builds/pytorch/pytorch_audio_repo.py checkout \
-    --repo /therock/pytorch_audio --depth 1 --jobs 10
+  python3 /therock/src/external-builds/pytorch/ptbuild.py checkout \
+    --no-pytorch --no-vision \
+    --audio-src-dir /therock/pytorch_audio --depth 1 --jobs 10
 COPY external-builds/pytorch/env_init.sh /therock/
 COPY external-builds/pytorch/build_pytorch_torch.sh /therock/
 COPY external-builds/pytorch/build_pytorch_vision.sh /therock/
@@ -58,11 +60,14 @@ COPY external-builds/pytorch/build_pytorch_audio.sh /therock/
 # We do this in two steps so that we get an image checkpoint
 # with clean sources first (faster iteration).
 RUN --mount=type=bind,target=/therock/src \
-  python3 /therock/src/external-builds/pytorch/pytorch_torch_repo.py checkout \
-    --repo /therock/pytorch --depth 1 --jobs 10 --no-patch --no-hipify
+  python3 /therock/src/external-builds/pytorch/ptbuild.py checkout \
+    --no-audio --no-vision \
+    --no-patch --no-hipify \
+    --pytorch-src-dir /therock/pytorch --depth 1 --jobs 10
 RUN --mount=type=bind,target=/therock/src \
-  python3 /therock/src/external-builds/pytorch/pytorch_torch_repo.py checkout \
-    --repo /therock/pytorch --depth 1 --jobs 10
+  python3 /therock/src/external-builds/pytorch/ptbuild.py checkout \
+    --no-audio --no-vision \
+    --pytorch-src-dir /therock/pytorch --depth 1 --jobs 10
 
 # Copy ROCM
 COPY --from=build_rocm /therock/build/dist/rocm /opt/rocm
@@ -99,9 +104,9 @@ ENV ROCM_HOME=/opt/rocm
 ENV PATH="/opt/rocm/bin:$PATH"
 ENV LD_LIBRARY_PATH="/opt/rocm/lib"
 
-RUN ./build_pytorch_torch.sh
-RUN ./build_pytorch_vision.sh
-RUN ./build_pytorch_audio.sh
+RUN ./build_pytorch_torch.sh /therock/pytorch
+RUN ./build_pytorch_vision.sh /therock/pytorch_vision
+RUN ./build_pytorch_audio.sh /therock/pytorch_audio
 
 ################################################################################
 # PyTorch Install
