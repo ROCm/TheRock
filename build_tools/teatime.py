@@ -41,6 +41,7 @@ import subprocess
 import sys
 import time
 
+
 class OutputSink:
     def __init__(self, args: argparse.Namespace):
         self.start_time = time.time()
@@ -114,15 +115,23 @@ class OutputSink:
                 script_path = repo_root / "build_tools" / "upload_logs_to_s3.py"
                 build_dir = repo_root / "build"
 
-                subprocess.run([
-                    sys.executable, str(script_path),
-                    "--build-dir", str(build_dir),
-                    "--s3-base-path", f"s3://{self.s3_bucket}/{self.s3_subdir}"
-                ], check=True)
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(script_path),
+                        "--build-dir",
+                        str(build_dir),
+                        "--s3-base-path",
+                        f"s3://{self.s3_bucket}/{self.s3_subdir}",
+                    ],
+                    check=True,
+                )
             except subprocess.CalledProcessError as e:
                 print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
             except Exception as e:
-                print(f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr)
+                print(
+                    f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr
+                )
 
     def writeline(self, line: bytes):
         if self.interactive_prefix is not None:
