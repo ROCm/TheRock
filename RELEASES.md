@@ -24,7 +24,7 @@ popd
 
 ### From per-commit CI builds
 
-Our CI builds artifacts need to be flattened to be used. Leverage the `build_tools/fileset_tool.py artifact-flatten` command. You will need to have a checkout (see for example [Clone and fetch sources](https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#clone-and-fetch-sources)) in ${SOURCE_DIR} to leverage this tool and a Python environment.
+Our CI builds artifacts which need to be "flattened" by the `build_tools/fileset_tool.py artifact-flatten` command before they can be used. You will need to have a checkout (see for example [Clone and fetch sources](https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#clone-and-fetch-sources)) in `${SOURCE_DIR}` to use this tool and a Python environment.
 
 ```bash
 echo "Unpacking artifacts"
