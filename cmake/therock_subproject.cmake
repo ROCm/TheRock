@@ -1114,7 +1114,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # bearing we can either add them to all projects or source those flags from
     # the projects themselves more locally.
     string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT )\n")
-    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -fms-extensions -fms-compatibility -D_ENABLE_EXTENDED_ALIGNED_STORAGE \")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -DWIN32_LEAN_AND_MEAN -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -fms-extensions -fms-compatibility -D_ENABLE_EXTENDED_ALIGNED_STORAGE \")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT )\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT )\n")
   else()

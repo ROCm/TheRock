@@ -58,6 +58,7 @@ include = [
 [components.doc."math-libs/BLAS/rocBLAS/stage"]
 [components.lib."math-libs/BLAS/rocBLAS/stage"]
 include = [
+  "bin/rocblas/library/**",
   "lib/rocblas/library/**",
 ]
 [components.test."math-libs/BLAS/rocBLAS/stage"]

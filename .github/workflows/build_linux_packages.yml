@@ -8,6 +8,9 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      expect_failure:
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -16,11 +19,21 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      expect_failure:
+        type: boolean
+
+# See the details regarding permissions from the link:
+# https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
+permissions:
+  contents: read
 
 jobs:
   build_linux_packages:
-    name: Build Linux Packages
+    name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
     runs-on: azure-linux-scale-rocm
+    continue-on-error: ${{ inputs.expect_failure }}
+    permissions:
+      id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     strategy:
@@ -68,6 +81,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build Projects
+        id: build
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
@@ -110,6 +124,7 @@ jobs:
           key: linux-build-packages-manylinux-v2-${{ github.sha }}
 
       - name: Configure AWS Credentials
+        if: always()
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
           aws-region: us-east-2
@@ -117,34 +132,43 @@ jobs:
 
       # TODO: Move to script
       - name: Create Index Files
+        if: always()
         run: |
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output build/indexer.py
           python build/indexer.py -f '*.tar.xz*' build/artifacts/
-          python build/indexer.py -f '*.log' build/logs/
-          sed -i 's,a href="..",a href="../../index-${{env.AMDGPU_FAMILIES}}.html",g' build/logs/index.html
+          python3 build_tools/create_log_index.py \
+            --build-dir=build \
+            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
 
       # TODO: Move to script
       - name: Upload Artifacts
         run: |
-          aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}/ \
+          aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}-linux/ \
             --recursive --no-follow-symlinks \
             --exclude "*" \
             --include "*.tar.xz*"
-          aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html
+          aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html
 
-      # TODO: Move to script
       - name: Upload Logs
+        if: always()
         run: |
-          aws s3 cp build/logs/ s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/ \
-            --recursive \
-            --content-type="text/plain" \
-            --exclude "*" \
-            --include "*.log"
-          aws s3 cp build/logs/index.html s3://therock-artifacts/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/
+          python3 build_tools/upload_logs_to_s3.py \
+            --build-dir=build \
+            --s3-base-path="s3://therock-artifacts/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}"
 
       - name: Add Links to Job Summary
+        if: always()
         run: |
-          echo '* [Artifacts](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/index-${{env.AMDGPU_FAMILIES}}.html)' >> $GITHUB_STEP_SUMMARY
-          echo '* [Build logs](https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}/logs/${{env.AMDGPU_FAMILIES}}/index.html)' >> $GITHUB_STEP_SUMMARY
+          LOG_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}/index.html"
+          echo "[Build Logs](${LOG_URL})" >> $GITHUB_STEP_SUMMARY
+
+          ARTIFACT_INDEX=build/artifacts/index.html
+          if [ -f "${ARTIFACT_INDEX}" ]; then
+            ARTIFACT_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html"
+
+            echo "[Artifacts](${ARTIFACT_URL})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "[INFO] No artifacts index found. Skipping artifact link."
+          fi

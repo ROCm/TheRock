@@ -1,7 +1,7 @@
 From 31675d06062328c8aa273994785a1e662f6edfdb Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Sat, 10 May 2025 15:56:02 -0700
-Subject: [PATCH 4/4] [windows] Fix assembler error in pal trap handler.
+Subject: [PATCH 2/2] [windows] Fix assembler error in pal trap handler.
 
 This has been showing up in real use as an error printed to the console complaining that the ".not_s_trap" label cannot be found on device initialization.
 

@@ -22,7 +22,7 @@ jobs:
         env:
           PYTORCH_DEV_DOCKER: "true"
           AMDGPU_FAMILIES: ${{ inputs.families }}
-        run: python ./build_tools/github_action/fetch_package_targets.py
+        run: python ./build_tools/github_actions/fetch_package_targets.py
 
   build-and-push-image:
     strategy:
@@ -52,9 +52,6 @@ jobs:
           echo "Git version: $(git --version)"
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
-
-      - name: Generate unique dispatch ID
-        run: echo "DISPATCH_ID=dispatch-${{ matrix.targets.amdgpu_family }}-${{ github.run_id }}" >> $GITHUB_ENV
 
       - name: Fetch sources
         run: |
@@ -105,7 +102,7 @@ jobs:
       - name: Trigger verification workflow
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
-          workflow: verify_docker_image.yml
+          workflow: test_pytorch_docker.yml
           inputs: |
             {
               "amdgpu_target": "${{ matrix.targets.amdgpu_family }}",
@@ -116,6 +113,5 @@ jobs:
                 (matrix.targets.amdgpu_family == 'gfx1100' && 'linux-rx7900-gpu-rocm') ||
                 'linux-mi300-1gpu-ossci-rocm'
               }}",
-              "dispatch_id": "${{ env.DISPATCH_ID }}",
               "version": "${{ env.VERSION }}"
             }

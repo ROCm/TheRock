@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 GENERIC_VARIANT = "generic"
-PLATFORM = platform.system()
+PLATFORM = platform.system().lower()
 
 
 def log(*args, **kwargs):
@@ -24,7 +24,7 @@ def s3_bucket_exists(run_id):
         "aws",
         "s3",
         "ls",
-        f"s3://therock-artifacts/{run_id}",
+        f"s3://therock-artifacts/{run_id}-{PLATFORM}",
         "--no-sign-request",
     ]
     process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
@@ -36,8 +36,8 @@ def s3_exec(variant, package, run_id, build_dir):
         "aws",
         "s3",
         "cp",
-        f"s3://therock-artifacts/{run_id}/{package}_{variant}.tar.xz",
-        build_dir,
+        f"s3://therock-artifacts/{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
+        str(build_dir),
         "--no-sign-request",
     ]
     log(f"++ Exec [{cmd}]")
@@ -72,7 +72,7 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
     artifact_paths = []
     all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
     # RCCL is disabled for Windows
-    if PLATFORM != "Windows":
+    if PLATFORM != "windows":
         all_artifacts.append("rccl")
 
     if args.blas:
@@ -85,7 +85,7 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
         artifact_paths.append("prim")
     if args.rand:
         artifact_paths.append("rand")
-    if args.rccl and PLATFORM != "Windows":
+    if args.rccl and PLATFORM != "windows":
         artifact_paths.append("rccl")
 
     enabled_artifacts = []
