@@ -155,14 +155,49 @@ jobs:
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
-            -DTHEROCK_ENABLE_BLAS=OFF \
             -DTHEROCK_ENABLE_SPARSE=OFF \
             -DTHEROCK_ENABLE_SOLVER=OFF \
             -DTHEROCK_ENABLE_ML_LIBS=OFF \
             ${extra_cmake_options}
 
-      - name: Build Projects
+      # HACK: timeout + retry the build a few times
+      #       if this works, we can create script with similar behavior
+      - name: Build Projects (0-10)
+        if: ${{ !cancelled() }}
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (10-20)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (20-30)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (30-40)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (40-50)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (50-60)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (60-70)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (70-80)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
+      - name: Build Projects (80-90)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 10
 
       - name: Report
         if: ${{ !cancelled() }}
