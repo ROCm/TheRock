@@ -91,6 +91,11 @@ These instructions mostly mirror the instructions in the root
 
   - https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
 
+- There are some [known issues](https://github.com/ROCm/TheRock/issues/651)
+  with preexisting HIP SDK / ROCm installs causing errors during the build
+  process. Until these are resolved, we recommend uninstalling the HIP SDK
+  before trying to build TheRock.
+
 - A Dev Drive is recommended, due to how many source and build files are used.
   See the
   [Set up a Dev Drive on Windows 11](https://learn.microsoft.com/en-us/windows/dev-drive/)
