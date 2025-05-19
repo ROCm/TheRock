@@ -1,4 +1,4 @@
-From bf20e250a6fab40f54021790ee085eac5c576729 Mon Sep 17 00:00:00 2001
+From 8efc7d127ab2189a44bc64b862c9feebf82b73f3 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Fri, 21 Mar 2025 17:01:20 +0000
 Subject: [PATCH 2/7] Work around race condition
@@ -28,5 +28,5 @@ index 9154cce..86b470b 100644
    include_directories(${CMAKE_BINARY_DIR}/include/hipblas)
    include_directories(${CMAKE_BINARY_DIR}/include)
 -- 
-2.43.0
+2.47.1.windows.2
 

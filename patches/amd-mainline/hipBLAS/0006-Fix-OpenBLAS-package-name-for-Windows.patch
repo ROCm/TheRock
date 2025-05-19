@@ -1,4 +1,4 @@
-From 259e93ed7697ea2ae2ba2e236c142c70255e88c1 Mon Sep 17 00:00:00 2001
+From b230ed25c6e75d8da2e75ddd88584d6bc3c90369 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Thu, 1 May 2025 11:29:55 -0700
 Subject: [PATCH 6/7] Fix OpenBLAS package name for Windows.
@@ -21,5 +21,5 @@ index 86b470b..650dc34 100644
          set( BLAS_INCLUDE_DIR "" )
        endif()
 -- 
-2.43.0
+2.47.1.windows.2
 
