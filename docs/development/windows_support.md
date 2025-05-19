@@ -3,6 +3,14 @@
 TheRock aims to support as many subprojects as possible on "native" Windows
 (as opposed to WSL 1 or WSL 2) using standard build tools like MSVC.
 
+> [!WARNING]
+> While Windows source builds of TheRock (including PyTorch!) are working for
+> some expert developers, this support is relatively new and is not yet mature.
+> There are several [known issues](#build-troubleshooting-and-known-issues) and
+> active development areas on the
+> [Windows platform support bringup](https://github.com/ROCm/TheRock/issues/36).
+> If you encounter any issues not yet represented there, please file an issue.
+
 ## Supported subprojects
 
 ROCm is composed of many subprojects, some of which are supported on Windows:
