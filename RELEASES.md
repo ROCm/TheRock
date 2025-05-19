@@ -1,6 +1,6 @@
 # Releases
 
-This is a quick overview of how to consume our current build, release [artifacts](docs/development/artifacts.md) and Python packages.
+This is a quick overview of how to consume our current build, release [artifacts](docs/development/artifacts.md), and Python packages.
 
 ## Current state
 
