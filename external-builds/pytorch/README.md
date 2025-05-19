@@ -24,17 +24,34 @@ patches locally until they can be upstreamed. See the `patches` directory.
 It is highly recommended to use a virtual environment unless if in a throw-away
 container/CI environment.
 
+On Linux:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
+On Windows:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate.bat
+```
+
 ### Step 1: Preparing sources
+
+On Linux:
 
 ```bash
 # Checks out the most recent stable release branch of PyTorch, hipifies and
 # applies patches.
 ./ptbuild.py checkout
+```
+
+On Windows:
+
+```bash
+python ptbuild.py checkout
 ```
 
 ### Step 2: Install Deps
