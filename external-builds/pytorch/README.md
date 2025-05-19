@@ -33,8 +33,7 @@ You will need either a source build or binary distribution of the dist packages.
 
 - For binary distributions, see [RELEASES.md](../../RELEASES.md).
 
-  > [!NOTE]
-  > Windows binary releases of TheRock are not yet available.
+  - Note: windows binary releases of TheRock are not yet available.
 
 - For source builds:
 
