@@ -70,7 +70,10 @@ source .venv/bin/activate
 ```bash
 # Checks out the most recent stable release branch of PyTorch, hipifies and
 # applies patches.
-./ptbuild.py checkout
+python pytorch_torch_repo.py checkout
+
+# See also ptbuild.py, which uses a different directory layout:
+# ./ptbuild.py checkout
 ```
 
 ### Step 2: Install Deps
