@@ -121,4 +121,4 @@ jobs:
         with:
           tag_name: ${{ env.TAG_NAME }}
           body_path: ${{ github.workspace }}/test_notes.md
-          append_body: ${{ steps.release_note.append == 'true' }}
+          append_body: ${{ steps.release_note.outputs.append == 'true' }}
