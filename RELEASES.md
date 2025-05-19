@@ -1,6 +1,6 @@
 # Releases
 
-This is a quick overview of how to consume our current build and release [artifacts](docs/development/artifacts.md).
+This is a quick overview of how to consume our current build, release [artifacts](docs/development/artifacts.md) and Python packages.
 
 ## Current state
 
@@ -80,3 +80,47 @@ popd
 - [Packages](https://github.com/orgs/ROCm/packages?repo_name=TheRock): We currently publish docker images for LLVM targets we support (as well as a container for our build machines)
 
 - [Per-commit CI builds](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess): Each of our latest passing CI builds has its own artifacts you can leverage. This is the latest and greatest! We will eventually support a nightly release that is at a higher quality bar than CI. Note a quick recipe for getting all of these from the s3 bucket is to use this quick command `aws s3 cp s3://therock-artifacts . --recursive --exclude "*" --include "${RUN_ID}-${OPERATING_SYSTEM}/*.tar.xz" --no-sign-request` where ${RUN_ID} is the runner id you selected (see the URL). Check the [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to get the aws cli.
+
+## Using our Python packages
+
+The Python packages contain pre-build libraries and tools but do not provide Python APIs for import or usage. Rather, pip is leveraged as a convient way to install the pre-build libraries and tools. For now, Python packages are only supported on Linux.
+
+> [!TIP]
+> We highly recommend to create an virtual environment
+> ```bash
+> python -m venv .venv
+> source .venv/bin/activate
+> ```
+
+> [!WARNING]
+> If installing the Python packages by passing `--break-system-packages` to `pip`, commandline interface shims for executables get installed to `/usr/local/bin` which normally has precende over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
+
+In dependence of the respective GPU architecture the URL to the appropirate index file must be passed to install the respective packages.
+On of the following commands can be used to install `rocm-sdk[libraries,devel]`.
+
+### gfx942-dcgpu
+
+```bash
+python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx94X-dcgpu/index.html \
+  rocm-sdk[libraries,devel]
+```
+
+### gfx110X-dcgpu
+
+```bash
+python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dcgpu/index.html \
+  rocm-sdk[libraries,devel]
+```
+
+### gfx110X-dcgpu
+
+```bash
+python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx1151/index.html \
+  rocm-sdk[libraries,devel]
+```
+### gfx110X-dcgpu
+
+```bash
+python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx120X-all/index.html \
+  rocm-sdk[libraries,devel]
+```
