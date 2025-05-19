@@ -1,14 +1,10 @@
-# Build ROCM PyTorch
+# Build PyTorch with ROCm support
 
-## Build PyTorch, PyTorch vision and PyTorch audio on Linux
+This directory provides tooling for building PyTorch compatible with TheRock's
+ROCm dist packages.
 
-- cd external-builds/pytorch
-- ./checkout_and_build_all.sh
-
-## Build PyTorch on Windows or on old way in Linux
-
-There is nothing special about this build procedure except that it is meant
-to run as part of the ROCM CI and development flow and leaves less room for
+There is nothing special about these build procedures except that they are meant
+to run as part of the ROCm CI and development flow and thus leave less room for
 interpretation with respect to golden path in upstream docs.
 
 This incorporates advice from:
@@ -17,7 +13,47 @@ This incorporates advice from:
 - `.ci/manywheel/build_rocm.sh` and friends
 
 Note that the above statement is currently aspirational as we contain some
-patches locally until they can be upstreamed. See the `patches` directory.
+patches locally until they can be upstreamed. See the
+[`patches/` directory](./patches/).
+
+## Feature support status
+
+| Feature                  | Linux support | Windows support |
+| ------------------------ | ------------- | --------------- |
+| PyTorch                  | ✅ Supported  | ✅ Supported    |
+| torchvision              | ✅ Supported  | ⚪ Unknown      |
+| torchaudio               | ✅ Supported  | ⚪ Unknown      |
+| Flash attention (Triton) | ✅ Supported  | 🟡 In progress  |
+
+## Build instructions
+
+### Prerequisites
+
+You will need either a source build or binary distribution of the dist packages.
+
+- For binary distributions, see [RELEASES.md](../../RELEASES.md).
+
+  > [!NOTE]
+  > Windows binary releases of TheRock are not yet available.
+
+- For source builds:
+
+  1. Follow the [building from source](../../README.md#building-from-source)
+     instructions.
+  1. Build the `therock-dist` target:
+     ```bash
+     cmake --build build --target therock-dist
+     ```
+  1. Use the `build/dist/rocm` directory.
+
+### Build PyTorch, PyTorch vision and PyTorch audio on Linux
+
+```bash
+cd external-builds/pytorch
+./checkout_and_build_all.sh
+```
+
+### Build PyTorch on Windows (or the old way on Linux)
 
 ### Step 0: Prep venv
 
@@ -60,3 +96,21 @@ On Windows:
 ```bash
 bash build_pytorch_windows.sh gfx1100
 ```
+
+## Bundling PyTorch and ROCm together into a "fat wheel"
+
+By default, Python wheels produced by the PyTorch build do not include ROCm
+binaries. Instead, they expect those binaries to be installed elsewhere on the
+system. A "fat wheel" bundles the ROCm binaries into the same wheel archive to
+produce a standalone install including both PyTorch and ROCm, with all necessary
+patches to shared library / DLL loading for out of the box operation.
+
+To produce such a fat wheel, see `windows_patch_fat_wheel.py` and a future
+equivalent script for Linux.
+
+## Development instructions
+
+To create patches
+
+1. Commit your change(s) within the relevant source folder(s)
+1. Run the `save-patches` subcommand of the relevant source management script(s)
