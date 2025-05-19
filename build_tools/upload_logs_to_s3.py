@@ -25,7 +25,7 @@ def check_aws_cli_available():
         sys.exit(1)
 
 
-def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None):
+def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None) -> None:
     if source_path.is_dir():
         cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
     else:
