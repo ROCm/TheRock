@@ -69,15 +69,13 @@ These instructions mostly mirror the instructions in the root
   Partial source builds bootstrapped from prebuilt binaries are on our roadmap
   to enable.
 
-  > [!NOTE]
-  > To set expectations, on powerful build servers, the full source build can
-  > still take over an hour.
+  - To set expectations, on powerful build servers, the full source build can
+    still take over an hour.
 
-  > [!NOTE]
-  > The Windows build uses
-  > [hard links](https://learn.microsoft.com/en-us/windows/win32/fileio/hard-links-and-junctions)
-  > to save space, but storage sizes do not often account for this savings.
-  > Reported size used and actual size used may differ substantially.
+  - The Windows build uses
+    [hard links](https://learn.microsoft.com/en-us/windows/win32/fileio/hard-links-and-junctions)
+    to save space, but storage sizes do not often account for this savings.
+    Reported size used and actual size used may differ substantially.
 
 - Long path support is required. As needed, enable long paths for your system:
 
