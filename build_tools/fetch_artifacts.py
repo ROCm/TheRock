@@ -19,7 +19,17 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
+def _s3_command_exists():
+    cmd = ["aws", "s3", "help"]
+    process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
+    if process.returncode != 0:
+        raise Exception(
+            "AWS CLI does not exist. Please install AWS CLI to use this script."
+        )
+
+
 def s3_bucket_exists(run_id):
+    _s3_command_exists()
     cmd = [
         "aws",
         "s3",
@@ -32,6 +42,7 @@ def s3_bucket_exists(run_id):
 
 
 def s3_exec(variant, package, run_id, build_dir):
+    _s3_command_exists()
     cmd = [
         "aws",
         "s3",
