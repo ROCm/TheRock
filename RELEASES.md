@@ -86,7 +86,7 @@ popd
 The Python packages contain pre-build libraries and tools but do not provide Python APIs for import or usage. Rather, pip is leveraged as a convient way to install the pre-build libraries and tools. For now, Python packages are only supported on Linux.
 
 > [!TIP]
-> We highly recommend to create an virtual environment
+> We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html)
 >
 > ```bash
 > python -m venv .venv
