@@ -96,8 +96,8 @@ The Python packages contain pre-build libraries and tools but do not provide Pyt
 > [!WARNING]
 > If installing the Python packages by passing `--break-system-packages` to `pip`, commandline interface shims for executables get installed to `/usr/local/bin` which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
-In dependence of the respective GPU architecture the URL to the appropirate index file must be passed to install the respective packages.
-On of the following commands can be used to install `rocm-sdk[libraries,devel]`.
+To install TheRock from pip, you must provide a link to the index page for your desired GPU architecture.
+One of the following commands can be used to install `rocm-sdk[libraries,devel]`.
 
 ### gfx942-dcgpu
 
