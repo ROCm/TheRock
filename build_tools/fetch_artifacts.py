@@ -21,7 +21,13 @@ def log(*args, **kwargs):
 
 def _s3_command_exists():
     cmd = ["aws", "s3", "help"]
-    process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
+    process = subprocess.run(
+        cmd,
+        check=False,
+        shell=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     if process.returncode != 0:
         raise Exception(
             "AWS CLI does not exist. Please install AWS CLI to use this script."
