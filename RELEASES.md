@@ -87,6 +87,7 @@ The Python packages contain pre-build libraries and tools but do not provide Pyt
 
 > [!TIP]
 > We highly recommend to create an virtual environment
+>
 > ```bash
 > python -m venv .venv
 > source .venv/bin/activate
@@ -118,6 +119,7 @@ python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.a
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx1151/index.html \
   rocm-sdk[libraries,devel]
 ```
+
 ### gfx110X-dcgpu
 
 ```bash
