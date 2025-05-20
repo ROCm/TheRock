@@ -43,7 +43,7 @@ python -m venv .venv
 ```bash
 # Checks out the most recent stable release branch of PyTorch, hipifies and
 # applies patches.
-python ptbuild.py checkout
+python pytorch_torch_repo.py checkout
 ```
 
 ### Step 2: Install Deps
