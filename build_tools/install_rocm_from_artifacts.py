@@ -31,7 +31,7 @@ import argparse
 from fetch_artifacts import (
     retrieve_base_artifacts,
     retrieve_enabled_artifacts,
-    s3_bucket_exists,
+    retrieve_s3_artifacts,
 )
 import json
 import os
@@ -162,14 +162,17 @@ def retrieve_artifacts_by_run_id(args):
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
     log(f"Retrieving artifacts for run ID {run_id}")
-    if not s3_bucket_exists(run_id):
+    s3_artifacts = retrieve_s3_artifacts(run_id, amdgpu_family)
+    if not s3_artifacts:
         log(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
 
     # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
-    retrieve_base_artifacts(args, run_id, output_dir)
+    retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
     if not args.base_only:
-        retrieve_enabled_artifacts(args, amdgpu_family, run_id, output_dir)
+        retrieve_enabled_artifacts(
+            args, amdgpu_family, run_id, output_dir, s3_artifacts
+        )
 
     # Flattening artifacts from .tar* files then removing .tar* files
     log(f"Untar-ing artifacts for {run_id}")

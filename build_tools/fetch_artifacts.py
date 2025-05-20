@@ -8,9 +8,9 @@
 import argparse
 import concurrent.futures
 import platform
-import shlex
-import subprocess
+import re
 import sys
+from urllib.request import urlopen, Request, urlretrieve, HTTPError
 
 
 class ArtifactNotFoundException(Exception):
@@ -21,6 +21,7 @@ class ArtifactNotFoundException(Exception):
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
+BUCKET_URL = "https://therock-artifacts.s3.us-east-2.amazonaws.com"
 
 # TODO(geomin12): switch out logging library
 def log(*args, **kwargs):
@@ -28,67 +29,69 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def s3_bucket_exists(run_id):
-    """Checks that the AWS S3 bucket exists."""
-    cmd = [
-        "aws",
-        "s3",
-        "ls",
-        f"s3://therock-artifacts/{run_id}-{PLATFORM}",
-        "--no-sign-request",
-    ]
-    process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
-    return process.returncode == 0
-
-
-def s3_commands_for_artifacts(artifacts, run_id, build_dir, variant):
-    """Collects AWS S3 copy commands to execute later in parallel."""
-    cmds = []
-    for artifact in artifacts:
-        cmds.append(
-            [
-                "aws",
-                "s3",
-                "cp",
-                f"s3://therock-artifacts/{run_id}/{artifact}_{variant}.tar.xz",
-                build_dir,
-                "--no-sign-request",
-            ]
-        )
-    return cmds
-
-
-def subprocess_run(cmd):
-    """Runs a command via subprocess run."""
+def retrieve_s3_artifacts(run_id, amdgpu_family):
+    """Checks that the AWS S3 bucket exists and returns artifact names."""
+    index_page_url = f"{BUCKET_URL}/{run_id}-{PLATFORM}/index-{amdgpu_family}.html"
+    request = Request(index_page_url)
     try:
-        log(f"++ Exec '{shlex.join(cmd)}'")
-        process = subprocess.run(cmd, capture_output=True)
-        if process.returncode == 1:
-            # Fetching is done at a best effort. If an artifact is not found, it doesn't trigger any errors
-            if "(404)" in str(process.stderr):
-                raise ArtifactNotFoundException(
-                    f"Artifact not found for '{shlex.join(cmd)}'"
+        with urlopen(request) as response:
+            # from the S3 index page, we search for artifacts inside the a tags "<a href={TAR_XZ_NAME}>"
+            pattern = r'<a\s+[^>]*href=["\']([^"\']+)["\']'
+            artifact_files = re.findall(pattern, str(response.read()))
+            data = set()
+            for artifact in artifact_files:
+                # We only want to get .tar.xz files, not .tar.xz.sha256sum
+                if "sha256sum" not in artifact and "tar.xz" in artifact:
+                    data.add(artifact)
+            return data
+    except HTTPError as err:
+        if err.code == 404:
+            return None
+        else:
+            raise Exception(
+                f"Error when retrieving S3 bucket {run_id}-{PLATFORM}/index-{amdgpu_family}.html. Exiting..."
+            )
+
+
+def collect_artifacts_urls(artifacts, run_id, build_dir, variant, existing_artifacts):
+    """Collects S3 artifact URLs to execute later in parallel."""
+    artifacts_to_retrieve = []
+    for artifact in artifacts:
+        file_name = f"{artifact}_{variant}.tar.xz"
+        # If artifact does exist in s3 bucket
+        if file_name in existing_artifacts:
+            # Tuple of (FILE_PATH_TO_WRITE, S3_ARTIFACT_URL)
+            artifacts_to_retrieve.append(
+                (
+                    f"{build_dir}/{file_name}",
+                    f"{BUCKET_URL}/{run_id}-{PLATFORM}/{file_name}",
                 )
-            else:
-                raise Exception(process.stderr)
-        log(f"++ Exec complete '{shlex.join(cmd)}'")
-    except ArtifactNotFoundException as ex:
-        log(str(ex))
-    except Exception as ex:
-        log(str(ex))
-        sys.exit(1)
+            )
+
+    return artifacts_to_retrieve
 
 
-def parallel_exec_commands(cmds):
-    """Runs parallelized subprocess commands using a thread pool executor"""
+def urllib_retrieve_artifact(artifact):
+    """Retrieves an artifact via urllib"""
+    output_path, artifact_url = artifact
+    log(f"++ Retrieving: {output_path}")
+    urlretrieve(artifact_url, output_path)
+    log(f"++ Retrieve complete: {output_path}")
+
+
+def parallel_exec_commands(artifacts):
+    """Runs parallelized urllib calls using a thread pool executor"""
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(subprocess_run, cmd) for cmd in cmds]
+        futures = [
+            executor.submit(urllib_retrieve_artifact, artifact)
+            for artifact in artifacts
+        ]
         for future in concurrent.futures.as_completed(futures):
             future.result(timeout=60)
 
 
-def retrieve_base_artifacts(args, run_id, build_dir):
-    """Retrieves TheRock base artifacts using AWS S3 copy."""
+def retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts):
+    """Retrieves TheRock base artifacts using urllib."""
     base_artifacts = [
         "core-runtime_run",
         "core-runtime_lib",
@@ -104,12 +107,14 @@ def retrieve_base_artifacts(args, run_id, build_dir):
     if args.blas:
         base_artifacts.append("host-blas_lib")
 
-    cmds = s3_commands_for_artifacts(base_artifacts, run_id, build_dir, GENERIC_VARIANT)
-    parallel_exec_commands(cmds)
+    artifacts_to_retrieve = collect_artifacts_urls(
+        base_artifacts, run_id, build_dir, GENERIC_VARIANT, s3_artifacts
+    )
+    parallel_exec_commands(artifacts_to_retrieve)
 
 
-def retrieve_enabled_artifacts(args, target, run_id, build_dir):
-    """Retrieves TheRock artifacts using AWS S3 copy, based on the enabled arguments.
+def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
+    """Retrieves TheRock artifacts using urllib, based on the enabled arguments.
 
     If no artifacts have been collected, we assume that we want to install all artifacts
     If `args.tests` have been enabled, we also collect test artifacts
@@ -144,20 +149,23 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir):
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
-    cmds = s3_commands_for_artifacts(enabled_artifacts, run_id, build_dir, target)
-    parallel_exec_commands(cmds)
+    artifacts_to_retrieve = collect_artifacts_urls(
+        enabled_artifacts, run_id, build_dir, target, s3_artifacts
+    )
+    parallel_exec_commands(artifacts_to_retrieve)
 
 
 def run(args):
     run_id = args.run_id
     target = args.target
     build_dir = args.build_dir
-    if not s3_bucket_exists(run_id):
+    s3_artifacts = retrieve_s3_artifacts(run_id, target)
+    if not s3_artifacts:
         print(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
-    retrieve_base_artifacts(args, run_id, build_dir)
+    retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts)
     if not args.base_only:
-        retrieve_enabled_artifacts(args, target, run_id, build_dir)
+        retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts)
 
 
 def main(argv):
