@@ -3,6 +3,13 @@ set -xeuo pipefail
 
 echo 'Running inside the container'
 
+#  Check for ROCm GPU availability
+echo 'Checking for ROCm-compatible GPU...'
+if ! rocminfo | grep -q 'Name: .*AMD'; then
+  echo "ERROR: No ROCm-compatible GPU detected."
+  exit 1
+fi
+
 echo 'Set path to .local/bin'
 export PATH="$HOME/.local/bin:$PATH"
 
