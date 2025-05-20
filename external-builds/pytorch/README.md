@@ -105,7 +105,22 @@ On Windows:
 bash build_pytorch_windows.sh gfx1100
 ```
 
-## Bundling PyTorch and ROCm together into a "fat wheel"
+## Running/testing PyTorch
+
+### Windows DLL setup
+
+On Windows, PyTorch needs to be able to find DLL files from the `dist/rocm`
+directory. This can be achieved by either
+
+- Extending your `PATH` to include that directory:
+
+  ```bash
+  set PATH=..\..\build\dist\rocm\bin;%PATH%
+  ```
+
+- Creating a "fat wheel" that bundles the files together (see the next section).
+
+### Bundling PyTorch and ROCm together into a "fat wheel"
 
 By default, Python wheels produced by the PyTorch build do not include ROCm
 binaries. Instead, they expect those binaries to be installed elsewhere on the
@@ -115,6 +130,16 @@ patches to shared library / DLL loading for out of the box operation.
 
 To produce such a fat wheel, see `windows_patch_fat_wheel.py` and a future
 equivalent script for Linux.
+
+### Running PyTorch smoketests
+
+We have some basic smoketests to check that the build succeeded and the
+environment setup is correct. See [smoketests](./smoke-tests/) for details, or
+just run:
+
+```bash
+pytest -v smoketests
+```
 
 ## Development instructions
 

@@ -21,7 +21,9 @@ SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
 
 if [ ! -n "${ROCM_HOME}" ]; then
     export ROCM_HOME=$(realpath $SCRIPT_DIR/../../build/dist/rocm)
+    export ROCM_HOME_WIN=$(cygpath -w ${ROCM_HOME})
     echo "ROCM_HOME: $ROCM_HOME"
+    echo "ROCM_HOME_WIN: $ROCM_HOME_WIN"
 fi
 if [ -d ${ROCM_HOME} ]; then
     export PATH=${ROCM_HOME}/bin:$PATH
@@ -57,9 +59,19 @@ mkdir -p ${LOGS_DIR}
 printf -v DATE_STR '%(%Y-%m-%d_%H%M%S)T' -1
 LOG_FILE_NAME="${LOGS_DIR}/logs_pytorch_windows_${DATE_STR}.txt"
 
-echo "Running \"python setup.py bdist_wheel\", directing output to $LOG_FILE_NAME"
+echo "Running \"python setup.py bdist_wheel\", directing output to ${LOG_FILE_NAME}"
 python setup.py bdist_wheel > ${LOG_FILE_NAME} 2>&1
 
+echo ""
+echo ""
 DIST_DIR="${PYTORCH_SRC_DIR}/dist"
-echo "Build completed! Wheels should be at ${DIST_DIR}:"
-ls ${DIST_DIR}
+echo "Build completed! Wheels should be at '${DIST_DIR}':"
+ls ${DIST_DIR} --sort=time -l
+
+echo ""
+echo "To use these wheels, either"
+echo "  * Extend your PATH with '${ROCM_HOME_WIN}/bin':"
+echo ""
+echo "      set PATH=${ROCM_HOME_WIN}\bin;%PATH%"
+echo ""
+echo "  * Create a fat wheel using 'windows_patch_fat_wheel.py'"
