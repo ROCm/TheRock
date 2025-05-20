@@ -40,17 +40,9 @@ python -m venv .venv
 
 ### Step 1: Preparing sources
 
-On Linux:
-
 ```bash
 # Checks out the most recent stable release branch of PyTorch, hipifies and
 # applies patches.
-./ptbuild.py checkout
-```
-
-On Windows:
-
-```bash
 python ptbuild.py checkout
 ```
 
