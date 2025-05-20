@@ -112,13 +112,34 @@ class OutputSink:
         if self.upload_to_s3 and self.s3_bucket and self.s3_subdir:
             try:
                 repo_root = Path(__file__).resolve().parent.parent
-                script_path = repo_root / "build_tools" / "upload_logs_to_s3.py"
                 build_dir = repo_root / "build"
 
+                # Run "create_log_index.py" script
+                create_index_script = repo_root / "build_tools" / "create_log_index.py"
+                amdgpu_family = os.getenv("AMDGPU_FAMILIES")
+                if amdgpu_family:
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            str(create_index_script),
+                            "--build-dir",
+                            str(build_dir),
+                            "--amdgpu-family",
+                            amdgpu_family,
+                        ],
+                        check=True,
+                    )
+                else:
+                    print(
+                        "[WARN] AMDGPU_FAMILIES env var is not set. Skipping log indexing."
+                    )
+
+                # Run "upload_logs_to_s3.py" script
+                upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
                 subprocess.run(
                     [
                         sys.executable,
-                        str(script_path),
+                        str(upload_script),
                         "--build-dir",
                         str(build_dir),
                         "--s3-base-path",
@@ -127,10 +148,11 @@ class OutputSink:
                     check=True,
                 )
             except subprocess.CalledProcessError as e:
-                print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
+                print(f"[WARN] Log index/upload failed: {e}", file=sys.stderr)
             except Exception as e:
                 print(
-                    f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr
+                    f"[WARN] Unexpected error during log indexing/upload: {e}",
+                    file=sys.stderr,
                 )
 
     def writeline(self, line: bytes):
