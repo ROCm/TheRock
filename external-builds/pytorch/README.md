@@ -51,7 +51,7 @@ python pytorch_torch_repo.py checkout
 Python deps:
 
 ```bash
-pip install -r src/requirements.txt
+pip install -r pytorch/requirements.txt
 pip install mkl-static mkl-include
 ```
 
