@@ -10,7 +10,7 @@ echo 'rocm-smi'
 rocm-smi
 #  Check for ROCm GPU availability
 echo 'Checking for ROCm-compatible GPU...'
-if ! rocminfo | grep -qi 'Name: .*AMD'; then
+if ! rocminfo | grep -q 'Device Type: *GPU'; then
   echo "ERROR: No ROCm-compatible GPU detected."
   exit 1
 fi
