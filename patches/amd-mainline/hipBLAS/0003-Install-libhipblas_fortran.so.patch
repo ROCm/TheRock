@@ -1,4 +1,4 @@
-From cbef28b246697fcc9469c12646ea7cb189b1081f Mon Sep 17 00:00:00 2001
+From a45367b0cf6d1a91a37a67bed5ebae13ff7a0478 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 1 Apr 2025 20:58:38 +0000
 Subject: [PATCH 3/7] Install `libhipblas_fortran.so`
@@ -22,5 +22,5 @@ index 3cb9b77..a1bad50 100755
  
  if(BUILD_ADDRESS_SANITIZER)
 -- 
-2.43.0
+2.47.1.windows.2
 

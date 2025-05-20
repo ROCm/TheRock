@@ -22,7 +22,7 @@ jobs:
         env:
           PYTORCH_DEV_DOCKER: "true"
           AMDGPU_FAMILIES: ${{ inputs.families }}
-        run: python ./build_tools/github_action/fetch_package_targets.py
+        run: python ./build_tools/github_actions/fetch_package_targets.py
 
   build-and-push-image:
     strategy:

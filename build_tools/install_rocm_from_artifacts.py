@@ -55,10 +55,9 @@ def _untar_files(output_dir, destination):
     """
     Retrieves all tar files in the output_dir, then extracts all files to the output_dir
     """
-    output_dir_path = Path(output_dir).resolve()
-    log(f"Extracting {destination.name} to {output_dir}")
+    log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir_path)
+        extracted_tar_file.extractall(output_dir)
     destination.unlink()
 
 
@@ -140,7 +139,7 @@ def _download_github_release_asset(asset_data, output_dir):
     """
     asset_name = asset_data["name"]
     asset_url = asset_data["url"]
-    destination = Path(output_dir) / asset_name
+    destination = output_dir / asset_name
     headers = {"Accept": "application/octet-stream"}
     # Making the API call to retrieve the asset
     request = Request(asset_url, headers=headers)
@@ -176,11 +175,8 @@ def retrieve_artifacts_by_run_id(args):
 
     # Flattening artifacts from .tar* files then removing .tar* files
     log(f"Untar-ing artifacts for {run_id}")
-    output_dir_path = Path(output_dir).resolve()
-    tar_file_paths = list(output_dir_path.glob("*.tar.*"))
-    flattener = ArtifactPopulator(
-        output_path=output_dir_path, verbose=True, flatten=True
-    )
+    tar_file_paths = list(output_dir.glob("*.tar.*"))
+    flattener = ArtifactPopulator(output_path=output_dir, verbose=True, flatten=True)
     flattener(*tar_file_paths)
     for file_path in tar_file_paths:
         file_path.unlink()
@@ -258,7 +254,7 @@ def retrieve_artifacts_by_input_dir(args):
 
 
 def run(args):
-    log("### Installing TheRock using artifacts 🪨 ###")
+    log("### Installing TheRock using artifacts ###")
     _create_output_directory(args)
     if args.run_id:
         retrieve_artifacts_by_run_id(args)
@@ -273,7 +269,7 @@ def main(argv):
     parser = argparse.ArgumentParser(prog="provision")
     parser.add_argument(
         "--output-dir",
-        type=str,
+        type=Path,
         default="./therock-build",
         help="Path of the output directory for TheRock",
     )

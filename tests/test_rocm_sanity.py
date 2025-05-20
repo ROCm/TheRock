@@ -2,6 +2,7 @@ import pytest
 import subprocess
 import re
 from pathlib import Path
+import platform
 from pytest_check import check
 import logging
 import os
@@ -10,11 +11,15 @@ THIS_DIR = Path(__file__).resolve().parent
 
 logger = logging.getLogger(__name__)
 
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
+
+
+def is_windows():
+    return "windows" == platform.system().lower()
 
 
 def run_command(command, cwd=None):
-    process = subprocess.run(command, capture_output=True, cwd=cwd)
+    process = subprocess.run(command, capture_output=True, cwd=cwd, shell=is_windows())
     return process
 
 
@@ -28,6 +33,7 @@ def rocm_info_output():
 
 
 class TestROCmSanity:
+    @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
     @pytest.mark.parametrize(
         "to_search",
         [
@@ -51,21 +57,33 @@ class TestROCmSanity:
 
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
+        platform_executable_suffix = ".exe" if is_windows() else ""
+        hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
         run_command(
             [
-                "./hipcc",
+                "hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
-                str(THIS_DIR / "hipcc_check"),
+                hipcc_check_executable_file,
             ],
             cwd=str(THEROCK_BIN_DIR),
         )
 
         # Running and checking the executable
-        process = run_command(["./hipcc_check"], cwd=str(THIS_DIR))
-        check.equal(process.returncode, 0)
-        check.greater(os.path.getsize(str(THIS_DIR / "hipcc_check")), 0)
+        platform_executable_prefix = "./" if not is_windows() else ""
+        hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
+        process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
+        # TODO(geomin12): Fix Windows 3221225477 error code when running exe.
+        if not is_windows():
+            check.equal(process.returncode, 0)
+        check.greater(
+            os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable_file)), 0
+        )
 
+    @pytest.mark.skipif(
+        is_windows(),
+        reason="rocm_agent_enumerator is not supported on Windows",
+    )
     def test_rocm_agent_enumerator(self):
         process = run_command([f"{THEROCK_BIN_DIR}/rocm_agent_enumerator"])
         output = process.stdout

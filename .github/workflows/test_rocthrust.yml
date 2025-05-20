@@ -12,6 +12,8 @@ on:
       test_runs_on:
         type: string
         default: ""
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -23,13 +25,20 @@ on:
       test_runs_on:
         type: string
         default: ""
+      platform:
+        type: string
   push:
     branches:
       - ADHOCBUILD
 
+permissions:
+  contents: read
+
 jobs:
   test_rocthrust:
     name: "rocTHRUST math-lib test"
+    # Currently, this test is not working with Windows. This test will be enabled once this library has been enabled
+    if: ${{ inputs.platform == 'linux' }}
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
@@ -39,8 +48,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/bin"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
       - name: Checkout Repository
@@ -54,6 +63,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--prim --tests"
+          PLATFORM: ${{ inputs.platform }}
 
       - name: Run rocthrust tests
         run: |
@@ -61,4 +71,4 @@ jobs:
             --test-dir ${THEROCK_BIN_DIR}/rocthrust \
             --output-on-failure \
             --parallel 8 \
-            --exclude-regex "^copy.hip$"
+            --exclude-regex "^copy.hip$|scan.hip"

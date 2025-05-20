@@ -1,4 +1,4 @@
-From fd6e79d96e49670b18e353cfd2354fdaca37f24f Mon Sep 17 00:00:00 2001
+From 3da24f6eb10c069a04db92c0369dadfecf69c736 Mon Sep 17 00:00:00 2001
 From: ikalinic <ilija.kalinic@amd.com>
 Date: Tue, 8 Apr 2025 16:18:11 +0000
 Subject: [PATCH 10/12] Include AOTriton dependent sources in Windows build
@@ -13,7 +13,7 @@ Approved by: https://github.com/jeffdaily
  1 file changed, 2 insertions(+), 6 deletions(-)
 
 diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
-index 67322e8f56..74e464dda4 100644
+index 67322e8f56e..74e464dda49 100644
 --- a/aten/src/ATen/CMakeLists.txt
 +++ b/aten/src/ATen/CMakeLists.txt
 @@ -382,12 +382,11 @@ endif()

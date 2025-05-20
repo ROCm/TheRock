@@ -1,4 +1,4 @@
-From 5041993ecc50597d9c350f4c116087c187c7b973 Mon Sep 17 00:00:00 2001
+From 86a13aadc1740be08cbaae86c48eb0cadfa8ad41 Mon Sep 17 00:00:00 2001
 From: Mika Laitio <mika.laitio@amd.com>
 Date: Tue, 29 Apr 2025 01:28:14 -0700
 Subject: [PATCH 07/12] link correct version of hsa-runtime with c10_hip
@@ -18,7 +18,7 @@ Signed-off-by: Mika Laitio <mika.laitio@amd.com>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/c10/hip/CMakeLists.txt b/c10/hip/CMakeLists.txt
-index f153030e79..a98ec6fa23 100644
+index f153030e793..a98ec6fa230 100644
 --- a/c10/hip/CMakeLists.txt
 +++ b/c10/hip/CMakeLists.txt
 @@ -48,7 +48,7 @@ if(NOT BUILD_LIBTORCHLESS)

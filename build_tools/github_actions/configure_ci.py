@@ -45,7 +45,12 @@ import subprocess
 import sys
 from typing import Iterable, List, Mapping, Optional
 import string
-from amdgpu_family_matrix import amdgpu_family_info_matrix
+from amdgpu_family_matrix import (
+    amdgpu_family_info_matrix,
+    DEFAULT_LINUX_CONFIGURATIONS,
+    DEFAULT_WINDOWS_CONFIGURATIONS,
+)
+from amdgpu_family_matrix_xfail import amdgpu_family_matrix_xfail
 
 # --------------------------------------------------------------------------- #
 # General utilities
@@ -198,9 +203,6 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 # Matrix creation logic based on PR, push or workflow_dispatch
 # --------------------------------------------------------------------------- #
 
-DEFAULT_LINUX_CONFIGURATIONS = ["gfx94X", "gfx110X"]
-DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110X"]
-
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
@@ -211,21 +213,38 @@ def get_pr_labels(args) -> List[str]:
     return labels
 
 
+def discover_targets(potential_targets, matrix):
+    # iterate through each potential target, validate it exists in our matrix and then append target to run on
+    targets = []
+
+    for target in potential_targets:
+        # For workflow dispatch triggers, this helps prevent potential user-input errors
+        target = target.lower()
+        if target in matrix:
+            targets.append(target)
+
+    return targets
+
+
 def matrix_generator(
-    is_pull_request,
-    is_workflow_dispatch,
-    is_push,
-    base_args,
-    families,
+    is_pull_request=False,
+    is_workflow_dispatch=False,
+    is_push=False,
+    is_schedule=False,
+    base_args={},
+    families={},
     platform="linux",
 ):
     """Parses and generates build matrix with build requirements"""
-    potential_targets = []
+    targets = []
+    matrix = amdgpu_family_info_matrix
 
     # For the specific event trigger, parse linux and windows target information
     # if the trigger is a workflow_dispatch, parse through the inputs and retrieve the list
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
+        # For workflow dispatch, user can select an "expect_failure" family or regular family
+        matrix = amdgpu_family_info_matrix | amdgpu_family_matrix_xfail
 
         input_gpu_targets = families.get("amdgpu_families")
 
@@ -234,52 +253,49 @@ def matrix_generator(
         # (ex: ",gfx94X ,|.gfx1201" -> "gfx94X   gfx1201" -> ["gfx94X", "gfx1201"])
         translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
         potential_targets = input_gpu_targets.translate(translator).split()
+        targets.extend(discover_targets(potential_targets, matrix))
 
     # if the trigger is a pull_request label, parse through the labels and retrieve the list
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
+        potential_targets = []
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
             if "gfx" in label:
                 target, _ = label.split("-")
                 potential_targets.append(target)
+        targets.extend(discover_targets(potential_targets, matrix))
 
         # Add the linux and windows default labels to the potential target lists
         if platform == "linux":
-            potential_targets.extend(DEFAULT_LINUX_CONFIGURATIONS)
+            for target in DEFAULT_LINUX_CONFIGURATIONS:
+                targets.append(target)
         else:
-            potential_targets.extend(DEFAULT_WINDOWS_CONFIGURATIONS)
+            for target in DEFAULT_WINDOWS_CONFIGURATIONS:
+                targets.append(target)
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
-        # Add all options
+        # Add all options except for families that allow failures
         for key in amdgpu_family_info_matrix:
-            if "linux" in amdgpu_family_info_matrix[key] and platform == "linux":
-                potential_targets.append(key)
-            if "windows" in amdgpu_family_info_matrix[key] and platform == "windows":
-                potential_targets.append(key)
+            targets.append(key)
+
+    if is_schedule:
+        print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
+        # For schedule runs, we will run build and tests for only expect_failure families
+        matrix = amdgpu_family_matrix_xfail
+
+        # Add all options that allow failures
+        for key in amdgpu_family_matrix_xfail:
+            targets.append(key)
 
     # Ensure the targets in the list are unique
-    potential_targets = list(set(potential_targets))
+    unique_targets = list(set(targets))
 
-    # iterate through each potential target, validate it exists in our matrix and then append target to run on
     target_output = []
-
-    for target in potential_targets:
-        # For workflow dispatch triggers, this helps prevent potential user-input errors
-        target = target.lower()
-        if (
-            target in amdgpu_family_info_matrix
-            and "linux" in amdgpu_family_info_matrix.get(target)
-            and platform == "linux"
-        ):
-            target_output.append(amdgpu_family_info_matrix.get(target).get("linux"))
-        elif (
-            target in amdgpu_family_info_matrix
-            and "windows" in amdgpu_family_info_matrix.get(target)
-            and platform == "windows"
-        ):
-            target_output.append(amdgpu_family_info_matrix.get(target).get("windows"))
+    for target in unique_targets:
+        if platform in matrix.get(target):
+            target_output.append(matrix.get(target).get(platform))
 
     print(f"Generated build matrix: {str(target_output)}")
 
@@ -296,6 +312,7 @@ def main(base_args, linux_families, windows_families):
     is_push = github_event_name == "push"
     is_workflow_dispatch = github_event_name == "workflow_dispatch"
     is_pull_request = github_event_name == "pull_request"
+    is_schedule = github_event_name == "schedule"
 
     base_ref = base_args.get("base_ref")
     print("Found metadata:")
@@ -312,6 +329,7 @@ def main(base_args, linux_families, windows_families):
         is_pull_request,
         is_workflow_dispatch,
         is_push,
+        is_schedule,
         base_args,
         linux_families,
         platform="linux",
@@ -322,6 +340,7 @@ def main(base_args, linux_families, windows_families):
         is_pull_request,
         is_workflow_dispatch,
         is_push,
+        is_schedule,
         base_args,
         windows_families,
         platform="windows",

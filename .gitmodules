@@ -93,7 +93,7 @@
 [submodule "rocPRIM"]
 	path = math-libs/rocPRIM
 	url = https://github.com/ROCm/rocPRIM.git
-	branch = mainline
+	branch = develop
 [submodule "rocRAND"]
 	path = math-libs/rocRAND
 	url = https://github.com/ROCm/rocRAND.git
@@ -109,7 +109,7 @@
 [submodule "rocThrust"]
 	path = math-libs/rocThrust
 	url = https://github.com/ROCm/rocThrust.git
-	branch = mainline
+	branch = develop
 [submodule "MIOpen"]
 	path = ml-libs/MIOpen
 	url = https://github.com/ROCm/MIOpen.git

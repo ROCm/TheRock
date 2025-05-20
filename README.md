@@ -1,18 +1,40 @@
 # TheRock
 
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
-
-## Description
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain) [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) [![Publish PyTorch Dev Dockers](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml?query=branch%3Amain)
 
 TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
-Currently, the platform offers developers the option to build HIP and ROCm from source. Additionally, a GitHub actions pipeline will offer a nightly build with compiled ROCm/HIP software available in S3 and in the GitHub releases section.
+## Features
 
-## Installation From Source
+TheRock includes:
+
+- A CMake super-project for HIP and ROCm source builds
+- Tools for developing individual ROCm components
+- Support for building PyTorch with ROCm from source
+  - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Comprehensive CI/CD pipelines for building, testing, and releasing supported components
+
+### Support status
+
+For HIP and ROCm:
+
+|         | Build from source | Prebuilt packages                                                   | Python packages |
+| ------- | ----------------- | ------------------------------------------------------------------- | --------------- |
+| Linux   | ✅ Supported      | ✅ Supported                                                        | ✅ Supported    |
+| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | ⚪ Planned      |
+
+For PyTorch with ROCm:
+
+|         | PyTorch source build                                                | PyTorch Python packages | PyTorch Docker images |
+| ------- | ------------------------------------------------------------------- | ----------------------- | --------------------- |
+| Linux   | ✅ Supported                                                        | ⚪ Planned              | ✅ Supported          |
+| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned              | N/A                   |
+
+## Building from source
 
 We keep the following instructions for recent, commonly used operating system versions. Most build failures are due to minor operating system differences in dependencies and project setup. Refer to the [Environment Setup Guide](docs/environment_setup_guide.md) for contributed instructions and configurations for alternatives.
 
-### Ubuntu (24.04)
+### Setup - Ubuntu (24.04)
 
 ```bash
 # Install Ubuntu dependencies
@@ -25,38 +47,45 @@ cd TheRock
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python ./build_tools/fetch_sources.py # Downloads submodules and applies patches
+
+# Download submodules and apply patches
+python ./build_tools/fetch_sources.py
 ```
 
-### Windows 11 (VS 2022)
+### Setup - Windows 11 (VS 2022)
 
-See [windows_support.md](./docs/development/windows_support.md), in particular
-the section for
-[installing tools](./docs/development/windows_support.md#install-tools).
+> [!IMPORTANT]
+> See [windows_support.md](./docs/development/windows_support.md) for setup
+> instructions on Windows, in particular
+> the section for
+> [installing tools](./docs/development/windows_support.md#install-tools).
 
 ```bash
-# Clone the repository
-git clone https://github.com/ROCm/TheRock.git
+# Install dependencies following the Windows support guide
 
 # Clone interop library from https://github.com/nod-ai/amdgpu-windows-interop
 # for CLR (the "HIP runtime") on Windows. The path used can also be configured
 # using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable.
 git clone https://github.com/nod-ai/amdgpu-windows-interop.git
 
+# Clone the repository
+git clone https://github.com/ROCm/TheRock.git
 cd TheRock
 
 # Init python virtual environment and install python dependencies
-python3 -m venv .venv
-.venv\Scripts\Activate.ps1
+python -m venv .venv
+.venv\Scripts\Activate.bat
 pip install -r requirements.txt
-python ./build_tools/fetch_sources.py  # Downloads submodules and applies patches
+
+# Download submodules and apply patches
+python ./build_tools/fetch_sources.py
 ```
 
-## Configuration
+### Build configuration
 
 The build can be customized through cmake feature flags.
 
-**Required Flags:**
+#### Required configuration flags
 
 - `-DTHEROCK_AMDGPU_FAMILIES=`
 
@@ -64,43 +93,52 @@ The build can be customized through cmake feature flags.
 
 - `-DTHEROCK_AMDGPU_TARGETS=`
 
-Note: *Not all family and targets are currently supported. See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file for available options*
+> [!NOTE]
+> Not all family and targets are currently supported.
+> See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file
+> for available options.
 
-**Optional Flags**
+#### Optional configuration flags
 
 By default, the project builds everything available. The following group flags
-allow enable/disable of selected subsets:
+enable/disable selected subsets:
 
-- `-DTHEROCK_ENABLE_ALL=OFF`: Disables all optional components.
-- `-DTHEROCK_ENABLE_CORE=OFF`: Disables all core components.
-- `-DTHEROCK_ENABLE_COMM_LIBS=OFF`: Disables all communication libraries.
-- `-DTHEROCK_ENABLE_MATH_LIBS=OFF`: Disables all math libraries.
-- `-DTHEROCK_ENABLE_ML_LIBS=OFF`: Disables all ML libraries.
+| Group flag                       | Description                          |
+| -------------------------------- | ------------------------------------ |
+| `-DTHEROCK_ENABLE_ALL=OFF`       | Disables all optional components     |
+| `-DTHEROCK_ENABLE_CORE=OFF`      | Disables all core components         |
+| `-DTHEROCK_ENABLE_COMM_LIBS=OFF` | Disables all communication libraries |
+| `-DTHEROCK_ENABLE_MATH_LIBS=OFF` | Disables all math libraries          |
+| `-DTHEROCK_ENABLE_ML_LIBS=OFF`   | Disables all ML libraries            |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
 minimal build):
 
-- `-DTHEROCK_ENABLE_COMPILER=ON`: Enables the GPU+host compiler toolchain.
-- `-DTHEROCK_ENABLE_HIPIFY=ON`: Enables the hipify tool.
-- `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`: Enables the core runtime components and tools.
-- `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`: Enables the HIP runtime components.
-- `-DTHEROCK_ENABLE_RCCL=ON`: Enables RCCL.
-- `-DTHEROCK_ENABLE_PRIM=ON`: Enables the PRIM library.
-- `-DTHEROCK_ENABLE_BLAS=ON`: Enables the BLAS libraries.
-- `-DTHEROCK_ENABLE_RAND=ON`: Enables the RAND libraries.
-- `-DTHEROCK_ENABLE_SOLVER=ON`: Enables the SOLVER libraries.
-- `-DTHEROCK_ENABLE_SPARSE=ON`: Enables the SPARSE libraries.
-- `-DTHEROCK_ENABLE_MIOPEN=ON`: Enables MIOpen.
+| Component flag                     | Description                                   |
+| ---------------------------------- | --------------------------------------------- |
+| `-DTHEROCK_ENABLE_COMPILER=ON`     | Enables the GPU+host compiler toolchain       |
+| `-DTHEROCK_ENABLE_HIPIFY=ON`       | Enables the hipify tool                       |
+| `-DTHEROCK_ENABLE_CORE_RUNTIME=ON` | Enables the core runtime components and tools |
+| `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`  | Enables the HIP runtime components            |
+| `-DTHEROCK_ENABLE_RCCL=ON`         | Enables RCCL                                  |
+| `-DTHEROCK_ENABLE_PRIM=ON`         | Enables the PRIM library                      |
+| `-DTHEROCK_ENABLE_BLAS=ON`         | Enables the BLAS libraries                    |
+| `-DTHEROCK_ENABLE_RAND=ON`         | Enables the RAND libraries                    |
+| `-DTHEROCK_ENABLE_SOLVER=ON`       | Enables the SOLVER libraries                  |
+| `-DTHEROCK_ENABLE_SPARSE=ON`       | Enables the SPARSE libraries                  |
+| `-DTHEROCK_ENABLE_MIOPEN=ON`       | Enables MIOpen                                |
 
-Enabling any features will implicitly enable its *minimum* dependencies. Some
-libraries (like MIOpen) have a number of *optional* dependencies, which must
-be enabled manually if enabling/disabling individual features.
+> [!TIP]
+> Enabling any features will implicitly enable their *minimum* dependencies. Some
+> libraries (like MIOpen) have a number of *optional* dependencies, which must
+> be enabled manually if enabling/disabling individual features.
 
-A report of enabled/disabled features and flags will be printed on every
-CMake configure.
+> [!TIP]
+> A report of enabled/disabled features and flags will be printed on every
+> CMake configure.
 
-## Usage
+### CMake build usage
 
 To build ROCm/HIP:
 
@@ -123,7 +161,7 @@ cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
 cmake --build build
 ```
 
-## Tests
+### Running tests
 
 Project-wide testing can be controlled with the standard CMake `-DBUILD_TESTING=ON|OFF` flag. This gates both setup of build tests and compilation of installed testing artifacts.
 
@@ -137,7 +175,7 @@ ctest --test-dir build
 Testing functionality on an actual GPU is in progress and will be documented
 separately.
 
-## Development Manuals
+## Development manuals
 
 - [Contribution Guidelines](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
 - [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).

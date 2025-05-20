@@ -1,4 +1,4 @@
-From 13ccab3d1bca34c59f2a43a8d88222b3c6eafbfb Mon Sep 17 00:00:00 2001
+From f0162a6ccdca9fb461d280398ff40b121a8a2840 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Mon, 31 Mar 2025 19:27:48 +0100
 Subject: [PATCH 05/12] Add gfx1150/gfx1151 to hipblaslt support list in
@@ -10,7 +10,7 @@ Subject: [PATCH 05/12] Add gfx1150/gfx1151 to hipblaslt support list in
  2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/aten/src/ATen/native/cuda/Blas.cpp b/aten/src/ATen/native/cuda/Blas.cpp
-index 28936cc034..592c04693c 100644
+index 28936cc034a..592c04693c5 100644
 --- a/aten/src/ATen/native/cuda/Blas.cpp
 +++ b/aten/src/ATen/native/cuda/Blas.cpp
 @@ -259,7 +259,7 @@ static bool isSupportedHipLtROCmArch(int index) {
@@ -23,7 +23,7 @@ index 28936cc034..592c04693c 100644
  #if ROCM_VERSION >= 60500
          "gfx950"
 diff --git a/aten/src/ATen/native/hip/Blas.cpp b/aten/src/ATen/native/hip/Blas.cpp
-index c1fdaf7f28..734af694b0 100644
+index c1fdaf7f284..734af694b0f 100644
 --- a/aten/src/ATen/native/hip/Blas.cpp
 +++ b/aten/src/ATen/native/hip/Blas.cpp
 @@ -260,7 +260,7 @@ static bool isSupportedHipLtROCmArch(int index) {

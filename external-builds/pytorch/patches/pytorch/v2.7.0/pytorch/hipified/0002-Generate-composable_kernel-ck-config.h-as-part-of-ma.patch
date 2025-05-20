@@ -1,4 +1,4 @@
-From 16b6619e27958d06fa5c6d0e7d8d629d1d1636db Mon Sep 17 00:00:00 2001
+From 281a67dce7f54430b7551a4eb23f87b96d93e265 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Wed, 19 Feb 2025 17:14:59 -0800
 Subject: [PATCH 02/12] Generate composable_kernel ck/config.h as part of main
@@ -10,7 +10,7 @@ Without this, the ck/config.h comes from somewhere, most probably a ROCM SDK tha
  1 file changed, 21 insertions(+)
 
 diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
-index 085af373ec..67322e8f56 100644
+index 085af373ec2..67322e8f56e 100644
 --- a/aten/src/ATen/CMakeLists.txt
 +++ b/aten/src/ATen/CMakeLists.txt
 @@ -343,9 +343,30 @@ if(USE_CUDA)
