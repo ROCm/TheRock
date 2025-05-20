@@ -1,27 +1,24 @@
-From e4f7cd26a70be2f59763f6066d6c43f9f5473746 Mon Sep 17 00:00:00 2001
+From e7d5568707798d3a0bf87e6988f6d6283f9208b5 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Sun, 4 May 2025 22:24:50 +0530
-Subject: [PATCH 13/13] [ROCm][Windows] Enable USE_ROCM and fix assorted
- issues.
+Subject: [PATCH 12/12] Enable USE_ROCM and fix assorted issues.
 
 * RCCL, the HSA runtime, and rocprofiler are not supported on Windows
 * hipcc should be run with Windows compatibility flags to avoid warning spam
-* Composable Kernels generate linker errors if sources are excluded
 
 Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Co-authored-by: Scott Todd <scott.todd0@gmail.com>
 ---
- CMakeLists.txt               |  4 ++--
- aten/src/ATen/CMakeLists.txt |  6 ------
- c10/hip/CMakeLists.txt       |  6 +++++-
- caffe2/CMakeLists.txt        |  4 ++++
- cmake/Dependencies.cmake     |  3 +++
- cmake/public/LoadHIP.cmake   | 32 ++++++++++++++++++--------------
- functorch/csrc/dim/arena.h   |  2 +-
- 7 files changed, 33 insertions(+), 24 deletions(-)
+ CMakeLists.txt             |  4 ++--
+ c10/hip/CMakeLists.txt     |  6 +++++-
+ caffe2/CMakeLists.txt      |  4 ++++
+ cmake/Dependencies.cmake   |  3 +++
+ cmake/public/LoadHIP.cmake | 32 ++++++++++++++++++--------------
+ functorch/csrc/dim/arena.h |  2 +-
+ 6 files changed, 33 insertions(+), 18 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index f3fee2f7ff..6086450e3e 100644
+index f3fee2f7ffc..6086450e3ed 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -248,7 +248,7 @@ option(USE_XPU "Use XPU" ON)
@@ -42,25 +39,8 @@ index f3fee2f7ff..6086450e3e 100644
  cmake_dependent_option(USE_STATIC_NCCL "Use static NCCL" OFF "USE_NCCL" OFF)
  cmake_dependent_option(USE_SYSTEM_NCCL "Use system-wide NCCL" OFF "USE_NCCL"
                         OFF)
-diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
-index 74e464dda4..009859de63 100644
---- a/aten/src/ATen/CMakeLists.txt
-+++ b/aten/src/ATen/CMakeLists.txt
-@@ -382,12 +382,6 @@ endif()
-     ${native_quantized_hip_hip}
-     ${native_transformers_hip_hip} ${native_transformers_src_hip_hip}
-   )
--  if(WIN32) # Windows doesn't support Composable Kernels
--    file(GLOB native_hip_bgemm "native/hip/bgemm_kernels/*.hip")
--    file(GLOB native_hip_ck "native/hip/ck*.hip")
--    exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
--      ${native_hip_bgemm} ${native_hip_ck})
--  endif()
-   # TODO: Codegen separate files for HIP and use those (s/cuda_generated_sources/hip_generated_sources)
-   list(APPEND all_hip_cpp
-     ${native_nested_hip_cpp}
 diff --git a/c10/hip/CMakeLists.txt b/c10/hip/CMakeLists.txt
-index a98ec6fa23..b0510797f4 100644
+index a98ec6fa230..b0510797f44 100644
 --- a/c10/hip/CMakeLists.txt
 +++ b/c10/hip/CMakeLists.txt
 @@ -48,7 +48,11 @@ if(NOT BUILD_LIBTORCHLESS)
@@ -77,7 +57,7 @@ index a98ec6fa23..b0510797f4 100644
    target_include_directories(
        c10_hip PUBLIC
 diff --git a/caffe2/CMakeLists.txt b/caffe2/CMakeLists.txt
-index b32c71c8bd..e76e05c125 100644
+index b32c71c8bd6..e76e05c1255 100644
 --- a/caffe2/CMakeLists.txt
 +++ b/caffe2/CMakeLists.txt
 @@ -1699,6 +1699,10 @@ if(USE_ROCM)
@@ -92,7 +72,7 @@ index b32c71c8bd..e76e05c125 100644
    hip_include_directories(${Caffe2_HIP_INCLUDE})
  
 diff --git a/cmake/Dependencies.cmake b/cmake/Dependencies.cmake
-index be45936a8e..4f6b2e4837 100644
+index be45936a8ea..4f6b2e4837c 100644
 --- a/cmake/Dependencies.cmake
 +++ b/cmake/Dependencies.cmake
 @@ -1065,6 +1065,9 @@ if(USE_ROCM)
@@ -106,7 +86,7 @@ index be45936a8e..4f6b2e4837 100644
      add_definitions(-DROCM_VERSION=${ROCM_VERSION_DEV_INT})
      add_definitions(-DTORCH_HIP_VERSION=${TORCH_HIP_VERSION})
 diff --git a/cmake/public/LoadHIP.cmake b/cmake/public/LoadHIP.cmake
-index 7b058199a1..d365971337 100644
+index 7b058199a13..d365971337e 100644
 --- a/cmake/public/LoadHIP.cmake
 +++ b/cmake/public/LoadHIP.cmake
 @@ -37,10 +37,12 @@ macro(pytorch_load_hip)
@@ -170,7 +150,7 @@ index 7b058199a1..d365971337 100644
    set(HIP_NEW_TYPE_ENUMS ON)
    set(PYTORCH_FOUND_HIP ON)
 diff --git a/functorch/csrc/dim/arena.h b/functorch/csrc/dim/arena.h
-index aaaf7e772a..4bc627575d 100644
+index aaaf7e772a3..4bc627575de 100644
 --- a/functorch/csrc/dim/arena.h
 +++ b/functorch/csrc/dim/arena.h
 @@ -8,7 +8,7 @@

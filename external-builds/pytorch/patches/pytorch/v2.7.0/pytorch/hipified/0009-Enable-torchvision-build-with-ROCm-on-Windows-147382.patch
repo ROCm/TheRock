@@ -1,7 +1,7 @@
-From 6dfc91490c5b9722eb96445b970f7e6d8ad73909 Mon Sep 17 00:00:00 2001
+From d14a60b8fd030e26373b89fdc562c6f23a4a9f9d Mon Sep 17 00:00:00 2001
 From: tvukovic-amd <tvukovic@amd.com>
 Date: Tue, 18 Mar 2025 23:37:01 +0000
-Subject: [PATCH 09/13] Enable torchvision build with ROCm on Windows (#147382)
+Subject: [PATCH 09/12] Enable torchvision build with ROCm on Windows (#147382)
 
 - Updated HIP flags for Windows (removed non Windows flags on Windows case, added runtime library)
 - Set hipcc call for Windows case
@@ -19,7 +19,7 @@ Co-authored-by: Jeff Daily <jeff.daily@amd.com>
  2 files changed, 67 insertions(+), 26 deletions(-)
 
 diff --git a/torch/utils/cpp_extension.py b/torch/utils/cpp_extension.py
-index b8dd20bc01..8dd296bcae 100644
+index b8dd20bc01f..8dd296bcae3 100644
 --- a/torch/utils/cpp_extension.py
 +++ b/torch/utils/cpp_extension.py
 @@ -173,9 +173,6 @@ def _join_rocm_home(*paths) -> str:
@@ -242,7 +242,7 @@ index b8dd20bc01..8dd296bcae 100644
          compile_rule.append(
              '  command = $cxx -MMD -MF $out.d $cflags -c $in -o $out $post_cflags')
 diff --git a/torch/utils/hipify/hipify_python.py b/torch/utils/hipify/hipify_python.py
-index 6cbdf6c7ec..de726e066d 100755
+index 6cbdf6c7ecc..de726e066da 100755
 --- a/torch/utils/hipify/hipify_python.py
 +++ b/torch/utils/hipify/hipify_python.py
 @@ -139,7 +139,6 @@ class GeneratedFileCleaner:

@@ -1,7 +1,7 @@
-From 1846fb0621cdd8aec5010df27ac8bae633febddd Mon Sep 17 00:00:00 2001
+From 1c3934e100360b6d37bd00c83e48c2854a9f605a Mon Sep 17 00:00:00 2001
 From: Michal Gallus <Michal.Gallus@amd.com>
 Date: Sat, 26 Apr 2025 01:35:46 +0000
-Subject: [PATCH 11/13] Fix HIP Caffe2 Tests (#152014)
+Subject: [PATCH 11/12] Fix HIP Caffe2 Tests (#152014)
 
 Solves the following problems of caffe2 HIP tests building on Windows:
 1. HIP tests now use `hip_add_executable` to be built with custom_command invoking hip compiler, due to lack of cmake support for HIP in 3.18 (currently used).
@@ -16,7 +16,7 @@ Approved by: https://github.com/jeffdaily
  2 files changed, 11 insertions(+), 2 deletions(-)
 
 diff --git a/aten/src/ATen/test/cuda_vectorized_test.cu b/aten/src/ATen/test/cuda_vectorized_test.cu
-index 6b120f7eb3..7ba7bcb99b 100644
+index 6b120f7eb30..7ba7bcb99bc 100644
 --- a/aten/src/ATen/test/cuda_vectorized_test.cu
 +++ b/aten/src/ATen/test/cuda_vectorized_test.cu
 @@ -27,7 +27,7 @@ void reset_buffers() {
@@ -29,7 +29,7 @@ index 6b120f7eb3..7ba7bcb99b 100644
    // This is a compile-time unit test. If this file compiles without error,
    // then the test passes and during runtime, we just need to return.
 diff --git a/caffe2/CMakeLists.txt b/caffe2/CMakeLists.txt
-index d2d23b7ab6..b32c71c8bd 100644
+index d2d23b7ab65..b32c71c8bd6 100644
 --- a/caffe2/CMakeLists.txt
 +++ b/caffe2/CMakeLists.txt
 @@ -1896,9 +1896,18 @@ if(BUILD_TEST)

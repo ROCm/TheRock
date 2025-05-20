@@ -1,8 +1,8 @@
-From e92b736fbbaffd4b3b128684501a4714ee43c0d2 Mon Sep 17 00:00:00 2001
+From 455f219101bbb23503cd390c7aedce8566b6ba21 Mon Sep 17 00:00:00 2001
 From: ikalinic <ilija.kalinic@amd.com>
 Date: Wed, 19 Mar 2025 07:30:50 +0000
-Subject: [PATCH 12/13] Disable hipSPARSE and CK declarations and remove
- references for Windows (#149195)
+Subject: [PATCH] Disable hipSPARSE and CK declarations and remove references
+ for Windows (#149195)
 
 This PR removes references to `hipSPARSE` and `ck` functions and disables declarations which are not supported on Windows.
 
@@ -17,7 +17,7 @@ Co-authored-by: Jeff Daily <jeff.daily@amd.com>
  2 files changed, 49 insertions(+), 18 deletions(-)
 
 diff --git a/aten/src/ATen/cuda/CUDABlas.cpp b/aten/src/ATen/cuda/CUDABlas.cpp
-index a62b028fd4..cb66a6fc24 100644
+index a62b028fd4f..cb66a6fc247 100644
 --- a/aten/src/ATen/cuda/CUDABlas.cpp
 +++ b/aten/src/ATen/cuda/CUDABlas.cpp
 @@ -708,7 +708,7 @@ void bgemm_internal<at::BFloat16>(CUDABLAS_BGEMM_ARGTYPES(at::BFloat16))
@@ -82,7 +82,7 @@ index a62b028fd4..cb66a6fc24 100644
  
  } // namespace at::cuda::blas
 diff --git a/aten/src/ATen/cuda/CUDABlas.h b/aten/src/ATen/cuda/CUDABlas.h
-index 6075e7b9c9..637b48c797 100644
+index 6075e7b9c9d..637b48c797f 100644
 --- a/aten/src/ATen/cuda/CUDABlas.h
 +++ b/aten/src/ATen/cuda/CUDABlas.h
 @@ -292,6 +292,21 @@ void vdot<c10::complex<double>>(CUDABLAS_DOT_ARGTYPES(c10::complex<double>));
