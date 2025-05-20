@@ -21,9 +21,7 @@ SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
 
 if [ ! -n "${ROCM_HOME}" ]; then
     export ROCM_HOME=$(realpath $SCRIPT_DIR/../../build/dist/rocm)
-    export ROCM_HOME_WIN=$(cygpath -w ${ROCM_HOME})
     echo "ROCM_HOME: $ROCM_HOME"
-    echo "ROCM_HOME_WIN: $ROCM_HOME_WIN"
 fi
 if [ -d ${ROCM_HOME} ]; then
     export PATH=${ROCM_HOME}/bin:$PATH
@@ -31,6 +29,14 @@ else
     echo "Could not find ROCM_HOME: $ROCM_HOME"
     exit 1
 fi
+
+# `realpath` above returns a Unix-style path like `/d//TheRock/build/dist/rocm`
+# The 'cygpath' command converts into a Windows-style path like
+# `D:\TheRock\build\dist\rocm`, which has better compatibility with the PATH
+# environment variable and other follow-up steps after this bash script.
+# When we rewrite this script in Python we can use Pathlib instead.
+export ROCM_HOME_WIN=$(cygpath -w ${ROCM_HOME})
+echo "ROCM_HOME_WIN: $ROCM_HOME_WIN"
 
 BUILD_DIR_ROOT=${ROCM_HOME?}/../..
 
