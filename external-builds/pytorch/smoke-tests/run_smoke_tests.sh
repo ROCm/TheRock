@@ -16,6 +16,6 @@ echo 'Install pytest'
 PIP_BREAK_SYSTEM_PACKAGES=1 pip install --no-index --find-links=/wheels pytest;
 
 echo 'Run smoke tests'
-pytest -v external-builds/pytorch/smoke-tests/
+pytest -ra --tb=short -v --log-cli-level=INFO external-builds/pytorch/smoke-tests/
 
 echo 'Task completed!'
