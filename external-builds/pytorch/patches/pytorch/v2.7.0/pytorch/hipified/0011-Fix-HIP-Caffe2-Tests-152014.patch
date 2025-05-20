@@ -1,7 +1,7 @@
-From 1c3934e100360b6d37bd00c83e48c2854a9f605a Mon Sep 17 00:00:00 2001
+From b777ba26c3b54b44310908b1f38f76532d25c703 Mon Sep 17 00:00:00 2001
 From: Michal Gallus <Michal.Gallus@amd.com>
 Date: Sat, 26 Apr 2025 01:35:46 +0000
-Subject: [PATCH 11/12] Fix HIP Caffe2 Tests (#152014)
+Subject: [PATCH 11/14] Fix HIP Caffe2 Tests (#152014)
 
 Solves the following problems of caffe2 HIP tests building on Windows:
 1. HIP tests now use `hip_add_executable` to be built with custom_command invoking hip compiler, due to lack of cmake support for HIP in 3.18 (currently used).
