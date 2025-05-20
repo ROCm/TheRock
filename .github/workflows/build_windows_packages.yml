@@ -162,26 +162,38 @@ jobs:
 
       # HACK: timeout + retry the build a few times
       #       if this works, we can create script with similar behavior
-      - name: Build Projects (0-20)
+      - name: Build Projects (0-30)
         if: ${{ !cancelled() }}
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
-        timeout-minutes: 20
-      - name: Build Projects (20-40)
+        timeout-minutes: 30
+      - name: Build Projects (30-60)
         if: ${{ !cancelled() }}
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
-        timeout-minutes: 20
-      - name: Build Projects (40-60)
+        timeout-minutes: 30
+      - name: Build Projects (60-90)
         if: ${{ !cancelled() }}
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
-        timeout-minutes: 20
-      - name: Build Projects (60-80)
+        timeout-minutes: 30
+      - name: Build Projects (90-120)
         if: ${{ !cancelled() }}
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
-        timeout-minutes: 20
-      - name: Build Projects (80-100)
+        timeout-minutes: 30
+      - name: Build Projects (120-150)
         if: ${{ !cancelled() }}
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
-        timeout-minutes: 20
+        timeout-minutes: 30
+      - name: Build Projects (150-180)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 30
+      - name: Build Projects (180-210)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 30
+      - name: Build Projects (210-240)
+        if: ${{ !cancelled() }}
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        timeout-minutes: 30
 
       - name: Report
         if: ${{ !cancelled() }}
