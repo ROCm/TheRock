@@ -3,6 +3,11 @@ set -xeuo pipefail
 
 echo 'Running inside the container'
 
+echo 'rocminfo' 
+rocminfo
+
+echo 'rocm-smi'
+rocm-smi
 #  Check for ROCm GPU availability
 echo 'Checking for ROCm-compatible GPU...'
 if ! rocminfo | grep -q 'Name: .*AMD'; then
