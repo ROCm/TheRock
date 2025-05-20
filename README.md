@@ -74,7 +74,7 @@ cd TheRock
 
 # Init python virtual environment and install python dependencies
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.bat
 pip install -r requirements.txt
 
 # Download submodules and apply patches

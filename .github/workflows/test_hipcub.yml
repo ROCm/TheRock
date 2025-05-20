@@ -64,6 +64,5 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run hipcub tests
-        if: ${{ inputs.platform == 'linux' }}
         run: |
           ctest --test-dir ${THEROCK_BIN_DIR}/hipcub --output-on-failure --parallel 8
