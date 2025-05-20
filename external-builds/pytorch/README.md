@@ -27,11 +27,12 @@ patches locally until they can be upstreamed. See the
 
 ## Build instructions
 
-### Prerequisites
+### Prerequisites and setup
 
 You will need either a source build or binary distribution of the dist packages.
 
-- For binary distributions, see [RELEASES.md](../../RELEASES.md).
+- For binary distributions, see [RELEASES.md](../../RELEASES.md). Both tarballs
+  and Python packages should include the necessary files.
 
   - Note: windows binary releases of TheRock are not yet available.
 
@@ -45,35 +46,32 @@ You will need either a source build or binary distribution of the dist packages.
      ```
   1. Use the `build/dist/rocm` directory.
 
+It is highly recommended to use a virtual environment unless working within a
+throw-away container or CI environment.
+
+- On Linux:
+
+  ```bash
+  python -m venv .venv
+  source .venv/bin/activate
+  ```
+
+- On Windows:
+
+  ```bash
+  python -m venv .venv
+  .venv\Scripts\activate.bat
+  ```
+
 ### Build PyTorch, PyTorch vision and PyTorch audio on Linux
 
 ```bash
-cd external-builds/pytorch
 ./checkout_and_build_all.sh
 ```
 
 ### Build PyTorch on Windows (or the old way on Linux)
 
-### Step 0: Prep venv
-
-It is highly recommended to use a virtual environment unless if in a throw-away
-container/CI environment.
-
-On Linux:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-On Windows:
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate.bat
-```
-
-### Step 1: Preparing sources
+#### Step 1: Preparing sources
 
 ```bash
 # Checks out the most recent stable release branch of PyTorch, hipifies and
@@ -81,7 +79,7 @@ python -m venv .venv
 python pytorch_torch_repo.py checkout
 ```
 
-### Step 2: Install Deps
+#### Step 2: Install Deps
 
 Python deps:
 
@@ -90,7 +88,7 @@ pip install -r pytorch/requirements.txt
 pip install mkl-static mkl-include
 ```
 
-### Step 3: Setup and Build
+#### Step 3: Setup and Build
 
 On Linux:
 
