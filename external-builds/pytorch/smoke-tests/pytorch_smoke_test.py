@@ -2,7 +2,13 @@ import torch
 import pytest
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="ROCm is not available")
+class TestROCmAvailability:
+    def test_rocm_available(self):
+        assert (
+            torch.cuda.is_available()
+        ), "ROCm is not available or not detected by PyTorch"
+
+
 class TestMatrixOperations:
     def test_matrix_multiplication(self):
         matrix1 = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device="cuda")
@@ -83,7 +89,6 @@ class TestMatrixOperations:
         assert result.device.type == "cuda"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="ROCm is not available")
 class TestConvolutions:
     def test_conv_transpose2d(self):
         inputs = torch.randn(1, 4, 5, 5, device="cuda")
