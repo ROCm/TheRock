@@ -25,8 +25,9 @@ def index_log_files(build_dir: Path, amdgpu_family: str):
     log_dir = build_dir / "logs"
     index_file = log_dir / "index.html"
 
+    repo_root = Path(__file__).resolve().parent.parent
     # TODO: Fork indexer.py locally to avoid relying on an external GitHub source at runtime.
-    indexer_path = build_dir / "indexer.py"
+    indexer_path = repo_root / build_dir / "indexer.py"
 
     if log_dir.is_dir():
         log(f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files...")
