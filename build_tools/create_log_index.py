@@ -21,13 +21,44 @@ def normalize_path(p: Path) -> str:
     return str(p).replace("\\", "/") if is_windows() else str(p)
 
 
+def download_indexer(build_dir: Path) -> Path:
+    url = "https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py"
+    repo_root = Path(__file__).resolve().parent.parent
+    indexer_path = repo_root / build_dir / "indexer.py"
+    log(f"[INFO] Downloading indexer.py from {url} to {indexer_path}")
+    indexer_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        subprocess.run(
+            [
+                "curl",
+                "-L",
+                "--fail",
+                "--silent",
+                "--show-error",
+                "-o",
+                str(indexer_path),
+                url,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        log(f"[ERROR] Failed to download indexer.py: {e}")
+        sys.exit(2)
+
+    log("[INFO] Download complete.")
+    return indexer_path
+
+
 def index_log_files(build_dir: Path, amdgpu_family: str):
     log_dir = build_dir / "logs"
     index_file = log_dir / "index.html"
 
     repo_root = Path(__file__).resolve().parent.parent
-    # TODO: Fork indexer.py locally to avoid relying on an external GitHub source at runtime.
     indexer_path = repo_root / build_dir / "indexer.py"
+
+    if not indexer_path.is_file():
+        indexer_path = download_indexer(build_dir)
 
     if log_dir.is_dir():
         log(f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files...")
