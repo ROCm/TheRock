@@ -9,12 +9,26 @@ import argparse
 import concurrent.futures
 import platform
 import re
+from shutil import copyfileobj
 import sys
-from urllib.request import urlopen, Request, urlretrieve, HTTPError
+from urllib.request import urlopen, Request, HTTPError
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 BUCKET_URL = "https://therock-artifacts.s3.us-east-2.amazonaws.com"
+
+
+class FetchArtifactException(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ArtifactNotFoundExeption(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
 
 # TODO(geomin12): switch out logging library
 def log(*args, **kwargs):
@@ -39,14 +53,22 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
             return data
     except HTTPError as err:
         if err.code == 404:
-            return None
+            raise ArtifactNotFoundExeption(
+                f"No artifacts found for {run_id}-{PLATFORM}. Exiting..."
+            )
         else:
-            raise Exception(
+            raise FetchArtifactException(
                 f"Error when retrieving S3 bucket {run_id}-{PLATFORM}/index-{amdgpu_family}.html. Exiting..."
             )
 
 
-def collect_artifacts_urls(artifacts, run_id, build_dir, variant, existing_artifacts):
+def collect_artifacts_urls(
+    artifacts: list[str],
+    run_id: str,
+    build_dir: str,
+    variant: str,
+    existing_artifacts: set[str],
+) -> list[str]:
     """Collects S3 artifact URLs to execute later in parallel."""
     artifacts_to_retrieve = []
     for artifact in artifacts:
@@ -65,10 +87,10 @@ def collect_artifacts_urls(artifacts, run_id, build_dir, variant, existing_artif
 
 
 def urllib_retrieve_artifact(artifact):
-    """Retrieves an artifact via urllib"""
     output_path, artifact_url = artifact
     log(f"++ Retrieving: {output_path}")
-    urlretrieve(artifact_url, output_path)
+    with urlopen(artifact_url) as in_stream, open(output_path, "wb") as out_file:
+        copyfileobj(in_stream, out_file)
     log(f"++ Retrieve complete: {output_path}")
 
 

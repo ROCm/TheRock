@@ -162,9 +162,6 @@ def retrieve_artifacts_by_run_id(args):
     amdgpu_family = args.amdgpu_family
     log(f"Retrieving artifacts for run ID {run_id}")
     s3_artifacts = retrieve_s3_artifacts(run_id, amdgpu_family)
-    if not s3_artifacts:
-        log(f"S3 artifacts for {run_id} does not exist. Exiting...")
-        return
 
     # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
     retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
