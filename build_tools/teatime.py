@@ -85,7 +85,7 @@ class OutputSink:
         self.upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
         self.s3_bucket = os.getenv("TEATIME_S3_BUCKET")
         self.s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
-        self.base_build_base = os.getenv("BASE_BUILD_DIR")
+        self.base_build_dir = os.getenv("BASE_BUILD_DIR")
 
     def start(self):
         if self.gh_group_label is not None:
@@ -110,46 +110,74 @@ class OutputSink:
                 b"[" + self.label + b" completed in " + run_pretty.encode() + b"]\n"
             )
 
-        if self.upload_to_s3 and self.s3_bucket and self.s3_subdir:
-            try:
-                repo_root = Path(__file__).resolve().parent.parent
-                build_dir = repo_root / self.base_build_base
-                upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
-                s3_path = f"s3://{self.s3_bucket}/{self.s3_subdir}"
+        # Return if upload is not configured
+        if not (self.upload_to_s3 and self.s3_bucket and self.s3_subdir):
+            return
 
-                print(f"[INFO] Uploading logs to {s3_path}")
+        repo_root = Path(__file__).resolve().parent.parent
+        build_dir = repo_root / self.base_build_dir
+        amdgpu_family = os.getenv("AMDGPU_FAMILIES")
+
+        # Step 1: Run create_log_index.py (if AMDGPU_FAMILIES is defined)
+        if amdgpu_family:
+            try:
+                index_script = repo_root / "build_tools" / "create_log_index.py"
+                print(f"[INFO] Indexing logs for AMDGPU_FAMILIES={amdgpu_family}")
                 subprocess.run(
                     [
                         sys.executable,
-                        str(upload_script),
+                        str(index_script),
                         "--build-dir",
                         str(build_dir),
-                        "--s3-base-path",
-                        s3_path,
+                        "--amdgpu-family",
+                        amdgpu_family,
                     ],
                     check=True,
                 )
             except subprocess.CalledProcessError as e:
-                print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
+                print(f"[WARN] create_log_index.py failed: {e}", file=sys.stderr)
             except Exception as e:
                 print(
-                    f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr
+                    f"[WARN] Unexpected error during log indexing: {e}", file=sys.stderr
                 )
+        else:
+            print("[WARN] AMDGPU_FAMILIES not set; skipping log indexing")
 
-    def writeline(self, line: bytes):
-        if self.interactive_prefix is not None:
-            self.out.write(self.interactive_prefix)
-        self.out.write(line)
-        if self.interactive:
-            self.out.flush()
-        if self.log_file is not None:
-            if self.log_timestamps:
-                now = time.time()
-                self.log_file.write(
-                    f"{round((now - self.start_time) * 10) / 10}\t".encode()
-                )
-            self.log_file.write(line)
-            self.log_file.flush()
+        # Step 2: Upload logs to S3
+        try:
+            upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
+            s3_path = f"s3://{self.s3_bucket}/{self.s3_subdir}"
+            print(f"[INFO] Uploading logs to {s3_path}")
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(upload_script),
+                    "--build-dir",
+                    str(build_dir),
+                    "--s3-base-path",
+                    s3_path,
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr)
+
+        def writeline(self, line: bytes):
+            if self.interactive_prefix is not None:
+                self.out.write(self.interactive_prefix)
+            self.out.write(line)
+            if self.interactive:
+                self.out.flush()
+            if self.log_file is not None:
+                if self.log_timestamps:
+                    now = time.time()
+                    self.log_file.write(
+                        f"{round((now - self.start_time) * 10) / 10}\t".encode()
+                    )
+                self.log_file.write(line)
+                self.log_file.flush()
 
 
 def run(args: argparse.Namespace, child_arg_list: list[str] | None, sink: OutputSink):
