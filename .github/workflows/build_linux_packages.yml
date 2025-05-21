@@ -39,6 +39,7 @@ jobs:
     strategy:
       fail-fast: true
     env:
+      BASE_BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       CCACHE_DIR: "${{ github.workspace }}/.container-cache/ccache"
       CCACHE_MAXSIZE: "700M"
@@ -143,7 +144,7 @@ jobs:
             --output build/indexer.py
           python build/indexer.py -f '*.tar.xz*' build/artifacts/
           python3 build_tools/create_log_index.py \
-            --build-dir=build \
+            --build-dir=${{ env.BASE_BUILD_DIR }} \
             --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
 
       # TODO: Move to script

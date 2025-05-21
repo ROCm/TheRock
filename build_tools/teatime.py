@@ -85,6 +85,7 @@ class OutputSink:
         self.upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
         self.s3_bucket = os.getenv("TEATIME_S3_BUCKET")
         self.s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
+        self.base_build_base = os.getenv("BASE_BUILD_DIR")
 
     def start(self):
         if self.gh_group_label is not None:
@@ -112,7 +113,7 @@ class OutputSink:
         if self.upload_to_s3 and self.s3_bucket and self.s3_subdir:
             try:
                 repo_root = Path(__file__).resolve().parent.parent
-                build_dir = repo_root / "build"
+                build_dir = repo_root / self.base_build_base
                 upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
                 s3_path = f"s3://{self.s3_bucket}/{self.s3_subdir}"
 
