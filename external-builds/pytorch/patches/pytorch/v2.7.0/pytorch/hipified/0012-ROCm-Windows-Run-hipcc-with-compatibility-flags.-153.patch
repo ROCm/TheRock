@@ -1,7 +1,16 @@
-From 0f71a7cf48401bede219434412192e53464b1b21 Mon Sep 17 00:00:00 2001
+From 3a588f0eba74652c6284221d5883240d40cef729 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
-Date: Tue, 20 May 2025 15:13:26 -0700
-Subject: [PATCH 13/14] Run hipcc with compatibility flags.
+Date: Wed, 21 May 2025 20:26:52 +0000
+Subject: [PATCH 12/14] [ROCm][Windows] Run hipcc with compatibility flags.
+ (#153986)
+
+See also https://github.com/ROCm/TheRock/issues/590. Including the `-Wno-ignored-attributes` flag here avoids 700MB of log warning spam while compiling and the `-fms-extensions` seems beneficial to include: https://clang.llvm.org/docs/MSVCCompatibility.html.
+
+Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Co-authored-by: Scott Todd <scott.todd0@gmail.com>
+
+Pull Request resolved: https://github.com/pytorch/pytorch/pull/153986
+Approved by: https://github.com/Skylion007, https://github.com/jeffdaily
 
 Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 ---
@@ -39,5 +48,5 @@ index be45936a8ea..4f6b2e4837c 100644
      add_definitions(-DROCM_VERSION=${ROCM_VERSION_DEV_INT})
      add_definitions(-DTORCH_HIP_VERSION=${TORCH_HIP_VERSION})
 -- 
-2.47.1.windows.2
+2.45.1.windows.1
 
