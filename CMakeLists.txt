@@ -57,6 +57,16 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
+# Source settings.
+option(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES "Use the `rocm-libraries` monorepo instead of submodules" OFF)
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES AND NOT ROCM_LIBRARIES_SOURCE_DIR)
+  message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_ROCM_LIBRARIES is set, ROCM_LIBRARIES_SOURCE_DIR is required!")
+endif()
+
+if(ROCM_LIBRARIES_SOURCE_DIR)
+  cmake_path(ABSOLUTE_PATH ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
+endif()
+
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 
