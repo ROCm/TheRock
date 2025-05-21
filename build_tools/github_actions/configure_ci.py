@@ -352,6 +352,10 @@ def main(base_args, linux_families, windows_families):
     #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
     enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
+    # In the case of a scheduled run, we always want to build
+    if is_schedule:
+        enable_build_jobs = True
+
     write_job_summary(
         f"""## Workflow configure results
 
