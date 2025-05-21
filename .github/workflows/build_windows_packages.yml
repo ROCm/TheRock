@@ -177,6 +177,8 @@ jobs:
       - name: Create Index Files
         if: always()
         run: |
+          mkdir -p "${BUILD_DIR_BASH}/artifacts"
+          mkdir -p "${BUILD_DIR_BASH}/logs"
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output ${{ env.BUILD_DIR_BASH }}/indexer.py
