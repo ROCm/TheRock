@@ -81,7 +81,7 @@ class OutputSink:
             self.log_file = open(self.log_path, "wb")
         self.log_timestamps: bool = args.log_timestamps
 
-        # Optional S3 upload
+        # S3 upload configuration
         self.upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
         self.s3_bucket = os.getenv("TEATIME_S3_BUCKET")
         self.s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
@@ -113,9 +113,10 @@ class OutputSink:
             try:
                 repo_root = Path(__file__).resolve().parent.parent
                 build_dir = repo_root / "build"
-
-                # Run "upload_logs_to_s3.py" script
                 upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
+                s3_path = f"s3://{self.s3_bucket}/{self.s3_subdir}"
+
+                print(f"[INFO] Uploading logs to {s3_path}")
                 subprocess.run(
                     [
                         sys.executable,
@@ -123,7 +124,7 @@ class OutputSink:
                         "--build-dir",
                         str(build_dir),
                         "--s3-base-path",
-                        f"s3://{self.s3_bucket}/{self.s3_subdir}",
+                        s3_path,
                     ],
                     check=True,
                 )
@@ -131,8 +132,7 @@ class OutputSink:
                 print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
             except Exception as e:
                 print(
-                    f"[WARN] Unexpected error during log upload: {e}",
-                    file=sys.stderr,
+                    f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr
                 )
 
     def writeline(self, line: bytes):
