@@ -41,7 +41,7 @@ RUNS=${(
 ) || RUNS=0
 
 
-if [[ ${RUNS -eq 0 ]]; then
+if [[ ${RUNS} -eq 0 ]]; then
   echo "No runs found for ${WORKFLOW_NAME} in ${REPOSITORY}"
   exit
 fi
