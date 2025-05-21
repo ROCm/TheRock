@@ -4,10 +4,10 @@
 # all previous runs of it. This scripts will delete all the runs for a given
 # workflow. Use with caution!!! It will prompt before deletion.
 #
-# Usage: delete-runs.sh <org/repo> <workflow-name (aka path to workflow 
+# Usage: delete-workflow.sh <org/repo> <workflow-name (aka path to workflow
 # file e.g. blahblah.yml )>
 #
-# Inspired by and mostly copied from: 
+# Inspired by and mostly copied from:
 # https://github.com/orgs/community/discussions/26256
 
 set -oe pipefail
@@ -37,7 +37,7 @@ RUNS=$(
     --jq '.workflow_runs[] | select(.conclusion != "") | .id'
 ) || RUNS=0
 
-if [[ RUNS -eq 0 ]]; then
+if [[ $RUNS -eq 0 ]]; then
   echo "No runs found for $WORKFLOW_NAME in $REPOSITORY"
   exit
 fi
@@ -57,6 +57,6 @@ select answer in "yes" "no"; do
 done
 
 for RUN in $RUNS; do
-  gh run delete --repo $REPOSITORY $RUN || echo "Failed to delete run $RUN"
+  gh run delete --repo "$REPOSITORY" "$RUN" || echo "Failed to delete run $RUN"
   sleep 0.1
 done
