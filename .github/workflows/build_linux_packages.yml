@@ -97,7 +97,8 @@ jobs:
         if: always()
         run: |
           mkdir -p build
-
+          mkdir -p build/artifacts
+          mkdir -p build/logs
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output build/indexer.py
