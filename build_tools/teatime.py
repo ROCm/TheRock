@@ -164,20 +164,20 @@ class OutputSink:
         except Exception as e:
             print(f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr)
 
-        def writeline(self, line: bytes):
-            if self.interactive_prefix is not None:
-                self.out.write(self.interactive_prefix)
-            self.out.write(line)
-            if self.interactive:
-                self.out.flush()
-            if self.log_file is not None:
-                if self.log_timestamps:
-                    now = time.time()
-                    self.log_file.write(
-                        f"{round((now - self.start_time) * 10) / 10}\t".encode()
-                    )
-                self.log_file.write(line)
-                self.log_file.flush()
+    def writeline(self, line: bytes):
+        if self.interactive_prefix is not None:
+            self.out.write(self.interactive_prefix)
+        self.out.write(line)
+        if self.interactive:
+            self.out.flush()
+        if self.log_file is not None:
+            if self.log_timestamps:
+                now = time.time()
+                self.log_file.write(
+                    f"{round((now - self.start_time) * 10) / 10}\t".encode()
+                )
+            self.log_file.write(line)
+            self.log_file.flush()
 
 
 def run(args: argparse.Namespace, child_arg_list: list[str] | None, sink: OutputSink):
