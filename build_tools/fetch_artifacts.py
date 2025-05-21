@@ -12,13 +12,6 @@ import re
 import sys
 from urllib.request import urlopen, Request, urlretrieve, HTTPError
 
-
-class ArtifactNotFoundException(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 BUCKET_URL = "https://therock-artifacts.s3.us-east-2.amazonaws.com"
