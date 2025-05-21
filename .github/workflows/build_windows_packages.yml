@@ -145,18 +145,6 @@ jobs:
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
           role-duration-seconds: 14400  # 4 hours
 
-      # TODO: Move to script
-      - name: Create Index Files
-        if: always()
-        run: |
-          curl --silent --fail --show-error --location \
-            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
-          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
-          python build_tools/create_log_index.py \
-            --build-dir=${{ env.BUILD_DIR_BASH }} \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
-
       - name: Configure Projects
         run: |
           # clear cache before build and after download
@@ -184,6 +172,18 @@ jobs:
             -DTHEROCK_ENABLE_SOLVER=OFF \
             -DTHEROCK_ENABLE_ML_LIBS=OFF \
             ${extra_cmake_options}
+
+      # TODO: Move to script
+      - name: Create Index Files
+        if: always()
+        run: |
+          curl --silent --fail --show-error --location \
+            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
+            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
+          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
+          python build_tools/create_log_index.py \
+            --build-dir=${{ env.BUILD_DIR_BASH }} \
+            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
 
       - name: Build Projects
         run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
