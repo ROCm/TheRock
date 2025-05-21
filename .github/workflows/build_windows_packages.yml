@@ -45,6 +45,9 @@ jobs:
       CCACHE_MAXSIZE: "4000M"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEATIME_S3_UPLOAD: "1"
+      TEATIME_S3_BUCKET: "therock-artifacts"
+      TEATIME_S3_SUBDIR: "${{ github.run_id }}-windows/logs/${{ inputs.amdgpu_families }}"
     steps:
       - name: "Create build dir"
         shell: powershell
@@ -226,15 +229,6 @@ jobs:
             --exclude "*" `
             --include "*.tar.xz*"
           aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html
-
-      - name: Upload Logs
-        if: always()
-        shell: powershell
-        run: |
-          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          python3 build_tools/upload_logs_to_s3.py `
-            --build-dir=${{ env.BASE_BUILD_DIR_POWERSHELL }} `
-            --s3-base-path="s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}"
 
       - name: Add Links to Job Summary
         if: always()
