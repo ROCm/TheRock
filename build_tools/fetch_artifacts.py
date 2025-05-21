@@ -88,10 +88,10 @@ def collect_artifacts_urls(
 
 def urllib_retrieve_artifact(artifact):
     output_path, artifact_url = artifact
-    log(f"++ Retrieving: {output_path}")
+    log(f"++ Downloading from {artifact_url} to {output_path}")
     with urlopen(artifact_url) as in_stream, open(output_path, "wb") as out_file:
         copyfileobj(in_stream, out_file)
-    log(f"++ Retrieve complete: {output_path}")
+    log(f"++ Download complete for {output_path}")
 
 
 def parallel_exec_commands(artifacts):
