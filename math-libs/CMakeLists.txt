@@ -75,7 +75,7 @@ if(THEROCK_ENABLE_PRIM)
   ##############################################################################
 
   if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
-    set(_rocprim_source_dir "${ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim")
+    set(_rocprim_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim")
   else()
     set(_rocprim_source_dir "rocPRIM")
   endif()
