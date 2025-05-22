@@ -18,6 +18,7 @@ include(CMakeDependentOption)
 include(ExternalProject)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
+include(therock_compiler_config)
 include(therock_features)
 include(therock_subproject)
 include(therock_job_pools)
@@ -104,6 +105,8 @@ endblock()
 ################################################################################
 
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
+option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
+option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 
 ################################################################################
 # Feature selection
