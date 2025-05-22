@@ -139,6 +139,14 @@ jobs:
           path: amdgpu-windows-interop
           lfs: true
 
+      - name: Download indexer.py and set INDEXER_PATH
+        if: always()
+        run: |
+          curl --silent --fail --show-error --location \
+            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
+            --output "${{ env.BUILD_DIR_BASH }}/indexer.py"
+          echo "INDEXER_PATH=${{ env.BUILD_DIR_BASH }}/indexer.py" >> $GITHUB_ENV
+
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
@@ -210,15 +218,10 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
-      # TODO: Move to script
       - name: Create Index Files
         if: always()
         run: |
-          curl --silent --fail --show-error --location \
-            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
-          export INDEXER_PATH="${{ env.BUILD_DIR_BASH }}/indexer.py"
-          python $INDEXER_PATH -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
+          python "$INDEXER_PATH" -f '*.tar.xz*' "${{ env.BUILD_DIR_BASH }}/artifacts/"
 
       # TODO: Move to script
       - name: Upload Artifacts
