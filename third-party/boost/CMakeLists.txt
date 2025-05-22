@@ -15,7 +15,7 @@ therock_subproject_fetch(boost-sources
   # Originally mirrored from: "https://archives.boost.io/release/1.87.0/source/boost_1_87_0.tar.bz2"
   # with `libs\wave\test\testwave\testfiles\utf8-test*` removed.
   URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/boost_1_87_0-1.tar.bz2"
-  URL HASH "SHA256=0ba4085a0beb3b9c57fa617d09110c79e977a9944750cd93fb17d82807a8c64c"
+  URL_HASH "SHA256=0ba4085a0beb3b9c57fa617d09110c79e977a9944750cd93fb17d82807a8c64c"
   TOUCH "${_download_stamp}"
 )
 
