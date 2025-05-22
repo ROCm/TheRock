@@ -122,7 +122,7 @@ class OutputSink:
         if amdgpu_family:
             try:
                 index_script = repo_root / "build_tools" / "create_log_index.py"
-                print(f"[INFO] Indexing logs for AMDGPU_FAMILIES={amdgpu_family}")
+                print(f"[TEATIME] Indexing logs for AMDGPU_FAMILIES={amdgpu_family}")
                 subprocess.run(
                     [
                         sys.executable,
@@ -147,7 +147,7 @@ class OutputSink:
         try:
             upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
             s3_path = f"s3://{self.s3_bucket}/{self.s3_subdir}"
-            print(f"[INFO] Uploading logs to {s3_path}")
+            print(f"[TEATIME] Uploading logs to {s3_path}")
             subprocess.run(
                 [
                     sys.executable,
