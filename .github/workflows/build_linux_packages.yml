@@ -48,8 +48,7 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
-      BUCKET: ${{ github.repository == 'ROCm/TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
-      REPO: ${{ github.repository == 'ROCm/TheRock'  && '' || github.event.repository.name }}
+      BUCKET: ${{ github.event.repository.name == 'TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -116,7 +115,7 @@ jobs:
           cmake --build build --target therock-archives therock-dist
 
       - name: Test Packaging
-        if: ${{ github.repository == 'ROCm/TheRock' }}
+        if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
           ctest --test-dir build --output-on-failure
 

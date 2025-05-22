@@ -16,7 +16,6 @@ GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
 BUCKET = os.getenv("BUCKET", "therock-artifacts")
-REPO = os.getenv("REPO", "")
 
 
 def log(*args, **kwargs):

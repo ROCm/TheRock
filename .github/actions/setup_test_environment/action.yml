@@ -17,8 +17,6 @@ inputs:
     type: string
   BUCKET:
     type: string
-  REPO:
-    type: string
 
 runs:
   using: "composite"
@@ -61,7 +59,6 @@ runs:
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
         BUCKET: ${{ inputs.BUCKET }}
-        REPO: ${{ inputs.REPO }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \

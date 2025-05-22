@@ -65,7 +65,6 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--prim --tests"
           PLATFORM: ${{ inputs.platform }}
           BUCKET: ${{ github.repository == 'ROCm/TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
-          REPO: ${{ github.repository == 'ROCm/TheRock'  && '' || github.event.repository.name }}
 
       - name: Run rocprim tests
         env:
