@@ -111,7 +111,7 @@ class OutputSink:
             )
 
         # Call coordinate_index_and_logs if upload is configured
-        if  (self.upload_to_s3 and self.s3_bucket and self.s3_subdir):
+        if self.upload_to_s3 and self.s3_bucket and self.s3_subdir:
             self.coordinate_index_and_logs()
 
     def coordinate_index_and_logs(self):
