@@ -13,7 +13,10 @@ Example usage:
     python patch_monorepo.py --repo /tmp/rocm-libraries
 
     # Apply patches to `rocm-libraries/projects/rocblas`:
-    python patch_monorepo.py --repo /tmp/rocm-libraries --projects=rocBLAS
+    python patch_monorepo.py --repo /tmp/rocm-libraries --projects rocBLAS
+
+    # Apply patches to `rocm-libraries/projects/{rocblas,rocthrust}`
+    python patch_monorepo.py --repo /tmp/rocm-libraries --projects rocBLAS rocThrust
 
 """
 
@@ -40,6 +43,11 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
+def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
+    relpath = repo / category / Path(name.lower())
+    return relpath
+
+
 def run(args):
     projects = list(args.projects)
     shared = list()
@@ -61,7 +69,7 @@ def run(args):
     if not patch_version_dir.exists():
         log(f"ERROR: Patch directory {patch_version_dir} does not exist")
     for patch_project_dir in patch_version_dir.iterdir():
-        # log(f"* Processing project patch directory {patch_project_dir}:")
+        log(f"* Processing project patch directory {patch_project_dir}:")
         # Check that project patch directory was included and set the category
         project_to_patch = patch_project_dir.name
         if project_to_patch in projects:
@@ -101,11 +109,6 @@ def run(args):
         ["git", "update-index", "--skip-worktree"],
         cwd=args.repo,
     )
-
-
-def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
-    relpath = repo / category / Path(name.lower())
-    return relpath
 
 
 def main(argv):
