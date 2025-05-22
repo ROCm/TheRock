@@ -2,16 +2,16 @@
 """
 upload_logs_to_s3.py
 
-Uploads log files and index.html to an S3 bucket using the AWS CLI.
+Uploads log files and index.html to an S3 bucket using boto3.
 """
 
 import os
 import sys
-import glob
-import shutil
 import argparse
-import subprocess
 from pathlib import Path
+
+import boto3
+from botocore.exceptions import ClientError
 
 
 def log(*args, **kwargs):
@@ -19,27 +19,17 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def check_aws_cli_available():
-    if not shutil.which("aws"):
-        log("[ERROR] AWS CLI not found in PATH.")
-        sys.exit(1)
+def upload_file_boto3(file_path: Path, bucket: str, key: str, content_type: str = None):
+    s3 = boto3.client("s3")
+    extra_args = {"ContentType": content_type} if content_type else {}
 
-
-def run_aws_cp(
-    source_path: Path, s3_destination: str, content_type: str = None
-) -> None:
-    if source_path.is_dir():
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
-    else:
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination]
-
-    if content_type:
-        cmd += ["--content-type", content_type]
     try:
-        log(f"[INFO] Running: {' '.join(cmd)}")
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        log(f"[ERROR] Failed to upload {source_path} to {s3_destination}: {e}")
+        log(f"[INFO] Uploading {file_path} to s3://{bucket}/{key}")
+        s3.upload_file(str(file_path), bucket, key, ExtraArgs=extra_args)
+    except ClientError as e:
+        log(f"[ERROR] Failed to upload {file_path} to s3://{bucket}/{key}: {e}")
+    else:
+        log(f"[INFO] Successfully uploaded {file_path} to s3://{bucket}/{key}")
 
 
 def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
@@ -49,26 +39,32 @@ def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
+    if not s3_base_path.startswith("s3://"):
+        log(f"[ERROR] Invalid s3_base_path: {s3_base_path}")
+        sys.exit(2)
+
+    bucket, *prefix_parts = s3_base_path[5:].split("/", 1)
+    prefix = prefix_parts[0] if prefix_parts else ""
+
     # Upload .log files
     log_files = list(log_dir.glob("*.log"))
     if not log_files:
         log("[WARN] No .log files found. Skipping log upload.")
     else:
-        run_aws_cp(log_dir, s3_base_path, content_type="text/plain")
+        for file_path in log_files:
+            key = f"{prefix}/{file_path.name}" if prefix else file_path.name
+            upload_file_boto3(file_path, bucket, key, content_type="text/plain")
 
     # Upload index.html
     index_path = log_dir / "index.html"
     if index_path.is_file():
-        index_s3_dest = f"{s3_base_path}/index.html"
-        run_aws_cp(index_path, index_s3_dest, content_type="text/html")
-        log(f"[INFO] Uploaded {index_path} to {index_s3_dest}")
+        key = f"{prefix}/index.html" if prefix else "index.html"
+        upload_file_boto3(index_path, bucket, key, content_type="text/html")
     else:
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
 def main():
-    check_aws_cli_available()
-
     repo_root = Path(__file__).resolve().parent.parent
     default_build_dir = repo_root / "build"
 
