@@ -49,6 +49,7 @@ jobs:
       TEATIME_S3_UPLOAD: "1"
       TEATIME_S3_BUCKET: "therock-artifacts"
       TEATIME_S3_SUBDIR: "${{ github.run_id }}-windows/logs/${{ inputs.amdgpu_families }}"
+      TEATIME_FAIL_ON_UPLOAD_ERROR: "1"
     steps:
       - name: "Create build dir"
         shell: powershell

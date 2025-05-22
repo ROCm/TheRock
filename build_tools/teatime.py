@@ -162,8 +162,12 @@ class OutputSink:
             )
         except subprocess.CalledProcessError as e:
             print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
+            if os.getenv("TEATIME_FAIL_ON_UPLOAD_ERROR") == "1":
+                raise
         except Exception as e:
             print(f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr)
+            if os.getenv("TEATIME_FAIL_ON_UPLOAD_ERROR") == "1":
+                raise
 
     def writeline(self, line: bytes):
         if self.interactive_prefix is not None:
