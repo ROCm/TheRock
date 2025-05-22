@@ -6,6 +6,7 @@
 # but those artifacts may not have all required dependencies.
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -13,6 +14,9 @@ import sys
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
+
+BUCKET = os.getenv("BUCKET")
+REPO = os.getenv("REPO")
 
 
 def log(*args, **kwargs):
@@ -32,7 +36,7 @@ def s3_bucket_exists(run_id):
         "aws",
         "s3",
         "ls",
-        f"s3://therock-artifacts/{run_id}-{PLATFORM}",
+        f"s3://{BUCKET}/{REPO}/{run_id}-{PLATFORM}",
         "--no-sign-request",
     ]
     process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
@@ -45,7 +49,7 @@ def s3_exec(variant, package, run_id, build_dir):
         "aws",
         "s3",
         "cp",
-        f"s3://therock-artifacts/{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
+        f"s3://{BUCKET}/{REPO}/{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
         str(build_dir),
         "--no-sign-request",
     ]
