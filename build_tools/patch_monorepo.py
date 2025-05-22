@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 """Applies patches to a monorepo.
-This script is available for users,but it is primarily the mechanism
-the CI uses to get to a clean state.
+This script is available for users, but it is primarily the mechanism
+the CI uses to apply patches to a monorepo.
+
+A monorepo like `rocm-libraries` can be fetch with the `fetch_repo.py`
+script, whereas patches carried in TheRock would be applied with this
+script.
 
 Example usage:
 
@@ -42,6 +46,8 @@ def run(args):
     if args.include_shared:
         shared = list(args.shared)
 
+    # TODO: This is take over from `fetch_sources` and likley only applies
+    #   to submodules. Re-evaluate here if needed.
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
     # then meaningless. Here on each fetch, we reset the flag so that if
@@ -67,7 +73,7 @@ def run(args):
                 f"* Project patch directory {patch_project_dir.name} was not included. Skipping."
             )
             continue
-        project_path = get_monorepo_path(args.repo, project_to_patch, category)
+        project_path = get_monorepo_path(args.repo, category, project_to_patch)
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
@@ -88,6 +94,8 @@ def run(args):
             cwd=args.repo,
         )
 
+    # TODO: This is take over from `fetch_sources` and likley only applies
+    #   to submodules. Re-evaluate here if needed.
     # Since it is in a patched state, make it invisible to changes.
     exec(
         ["git", "update-index", "--skip-worktree"],
@@ -95,7 +103,7 @@ def run(args):
     )
 
 
-def get_monorepo_path(repo: Path, name: str, category: str) -> Path:
+def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
     relpath = repo / category / Path(name.lower())
     return relpath
 
