@@ -138,7 +138,9 @@ class OutputSink:
             except subprocess.CalledProcessError as e:
                 print(f"[WARN] create_log_index.py failed: {e}", file=sys.stderr)
             except Exception as e:
-                print(f"[WARN] Unexpected error during log indexing: {e}", file=sys.stderr)
+                print(
+                    f"[WARN] Unexpected error during log indexing: {e}", file=sys.stderr
+                )
         else:
             print("[WARN] AMDGPU_FAMILIES not set; skipping log indexing")
 
