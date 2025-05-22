@@ -1,0 +1,45 @@
+From acbe241b27fefe0511d43410923cffe00d513539 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Wed, 30 Apr 2025 15:28:31 -0700
+Subject: [PATCH 5/5] [windows] Add sql2text missing header and simplify build.
+
+* Was missing the unordered_map header.
+* Replace conditional inclusion of `dl` with `${CMAKE_DL_LIBS}` per best practice.
+---
+ tools/sqlite2txt/CMakeLists.txt | 8 ++------
+ tools/sqlite2txt/main.cpp       | 1 +
+ 2 files changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/tools/sqlite2txt/CMakeLists.txt b/tools/sqlite2txt/CMakeLists.txt
+index 3b3ba4780..019965767 100644
+--- a/tools/sqlite2txt/CMakeLists.txt
++++ b/tools/sqlite2txt/CMakeLists.txt
+@@ -1,11 +1,7 @@
+ add_executable(sqlite2txt
+-        main.cpp
++    main.cpp
+ )
+ 
+-target_link_libraries(sqlite2txt SQLite::SQLite3 Threads::Threads)
+-
+-if (NOT WIN32)
+-    target_link_libraries(sqlite2txt dl)
+-endif()
++target_link_libraries(sqlite2txt SQLite::SQLite3 Threads::Threads ${CMAKE_DL_LIBS})
+ 
+ clang_tidy_check(sqlite2txt)
+diff --git a/tools/sqlite2txt/main.cpp b/tools/sqlite2txt/main.cpp
+index 00b5b66e7..5be4645e0 100644
+--- a/tools/sqlite2txt/main.cpp
++++ b/tools/sqlite2txt/main.cpp
+@@ -6,6 +6,7 @@
+ #include <memory>
+ #include <string>
+ #include <sstream>
++#include <unordered_map>
+ 
+ std::unique_ptr<sqlite3, int (*)(sqlite3*)> OpenDb(const char* filename, int flags)
+ {
+-- 
+2.41.0.windows.1
+

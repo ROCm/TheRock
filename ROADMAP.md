@@ -25,7 +25,7 @@ The following is a list of prioritized roadmaps divided by OS (Linux/Windows) an
 | CDNA2        | gfx90a      |               |               |
 | CDNA         | gfx908      |               |               |
 | GCN5.1       | gfx906      |               |               |
-| GCN5.1       | gfx900      |               |               |
+| GCN5         | gfx900      |               |               |
 
 **AMD Radeon**
 

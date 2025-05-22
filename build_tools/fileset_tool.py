@@ -82,6 +82,7 @@ ComponentDefaults(
     "dev",
     includes=[
         "**/*.a",
+        "**/*.lib",
         "**/cmake/**",
         "**/include/**",
         "**/share/modulefiles/**",

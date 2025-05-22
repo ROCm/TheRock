@@ -1,0 +1,167 @@
+From e7d5568707798d3a0bf87e6988f6d6283f9208b5 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Sun, 4 May 2025 22:24:50 +0530
+Subject: [PATCH 12/12] Enable USE_ROCM and fix assorted issues.
+
+* RCCL, the HSA runtime, and rocprofiler are not supported on Windows
+* hipcc should be run with Windows compatibility flags to avoid warning spam
+
+Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Co-authored-by: Scott Todd <scott.todd0@gmail.com>
+---
+ CMakeLists.txt             |  4 ++--
+ c10/hip/CMakeLists.txt     |  6 +++++-
+ caffe2/CMakeLists.txt      |  4 ++++
+ cmake/Dependencies.cmake   |  3 +++
+ cmake/public/LoadHIP.cmake | 32 ++++++++++++++++++--------------
+ functorch/csrc/dim/arena.h |  2 +-
+ 6 files changed, 33 insertions(+), 18 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f3fee2f7ffc..6086450e3ed 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -248,7 +248,7 @@ option(USE_XPU "Use XPU" ON)
+ cmake_dependent_option(
+   BUILD_LAZY_CUDA_LINALG "Build cuda linalg ops as separate library" ON
+   "USE_CUDA AND LINUX AND BUILD_PYTHON" OFF)
+-cmake_dependent_option(USE_ROCM "Use ROCm" ON "LINUX" OFF)
++cmake_dependent_option(USE_ROCM "Use ROCm" ON "LINUX OR WIN32" OFF)
+ option(CAFFE2_STATIC_LINK_CUDA "Statically link CUDA libraries" OFF)
+ cmake_dependent_option(USE_CUDNN "Use cuDNN" ON "USE_CUDA" OFF)
+ cmake_dependent_option(USE_STATIC_CUDNN "Use cuDNN static libraries" OFF
+@@ -271,7 +271,7 @@ option(USE_NATIVE_ARCH "Use -march=native" OFF)
+ cmake_dependent_option(USE_MPS "Use MPS for macOS build" ON "MPS_FOUND" OFF)
+ cmake_dependent_option(USE_NCCL "Use NCCL" ON
+                        "USE_CUDA OR USE_ROCM;UNIX;NOT APPLE" OFF)
+-cmake_dependent_option(USE_RCCL "Use RCCL" ON USE_NCCL OFF)
++cmake_dependent_option(USE_RCCL "Use RCCL" ON "USE_NCCL;NOT WIN32" OFF)
+ cmake_dependent_option(USE_STATIC_NCCL "Use static NCCL" OFF "USE_NCCL" OFF)
+ cmake_dependent_option(USE_SYSTEM_NCCL "Use system-wide NCCL" OFF "USE_NCCL"
+                        OFF)
+diff --git a/c10/hip/CMakeLists.txt b/c10/hip/CMakeLists.txt
+index a98ec6fa230..b0510797f44 100644
+--- a/c10/hip/CMakeLists.txt
++++ b/c10/hip/CMakeLists.txt
+@@ -48,7 +48,11 @@ if(NOT BUILD_LIBTORCHLESS)
+   endif()
+ 
+   # ---[ Dependency of c10_hip
+-  target_link_libraries(c10_hip PUBLIC ${C10_LIB} hip::amdhip64 hsa-runtime64::hsa-runtime64)
++  if(NOT WIN32)
++    target_link_libraries(c10_hip PUBLIC ${C10_LIB} hip::amdhip64 hsa-runtime64::hsa-runtime64)
++  else()
++    target_link_libraries(c10_hip PUBLIC ${C10_LIB} hip::amdhip64)
++  endif()
+ 
+   target_include_directories(
+       c10_hip PUBLIC
+diff --git a/caffe2/CMakeLists.txt b/caffe2/CMakeLists.txt
+index b32c71c8bd6..e76e05c1255 100644
+--- a/caffe2/CMakeLists.txt
++++ b/caffe2/CMakeLists.txt
+@@ -1699,6 +1699,10 @@ if(USE_ROCM)
+     endforeach()
+   endif()
+ 
++  if(WIN32)
++    list(APPEND HIP_CXX_FLAGS "-fms-extensions")
++  endif()
++
+   # Call again since Caffe2_HIP_INCLUDE is extended with ATen include dirs.
+   hip_include_directories(${Caffe2_HIP_INCLUDE})
+ 
+diff --git a/cmake/Dependencies.cmake b/cmake/Dependencies.cmake
+index be45936a8ea..4f6b2e4837c 100644
+--- a/cmake/Dependencies.cmake
++++ b/cmake/Dependencies.cmake
+@@ -1065,6 +1065,9 @@ if(USE_ROCM)
+     list(APPEND HIP_HIPCC_FLAGS --offload-compress)
+     if(WIN32)
+       add_definitions(-DROCM_ON_WINDOWS)
++      list(APPEND HIP_CXX_FLAGS -fms-extensions)
++      # Suppress warnings about dllexport.
++      list(APPEND HIP_CXX_FLAGS -Wno-ignored-attributes)
+     endif()
+     add_definitions(-DROCM_VERSION=${ROCM_VERSION_DEV_INT})
+     add_definitions(-DTORCH_HIP_VERSION=${TORCH_HIP_VERSION})
+diff --git a/cmake/public/LoadHIP.cmake b/cmake/public/LoadHIP.cmake
+index 7b058199a13..d365971337e 100644
+--- a/cmake/public/LoadHIP.cmake
++++ b/cmake/public/LoadHIP.cmake
+@@ -37,10 +37,12 @@ macro(pytorch_load_hip)
+   message(STATUS "hiprtc version: ${hiprtc_VERSION}")
+ 
+   # Original version made these UNIX-only.
+-  find_package(rccl REQUIRED)
+-  message(STATUS "rccl version: ${rccl_VERSION}")
+-  find_package(hsa-runtime64 REQUIRED)
+-  message(STATUS "hsa-runtime64 version: ${hsa-runtime64_VERSION}")
++  if(NOT WIN32)  # RCCL is not yet supported on Windows.
++    find_package(rccl REQUIRED)
++    message(STATUS "rccl version: ${rccl_VERSION}")
++    find_package(hsa-runtime64 REQUIRED)
++    message(STATUS "hsa-runtime64 version: ${hsa-runtime64_VERSION}")
++  endif()
+   find_package(hipblaslt REQUIRED)
+   message(STATUS "hipblaslt version: ${hipblaslt_VERSION}")
+ 
+@@ -74,14 +76,16 @@ macro(pytorch_load_hip)
+   # TODO: This isn't quite right and needs to mate up with whether kineto
+   # depends on roctracer or rocprofiler-sdk. The coupling here is fragile and
+   # needs to be reworked.
+-  find_package(rocprofiler-sdk-roctx)
+-  if(rocprofiler-sdk-roctx_FOUND)
+-    message(STATUS "rocprofiler-sdk-roctx version: ${rocprofiler-sdk-roctx_VERSION} found (will use instead of roctracer)")
+-    set(ROCM_ROCTX_LIB rocprofiler-sdk-roctx::rocprofiler-sdk-roctx-shared-library)
+-  else()
+-    find_library(ROCM_ROCTX_LIB roctx64)
+-    if(NOT ROCM_ROCTX_LIB)
+-      cmake(WARNING "Neither rocprofiler-sdk nor libroctx64.so was found: This may result in errors if components rely on it")
++  if(NOT WIN32)
++    find_package(rocprofiler-sdk-roctx)
++    if(rocprofiler-sdk-roctx_FOUND)
++      message(STATUS "rocprofiler-sdk-roctx version: ${rocprofiler-sdk-roctx_VERSION} found (will use instead of roctracer)")
++      set(ROCM_ROCTX_LIB rocprofiler-sdk-roctx::rocprofiler-sdk-roctx-shared-library)
++    else()
++      find_library(ROCM_ROCTX_LIB roctx64)
++      if(NOT ROCM_ROCTX_LIB)
++        cmake(WARNING "Neither rocprofiler-sdk nor libroctx64.so was found: This may result in errors if components rely on it")
++      endif()
+     endif()
+   endif()
+ 
+@@ -98,7 +102,7 @@ macro(pytorch_load_hip)
+   # contains FindHIP.cmake.
+   function(find_rocm_sdk_module_path)
+     set(hip_lib_dir "${hip_LIB_INSTALL_DIR}")
+-    foreach(candidate_path "${hip_lib_dir}/cmake" "${hip_lib_dir}/cmake/hip")
++    foreach(candidate_path "${hip_lib_dir}/cmake" "${hip_lib_dir}/cmake/hip" "${hip_lib_dir}/../cmake")
+       if(EXISTS "${candidate_path}/FindHIP.cmake")
+         list(PREPEND CMAKE_MODULE_PATH "${candidate_path}")
+         message(STATUS "Legacy FindHIP.cmake module found in ${candidate_path}")
+@@ -110,7 +114,7 @@ macro(pytorch_load_hip)
+     message(STATUS "Could not locate legacy FindHIP.cmake: You may need to set CMAKE_MODULE_PATH explicitly to its location")
+   endfunction()
+   find_rocm_sdk_module_path()
+-  find_package(HIP 1.0 MODULE REQUIRED)
++  find_package(HIP MODULE REQUIRED)
+ 
+   set(HIP_NEW_TYPE_ENUMS ON)
+   set(PYTORCH_FOUND_HIP ON)
+diff --git a/functorch/csrc/dim/arena.h b/functorch/csrc/dim/arena.h
+index aaaf7e772a3..4bc627575de 100644
+--- a/functorch/csrc/dim/arena.h
++++ b/functorch/csrc/dim/arena.h
+@@ -8,7 +8,7 @@
+ #include <ATen/ATen.h>
+ #include "minpybind.h"
+ 
+-#ifdef _WIN32
++#if defined(_WIN32) && !(defined(__clang__) && defined(_MSC_VER))
+ #include <intrin.h>
+ // https://stackoverflow.com/questions/355967/how-to-use-msvc-intrinsics-to-get-the-equivalent-of-this-gcc-code
+ inline unsigned int __builtin_clz(unsigned int x) {
+-- 
+2.47.1.windows.2
+

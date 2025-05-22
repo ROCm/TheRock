@@ -2,7 +2,7 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "In-source builds are not allowed. Please create a separate build directory.")
 endif()
 
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.25)  # Also update in alternative_os_setup.md
 
 # Set the default build type to Release if not specified
 if(NOT CMAKE_BUILD_TYPE)
@@ -18,6 +18,7 @@ include(CMakeDependentOption)
 include(ExternalProject)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
+include(therock_compiler_config)
 include(therock_features)
 include(therock_subproject)
 include(therock_job_pools)
@@ -57,6 +58,18 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
+# Source settings.
+# Source can be consumed from the https://github.com/ROCm/rocm-libraries monorepo,
+# while the default is to consume the submodules defined in TheRock's `.gitmodules`.
+option(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES "Use the `rocm-libraries` monorepo instead of submodules" OFF)
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES AND NOT THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
+  message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_ROCM_LIBRARIES is set, THEROCK_ROCM_LIBRARIES_SOURCE_DIR is required!")
+endif()
+
+if(THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
+  cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
+endif()
+
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 
@@ -82,11 +95,30 @@ block(PROPAGATE ROCM_MAJOR_VERSION ROCM_MINOR_VERSION ROCM_PATCH_VERSION)
   endif()
 endblock()
 
+# Various things need to be lined up across layers to precisely match the HIP version.
+# The only source of truth for this is from the HIP/VERSION file, so we parse it the
+# same way that clr does. While this *should* generally match the ROCM version, at
+# least from a major/minor perspective, the ROCM version is a "user" version, whereas
+# the HIP version is hardcoded into various places in the code.
+block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
+  set(VERSION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/core/HIP/VERSION")
+  if(NOT EXISTS "${VERSION_PATH}")
+    message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
+  endif()
+  file(STRINGS "${VERSION_PATH}" VERSION_LIST REGEX "^[0-9]+")
+  list(GET VERSION_LIST 0 THEROCK_HIP_MAJOR_VERSION)
+  list(GET VERSION_LIST 1 THEROCK_HIP_MINOR_VERSION)
+  list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
+  message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
+endblock()
+
 ################################################################################
 # Debug Options
 ################################################################################
 
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
+option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
+option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 
 ################################################################################
 # Feature selection
@@ -108,11 +140,14 @@ therock_add_feature(HOST_BLAS
   GROUP HOST_MATH
   DESCRIPTION "Bundled host BLAS library"
 )
-therock_add_feature(HOST_SUITE_SPARSE
-  GROUP HOST_MATH
-  DESCRIPTION "Bundled SuiteSparse library"
-  REQUIRES HOST_BLAS
-)
+if(NOT WIN32)
+  # Currently unsupported on Windows.
+  therock_add_feature(HOST_SUITE_SPARSE
+    GROUP HOST_MATH
+    DESCRIPTION "Bundled SuiteSparse library"
+    REQUIRES HOST_BLAS
+  )
+endif()
 
 # Base Features.
 therock_add_feature(COMPILER
@@ -163,11 +198,14 @@ else()
 endif()
 
 # Comm-libs Features.
-therock_add_feature(RCCL
-  GROUP COMM_LIBS
-  DESCRIPTION "Enables rccl"
-  REQUIRES COMPILER HIP_RUNTIME HIPIFY
-)
+if(NOT WIN32)
+  # RCCL is Linux-only.
+  therock_add_feature(RCCL
+    GROUP COMM_LIBS
+    DESCRIPTION "Enables rccl"
+    REQUIRES COMPILER HIP_RUNTIME HIPIFY
+  )
+endif()
 
 # Math-libs Features.
 therock_add_feature(PRIM
@@ -198,10 +236,15 @@ therock_add_feature(SPARSE
   DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
   REQUIRES COMPILER HIP_RUNTIME BLAS PRIM
 )
+if(NOT WIN32)
+  set(_solver_platform_requirements "HOST_SUITE_SPARSE")
+else()
+  set(_solver_platform_requirements "")
+endif()
 therock_add_feature(SOLVER
   GROUP MATH_LIBS
   DESCRIPTION "Enables solver libraries (hipsolver, rocsolver)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE HOST_SUITE_SPARSE
+  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
 # ML-Libs Features.
@@ -306,8 +349,10 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
+    set(THEROCK_BUNDLED_ZSTD therock-zstd)
   else()
     message(FATAL_ERROR "Bundled system deps not supported on this platform (THEROCK_BUNDLE_SYSDEPS=ON)")
   endif()

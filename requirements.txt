@@ -3,5 +3,8 @@ build>=1.2.2
 meson>=1.7.0
 python-magic>=0.4.27
 PyYAML==6.0.2
-
 tomli==2.2.1; python_version <= '3.10'
+
+# hipBLASLt deps
+joblib>=1.4.2
+msgpack>=1.1.0

@@ -1,3 +1,17 @@
+# This CI workflow is triggered by:
+#   - push to main branch
+#   - pull request
+#   - workflow dispatch
+#
+# For pull requests, we run default builds and tests for:
+#   - Linux: gfx94X gfx110X
+#   - Windows: gfx110X
+# If you want to trigger jobs for additional targets, please add a defined label (ex: gfx120X-linux) to the pull request
+#
+# For push to main branch, all AMD families will built and tested from `amdgpu_family_matrix.py`.
+#
+# Note: If a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
+
 name: CI
 
 on:
@@ -6,22 +20,20 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      build_linux_amdgpu_families:
+      linux_amdgpu_families:
         type: string
-        description: "Insert comma-separated list of Linux GPU families to build. ex: gfx94X, gfx1201X"
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
-      build_windows_amdgpu_families:
+      linux_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
+      windows_amdgpu_families:
         type: string
-        description: "Insert comma-separated list of Windows GPU families to build. ex: gfx94X, gfx1201X"
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
-      test_linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to test. ex: gfx94X, gfx1201X"
-        default: ""
-      test_windows_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Windows GPU families to test. ex: gfx94X, gfx1201X"
-        default: ""
+      windows_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
       artifact_run_id:
         type: string
         description: "If provided, the tests will run on this artifact ID"
@@ -31,6 +43,9 @@ on:
       - labeled
       - opened
       - synchronize
+  # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
+  schedule:
+    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
 
 permissions:
   contents: read
@@ -47,53 +62,51 @@ jobs:
   setup:
     uses: ./.github/workflows/setup.yml
 
-  build_linux_packages:
-    name: Build Linux Packages
+  linux_build_and_test:
+    name: Linux
     needs: setup
-    if: ${{ needs.setup.outputs.build_linux_amdgpu_families != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        families: ${{ fromJSON(needs.setup.outputs.build_linux_amdgpu_families) }}
-    uses: ./.github/workflows/build_linux_packages.yml
-    with:
-      amdgpu_families: ${{ matrix.families.target }}
-    permissions:
-      id-token: write
-
-  build_windows_packages:
-    name: Build Windows Packages
-    needs: setup
-    if: ${{ needs.setup.outputs.build_windows_amdgpu_families != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        families: ${{ fromJSON(needs.setup.outputs.build_windows_amdgpu_families) }}
-    uses: ./.github/workflows/build_windows_packages.yml
-    with:
-      amdgpu_families: ${{ matrix.families.target }}
-
-  test_linux_packages:
-    needs: [setup, build_linux_packages]
-    name: Test Linux Packages
-    if: |
+    if: >-
       ${{
-        !cancelled() &&
-        needs.setup.outputs.test_linux_amdgpu_families != '[]' &&
-        (
-          needs.build_linux_packages.result == 'success' ||
-          needs.build_linux_packages.result == 'skipped'
-        )
+        needs.setup.outputs.linux_amdgpu_families != '[]' &&
+        needs.setup.outputs.enable_build_jobs == 'true'
       }}
     strategy:
       fail-fast: false
       matrix:
-        families: ${{ fromJSON(needs.setup.outputs.test_linux_amdgpu_families) }}
-    uses: ./.github/workflows/test_linux_packages.yml
+        families: ${{ fromJSON(needs.setup.outputs.linux_amdgpu_families) }}
+    uses: ./.github/workflows/ci_linux.yml
     with:
-      amdgpu_families: ${{ matrix.families.target }}
+      amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      expect_failure: ${{ matrix.families.expect_failure == true }}
+      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+    permissions:
+      contents: read
+      id-token: write
+
+  windows_build_and_test:
+    name: Windows
+    needs: setup
+    if: >-
+      ${{
+        needs.setup.outputs.windows_amdgpu_families != '[]' &&
+        needs.setup.outputs.enable_build_jobs == 'true'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        families: ${{ fromJSON(needs.setup.outputs.windows_amdgpu_families) }}
+    uses: ./.github/workflows/ci_windows.yml
+    with:
+      amdgpu_families: ${{ matrix.families.family }}
+      test_runs_on: ${{ matrix.families.test-runs-on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      extra_cmake_options: ${{ matrix.extra_cmake_options }}
+      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+    permissions:
+      contents: read
+      id-token: write
 
   # build_python_packages:
   #   name: Build Python Packages

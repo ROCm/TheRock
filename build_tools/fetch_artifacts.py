@@ -6,10 +6,13 @@
 # but those artifacts may not have all required dependencies.
 
 import argparse
+import platform
+import shutil
 import subprocess
 import sys
 
 GENERIC_VARIANT = "generic"
+PLATFORM = platform.system().lower()
 
 
 def log(*args, **kwargs):
@@ -17,13 +20,33 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
+def check_aws_cli_available():
+    if not shutil.which("aws"):
+        log("[ERROR] AWS CLI not found in PATH.")
+        sys.exit(1)
+
+
+def s3_bucket_exists(run_id):
+    check_aws_cli_available()
+    cmd = [
+        "aws",
+        "s3",
+        "ls",
+        f"s3://therock-artifacts/{run_id}-{PLATFORM}",
+        "--no-sign-request",
+    ]
+    process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
+    return process.returncode == 0
+
+
 def s3_exec(variant, package, run_id, build_dir):
+    check_aws_cli_available()
     cmd = [
         "aws",
         "s3",
         "cp",
-        f"s3://therock-artifacts/{run_id}/{package}_{variant}.tar.xz",
-        build_dir,
+        f"s3://therock-artifacts/{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
+        str(build_dir),
         "--no-sign-request",
     ]
     log(f"++ Exec [{cmd}]")
@@ -47,32 +70,42 @@ def retrieve_base_artifacts(args, run_id, build_dir):
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
-    if args.blas or args.all:
+    if args.blas:
         base_artifacts.append("host-blas_lib")
 
     for base_artifact in base_artifacts:
         s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
 
 
-def retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir):
-    base_artifact_path = []
-    if args.blas or args.all:
-        base_artifact_path.append("blas")
-    if args.fft or args.all:
-        base_artifact_path.append("fft")
-    if args.miopen or args.all:
-        base_artifact_path.append("miopen")
-    if args.prim or args.all:
-        base_artifact_path.append("prim")
-    if args.rand or args.all:
-        base_artifact_path.append("rand")
-    if args.rccl or args.all:
-        base_artifact_path.append("rccl")
+def retrieve_enabled_artifacts(args, target, run_id, build_dir):
+    artifact_paths = []
+    all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
+    # RCCL is disabled for Windows
+    if PLATFORM != "windows":
+        all_artifacts.append("rccl")
+
+    if args.blas:
+        artifact_paths.append("blas")
+    if args.fft:
+        artifact_paths.append("fft")
+    if args.miopen:
+        artifact_paths.append("miopen")
+    if args.prim:
+        artifact_paths.append("prim")
+    if args.rand:
+        artifact_paths.append("rand")
+    if args.rccl and PLATFORM != "windows":
+        artifact_paths.append("rccl")
 
     enabled_artifacts = []
-    for base_path in base_artifact_path:
+
+    # In the case that no library arguments were passed and base_only args is false, we install all artifacts
+    if not artifact_paths and not args.base_only:
+        artifact_paths = all_artifacts
+
+    for base_path in artifact_paths:
         enabled_artifacts.append(f"{base_path}_lib")
-        if test_enabled:
+        if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
     for enabled_artifact in enabled_artifacts:
@@ -83,19 +116,28 @@ def run(args):
     run_id = args.run_id
     target = args.target
     build_dir = args.build_dir
-    test_enabled = args.test
+    if not s3_bucket_exists(run_id):
+        print(f"S3 artifacts for {run_id} does not exist. Exiting...")
+        return
     retrieve_base_artifacts(args, run_id, build_dir)
-    retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir)
+    if not args.base_only:
+        retrieve_enabled_artifacts(args, target, run_id, build_dir)
 
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="fetch_artifacts")
     parser.add_argument(
-        "--run-id", type=str, help="GitHub run ID to retrieve artifacts from"
+        "--run-id",
+        type=str,
+        required=True,
+        help="GitHub run ID to retrieve artifacts from",
     )
 
     parser.add_argument(
-        "--target", type=str, help="Target variant for specific GPU target"
+        "--target",
+        type=str,
+        required=True,
+        help="Target variant for specific GPU target",
     )
 
     parser.add_argument(
@@ -105,48 +147,58 @@ def main(argv):
         help="Path to the artifact build directory",
     )
 
-    parser.add_argument(
-        "--test",
-        help="If flagged, test artifacts will be retrieved",
-        action="store_true",
-    )
-
-    parser.add_argument(
+    artifacts_group = parser.add_argument_group("artifacts_group")
+    artifacts_group.add_argument(
         "--blas",
-        help="If flagged, blas artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'blas' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
-        "--fft", help="If flagged, fft artifacts will be retrieved", action="store_true"
+    artifacts_group.add_argument(
+        "--fft",
+        default=False,
+        help="Include 'fft' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--miopen",
-        help="If flagged, miopen artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'miopen' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--prim",
-        help="If flagged, prim artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'prim' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--rand",
-        help="If flagged, rand artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'rand' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--rccl",
-        help="If flagged, rccl artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
-        "--all", help="If flagged, all artifacts will be retrieved", action="store_true"
+    artifacts_group.add_argument(
+        "--tests",
+        default=False,
+        help="Include all test artifacts for enabled libraries",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--base-only", help="Include only base artifacts", action="store_true"
     )
 
     args = parser.parse_args(argv)

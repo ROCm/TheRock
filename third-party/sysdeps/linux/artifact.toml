@@ -1,5 +1,10 @@
 # bzip2
 [components.dev."third-party/sysdeps/linux/bzip2/build/stage"]
+# Include the executables in the dev package since some sub-projects
+# require them.
+include = [
+  "**/bin/*"
+]
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 
 # elfutils
