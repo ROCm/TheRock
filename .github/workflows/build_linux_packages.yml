@@ -16,7 +16,7 @@ on:
       bucket:
         type: string
         default: "therock-artifacts"
-      bucket_path:
+      repo:
         type: string
         default: ""
 
