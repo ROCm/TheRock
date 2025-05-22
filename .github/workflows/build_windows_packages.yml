@@ -71,12 +71,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install python deps
+      - name: Install python and other deps
         run: |
           pip install -r requirements.txt
-
-      - name: Install boto3
-        run: |
           pip install boto3
 
       - name: Install requirements
