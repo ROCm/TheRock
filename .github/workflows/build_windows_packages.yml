@@ -78,7 +78,7 @@ jobs:
       - name: Install boto3
         run: |
           pip install boto3
-  
+
       - name: Install requirements
         run: |
           choco install --no-progress -y ccache
