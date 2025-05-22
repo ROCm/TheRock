@@ -138,25 +138,24 @@ class OutputSink:
             except subprocess.CalledProcessError as e:
                 print(f"[WARN] create_log_index.py failed: {e}", file=sys.stderr)
             except Exception as e:
-                print(
-                    f"[WARN] Unexpected error during log indexing: {e}", file=sys.stderr
-                )
+                print(f"[WARN] Unexpected error during log indexing: {e}", file=sys.stderr)
         else:
             print("[WARN] AMDGPU_FAMILIES not set; skipping log indexing")
 
-        # Step 2: Upload logs to S3
+        # Step 2: S3 upload using --bucket and --subdir
         try:
             upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
-            s3_path = f"s3://{self.s3_bucket}/{self.s3_subdir}"
-            print(f"[TEATIME] Uploading logs to {s3_path}")
+            print(f"[TEATIME] Uploading logs to s3://{self.s3_bucket}/{self.s3_subdir}")
             subprocess.run(
                 [
                     sys.executable,
                     str(upload_script),
                     "--build-dir",
                     str(build_dir),
-                    "--s3-base-path",
-                    s3_path,
+                    "--bucket",
+                    self.s3_bucket,
+                    "--subdir",
+                    self.s3_subdir,
                 ],
                 check=True,
             )
