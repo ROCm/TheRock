@@ -106,6 +106,7 @@ jobs:
           cmake --build build --target therock-archives therock-dist
 
       - name: Test Packaging
+        if: ${{ github.repository == 'ROCm/TheRock' }}
         run: |
           ctest --test-dir build --output-on-failure
 
