@@ -15,10 +15,6 @@ inputs:
     type: string
   PLATFORM:
     type: string
-  BUCKET:
-    type: string
-  REPO:
-    type: string
 
 runs:
   using: "composite"
@@ -60,8 +56,8 @@ runs:
         AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
-        BUCKET: ${{ inputs.BUCKET }}
-        REPO: ${{ inputs.REPO }}
+        BUCKET: ${{ github.repository == 'ROCm/TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
+        REPO: ${{ github.repository == 'ROCm/TheRock'  && '' || github.event.repository.name }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \

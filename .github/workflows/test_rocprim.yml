@@ -14,12 +14,6 @@ on:
         default: ""
       platform:
         type: string
-      bucket: 
-        type: string
-        default: "therock-artifacts"
-      repo:
-        type: string
-        default: ""
   workflow_call:
     inputs:
       artifact_run_id:
@@ -33,12 +27,6 @@ on:
         default: ""
       platform:
         type: string
-      bucket: 
-        type: string
-        default: "therock-artifacts"
-      repo:
-        type: string
-        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -76,8 +64,6 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--prim --tests"
           PLATFORM: ${{ inputs.platform }}
-          BUCKET: ${{ inputs.bucket }}
-          REPO: ${{ inputs.repo }}
 
       - name: Run rocprim tests
         env:
