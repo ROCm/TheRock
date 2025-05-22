@@ -60,12 +60,12 @@ def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
-    if not s3_base_path.startswith("s3://"):
-        log(f"[ERROR] Invalid s3_base_path: {s3_base_path}")
+    try:
+        bucket, *prefix_parts = s3_base_path[5:].split("/", 1)
+        prefix = prefix_parts[0] if prefix_parts else ""
+    except Exception:
+        log(f"[ERROR] Could not parse s3_base_path: {s3_base_path}")
         sys.exit(2)
-
-    bucket, *prefix_parts = s3_base_path[5:].split("/", 1)
-    prefix = prefix_parts[0] if prefix_parts else ""
 
     # Upload .log files
     log_files = list(log_dir.glob("*.log"))
