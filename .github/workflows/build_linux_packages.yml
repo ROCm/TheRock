@@ -84,6 +84,10 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Install boto3
+        run: |
+          pip install boto3
+
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
