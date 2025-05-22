@@ -35,7 +35,8 @@ def upload_file_boto3(file_path: Path, bucket: str, key: str, content_type: str 
             return
 
     if already_exists:
-        # Upload anyway, but do not repeat success log
+        # Upload anyway for the additional logs,
+        # but do not repeat success log
         try:
             s3.upload_file(str(file_path), bucket, key, ExtraArgs=extra_args)
         except ClientError as e:
