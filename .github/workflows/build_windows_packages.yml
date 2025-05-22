@@ -216,7 +216,8 @@ jobs:
           curl --silent --fail --show-error --location \
             https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
             --output ${{ env.BUILD_DIR_BASH }}/indexer.py
-          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
+          export INDEXER_PATH="${{ env.BUILD_DIR_BASH }}/indexer.py"
+          python $INDEXER_PATH -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
 
       # TODO: Move to script
       - name: Upload Artifacts
