@@ -1,7 +1,7 @@
-From 8f8d7e793521f20e5bb48ef9ee7f288c777489b1 Mon Sep 17 00:00:00 2001
+From 797112515489313882fa49bcaa39efca98e9e5b4 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 31 Mar 2025 18:54:56 +0100
-Subject: [PATCH 03/13] TEMPORARY: Manually disable roctx until compatibility
+Subject: [PATCH 03/12] TEMPORARY: Manually disable roctx until compatibility
  with rocprofv3 is established.
 
 ---
@@ -10,7 +10,7 @@ Subject: [PATCH 03/13] TEMPORARY: Manually disable roctx until compatibility
  2 files changed, 21 insertions(+), 11 deletions(-)
 
 diff --git a/torch/csrc/cuda/shared/nvtx.cpp b/torch/csrc/cuda/shared/nvtx.cpp
-index 40e9821389..0ce2dd34b5 100644
+index 40e9821389f..0ce2dd34b56 100644
 --- a/torch/csrc/cuda/shared/nvtx.cpp
 +++ b/torch/csrc/cuda/shared/nvtx.cpp
 @@ -1,13 +1,14 @@
@@ -69,7 +69,7 @@ index 40e9821389..0ce2dd34b5 100644
    nvtx.def("deviceRangeEnd", device_nvtxRangeEnd);
  }
 diff --git a/torch/csrc/profiler/stubs/cuda.cpp b/torch/csrc/profiler/stubs/cuda.cpp
-index 37364dfc93..0ed35059a1 100644
+index 37364dfc931..0ed35059a1a 100644
 --- a/torch/csrc/profiler/stubs/cuda.cpp
 +++ b/torch/csrc/profiler/stubs/cuda.cpp
 @@ -1,11 +1,13 @@

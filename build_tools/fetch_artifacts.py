@@ -7,6 +7,7 @@
 
 import argparse
 import platform
+import shutil
 import subprocess
 import sys
 
@@ -19,7 +20,14 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
+def check_aws_cli_available():
+    if not shutil.which("aws"):
+        log("[ERROR] AWS CLI not found in PATH.")
+        sys.exit(1)
+
+
 def s3_bucket_exists(run_id):
+    check_aws_cli_available()
     cmd = [
         "aws",
         "s3",
@@ -32,6 +40,7 @@ def s3_bucket_exists(run_id):
 
 
 def s3_exec(variant, package, run_id, build_dir):
+    check_aws_cli_available()
     cmd = [
         "aws",
         "s3",

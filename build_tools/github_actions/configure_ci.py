@@ -321,9 +321,6 @@ def main(base_args, linux_families, windows_families):
     print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
     print(f"  is_pull_request: {is_pull_request}")
 
-    modified_paths = get_modified_paths(base_ref)
-    print("modified_paths (max 200):", modified_paths[:200])
-
     print(f"Generating build matrix for Linux: {str(linux_families)}")
     linux_target_output = matrix_generator(
         is_pull_request,
@@ -346,11 +343,16 @@ def main(base_args, linux_families, windows_families):
         platform="windows",
     )
 
-    enable_build_jobs = False
-    print(f"Checking modified files since this had a {github_event_name} trigger")
-    # TODO(#199): other behavior changes
-    #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
-    enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
+    # In the case of a scheduled run, we always want to build
+    if is_schedule:
+        enable_build_jobs = False
+    else:
+        modified_paths = get_modified_paths(base_ref)
+        print("modified_paths (max 200):", modified_paths[:200])
+        print(f"Checking modified files since this had a {github_event_name} trigger")
+        # TODO(#199): other behavior changes
+        #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
+        enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
     write_job_summary(
         f"""## Workflow configure results

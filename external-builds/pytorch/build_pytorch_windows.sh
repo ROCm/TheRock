@@ -30,6 +30,14 @@ else
     exit 1
 fi
 
+# `realpath` above returns a Unix-style path like `/d//TheRock/build/dist/rocm`
+# The 'cygpath' command converts into a Windows-style path like
+# `D:\TheRock\build\dist\rocm`, which has better compatibility with the PATH
+# environment variable and other follow-up steps after this bash script.
+# When we rewrite this script in Python we can use Pathlib instead.
+export ROCM_HOME_WIN=$(cygpath -w ${ROCM_HOME})
+echo "ROCM_HOME_WIN: $ROCM_HOME_WIN"
+
 BUILD_DIR_ROOT=${ROCM_HOME?}/../..
 
 # Environment variables recommended here:
@@ -57,9 +65,19 @@ mkdir -p ${LOGS_DIR}
 printf -v DATE_STR '%(%Y-%m-%d_%H%M%S)T' -1
 LOG_FILE_NAME="${LOGS_DIR}/logs_pytorch_windows_${DATE_STR}.txt"
 
-echo "Running \"python setup.py bdist_wheel\", directing output to $LOG_FILE_NAME"
+echo "Running \"python setup.py bdist_wheel\", directing output to ${LOG_FILE_NAME}"
 python setup.py bdist_wheel > ${LOG_FILE_NAME} 2>&1
 
+echo ""
+echo ""
 DIST_DIR="${PYTORCH_SRC_DIR}/dist"
-echo "Build completed! Wheels should be at ${DIST_DIR}:"
-ls ${DIST_DIR}
+echo "Build completed! Wheels should be at '${DIST_DIR}':"
+ls ${DIST_DIR} --sort=time -l
+
+echo ""
+echo "To use these wheels, either"
+echo "  * Extend your PATH with '${ROCM_HOME_WIN}/bin':"
+echo ""
+echo "      set PATH=${ROCM_HOME_WIN}\bin;%PATH%"
+echo ""
+echo "  * Create a fat wheel using 'windows_patch_fat_wheel.py'"
