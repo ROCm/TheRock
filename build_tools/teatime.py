@@ -110,10 +110,11 @@ class OutputSink:
                 b"[" + self.label + b" completed in " + run_pretty.encode() + b"]\n"
             )
 
-        # Return if upload is not configured
-        if not (self.upload_to_s3 and self.s3_bucket and self.s3_subdir):
-            return
+        # Call coordinate_index_and_logs if upload is configured
+        if  (self.upload_to_s3 and self.s3_bucket and self.s3_subdir):
+            self.coordinate_index_and_logs()
 
+    def coordinate_index_and_logs(self):
         repo_root = Path(__file__).resolve().parent.parent
         build_dir = repo_root / self.base_build_dir
         amdgpu_family = os.getenv("AMDGPU_FAMILIES")
