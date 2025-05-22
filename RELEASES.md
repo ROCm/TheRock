@@ -111,7 +111,7 @@ We leverage `pip` as a convient way to install pre-build libraries and tools. Th
 To install TheRock from pip, you must provide a link to the index page for your desired GPU architecture.
 One of the following commands can be used to install `rocm-sdk[libraries,devel]`.
 
-### gfx942-dcgpu
+### gfx94X-dcgpu
 
 ```bash
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx94X-dcgpu/index.html \
@@ -125,14 +125,14 @@ python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.a
   rocm-sdk[libraries,devel]
 ```
 
-### gfx110X-dcgpu
+### gfx1151
 
 ```bash
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx1151/index.html \
   rocm-sdk[libraries,devel]
 ```
 
-### gfx110X-dcgpu
+### gfx120X-all
 
 ```bash
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx120X-all/index.html \
