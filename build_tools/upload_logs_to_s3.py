@@ -19,23 +19,37 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-_uploaded = set()  # Track already-logged files
-
-
 def upload_file_boto3(file_path: Path, bucket: str, key: str, content_type: str = None):
     s3 = boto3.client("s3")
     extra_args = {"ContentType": content_type} if content_type else {}
 
-    if file_path in _uploaded:
-        return  # Avoid re-logging
+    try:
+        # Check if file already exists
+        s3.head_object(Bucket=bucket, Key=key)
+        already_exists = True
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "404":
+            already_exists = False
+        else:
+            log(f"[ERROR] Failed checking existence for {key}: {e}")
+            return
 
+    if already_exists:
+        # Upload anyway, but do not repeat success log
+        try:
+            s3.upload_file(str(file_path), bucket, key, ExtraArgs=extra_args)
+        except ClientError as e:
+            log(f"[ERROR] Re-upload failed for {file_path}: {e}")
+        return  # Suppress success log
+
+    # First-time upload
     try:
         log(f"[INFO] Uploading {file_path} to s3://{bucket}/{key}")
         s3.upload_file(str(file_path), bucket, key, ExtraArgs=extra_args)
-        _uploaded.add(file_path)
-        log(f"[INFO] Successfully uploaded to s3://{bucket}/{key}")
     except ClientError as e:
         log(f"[ERROR] Failed to upload {file_path} to s3://{bucket}/{key}: {e}")
+    else:
+        log(f"[INFO] Successfully uploaded {file_path} to s3://{bucket}/{key}")
 
 
 def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
@@ -53,9 +67,13 @@ def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
     prefix = prefix_parts[0] if prefix_parts else ""
 
     # Upload .log files
-    for file_path in log_dir.glob("*.log"):
-        key = f"{prefix}/{file_path.name}" if prefix else file_path.name
-        upload_file_boto3(file_path, bucket, key, content_type="text/plain")
+    log_files = list(log_dir.glob("*.log"))
+    if not log_files:
+        log("[WARN] No .log files found. Skipping log upload.")
+    else:
+        for file_path in log_files:
+            key = f"{prefix}/{file_path.name}" if prefix else file_path.name
+            upload_file_boto3(file_path, bucket, key, content_type="text/plain")
 
     # Upload index.html
     index_path = log_dir / "index.html"
