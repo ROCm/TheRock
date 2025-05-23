@@ -21,22 +21,42 @@ def normalize_path(p: Path) -> str:
     return str(p).replace("\\", "/") if is_windows() else str(p)
 
 
+def get_indexer_path() -> Path:
+    indexer_env_path = os.getenv("INDEXER_PATH")
+    if indexer_env_path:
+        indexer_path = Path(indexer_env_path).resolve()
+        if indexer_path.is_file():
+            log(f"[INFO] Using INDEXER_PATH from environment: {indexer_path}")
+            return indexer_path
+        else:
+            log(
+                f"[ERROR] INDEXER_PATH is set but does not point to a file: {indexer_path}"
+            )
+            sys.exit(2)
+    else:
+        log("[ERROR] INDEXER_PATH environment variable not set")
+        sys.exit(2)
+
+
 def index_log_files(build_dir: Path, amdgpu_family: str):
     log_dir = build_dir / "logs"
     index_file = log_dir / "index.html"
 
-    # TODO: Fork indexer.py locally to avoid relying on an external GitHub source at runtime.
-    indexer_path = build_dir / "indexer.py"
+    if not log_dir.is_dir():
+        log(f"[WARN] Log directory '{log_dir}' not found. Skipping indexing.")
+        return
 
-    if log_dir.is_dir():
-        log(f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files...")
+    indexer_path = get_indexer_path()
+
+    log(f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files...")
+    try:
         subprocess.run(
             ["python", str(indexer_path), "-f", "*.log", normalize_path(log_dir)],
             check=True,
         )
-    else:
-        log(f"[WARN] Log directory '{log_dir}' not found. Skipping indexing.")
-        return
+    except subprocess.CalledProcessError as e:
+        log(f"[ERROR] Failed to run indexer.py: {e}")
+        sys.exit(2)
 
     if index_file.exists():
         log(

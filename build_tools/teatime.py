@@ -81,6 +81,12 @@ class OutputSink:
             self.log_file = open(self.log_path, "wb")
         self.log_timestamps: bool = args.log_timestamps
 
+        # S3 upload configuration
+        self.upload_to_s3 = os.getenv("TEATIME_S3_UPLOAD", "0") == "1"
+        self.s3_bucket = os.getenv("TEATIME_S3_BUCKET")
+        self.s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
+        self.base_build_dir = os.getenv("BASE_BUILD_DIR")
+
     def start(self):
         if self.gh_group_label is not None:
             self.out.write(b"::group::" + self.gh_group_label + b"\n")
@@ -95,6 +101,7 @@ class OutputSink:
                     f"END\t{end_time}\t{end_time - self.start_time}\n".encode()
                 )
             self.log_file.close()
+
         if self.gh_group_label is not None:
             self.out.write(b"::endgroup::\n")
         elif self.interactive_prefix is not None and self.label is not None:
@@ -102,6 +109,66 @@ class OutputSink:
             self.out.write(
                 b"[" + self.label + b" completed in " + run_pretty.encode() + b"]\n"
             )
+
+        # Call coordinate_index_and_logs if upload is configured
+        if self.upload_to_s3 and self.s3_bucket and self.s3_subdir:
+            self.coordinate_index_and_logs()
+
+    def coordinate_index_and_logs(self):
+        repo_root = Path(__file__).resolve().parent.parent
+        build_dir = repo_root / self.base_build_dir
+        amdgpu_family = os.getenv("AMDGPU_FAMILIES")
+
+        # Step 1: Run create_log_index.py (if AMDGPU_FAMILIES is defined)
+        if amdgpu_family:
+            try:
+                index_script = repo_root / "build_tools" / "create_log_index.py"
+                print(f"[TEATIME] Indexing logs for AMDGPU_FAMILIES={amdgpu_family}")
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(index_script),
+                        "--build-dir",
+                        str(build_dir),
+                        "--amdgpu-family",
+                        amdgpu_family,
+                    ],
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"[WARN] create_log_index.py failed: {e}", file=sys.stderr)
+            except Exception as e:
+                print(
+                    f"[WARN] Unexpected error during log indexing: {e}", file=sys.stderr
+                )
+        else:
+            print("[WARN] AMDGPU_FAMILIES not set; skipping log indexing")
+
+        # Step 2: S3 upload using --bucket and --subdir
+        try:
+            upload_script = repo_root / "build_tools" / "upload_logs_to_s3.py"
+            print(f"[TEATIME] Uploading logs to s3://{self.s3_bucket}/{self.s3_subdir}")
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(upload_script),
+                    "--build-dir",
+                    str(build_dir),
+                    "--bucket",
+                    self.s3_bucket,
+                    "--subdir",
+                    self.s3_subdir,
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
+            if os.getenv("TEATIME_FAIL_ON_UPLOAD_ERROR") == "1":
+                raise
+        except Exception as e:
+            print(f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr)
+            if os.getenv("TEATIME_FAIL_ON_UPLOAD_ERROR") == "1":
+                raise
 
     def writeline(self, line: bytes):
         if self.interactive_prefix is not None:
