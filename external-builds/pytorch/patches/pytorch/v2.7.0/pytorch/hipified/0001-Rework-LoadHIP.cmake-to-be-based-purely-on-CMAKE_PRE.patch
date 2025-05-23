@@ -1,7 +1,7 @@
-From 502e9e63887274f3fa5f975a7990addea61cdb93 Mon Sep 17 00:00:00 2001
+From 3888f20437b97ea28073f0c3d76dc8b824ab46a0 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 17 Feb 2025 16:47:57 -0800
-Subject: [PATCH 01/12] Rework LoadHIP.cmake to be based purely on
+Subject: [PATCH 01/14] Rework LoadHIP.cmake to be based purely on
  CMAKE_PREFIX_PATH.
 
 * Eliminates dependence on `/opt/rocm` and path based heuristics.
@@ -9,17 +9,45 @@ Subject: [PATCH 01/12] Rework LoadHIP.cmake to be based purely on
 * Workaround cmake >= 4.0 for hiprtc
 
 Co-authored-by: Scott Tsai <scottt.tw@gmail.com>
+Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 ---
- cmake/public/LoadHIP.cmake | 303 ++++++++++++++-----------------------
- 1 file changed, 111 insertions(+), 192 deletions(-)
+ cmake/public/LoadHIP.cmake | 308 ++++++++++++++-----------------------
+ 1 file changed, 116 insertions(+), 192 deletions(-)
 
 diff --git a/cmake/public/LoadHIP.cmake b/cmake/public/LoadHIP.cmake
-index 58c74ddda35..57910495fcc 100644
+index 58c74ddda35..ef0cf26e645 100644
 --- a/cmake/public/LoadHIP.cmake
 +++ b/cmake/public/LoadHIP.cmake
-@@ -1,206 +1,125 @@
+@@ -1,206 +1,130 @@
 -set(PYTORCH_FOUND_HIP FALSE)
--
++macro(pytorch_load_hip)
++  find_package(hip REQUIRED CONFIG)
++  message(STATUS "hip version: ${hip_VERSION}")
++  find_package(amd_comgr REQUIRED)
++  message(STATUS "amd_comgr version: ${amd_comgr_VERSION}")
++  find_package(rocrand REQUIRED)
++  message(STATUS "rocrand version: ${rocrand_VERSION}")
++  find_package(hiprand REQUIRED)
++  message(STATUS "hiprand version: ${hiprand_VERSION}")
++  find_package(rocblas REQUIRED)
++  message(STATUS "rocblas version: ${rocblas_VERSION}")
++  find_package(hipblas REQUIRED)
++  message(STATUS "hipblas_VERSION: ${hipblas_VERSION}")
++  find_package(miopen REQUIRED)
++  message(STATUS "miopen version: ${miopen_VERSION}")
++  find_package(hipfft REQUIRED)
++  message(STATUS "hipfft version: ${hipfft_VERSION}")
++  find_package(hipsparse REQUIRED)
++  message(STATUS "hipsparse version: ${hipsparse_VERSION}")
++  find_package(rocprim REQUIRED)
++  message(STATUS "rocprim version: ${rocprim_VERSION}")
++  find_package(hipcub REQUIRED)
++  message(STATUS "hipcub version: ${hipcub_VERSION}")
++  find_package(rocthrust REQUIRED)
++  message(STATUS "rocthrust version: ${rocthrust_VERSION}")
++  find_package(hipsolver REQUIRED)
++  message(STATUS "hipsolver versio: ${hipsolver_VERSION}")
+ 
 -# If ROCM_PATH is set, assume intention is to compile with
 -# ROCm support and error out if the ROCM_PATH does not exist.
 -# Else ROCM_PATH does not exist, assume a default of /opt/rocm
@@ -109,34 +137,7 @@ index 58c74ddda35..57910495fcc 100644
 -    set(ROCM_VERSION_HEADER_PATH ${ROCM_INCLUDE_DIRS}/hip/hip_version.h)
 -  endif()
 -  get_filename_component(ROCM_HEADER_NAME ${ROCM_VERSION_HEADER_PATH} NAME)
-+macro(pytorch_load_hip)
-+  find_package(hip REQUIRED CONFIG)
-+  message(STATUS "hip version: ${hip_VERSION}")
-+  find_package(amd_comgr REQUIRED)
-+  message(STATUS "amd_comgr version: ${amd_comgr_VERSION}")
-+  find_package(rocrand REQUIRED)
-+  message(STATUS "rocrand version: ${rocrand_VERSION}")
-+  find_package(hiprand REQUIRED)
-+  message(STATUS "hiprand version: ${hiprand_VERSION}")
-+  find_package(rocblas REQUIRED)
-+  message(STATUS "rocblas version: ${rocblas_VERSION}")
-+  find_package(hipblas REQUIRED)
-+  message(STATUS "hipblas_VERSION: ${hipblas_VERSION}")
-+  find_package(miopen REQUIRED)
-+  message(STATUS "miopen version: ${miopen_VERSION}")
-+  find_package(hipfft REQUIRED)
-+  message(STATUS "hipfft version: ${hipfft_VERSION}")
-+  find_package(hipsparse REQUIRED)
-+  message(STATUS "hipsparse version: ${hipsparse_VERSION}")
-+  find_package(rocprim REQUIRED)
-+  message(STATUS "rocprim version: ${rocprim_VERSION}")
-+  find_package(hipcub REQUIRED)
-+  message(STATUS "hipcub version: ${hipcub_VERSION}")
-+  find_package(rocthrust REQUIRED)
-+  message(STATUS "rocthrust version: ${rocthrust_VERSION}")
-+  find_package(hipsolver REQUIRED)
-+  message(STATUS "hipsolver versio: ${hipsolver_VERSION}")
- 
+-
 -  if(EXISTS ${ROCM_VERSION_HEADER_PATH})
 -    set(ROCM_HEADER_FILE ${ROCM_VERSION_HEADER_PATH})
 +  if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0.0")
@@ -158,7 +159,16 @@ index 58c74ddda35..57910495fcc 100644
 -    set(ROCM_LIB_NAME "ROCM")
 -  else() # Win32
 -    set(ROCM_LIB_NAME "HIP")
--  endif()
++  message(STATUS "hiprtc version: ${hiprtc_VERSION}")
++
++  if(NOT WIN32)
++    # RCCL is supported on Linux. It is not on Windows
++    find_package(rccl REQUIRED)
++    message(STATUS "rccl version: ${rccl_VERSION}")
++    # The HSA runtime is used on Linux, not Windows.
++    find_package(hsa-runtime64 REQUIRED)
++    message(STATUS "hsa-runtime64 version: ${hsa-runtime64_VERSION}")
+   endif()
 -  # Below we use a RegEx to find ROCM version numbers.
 -  # Note that CMake does not support \s for blank space. That is
 -  # why in the regular expressions below we have a blank space in
@@ -177,13 +187,6 @@ index 58c74ddda35..57910495fcc 100644
 -  string(REGEX MATCH "${ROCM_LIB_NAME}_VERSION_PATCH[ ]+[0-9]+" TEMP1 ${ROCM_HEADER_CONTENT})
 -  string(REPLACE "${ROCM_LIB_NAME}_VERSION_PATCH" "" TEMP2 ${TEMP1})
 -  string(STRIP ${TEMP2} ROCM_VERSION_DEV_PATCH)
-+  message(STATUS "hiprtc version: ${hiprtc_VERSION}")
-+
-+  # Original version made these UNIX-only.
-+  find_package(rccl REQUIRED)
-+  message(STATUS "rccl version: ${rccl_VERSION}")
-+  find_package(hsa-runtime64 REQUIRED)
-+  message(STATUS "hsa-runtime64 version: ${hsa-runtime64_VERSION}")
 +  find_package(hipblaslt REQUIRED)
 +  message(STATUS "hipblaslt version: ${hipblaslt_VERSION}")
 +
@@ -240,6 +243,8 @@ index 58c74ddda35..57910495fcc 100644
 -    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 -    find_package_and_print_version(hiprtc REQUIRED)
 -    unset(CMAKE_POLICY_VERSION_MINIMUM)
+-  else()
+-    find_package_and_print_version(hiprtc REQUIRED)
 +  math(EXPR TORCH_HIP_VERSION "(${ROCM_VERSION_DEV_MAJOR} * 100) + ${ROCM_VERSION_DEV_MINOR}")
 +
 +  message(STATUS "  ROCM_VERSION_DEV_INT:   ${ROCM_VERSION_DEV_INT}")
@@ -252,15 +257,16 @@ index 58c74ddda35..57910495fcc 100644
 +  # TODO: This isn't quite right and needs to mate up with whether kineto
 +  # depends on roctracer or rocprofiler-sdk. The coupling here is fragile and
 +  # needs to be reworked.
-+  find_package(rocprofiler-sdk-roctx)
-+  if(rocprofiler-sdk-roctx_FOUND)
-+    message(STATUS "rocprofiler-sdk-roctx version: ${rocprofiler-sdk-roctx_VERSION} found (will use instead of roctracer)")
-+    set(ROCM_ROCTX_LIB rocprofiler-sdk-roctx::rocprofiler-sdk-roctx-shared-library)
-   else()
--    find_package_and_print_version(hiprtc REQUIRED)
-+    find_library(ROCM_ROCTX_LIB roctx64)
-+    if(NOT ROCM_ROCTX_LIB)
-+      cmake(WARNING "Neither rocprofiler-sdk nor libroctx64.so was found: This may result in errors if components rely on it")
++  if(NOT WIN32)
++    find_package(rocprofiler-sdk-roctx)
++    if(rocprofiler-sdk-roctx_FOUND)
++      message(STATUS "rocprofiler-sdk-roctx version: ${rocprofiler-sdk-roctx_VERSION} found (will use instead of roctracer)")
++      set(ROCM_ROCTX_LIB rocprofiler-sdk-roctx::rocprofiler-sdk-roctx-shared-library)
++    else()
++      find_library(ROCM_ROCTX_LIB roctx64)
++      if(NOT ROCM_ROCTX_LIB)
++        cmake(WARNING "Neither rocprofiler-sdk nor libroctx64.so was found: This may result in errors if components rely on it")
++      endif()
 +    endif()
    endif()
 -  find_package_and_print_version(hipblaslt REQUIRED)
@@ -281,7 +287,7 @@ index 58c74ddda35..57910495fcc 100644
 +  # contains FindHIP.cmake.
 +  function(find_rocm_sdk_module_path)
 +    set(hip_lib_dir "${hip_LIB_INSTALL_DIR}")
-+    foreach(candidate_path "${hip_lib_dir}/cmake" "${hip_lib_dir}/cmake/hip")
++    foreach(candidate_path "${hip_lib_dir}/cmake" "${hip_lib_dir}/cmake/hip" "${hip_lib_dir}/../cmake")
 +      if(EXISTS "${candidate_path}/FindHIP.cmake")
 +        list(PREPEND CMAKE_MODULE_PATH "${candidate_path}")
 +        message(STATUS "Legacy FindHIP.cmake module found in ${candidate_path}")
@@ -295,7 +301,7 @@ index 58c74ddda35..57910495fcc 100644
 +    message(STATUS "Could not locate legacy FindHIP.cmake: You may need to set CMAKE_MODULE_PATH explicitly to its location")
 +  endfunction()
 +  find_rocm_sdk_module_path()
-+  find_package(HIP 1.0 MODULE REQUIRED)
++  find_package(HIP MODULE REQUIRED)
  
 -    set(PROJECT_RANDOM_BINARY_DIR "${PROJECT_BINARY_DIR}")
 +  set(HIP_NEW_TYPE_ENUMS ON)

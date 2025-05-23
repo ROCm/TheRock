@@ -1,7 +1,7 @@
-From f0162a6ccdca9fb461d280398ff40b121a8a2840 Mon Sep 17 00:00:00 2001
+From 9ebf7f84ef304c8e1226d9b51e7cdb5c5292fff8 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Mon, 31 Mar 2025 19:27:48 +0100
-Subject: [PATCH 05/12] Add gfx1150/gfx1151 to hipblaslt support list in
+Subject: [PATCH 05/14] Add gfx1150/gfx1151 to hipblaslt support list in
  Blas.cpp
 
 ---
