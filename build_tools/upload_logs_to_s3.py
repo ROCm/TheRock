@@ -23,6 +23,11 @@ def upload_file_boto3(file_path: Path, bucket: str, key: str, content_type: str 
     s3 = boto3.client("s3")
     extra_args = {"ContentType": content_type} if content_type else {}
 
+    # Skip empty files (avoids IncompleteBody errors)
+    if not file_path.exists() or file_path.stat().st_size == 0:
+        log(f"[WARN] Skipping upload of empty or missing file: {file_path}")
+        return
+
     try:
         # Check if file already exists
         s3.head_object(Bucket=bucket, Key=key)
