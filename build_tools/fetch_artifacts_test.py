@@ -14,8 +14,8 @@ from fetch_artifacts import (
     FetchArtifactException,
 )
 
-THIS_DIR = Path(__file__).resolve().parent.parent
-TEST_DIR = THIS_DIR / "build"
+PARENT_DIR = Path(__file__).resolve().parent.parent
+TEST_DIR = PARENT_DIR / "build"
 
 
 def get_indexer_file():
@@ -34,7 +34,9 @@ def get_indexer_file():
 
 
 def run_indexer_file():
-    subprocess.run([sys.executable, TEST_DIR / "indexer.py", "-f", "*.tar.xz*", TEST_DIR])
+    subprocess.run(
+        [sys.executable, TEST_DIR / "indexer.py", "-f", "*.tar.xz*", TEST_DIR]
+    )
 
 
 def create_sample_tar_files():
