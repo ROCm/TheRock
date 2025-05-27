@@ -17,6 +17,7 @@ GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 BUCKET_URL = "https://therock-artifacts.s3.us-east-2.amazonaws.com"
 
+
 class FetchArtifactException(Exception):
     def __init__(self, message):
         self.message = message
@@ -27,20 +28,21 @@ class ArtifactNotFoundExeption(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
-        
+
+
 class IndexPageParser(HTMLParser):
     def __init__(self):
         HTMLParser.__init__(self)
         self.files = []
         self.is_file_data = False
-        
+
     def handle_starttag(self, tag, attrs):
         if tag == "span":
             for attr_name, attr_value in attrs:
                 if attr_name == "class" and attr_value == "name":
                     self.is_file_data = True
                     break
-    
+
     def handle_data(self, data):
         if self.is_file_data:
             self.files.append(data)
@@ -106,7 +108,9 @@ def collect_artifacts_urls(
 def urllib_retrieve_artifact(artifact):
     output_path, artifact_url = artifact
     log(f"++ Downloading from {artifact_url} to {output_path}")
-    with urllib.request.urlopen(artifact_url) as in_stream, open(output_path, "wb") as out_file:
+    with urllib.request.urlopen(artifact_url) as in_stream, open(
+        output_path, "wb"
+    ) as out_file:
         copyfileobj(in_stream, out_file)
     log(f"++ Download complete for {output_path}")
 
