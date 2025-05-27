@@ -7,11 +7,11 @@
 
 import argparse
 import concurrent.futures
+from html.parser import HTMLParser
 import platform
-import re
 from shutil import copyfileobj
 import sys
-from urllib.request import urlopen, Request, HTTPError
+import urllib.request
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
@@ -27,6 +27,24 @@ class ArtifactNotFoundExeption(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+        
+class IndexPageParser(HTMLParser):
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.files = []
+        self.is_file_data = False
+        
+    def handle_starttag(self, tag, attrs):
+        if tag == "span":
+            for attr_name, attr_value in attrs:
+                if attr_name == "class" and attr_value == "name":
+                    self.is_file_data = True
+                    break
+    
+    def handle_data(self, data):
+        if self.is_file_data:
+            self.files.append(data)
+            self.is_file_data = False
 
 
 # TODO(geomin12): switch out logging library
@@ -38,19 +56,19 @@ def log(*args, **kwargs):
 def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     index_page_url = f"{BUCKET_URL}/{run_id}-{PLATFORM}/index-{amdgpu_family}.html"
-    request = Request(index_page_url)
+    request = urllib.request.Request(index_page_url)
     try:
-        with urlopen(request) as response:
-            # from the S3 index page, we search for artifacts inside the a tags "<a href={TAR_XZ_NAME}>"
-            pattern = r'<a\s+[^>]*href=["\']([^"\']+)["\']'
-            artifact_files = re.findall(pattern, str(response.read()))
+        with urllib.request.urlopen(request) as response:
+            # from the S3 index page, we search for artifacts inside the a tags "<span class='name'>{TAR_NAME}</span>"
+            parser = IndexPageParser()
+            parser.feed(str(response.read()))
             data = set()
-            for artifact in artifact_files:
+            for artifact in parser.files:
                 # We only want to get .tar.xz files, not .tar.xz.sha256sum
                 if "sha256sum" not in artifact and "tar.xz" in artifact:
                     data.add(artifact)
             return data
-    except HTTPError as err:
+    except urllib.request.HTTPError as err:
         if err.code == 404:
             raise ArtifactNotFoundExeption(
                 f"No artifacts found for {run_id}-{PLATFORM}. Exiting..."
@@ -88,7 +106,7 @@ def collect_artifacts_urls(
 def urllib_retrieve_artifact(artifact):
     output_path, artifact_url = artifact
     log(f"++ Downloading from {artifact_url} to {output_path}")
-    with urlopen(artifact_url) as in_stream, open(output_path, "wb") as out_file:
+    with urllib.request.urlopen(artifact_url) as in_stream, open(output_path, "wb") as out_file:
         copyfileobj(in_stream, out_file)
     log(f"++ Download complete for {output_path}")
 
