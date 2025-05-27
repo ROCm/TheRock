@@ -7,8 +7,6 @@ import tarfile
 import unittest
 from unittest.mock import patch
 import urllib.request
-
-sys.path.append("build_tools")
 from fetch_artifacts import (
     IndexPageParser,
     retrieve_s3_artifacts,
@@ -16,8 +14,8 @@ from fetch_artifacts import (
     FetchArtifactException,
 )
 
-THIS_DIR = Path(__file__).resolve().parent
-TEST_DIR = THIS_DIR / "test_dir"
+THIS_DIR = Path(__file__).resolve().parent.parent
+TEST_DIR = THIS_DIR / "build"
 
 
 def get_indexer_file():
@@ -33,11 +31,10 @@ def get_indexer_file():
             TEST_DIR / "indexer.py",
         ]
     )
-    pass
 
 
 def run_indexer_file():
-    subprocess.run(["python", TEST_DIR / "indexer.py", "-f", "*.tar.xz*", TEST_DIR])
+    subprocess.run([sys.executable, TEST_DIR / "indexer.py", "-f", "*.tar.xz*", TEST_DIR])
 
 
 def create_sample_tar_files():
@@ -62,11 +59,11 @@ class ArtifactsIndexPageTest(unittest.TestCase):
     @classmethod
     def tearDownClass(self):
         shutil.rmtree(TEST_DIR)
-        pass
 
     def testCreateIndexPage(self):
         run_indexer_file()
-        self.assertGreater(os.path.getsize(TEST_DIR / "index.html"), 0)
+        index_file_path = Path(TEST_DIR / "index.html")
+        self.assertGreater(index_file_path.stat().st_size, 0)
         # Ensuring we have three tar.xz files
         parser = IndexPageParser()
         with open(TEST_DIR / "index.html", "r") as file:
