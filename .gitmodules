@@ -122,3 +122,6 @@
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
 	branch = develop
+[submodule "third-party/indexer"]
+	path = third-party/indexer
+	url = https://github.com/joshbrunty/Indexer.git
