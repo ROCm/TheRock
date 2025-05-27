@@ -155,9 +155,6 @@ cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   .
 
-# On Windows, also add
-#   -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
-
 cmake --build build
 ```
 

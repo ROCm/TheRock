@@ -1,0 +1,24 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-release-package",
+      "displayName": "Settings for Linux release packages",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "amd-llvm_BUILD_TYPE": "Release",
+        "therock-host-blas_BUILD_TYPE": "Release",
+        "therock-SuiteSparse_BUILD_TYPE": "Release",
+        "THEROCK_SPLIT_DEBUG_INFO": "ON",
+        "THEROCK_MINIMAL_DEBUG_INFO": "ON",
+        "THEROCK_QUIET_INSTALL": "OFF"
+      }
+    }
+  ]
+}

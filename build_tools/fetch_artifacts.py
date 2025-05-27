@@ -17,7 +17,6 @@ GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 BUCKET_URL = "https://therock-artifacts.s3.us-east-2.amazonaws.com"
 
-
 class FetchArtifactException(Exception):
     def __init__(self, message):
         self.message = message
