@@ -135,13 +135,6 @@ jobs:
           echo "-------------"
           ccache -s
 
-      - name: Save cache
-        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
-        if: always()
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v2-${{ github.sha }}
-
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
@@ -191,3 +184,10 @@ jobs:
           else
             echo "[INFO] No artifacts index found. Skipping artifact link."
           fi
+
+      - name: Save cache
+        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        if: always()
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: linux-build-packages-manylinux-v2-${{ github.sha }}
