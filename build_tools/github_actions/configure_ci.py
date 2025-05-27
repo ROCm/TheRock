@@ -345,7 +345,7 @@ def main(base_args, linux_families, windows_families):
 
     # In the case of a scheduled run, we always want to build
     if is_schedule:
-        enable_build_jobs = False
+        enable_build_jobs = True
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
