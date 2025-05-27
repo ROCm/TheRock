@@ -1,9 +1,8 @@
-import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import unittest
 from unittest.mock import patch
 import urllib.request
@@ -15,64 +14,65 @@ from fetch_artifacts import (
 )
 
 PARENT_DIR = Path(__file__).resolve().parent.parent
-TEST_DIR = PARENT_DIR / "temp_dir"
 
 
-def run_indexer_file():
+def run_indexer_file(temp_dir):
     subprocess.run(
         [
             sys.executable,
             PARENT_DIR / "third-party" / "indexer" / "indexer.py",
             "-f",
             "*.tar.xz*",
-            TEST_DIR,
+            temp_dir,
         ]
     )
 
 
-def create_sample_tar_files():
-    with open(TEST_DIR / "test.txt", "w") as file:
+def create_sample_tar_files(temp_dir):
+    with open(temp_dir / "test.txt", "w") as file:
         file.write("Hello, World!")
 
-    with tarfile.open(TEST_DIR / "empty_1.tar.xz", "w:xz") as tar:
-        tar.add(TEST_DIR / "test.txt", arcname="test.txt")
-    with tarfile.open(TEST_DIR / "empty_2.tar.xz", "w:xz") as tar:
-        tar.add(TEST_DIR / "test.txt", arcname="test.txt")
-    with tarfile.open(TEST_DIR / "empty_3.tar.xz", "w:xz") as tar:
-        tar.add(TEST_DIR / "test.txt", arcname="test.txt")
+    with tarfile.open(temp_dir / "empty_1.tar.xz", "w:xz") as tar:
+        tar.add(temp_dir / "test.txt", arcname="test.txt")
+
+    with tarfile.open(temp_dir / "empty_2.tar.xz", "w:xz") as tar:
+        tar.add(temp_dir / "test.txt", arcname="test.txt")
+
+    with tarfile.open(temp_dir / "empty_3.tar.xz", "w:xz") as tar:
+        tar.add(temp_dir / "test.txt", arcname="test.txt")
 
 
 class ArtifactsIndexPageTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(self):
-        os.makedirs(TEST_DIR, exist_ok=True)
-        create_sample_tar_files()
-
-    @classmethod
-    def tearDownClass(self):
-        shutil.rmtree(TEST_DIR)
-
     def testCreateIndexPage(self):
-        run_indexer_file()
-        index_file_path = Path(TEST_DIR / "index.html")
-        self.assertGreater(index_file_path.stat().st_size, 0)
-        # Ensuring we have three tar.xz files
-        parser = IndexPageParser()
-        with open(TEST_DIR / "index.html", "r") as file:
-            parser.feed(str(file.read()))
-        self.assertEqual(len(parser.files), 3)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir = Path(temp_dir)
+            create_sample_tar_files(temp_dir)
+            run_indexer_file(temp_dir)
+
+            index_file_path = Path(temp_dir / "index.html")
+            self.assertGreater(index_file_path.stat().st_size, 0)
+            # Ensuring we have three tar.xz files
+            parser = IndexPageParser()
+            with open(temp_dir / "index.html", "r") as file:
+                parser.feed(str(file.read()))
+            self.assertEqual(len(parser.files), 3)
 
     @patch("urllib.request.urlopen")
     def testRetrieveS3Artifacts(self, mock_urlopen):
-        with open(TEST_DIR / "index.html", "r") as file:
-            mock_urlopen().__enter__().read.return_value = file.read()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir = Path(temp_dir)
+            create_sample_tar_files(temp_dir)
+            run_indexer_file(temp_dir)
 
-        result = retrieve_s3_artifacts("123", "test")
+            with open(temp_dir / "index.html", "r") as file:
+                mock_urlopen().__enter__().read.return_value = file.read()
 
-        self.assertEqual(len(result), 3)
-        self.assertTrue("empty_1.tar.xz" in result)
-        self.assertTrue("empty_2.tar.xz" in result)
-        self.assertTrue("empty_3.tar.xz" in result)
+            result = retrieve_s3_artifacts("123", "test")
+
+            self.assertEqual(len(result), 3)
+            self.assertTrue("empty_1.tar.xz" in result)
+            self.assertTrue("empty_2.tar.xz" in result)
+            self.assertTrue("empty_3.tar.xz" in result)
 
     @patch("urllib.request.urlopen")
     def testRetrieveS3ArtifactsNotFound(self, mock_urlopen):
