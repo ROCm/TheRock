@@ -170,12 +170,12 @@ def process_dir(top_dir, opts):
     .icon {
         margin-right: 5px;
     }
-    tr.clickable { 
-        cursor: pointer; 
-    } 
-    tr.clickable a { 
-        display: block; 
-    } 
+    tr.clickable {
+        cursor: pointer;
+    }
+    tr.clickable a {
+        display: block;
+    }
     @media (max-width: 600px) {
         * {
             font-size: 1.06rem;
