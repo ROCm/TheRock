@@ -207,10 +207,7 @@ jobs:
       - name: Create Index Files
         if: always()
         run: |
-          curl --silent --fail --show-error --location \
-            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
-          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
+          python third-party/indexer/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
           python build_tools/create_log_index.py \
             --build-dir=${{ env.BUILD_DIR_BASH }} \
             --amdgpu-family=${{ env.AMDGPU_FAMILIES }}

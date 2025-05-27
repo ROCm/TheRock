@@ -18,24 +18,15 @@ PARENT_DIR = Path(__file__).resolve().parent.parent
 TEST_DIR = PARENT_DIR / "build"
 
 
-def get_indexer_file():
-    subprocess.run(
-        [
-            "curl",
-            "--silent",
-            "--fail",
-            "--show-error",
-            "--location",
-            "https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py",
-            "--output",
-            TEST_DIR / "indexer.py",
-        ]
-    )
-
-
 def run_indexer_file():
     subprocess.run(
-        [sys.executable, TEST_DIR / "indexer.py", "-f", "*.tar.xz*", TEST_DIR]
+        [
+            sys.executable,
+            PARENT_DIR / "third-party" / "indexer" / "indexer.py",
+            "-f",
+            "*.tar.xz*",
+            TEST_DIR,
+        ]
     )
 
 
@@ -56,7 +47,6 @@ class ArtifactsIndexPageTest(unittest.TestCase):
     def setUpClass(self):
         os.makedirs(TEST_DIR, exist_ok=True)
         create_sample_tar_files()
-        get_indexer_file()
 
     @classmethod
     def tearDownClass(self):
