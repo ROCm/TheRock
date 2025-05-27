@@ -15,7 +15,7 @@ from fetch_artifacts import (
 )
 
 PARENT_DIR = Path(__file__).resolve().parent.parent
-TEST_DIR = PARENT_DIR / "build"
+TEST_DIR = PARENT_DIR / "temp_dir"
 
 
 def run_indexer_file():
