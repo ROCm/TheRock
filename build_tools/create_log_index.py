@@ -9,6 +9,7 @@ import argparse
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
 
+
 def log(*args):
     print(*args)
     sys.stdout.flush()
