@@ -1,0 +1,149 @@
+import argparse
+import logging
+import os
+from pathlib import Path
+import platform
+import subprocess
+import sys
+
+logger = logging.getLogger(__name__)
+
+THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+GENERIC_VARIANT = "generic"
+PLATFORM = platform.system().lower()
+
+def set_github_step_summary(string):
+    logger.info(f"Appending to github summary: {string}")
+    step_summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "")
+    if not step_summary_file:
+        print("Warning: GITHUB_STEP_SUMMARY env var not set, can't set github step summary")
+        return
+    with open(step_summary_file, "a") as f:
+        f.write(string + "\n")
+
+def create_index_file(args):
+    logger.info("Creating index file")
+    index_file_path = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
+    build_dir = args.build_dir
+    
+    subprocess.run([
+        sys.executable, 
+        index_file_path,
+        "-f",
+        "*.tar.xz*",
+        build_dir / "artifacts"
+    ])
+
+def create_log_index(args):
+    logger.info("Creating log index file")
+    create_log_index_path = THEROCK_DIR / "build_tools" / "create_log_index.py"
+    build_dir = args.build_dir
+    amdgpu_family = args.amdgpu_family
+    
+    subprocess.run([
+        sys.executable, 
+        create_log_index_path,
+        f"--build-dir={str(build_dir)}",
+        f"--amdgpu-family={amdgpu_family}"
+    ])
+    
+def upload_artifacts(args, bucket):
+    logger.info("Uploading artifacts to S3")
+    build_dir = args.build_dir
+    run_id = args.run_id
+    amdgpu_family = args.amdgpu_family
+    
+    # Uploading artifacts to S3 bucket
+    subprocess.run([
+        "aws",
+        "s3",
+        "cp",
+        build_dir / "artifacts",
+        f"s3://{bucket}/{run_id}-{PLATFORM}/",
+        "--recursive",
+        "--no-follow-symlinks",
+        "--exclude",
+        "*",
+        "--include",
+        "*.tar.xz*"
+    ])
+    
+    # Uploading index.html to S3 bucket
+    subprocess.run([
+        "aws",
+        "s3",
+        "cp",
+        build_dir / "artifacts" / "index.html",
+        f"s3://{bucket}/{run_id}-{PLATFORM}/index-{amdgpu_family}.html"
+    ])
+    
+def upload_logs(args, bucket):
+    logger.info("Uploading logs to S3")
+    build_dir = args.build_dir
+    run_id = args.run_id
+    amdgpu_family = args.amdgpu_family
+    upload_logs_s3_path = THEROCK_DIR / "build_tools" / "upload_logs_to_s3.py"
+    s3_base_path = f"s3://{bucket}/{run_id}-{PLATFORM}/logs/{amdgpu_family}"
+    
+    subprocess.run([
+        sys.executable,
+        upload_logs_s3_path,
+        f"--build-dir={build_dir}",
+        f"--s3-base-path='{s3_base_path}'"
+    ])
+    
+def add_links_to_job_summary(args, bucket):
+    build_dir = args.build_dir
+    run_id = args.run_id
+    amdgpu_family = args.amdgpu_family
+    
+    log_url = f"https://{bucket}.s3.us-east-2.amazonaws.com/{run_id}-{PLATFORM}/logs/{amdgpu_family}/index.html"
+    set_github_step_summary(f"[Build Logs]({log_url})")
+    if os.path.exists(build_dir / "artifacts" / "index.html"):
+        artifact_url = f"https://{bucket}.s3.us-east-2.amazonaws.com/{run_id}-{PLATFORM}/index-{amdgpu_family}.html"
+        set_github_step_summary(f"[Artifacts]({artifact_url})")
+    else:
+        logger.info("No artifacts index found. Skipping artifact link.")
+
+
+def run(args):
+    repo_name = args.repo
+    bucket = "therock-artifacts" if repo_name == "TheRock" else "therock-artifacts-external"
+    create_index_file(args)
+    create_log_index(args)
+    upload_artifacts(args, bucket)
+    upload_logs(args, bucket)
+    add_links_to_job_summary(args, bucket)
+    
+def main(argv):
+    parser = argparse.ArgumentParser(prog="fetch_artifacts")
+    parser.add_argument(
+        "--repo",
+        type=str,
+        required=True
+    )
+
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        required=True
+    )
+    
+    parser.add_argument(
+        "--amdgpu-family",
+        type=str,
+        required=True
+    )
+    
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        required=True
+    )
+
+    args = parser.parse_args(argv)
+    run(args)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -149,45 +149,10 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
-      # TODO: Move to script
-      - name: Create Index Files
+      - name: Upload artifacts
         if: always()
-        run: |
-          curl --silent --fail --show-error --location \
-            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output build/indexer.py
-          python build/indexer.py -f '*.tar.xz*' build/artifacts/
-          python3 build_tools/create_log_index.py \
-            --build-dir=build \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
-
-      # TODO: Move to script
-      - name: Upload Artifacts
-        run: |
-          aws s3 cp build/artifacts/ s3://${{env.BUCKET}}/${{github.run_id}}-linux/ \
-            --recursive --no-follow-symlinks \
-            --exclude "*" \
-            --include "*.tar.xz*"
-          aws s3 cp build/artifacts/index.html s3://${{env.BUCKET}}/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html
-
-      - name: Upload Logs
-        if: always()
-        run: |
-          python3 build_tools/upload_logs_to_s3.py \
-            --build-dir=build \
-            --s3-base-path="s3://${{env.BUCKET}}/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}"
-
-      - name: Add Links to Job Summary
-        if: always()
-        run: |
-          LOG_URL="https://${{env.BUCKET}}.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}/index.html"
-          echo "[Build Logs](${LOG_URL})" >> $GITHUB_STEP_SUMMARY
-
-          ARTIFACT_INDEX=build/artifacts/index.html
-          if [ -f "${ARTIFACT_INDEX}" ]; then
-            ARTIFACT_URL="https://${{env.BUCKET}}.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html"
-
-            echo "[Artifacts](${ARTIFACT_URL})" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "[INFO] No artifacts index found. Skipping artifact link."
-          fi
+        run: python build_tools/github_actions/artifact_upload.py \
+          --repo=${{ github.event.repository.name }} \
+          --run-id=${{ github.run_id }} \ 
+          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} \ 
+          --build-dir=build/
