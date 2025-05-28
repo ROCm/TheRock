@@ -98,7 +98,7 @@ def upload_logs(args, bucket, bucket_uri):
             sys.executable,
             upload_logs_s3_path,
             f"--build-dir={build_dir}",
-            f"--s3-base-path='{s3_base_path}'",
+            f"--s3-base-path={s3_base_path}",
         ]
     )
 
