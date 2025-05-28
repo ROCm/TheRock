@@ -20,7 +20,11 @@ PLATFORM = platform.system().lower()
 REPO = os.getenv("REPO", "ROCm/TheRock")
 OWNER, REPO_NAME = REPO.split("/")
 EXTERNAL_REPO = "" if REPO_NAME == "TheRock" and OWNER == "ROCm" else f"{OWNER}-{REPO}/"
-BUCKET = "therock-artifacts" if REPO_NAME == "TheRock" and OWNER == "ROCm" else 'therock-artifacts-external'
+BUCKET = (
+    "therock-artifacts"
+    if REPO_NAME == "TheRock" and OWNER == "ROCm"
+    else "therock-artifacts-external"
+)
 
 
 class FetchArtifactException(Exception):

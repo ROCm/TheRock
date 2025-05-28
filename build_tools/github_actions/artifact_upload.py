@@ -6,8 +6,7 @@ import platform
 import subprocess
 import sys
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 GENERIC_VARIANT = "generic"
@@ -15,7 +14,7 @@ PLATFORM = platform.system().lower()
 
 
 def set_github_step_summary(string):
-    logger.info(f"Appending to github summary: {string}")
+    logging.info(f"Appending to github summary: {string}")
     step_summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "")
     if not step_summary_file:
         print(
@@ -27,7 +26,7 @@ def set_github_step_summary(string):
 
 
 def create_index_file(args):
-    logger.info("Creating index file")
+    logging.info("Creating index file")
     index_file_path = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
     build_dir = args.build_dir
 
@@ -37,7 +36,7 @@ def create_index_file(args):
 
 
 def create_log_index(args):
-    logger.info("Creating log index file")
+    logging.info("Creating log index file")
     create_log_index_path = THEROCK_DIR / "build_tools" / "create_log_index.py"
     build_dir = args.build_dir
     amdgpu_family = args.amdgpu_family
@@ -53,7 +52,7 @@ def create_log_index(args):
 
 
 def upload_artifacts(args, bucket_uri):
-    logger.info("Uploading artifacts to S3")
+    logging.info("Uploading artifacts to S3")
     build_dir = args.build_dir
     amdgpu_family = args.amdgpu_family
 
@@ -87,7 +86,7 @@ def upload_artifacts(args, bucket_uri):
 
 
 def upload_logs(args, bucket, bucket_uri):
-    logger.info(f"Uploading logs to S3 for bucket {bucket}")
+    logging.info(f"Uploading logs to S3 for bucket {bucket}")
     build_dir = args.build_dir
     amdgpu_family = args.amdgpu_family
     upload_logs_s3_path = THEROCK_DIR / "build_tools" / "upload_logs_to_s3.py"
@@ -104,7 +103,7 @@ def upload_logs(args, bucket, bucket_uri):
 
 
 def add_links_to_job_summary(args, bucket, bucket_url):
-    logger.info(f"Adding links to job summary to bucket {bucket}")
+    logging.info(f"Adding links to job summary to bucket {bucket}")
     build_dir = args.build_dir
     run_id = args.run_id
     amdgpu_family = args.amdgpu_family
@@ -115,7 +114,7 @@ def add_links_to_job_summary(args, bucket, bucket_url):
         artifact_url = f"{bucket_url}/index-{amdgpu_family}.html"
         set_github_step_summary(f"[Artifacts]({artifact_url})")
     else:
-        logger.info("No artifacts index found. Skipping artifact link.")
+        logging.info("No artifacts index found. Skipping artifact link.")
 
 
 def run(args):
@@ -123,10 +122,14 @@ def run(args):
     owner, repo_name = repo.split("/")
     run_id = args.run_id
     bucket = (
-        "therock-artifacts" if repo_name == "TheRock" and owner == "ROCm" else "therock-artifacts-external"
+        "therock-artifacts"
+        if repo_name == "TheRock" and owner == "ROCm"
+        else "therock-artifacts-external"
     )
     # For external repos, we add an extra folder in the bucket because GitHub run IDs are unique per repo.
-    external_repo_path = "" if repo_name == "TheRock" and owner == "ROCm" else f"{owner}-{repo_name}/"
+    external_repo_path = (
+        "" if repo_name == "TheRock" and owner == "ROCm" else f"{owner}-{repo_name}/"
+    )
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
     bucket_url = f"https://{bucket}.s3.us-east-2.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
 
