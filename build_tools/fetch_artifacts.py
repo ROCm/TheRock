@@ -63,7 +63,7 @@ def log(*args, **kwargs):
 def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
-    index_page_url = f"{BUCKET_URL}/{run_id}-{PLATFORM}/index-{amdgpu_family}.html"
+    index_page_url = f"{BUCKET_URL}/index-{amdgpu_family}.html"
     request = urllib.request.Request(index_page_url)
     try:
         with urllib.request.urlopen(request) as response:
@@ -105,7 +105,7 @@ def collect_artifacts_urls(
             artifacts_to_retrieve.append(
                 (
                     f"{build_dir}/{file_name}",
-                    f"{BUCKET_URL}/{run_id}-{PLATFORM}/{file_name}",
+                    f"{BUCKET_URL}/{file_name}",
                 )
             )
 
