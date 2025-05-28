@@ -18,17 +18,17 @@ TheRock includes:
 
 For HIP and ROCm:
 
-|         | Build from source | Prebuilt packages                                                   | Python packages |
-| ------- | ----------------- | ------------------------------------------------------------------- | --------------- |
-| Linux   | ✅ Supported      | ✅ Supported                                                        | ✅ Supported    |
-| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | ⚪ Planned      |
+|         | Build from source | Prebuilt packages                                                   | Python packages                                                     |
+| ------- | ----------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Linux   | ✅ Supported      | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
+| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | ⚪ Planned                                                          |
 
 For PyTorch with ROCm:
 
-|         | PyTorch source build                                                | PyTorch Python packages | PyTorch Docker images |
-| ------- | ------------------------------------------------------------------- | ----------------------- | --------------------- |
-| Linux   | ✅ Supported                                                        | ⚪ Planned              | ✅ Supported          |
-| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned              | N/A                   |
+|         | PyTorch source build                                                | PyTorch Python packages                                             | PyTorch Docker images |
+| ------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------- |
+| Linux   | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) | ✅ Supported          |
+| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned                                                          | N/A                   |
 
 ## Building from source
 

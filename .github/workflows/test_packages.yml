@@ -34,6 +34,7 @@ jobs:
     uses: './.github/workflows/test_sanity_check.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ inputs.platform }}
 
