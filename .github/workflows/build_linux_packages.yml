@@ -153,7 +153,7 @@ jobs:
         if: always()
         run: |
           python build_tools/github_actions/artifact_upload.py \
-          --repo=${{ github.event.repository.name }} \
-          --run-id=${{ github.run_id }} \ 
-          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} \ 
-          --build-dir=build/
+          --repo ${{ github.event.repository.name }} \
+          --run-id ${{ github.run_id }} \ 
+          --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \ 
+          --build-dir build/

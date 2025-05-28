@@ -208,10 +208,10 @@ jobs:
         if: always()
         run: |
           python build_tools/github_actions/artifact_upload.py \
-          --repo=${{ github.event.repository.name }} \
-          --run-id=${{ github.run_id }} \ 
-          --amdgpu-family=${{ env.AMDGPU_FAMILIES }} \ 
-          --build-dir=${{ env.BUILD_DIR_BASH }}
+          --repo ${{ github.event.repository.name }} \
+          --run-id ${{ github.run_id }} \ 
+          --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \ 
+          --build-dir ${{ env.BUILD_DIR_BASH }}
 
       # # TODO: Move to script
       # - name: Create Index Files
