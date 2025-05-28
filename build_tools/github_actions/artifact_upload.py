@@ -119,13 +119,14 @@ def add_links_to_job_summary(args, bucket, bucket_url):
 
 
 def run(args):
-    repo_name = args.repo
+    repo = args.repo
+    owner, repo_name = repo.split("/")
     run_id = args.run_id
     bucket = (
-        "therock-artifacts" if repo_name == "TheRock" else "therock-artifacts-external"
+        "therock-artifacts" if repo_name == "TheRock" and owner == "ROCm" else "therock-artifacts-external"
     )
     # For external repos, we add an extra folder in the bucket because GitHub run IDs are unique per repo.
-    external_repo_path = "" if repo_name == "TheRock" else f"{repo_name}/"
+    external_repo_path = "" if repo_name == "TheRock" and owner == "ROCm" else f"{owner}-{repo_name}/"
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
     bucket_url = f"https://{bucket}.s3.us-east-2.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
 

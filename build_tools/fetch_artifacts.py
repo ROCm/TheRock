@@ -15,7 +15,10 @@ import sys
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
-BUCKET = os.getenv("BUCKET", "therock-artifacts")
+REPO = os.getenv("REPO", "ROCm/TheRock")
+OWNER, REPO_NAME = REPO.split("/")
+EXTERNAL_REPO = "" if REPO_NAME == "TheRock" and OWNER == "ROCm" else f"{OWNER}-{REPO}/"
+BUCKET = "therock-artifacts" if REPO_NAME == "TheRock" and OWNER == "ROCm" else 'therock-artifacts-external'
 
 
 def log(*args, **kwargs):
@@ -35,7 +38,7 @@ def s3_bucket_exists(run_id):
         "aws",
         "s3",
         "ls",
-        f"s3://{BUCKET}/{run_id}-{PLATFORM}",
+        f"s3://{BUCKET}/{EXTERNAL_REPO}{run_id}-{PLATFORM}",
         "--no-sign-request",
     ]
     process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
@@ -48,7 +51,7 @@ def s3_exec(variant, package, run_id, build_dir):
         "aws",
         "s3",
         "cp",
-        f"s3://{BUCKET}/{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
+        f"s3://{BUCKET}/{EXTERNAL_REPO}{run_id}-{PLATFORM}/{package}_{variant}.tar.xz",
         str(build_dir),
         "--no-sign-request",
     ]
