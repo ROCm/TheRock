@@ -110,7 +110,7 @@ jobs:
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
           nthreads=$(nproc --all)
-          echo [*] Logical Processors to be used: $nthreads...
+          echo [*] Logical Processors available: $nthreads...
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -149,6 +149,7 @@ jobs:
             -DCMAKE_C_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
             -DCMAKE_CXX_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
             -DCMAKE_LINKER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/link.exe" \
+            -DTHEROCK_BACKGROUND_BUILD_JOBS=4 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
@@ -161,7 +162,7 @@ jobs:
             ${extra_cmake_options}
 
       - name: Build Projects
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" --target therock-archives therock-dist
 
       - name: Report
         if: ${{ !cancelled() }}
