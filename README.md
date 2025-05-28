@@ -18,17 +18,17 @@ TheRock includes:
 
 For HIP and ROCm:
 
-|         | Build from source | Prebuilt packages                                                   | Python packages |
-| ------- | ----------------- | ------------------------------------------------------------------- | --------------- |
-| Linux   | ✅ Supported      | ✅ Supported                                                        | ✅ Supported    |
-| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | ⚪ Planned      |
+|         | Build from source | Prebuilt packages                                                   | Python packages                                                     |
+| ------- | ----------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Linux   | ✅ Supported      | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
+| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | ⚪ Planned                                                          |
 
 For PyTorch with ROCm:
 
-|         | PyTorch source build                                                | PyTorch Python packages | PyTorch Docker images |
-| ------- | ------------------------------------------------------------------- | ----------------------- | --------------------- |
-| Linux   | ✅ Supported                                                        | ⚪ Planned              | ✅ Supported          |
-| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned              | N/A                   |
+|         | PyTorch source build                                                | PyTorch Python packages                                             | PyTorch Docker images |
+| ------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------- |
+| Linux   | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) | ✅ Supported          |
+| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned                                                          | N/A                   |
 
 ## Building from source
 
@@ -74,7 +74,7 @@ cd TheRock
 
 # Init python virtual environment and install python dependencies
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.bat
 pip install -r requirements.txt
 
 # Download submodules and apply patches
@@ -154,9 +154,6 @@ cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   .
-
-# On Windows, also add
-#   -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
 
 cmake --build build
 ```

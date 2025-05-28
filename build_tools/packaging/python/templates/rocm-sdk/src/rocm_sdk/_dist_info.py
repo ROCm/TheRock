@@ -119,7 +119,6 @@ def determine_target_family() -> str:
             f"not available in the distribution (available: "
             f"{', '.join(AVAILABLE_TARGET_FAMILIES)})"
         )
-    print(f"Determined target family: '{target_family}'")
     CACHED_TARGET_FAMILY = target_family
     return target_family
 
@@ -163,13 +162,14 @@ LibraryEntry("amdhip64", "core", "libamdhip64.so.6")
 LibraryEntry("hiprtc", "core", "libhiprtc.so.6")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so.0")
 
-LibraryEntry("hipblas", "libraries", "libhipblas.so.2")
+LibraryEntry("hipblas", "libraries", "libhipblas.so.3")
 LibraryEntry("hipfft", "libraries", "libhipfft.so.0")
 LibraryEntry("hiprand", "libraries", "libhiprand.so.1")
-LibraryEntry("hipsparse", "libraries", "libhipsparse.so.1")
-LibraryEntry("hipsolver", "libraries", "libhipsolver.so.0")
+LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4")
+LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1")
 LibraryEntry("rccl", "libraries", "librccl.so.1")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.0")
+LibraryEntry("miopen", "libraries", "libMIOpen.so.1")
 
 # Overall ROCM package version.
 __version__ = "DEFAULT"

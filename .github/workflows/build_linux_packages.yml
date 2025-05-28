@@ -11,6 +11,8 @@ on:
       expect_failure:
         type: boolean
         default: false
+      extra_cmake_options:
+        type: string
 
   workflow_call:
     inputs:
@@ -21,6 +23,8 @@ on:
         type: string
       expect_failure:
         type: boolean
+      extra_cmake_options:
+        type: string
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -44,9 +48,20 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+      BUCKET: ${{ github.event.repository.name == 'TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: "ROCm/TheRock"
+
+      - name: "Checking out repository for rocm-libraries"
+        if: ${{ github.repository == 'ROCm/rocm-libraries' }}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: "ROCm/rocm-libraries"
+          ref: ${{ github.head_ref || github.ref_name }}
+          path: "rocm-libraries"
 
       - name: Runner Health Settings
         run: |
@@ -85,6 +100,7 @@ jobs:
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
+          extra_cmake_options="${{ inputs.extra_cmake_options }}"
           echo "Building package ${package_version}"
 
           # Build.
@@ -93,10 +109,13 @@ jobs:
             -DTHEROCK_AMDGPU_FAMILIES=${{env.AMDGPU_FAMILIES}} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_VERBOSE=ON \
-            -DBUILD_TESTING=ON
+            -DBUILD_TESTING=ON \
+            ${extra_cmake_options}
+
           cmake --build build --target therock-archives therock-dist
 
       - name: Test Packaging
+        if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
           ctest --test-dir build --output-on-failure
 
@@ -145,28 +164,28 @@ jobs:
       # TODO: Move to script
       - name: Upload Artifacts
         run: |
-          aws s3 cp build/artifacts/ s3://therock-artifacts/${{github.run_id}}-linux/ \
+          aws s3 cp build/artifacts/ s3://${{env.BUCKET}}/${{github.run_id}}-linux/ \
             --recursive --no-follow-symlinks \
             --exclude "*" \
             --include "*.tar.xz*"
-          aws s3 cp build/artifacts/index.html s3://therock-artifacts/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html
+          aws s3 cp build/artifacts/index.html s3://${{env.BUCKET}}/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html
 
       - name: Upload Logs
         if: always()
         run: |
           python3 build_tools/upload_logs_to_s3.py \
             --build-dir=build \
-            --s3-base-path="s3://therock-artifacts/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}"
+            --s3-base-path="s3://${{env.BUCKET}}/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}"
 
       - name: Add Links to Job Summary
         if: always()
         run: |
-          LOG_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}/index.html"
+          LOG_URL="https://${{env.BUCKET}}.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}/index.html"
           echo "[Build Logs](${LOG_URL})" >> $GITHUB_STEP_SUMMARY
 
           ARTIFACT_INDEX=build/artifacts/index.html
           if [ -f "${ARTIFACT_INDEX}" ]; then
-            ARTIFACT_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html"
+            ARTIFACT_URL="https://${{env.BUCKET}}.s3.us-east-2.amazonaws.com/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html"
 
             echo "[Artifacts](${ARTIFACT_URL})" >> $GITHUB_STEP_SUMMARY
           else
