@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 GENERIC_VARIANT = "generic"
@@ -93,6 +94,7 @@ def upload_logs(args, bucket):
     ])
     
 def add_links_to_job_summary(args, bucket):
+    logger.info("Adding links to job summary")
     build_dir = args.build_dir
     run_id = args.run_id
     amdgpu_family = args.amdgpu_family

@@ -7,6 +7,7 @@ import sys
 import platform
 import argparse
 
+THEROCK_DIR = Path(__file__).resolve().parent.parent
 
 def log(*args):
     print(*args)
@@ -25,8 +26,7 @@ def index_log_files(build_dir: Path, amdgpu_family: str):
     log_dir = build_dir / "logs"
     index_file = log_dir / "index.html"
 
-    # TODO: Fork indexer.py locally to avoid relying on an external GitHub source at runtime.
-    indexer_path = build_dir / "indexer.py"
+    indexer_path = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
 
     if log_dir.is_dir():
         log(f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files...")
