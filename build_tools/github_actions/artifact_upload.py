@@ -116,7 +116,7 @@ def run(args):
     add_links_to_job_summary(args, bucket)
     
 def main(argv):
-    parser = argparse.ArgumentParser(prog="fetch_artifacts")
+    parser = argparse.ArgumentParser(prog="artifact_upload")
     parser.add_argument(
         "--repo",
         type=str,
