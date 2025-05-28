@@ -9,6 +9,7 @@ Project can be application, library or some other buildable or installable entit
 ## List of applications build
 
 At the moment RockBuilder will build following application:
+
 - pytorch
 - pytorch vision
 - pytorch audio
@@ -58,7 +59,6 @@ If you want to use instead real python environment instead of venv,
 you must force that by defining ROCK_PYTHON_PATH environment variable.
 For example on Linux:
 
-
 ```bash
 export ROCK_PYTHON_PATH=/usr/bin
 ```
@@ -96,25 +96,25 @@ source .venv/bin/activate
 cd TheRock/external-projects
 python rockbuilder.py
 ```
-    
+
 ## Checkout all projects (without build and install)
 
 ```bash
 python rockbuilder.py --checkout
 ```
-    
+
 ## Checkout only the pytorch_audio sources
 
 ```bash
 python rockbuilder.py --checkout --project pytorch_audio
 ```
-    
+
 ## Build only pytorch audio
 
 ```bash
 python rockbuilder.py --build --project pytorch_audio
 ```
-    
+
 ## Install only pytorch audio
 
 ```bash
@@ -151,6 +151,7 @@ project_list=
 projects/pytorch.cfg is an example from the project configuration file.
 
 Project configuration file specifies actions that RockBuilder executes for the project:
+
 - checkout
 - clean
 - configure
