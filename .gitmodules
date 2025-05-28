@@ -13,7 +13,7 @@
 [submodule "HIPIFY"]
 	path = compiler/hipify
 	url = https://github.com/ROCm/HIPIFY.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git
