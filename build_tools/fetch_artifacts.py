@@ -17,9 +17,11 @@ import urllib.request
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
-REPO = os.getenv("REPO", "ROCm/TheRock")
-OWNER, REPO_NAME = REPO.split("/")
-EXTERNAL_REPO = "" if REPO_NAME == "TheRock" and OWNER == "ROCm" else f"{OWNER}-{REPO}/"
+GITHUB_REPOSITORY = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
+OWNER, REPO_NAME = GITHUB_REPOSITORY.split("/")
+EXTERNAL_REPO = (
+    "" if REPO_NAME == "TheRock" and OWNER == "ROCm" else f"{OWNER}-{REPO_NAME}/"
+)
 BUCKET = (
     "therock-artifacts"
     if REPO_NAME == "TheRock" and OWNER == "ROCm"

@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 import platform
+import shlex
 import subprocess
 import sys
 
@@ -13,19 +14,14 @@ GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
 
-def set_github_step_summary(string):
-    logging.info(f"Appending to github summary: {string}")
+def set_github_step_summary(summary: str):
+    logging.info(f"Appending to github summary: {summary}")
     step_summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "")
-    if not step_summary_file:
-        print(
-            "Warning: GITHUB_STEP_SUMMARY env var not set, can't set github step summary"
-        )
-        return
     with open(step_summary_file, "a") as f:
-        f.write(string + "\n")
+        f.write(summary + "\n")
 
 
-def create_index_file(args):
+def create_index_file(args: argparse.Namespace):
     logging.info("Creating index file")
     index_file_path = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
     build_dir = args.build_dir
@@ -35,7 +31,7 @@ def create_index_file(args):
     )
 
 
-def create_log_index(args):
+def create_log_index(args: argparse.Namespace):
     logging.info("Creating log index file")
     create_log_index_path = THEROCK_DIR / "build_tools" / "create_log_index.py"
     build_dir = args.build_dir
@@ -51,41 +47,41 @@ def create_log_index(args):
     )
 
 
-def upload_artifacts(args, bucket_uri):
+def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
     logging.info("Uploading artifacts to S3")
     build_dir = args.build_dir
     amdgpu_family = args.amdgpu_family
 
     # Uploading artifacts to S3 bucket
-    subprocess.run(
-        [
-            "aws",
-            "s3",
-            "cp",
-            build_dir / "artifacts",
-            bucket_uri,
-            "--recursive",
-            "--no-follow-symlinks",
-            "--exclude",
-            "*",
-            "--include",
-            "*.tar.xz*",
-        ]
-    )
+    cmd = [
+        "aws",
+        "s3",
+        "cp",
+        build_dir / "artifacts",
+        bucket_uri,
+        "--recursive",
+        "--no-follow-symlinks",
+        "--exclude",
+        "*",
+        "--include",
+        "*.tar.xz*",
+    ]
+    logging.info(f"Executing cmd {shlex.join(cmd)}")
+    subprocess.run(cmd)
 
     # Uploading index.html to S3 bucket
-    subprocess.run(
-        [
-            "aws",
-            "s3",
-            "cp",
-            build_dir / "artifacts" / "index.html",
-            f"{bucket_uri}/index-{amdgpu_family}.html",
-        ]
-    )
+    cmd = [
+        "aws",
+        "s3",
+        "cp",
+        build_dir / "artifacts" / "index.html",
+        f"{bucket_uri}/index-{amdgpu_family}.html",
+    ]
+    logging.info(f"Executing cmd {shlex.join(cmd)}")
+    subprocess.run(cmd)
 
 
-def upload_logs(args, bucket, bucket_uri):
+def upload_logs(args: argparse.Namespace, bucket: str, bucket_uri: str):
     logging.info(f"Uploading logs to S3 for bucket {bucket}")
     build_dir = args.build_dir
     amdgpu_family = args.amdgpu_family
@@ -102,7 +98,7 @@ def upload_logs(args, bucket, bucket_uri):
     )
 
 
-def add_links_to_job_summary(args, bucket, bucket_url):
+def add_links_to_job_summary(args: argparse.Namespace, bucket: str, bucket_url: str):
     logging.info(f"Adding links to job summary to bucket {bucket}")
     build_dir = args.build_dir
     run_id = args.run_id
@@ -117,7 +113,7 @@ def add_links_to_job_summary(args, bucket, bucket_url):
         logging.info("No artifacts index found. Skipping artifact link.")
 
 
-def run(args):
+def run(args: argparse.Namespace):
     repo = args.repo
     owner, repo_name = repo.split("/")
     run_id = args.run_id
