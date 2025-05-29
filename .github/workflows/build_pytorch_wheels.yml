@@ -1,0 +1,32 @@
+name: Build PyTorch Wheels
+
+on:
+  workflow_call:
+    inputs:
+      families:
+        required: true
+        type: string
+      python_version:
+        required: true
+        type: string
+      find_links:
+        required: true
+        type: string
+      version_suffix:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build_pytorch_wheels:
+    name: ${{ inputs.families }} | Python ${{ inputs.python_version }}
+    runs-on: ubuntu-22.04
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
+    env:
+      OUTPUT_DIR: /__w/TheRock/TheRock/output
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4

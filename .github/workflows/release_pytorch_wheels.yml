@@ -1,0 +1,20 @@
+name: Release PyTorch Wheels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build_pytorch_grid:
+    strategy:
+      matrix:
+        python_version: ["3.11", "3.12"]
+        families: ["gfx110X"]
+    uses: ./.github/workflows/build_pytorch_wheels.yml
+    with:
+      families: ${{ matrix.families }}
+      python_version: ${{ matrix.python_version }}
+      find_links: "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.families }}/index.html"
+      version_suffix: "20250528"
