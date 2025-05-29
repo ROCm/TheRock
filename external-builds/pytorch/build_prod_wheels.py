@@ -303,7 +303,7 @@ def do_build_pytorch_audio(
     # Compute version.
     build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default BUILD_VERSION: {build_version}")
+    print(f"  Default pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
 
