@@ -61,7 +61,7 @@ jobs:
         with:
           repository: "ROCm/rocm-libraries"
           # for testing purposes
-          ref: fc418b7f7889e83aa53b210974615ab23cbf3621
+          ref: develop
           # ref: ${{ github.head_ref || github.ref_name }}
           path: "rocm-libraries"
 
