@@ -54,8 +54,6 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          # temporary
-          ref: 20f961a413bc4e2d11d9d7b7614239b0d01bf29a
 
       - name: "Checking out repository for rocm-libraries"
         if: ${{ github.repository == 'ROCm/rocm-libraries' }}
