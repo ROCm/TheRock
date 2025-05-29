@@ -91,6 +91,9 @@ function(therock_provide_artifact slice_name)
     set(_archive_file "${THEROCK_BINARY_DIR}/artifacts/${slice_name}_${_component}${_bundle_suffix}${THEROCK_ARTIFACT_ARCHIVE_SUFFIX}.tar.xz")
     list(APPEND _archive_files "${_archive_file}")
     set(_archive_sha_file "${_archive_file}.sha256sum")
+    # TODO(#726): Lower compression levels are much faster for development and CI.
+    #             Set back to 6+ for production builds?
+    set(_archive_compression_level 2)
     add_custom_command(
       OUTPUT
         "${_archive_file}"
@@ -100,6 +103,7 @@ function(therock_provide_artifact slice_name)
         "${Python3_EXECUTABLE}" "${_fileset_tool}"
         artifact-archive "${_component_dir}"
           -o "${_archive_file}"
+          --compression-level "${_archive_compression_level}"
           --hash-file "${_archive_sha_file}" --hash-algorithm sha256
       DEPENDS
         "${_manifest_file}"
