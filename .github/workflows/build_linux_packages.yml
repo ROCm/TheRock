@@ -60,7 +60,9 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rocm-libraries"
-          ref: ${{ github.head_ref || github.ref_name }}
+          # for testing purposes
+          ref: fc418b7f7889e83aa53b210974615ab23cbf3621
+          # ref: ${{ github.head_ref || github.ref_name }}
           path: "rocm-libraries"
 
       - name: Runner Health Settings
