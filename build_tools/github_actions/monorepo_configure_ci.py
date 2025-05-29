@@ -12,6 +12,7 @@ import os
 
 SUBTREES = os.getenv("SUBTREES", "")
 
+
 def run():
     subtrees = SUBTREES.split("\n")
     job = None
