@@ -41,11 +41,11 @@
 [submodule "rocprofiler-register"]
 	path = base/rocprofiler-register
 	url = https://github.com/ROCm/rocprofiler-register.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "rocprofiler-sdk"]
 	path = profiler/rocprofiler-sdk
 	url = https://github.com/ROCm/rocprofiler-sdk.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "ROCR-Runtime"]
 	path = core/ROCR-Runtime
 	url = https://github.com/ROCm/ROCR-Runtime.git
@@ -122,3 +122,6 @@
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
 	branch = develop
+[submodule "profiler/aqlprofile"]
+	path = profiler/aqlprofile
+	url = https://github.com/ROCm/aqlprofile.git
