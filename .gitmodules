@@ -122,6 +122,6 @@
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
 	branch = develop
-[submodule "profiler/aqlprofile"]
+[submodule "aqlprofile"]
 	path = profiler/aqlprofile
 	url = https://github.com/ROCm/aqlprofile.git

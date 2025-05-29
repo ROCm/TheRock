@@ -221,6 +221,7 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
+            "aqlprofile",
             "clr",
             "half",
             "HIP",
