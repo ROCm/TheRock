@@ -54,15 +54,15 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
+          # for testing purposes
+          ref: 7ca5b15f4441d993abf7e84495e9dc3247f3dd6e
 
       - name: "Checking out repository for rocm-libraries"
         if: ${{ github.repository == 'ROCm/rocm-libraries' }}
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rocm-libraries"
-          # for testing purposes
-          ref: develop
-          # ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.head_ref || github.ref_name }}
           path: "rocm-libraries"
 
       - name: Runner Health Settings
