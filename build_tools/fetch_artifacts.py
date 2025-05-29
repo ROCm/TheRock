@@ -16,7 +16,7 @@ import urllib.request
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
-BUCKET = os.getenv("BUCKET")
+BUCKET = os.getenv("BUCKET", "therock-artifacts")
 BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com"
 
 
