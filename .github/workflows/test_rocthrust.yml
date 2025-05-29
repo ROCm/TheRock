@@ -71,4 +71,5 @@ jobs:
             --test-dir ${THEROCK_BIN_DIR}/rocthrust \
             --output-on-failure \
             --parallel 8 \
-            --exclude-regex "^copy.hip$|scan.hip"
+            --exclude-regex "^copy.hip$|scan.hip" \
+            --timeout 300

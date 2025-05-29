@@ -66,6 +66,7 @@ jobs:
         run: sudo apt install libgfortran5 -y
 
       - name: Run hipBLASLt tests
+        timeout-minutes: 30
         run: |
           if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
