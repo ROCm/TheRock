@@ -8,6 +8,7 @@
 import argparse
 import concurrent.futures
 from html.parser import HTMLParser
+import os
 import platform
 from shutil import copyfileobj
 import sys
@@ -15,7 +16,8 @@ import urllib.request
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
-BUCKET_URL = "https://therock-artifacts.s3.us-east-2.amazonaws.com"
+BUCKET = os.getenv("BUCKET")
+BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com"
 
 
 class FetchArtifactException(Exception):
