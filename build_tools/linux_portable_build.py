@@ -60,15 +60,21 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
         ]
     )
 
-    if args.build_python_only:
+    if args.exec:
+        cl.extend(
+            [
+                args.image,
+            ]
+        )
+        cl += rest_args
+    elif args.build_python_only:
         cl.extend(
             [
                 "--mount",
                 f"type=bind,src={args.artifact_dir},dst=/therock/artifacts",
             ]
         )
-
-    if args.interactive:
+    elif args.interactive:
         cl.extend(
             [
                 "-it",
@@ -136,6 +142,11 @@ def main(argv: list[str]):
     )
     p.add_argument(
         "--repo-dir", default=REPO_DIR, help="Root directory of this repository"
+    )
+    p.add_argument(
+        "--exec",
+        action=argparse.BooleanOptionalAction,
+        help="Execute arguments verbatim vs running a specific script",
     )
     p.add_argument(
         "--interactive",

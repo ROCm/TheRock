@@ -97,8 +97,7 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Build Projects
-        id: build
+      - name: Configure Projects
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
@@ -114,7 +113,11 @@ jobs:
             -DBUILD_TESTING=ON \
             ${extra_cmake_options}
 
-          cmake --build build --target therock-archives therock-dist
+      - name: Build therock-dist
+        run: cmake --build build --target therock-dist
+
+      - name: Build therock-archives
+        run: cmake --build build --target therock-archives
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
