@@ -63,7 +63,7 @@ python build_prod_wheels.py build \
     --output-dir $HOME/tmp/pyout
 ```
 
-# Building Linux portable wheels
+## Building Linux portable wheels
 
 On Linux, production wheels are typically built in a manylinux container and must have
 some custom post-processing to ensure that system deps are bundled. This can be done
