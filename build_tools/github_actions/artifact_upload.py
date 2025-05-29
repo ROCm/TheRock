@@ -14,6 +14,20 @@ GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
 
+def retrieve_bucket_info():
+    GITHUB_REPOSITORY = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
+    OWNER, REPO_NAME = GITHUB_REPOSITORY.split("/")
+    EXTERNAL_REPO = (
+        "" if REPO_NAME == "TheRock" and OWNER == "ROCm" else f"{OWNER}-{REPO_NAME}/"
+    )
+    BUCKET = (
+        "therock-artifacts"
+        if REPO_NAME == "TheRock" and OWNER == "ROCm"
+        else "therock-artifacts-external"
+    )
+    return (EXTERNAL_REPO, BUCKET)
+
+
 def set_github_step_summary(summary: str):
     logging.info(f"Appending to github summary: {summary}")
     step_summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "")
@@ -114,20 +128,12 @@ def add_links_to_job_summary(args: argparse.Namespace, bucket: str, bucket_url: 
 
 
 def run(args: argparse.Namespace):
-    repo = args.repo
-    owner, repo_name = repo.split("/")
+    external_repo_path, bucket = retrieve_bucket_info()
     run_id = args.run_id
-    bucket = (
-        "therock-artifacts"
-        if repo_name == "TheRock" and owner == "ROCm"
-        else "therock-artifacts-external"
-    )
-    # For external repos, we add an extra folder in the bucket because GitHub run IDs are unique per repo.
-    external_repo_path = (
-        "" if repo_name == "TheRock" and owner == "ROCm" else f"{owner}-{repo_name}/"
-    )
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
-    bucket_url = f"https://{bucket}.s3.us-east-2.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
+    bucket_url = (
+        f"https://{bucket}.s3.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
+    )
 
     create_index_file(args)
     create_log_index(args)
@@ -138,13 +144,20 @@ def run(args: argparse.Namespace):
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="artifact_upload")
-    parser.add_argument("--repo", type=str, required=True)
+    parser.add_argument(
+        "--run-id", type=str, required=True, help="GitHub run ID of this workflow run"
+    )
 
-    parser.add_argument("--run-id", type=str, required=True)
+    parser.add_argument(
+        "--amdgpu-family", type=str, required=True, help="AMD GPU family to upload"
+    )
 
-    parser.add_argument("--amdgpu-family", type=str, required=True)
-
-    parser.add_argument("--build-dir", type=Path, required=True)
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        required=True,
+        help="Path to the build directory of TheRock",
+    )
 
     args = parser.parse_args(argv)
     run(args)

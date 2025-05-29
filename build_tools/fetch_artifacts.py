@@ -13,20 +13,10 @@ import platform
 from shutil import copyfileobj
 import sys
 import urllib.request
+from github_actions.artifact_upload import retrieve_bucket_info
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
-
-GITHUB_REPOSITORY = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
-OWNER, REPO_NAME = GITHUB_REPOSITORY.split("/")
-EXTERNAL_REPO = (
-    "" if REPO_NAME == "TheRock" and OWNER == "ROCm" else f"{OWNER}-{REPO_NAME}/"
-)
-BUCKET = (
-    "therock-artifacts"
-    if REPO_NAME == "TheRock" and OWNER == "ROCm"
-    else "therock-artifacts-external"
-)
 
 
 class FetchArtifactException(Exception):
@@ -68,7 +58,8 @@ def log(*args, **kwargs):
 
 def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
-    BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
+    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
+    BUCKET_URL = f"https://{BUCKET}.s3.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
     index_page_url = f"{BUCKET_URL}/index-{amdgpu_family}.html"
     log(f"Retrieving artifacts from {index_page_url}")
     request = urllib.request.Request(index_page_url)
@@ -102,6 +93,7 @@ def collect_artifacts_urls(
     existing_artifacts: set[str],
 ) -> list[str]:
     """Collects S3 artifact URLs to execute later in parallel."""
+    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
     artifacts_to_retrieve = []
     for artifact in artifacts:
