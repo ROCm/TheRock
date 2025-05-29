@@ -333,7 +333,7 @@ def do_build_pytorch_vision(
     # Compute version.
     build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default BUILD_VERSION: {build_version}")
+    print(f"  Default pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
