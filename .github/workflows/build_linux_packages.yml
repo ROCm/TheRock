@@ -55,7 +55,7 @@ jobs:
         with:
           repository: "ROCm/TheRock"
           # for testing purposes
-          ref: 7ca5b15f4441d993abf7e84495e9dc3247f3dd6e
+          ref: users/geomin12/s3-organization
 
       - name: "Checking out repository for rocm-libraries"
         if: ${{ github.repository == 'ROCm/rocm-libraries' }}
