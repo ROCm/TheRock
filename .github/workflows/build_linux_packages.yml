@@ -43,11 +43,17 @@ jobs:
     strategy:
       fail-fast: true
     env:
+      BASE_BUILD_DIR: build
+      LOG_DIR: build/logs
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       CCACHE_DIR: "${{ github.workspace }}/.container-cache/ccache"
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+      TEATIME_S3_UPLOAD: "1"
+      TEATIME_S3_BUCKET: "therock-artifacts"
+      TEATIME_S3_SUBDIR: "${{ github.run_id }}-linux/logs/${{ inputs.amdgpu_families }}"
+      TEATIME_FAIL_ON_UPLOAD_ERROR: "1"
       BUCKET: ${{ github.event.repository.name == 'TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
     steps:
       - name: "Checking out repository"
@@ -91,9 +97,18 @@ jobs:
         run: |
           ./build_tools/fetch_sources.py --jobs 12
 
-      - name: Install python deps
+      - name: Install python and dev deps
         run: |
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+          role-duration-seconds: 14400  # 4 hours
 
       - name: Configure Projects
         run: |
@@ -138,24 +153,10 @@ jobs:
           echo "-------------"
           ccache -s
 
-      - name: Configure AWS Credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
-
-      # TODO: Move to script
-      - name: Create Index Files
+      - name: Create Artifact Index
         if: always()
         run: |
-          curl --silent --fail --show-error --location \
-            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output build/indexer.py
-          python build/indexer.py -f '*.tar.xz*' build/artifacts/
-          python3 build_tools/create_log_index.py \
-            --build-dir=build \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+          python third-party/indexer/indexer.py -f '*.tar.xz*' ${{ env.BASE_BUILD_DIR }}/artifacts/
 
       # TODO: Move to script
       - name: Upload Artifacts
@@ -166,12 +167,10 @@ jobs:
             --include "*.tar.xz*"
           aws s3 cp build/artifacts/index.html s3://${{env.BUCKET}}/${{github.run_id}}-linux/index-${{env.AMDGPU_FAMILIES}}.html
 
-      - name: Upload Logs
+      - name: Index and Upload Logs
         if: always()
         run: |
-          python3 build_tools/upload_logs_to_s3.py \
-            --build-dir=build \
-            --s3-base-path="s3://${{env.BUCKET}}/${{github.run_id}}-linux/logs/${{env.AMDGPU_FAMILIES}}"
+          python3 build_tools/teatime.py --label "index_and_upload" --log-timestamps build/logs/temp.log
 
       - name: Add Links to Job Summary
         if: always()

@@ -106,6 +106,7 @@ function(therock_subproject_log_command out_var)
     "${Python3_EXECUTABLE}"
     "${THEROCK_SOURCE_DIR}/build_tools/teatime.py"
     "--log-timestamps"
+    "--skip-index"
   )
   if(ARG_LABEL)
     list(APPEND command "--label" "${ARG_LABEL}")
