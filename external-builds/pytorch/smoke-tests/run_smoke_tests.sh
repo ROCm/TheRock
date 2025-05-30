@@ -13,7 +13,7 @@ echo 'List the pip packages'
 pip list
 
 echo 'Install pytest'
-PIP_BREAK_SYSTEM_PACKAGES=1 pip install --no-index --find-links=/wheels pytest;
+PIP_BREAK_SYSTEM_PACKAGES=1 pip install pytest --no-cache-dir --find-links=/wheels --index-url=https://pypi.org/simple
 
 echo 'Run smoke tests'
 pytest -v -p faulthandler -o faulthandler_timeout=5 -s external-builds/pytorch/smoke-tests/

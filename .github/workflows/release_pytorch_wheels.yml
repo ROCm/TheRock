@@ -1,4 +1,4 @@
-name: Release PyTorch Wheels
+name: Release Linux PyTorch Wheels
 
 on:
   workflow_dispatch:
@@ -7,14 +7,25 @@ permissions:
   contents: read
 
 jobs:
-  build_pytorch_grid:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version_suffix: ${{ steps.set.outputs.version_suffix }}
+    steps:
+      - id: set
+        run: echo "version_suffix=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+  release_pytorch:
+    needs: setup
     strategy:
+      fail-fast: false
       matrix:
         python_version: ["3.11", "3.12"]
-        families: ["gfx110X"]
+        target: [gfx942]
     uses: ./.github/workflows/build_pytorch_wheels.yml
     with:
-      families: ${{ matrix.families }}
+      family: gfx94X-dcgpu
       python_version: ${{ matrix.python_version }}
-      find_links: "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.families }}/index.html"
-      version_suffix: "20250528"
+      target: ${{ matrix.target }}
+      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html
+      version_suffix: ${{ needs.setup.outputs.version_suffix }}

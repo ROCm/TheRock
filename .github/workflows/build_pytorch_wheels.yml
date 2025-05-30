@@ -1,11 +1,14 @@
-name: Build PyTorch Wheels
+name: Build Linux PyTorch Wheels
 
 on:
   workflow_call:
     inputs:
-      families:
+      family:
         required: true
         type: string
+      target:
+        required: true
+        type: string 
       python_version:
         required: true
         type: string
@@ -21,12 +24,55 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: ${{ inputs.families }} | Python ${{ inputs.python_version }}
-    runs-on: ubuntu-22.04
+    name: Build PyTorch Wheels | ${{ inputs.family }} | Python ${{ inputs.python_version }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
     env:
       OUTPUT_DIR: /__w/TheRock/TheRock/output
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "no-body"
+          git config --global user.email "nobody@amd.com"
+
+      - name: Checkout PyTorch Source Repos
+        run: |
+          echo "Checking out patched PyTorch repositories..."
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout
+
+      - name: Build PyTorch Wheels
+        run: |
+          echo "Building PyTorch wheels for ${{ inputs.target }}"
+          ./external-builds/pytorch/build_prod_wheels.py build \
+            --find-links "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
+            --install-rocm \
+            --clean \
+            --output-dir ${{ env.OUTPUT_DIR }}/packages/dist \
+            --pytorch-rocm-arch ${{ inputs.target }} \
+            --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
+
+      - name: Test Installed Wheel
+        run: |
+          echo "Installing torch from: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html"
+          pip install --no-cache-dir --no-index \
+            --find-links="https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
+            torch
+
+          echo "Checking if torch is importable:"
+          python -c "import torch; print(f'torch version: {torch.__version__}')"
+
+          bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+
+      - name: Upload wheels to S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          # These wheels share the same S3 directory as rocm-sdk to simplify --find-links usage
+          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://therock-nightly-python/${{ inputs.family }}/ \
+            --recursive --exclude "*" --include "*.whl"

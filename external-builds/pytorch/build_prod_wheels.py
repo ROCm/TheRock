@@ -382,6 +382,20 @@ def main(argv: list[str]):
     install_rocm_p.set_defaults(func=do_install_rocm)
 
     build_p = sub_p.add_parser("build", help="Build pytorch wheels")
+    build_p.add_argument("--find-links", help="Pip find-links to pass to pip install")
+    build_p.add_argument("--pip-cache-dir", type=Path, help="Pip cache dir")
+    build_p.add_argument(
+        "--rocm-sdk-version",
+        default=">1.0",
+        help="rocm-sdk version to match (with comparison prefix)",
+    )
+    build_p.add_argument(
+        "--pre",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include pre-release packages (default True)",
+    )
+
     build_p.add_argument(
         "--install-rocm",
         action=argparse.BooleanOptionalAction,
