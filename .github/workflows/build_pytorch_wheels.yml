@@ -8,7 +8,7 @@ on:
         type: string
       target:
         required: true
-        type: string 
+        type: string
       python_version:
         required: true
         type: string
