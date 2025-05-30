@@ -14,11 +14,11 @@ GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
 # Importing indexer.py
-sys.append(THEROCK_DIR / "third-party" / "indexer")
+sys.path.append(THEROCK_DIR / "third-party" / "indexer")
 from indexer import process_dir
 
 # Importing create_log_index.py and upload_logs_to_s3.py
-sys.append(THEROCK_DIR / "build_tools")
+sys.path.append(THEROCK_DIR / "build_tools")
 from create_log_index import index_log_files
 from upload_logs_to_s3 import upload_logs_to_s3
 
