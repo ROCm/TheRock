@@ -38,8 +38,8 @@ jobs:
 
       - name: Configure Git Identity
         run: |
-          git config --global user.name "no-body"
-          git config --global user.email "nobody@amd.com"
+          git config --global user.name "therockbot"
+          git config --global user.email "therockbot@amd.com"
 
       - name: Checkout PyTorch Source Repos
         run: |
