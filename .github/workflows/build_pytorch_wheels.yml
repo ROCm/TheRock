@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build PyTorch Wheels | ${{ inputs.family }} | Python ${{ inputs.python_version }}
+    name: Build Linux PyTorch Wheels | ${{ inputs.family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
