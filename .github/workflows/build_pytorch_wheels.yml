@@ -58,16 +58,9 @@ jobs:
             --pytorch-rocm-arch ${{ inputs.target }} \
             --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
 
-      - name: Test Installed Wheel
+      - name: Sanity Check Wheel
         run: |
-          echo "Installing torch from: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html"
-          pip install --no-cache-dir --no-index \
-            --find-links="https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
-            torch
-
-          python -c "import torch; print(f'torch version: {torch.__version__}')"
-
-          bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
+          python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
 
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
