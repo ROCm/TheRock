@@ -42,7 +42,7 @@ jobs:
 
       - name: Checkout PyTorch Source Repos
         run: |
-          echo "Checking out patched PyTorch repositories..."
+          echo "Checking out PyTorch repositories..."
           ./external-builds/pytorch/pytorch_torch_repo.py checkout
           ./external-builds/pytorch/pytorch_audio_repo.py checkout
           ./external-builds/pytorch/pytorch_vision_repo.py checkout
@@ -65,7 +65,6 @@ jobs:
             --find-links="https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
             torch
 
-          echo "Checking if torch is importable:"
           python -c "import torch; print(f'torch version: {torch.__version__}')"
 
           bash external-builds/pytorch/smoke-tests/run_smoke_tests.sh
