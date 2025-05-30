@@ -12,9 +12,6 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
-
 jobs:
   setup:
     runs-on: ubuntu-24.04
@@ -31,6 +28,9 @@ jobs:
       matrix:
         python_version: ["3.11", "3.12"]
     uses: ./.github/workflows/build_pytorch_wheels.yml
+    permissions:
+      id-token: write
+      contents: read
     with:
       family: ${{ inputs.family }}
       python_version: ${{ matrix.python_version }}
