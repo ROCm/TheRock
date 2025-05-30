@@ -110,6 +110,7 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_COMM_LIBS=OFF` | Disables all communication libraries |
 | `-DTHEROCK_ENABLE_MATH_LIBS=OFF` | Disables all math libraries          |
 | `-DTHEROCK_ENABLE_ML_LIBS=OFF`   | Disables all ML libraries            |
+| `-DTHEROCK_ENABLE_PROFILER=OFF`  | Disables profilers                   |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
