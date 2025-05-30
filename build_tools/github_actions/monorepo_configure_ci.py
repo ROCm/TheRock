@@ -15,11 +15,11 @@ SUBTREES = os.getenv("SUBTREES", "")
 
 def run():
     subtrees = SUBTREES.split("\n")
-    jobs = []
+    projects = []
     for subtree in subtrees:
         if subtree in monorepo_map:
-            jobs.append(monorepo_map.get(subtree))
-    set_github_output({"jobs": json.dumps(jobs)})
+            projects.append(monorepo_map.get(subtree))
+    set_github_output({"projects": json.dumps(projects)})
 
 
 if __name__ == "__main__":
