@@ -71,7 +71,7 @@ def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
         "aws",
         "s3",
         "cp",
-        build_dir / "artifacts",
+        str(build_dir / "artifacts"),
         bucket_uri,
         "--recursive",
         "--no-follow-symlinks",
@@ -88,7 +88,7 @@ def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
         "aws",
         "s3",
         "cp",
-        build_dir / "artifacts" / "index.html",
+        str(build_dir / "artifacts" / "index.html"),
         f"{bucket_uri}/index-{amdgpu_family}.html",
     ]
     logging.info(f"Executing cmd {shlex.join(cmd)}")
