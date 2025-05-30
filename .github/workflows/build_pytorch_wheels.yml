@@ -20,6 +20,7 @@ on:
         type: string
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
@@ -57,6 +58,13 @@ jobs:
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             --pytorch-rocm-arch ${{ inputs.target }} \
             --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
+
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
       - name: Sanity Check Wheel
         run: |
