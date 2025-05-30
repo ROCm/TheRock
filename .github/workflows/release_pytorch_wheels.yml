@@ -2,6 +2,15 @@ name: Release Linux PyTorch Wheels
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Target gfx architecture (e.g., gfx942)"
+        required: true
+        type: string
+      family:
+        description: "Family name (e.g., gfx94X-dcgpu)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,11 +30,10 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12"]
-        target: [gfx942]
     uses: ./.github/workflows/build_pytorch_wheels.yml
     with:
-      family: gfx94X-dcgpu
+      family: ${{ inputs.family }}
       python_version: ${{ matrix.python_version }}
-      target: ${{ matrix.target }}
+      target: ${{ inputs.target }}
       find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html
       version_suffix: ${{ needs.setup.outputs.version_suffix }}
