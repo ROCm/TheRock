@@ -64,8 +64,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
-
+          role-to-assume: arn:aws:iam::692859939525:role/therock-nightly-releases
       - name: Sanity Check Wheel
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
