@@ -174,7 +174,11 @@ def directory_if_exists(dir: Path) -> Path | None:
 def do_install_rocm(args: argparse.Namespace):
     # Because the rocm-sdk package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
-    exec([sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"], cwd=Path.cwd())
+    exec(
+        [sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"],
+        cwd=Path.cwd(),
+        env={**os.environ, "PIP_CACHE_DIR": "/tmp/pipcache"},
+    )
 
     # Do the main pip install.
     pip_args = [
