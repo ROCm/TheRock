@@ -23,6 +23,7 @@ include = [
 [components.run."profiler/rocprofiler-sdk/stage"]
 include = [
   "bin/**",
+  "share/rocprofiler-sdk/**",
 ]
 [components.test."profiler/rocprofiler-sdk/stage"]
 include = [
