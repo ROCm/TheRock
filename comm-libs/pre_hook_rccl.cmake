@@ -1,6 +1,6 @@
 if(NOT WIN32)
   # Configure roctracer if on a supported operating system (Linux).
-  # rocSPARSE has deprecated dependencies on roctracer. We apply a patch to redirect
+  # rocBLAS has deprecated dependencies on roctracer. We apply a patch to redirect
   # naked linking against `-lroctx64` to an explicitly found version of the library.
   # See: https://github.com/ROCm/TheRock/issues/364
   list(APPEND CMAKE_MODULE_PATH "${THEROCK_SOURCE_DIR}/cmake")

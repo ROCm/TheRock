@@ -211,6 +211,10 @@ endfunction()
 # RUNTIME_DEPS: Projects which must build prior to this one and whose install
 #   files must be distributed with this project's artifacts in order to
 #   function.
+# INTERFACE_INCLUDE_DIRS: Relative paths within the install tree which dependent
+#   sub-projects must have their CPP include path set to include. Use of this
+#   is strongly discouraged (deps should be on proper CMake libraries), but
+#   some old projects still need this.
 # INTERFACE_LINK_DIRS: Relative paths within the install tree which dependent
 #   sub-projects must add to their runtime link library path.
 # INTERFACE_PROGRAM_DIRS: Relative paths within the install tree which
@@ -274,7 +278,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -321,10 +325,15 @@ function(therock_cmake_subproject_declare target_name)
 
   # Collect LINK_DIRS and PROGRAM_DIRS from explicit args and RUNTIME_DEPS.
   _therock_cmake_subproject_collect_runtime_deps(
-      _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
+      _private_include_dirs _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
       _transitive_runtime_deps
       _transitive_configure_depend_files
       ${ARG_RUNTIME_DEPS})
+
+  # Include dirs
+  set(_declared_include_dirs "${ARG_INTERFACE_INCLUDE_DIRS}")
+  _therock_cmake_subproject_absolutize(_declared_include_dirs "${_stage_dir}")
+  set(_interface_include_dirs ${_private_include_dirs} ${_declared_include_dirs})
 
   # Link dirs
   set(_declared_link_dirs "${ARG_INTERFACE_LINK_DIRS}")
@@ -351,6 +360,8 @@ function(therock_cmake_subproject_declare target_name)
   set(_private_install_rpath_dirs ${ARG_INSTALL_RPATH_DIRS} ${_interface_install_rpath_dirs})
 
   # Dedup transitives.
+  list(REMOVE_DUPLICATES _private_include_dirs)
+  list(REMOVE_DUPLICATES _interface_include_dirs)
   list(REMOVE_DUPLICATES _private_link_dirs)
   list(REMOVE_DUPLICATES _interface_link_dirs)
   list(REMOVE_DUPLICATES _private_program_dirs)
@@ -405,6 +416,10 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
+    # Include dirs that this project compiles with.
+    THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
+    # Include dirs that are advertised to dependents.
+    THEROCK_INTERFACE_INCLUDE_DIRS "${_interface_include_dirs}"
     # That this project compiles with.
     THEROCK_PRIVATE_LINK_DIRS "${_private_link_dirs}"
     # Link dirs that are advertised to dependents
@@ -485,6 +500,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_ignore_packages "${target_name}" THEROCK_IGNORE_PACKAGES)
   get_target_property(_install_destination "${target_name}" THEROCK_INSTALL_DESTINATION)
   get_target_property(_no_merge_compile_commands "${target_name}" THEROCK_NO_MERGE_COMPILE_COMMANDS)
+  get_target_property(_private_include_dirs "${target_name}" THEROCK_PRIVATE_INCLUDE_DIRS)
   get_target_property(_private_link_dirs "${target_name}" THEROCK_PRIVATE_LINK_DIRS)
   get_target_property(_private_pkg_config_dirs "${target_name}" THEROCK_PRIVATE_PKG_CONFIG_DIRS)
   get_target_property(_private_program_dirs "${target_name}" THEROCK_PRIVATE_PROGRAM_DIRS)
@@ -598,6 +614,16 @@ function(therock_cmake_subproject_activate target_name)
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
 
+  # Include dirs.
+  foreach(_private_include_dir ${_private_include_dirs})
+    if(THEROCK_VERBOSE)
+      message(STATUS "  INCLUDE_DIR: ${_private_include_dir}")
+    endif()
+    string(APPEND _init_contents "include_directories(BEFORE \"${_private_include_dir}\")\n")
+    string(APPEND _init_contents "list(PREPEND CMAKE_REQUIRED_INCLUDES \"${_private_include_dir}\")\n")
+  endforeach()
+
+  # Link dirs.
   foreach(_private_link_dir ${_private_link_dirs})
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
@@ -619,6 +645,7 @@ function(therock_cmake_subproject_activate target_name)
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /LIBPATH:${_private_link_dir}\")\n")
     endif()
   endforeach()
+
   if(THEROCK_VERBOSE AND _private_pkg_config_dirs)
     message(STATUS "  PKG_CONFIG_DIRS: ${_private_pkg_config_dirs}")
   endif()
@@ -1019,9 +1046,10 @@ endfunction()
 # and transitive runtime deps. Both lists may contain duplicates if the DAG
 # includes the same dep multiple times.
 function(_therock_cmake_subproject_collect_runtime_deps
-    out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
+    out_include_dirs out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
     out_transitive_deps
     out_transitive_configure_depend_files)
+  set(_include_dirs)
   set(_install_rpath_dirs)
   set(_link_dirs)
   set(_program_dirs)
@@ -1033,6 +1061,10 @@ function(_therock_cmake_subproject_collect_runtime_deps
     get_target_property(_declared_configure_depend_files "${target_name}" THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES)
     list(APPEND _transitive_configure_depend_files ${_declared_configure_depend_files})
     get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
+
+    # Include dirs.
+    get_target_property(_include_dir "${target_name}" THEROCK_INTERFACE_INCLUDE_DIRS)
+    list(APPEND _include_dirs ${_include_dir})
 
     # Link dirs.
     get_target_property(_link_dir "${target_name}" THEROCK_INTERFACE_LINK_DIRS)
@@ -1063,6 +1095,7 @@ function(_therock_cmake_subproject_collect_runtime_deps
       list(APPEND _install_rpath_dirs ${_install_rpath_dir})
     endif()
   endforeach()
+  set("${out_include_dirs}" "${_include_dirs}" PARENT_SCOPE)
   set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
   set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
   set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)

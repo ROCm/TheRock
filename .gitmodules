@@ -125,3 +125,6 @@
 [submodule "aqlprofile"]
 	path = profiler/aqlprofile
 	url = https://github.com/ROCm/aqlprofile.git
+[submodule "roctracer"]
+	path = profiler/roctracer
+	url = https://github.com/ROCm/roctracer.git
