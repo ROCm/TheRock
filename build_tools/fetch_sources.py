@@ -239,6 +239,7 @@ def main(argv):
             "rocprofiler-sdk",
             # TODO: Re-enable when used.
             # "rocprofiler-systems",
+            "roctracer",
             "ROCR-Runtime",
         ],
     )
