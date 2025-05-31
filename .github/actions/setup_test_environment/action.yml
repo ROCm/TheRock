@@ -15,9 +15,6 @@ inputs:
     type: string
   PLATFORM:
     type: string
-  BUCKET:
-    type: string
-    default: "therock-artifacts"
 
 runs:
   using: "composite"
@@ -59,7 +56,6 @@ runs:
         AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
-        BUCKET: ${{ inputs.BUCKET }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
