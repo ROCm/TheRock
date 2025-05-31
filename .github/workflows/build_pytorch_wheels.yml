@@ -48,16 +48,21 @@ jobs:
           ./external-builds/pytorch/pytorch_audio_repo.py checkout
           ./external-builds/pytorch/pytorch_vision_repo.py checkout
 
+      - name: Create pip cache directory
+        run: mkdir -p /tmp/pipcache
+
       - name: Build PyTorch Wheels
         run: |
           echo "Building PyTorch wheels for ${{ inputs.target }}"
-          ./external-builds/pytorch/build_prod_wheels.py build \
-            --find-links "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
-            --install-rocm \
-            --clean \
-            --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --pytorch-rocm-arch ${{ inputs.target }} \
-            --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
+          ./external-builds/pytorch/build_prod_wheels.py \
+            --pip-cache-dir /tmp/pipcache \
+            build \
+              --find-links "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
+              --install-rocm \
+              --clean \
+              --output-dir ${{ env.PACKAGE_DIST_DIR }} \
+              --pytorch-rocm-arch ${{ inputs.target }} \
+              --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
 
       - name: Configure AWS Credentials
         if: always()
