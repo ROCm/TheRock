@@ -55,6 +55,9 @@ def create_index_file(args: argparse.Namespace):
 
     indexer_args = argparse.Namespace()
     indexer_args.filter = "*.tar.xz*"
+    indexer_args.output_file = "index.html"
+    indexer_args.verbose = False
+    indexer_args.recursive = False
     process_dir(build_dir, indexer_args)
 
 
