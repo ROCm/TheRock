@@ -4,33 +4,34 @@ import sys
 from pathlib import Path
 
 
+def check_wheel(wheel: Path, expected_name: str):
+    if not wheel.name.startswith(f"{expected_name}-"):
+        print(f"ERROR: Unexpected wheel name: {wheel.name}")
+        sys.exit(1)
+
+    size = wheel.stat().st_size
+    if size < 100 * 1024:  # e.g., minimum 100 KB
+        print(f"ERROR: Wheel {wheel.name} is too small ({size} bytes)")
+        sys.exit(1)
+
+    print(f"Valid wheel: {wheel.name} ({size} bytes)")
+
+
 def main():
     if len(sys.argv) != 2:
-        print("Usage: sanity_check_wheel.py <wheel_directory>")
-        sys.exit(2)
+        print(f"Usage: {sys.argv[0]} <wheel-dir>")
+        sys.exit(1)
 
     wheel_dir = Path(sys.argv[1])
     if not wheel_dir.is_dir():
         print(f"ERROR: {wheel_dir} is not a directory")
         sys.exit(1)
 
-    wheels = list(wheel_dir.glob("torch-*.whl"))
-    if not wheels:
-        print("ERROR: No torch-*.whl file found")
-        sys.exit(1)
-
-    found_valid = False
-    for wheel in wheels:
-        size = wheel.stat().st_size
-        if size < 100:
-            print(f"ERROR: Wheel {wheel.name} is too small ({size} bytes)")
-            sys.exit(1)
-        print(f" Found valid wheel: {wheel.name} ({size} bytes)")
-        found_valid = True
-
-    if not found_valid:
-        print("ERROR: Invalid torch wheel found")
-        sys.exit(1)
+    # Expected names: torch, torchaudio, torchvision
+    for expected_name in ["torch", "torchaudio", "torchvision"]:
+        wheels = list(wheel_dir.glob(f"{expected_name}-*.whl"))
+        for wheel in wheels:
+            check_wheel(wheel, expected_name)
 
 
 if __name__ == "__main__":
