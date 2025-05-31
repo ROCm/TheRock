@@ -122,6 +122,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_HIPIFY=ON`       | Enables the hipify tool                       |
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON` | Enables the core runtime components and tools |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`  | Enables the HIP runtime components            |
+| `-DTHEROCK_ENABLE_ROCPROFV3=ON`    | Enables rocprofv3                             |
 | `-DTHEROCK_ENABLE_RCCL=ON`         | Enables RCCL                                  |
 | `-DTHEROCK_ENABLE_PRIM=ON`         | Enables the PRIM library                      |
 | `-DTHEROCK_ENABLE_BLAS=ON`         | Enables the BLAS libraries                    |

@@ -28,3 +28,11 @@ include = [
 include = [
   "share/rocprofiler-sdk/tests/**",
 ]
+
+# roctracer
+[components.dbg."profiler/roctracer/stage"]
+[components.dev."profiler/roctracer/stage"]
+[components.doc."profiler/roctracer/stage"]
+[components.lib."profiler/roctracer/stage"]
+[components.run."profiler/roctracer/stage"]
+[components.test."profiler/roctracer/stage"]

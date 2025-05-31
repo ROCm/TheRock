@@ -186,15 +186,15 @@ therock_add_feature(HIP_RUNTIME
 # Profiler Features.
 if(NOT WIN32)
   # Other platforms (Linux) _do_ have the profiler SDK.
-  therock_add_feature(PROFILER_SDK
+  therock_add_feature(ROCPROFV3
     GROUP PROFILER
-    DESCRIPTION "Enables the rocprofiler-sdk project"
+    DESCRIPTION "Enables the rocprofilerv3 project (and ancillary deps)"
     REQUIRES HIP_RUNTIME
   )
-  set(_blas_platform_requirements "PROFILER_SDK")
+  set(_optional_profiler_requirements "ROCPROFV3")
 else()
   # No profiler SDK on Windows.
-  set(_blas_platform_requirements "")
+  set(_optional_profiler_requirements "")
 endif()
 
 # Comm-libs Features.
@@ -219,7 +219,7 @@ therock_add_feature(BLAS
   # NOTE: HOST_BLAS is only needed for some tests and PROFILER_SDK is
   # currently only required for rocblas. We may want to re-evaluate the deps
   # if they continue to be sparse like this as it increases minimum dep length.
-  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS ${_blas_platform_requirements}
+  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS ${_optional_profiler_requirements}
 )
 therock_add_feature(RAND
   GROUP MATH_LIBS
@@ -234,7 +234,7 @@ therock_add_feature(FFT
 therock_add_feature(SPARSE
   GROUP MATH_LIBS
   DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM
+  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM ${_optional_profiler_requirements}
 )
 if(NOT WIN32)
   set(_solver_platform_requirements "HOST_SUITE_SPARSE")
@@ -251,7 +251,7 @@ therock_add_feature(SOLVER
 therock_add_feature(MIOPEN
   GROUP ML_LIBS
   DESCRIPTION "Enables the MIOpen project (with minimal deps defaults to ON)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS RAND
+  REQUIRES COMPILER HIP_RUNTIME BLAS RAND ${_optional_profiler_requirements}
 )
 
 # Finalize all feature flags.

@@ -1,4 +1,11 @@
 if(THEROCK_ENABLE_MIOPEN)
+  # Most libraries need to depend on the profiler, but is conditionally only used
+  # on Posix.
+  set(optional_profiler_deps)
+  if(NOT WIN32)
+    list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+  endif()
+
   ##############################################################################
   # MIOpen
   ##############################################################################
@@ -31,7 +38,6 @@ if(THEROCK_ENABLE_MIOPEN)
       -DMIOPEN_USE_COMPOSABLEKERNEL=OFF  # TODO: enable
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
-      -DMIOPEN_USE_ROCTRACER=OFF # TODO: enable
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
     COMPILER_TOOLCHAIN
       amd-hip
@@ -53,6 +59,7 @@ if(THEROCK_ENABLE_MIOPEN)
       rocRAND
       ${THEROCK_BUNDLED_BZIP2}
       ${THEROCK_BUNDLED_SQLITE3}
+      ${optional_profiler_deps}
   )
 
   therock_cmake_subproject_activate(MIOpen)
