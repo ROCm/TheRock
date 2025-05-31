@@ -177,7 +177,7 @@ def do_install_rocm(args: argparse.Namespace):
     exec(
         [sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"],
         cwd=Path.cwd(),
-        env={**os.environ, "PIP_CACHE_DIR": "/tmp/pipcache"},
+        env={**os.environ, "PIP_CACHE_DIR": str(args.pip_cache_dir) if args.pip_cache_dir else "/tmp/pipcache"},
     )
 
     # Do the main pip install.
