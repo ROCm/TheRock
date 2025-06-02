@@ -1,7 +1,7 @@
 From 206959ef7d064c5f4a2a8afc11979fc942180347 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 2 May 2025 15:27:13 -0700
-Subject: [PATCH 3/3] Limit number of Tensile workers to 61 on Windows due to
+Subject: [PATCH 2/2] Limit number of Tensile workers to 61 on Windows due to
  system limit.
 
 ---
