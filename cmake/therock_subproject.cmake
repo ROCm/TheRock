@@ -64,9 +64,9 @@ set(THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS
   -Wno-documentation-pedantic
   -Wno-unused-command-line-argument
 
-  # There are many (up to 1GB+ of logs) self-inflicted warnings where one
-  # subproject marks a macro or struct as deprecated. In some cases, projects
-  # continue to use fields they marked as deprecated themselves.
+  # See https://github.com/ROCm/rocm-libraries/issues/130.
+  # rocPRIM in particular marks macros and struct as deprecated while
+  # continuing to use them itself, resulting in 1GB+ of warning logs.
   -Wno-deprecated-pragma
   -Wno-deprecated-declarations
 )
