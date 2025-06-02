@@ -66,6 +66,7 @@ jobs:
         run: sudo apt install libgfortran5 -y
 
       - name: Run rocBLAS tests
+        timeout-minutes: 5
         run: |
           ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
           if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi

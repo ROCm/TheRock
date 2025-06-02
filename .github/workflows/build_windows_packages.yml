@@ -110,7 +110,7 @@ jobs:
           echo "Git version: $(git --version)"
           git config fetch.parallel 10
           nthreads=$(nproc --all)
-          echo [*] Logical Processors to be used: $nthreads...
+          echo [*] Logical Processors available: $nthreads...
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -149,20 +149,20 @@ jobs:
             -DCMAKE_C_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
             -DCMAKE_CXX_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
             -DCMAKE_LINKER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/link.exe" \
+            -DTHEROCK_BACKGROUND_BUILD_JOBS=4 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
             -DTHEROCK_AMDGPU_FAMILIES=${amdgpu_families} \
             -DTHEROCK_PACKAGE_VERSION="${package_version}" \
             -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
-            -DTHEROCK_ENABLE_BLAS=OFF \
-            -DTHEROCK_ENABLE_SPARSE=OFF \
-            -DTHEROCK_ENABLE_SOLVER=OFF \
-            -DTHEROCK_ENABLE_ML_LIBS=OFF \
             ${extra_cmake_options}
 
-      - name: Build Projects
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}" -j $(nproc --all) --target therock-archives therock-dist
+      - name: Build therock-dist
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" --target therock-dist
+
+      - name: Build therock-archives
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" --target therock-archives
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -179,13 +179,6 @@ jobs:
           echo "CCache Stats:"
           echo "-------------"
           ccache -s
-
-      - name: Save cache
-        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
-        if: always()
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-build-packages-v3-${{ github.sha }}
 
       - name: "Build size report"
         if: always()
@@ -249,3 +242,10 @@ jobs:
           else
             echo "[INFO] No artifacts index found. Skipping artifact link."
           fi
+
+      - name: Save cache
+        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        if: always()
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: windows-build-packages-v3-${{ github.sha }}

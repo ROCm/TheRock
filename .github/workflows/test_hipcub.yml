@@ -65,4 +65,8 @@ jobs:
 
       - name: Run hipcub tests
         run: |
-          ctest --test-dir ${THEROCK_BIN_DIR}/hipcub --output-on-failure --parallel 8
+          ctest \
+            --test-dir ${THEROCK_BIN_DIR}/hipcub \
+            --output-on-failure \
+            --parallel 8 \
+            --timeout 360

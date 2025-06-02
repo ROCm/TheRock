@@ -43,10 +43,10 @@ python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.a
   rocm-sdk[libraries,devel]
 ```
 
-### gfx110X-dcgpu
+### gfx110X-dgpu
 
 ```bash
-python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dcgpu/index.html \
+python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
   rocm-sdk[libraries,devel]
 ```
 

@@ -602,6 +602,8 @@ function(therock_cmake_subproject_activate target_name)
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
     endif()
+    # Make the link dir visible to CMake find_library.
+    string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_private_link_dir}\")\n")
     if(NOT MSVC)
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")

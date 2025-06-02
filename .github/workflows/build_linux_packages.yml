@@ -95,8 +95,7 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Build Projects
-        id: build
+      - name: Configure Projects
         run: |
           # Generate a new build id.
           package_version="${{ inputs.package_version }}"
@@ -112,7 +111,11 @@ jobs:
             -DBUILD_TESTING=ON \
             ${extra_cmake_options}
 
-          cmake --build build --target therock-archives therock-dist
+      - name: Build therock-dist
+        run: cmake --build build --target therock-dist
+
+      - name: Build therock-archives
+        run: cmake --build build --target therock-archives
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
@@ -134,13 +137,6 @@ jobs:
           echo "CCache Stats:"
           echo "-------------"
           ccache -s
-
-      - name: Save cache
-        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
-        if: always()
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v2-${{ github.sha }}
 
       - name: Configure AWS Credentials
         if: always()
@@ -191,3 +187,10 @@ jobs:
           else
             echo "[INFO] No artifacts index found. Skipping artifact link."
           fi
+
+      - name: Save cache
+        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        if: always()
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: linux-build-packages-manylinux-v2-${{ github.sha }}
