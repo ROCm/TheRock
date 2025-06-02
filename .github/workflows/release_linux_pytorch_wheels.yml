@@ -20,7 +20,7 @@ jobs:
     steps:
       - id: set
         run: |
-          echo "$(python external-builds/pytorch/set_version_suffix.py)" >> $GITHUB_OUTPUT
+          echo "$(python ./external-builds/pytorch/set_version_suffix.py)" >> $GITHUB_OUTPUT
 
   release_pytorch:
     needs: setup
