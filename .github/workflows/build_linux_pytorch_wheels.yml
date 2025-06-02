@@ -56,13 +56,13 @@ jobs:
           echo "Building PyTorch wheels for ${{ inputs.target }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
+            --find-links "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
             build \
-              --find-links "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
-              --install-rocm \
-              --clean \
-              --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-              --pytorch-rocm-arch ${{ inputs.target }} \
-              --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
+            --install-rocm \
+            --clean \
+            --output-dir ${{ env.PACKAGE_DIST_DIR }} \
+            --pytorch-rocm-arch ${{ inputs.target }} \
+            --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
 
       - name: Configure AWS Credentials
         if: always()
