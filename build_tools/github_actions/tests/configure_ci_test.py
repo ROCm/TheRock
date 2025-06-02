@@ -1,4 +1,9 @@
+from pathlib import Path
 from unittest import TestCase, main
+import os
+import sys
+
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
 
 
