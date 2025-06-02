@@ -39,17 +39,23 @@ jobs:
     strategy:
       fail-fast: true
     env:
-      BASE_BUILD_DIR_POWERSHELL: B:\tmpbuild
+      # Base build dir for Windows
+      BASE_BUILD_DIR: B:\tmpbuild
+      LOG_DIR: B:\tmpbuild\logs
       CACHE_DIR: "${{github.workspace}}/.cache"
       CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEATIME_S3_UPLOAD: "1"
+      TEATIME_S3_BUCKET: "therock-artifacts"
+      TEATIME_S3_SUBDIR: "${{ github.run_id }}-windows/logs/${{ inputs.amdgpu_families }}"
+      TEATIME_FAIL_ON_UPLOAD_ERROR: "1"
     steps:
       - name: "Create build dir"
         shell: powershell
         run: |
-          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
+          $buildDir = "$env:BASE_BUILD_DIR\"
           echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
           mkdir "$buildDir"
           Write-Host "Generated Build Directory: $buildDir"
@@ -67,9 +73,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install python deps
+      - name: Install python and dev deps
         run: |
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Install requirements
         run: |
@@ -133,6 +140,14 @@ jobs:
           path: amdgpu-windows-interop
           lfs: true
 
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+          role-duration-seconds: 14400  # 4 hours
+
       - name: Configure Projects
         run: |
           # clear cache before build and after download
@@ -189,44 +204,26 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
-      - name: Configure AWS Credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
-
-      # TODO: Move to script
-      - name: Create Index Files
+      - name: Create Artifact Index
         if: always()
         run: |
-          curl --silent --fail --show-error --location \
-            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
-          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
-          python build_tools/create_log_index.py \
-            --build-dir=${{ env.BUILD_DIR_BASH }} \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+          python third-party/indexer/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
 
       # TODO: Move to script
       - name: Upload Artifacts
         shell: powershell
         run: |
           $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts s3://therock-artifacts/${{github.run_id}}-windows/ `
+          aws s3 cp ${{ env.BASE_BUILD_DIR }}\artifacts s3://therock-artifacts/${{github.run_id}}-windows/ `
             --recursive --no-follow-symlinks `
             --exclude "*" `
             --include "*.tar.xz*"
-          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html
+          aws s3 cp ${{ env.BASE_BUILD_DIR }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html
 
-      - name: Upload Logs
+      - name: Index and Upload Logs
         if: always()
-        shell: powershell
         run: |
-          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          python3 build_tools/upload_logs_to_s3.py `
-            --build-dir=${{ env.BASE_BUILD_DIR_POWERSHELL }} `
-            --s3-base-path="s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}"
+          python3 build_tools/teatime.py --label "index_and_upload" --log-timestamps build/logs/temp.log
 
       - name: Add Links to Job Summary
         if: always()
@@ -234,7 +231,7 @@ jobs:
           LOG_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/index.html"
           echo "[Build Logs](${LOG_URL})" >> $GITHUB_STEP_SUMMARY
 
-          ARTIFACT_INDEX="${{ env.BASE_BUILD_DIR_POWERSHELL }}/artifacts/index.html"
+          ARTIFACT_INDEX="${{ env.BASE_BUILD_DIR }}/artifacts/index.html"
           if [ -f "${ARTIFACT_INDEX}" ]; then
             ARTIFACT_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html"
 

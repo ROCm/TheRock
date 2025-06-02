@@ -21,22 +21,41 @@ def normalize_path(p: Path) -> str:
     return str(p).replace("\\", "/") if is_windows() else str(p)
 
 
-def index_log_files(build_dir: Path, amdgpu_family: str):
-    log_dir = build_dir / "logs"
+def get_indexer_path() -> Path:
+    """
+    Resolve to the local third-party/indexer/indexer.py copy.
+    """
+    indexer_path = (
+        Path(__file__).resolve().parent.parent / "third-party/indexer/indexer.py"
+    )
+    if indexer_path.is_file():
+        log(f"[INFO] Using bundled indexer.py: {indexer_path}")
+        return indexer_path
+    else:
+        log(f"[ERROR] Bundled indexer.py not found at: {indexer_path}")
+        sys.exit(2)
+
+
+def index_log_files(log_dir: Path, amdgpu_family: str):
     index_file = log_dir / "index.html"
 
-    # TODO: Fork indexer.py locally to avoid relying on an external GitHub source at runtime.
-    indexer_path = build_dir / "indexer.py"
-
-    if log_dir.is_dir():
-        log(f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files...")
-        subprocess.run(
-            ["python", str(indexer_path), "-f", "*.log", normalize_path(log_dir)],
-            check=True,
-        )
-    else:
+    if not log_dir.is_dir():
         log(f"[WARN] Log directory '{log_dir}' not found. Skipping indexing.")
         return
+
+    indexer_path = get_indexer_path()
+    log(
+        f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files using indexer: {indexer_path}"
+    )
+
+    try:
+        subprocess.run(
+            [sys.executable, str(indexer_path), "-f", "*.log", normalize_path(log_dir)],
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        log(f"[ERROR] Failed to run indexer.py: {e}")
+        sys.exit(2)
 
     if index_file.exists():
         log(
@@ -46,19 +65,23 @@ def index_log_files(build_dir: Path, amdgpu_family: str):
         updated = content.replace(
             'a href=".."', f'a href="../../index-{amdgpu_family}.html"'
         )
-        index_file.write_text(updated)
+
+        # Ensure full write and flush to disk
+        with open(index_file, "w", encoding="utf-8") as f:
+            f.write(updated)
+            f.flush()
+            os.fsync(f.fileno())
+
         log("[INFO] Log index links updated.")
-    else:
-        log(f"[WARN] '{index_file}' not found. Skipping link rewrite.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create HTML index for log files.")
     parser.add_argument(
-        "--build-dir",
+        "--log-dir",
         type=Path,
-        default=Path(os.getenv("BUILD_DIR", "build")),
-        help="Build directory containing logs (default: 'build' or $BUILD_DIR)",
+        default=Path(os.getenv("LOG_DIR", "build/logs")),
+        help="Directory containing log files (default: 'build/logs' or $LOG_DIR)",
     )
     parser.add_argument(
         "--amdgpu-family",
@@ -72,4 +95,4 @@ if __name__ == "__main__":
         log("[ERROR] --amdgpu-family not provided and AMDGPU_FAMILIES env var not set")
         sys.exit(1)
 
-    index_log_files(args.build_dir, args.amdgpu_family)
+    index_log_files(args.log_dir, args.amdgpu_family)

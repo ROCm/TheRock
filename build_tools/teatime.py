@@ -25,6 +25,18 @@ Other arguments:
 * --log-timestamps: Log lines will be written with a starting column of the
   time in seconds since start, and a header/trailer will be added with more
   timing information.
+* --skip-index: Suppresses automatic indexing and uploading of logs to S3.
+
+Environment Variables:
+* TEATIME_FORCE_INTERACTIVE: If set to 1, forces console output regardless of
+  --interactive flag.
+* TEATIME_S3_UPLOAD: If "1", enables automatic S3 upload and log indexing.
+* TEATIME_S3_BUCKET: S3 bucket name for log uploads.
+* TEATIME_S3_SUBDIR: Subdirectory in the bucket for organizing uploads.
+* TEATIME_FAIL_ON_UPLOAD_ERROR: If "1", treat S3 upload or indexing errors as fatal.
+* BASE_BUILD_DIR: Root of the build directory. Used to find logs and pass to
+  indexing/upload scripts.
+* AMDGPU_FAMILIES: Required by `create_log_index.py` to organize logs.
 
 CI systems can set `TEATIME_LABEL_GH_GROUP=1` in the environment, which will
 cause labeled console output to be printed using GitHub Actions group markers
@@ -46,6 +58,7 @@ class OutputSink:
     def __init__(self, args: argparse.Namespace):
         self.start_time = time.time()
         self.interactive: bool = args.interactive
+        self.skip_index = args.skip_index
         if self.interactive:
             self.out = sys.stdout.buffer
         else:
@@ -81,6 +94,33 @@ class OutputSink:
             self.log_file = open(self.log_path, "wb")
         self.log_timestamps: bool = args.log_timestamps
 
+        # S3 upload configuration
+        try:
+            self.upload_to_s3 = bool(int(os.getenv("TEATIME_S3_UPLOAD", "0")))
+        except ValueError:
+            print(
+                "warning: TEATIME_S3_UPLOAD env var must be an integer "
+                "(skipping S3 log upload)",
+                file=sys.stderr,
+            )
+            self.upload_to_s3 = False
+
+        self.s3_bucket = os.getenv("TEATIME_S3_BUCKET")
+        if not self.s3_bucket and self.upload_to_s3:
+            print(
+                "warning: TEATIME_S3_BUCKET is not set (S3 upload will likely fail)",
+                file=sys.stderr,
+            )
+
+        self.s3_subdir = os.getenv("TEATIME_S3_SUBDIR")
+        if not self.s3_subdir and self.upload_to_s3:
+            print(
+                "warning: TEATIME_S3_SUBDIR is not set (S3 upload will likely fail)",
+                file=sys.stderr,
+            )
+
+        self.log_dir = os.getenv("LOG_DIR", "build/logs")
+
     def start(self):
         if self.gh_group_label is not None:
             self.out.write(b"::group::" + self.gh_group_label + b"\n")
@@ -95,6 +135,7 @@ class OutputSink:
                     f"END\t{end_time}\t{end_time - self.start_time}\n".encode()
                 )
             self.log_file.close()
+
         if self.gh_group_label is not None:
             self.out.write(b"::endgroup::\n")
         elif self.interactive_prefix is not None and self.label is not None:
@@ -102,6 +143,79 @@ class OutputSink:
             self.out.write(
                 b"[" + self.label + b" completed in " + run_pretty.encode() + b"]\n"
             )
+
+        # Call coordinate_index_and_logs if indexing is enabled.
+        if (
+            not self.skip_index
+            and self.upload_to_s3
+            and self.s3_bucket
+            and self.log_dir
+        ):
+            self.coordinate_index_and_logs()
+
+    def coordinate_index_and_logs(self):
+        # Determine paths
+        log_dir = self.log_dir
+        amdgpu_family = os.getenv("AMDGPU_FAMILIES")
+
+        # Step 1: Run create_log_index.py (if AMDGPU_FAMILIES is defined)
+        if amdgpu_family:
+            try:
+                index_script = (
+                    Path(__file__).resolve().parent.parent
+                    / "build_tools"
+                    / "create_log_index.py"
+                )
+                print(f"[TEATIME] Indexing logs for AMDGPU_FAMILIES={amdgpu_family}")
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(index_script),
+                        "--log-dir",
+                        str(log_dir),
+                        "--amdgpu-family",
+                        amdgpu_family,
+                    ],
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"[WARN] create_log_index.py failed: {e}", file=sys.stderr)
+            except Exception as e:
+                print(
+                    f"[WARN] Unexpected error during log indexing: {e}", file=sys.stderr
+                )
+        else:
+            print("[WARN] AMDGPU_FAMILIES not set; skipping log indexing")
+
+        # Step 2: S3 upload using --bucket and --subdir
+        try:
+            upload_script = (
+                Path(__file__).resolve().parent.parent
+                / "build_tools"
+                / "upload_logs_to_s3.py"
+            )
+            print(f"[TEATIME] Uploading logs to s3://{self.s3_bucket}/{self.s3_subdir}")
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(upload_script),
+                    "--log-dir",
+                    str(log_dir),
+                    "--bucket",
+                    self.s3_bucket,
+                    "--subdir",
+                    self.s3_subdir,
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"[WARN] Log upload failed: {e}", file=sys.stderr)
+            if os.getenv("TEATIME_FAIL_ON_UPLOAD_ERROR") == "1":
+                raise
+        except Exception as e:
+            print(f"[WARN] Unexpected error during log upload: {e}", file=sys.stderr)
+            if os.getenv("TEATIME_FAIL_ON_UPLOAD_ERROR") == "1":
+                raise
 
     def writeline(self, line: bytes):
         if self.interactive_prefix is not None:
@@ -177,6 +291,9 @@ def main(cl_args: list[str]):
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Log timestamps along with log lines to the log file",
+    )
+    p.add_argument(
+        "--skip-index", action="store_true", help="Skip indexing and uploading logs"
     )
     p.add_argument("file", type=Path, help="Also log output to this file")
     args = p.parse_args(cl_args)
