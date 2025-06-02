@@ -13,17 +13,8 @@ on:
         type: string
 
 jobs:
-  setup:
-    runs-on: ubuntu-24.04
-    outputs:
-      version_suffix: ${{ steps.set.outputs.version_suffix }}
-    steps:
-      - id: set
-        run: |
-          echo "$(python ./external-builds/pytorch/set_version_suffix.py)" >> $GITHUB_OUTPUT
-
   release_pytorch:
-    needs: setup
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -37,4 +28,3 @@ jobs:
       python_version: ${{ matrix.python_version }}
       target: ${{ inputs.target }}
       find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html
-      version_suffix: ${{ needs.setup.outputs.version_suffix }}

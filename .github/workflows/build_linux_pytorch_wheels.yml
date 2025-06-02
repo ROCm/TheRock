@@ -15,9 +15,6 @@ on:
       find_links:
         required: true
         type: string
-      version_suffix:
-        required: true
-        type: string
 
 permissions:
   id-token: write
@@ -41,6 +38,11 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
+      - name: Get version suffix
+        id: version
+        run: |
+          echo "version_suffix=$(./external-builds/pytorch/set_version_suffix.py)" >> $GITHUB_OUTPUT
+
       - name: Checkout PyTorch Source Repos
         run: |
           echo "Checking out PyTorch repositories..."
@@ -56,13 +58,13 @@ jobs:
           echo "Building PyTorch wheels for ${{ inputs.target }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
-            --find-links "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html" \
+            --find-links "${{ inputs.find_links }}" \
             build \
             --install-rocm \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             --pytorch-rocm-arch ${{ inputs.target }} \
-            --version-suffix "+rocmsdk${{ inputs.version_suffix }}"
+            --version-suffix "+rocmsdk${{ steps.version.outputs.version_suffix }}"
 
       - name: Configure AWS Credentials
         if: always()
