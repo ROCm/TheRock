@@ -12,17 +12,18 @@ on:
         required: true
         type: string
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
-  release_pytorch:
-    runs-on: ubuntu-24.04
+  build:
     strategy:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12"]
+
     uses: ./.github/workflows/build_linux_pytorch_wheels.yml
-    permissions:
-      id-token: write
-      contents: read
     with:
       family: ${{ inputs.family }}
       python_version: ${{ matrix.python_version }}
