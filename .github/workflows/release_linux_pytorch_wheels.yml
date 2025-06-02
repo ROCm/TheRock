@@ -19,7 +19,8 @@ jobs:
       version_suffix: ${{ steps.set.outputs.version_suffix }}
     steps:
       - id: set
-        run: echo "version_suffix=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+        run: |
+          echo "$(external-builds/pytorch/set_version_suffix.py)" >> $GITHUB_OUTPUT
 
   release_pytorch:
     needs: setup
