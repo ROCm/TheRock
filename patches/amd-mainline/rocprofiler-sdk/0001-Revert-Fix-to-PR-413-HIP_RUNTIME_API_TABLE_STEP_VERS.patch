@@ -1,0 +1,135 @@
+From 4164aaac9842e2bd5c3298f64294e4eb947a91c9 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Thu, 29 May 2025 16:33:45 -0700
+Subject: [PATCH 1/2] Revert "Fix to PR #413 HIP_RUNTIME_API_TABLE_STEP_VERSION
+ 9 vs. 10 (#419)"
+
+This reverts commit fec74141b060b75afbcf41077796c2380dfc7198.
+---
+ source/include/rocprofiler-sdk/hip/api_args.h    | 16 ++++++++--------
+ .../include/rocprofiler-sdk/hip/runtime_api_id.h |  6 +++---
+ source/lib/rocprofiler-sdk/hip/abi.cpp           | 14 +++++++-------
+ source/lib/rocprofiler-sdk/hip/hip.def.cpp       |  8 ++++----
+ 4 files changed, 22 insertions(+), 22 deletions(-)
+
+diff --git a/source/include/rocprofiler-sdk/hip/api_args.h b/source/include/rocprofiler-sdk/hip/api_args.h
+index 9cb90ff..637373f 100644
+--- a/source/include/rocprofiler-sdk/hip/api_args.h
++++ b/source/include/rocprofiler-sdk/hip/api_args.h
+@@ -3064,6 +3064,14 @@ typedef union rocprofiler_hip_api_args_t
+     } hipGraphExecBatchMemOpNodeSetParams;
+ #endif
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 9
++    struct
++    {
++        hipEvent_t   event;
++        hipStream_t  stream;
++        unsigned int flags;
++    } hipEventRecordWithFlags;
++#endif
++#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+     struct
+     {
+         hipLinkState_t  state;
+@@ -3102,14 +3110,6 @@ typedef union rocprofiler_hip_api_args_t
+         hipLinkState_t state;
+     } hipLinkDestroy;
+ #endif
+-#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+-    struct
+-    {
+-        hipEvent_t   event;
+-        hipStream_t  stream;
+-        unsigned int flags;
+-    } hipEventRecordWithFlags;
+-#endif
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 11
+     struct
+     {
+diff --git a/source/include/rocprofiler-sdk/hip/runtime_api_id.h b/source/include/rocprofiler-sdk/hip/runtime_api_id.h
+index 0b78889..bd5edbb 100644
+--- a/source/include/rocprofiler-sdk/hip/runtime_api_id.h
++++ b/source/include/rocprofiler-sdk/hip/runtime_api_id.h
+@@ -515,15 +515,15 @@ typedef enum rocprofiler_hip_runtime_api_id_t  // NOLINT(performance-enum-size)
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipGraphExecBatchMemOpNodeSetParams,
+ #endif
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 9
++    ROCPROFILER_HIP_RUNTIME_API_ID_hipEventRecordWithFlags,
++#endif
++#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkAddData,
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkAddFile,
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkComplete,
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkCreate,
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkDestroy,
+ #endif
+-#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+-    ROCPROFILER_HIP_RUNTIME_API_ID_hipEventRecordWithFlags,
+-#endif
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 11
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipLaunchKernelExC,
+     ROCPROFILER_HIP_RUNTIME_API_ID_hipDrvLaunchKernelEx,
+diff --git a/source/lib/rocprofiler-sdk/hip/abi.cpp b/source/lib/rocprofiler-sdk/hip/abi.cpp
+index 5269f98..cc9c3e9 100644
+--- a/source/lib/rocprofiler-sdk/hip/abi.cpp
++++ b/source/lib/rocprofiler-sdk/hip/abi.cpp
+@@ -551,15 +551,15 @@ ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipGraphExecBatchMemOpNodeSetParams_fn,
+ #endif
+ 
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 9
+-ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkAddData_fn, 468)
+-ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkAddFile_fn, 469)
+-ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkComplete_fn, 470)
+-ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkCreate_fn, 471)
+-ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkDestroy_fn, 472)
++ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipEventRecordWithFlags_fn, 468)
+ #endif
+ 
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+-ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipEventRecordWithFlags_fn, 473)
++ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkAddData_fn, 469)
++ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkAddFile_fn, 470)
++ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkComplete_fn, 471)
++ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkCreate_fn, 472)
++ROCP_SDK_ENFORCE_ABI(::HipDispatchTable, hipLinkDestroy_fn, 473)
+ #endif
+ 
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 11
+@@ -590,7 +590,7 @@ ROCP_SDK_ENFORCE_ABI_VERSIONING(::HipDispatchTable, 464)
+ #elif HIP_RUNTIME_API_TABLE_STEP_VERSION == 8
+ ROCP_SDK_ENFORCE_ABI_VERSIONING(::HipDispatchTable, 468)
+ #elif HIP_RUNTIME_API_TABLE_STEP_VERSION == 9
+-ROCP_SDK_ENFORCE_ABI_VERSIONING(::HipDispatchTable, 473)
++ROCP_SDK_ENFORCE_ABI_VERSIONING(::HipDispatchTable, 469)
+ #elif HIP_RUNTIME_API_TABLE_STEP_VERSION == 10
+ ROCP_SDK_ENFORCE_ABI_VERSIONING(::HipDispatchTable, 474)
+ #elif HIP_RUNTIME_API_TABLE_STEP_VERSION == 11
+diff --git a/source/lib/rocprofiler-sdk/hip/hip.def.cpp b/source/lib/rocprofiler-sdk/hip/hip.def.cpp
+index e116a1e..1dd61e4 100644
+--- a/source/lib/rocprofiler-sdk/hip/hip.def.cpp
++++ b/source/lib/rocprofiler-sdk/hip/hip.def.cpp
+@@ -578,6 +578,10 @@ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNT
+ #endif
+ 
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 9
++HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipEventRecordWithFlags, hipEventRecordWithFlags, hipEventRecordWithFlags_fn, event, stream, flags);
++#endif
++
++#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkAddData, hipLinkAddData, hipLinkAddData_fn, state, type, data, size, name, numOptions, options, optionValues);
+ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkAddFile, hipLinkAddFile, hipLinkAddFile_fn, state, type, path, numOptions, options, optionValues);
+ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkComplete, hipLinkComplete, hipLinkComplete_fn, state, hipBinOut, sizeOut);
+@@ -585,10 +589,6 @@ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNT
+ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipLinkDestroy, hipLinkDestroy, hipLinkDestroy_fn, state);
+ #endif
+ 
+-#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+-HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipEventRecordWithFlags, hipEventRecordWithFlags, hipEventRecordWithFlags_fn, event, stream, flags);
+-#endif
+-
+ #if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 11
+ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipLaunchKernelExC, hipLaunchKernelExC, hipLaunchKernelExC_fn, config, fPtr, args);
+ HIP_API_INFO_DEFINITION_V(ROCPROFILER_HIP_TABLE_ID_Runtime, ROCPROFILER_HIP_RUNTIME_API_ID_hipDrvLaunchKernelEx, hipDrvLaunchKernelEx, hipDrvLaunchKernelEx_fn, config, f, params, extra);
+-- 
+2.43.0
+

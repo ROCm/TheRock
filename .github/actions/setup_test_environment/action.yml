@@ -13,6 +13,11 @@ inputs:
     type: string
   FETCH_ARTIFACT_ARGS:
     type: string
+  PLATFORM:
+    type: string
+  BUCKET:
+    type: string
+    default: "therock-artifacts"
 
 runs:
   using: "composite"
@@ -28,14 +33,22 @@ runs:
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
-        python -m venv ${VENV_DIR}
-        source ${VENV_DIR}/bin/activate
+        python3 -m venv ${VENV_DIR}
+        if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
         pip install -r requirements-test.txt
         pip freeze
 
     - name: Install the AWS tool
+      if: ${{ inputs.PLATFORM == 'linux'}}
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
+
+    - name: Install the AWS tool
+      if: ${{ inputs.PLATFORM == 'windows'}}
+      shell: bash
+      run: |
+        choco install --no-progress -y awscli
+        echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
     - name: Download and Unpack Artifacts
       shell: bash
@@ -46,9 +59,8 @@ runs:
         AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
+        BUCKET: ${{ inputs.BUCKET }}
       run: |
-        source ${VENV_DIR}/bin/activate
-
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --amdgpu-family=${AMDGPU_FAMILIES} \

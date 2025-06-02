@@ -1,0 +1,6 @@
+[projects]
+project_list=
+    pytorch
+    pytorch_vision
+    pytorch_audio
+    torch_migraphx

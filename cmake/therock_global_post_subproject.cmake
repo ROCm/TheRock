@@ -14,7 +14,7 @@ therock_get_all_targets(THEROCK_ALL_TARGETS "${CMAKE_CURRENT_SOURCE_DIR}")
 set(THEROCK_EXECUTABLE_TARGETS)
 set(THEROCK_SHARED_LIBRARY_TARGETS)
 set(THEROCK_MODULE_TARGETS)
-block()
+block(SCOPE_FOR VARIABLES)
   foreach(target ${THEROCK_ALL_TARGETS})
     get_target_property(target_type "${target}" TYPE)
     get_target_property(target_alias "${target}" ALIASED_TARGET)
@@ -77,7 +77,7 @@ endfunction()
 
 # Iterate over all shared library and executable targets and set default RPATH
 # (unless if globally disabled for the subproject).
-block()
+block(SCOPE_FOR VARIABLES)
   if(NOT THEROCK_NO_INSTALL_RPATH)
     foreach(target ${THEROCK_EXECUTABLE_TARGETS} ${THEROCK_SHARED_LIBRARY_TARGETS})
       _therock_post_process_rpath_target(${target})
@@ -89,7 +89,7 @@ endblock()
 # to process their build id and split debug files out.
 if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   include(CMakeFindBinUtils)
-  block()
+  block(SCOPE_FOR POLICIES VARIABLES)
     install(
       CODE "set(THEROCK_DEBUG_BUILD_ID_PATHS)"
       CODE "set(THEROCK_OBJCOPY \"${CMAKE_OBJCOPY}\")"
@@ -101,11 +101,14 @@ if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
             ${THEROCK_EXECUTABLE_TARGETS}
             ${THEROCK_SHARED_LIBRARY_TARGETS}
             ${THEROCK_MODULE_TARGETS})
+      message(STATUS "Splitting debug info for ${target}")
       set(_target_path "$<TARGET_FILE:${target}>")
       install(
         CODE "list(APPEND THEROCK_DEBUG_BUILD_ID_PATHS \"${_target_path}\")"
         COMPONENT THEROCK_DEBUG_BUILD_ID
       )
+      # Must be built with build-id enabled in order to do debug symbol sep.
+      target_link_options("${target}" PRIVATE "-Wl,--build-id")
     endforeach()
     install(
         SCRIPT "${THEROCK_SOURCE_DIR}/cmake/therock_install_linux_build_id_files.cmake"

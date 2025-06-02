@@ -61,19 +61,3 @@ def rocm_info():
 
 def rocm_smi():
     _exec("bin/rocm-smi")
-
-
-def roc_obj():
-    _exec("bin/roc-obj")
-
-
-def roc_obj():
-    _exec("bin/roc-obj")
-
-
-def roc_obj_extract():
-    _exec("bin/roc-obj-extract")
-
-
-def roc_obj_ls():
-    _exec("bin/roc-obj-ls")

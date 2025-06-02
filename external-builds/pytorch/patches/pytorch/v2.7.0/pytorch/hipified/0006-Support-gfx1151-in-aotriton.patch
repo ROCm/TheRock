@@ -1,7 +1,7 @@
-From 6bb1df0b72bb7b12fc0afe7fe05c5dd7a501291f Mon Sep 17 00:00:00 2001
+From f5a3e955c3be28e23b10d91ec5975e085f750810 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Mon, 31 Mar 2025 19:27:59 +0100
-Subject: [PATCH 6/8] Support gfx1151 in aotriton
+Subject: [PATCH 06/14] Support gfx1151 in aotriton
 
 ---
  cmake/External/aotriton.cmake | 6 ++++--
@@ -9,7 +9,7 @@ Subject: [PATCH 6/8] Support gfx1151 in aotriton
  2 files changed, 10 insertions(+), 2 deletions(-)
 
 diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
-index 2678cfde3c..b70b9311d7 100644
+index 2678cfde3c4..b70b9311d70 100644
 --- a/cmake/External/aotriton.cmake
 +++ b/cmake/External/aotriton.cmake
 @@ -2,6 +2,7 @@ macro(get_target_gpus_from_pytorch target_gpus)
@@ -47,10 +47,10 @@ index 2678cfde3c..b70b9311d7 100644
        BUILD_COMMAND ""  # No build, install command will repeat the build process due to problems in the build system.
        BUILD_BYPRODUCTS "${__AOTRITON_INSTALL_DIR}/lib/libaotriton_v2.so"
 diff --git a/cmake/public/LoadHIP.cmake b/cmake/public/LoadHIP.cmake
-index 57910495fc..7b058199a1 100644
+index ef0cf26e645..5ac8c396694 100644
 --- a/cmake/public/LoadHIP.cmake
 +++ b/cmake/public/LoadHIP.cmake
-@@ -121,5 +121,11 @@ set(PYTORCH_FOUND_HIP FALSE)
+@@ -126,5 +126,11 @@ set(PYTORCH_FOUND_HIP FALSE)
  set(HIP_PLATFORM "amd")
  find_package(hip CONFIG)
  if(hip_FOUND)
@@ -63,5 +63,5 @@ index 57910495fc..7b058199a1 100644
    pytorch_load_hip()
  endif()
 -- 
-2.43.0
+2.47.1.windows.2
 

@@ -15,9 +15,9 @@ python build_tools/install_rocm_from_artifacts.py [--output-dir OUTPUT_DIR] [--a
 Examples:
 - Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
     - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --tests`
-- Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-release` to the specified output directory `build`:
+- Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`
-- Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-release` to the default output directory `therock-build`:
+- Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`
 
 You can select your AMD GPU family from this file https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81
@@ -31,7 +31,7 @@ import argparse
 from fetch_artifacts import (
     retrieve_base_artifacts,
     retrieve_enabled_artifacts,
-    s3_bucket_exists,
+    retrieve_s3_artifacts,
 )
 import json
 import os
@@ -55,10 +55,9 @@ def _untar_files(output_dir, destination):
     """
     Retrieves all tar files in the output_dir, then extracts all files to the output_dir
     """
-    output_dir_path = Path(output_dir).resolve()
-    log(f"Extracting {destination.name} to {output_dir}")
+    log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir_path)
+        extracted_tar_file.extractall(output_dir)
     destination.unlink()
 
 
@@ -110,23 +109,23 @@ def _get_github_release_assets(release_tag, amdgpu_family, release_version):
         release_data = json.loads(response.read().decode("utf-8"))
 
     # We retrieve the most recent release asset that matches the amdgpu_family
-    # In the cases of "nightly-release" or "dev-release", this will retrieve the the specified version or latest
+    # In the cases of "nightly-tarball" or "dev-tarball", this will retrieve the the specified version or latest
     asset_data = sorted(
         release_data["assets"], key=lambda item: item["updated_at"], reverse=True
     )
 
-    # For nightly-release
-    if release_tag == "nightly-release" and release_version != "latest":
+    # For nightly-tarball
+    if release_tag == "nightly-tarball" and release_version != "latest":
         for asset in asset_data:
             if amdgpu_family in asset["name"] and release_version in asset["name"]:
                 return asset
-    # For dev-release
-    elif release_tag == "dev-release":
+    # For dev-tarball
+    elif release_tag == "dev-tarball":
         for asset in asset_data:
             if amdgpu_family in asset["name"] and release_version in asset["name"]:
                 return asset
-    # Otherwise, return the latest and amdgpu-matched asset available from the tag nightly-release
-    elif release_tag == "nightly-release" and release_version == "latest":
+    # Otherwise, return the latest and amdgpu-matched asset available from the tag nightly-tarball
+    elif release_tag == "nightly-tarball" and release_version == "latest":
         for asset in asset_data:
             if amdgpu_family in asset["name"]:
                 return asset
@@ -140,7 +139,7 @@ def _download_github_release_asset(asset_data, output_dir):
     """
     asset_name = asset_data["name"]
     asset_url = asset_data["url"]
-    destination = Path(output_dir) / asset_name
+    destination = output_dir / asset_name
     headers = {"Accept": "application/octet-stream"}
     # Making the API call to retrieve the asset
     request = Request(asset_url, headers=headers)
@@ -162,22 +161,19 @@ def retrieve_artifacts_by_run_id(args):
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
     log(f"Retrieving artifacts for run ID {run_id}")
-    if not s3_bucket_exists(run_id):
-        log(f"S3 artifacts for {run_id} does not exist. Exiting...")
-        return
+    s3_artifacts = retrieve_s3_artifacts(run_id, amdgpu_family)
 
     # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
-    retrieve_base_artifacts(args, run_id, output_dir)
+    retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
     if not args.base_only:
-        retrieve_enabled_artifacts(args, amdgpu_family, run_id, output_dir)
+        retrieve_enabled_artifacts(
+            args, amdgpu_family, run_id, output_dir, s3_artifacts
+        )
 
     # Flattening artifacts from .tar* files then removing .tar* files
     log(f"Untar-ing artifacts for {run_id}")
-    output_dir_path = Path(output_dir).resolve()
-    tar_file_paths = list(output_dir_path.glob("*.tar.*"))
-    flattener = ArtifactPopulator(
-        output_path=output_dir_path, verbose=True, flatten=True
-    )
+    tar_file_paths = list(output_dir.glob("*.tar.*"))
+    flattener = ArtifactPopulator(output_path=output_dir, verbose=True, flatten=True)
     flattener(*tar_file_paths)
     for file_path in tar_file_paths:
         file_path.unlink()
@@ -191,12 +187,12 @@ def retrieve_artifacts_by_release(args):
     """
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    # In the case that the user passes in latest, we will get the latest nightly-release
+    # In the case that the user passes in latest, we will get the latest nightly-tarball
     if args.release == "latest":
-        release_tag = "nightly-release"
-    # Otherwise, determine if version is nightly-release or dev-release
+        release_tag = "nightly-tarball"
+    # Otherwise, determine if version is nightly-tarball or dev-tarball
     else:
-        # Searching for nightly-release or dev-release format
+        # Searching for nightly-tarball or dev-tarball format
         nightly_regex_expression = (
             "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
         )
@@ -204,18 +200,18 @@ def retrieve_artifacts_by_release(args):
         nightly_release = re.search(nightly_regex_expression, args.release) != None
         dev_release = re.search(dev_regex_expression, args.release) != None
         if not nightly_release and not dev_release:
-            log("This script requires a nightly-release or dev-release version.")
+            log("This script requires a nightly-tarball or dev-tarball version.")
             log("Please retrieve the correct release version from:")
             log(
-                "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-release (nightly-release example: 6.4.0rc20250416)"
+                "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-tarball (nightly-tarball example: 6.4.0rc20250416)"
             )
             log(
-                "\t - https://github.com/ROCm/TheRock/releases/tag/dev-release (dev-release example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+                "\t - https://github.com/ROCm/TheRock/releases/tag/dev-tarball (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
             )
             log("Exiting...")
             return
 
-        release_tag = "nightly-release" if nightly_release else "dev-release"
+        release_tag = "nightly-tarball" if nightly_release else "dev-tarball"
     release_version = args.release
 
     log(f"Retrieving artifacts for release tag {release_tag}")
@@ -255,7 +251,7 @@ def retrieve_artifacts_by_input_dir(args):
 
 
 def run(args):
-    log("### Installing TheRock using artifacts 🪨 ###")
+    log("### Installing TheRock using artifacts ###")
     _create_output_directory(args)
     if args.run_id:
         retrieve_artifacts_by_run_id(args)
@@ -270,7 +266,7 @@ def main(argv):
     parser = argparse.ArgumentParser(prog="provision")
     parser.add_argument(
         "--output-dir",
-        type=str,
+        type=Path,
         default="./therock-build",
         help="Path of the output directory for TheRock",
     )
@@ -289,7 +285,7 @@ def main(argv):
     group.add_argument(
         "--release",
         type=str,
-        help="Github release version of TheRock to install, from the nightly-release (X.Y.ZrcYYYYMMDD) or dev-release (X.Y.Z.dev0+{hash})",
+        help="Github release version of TheRock to install, from the nightly-tarball (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")

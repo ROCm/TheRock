@@ -12,7 +12,6 @@ include(ExternalProject)
 # List of CMake variables that will be injected by default into the
 # project_init.cmake file of each subproject.
 set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
-  CMAKE_BUILD_TYPE
   CMAKE_PROGRAM_PATH
   CMAKE_PLATFORM_NO_VERSIONED_SONAME
   Python3_EXECUTABLE
@@ -529,10 +528,31 @@ function(therock_cmake_subproject_activate target_name)
 
   get_property(_mirror_cmake_vars GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS)
 
+  # Pairs of arguments for a `cmake -E env` command to run before each
+  # subproject build or configure command.
+  # https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-E-arg-env
+  # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
+  set(_build_env_pairs)
+
+  # All project dependencies are managed within the super-project so we don't
+  # want subprojects reaching outside of the sandbox and building against
+  # uncontrolled (and likely incompatible) sources.
+  #
+  # These environment variables have been used by some subprojects to discover
+  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
+  # things like:
+  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
+  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
+  # We unset both the CMake and environment variables with these names.
+  # See also https://github.com/ROCm/TheRock/issues/670.
+  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
+  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
+  list(APPEND _build_env_pairs "--unset=HIP_PATH")
+  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)
-  set(_build_env_pairs)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
 
@@ -554,6 +574,11 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_init_contents)
+  # Support generator expressions in install CODE
+  # We rely on this for debug symbol separation and some of our very old projects
+  # have a CMake minver < 3.14, defaulting them to OLD. Unfortunately, this policy
+  # must be set globally vs in a block scope to have effect.
+  string(APPEND _init_contents "cmake_policy(SET CMP0087 NEW)\n")
   foreach(_var_name ${_mirror_cmake_vars})
     string(APPEND _init_contents "set(${_var_name} \"@${_var_name}@\" CACHE STRING \"\" FORCE)\n")
   endforeach()
@@ -577,6 +602,8 @@ function(therock_cmake_subproject_activate target_name)
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
     endif()
+    # Make the link dir visible to CMake find_library.
+    string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_private_link_dir}\")\n")
     if(NOT MSVC)
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
@@ -636,6 +663,15 @@ function(therock_cmake_subproject_activate target_name)
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
   set(_stage_stamp_file "${_stamp_dir}/stage.stamp")
 
+  # Derive the CMAKE_BUILD_TYPE from eiether {project}_BUILD_TYPE or the global
+  # CMAKE_BUILD_TYPE.
+  set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
+  if(NOT _cmake_build_type)
+    set(_cmake_build_type "${CMAKE_BUILD_TYPE}")
+  else()
+    message(STATUS "  PROJECT SPECIFIC CMAKE_BUILD_TYPE=${_cmake_build_type}")
+  endif()
+
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
@@ -689,10 +725,12 @@ function(therock_cmake_subproject_activate target_name)
       OUTPUT "${_configure_stamp_file}"
       COMMAND
         ${_configure_log_prefix}
+        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
         "${CMAKE_COMMAND}"
         "-G${CMAKE_GENERATOR}"
         "-B${_binary_dir}"
         "-S${_cmake_source_dir}"
+        "-DCMAKE_BUILD_TYPE=${_cmake_build_type}"
         "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
@@ -775,7 +813,7 @@ function(therock_cmake_subproject_activate target_name)
       LABEL "${target_name} install"
       # While useful for debugging, stage install logs are almost pure noise
       # for interactive use.
-      OUTPUT_ON_FAILURE ON
+      OUTPUT_ON_FAILURE "${THEROCK_QUIET_INSTALL}"
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
@@ -1114,7 +1152,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # bearing we can either add them to all projects or source those flags from
     # the projects themselves more locally.
     string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT )\n")
-    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -fms-extensions -fms-compatibility -D_ENABLE_EXTENDED_ALIGNED_STORAGE \")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -DWIN32_LEAN_AND_MEAN -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -fms-extensions -fms-compatibility -D_ENABLE_EXTENDED_ALIGNED_STORAGE \")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT )\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT )\n")
   else()
@@ -1122,8 +1160,27 @@ function(_therock_cmake_subproject_setup_toolchain
     # simply forward flags from the system compiler to the toolchain compiler.
     string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT \"@CMAKE_C_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"@CMAKE_CXX_FLAGS@\")\n")
-    string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT @CMAKE_EXE_LINKER_FLAGS@)\n")
-    string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT @CMAKE_SHARED_LINKER_FLAGS@)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT \"@CMAKE_EXE_LINKER_FLAGS@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
+  endif()
+
+  # Customize debug info generation.
+  if(THEROCK_MINIMAL_DEBUG_INFO)
+    # System toolchain can be either MSVC or another system compiler.
+    if(MSVC AND NOT compiler_toolchain)
+      # Set MSVC style debug options.
+      # TODO: For now, just set the default.
+    elseif((NOT compiler_toolchain AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
+           OR compiler_toolchain)
+      # If the system compiler and GCC/clang or an explicit toolchain (which are all
+      # LLVM based).
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_DEBUG \" -g1 -gz\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO \" -g1 -gz\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_DEBUG \" -g1 -gz\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_RELWITHDEBINFO \" -g1 -gz\")\n")
+    else()
+      message(WARNING "Cannot setup THEROCK_MINIMAL_DEBUG_INFO mode for unknown compiler")
+    endif()
   endif()
 
   if(NOT compiler_toolchain)
