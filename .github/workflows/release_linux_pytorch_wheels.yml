@@ -8,36 +8,24 @@ on:
 permissions:
   id-token: write
   contents: read
-  actions: write # Added permission to trigger workflows
 
 jobs:
-  dispatch:
+  build:
     strategy:
       fail-fast: false
       matrix:
-        target: [gfx942, gfx1100, gfx1201]
+        include:
+          - target: gfx942
+            family: gfx94X-dcgpu
+          - target: gfx1100
+            family: gfx110X-dgpu
+          - target: gfx1201
+            family: gfx120X-all
         python_version: ["3.11", "3.12"]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Set family
-        id: set_family
-        run: |
-          case "${{ matrix.target }}" in
-            gfx942) echo "family=gfx94X-dcgpu" >> $GITHUB_OUTPUT ;;
-            gfx1100) echo "family=gfx110X-dgpu" >> $GITHUB_OUTPUT ;;
-            gfx1201) echo "family=gfx120X-all" >> $GITHUB_OUTPUT ;;
-            *) echo "Unknown target"; exit 1 ;;
-          esac
 
-      - name: Trigger Build-Linux-PyTorch-Wheels workflow
-        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
-        with:
-          workflow: build_linux_pytorch_wheels.yml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          inputs: |
-            {
-              "family": "${{ steps.set_family.outputs.family }}",
-              "target": "${{ matrix.target }}",
-              "python_version": "${{ matrix.python_version }}",
-              "find_links": "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html"
-            }
+    uses: ROCm/TheRock/.github/workflows/build_linux_pytorch_wheels.yml@main
+    with:
+      family: ${{ matrix.family }}
+      target: ${{ matrix.target }}
+      python_version: ${{ matrix.python_version }}
+      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.family }}/index.html
