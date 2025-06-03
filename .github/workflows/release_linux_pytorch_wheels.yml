@@ -10,7 +10,6 @@ permissions:
   contents: read
   actions: write # Added permission to trigger workflows
 
-
 jobs:
   dispatch:
     strategy:
@@ -30,7 +29,7 @@ jobs:
             *) echo "Unknown target"; exit 1 ;;
           esac
 
-      - name: Trigger reusable workflow  
+      - name: Trigger Build-Linux-PyTorch-Wheels workflow
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
           workflow: build_linux_pytorch_wheels.yml
