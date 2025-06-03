@@ -34,6 +34,8 @@ jobs:
   test_hipblaslt:
     name: "hipBLASLt math-lib test"
     runs-on: ${{ inputs.test_runs_on }}
+    # Currently, this test is not working with Windows. This test will be enabled once this library has been enabled
+    if: ${{ inputs.platform == 'linux' }}
     strategy:
       fail-fast: false
     defaults:
@@ -62,10 +64,6 @@ jobs:
       - name: Install additional packages
         if: ${{ inputs.platform == 'linux' }}
         run: sudo apt install libgfortran5 -y
-
-      - name: Configure TensileLibrary path
-        if: ${{ inputs.platform == 'windows' }}
-        run: echo "HIPBLASLT_TENSILE_LIBPATH=${{ github.workspace }}\build\bin\rocblas\library" >> "$GITHUB_ENV"
 
       - name: Run hipBLASLt tests
         timeout-minutes: 30
