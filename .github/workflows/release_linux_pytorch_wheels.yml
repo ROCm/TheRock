@@ -32,6 +32,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
           workflow: build_linux_pytorch_wheels.yml
+          token: ${{ secrets.GITHUB_TOKEN }}
           inputs: |
             {
               "family": "${{ steps.set_family.outputs.family }}",
