@@ -11,32 +11,28 @@ permissions:
 
 jobs:
   build:
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: gfx942
-            family: gfx94X-dcgpu
-            python_version: "3.11"
-          - target: gfx942
-            family: gfx94X-dcgpu
-            python_version: "3.12"
-          - target: gfx1100
-            family: gfx110X-dgpu
-            python_version: "3.11"
-          - target: gfx1100
-            family: gfx110X-dgpu
-            python_version: "3.12"
-          - target: gfx1201
-            family: gfx120X-all
-            python_version: "3.11"
-          - target: gfx1201
-            family: gfx120X-all
-            python_version: "3.12"
+        target: [gfx942, gfx1100, gfx1201]
+        python_version: ["3.11", "3.12"]
 
-    uses: ./.github/workflows/build_linux_pytorch_wheels.yml
-    with:
-      family: ${{ matrix.family }}
-      python_version: ${{ matrix.python_version }}
-      target: ${{ matrix.target }}
-      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.family }}/index.html
+    steps:
+      - name: Set family based on target
+        id: set_family
+        run: |
+          case "${{ matrix.target }}" in
+            gfx942) echo "family=gfx94X-dcgpu" >> $GITHUB_OUTPUT ;;
+            gfx1100) echo "family=gfx110X-dgpu" >> $GITHUB_OUTPUT ;;
+            gfx1201) echo "family=gfx120X-all" >> $GITHUB_OUTPUT ;;
+            *) echo "Unknown target: ${{ matrix.target }}" && exit 1 ;;
+          esac
+
+      - name: Call build workflow
+        uses: ROCm/TheRock/.github/workflows/build_linux_pytorch_wheels.yml@main
+        with:
+          family: ${{ steps.set_family.outputs.family }}
+          target: ${{ matrix.target }}
+          python_version: ${{ matrix.python_version }}
+          find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html
