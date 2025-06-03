@@ -65,7 +65,7 @@ jobs:
 
       - name: Configure TensileLibrary path
         if: ${{ inputs.platform == 'windows' }}
-        run: echo "HIPBLASLT_TENSILE_LIBPATH=${THEROCK_BIN_DIR}\rocblas\library" >> "$GITHUB_ENV"
+        run: echo "HIPBLASLT_TENSILE_LIBPATH=${{ github.workspace }}\build\bin\rocblas\library" >> "$GITHUB_ENV"
 
       - name: Run hipBLASLt tests
         timeout-minutes: 30
