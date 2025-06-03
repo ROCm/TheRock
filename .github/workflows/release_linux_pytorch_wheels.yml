@@ -38,4 +38,3 @@ jobs:
           python_version: ${{ matrix.python_version }}
           target: ${{ matrix.target }}
           find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html
-        secrets: inherit
