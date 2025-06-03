@@ -10,29 +10,30 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
+  dispatch:
     strategy:
       fail-fast: false
       matrix:
         target: [gfx942, gfx1100, gfx1201]
         python_version: ["3.11", "3.12"]
-
+    runs-on: ubuntu-24.04
     steps:
-      - name: Set family based on target
+      - name: Set family
         id: set_family
         run: |
           case "${{ matrix.target }}" in
             gfx942) echo "family=gfx94X-dcgpu" >> $GITHUB_OUTPUT ;;
             gfx1100) echo "family=gfx110X-dgpu" >> $GITHUB_OUTPUT ;;
             gfx1201) echo "family=gfx120X-all" >> $GITHUB_OUTPUT ;;
-            *) echo "Unknown target: ${{ matrix.target }}" && exit 1 ;;
+            *) echo "Unknown target"; exit 1 ;;
           esac
 
-      - name: Call build workflow
-        uses: ROCm/TheRock/.github/workflows/build_linux_pytorch_wheels.yml@main
+      - name: Trigger reusable workflow  
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc #1.2.4
         with:
-          family: ${{ steps.set_family.outputs.family }}
-          target: ${{ matrix.target }}
-          python_version: ${{ matrix.python_version }}
-          find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html
+          workflow: build_linux_pytorch_wheels.yml
+          inputs: |
+            family: ${{ steps.set_family.outputs.family }}
+            target: ${{ matrix.target }}
+            python_version: ${{ matrix.python_version }}
+            find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html
