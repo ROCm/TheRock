@@ -106,6 +106,14 @@ block()
     OPT
     YAML2OBJ
   )
+  if(WIN32)
+    # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
+    # we might as well build them from source ourselves.
+    list(APPEND _llvm_required_tools "LLVM_AR")
+    list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
+    list(APPEND _llvm_required_tools "LLVM_LIB")
+    list(APPEND _llvm_required_tools "LLVM_RANLIB")
+  endif()
   therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
 
   # Clang tools that are required.
@@ -118,5 +126,10 @@ block()
     CLANG_SHLIB
     DRIVER
   )
+  if(WIN32)
+    # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
+    # we might as well build them from source ourselves.
+    list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
+  endif()
   therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
 endblock()

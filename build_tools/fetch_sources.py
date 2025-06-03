@@ -221,12 +221,14 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
+            "aqlprofile",
             "clr",
             "half",
             "HIP",
             "HIPIFY",
             "llvm-project",
             "rccl",
+            "rccl-tests",
             "rocm_smi_lib",
             "rocm-cmake",
             "rocm-core",
@@ -237,6 +239,7 @@ def main(argv):
             "rocprofiler-sdk",
             # TODO: Re-enable when used.
             # "rocprofiler-systems",
+            "roctracer",
             "ROCR-Runtime",
         ],
     )

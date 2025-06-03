@@ -12,6 +12,8 @@ on:
       test_runs_on:
         type: string
         default: ""
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -23,9 +25,14 @@ on:
       test_runs_on:
         type: string
         default: ""
+      platform:
+        type: string
   push:
     branches:
       - ADHOCBUILD
+
+permissions:
+  contents: read
 
 jobs:
   test_rocprim:
@@ -42,12 +49,14 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "${{ github.workspace }}/build/artifacts"
-      THEROCK_BIN_DIR: "${{ github.workspace }}/build/artifacts/output_dir/bin"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: "ROCm/TheRock"
 
       - name: Run setup test environment workflow
         uses: './.github/actions/setup_test_environment'
@@ -56,13 +65,16 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: "--test --prim"
+          FETCH_ARTIFACT_ARGS: "--prim --tests"
+          PLATFORM: ${{ inputs.platform }}
+          BUCKET: ${{ github.repository == 'ROCm/TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
 
       - name: Run rocprim tests
+        env:
+          TEST_TO_IGNORE: "'rocprim.lookback_reproducibility|rocprim.linking|rocprim.device_merge_inplace|rocprim.device_merge_sort|rocprim.device_partition|rocprim.device_radix_sort|rocprim.device_select'"
         run: |
-          TEST_TO_IGNORE="rocprim.lookback_reproducibility|rocprim.linking|rocprim.device_merge_inplace|rocprim.device_merge_sort|rocprim.device_partition|rocprim.device_radix_sort|rocprim.device_select"
-          ctest \
-            --test-dir ${THEROCK_BIN_DIR}/rocprim \
+          ctest --test-dir ${THEROCK_BIN_DIR}/rocprim \
             --output-on-failure \
             --parallel 8 \
-            --exclude-regex ${TEST_TO_IGNORE}
+            --exclude-regex ${TEST_TO_IGNORE} \
+            --timeout 900

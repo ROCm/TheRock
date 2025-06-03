@@ -1,6 +1,6 @@
-From a6ae01b094fb545c82baac8f4f6c332f0b1ea9c8 Mon Sep 17 00:00:00 2001
+From ebc09d74949c3be0e34ab74c5d03fe13be01dbff Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
-Date: Thu, 6 Mar 2025 14:39:58 -0800
+Date: Wed, 14 May 2025 10:15:52 +0000
 Subject: [PATCH] Miscellaneous CMake fixes.
 
 * Adds a `project` declaration (not having this is a big anti-pattern).
@@ -13,12 +13,12 @@ Subject: [PATCH] Miscellaneous CMake fixes.
  3 files changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 129a5ce..7b1643b 100755
+index 76b53df..5fb1ae3 100755
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -2,15 +2,13 @@
- # Minimum version of cmake and C++ required
- #
+@@ -5,15 +5,13 @@ message("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+ message("                    CMake ROCm SMI (Library) [root]                ")
+ message("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
  cmake_minimum_required(VERSION 3.14)
 +project(rocm_smi_lib)
  
@@ -35,7 +35,7 @@ index 129a5ce..7b1643b 100755
  include(utils)
  
 diff --git a/oam/CMakeLists.txt b/oam/CMakeLists.txt
-index 4789bd4..aaf72ab 100644
+index 181ee1e..ad6b54b 100644
 --- a/oam/CMakeLists.txt
 +++ b/oam/CMakeLists.txt
 @@ -94,6 +94,8 @@ endif ()
@@ -48,7 +48,7 @@ index 4789bd4..aaf72ab 100644
                             "$<INSTALL_INTERFACE:{OAM_NAME}/include>")
  
 diff --git a/rocm_smi/CMakeLists.txt b/rocm_smi/CMakeLists.txt
-index 75070a2..6c0cdfe 100755
+index 257309b..7ccf163 100755
 --- a/rocm_smi/CMakeLists.txt
 +++ b/rocm_smi/CMakeLists.txt
 @@ -88,6 +88,8 @@ target_include_directories(${ROCM_SMI_TARGET} PRIVATE

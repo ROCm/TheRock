@@ -59,7 +59,11 @@ macro(therock_dependency_provider method package_name)
     endif()
     cmake_policy(POP)
     message(STATUS "Resolving system find_package(${package_name}) (not found in super-project ${THEROCK_PROVIDED_PACKAGES})")
+    set(_therock_has_preserved_module_path FALSE)
     find_package(${package_name} ${ARGN} BYPASS_PROVIDER)
+    if(_therock_has_preserved_module_path)
+      set(CMAKE_MODULE_PATH "${_therock_preserved_module_path}")
+    endif()
   endif()
 endmacro()
 if(THEROCK_PROVIDED_PACKAGES)
@@ -74,7 +78,7 @@ function(therock_reparse_super_project_find_package superproject_path package_na
   # We parse the arguments we want dropped from the find_package and then use
   # what was unparsed.
   cmake_parse_arguments(PARSE_ARGV 1 UNUSED
-    "BYPASS_PROVIDER;CONFIG;NO_DEFAULT_PATH;NO_CMAKE_PATH;NO_CMAKE_ENVIRONMENT_PATH;NO_SYSTEM_ENVIRONMENT_PATH;NO_CMAKE_PACKAGE_REGISTRY"
+    "BYPASS_PROVIDER;CONFIG;MODULE;NO_DEFAULT_PATH;NO_CMAKE_PATH;NO_CMAKE_ENVIRONMENT_PATH;NO_SYSTEM_ENVIRONMENT_PATH;NO_CMAKE_PACKAGE_REGISTRY"
     ""
     "HINTS;PATHS"
   )
@@ -82,8 +86,30 @@ function(therock_reparse_super_project_find_package superproject_path package_na
     message(FATAL_ERROR "Super-project package path not found for ${package_name}")
   endif()
 
+  # The signature of MODULE vs DEFAULT mode is different, so switch.
   set(_rewritten ${UNUSED_UNPARSED_ARGUMENTS})
-  list(APPEND _rewritten BYPASS_PROVIDER NO_DEFAULT_PATH PATHS ${superproject_path})
+  # Some very old code uses explicit MODULE mode, which forces the basic
+  # signature (*cough* old FindHIP based junk). In this mode, there is no way
+  # to explicitly indicate a search path in the signature (and other options
+  # are illegal), so we fork on this and hard code the CMAKE_MODULE_PATH
+  # in the parent scope, also stashing the original and setting an indicator
+  # to restore it. This is not *the best* thing to be doing, but since this
+  # is a controlled ecosystem and used for very old things, we tolerate the
+  # pitfalls.
+  if(UNUSED_MODULE)
+    # Explicit find module.
+    list(APPEND _rewritten MODULE BYPASS_PROVIDER)
+    set(_therock_has_preserved_module_path TRUE PARENT_SCOPE)
+    set(_therock_preserved_module_path "${CMAKE_MODULE_PATH}" PARENT_SCOPE)
+    set(CMAKE_MODULE_PATH "${superproject_path}" PARENT_SCOPE)
+  else()
+    # By default, assume a FULL signature.
+    if(UNUSED_CONFIG)
+      list(APPEND _rewritten "CONFIG")
+    endif()
+    list(APPEND _rewritten BYPASS_PROVIDER NO_DEFAULT_PATH PATHS ${superproject_path})
+  endif()
+
   list(JOIN _rewritten " " _rewritten_pretty)
   message(STATUS "Resolving super-project find_package(${_rewritten_pretty})")
   set(_therock_rewritten_superproject_find_package_sig ${_rewritten} PARENT_SCOPE)

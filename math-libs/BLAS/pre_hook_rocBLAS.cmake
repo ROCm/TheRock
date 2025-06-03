@@ -20,27 +20,11 @@ endblock()
 
 if(NOT WIN32)
   # Configure roctracer if on a supported operating system (Linux).
-
-  # rocBLAS has deprecated dependencies on roctracer. We apply a patch to move these
-  # to rocprofiler-sdk via the compat library until it can be caught up.
+  # rocBLAS has deprecated dependencies on roctracer. We apply a patch to redirect
+  # naked linking against `-lroctx64` to an explicitly found version of the library.
   # See: https://github.com/ROCm/TheRock/issues/364
-  find_package(roctracer-compat REQUIRED)
   list(APPEND CMAKE_MODULE_PATH "${THEROCK_SOURCE_DIR}/cmake")
   include(therock_subproject_utils)
-
-  function(_rocblas_patch_roctracer)
-    therock_get_all_targets(all_targets "${CMAKE_CURRENT_SOURCE_DIR}")
-    message(STATUS "Patching rocblas targets: ${all_targets}")
-    foreach(target ${all_targets})
-      get_target_property(link_libs "${target}" LINK_LIBRARIES)
-      if("-lroctx64" IN_LIST link_libs)
-        list(REMOVE_ITEM link_libs "-lroctx64")
-        list(APPEND link_libs "roctracer-compat::roctx")
-        set_target_properties("${target}" PROPERTIES LINK_LIBRARIES "${link_libs}")
-        message(WARNING "target ${target} depends on deprecated -lroctx64. redirecting: ${link_libs}")
-      endif()
-    endforeach()
-  endfunction()
-
-  cmake_language(DEFER CALL _rocblas_patch_roctracer)
+  find_library(_therock_legacy_roctx64 roctx64 REQUIRED)
+  cmake_language(DEFER CALL therock_patch_linked_lib OLD_LIBRARY "roctx64" NEW_TARGET "${_therock_legacy_roctx64}")
 endif()

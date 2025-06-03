@@ -6,47 +6,128 @@
 # but those artifacts may not have all required dependencies.
 
 import argparse
-import subprocess
+import concurrent.futures
+from html.parser import HTMLParser
+import platform
+from shutil import copyfileobj
 import sys
+import urllib.request
 
 GENERIC_VARIANT = "generic"
+PLATFORM = platform.system().lower()
+BUCKET_URL = "https://therock-artifacts.s3.us-east-2.amazonaws.com"
 
 
+class FetchArtifactException(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ArtifactNotFoundExeption(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
+class IndexPageParser(HTMLParser):
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.files = []
+        self.is_file_data = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "span":
+            for attr_name, attr_value in attrs:
+                if attr_name == "class" and attr_value == "name":
+                    self.is_file_data = True
+                    break
+
+    def handle_data(self, data):
+        if self.is_file_data:
+            self.files.append(data)
+            self.is_file_data = False
+
+
+# TODO(geomin12): switch out logging library
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
 
 
-def s3_bucket_exists(run_id):
-    cmd = [
-        "aws",
-        "s3",
-        "ls",
-        f"s3://therock-artifacts/{run_id}",
-        "--no-sign-request",
-    ]
-    process = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL)
-    return process.returncode == 0
-
-
-def s3_exec(variant, package, run_id, build_dir):
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        f"s3://therock-artifacts/{run_id}/{package}_{variant}.tar.xz",
-        build_dir,
-        "--no-sign-request",
-    ]
-    log(f"++ Exec [{cmd}]")
+def retrieve_s3_artifacts(run_id, amdgpu_family):
+    """Checks that the AWS S3 bucket exists and returns artifact names."""
+    index_page_url = f"{BUCKET_URL}/{run_id}-{PLATFORM}/index-{amdgpu_family}.html"
+    request = urllib.request.Request(index_page_url)
     try:
-        subprocess.run(cmd, check=True)
-    except Exception as ex:
-        log(f"Exception when executing [{cmd}]")
-        log(str(ex))
+        with urllib.request.urlopen(request) as response:
+            # from the S3 index page, we search for artifacts inside the a tags "<span class='name'>{TAR_NAME}</span>"
+            parser = IndexPageParser()
+            parser.feed(str(response.read()))
+            data = set()
+            for artifact in parser.files:
+                # We only want to get .tar.xz files, not .tar.xz.sha256sum
+                if "sha256sum" not in artifact and "tar.xz" in artifact:
+                    data.add(artifact)
+            return data
+    except urllib.request.HTTPError as err:
+        if err.code == 404:
+            raise ArtifactNotFoundExeption(
+                f"No artifacts found for {run_id}-{PLATFORM}. Exiting..."
+            )
+        else:
+            raise FetchArtifactException(
+                f"Error when retrieving S3 bucket {run_id}-{PLATFORM}/index-{amdgpu_family}.html. Exiting..."
+            )
 
 
-def retrieve_base_artifacts(args, run_id, build_dir):
+def collect_artifacts_urls(
+    artifacts: list[str],
+    run_id: str,
+    build_dir: str,
+    variant: str,
+    existing_artifacts: set[str],
+) -> list[str]:
+    """Collects S3 artifact URLs to execute later in parallel."""
+    artifacts_to_retrieve = []
+    for artifact in artifacts:
+        file_name = f"{artifact}_{variant}.tar.xz"
+        # If artifact does exist in s3 bucket
+        if file_name in existing_artifacts:
+            # Tuple of (FILE_PATH_TO_WRITE, S3_ARTIFACT_URL)
+            artifacts_to_retrieve.append(
+                (
+                    f"{build_dir}/{file_name}",
+                    f"{BUCKET_URL}/{run_id}-{PLATFORM}/{file_name}",
+                )
+            )
+
+    return artifacts_to_retrieve
+
+
+def urllib_retrieve_artifact(artifact):
+    output_path, artifact_url = artifact
+    log(f"++ Downloading from {artifact_url} to {output_path}")
+    with urllib.request.urlopen(artifact_url) as in_stream, open(
+        output_path, "wb"
+    ) as out_file:
+        copyfileobj(in_stream, out_file)
+    log(f"++ Download complete for {output_path}")
+
+
+def parallel_exec_commands(artifacts):
+    """Runs parallelized urllib calls using a thread pool executor"""
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(urllib_retrieve_artifact, artifact)
+            for artifact in artifacts
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            future.result(timeout=60)
+
+
+def retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts):
+    """Retrieves TheRock base artifacts using urllib."""
     base_artifacts = [
         "core-runtime_run",
         "core-runtime_lib",
@@ -59,58 +140,84 @@ def retrieve_base_artifacts(args, run_id, build_dir):
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
-    if args.all or args.blas:
+    if args.blas:
         base_artifacts.append("host-blas_lib")
 
-    for base_artifact in base_artifacts:
-        s3_exec(GENERIC_VARIANT, base_artifact, run_id, build_dir)
+    artifacts_to_retrieve = collect_artifacts_urls(
+        base_artifacts, run_id, build_dir, GENERIC_VARIANT, s3_artifacts
+    )
+    parallel_exec_commands(artifacts_to_retrieve)
 
 
-def retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir):
-    base_artifact_path = []
-    if args.all or args.blas:
-        base_artifact_path.append("blas")
-    if args.all or args.fft:
-        base_artifact_path.append("fft")
-    if args.all or args.miopen:
-        base_artifact_path.append("miopen")
-    if args.all or args.prim:
-        base_artifact_path.append("prim")
-    if args.all or args.rand:
-        base_artifact_path.append("rand")
-    if args.all or args.rccl:
-        base_artifact_path.append("rccl")
+def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
+    """Retrieves TheRock artifacts using urllib, based on the enabled arguments.
+
+    If no artifacts have been collected, we assume that we want to install all artifacts
+    If `args.tests` have been enabled, we also collect test artifacts
+    """
+    artifact_paths = []
+    all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
+    # RCCL is disabled for Windows
+    if PLATFORM != "windows":
+        all_artifacts.append("rccl")
+
+    if args.blas:
+        artifact_paths.append("blas")
+    if args.fft:
+        artifact_paths.append("fft")
+    if args.miopen:
+        artifact_paths.append("miopen")
+    if args.prim:
+        artifact_paths.append("prim")
+    if args.rand:
+        artifact_paths.append("rand")
+    if args.rccl and PLATFORM != "windows":
+        artifact_paths.append("rccl")
 
     enabled_artifacts = []
-    for base_path in base_artifact_path:
+
+    # In the case that no library arguments were passed and base_only args is false, we install all artifacts
+    if not artifact_paths and not args.base_only:
+        artifact_paths = all_artifacts
+
+    for base_path in artifact_paths:
         enabled_artifacts.append(f"{base_path}_lib")
-        if test_enabled:
+        if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
-    for enabled_artifact in enabled_artifacts:
-        s3_exec(f"{target}", enabled_artifact, run_id, build_dir)
+    artifacts_to_retrieve = collect_artifacts_urls(
+        enabled_artifacts, run_id, build_dir, target, s3_artifacts
+    )
+    parallel_exec_commands(artifacts_to_retrieve)
 
 
 def run(args):
     run_id = args.run_id
     target = args.target
     build_dir = args.build_dir
-    test_enabled = args.test
-    if not s3_bucket_exists(run_id):
+    s3_artifacts = retrieve_s3_artifacts(run_id, target)
+    if not s3_artifacts:
         print(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
-    retrieve_base_artifacts(args, run_id, build_dir)
-    retrieve_enabled_artifacts(args, test_enabled, target, run_id, build_dir)
+    retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts)
+    if not args.base_only:
+        retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts)
 
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="fetch_artifacts")
     parser.add_argument(
-        "--run-id", type=str, help="GitHub run ID to retrieve artifacts from"
+        "--run-id",
+        type=str,
+        required=True,
+        help="GitHub run ID to retrieve artifacts from",
     )
 
     parser.add_argument(
-        "--target", type=str, help="Target variant for specific GPU target"
+        "--target",
+        type=str,
+        required=True,
+        help="Target variant for specific GPU target",
     )
 
     parser.add_argument(
@@ -120,48 +227,58 @@ def main(argv):
         help="Path to the artifact build directory",
     )
 
-    parser.add_argument(
-        "--test",
-        help="If flagged, test artifacts will be retrieved",
-        action="store_true",
-    )
-
-    parser.add_argument(
+    artifacts_group = parser.add_argument_group("artifacts_group")
+    artifacts_group.add_argument(
         "--blas",
-        help="If flagged, blas artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'blas' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
-        "--fft", help="If flagged, fft artifacts will be retrieved", action="store_true"
+    artifacts_group.add_argument(
+        "--fft",
+        default=False,
+        help="Include 'fft' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--miopen",
-        help="If flagged, miopen artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'miopen' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--prim",
-        help="If flagged, prim artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'prim' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--rand",
-        help="If flagged, rand artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'rand' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
+    artifacts_group.add_argument(
         "--rccl",
-        help="If flagged, rccl artifacts will be retrieved",
-        action="store_true",
+        default=False,
+        help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
     )
 
-    parser.add_argument(
-        "--all", help="If flagged, all artifacts will be retrieved", action="store_true"
+    artifacts_group.add_argument(
+        "--tests",
+        default=False,
+        help="Include all test artifacts for enabled libraries",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--base-only", help="Include only base artifacts", action="store_true"
     )
 
     args = parser.parse_args(argv)

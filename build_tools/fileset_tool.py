@@ -235,7 +235,7 @@ def do_artifact_archive(args):
         output_path.unlink()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with _open_archive(output_path) as arc:
+    with _open_archive(output_path, args.compression_level) as arc:
         for artifact_path in args.artifact:
             manifest_path: Path = artifact_path / "artifact_manifest.txt"
             relpaths = manifest_path.read_text().splitlines()
@@ -258,8 +258,8 @@ def do_artifact_archive(args):
         write_hash(args.hash_file, digest)
 
 
-def _open_archive(p: Path) -> tarfile.TarFile:
-    return tarfile.TarFile.open(p, mode="x:xz")
+def _open_archive(p: Path, compression_level: int) -> tarfile.TarFile:
+    return tarfile.TarFile.open(p, mode="x:xz", preset=compression_level)
 
 
 def _do_artifact_flatten(args):
@@ -370,6 +370,12 @@ def main(cl_args: list[str]):
     )
     artifact_archive_p.add_argument(
         "-o", type=Path, required=True, help="Output archive name"
+    )
+    artifact_archive_p.add_argument(
+        "--compression-level",
+        type=int,
+        default=6,
+        help="LZMA compression preset level [0-9, default 6]",
     )
     artifact_archive_p.add_argument(
         "--hash-file",

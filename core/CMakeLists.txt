@@ -75,7 +75,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   set(HIP_CLR_RUNTIME_DEPS)
   if(WIN32)
     # Windows CLR options
-    set(_compute_pal_dir "${THEROCK_AMDGPU_WINDOWS_INTEROP_DIR}/20250414a")
+    set(_compute_pal_dir "${THEROCK_AMDGPU_WINDOWS_INTEROP_DIR}/20250515a")
     cmake_path(NORMAL_PATH _compute_pal_dir)
     set(_compute_pal_probe "${_compute_pal_dir}/pal/CMakeLists.txt")
     if(NOT EXISTS "${_compute_pal_probe}")
