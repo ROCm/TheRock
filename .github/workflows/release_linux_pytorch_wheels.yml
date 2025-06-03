@@ -33,7 +33,9 @@ jobs:
         with:
           workflow: build_linux_pytorch_wheels.yml
           inputs: |
-            family: ${{ steps.set_family.outputs.family }}
-            target: ${{ matrix.target }}
-            python_version: ${{ matrix.python_version }}
-            find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html
+            {
+              "family": "${{ steps.set_family.outputs.family }}",
+              "target": "${{ matrix.target }}",
+              "python_version": "${{ matrix.python_version }}",
+              "find_links": "https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html"
+            }
