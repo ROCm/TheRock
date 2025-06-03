@@ -14,6 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        python_version: ["3.11", "3.12"]
         include:
           - target: gfx942
             family: gfx94X-dcgpu
@@ -21,7 +22,6 @@ jobs:
             family: gfx110X-dgpu
           - target: gfx1201
             family: gfx120X-all
-        python_version: ["3.11", "3.12"]
 
     uses: ./.github/workflows/build_linux_pytorch_wheels.yml
     with:
