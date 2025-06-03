@@ -8,12 +8,17 @@
 import argparse
 import concurrent.futures
 from html.parser import HTMLParser
-import os
+from pathlib import Path
 import platform
 from shutil import copyfileobj
 import sys
 import urllib.request
-from github_actions.artifact_upload import retrieve_bucket_info
+
+THEROCK_DIR = Path(__file__).resolve().parent.parent
+
+# Importing build_artifact_upload.py
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from upload_build_artifacts import retrieve_bucket_info
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()

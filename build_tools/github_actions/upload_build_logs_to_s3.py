@@ -5,13 +5,15 @@ upload_logs_to_s3.py
 Uploads log files and index.html to an S3 bucket using the AWS CLI.
 """
 
-import os
-import sys
-import glob
-import shutil
 import argparse
+import sys
+import shutil
 import subprocess
 from pathlib import Path
+import platform
+from upload_build_artifacts import retrieve_bucket_info
+
+PLATFORM = platform.system().lower()
 
 
 def log(*args, **kwargs):
@@ -40,7 +42,11 @@ def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None)
         log(f"[ERROR] Failed to upload {source_path} to {s3_destination}: {e}")
 
 
-def upload_logs_to_s3(s3_base_path: str, build_dir: Path):
+def upload_logs_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
+    external_repo_path, bucket = retrieve_bucket_info()
+    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
+    s3_base_path = f"{bucket_uri}/logs/{amdgpu_family}"
+
     log_dir = build_dir / "logs"
 
     if not log_dir.is_dir():
@@ -78,14 +84,15 @@ def main():
         help="Path to the build directory (default: <repo_root>/build)",
     )
     parser.add_argument(
-        "--s3-base-path",
-        type=str,
-        required=True,
-        help="Base S3 path to upload logs to, e.g. s3://bucket/run-id-platform/logs/family",
+        "--run-id", type=str, required=True, help="GitHub run ID of this workflow run"
+    )
+
+    parser.add_argument(
+        "--amdgpu-family", type=str, required=True, help="AMD GPU family to upload"
     )
     args = parser.parse_args()
 
-    upload_logs_to_s3(args.s3_base_path, args.build_dir)
+    upload_logs_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
 
 
 if __name__ == "__main__":

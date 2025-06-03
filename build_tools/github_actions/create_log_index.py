@@ -7,7 +7,7 @@ import sys
 import platform
 import argparse
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent
+THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 def log(*args):
