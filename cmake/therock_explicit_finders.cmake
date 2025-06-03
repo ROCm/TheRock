@@ -68,9 +68,11 @@ function(find_library var name)
   endif()
 
   # System fallback.
+  # Note that in the system resolution case, the native version only sets a cache variable,
+  # relying on scope fallback for a local. Some things absolutely depend on this, so we
+  # preserve it here.
   _find_library("${var}" NAMES ${ARG_NAMES} ${ARG_UNPARSED_ARGUMENTS})
   message(STATUS "Resolving system find_library(${var} NAMES ${ARG_NAMES} ${ARG_UNPARSED_ARGUMENTS}): ${${var}}")
-  set("${var}" "${${var}}" PARENT_SCOPE)
 endfunction()
 
 
@@ -113,7 +115,9 @@ function(find_path var name)
   endif()
 
   # System fallback.
+  # Note that in the system resolution case, the native version only sets a cache variable,
+  # relying on scope fallback for a local. Some things absolutely depend on this, so we
+  # preserve it here.
   _find_path("${var}" NAMES ${ARG_NAMES} ${ARG_UNPARSED_ARGUMENTS})
   message(STATUS "Resolving system find_path(${var} NAMES ${ARG_NAMES} ${ARG_UNPARSED_ARGUMENTS}): ${${var}}")
-  set("${var}" "${${var}}" PARENT_SCOPE)
 endfunction()
