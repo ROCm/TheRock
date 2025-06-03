@@ -3,41 +3,40 @@ name: Release Linux PyTorch Wheels
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *"  # Runs nightly at 2 AM UTC
+    - cron: "0 2 * * *"  # Nightly at 2 AM UTC
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  set_family_and_dispatch:
-    runs-on: ubuntu-24.04
+  build:
     strategy:
       fail-fast: false
       matrix:
-        target: [gfx942, gfx1100, gfx1201]
-        python_version: ["3.11", "3.12"]
-    outputs:
-      build-matrix: ${{ steps.set.outputs.build_matrix }}
+        include:
+          - target: gfx942
+            family: gfx94X-dcgpu
+            python_version: "3.11"
+          - target: gfx942
+            family: gfx94X-dcgpu
+            python_version: "3.12"
+          - target: gfx1100
+            family: gfx110X-dgpu
+            python_version: "3.11"
+          - target: gfx1100
+            family: gfx110X-dgpu
+            python_version: "3.12"
+          - target: gfx1201
+            family: gfx120X-all
+            python_version: "3.11"
+          - target: gfx1201
+            family: gfx120X-all
+            python_version: "3.12"
 
-    steps:
-      - name: Set family from target
-      - id: set
-        run: |
-          family=""
-          case "${{ matrix.target }}" in
-            gfx942) family="gfx94X-dcgpu" ;;
-            gfx1100) family="gfx110X-dgpu" ;;
-            gfx1201) family="gfx120X-all" ;;
-            *) echo "Unknown target"; exit 1 ;;
-          esac
-          echo "FAMILY=$family" >> $GITHUB_ENV
-          echo "family=$family" >> $GITHUB_OUTPUT
-
-      - name: Dispatch Build Linux Pytorch Wheels
-        uses: ./.github/workflows/build_linux_pytorch_wheels.yml
-        with:
-          family: ${{ steps.set.outputs.family }}
-          python_version: ${{ matrix.python_version }}
-          target: ${{ matrix.target }}
-          find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set.outputs.family }}/index.html
+    uses: ./.github/workflows/build_linux_pytorch_wheels.yml
+    with:
+      family: ${{ matrix.family }}
+      python_version: ${{ matrix.python_version }}
+      target: ${{ matrix.target }}
+      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.family }}/index.html
