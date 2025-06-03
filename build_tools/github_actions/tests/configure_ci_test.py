@@ -224,6 +224,7 @@ class ConfigureCITest(TestCase):
                 "family": "gfx1151",
                 "pytorch-target": "gfx1151",
             },
+            {"family": "gfx120X-all", "pytorch-target": "gfx1201", "test-runs-on": ""},
         ]
         windows_target_to_compare.sort(key=lambda item: item["family"])
         self.assertEqual(windows_target_output, windows_target_to_compare)
