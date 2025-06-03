@@ -39,6 +39,8 @@ if(THEROCK_ENABLE_MIOPEN)
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS

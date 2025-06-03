@@ -24,6 +24,8 @@ if(THEROCK_ENABLE_RCCL)
       -DENABLE_MSCCLPP=OFF
       -DENABLE_MSCCL_KERNEL=OFF
       -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS

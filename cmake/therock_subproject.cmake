@@ -206,6 +206,7 @@ endfunction()
 #   sub-project installs. Defaults to empty, meaning that it installs at the top
 #   of the namespace.
 # CMAKE_ARGS: Additional CMake configure arguments.
+# CMAKE_INCLUDES: Additional CMake files to include at the top level.
 # BUILD_DEPS: Projects which must build and provide their packages prior to this
 #   one.
 # RUNTIME_DEPS: Projects which must build prior to this one and whose install
@@ -278,7 +279,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -412,6 +413,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
+    THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
     # Non-transitive build deps.
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
@@ -491,6 +493,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_dist_dir "${target_name}" THEROCK_DIST_DIR)
   get_target_property(_runtime_deps "${target_name}" THEROCK_RUNTIME_DEPS)
   get_target_property(_cmake_args "${target_name}" THEROCK_CMAKE_ARGS)
+  get_target_property(_cmake_includes "${target_name}" THEROCK_CMAKE_INCLUDES)
   get_target_property(_cmake_project_init_file "${target_name}" THEROCK_CMAKE_PROJECT_INIT_FILE)
   get_target_property(_cmake_project_toolchain_file "${target_name}" THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE)
   get_target_property(_cmake_source_dir "${target_name}" THEROCK_CMAKE_SOURCE_DIR)
@@ -621,6 +624,7 @@ function(therock_cmake_subproject_activate target_name)
     endif()
     string(APPEND _init_contents "include_directories(BEFORE \"${_private_include_dir}\")\n")
     string(APPEND _init_contents "list(PREPEND CMAKE_REQUIRED_INCLUDES \"${_private_include_dir}\")\n")
+    string(APPEND _init_contents "list(APPEND THEROCK_SUPERPROJECT_INCLUDE_DIRS \"${_private_include_dir}\")\n")
   endforeach()
 
   # Link dirs.
@@ -664,6 +668,13 @@ function(therock_cmake_subproject_activate target_name)
   endif()
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
   string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
+  foreach(_addl_cmake_include ${_cmake_includes})
+    if(NOT IS_ABSOLUTE)
+      find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
+      cmake_path(ABSOLUTE_PATH _addl_cmake_include BASE_DIRECTORY "${_addl_cmake_include_path}")
+    endif()
+    string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
+  endforeach()
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
