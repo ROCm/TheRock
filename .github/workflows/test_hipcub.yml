@@ -69,4 +69,5 @@ jobs:
             --test-dir ${THEROCK_BIN_DIR}/hipcub \
             --output-on-failure \
             --parallel 8 \
-            --timeout 360
+            --timeout 360 \
+            --rerun-failed

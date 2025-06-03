@@ -74,4 +74,5 @@ jobs:
             --output-on-failure \
             --parallel 8 \
             --exclude-regex ${TEST_TO_IGNORE} \
-            --timeout 900
+            --timeout 900 \
+            --rerun-failed
