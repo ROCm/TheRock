@@ -1,0 +1,91 @@
+name: Test Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+      test_runs_on:
+        type: string
+      platform:
+        type: string
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+      test_runs_on:
+        type: string
+      platform:
+        type: string
+  push:
+    branches:
+      - ADHOCBUILD
+
+jobs:
+  test_sanity_check:
+    name: 'Test Sanity Check'
+    if: ${{ inputs.test_runs_on != '' }} # if there is a test machine available
+    uses: './.github/workflows/test_sanity_check.yml'
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}
+
+  # BLAS tests
+  test_hipblaslt:
+    name: 'Test hipBLASLt math-lib'
+    uses: './.github/workflows/test_hipblaslt.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}
+
+  test_rocblas:
+    name: 'Test rocBLAS math-lib'
+    uses: './.github/workflows/test_rocblas.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}
+
+  # PRIM tests
+  test_rocprim:
+    name: 'Test rocPRIM math-lib'
+    uses: './.github/workflows/test_rocprim.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}
+
+  test_rocthrust:
+    name: 'Test rocTHRUST math-lib'
+    uses: './.github/workflows/test_rocthrust.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}
+
+  test_hipcub:
+    name: 'Test hipCUB math-lib'
+    uses: './.github/workflows/test_hipcub.yml'
+    needs: test_sanity_check
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ inputs.platform }}

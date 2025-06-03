@@ -41,11 +41,11 @@
 [submodule "rocprofiler-register"]
 	path = base/rocprofiler-register
 	url = https://github.com/ROCm/rocprofiler-register.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "rocprofiler-sdk"]
 	path = profiler/rocprofiler-sdk
 	url = https://github.com/ROCm/rocprofiler-sdk.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "ROCR-Runtime"]
 	path = core/ROCR-Runtime
 	url = https://github.com/ROCm/ROCR-Runtime.git
@@ -65,15 +65,15 @@
 [submodule "hipCUB"]
 	path = math-libs/hipCUB
 	url = https://github.com/ROCm/hipCUB.git
-	branch = mainline
+	branch = develop
 [submodule "hipFFT"]
 	path = math-libs/hipFFT
 	url = https://github.com/ROCm/hipFFT.git
-	branch = mainline
+	branch = develop
 [submodule "hipRAND"]
 	path = math-libs/hipRAND
 	url = https://github.com/ROCm/hipRAND.git
-	branch = mainline
+	branch = develop
 [submodule "hipSOLVER"]
 	path = math-libs/BLAS/hipSOLVER
 	url = https://github.com/ROCm/hipSOLVER.git
@@ -89,15 +89,15 @@
 [submodule "rocFFT"]
 	path = math-libs/rocFFT
 	url = https://github.com/ROCm/rocFFT.git
-	branch = mainline
+	branch = develop
 [submodule "rocPRIM"]
 	path = math-libs/rocPRIM
 	url = https://github.com/ROCm/rocPRIM.git
-	branch = mainline
+	branch = develop
 [submodule "rocRAND"]
 	path = math-libs/rocRAND
 	url = https://github.com/ROCm/rocRAND.git
-	branch = mainline
+	branch = develop
 [submodule "rocSOLVER"]
 	path = math-libs/BLAS/rocSOLVER
 	url = https://github.com/ROCm/rocSOLVER.git
@@ -109,7 +109,7 @@
 [submodule "rocThrust"]
 	path = math-libs/rocThrust
 	url = https://github.com/ROCm/rocThrust.git
-	branch = mainline
+	branch = develop
 [submodule "MIOpen"]
 	path = ml-libs/MIOpen
 	url = https://github.com/ROCm/MIOpen.git
@@ -122,3 +122,9 @@
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
 	branch = develop
+[submodule "aqlprofile"]
+	path = profiler/aqlprofile
+	url = https://github.com/ROCm/aqlprofile.git
+[submodule "roctracer"]
+	path = profiler/roctracer
+	url = https://github.com/ROCm/roctracer.git

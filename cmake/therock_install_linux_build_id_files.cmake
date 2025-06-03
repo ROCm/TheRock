@@ -17,7 +17,7 @@
 #     Build ID: dac12d72d961c9d08880d946cd26618f0107dc4b
 # And then installs the debug sections to an appropriate file in .build-id/
 
-block()
+block(SCOPE_FOR VARIABLES)
   foreach(binary_path ${THEROCK_DEBUG_BUILD_ID_PATHS})
     if(NOT EXISTS "${binary_path}")
       message("Skipping debug info for ${binary_path} (does not exist)")

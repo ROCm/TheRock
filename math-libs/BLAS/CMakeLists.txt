@@ -5,6 +5,14 @@
 therock_cmake_subproject_dist_dir(_blas_hack_hip_dir hip-clr)
 cmake_path(APPEND _blas_hack_hip_dir lib/llvm OUTPUT_VARIABLE _toolchain_dir)
 
+# Most libraries need to depend on the profiler, but is conditionally only used
+# on Posix.
+set(optional_profiler_deps)
+if(NOT WIN32)
+  list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+endif()
+
+
 ##############################################################################
 # hipBLAS-common
 ##############################################################################
@@ -13,7 +21,6 @@ set(_blas_subproject_names)
 therock_cmake_subproject_declare(hipBLAS-common
 EXTERNAL_SOURCE_DIR "hipBLAS-common"
 BACKGROUND_BUILD
-CMAKE_LISTS_RELPATH "next-cmake"
 COMPILER_TOOLCHAIN
   amd-hip
 BUILD_DEPS
@@ -40,11 +47,6 @@ if(NOT WIN32)
     rocm_smi_lib
   )
 endif()
-if(THEROCK_BUILD_TESTING)
-  list(APPEND hipBLASLt_optional_deps
-    therock-host-blas
-  )
-endif()
 
 therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "hipBLASLt"
@@ -55,6 +57,8 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
     -DBUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+  CMAKE_INCLUDES
+    therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
@@ -65,7 +69,9 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-msgpack-cxx
   RUNTIME_DEPS
     hip-clr
+    therock-host-blas
     ${hipBLASLt_optional_deps}
+    ${optional_profiler_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
 SUBDIRS
@@ -82,8 +88,8 @@ list(APPEND _blas_subproject_names hipBLASLt)
 
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
-  # rocBLAS is hard-coded to not expect rocm-smi and roctx64 on Windows.
-  list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib roctracer-compat)
+  # rocBLAS is hard-coded to not expect rocm-smi.
+  list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
 elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
@@ -105,6 +111,8 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DLINK_BLIS=OFF
+  CMAKE_INCLUDES
+    therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
@@ -116,6 +124,7 @@ therock_cmake_subproject_declare(rocBLAS
     hip-clr
     hipBLASLt
     ${rocBLAS_optional_runtime_deps}
+    ${optional_profiler_deps}
 )
 therock_cmake_subproject_glob_c_sources(rocBLAS
 SUBDIRS
@@ -131,11 +140,6 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
   set(_sparse_subproject_names)
 
-  set(rocSPARSE_optional_runtime_deps)
-  if(NOT WIN32)
-    list(APPEND rocSPARSE_optional_runtime_deps roctracer-compat)
-  endif()
-
   therock_cmake_subproject_declare(rocSPARSE
     EXTERNAL_SOURCE_DIR "rocSPARSE"
     BACKGROUND_BUILD
@@ -147,6 +151,8 @@ if(THEROCK_ENABLE_SPARSE)
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -156,7 +162,7 @@ if(THEROCK_ENABLE_SPARSE)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
-      ${rocSPARSE_optional_runtime_deps}
+      ${optional_profiler_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocSPARSE
     SUBDIRS

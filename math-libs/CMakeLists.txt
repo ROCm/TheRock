@@ -74,8 +74,15 @@ if(THEROCK_ENABLE_PRIM)
   # rocPRIM
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_rocprim_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim")
+  else()
+    set(_rocprim_source_dir "rocPRIM")
+  endif()
+
   therock_cmake_subproject_declare(rocPRIM
-    EXTERNAL_SOURCE_DIR "rocPRIM"
+    EXTERNAL_SOURCE_DIR "${_rocprim_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -97,8 +104,15 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_hipcub_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub")
+  else()
+    set(_hipcub_source_dir "hipCUB")
+  endif()
+
   therock_cmake_subproject_declare(hipCUB
-    EXTERNAL_SOURCE_DIR "hipCUB"
+    EXTERNAL_SOURCE_DIR "${_hipcub_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -121,8 +135,15 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(hipCUB hipcub lib/cmake/hipcub)
   therock_cmake_subproject_activate(hipCUB)
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_rocthrust_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust")
+  else()
+    set(_rocthrust_source_dir "rocThrust")
+  endif()
+
   therock_cmake_subproject_declare(rocThrust
-    EXTERNAL_SOURCE_DIR "rocThrust"
+    EXTERNAL_SOURCE_DIR "${_rocthrust_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocThrust"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd

@@ -51,6 +51,8 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
     ]
     if sys.stdin.isatty():
         cl.extend(["-i", "-t"])
+
+    # Mount options that must go before execution options.
     cl.extend(
         [
             "--mount",
@@ -59,7 +61,6 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
             f"type=bind,src={args.repo_dir},dst=/therock/src",
         ]
     )
-
     if args.build_python_only:
         cl.extend(
             [
@@ -68,7 +69,15 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
             ]
         )
 
-    if args.interactive:
+    # Type of execution requested.
+    if args.exec:
+        cl.extend(
+            [
+                args.image,
+            ]
+        )
+        cl += rest_args
+    elif args.interactive:
         cl.extend(
             [
                 "-it",
@@ -136,6 +145,11 @@ def main(argv: list[str]):
     )
     p.add_argument(
         "--repo-dir", default=REPO_DIR, help="Root directory of this repository"
+    )
+    p.add_argument(
+        "--exec",
+        action=argparse.BooleanOptionalAction,
+        help="Execute arguments verbatim vs running a specific script",
     )
     p.add_argument(
         "--interactive",

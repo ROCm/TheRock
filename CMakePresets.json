@@ -1,0 +1,60 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-release-package",
+      "displayName": "Linux release packages",
+      "description": "Ninja generator, default compiler, RelWithDebInfo for most subprojects",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "amd-llvm_BUILD_TYPE": "Release",
+        "therock-host-blas_BUILD_TYPE": "Release",
+        "therock-SuiteSparse_BUILD_TYPE": "Release",
+        "THEROCK_SPLIT_DEBUG_INFO": "ON",
+        "THEROCK_MINIMAL_DEBUG_INFO": "ON",
+        "THEROCK_QUIET_INSTALL": "OFF"
+      }
+    },
+    {
+      "name": "windows-base",
+      "displayName": "Windows base preset",
+      "description": "Ninja generator, MSVC (cl.exe), x64 architecture",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "architecture": {
+        "value": "host=x64",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "host=x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows release builds preset",
+      "description": "Ninja generator, MSVC (cl.exe), x64 architecture, Release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "inherits": [
+        "windows-base"
+      ]
+    }
+  ]
+}

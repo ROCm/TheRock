@@ -12,7 +12,6 @@ include(ExternalProject)
 # List of CMake variables that will be injected by default into the
 # project_init.cmake file of each subproject.
 set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
-  CMAKE_BUILD_TYPE
   CMAKE_PROGRAM_PATH
   CMAKE_PLATFORM_NO_VERSIONED_SONAME
   Python3_EXECUTABLE
@@ -207,11 +206,16 @@ endfunction()
 #   sub-project installs. Defaults to empty, meaning that it installs at the top
 #   of the namespace.
 # CMAKE_ARGS: Additional CMake configure arguments.
+# CMAKE_INCLUDES: Additional CMake files to include at the top level.
 # BUILD_DEPS: Projects which must build and provide their packages prior to this
 #   one.
 # RUNTIME_DEPS: Projects which must build prior to this one and whose install
 #   files must be distributed with this project's artifacts in order to
 #   function.
+# INTERFACE_INCLUDE_DIRS: Relative paths within the install tree which dependent
+#   sub-projects must have their CPP include path set to include. Use of this
+#   is strongly discouraged (deps should be on proper CMake libraries), but
+#   some old projects still need this.
 # INTERFACE_LINK_DIRS: Relative paths within the install tree which dependent
 #   sub-projects must add to their runtime link library path.
 # INTERFACE_PROGRAM_DIRS: Relative paths within the install tree which
@@ -270,12 +274,15 @@ endfunction()
 #   that all shared libraries are installed to. Defaults to
 #   INSTALL_DESTINATION/lib. Can be overriden on a per target basis by setting
 #   THEROCK_INSTALL_RPATH_LIBRARY_DIR.
+#
+# Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
+# transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -322,10 +329,15 @@ function(therock_cmake_subproject_declare target_name)
 
   # Collect LINK_DIRS and PROGRAM_DIRS from explicit args and RUNTIME_DEPS.
   _therock_cmake_subproject_collect_runtime_deps(
-      _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
+      _private_include_dirs _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
       _transitive_runtime_deps
       _transitive_configure_depend_files
       ${ARG_RUNTIME_DEPS})
+
+  # Include dirs
+  set(_declared_include_dirs "${ARG_INTERFACE_INCLUDE_DIRS}")
+  _therock_cmake_subproject_absolutize(_declared_include_dirs "${_stage_dir}")
+  set(_interface_include_dirs ${_private_include_dirs} ${_declared_include_dirs})
 
   # Link dirs
   set(_declared_link_dirs "${ARG_INTERFACE_LINK_DIRS}")
@@ -352,6 +364,8 @@ function(therock_cmake_subproject_declare target_name)
   set(_private_install_rpath_dirs ${ARG_INSTALL_RPATH_DIRS} ${_interface_install_rpath_dirs})
 
   # Dedup transitives.
+  list(REMOVE_DUPLICATES _private_include_dirs)
+  list(REMOVE_DUPLICATES _interface_include_dirs)
   list(REMOVE_DUPLICATES _private_link_dirs)
   list(REMOVE_DUPLICATES _interface_link_dirs)
   list(REMOVE_DUPLICATES _private_program_dirs)
@@ -402,10 +416,15 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
+    THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
     # Non-transitive build deps.
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
+    # Include dirs that this project compiles with.
+    THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
+    # Include dirs that are advertised to dependents.
+    THEROCK_INTERFACE_INCLUDE_DIRS "${_interface_include_dirs}"
     # That this project compiles with.
     THEROCK_PRIVATE_LINK_DIRS "${_private_link_dirs}"
     # Link dirs that are advertised to dependents
@@ -477,6 +496,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_dist_dir "${target_name}" THEROCK_DIST_DIR)
   get_target_property(_runtime_deps "${target_name}" THEROCK_RUNTIME_DEPS)
   get_target_property(_cmake_args "${target_name}" THEROCK_CMAKE_ARGS)
+  get_target_property(_cmake_includes "${target_name}" THEROCK_CMAKE_INCLUDES)
   get_target_property(_cmake_project_init_file "${target_name}" THEROCK_CMAKE_PROJECT_INIT_FILE)
   get_target_property(_cmake_project_toolchain_file "${target_name}" THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE)
   get_target_property(_cmake_source_dir "${target_name}" THEROCK_CMAKE_SOURCE_DIR)
@@ -486,6 +506,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_ignore_packages "${target_name}" THEROCK_IGNORE_PACKAGES)
   get_target_property(_install_destination "${target_name}" THEROCK_INSTALL_DESTINATION)
   get_target_property(_no_merge_compile_commands "${target_name}" THEROCK_NO_MERGE_COMPILE_COMMANDS)
+  get_target_property(_private_include_dirs "${target_name}" THEROCK_PRIVATE_INCLUDE_DIRS)
   get_target_property(_private_link_dirs "${target_name}" THEROCK_PRIVATE_LINK_DIRS)
   get_target_property(_private_pkg_config_dirs "${target_name}" THEROCK_PRIVATE_PKG_CONFIG_DIRS)
   get_target_property(_private_program_dirs "${target_name}" THEROCK_PRIVATE_PROGRAM_DIRS)
@@ -529,10 +550,31 @@ function(therock_cmake_subproject_activate target_name)
 
   get_property(_mirror_cmake_vars GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS)
 
+  # Pairs of arguments for a `cmake -E env` command to run before each
+  # subproject build or configure command.
+  # https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-E-arg-env
+  # TODO: split into 'build' and 'configure'? Keeping them in sync seems useful.
+  set(_build_env_pairs)
+
+  # All project dependencies are managed within the super-project so we don't
+  # want subprojects reaching outside of the sandbox and building against
+  # uncontrolled (and likely incompatible) sources.
+  #
+  # These environment variables have been used by some subprojects to discover
+  # preexisting ROCm/HIP SDK installs. If detected, these subprojects then do
+  # things like:
+  #   * Append `${HIP_PATH}/cmake` to `CMAKE_MODULE_PATH`
+  #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
+  # We unset both the CMake and environment variables with these names.
+  # See also https://github.com/ROCm/TheRock/issues/670.
+  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
+  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
+  list(APPEND _build_env_pairs "--unset=HIP_PATH")
+  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)
-  set(_build_env_pairs)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
 
@@ -554,6 +596,11 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_init_contents)
+  # Support generator expressions in install CODE
+  # We rely on this for debug symbol separation and some of our very old projects
+  # have a CMake minver < 3.14, defaulting them to OLD. Unfortunately, this policy
+  # must be set globally vs in a block scope to have effect.
+  string(APPEND _init_contents "cmake_policy(SET CMP0087 NEW)\n")
   foreach(_var_name ${_mirror_cmake_vars})
     string(APPEND _init_contents "set(${_var_name} \"@${_var_name}@\" CACHE STRING \"\" FORCE)\n")
   endforeach()
@@ -573,10 +620,23 @@ function(therock_cmake_subproject_activate target_name)
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
 
+  # Include dirs.
+  foreach(_private_include_dir ${_private_include_dirs})
+    if(THEROCK_VERBOSE)
+      message(STATUS "  INCLUDE_DIR: ${_private_include_dir}")
+    endif()
+    string(APPEND _init_contents "include_directories(BEFORE \"${_private_include_dir}\")\n")
+    string(APPEND _init_contents "list(PREPEND CMAKE_REQUIRED_INCLUDES \"${_private_include_dir}\")\n")
+    string(APPEND _init_contents "list(APPEND THEROCK_SUPERPROJECT_INCLUDE_DIRS \"${_private_include_dir}\")\n")
+  endforeach()
+
+  # Link dirs.
   foreach(_private_link_dir ${_private_link_dirs})
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
     endif()
+    # Make the link dir visible to CMake find_library.
+    string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_private_link_dir}\")\n")
     if(NOT MSVC)
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
@@ -592,6 +652,7 @@ function(therock_cmake_subproject_activate target_name)
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /LIBPATH:${_private_link_dir}\")\n")
     endif()
   endforeach()
+
   if(THEROCK_VERBOSE AND _private_pkg_config_dirs)
     message(STATUS "  PKG_CONFIG_DIRS: ${_private_pkg_config_dirs}")
   endif()
@@ -610,6 +671,13 @@ function(therock_cmake_subproject_activate target_name)
   endif()
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
   string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
+  foreach(_addl_cmake_include ${_cmake_includes})
+    if(NOT IS_ABSOLUTE)
+      find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
+      cmake_path(ABSOLUTE_PATH _addl_cmake_include BASE_DIRECTORY "${_addl_cmake_include_path}")
+    endif()
+    string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
+  endforeach()
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
@@ -635,6 +703,15 @@ function(therock_cmake_subproject_activate target_name)
   set(_configure_stamp_file "${_stamp_dir}/configure.stamp")
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
   set(_stage_stamp_file "${_stamp_dir}/stage.stamp")
+
+  # Derive the CMAKE_BUILD_TYPE from eiether {project}_BUILD_TYPE or the global
+  # CMAKE_BUILD_TYPE.
+  set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
+  if(NOT _cmake_build_type)
+    set(_cmake_build_type "${CMAKE_BUILD_TYPE}")
+  else()
+    message(STATUS "  PROJECT SPECIFIC CMAKE_BUILD_TYPE=${_cmake_build_type}")
+  endif()
 
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
@@ -689,10 +766,12 @@ function(therock_cmake_subproject_activate target_name)
       OUTPUT "${_configure_stamp_file}"
       COMMAND
         ${_configure_log_prefix}
+        "${CMAKE_COMMAND}" -E env ${_build_env_pairs} --
         "${CMAKE_COMMAND}"
         "-G${CMAKE_GENERATOR}"
         "-B${_binary_dir}"
         "-S${_cmake_source_dir}"
+        "-DCMAKE_BUILD_TYPE=${_cmake_build_type}"
         "-DCMAKE_INSTALL_PREFIX=${_stage_destination_dir}"
         "-DTHEROCK_STAGE_INSTALL_ROOT=${_stage_dir}"
         "-DCMAKE_TOOLCHAIN_FILE=${_cmake_project_toolchain_file}"
@@ -775,7 +854,7 @@ function(therock_cmake_subproject_activate target_name)
       LABEL "${target_name} install"
       # While useful for debugging, stage install logs are almost pure noise
       # for interactive use.
-      OUTPUT_ON_FAILURE ON
+      OUTPUT_ON_FAILURE "${THEROCK_QUIET_INSTALL}"
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
@@ -981,9 +1060,10 @@ endfunction()
 # and transitive runtime deps. Both lists may contain duplicates if the DAG
 # includes the same dep multiple times.
 function(_therock_cmake_subproject_collect_runtime_deps
-    out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
+    out_include_dirs out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
     out_transitive_deps
     out_transitive_configure_depend_files)
+  set(_include_dirs)
   set(_install_rpath_dirs)
   set(_link_dirs)
   set(_program_dirs)
@@ -995,6 +1075,10 @@ function(_therock_cmake_subproject_collect_runtime_deps
     get_target_property(_declared_configure_depend_files "${target_name}" THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES)
     list(APPEND _transitive_configure_depend_files ${_declared_configure_depend_files})
     get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
+
+    # Include dirs.
+    get_target_property(_include_dir "${target_name}" THEROCK_INTERFACE_INCLUDE_DIRS)
+    list(APPEND _include_dirs ${_include_dir})
 
     # Link dirs.
     get_target_property(_link_dir "${target_name}" THEROCK_INTERFACE_LINK_DIRS)
@@ -1025,6 +1109,7 @@ function(_therock_cmake_subproject_collect_runtime_deps
       list(APPEND _install_rpath_dirs ${_install_rpath_dir})
     endif()
   endforeach()
+  set("${out_include_dirs}" "${_include_dirs}" PARENT_SCOPE)
   set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
   set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
   set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)
@@ -1114,7 +1199,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # bearing we can either add them to all projects or source those flags from
     # the projects themselves more locally.
     string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT )\n")
-    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -fms-extensions -fms-compatibility -D_ENABLE_EXTENDED_ALIGNED_STORAGE \")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"-DWIN32 -DWIN32_LEAN_AND_MEAN -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX -fms-extensions -fms-compatibility -D_ENABLE_EXTENDED_ALIGNED_STORAGE \")\n")
     string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT )\n")
     string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT )\n")
   else()
@@ -1122,8 +1207,27 @@ function(_therock_cmake_subproject_setup_toolchain
     # simply forward flags from the system compiler to the toolchain compiler.
     string(APPEND _toolchain_contents "set(CMAKE_C_FLAGS_INIT \"@CMAKE_C_FLAGS@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_FLAGS_INIT \"@CMAKE_CXX_FLAGS@\")\n")
-    string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT @CMAKE_EXE_LINKER_FLAGS@)\n")
-    string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT @CMAKE_SHARED_LINKER_FLAGS@)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_EXE_LINKER_FLAGS_INIT \"@CMAKE_EXE_LINKER_FLAGS@\")\n")
+    string(APPEND _toolchain_contents "set(CMAKE_SHARED_LINKER_FLAGS_INIT \"@CMAKE_SHARED_LINKER_FLAGS@\")\n")
+  endif()
+
+  # Customize debug info generation.
+  if(THEROCK_MINIMAL_DEBUG_INFO)
+    # System toolchain can be either MSVC or another system compiler.
+    if(MSVC AND NOT compiler_toolchain)
+      # Set MSVC style debug options.
+      # TODO: For now, just set the default.
+    elseif((NOT compiler_toolchain AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
+           OR compiler_toolchain)
+      # If the system compiler and GCC/clang or an explicit toolchain (which are all
+      # LLVM based).
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_DEBUG \" -g1 -gz\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO \" -g1 -gz\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_DEBUG \" -g1 -gz\")\n")
+      string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_RELWITHDEBINFO \" -g1 -gz\")\n")
+    else()
+      message(WARNING "Cannot setup THEROCK_MINIMAL_DEBUG_INFO mode for unknown compiler")
+    endif()
   endif()
 
   if(NOT compiler_toolchain)

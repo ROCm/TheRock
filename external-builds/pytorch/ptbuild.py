@@ -23,11 +23,11 @@ The checkout process combines the following activities:
 * Configures PyTorch submodules to be ignored for any local changes (so that
   the result is suitable for development with local patches).
 * Applies "base" patches to the pytorch repo and any submodules (by using
-  `git am` with patches from `patches/pytorch_ref_to_patches_dir_name(<pytorch-ref>)/<repo-name>/base`).
+  `git am` with patches from `patches/pytorch/<pytorch-ref>/<repo-name>/base`).
 * Runs `hipify` to prepare sources for AMD GPU and commits the result to the
   main repo and any modified submodules.
 * Applies "hipified" patches to the pytorch repo and any submodules (by using
-  `git am` with patches from `patches/<pytorch-ref>/<repo-name>/hipified`).
+  `git am` with patches from `patches/pytorch/<pytorch-ref>/<repo-name>/hipified`).
 * Records some tag information for subsequent activities.
 
 For one-shot builds and CI use, the above is sufficient. But this tool can also
@@ -45,7 +45,7 @@ import subprocess
 import sys
 
 THIS_DIR = Path(__file__).resolve().parent
-PATCHES_DIR = THIS_DIR / "patches"
+PATCHES_DIR = THIS_DIR / "patches" / "pytorch"
 REPO_ROOT = THIS_DIR.parent.parent
 FILESET_TOOL = REPO_ROOT / "build_tools" / "fileset_tool.py"
 TAG_UPSTREAM_DIFFBASE = "THEROCK_UPSTREAM_DIFFBASE"
@@ -306,12 +306,12 @@ def main(cl_args: list[str]):
         command_parser.add_argument(
             "--repo",
             type=Path,
-            default=THIS_DIR / "src",
+            default=THIS_DIR / "pytorch",
             help="PyTorch repository path",
         )
 
     p = argparse.ArgumentParser("ptbuild.py")
-    default_tag = "v2.6.0"
+    default_tag = "v2.7.0"
     sub_p = p.add_subparsers(required=True)
     checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
     add_common(checkout_p)

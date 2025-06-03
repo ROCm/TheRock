@@ -1,4 +1,11 @@
 if(THEROCK_ENABLE_RCCL)
+  # Most libraries need to depend on the profiler, but is conditionally only used
+  # on Posix.
+  set(optional_profiler_deps)
+  if(NOT WIN32)
+    list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+  endif()
+
   ##############################################################################
   # rccl
   ##############################################################################
@@ -17,6 +24,8 @@ if(THEROCK_ENABLE_RCCL)
       -DENABLE_MSCCLPP=OFF
       -DENABLE_MSCCL_KERNEL=OFF
       -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -27,6 +36,7 @@ if(THEROCK_ENABLE_RCCL)
       hipify
       rocm_smi_lib
       rocprofiler-register
+      ${optional_profiler_deps}
   )
   therock_cmake_subproject_glob_c_sources(rccl
     SUBDIRS

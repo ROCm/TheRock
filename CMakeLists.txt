@@ -18,6 +18,7 @@ include(CMakeDependentOption)
 include(ExternalProject)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
+include(therock_compiler_config)
 include(therock_features)
 include(therock_subproject)
 include(therock_job_pools)
@@ -57,6 +58,18 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
+# Source settings.
+# Source can be consumed from the https://github.com/ROCm/rocm-libraries monorepo,
+# while the default is to consume the submodules defined in TheRock's `.gitmodules`.
+option(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES "Use the `rocm-libraries` monorepo instead of submodules" OFF)
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES AND NOT THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
+  message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_ROCM_LIBRARIES is set, THEROCK_ROCM_LIBRARIES_SOURCE_DIR is required!")
+endif()
+
+if(THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
+  cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
+endif()
+
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 
@@ -82,11 +95,30 @@ block(PROPAGATE ROCM_MAJOR_VERSION ROCM_MINOR_VERSION ROCM_PATCH_VERSION)
   endif()
 endblock()
 
+# Various things need to be lined up across layers to precisely match the HIP version.
+# The only source of truth for this is from the HIP/VERSION file, so we parse it the
+# same way that clr does. While this *should* generally match the ROCM version, at
+# least from a major/minor perspective, the ROCM version is a "user" version, whereas
+# the HIP version is hardcoded into various places in the code.
+block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
+  set(VERSION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/core/HIP/VERSION")
+  if(NOT EXISTS "${VERSION_PATH}")
+    message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
+  endif()
+  file(STRINGS "${VERSION_PATH}" VERSION_LIST REGEX "^[0-9]+")
+  list(GET VERSION_LIST 0 THEROCK_HIP_MAJOR_VERSION)
+  list(GET VERSION_LIST 1 THEROCK_HIP_MINOR_VERSION)
+  list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
+  message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
+endblock()
+
 ################################################################################
 # Debug Options
 ################################################################################
 
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
+option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
+option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 
 ################################################################################
 # Feature selection
@@ -154,15 +186,15 @@ therock_add_feature(HIP_RUNTIME
 # Profiler Features.
 if(NOT WIN32)
   # Other platforms (Linux) _do_ have the profiler SDK.
-  therock_add_feature(PROFILER_SDK
+  therock_add_feature(ROCPROFV3
     GROUP PROFILER
-    DESCRIPTION "Enables the rocprofiler-sdk project"
+    DESCRIPTION "Enables the rocprofilerv3 project (and ancillary deps)"
     REQUIRES HIP_RUNTIME
   )
-  set(_blas_platform_requirements "PROFILER_SDK")
+  set(_optional_profiler_requirements "ROCPROFV3")
 else()
   # No profiler SDK on Windows.
-  set(_blas_platform_requirements "")
+  set(_optional_profiler_requirements "")
 endif()
 
 # Comm-libs Features.
@@ -187,7 +219,7 @@ therock_add_feature(BLAS
   # NOTE: HOST_BLAS is only needed for some tests and PROFILER_SDK is
   # currently only required for rocblas. We may want to re-evaluate the deps
   # if they continue to be sparse like this as it increases minimum dep length.
-  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS ${_blas_platform_requirements}
+  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS ${_optional_profiler_requirements}
 )
 therock_add_feature(RAND
   GROUP MATH_LIBS
@@ -202,7 +234,7 @@ therock_add_feature(FFT
 therock_add_feature(SPARSE
   GROUP MATH_LIBS
   DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM
+  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM ${_optional_profiler_requirements}
 )
 if(NOT WIN32)
   set(_solver_platform_requirements "HOST_SUITE_SPARSE")
@@ -219,7 +251,7 @@ therock_add_feature(SOLVER
 therock_add_feature(MIOPEN
   GROUP ML_LIBS
   DESCRIPTION "Enables the MIOpen project (with minimal deps defaults to ON)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS RAND
+  REQUIRES COMPILER HIP_RUNTIME BLAS RAND ${_optional_profiler_requirements}
 )
 
 # Finalize all feature flags.
@@ -270,13 +302,6 @@ if(CMAKE_C_VISIBILITY_PRESET)
 endif()
 if(CMAKE_CXX_VISIBILITY_PRESET)
   list(APPEND DEFAULT_CMAKE_ARGS ${CMAKE_CXX_VISIBILITY_PRESET})
-endif()
-
-if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-  message(
-    FATAL_ERROR
-    "Cannot build 32-bit ROCm with MSVC: You must enable the Windows x64 "
-    "development tools and rebuild (detected compiler ${CMAKE_CXX_COMPILER})")
 endif()
 
 ################################################################################
