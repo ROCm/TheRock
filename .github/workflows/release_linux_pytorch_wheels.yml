@@ -2,15 +2,8 @@ name: Release Linux PyTorch Wheels
 
 on:
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Target gfx architecture (e.g., gfx942)"
-        required: true
-        type: string
-      family:
-        description: "Family name (e.g., gfx94X-dcgpu)"
-        required: true
-        type: string
+  schedule:
+    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
 
 permissions:
   id-token: write
@@ -21,11 +14,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        include:
+          - target: gfx942
+            family: gfx94X-dcgpu
+          - target: gfx1100
+            family: gfx110X-dgpu
+          - target: gfx1201
+            family: gfx120X-all
         python_version: ["3.11", "3.12"]
 
     uses: ./.github/workflows/build_linux_pytorch_wheels.yml
     with:
-      family: ${{ inputs.family }}
+      family: ${{ matrix.family }}
       python_version: ${{ matrix.python_version }}
-      target: ${{ inputs.target }}
-      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ inputs.family }}/index.html
+      target: ${{ matrix.target }}
+      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.family }}/index.html
+    secrets: inherit
