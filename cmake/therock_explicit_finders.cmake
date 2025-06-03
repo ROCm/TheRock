@@ -50,7 +50,6 @@ function(find_library var name)
   set(_is_superproject FALSE)
   foreach(_name ${ARG_NAMES})
     if("${_name}" IN_LIST THEROCK_SUPER_PROJECT_FIND_LIBRARY_NAMES)
-      message(STATUS "NAME ${_name}")
       # Resolve from super-project
       set(_is_superproject TRUE)
       _find_library(_found_library NAMES "${_name}"

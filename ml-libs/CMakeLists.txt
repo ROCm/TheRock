@@ -44,9 +44,7 @@ if(THEROCK_ENABLE_MIOPEN)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
-      hipBLAS-common
       rocm-cmake
-      rocm-half
       therock-boost
       therock-eigen
       therock-frugally-deep
@@ -54,9 +52,11 @@ if(THEROCK_ENABLE_MIOPEN)
       therock-nlohmann-json
       therock-FunctionalPlus
     RUNTIME_DEPS
+      hipBLAS-common
       hip-clr
       hipBLAS
       hipBLASLt
+      rocm-half
       rocBLAS
       rocRAND
       ${THEROCK_BUNDLED_BZIP2}

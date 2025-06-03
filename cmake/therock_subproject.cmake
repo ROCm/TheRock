@@ -274,6 +274,9 @@ endfunction()
 #   that all shared libraries are installed to. Defaults to
 #   INSTALL_DESTINATION/lib. Can be overriden on a per target basis by setting
 #   THEROCK_INSTALL_RPATH_LIBRARY_DIR.
+#
+# Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
+# transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG

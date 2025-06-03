@@ -115,6 +115,9 @@ endif()
 therock_cmake_subproject_declare(rocm-half
   EXTERNAL_SOURCE_DIR "half"
   BACKGROUND_BUILD
+  INTERFACE_INCLUDE_DIRS
+    # No find_package support (just a naked include).
+    include
   BUILD_DEPS
     rocm-cmake
 )
