@@ -34,8 +34,6 @@ jobs:
   test_rocblas:
     name: "rocBLAS math-lib test"
     runs-on: ${{ inputs.test_runs_on }}
-    # Currently, this test is not working with Windows. This test will be enabled once this library has been enabled
-    if: ${{ inputs.platform == 'linux' }}
     strategy:
       fail-fast: false
     defaults:
@@ -68,6 +66,5 @@ jobs:
       - name: Run rocBLAS tests
         timeout-minutes: 5
         run: |
-          ROCBLAS_TENSILE_LIBPATH="${BUILD_ARTIFACTS_DIR}/output_dir/lib/rocblas/library/"
           if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           ${THEROCK_BIN_DIR}/rocblas-test --yaml ${THEROCK_BIN_DIR}/rocblas_smoke.yaml
