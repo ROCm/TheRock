@@ -10,31 +10,34 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  set_family_and_dispatch:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         target: [gfx942, gfx1100, gfx1201]
         python_version: ["3.11", "3.12"]
+    outputs:
+      build-matrix: ${{ steps.set.outputs.build_matrix }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Set family from target
-        id: set_family
+      - id: set
         run: |
-          case ${{ matrix.target }} in
-            gfx942) echo "family=gfx94X-dcgpu" >> $GITHUB_OUTPUT ;;
-            gfx1100) echo "family=gfx110X-dgpu" >> $GITHUB_OUTPUT ;;
-            gfx1201) echo "family=gfx120X-all" >> $GITHUB_OUTPUT ;;
+          family=""
+          case "${{ matrix.target }}" in
+            gfx942) family="gfx94X-dcgpu" ;;
+            gfx1100) family="gfx110X-dgpu" ;;
+            gfx1201) family="gfx120X-all" ;;
+            *) echo "Unknown target"; exit 1 ;;
           esac
+          echo "FAMILY=$family" >> $GITHUB_ENV
+          echo "family=$family" >> $GITHUB_OUTPUT
 
-      - name: Reinvoke reusable build workflow
+      - name: Dispatch Build Linux Pytorch Wheels
         uses: ./.github/workflows/build_linux_pytorch_wheels.yml
         with:
-          family: ${{ steps.set_family.outputs.family }}
+          family: ${{ steps.set.outputs.family }}
           python_version: ${{ matrix.python_version }}
           target: ${{ matrix.target }}
-          find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set_family.outputs.family }}/index.html
+          find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ steps.set.outputs.family }}/index.html
