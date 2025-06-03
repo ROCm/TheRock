@@ -54,8 +54,6 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
-          # for testing purposes
-          ref: users/geomin12/s3-organization
 
       - name: "Checking out repository for rocm-libraries"
         if: ${{ github.repository == 'ROCm/rocm-libraries' }}
@@ -158,9 +156,9 @@ jobs:
         if: always()
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
-          --run-id ${{ github.run_id }} \
-          --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-          --build-dir build/
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir build/
 
       - name: Upload Logs
         if: always()
@@ -174,9 +172,9 @@ jobs:
         if: always()
         run: |
           python build_tools/github_actions/upload_build_summary.py \
-          --run-id ${{ github.run_id }} \
-          --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-          --build-dir build/
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir build/
 
       - name: Save cache
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
