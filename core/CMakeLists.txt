@@ -4,6 +4,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
 
   therock_cmake_subproject_declare(ROCR-Runtime
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "ROCR-Runtime"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -39,6 +40,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
 
   therock_cmake_subproject_declare(rocminfo
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "rocminfo"
     BACKGROUND_BUILD
     RUNTIME_DEPS
@@ -105,6 +107,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   endif()
 
   therock_cmake_subproject_declare(hip-clr
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "clr"
     INTERFACE_PROGRAM_DIRS
       bin

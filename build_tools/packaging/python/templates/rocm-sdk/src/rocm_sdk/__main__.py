@@ -2,6 +2,8 @@
 
 import argparse
 import importlib.util
+import json
+from pathlib import Path
 import sys
 
 from . import _dist_info as di
@@ -66,6 +68,20 @@ def _do_test(args: argparse.Namespace):
         sys.exit(1)
 
 
+def _do_version(args: argparse.Namespace):
+    print(di.__version__)
+
+
+def _do_targets(args: argparse.Namespace):
+    core_mod_name = di.ALL_PACKAGES["core"].get_py_package_name()
+    core_mod = importlib.import_module(core_mod_name)
+    core_path = Path(core_mod.__file__).parent  # Chop __init__.py
+    dist_info_path = core_path / "share" / "therock" / "dist_info.json"
+    with open(dist_info_path, "rb") as f:
+        dist_info_struct = json.load(f)
+    print(dist_info_struct["dist_amdgpu_targets"])
+
+
 def main(argv: list[str] | None = None):
     if argv is None:
         argv = sys.argv[1:]
@@ -75,6 +91,8 @@ def main(argv: list[str] | None = None):
         description="ROCm SDK Python CLI",
     )
     sub_p = p.add_subparsers(required=True)
+
+    # 'path' subcommand.
     path_p = sub_p.add_parser("path", help="Print various paths to ROCm installation")
     path_p_group = path_p.add_mutually_exclusive_group(required=True)
     path_p_group.add_argument(
@@ -94,8 +112,20 @@ def main(argv: list[str] | None = None):
     )
     path_p.set_defaults(func=_do_path)
 
+    # 'test' subcommand.
     test_p = sub_p.add_parser("test", help="Run installation tests to verify integrity")
     test_p.set_defaults(func=_do_test)
+
+    # 'version' subcommand.
+    version_p = sub_p.add_parser("version", help="Print version information")
+    version_p.set_defaults(func=_do_version)
+
+    # 'targets' subcommand.
+    targets_p = sub_p.add_parser(
+        "targets", help="Print information about the GPU targets that are supported"
+    )
+    targets_p.set_defaults(func=_do_targets)
+
     args = p.parse_args(argv)
     args.func(args)
 

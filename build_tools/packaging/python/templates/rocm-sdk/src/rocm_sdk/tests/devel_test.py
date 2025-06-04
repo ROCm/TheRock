@@ -117,13 +117,15 @@ class ROCmDevelTest(unittest.TestCase):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
                 continue
-            if (
-                "librocprofiler-sdk" in str(so_path) or "librocprofv3" in str(so_path)
-            ) and "librocprofiler-sdk-roctx" not in str(so_path):
-                # rocprofiler-sdk still depends on aqlprofiler, which is not yet
-                # open-source. But we do need the roctx library to load properly
-                # regardless.
-                # See: https://github.com/ROCm/TheRock/issues/330
+            if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
+                # Internal roctracer libraries are meant to be pre-loaded
+                # explicitly and cannot necessarily be loaded standalone.
+                continue
+            if "lib/rocprofiler-sdk/" in str(
+                so_path
+            ) or "libexec/rocprofiler-sdk/" in str(so_path):
+                # Internal rocprofiler-sdk libraries are meant to be pre-loaded
+                # explicitly and cannot necessarily be loaded standalone.
                 continue
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
