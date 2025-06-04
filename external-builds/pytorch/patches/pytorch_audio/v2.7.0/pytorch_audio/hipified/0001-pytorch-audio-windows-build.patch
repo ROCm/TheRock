@@ -1,0 +1,59 @@
+From 1be5504f6bcf91771a6c3c6dc7f9bae16709da97 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 3 Jun 2025 15:18:20 -0700
+Subject: [PATCH] pytorch audio windows build fixes
+
+- allow overriding default cl compiler on windows
+  by checking if CC and CXX variables have been set
+- add utils.cpp also to _torchaudio.lib to avoid linking error
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ src/libtorchaudio/CMakeLists.txt |  1 +
+ tools/setup_helpers/extension.py | 18 ++++++++++++++++--
+ 2 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/src/libtorchaudio/CMakeLists.txt b/src/libtorchaudio/CMakeLists.txt
+index 713cb50..734b3e2 100644
+--- a/src/libtorchaudio/CMakeLists.txt
++++ b/src/libtorchaudio/CMakeLists.txt
+@@ -108,6 +108,7 @@ endif()
+ if (BUILD_TORCHAUDIO_PYTHON_EXTENSION)
+   set(
+     extension_sources
++    utils.cpp
+     pybind/pybind.cpp
+     )
+   torchaudio_extension(
+diff --git a/tools/setup_helpers/extension.py b/tools/setup_helpers/extension.py
+index 2415bba..c6eaf83 100644
+--- a/tools/setup_helpers/extension.py
++++ b/tools/setup_helpers/extension.py
+@@ -161,9 +161,23 @@ class CMakeBuild(build_ext):
+             import sys
+
+             python_version = sys.version_info
++            if "CC" in os.environ:
++                cmake_args += [
++                    "-DCMAKE_C_COMPILER=" + os.environ['CC']
++                ]
++            else:
++                cmake_args += [
++                    "-DCMAKE_C_COMPILER=cl",
++                ]
++            if "CXX" in os.environ:
++                cmake_args += [
++                    "-DCMAKE_CXX_COMPILER=" + os.environ['CXX']
++                ]
++            else:
++                cmake_args += [
++                    "-DCMAKE_CXX_COMPILER=cl",
++                ]
+             cmake_args += [
+-                "-DCMAKE_C_COMPILER=cl",
+-                "-DCMAKE_CXX_COMPILER=cl",
+                 f"-DPYTHON_VERSION={python_version.major}.{python_version.minor}",
+             ]
+
+--
+2.43.0
