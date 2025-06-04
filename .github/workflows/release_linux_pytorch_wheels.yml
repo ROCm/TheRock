@@ -3,7 +3,7 @@ name: Release Linux PyTorch Wheels
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 2 * * *"  # Nightly at 2 AM UTC
 
 permissions:
   id-token: write
@@ -14,11 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [gfx942, gfx1100, gfx1201]
+        config:
+          - { AMDGPU_FAMILIES: gfx94X-dcgpu, PYTORCH_TARGET_ARCH: gfx942 }
+          - { AMDGPU_FAMILIES: gfx110X-dgpu, PYTORCH_TARGET_ARCH: gfx1100 }
+          - { AMDGPU_FAMILIES: gfx120X-all, PYTORCH_TARGET_ARCH: gfx1201 }
         python_version: ["3.11", "3.12"]
-    uses: ROCm/TheRock/.github/workflows/build_linux_pytorch_wheels.yml@main
+
+    uses: ./.github/workflows/build_linux_pytorch_wheels.yml
     with:
-      target: ${{ matrix.target }}
+      AMDGPU_FAMILIES: ${{ matrix.config.AMDGPU_FAMILIES }}
+      PYTORCH_TARGET_ARCH: ${{ matrix.config.PYTORCH_TARGET_ARCH }}
       python_version: ${{ matrix.python_version }}
-      family: ${{ fromJson('{"gfx942":"gfx94X-dcgpu","gfx1100":"gfx110X-dgpu","gfx1201":"gfx120X-all"}')[matrix.target] }}
-      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ fromJson('{"gfx942":"gfx94X-dcgpu","gfx1100":"gfx110X-dgpu","gfx1201":"gfx120X-all"}')[matrix.target] }}/index.html
+      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.config.AMDGPU_FAMILIES }}/index.html
