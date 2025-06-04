@@ -40,28 +40,28 @@ One of the following commands can be used to install `rocm-sdk[libraries,devel]`
 
 ```bash
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx94X-dcgpu/index.html \
-  rocm-sdk[libraries,devel]
+  rocm-sdk[libraries,devel] --pre
 ```
 
 ### gfx110X-dgpu
 
 ```bash
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
-  rocm-sdk[libraries,devel]
+  rocm-sdk[libraries,devel] --pre
 ```
 
 ### gfx1151
 
 ```bash
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx1151/index.html \
-  rocm-sdk[libraries,devel]
+  rocm-sdk[libraries,devel] --pre
 ```
 
 ### gfx120X-all
 
 ```bash
 python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx120X-all/index.html \
-  rocm-sdk[libraries,devel]
+  rocm-sdk[libraries,devel] --pre
 ```
 
 ## Using our tarballs

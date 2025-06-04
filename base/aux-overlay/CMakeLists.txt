@@ -23,3 +23,13 @@ if(NOT WIN32)
 endif()
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/overlay/" DESTINATION ".")
+
+# Generate distribution info.
+string(JSON dist_info_json_str SET "{}"
+  "dist_amdgpu_targets" "\"${GPU_TARGETS}\""
+)
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/dist_info.json" "${dist_info_json_str}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dist_info.json"
+  DESTINATION "share/therock"
+)

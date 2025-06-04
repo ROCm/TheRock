@@ -4,6 +4,7 @@
 
 therock_cmake_subproject_declare(therock-aux-overlay
   EXTERNAL_SOURCE_DIR "aux-overlay"
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
@@ -14,6 +15,7 @@ therock_cmake_subproject_activate(therock-aux-overlay)
 
 therock_cmake_subproject_declare(rocm-cmake
   EXTERNAL_SOURCE_DIR "rocm-cmake"
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
 )
 therock_cmake_subproject_provide_package(rocm-cmake
@@ -35,6 +37,7 @@ endif()
 
 therock_cmake_subproject_declare(rocm-core
   EXTERNAL_SOURCE_DIR "rocm-core"
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
     "-DBUILD_SHARED_LIBS=${_shared_libs_arg}"
@@ -55,6 +58,7 @@ if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion g
 
 therock_cmake_subproject_declare(rocm_smi_lib
   EXTERNAL_SOURCE_DIR "rocm_smi_lib"
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
     # See the post_hook, which needs to advertise install interface directories
@@ -91,6 +95,7 @@ if(NOT WIN32)  # TODO(#36): Enable on Windows?
 
 therock_cmake_subproject_declare(rocprofiler-register
   EXTERNAL_SOURCE_DIR "rocprofiler-register"
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   INTERFACE_LINK_DIRS
     "lib"
@@ -114,6 +119,7 @@ endif()
 
 therock_cmake_subproject_declare(rocm-half
   EXTERNAL_SOURCE_DIR "half"
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   INTERFACE_INCLUDE_DIRS
     # No find_package support (just a naked include).

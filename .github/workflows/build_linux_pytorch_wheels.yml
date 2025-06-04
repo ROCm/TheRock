@@ -3,10 +3,24 @@ name: Build Linux PyTorch Wheels
 on:
   workflow_call:
     inputs:
-      family:
+      AMDGPU_FAMILIES:
         required: true
         type: string
-      target:
+      PYTORCH_TARGET_ARCH:
+        required: true
+        type: string
+      python_version:
+        required: true
+        type: string
+      find_links:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      AMDGPU_FAMILIES:
+        required: true
+        type: string
+      PYTORCH_TARGET_ARCH:
         required: true
         type: string
       python_version:
@@ -22,7 +36,7 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build Linux PyTorch Wheels | ${{ inputs.family }} | Python ${{ inputs.python_version }}
+    name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
@@ -50,7 +64,7 @@ jobs:
 
       - name: Build PyTorch Wheels
         run: |
-          echo "Building PyTorch wheels for ${{ inputs.target }}"
+          echo "Building PyTorch wheels for ${{ inputs.PYTORCH_TARGET_ARCH }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
             --find-links "${{ inputs.find_links }}" \
@@ -58,7 +72,7 @@ jobs:
             --install-rocm \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --pytorch-rocm-arch ${{ inputs.target }} \
+            --pytorch-rocm-arch ${{ inputs.PYTORCH_TARGET_ARCH }} \
 
       - name: Configure AWS Credentials
         if: always()
@@ -75,5 +89,5 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           # These wheels share the same S3 directory as rocm-sdk to simplify --find-links usage
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://therock-nightly-python/${{ inputs.family }}/ \
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://therock-nightly-python/${{ inputs.AMDGPU_FAMILIES }}/ \
             --recursive --exclude "*" --include "*.whl"

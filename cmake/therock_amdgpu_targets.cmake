@@ -133,6 +133,11 @@ function(therock_validate_amdgpu_targets)
   string(JOIN " " _expanded_targets_spaces ${_expanded_targets})
   set(THEROCK_AMDGPU_TARGETS_SPACES "${_expanded_targets_spaces}" PARENT_SCOPE)
 
+  # Export the dist targets as the same until we have support/need to separate
+  # them.
+  set(THEROCK_DIST_AMDGPU_TARGETS "${_expanded_targets}" PARENT_SCOPE)
+  set(THEROCK_DIST_AMDGPU_TARGETS_SPACES "${_expanded_targets_spaces}" PARENT_SCOPE)
+
   if(NOT THEROCK_AMDGPU_DIST_BUNDLE_NAME)
     list(LENGTH _explicit_selections _explicit_count)
     if(_explicit_count GREATER "1")

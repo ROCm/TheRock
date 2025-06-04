@@ -22,6 +22,7 @@ amdgpu_family_info_matrix = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
+            "pytorch-target": "gfx1100",
         },
     },
     "gfx115x": {
@@ -37,6 +38,11 @@ amdgpu_family_info_matrix = {
             "test-runs-on": "linux-rx9070-gpu-rocm",
             "family": "gfx120X-all",
             "pytorch-target": "gfx1201",
-        }
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx120X-all",
+            "pytorch-target": "gfx1201",
+        },
     },
 }

@@ -12,6 +12,7 @@ if(THEROCK_ENABLE_COMPILER)
   endif()
 
   therock_cmake_subproject_declare(amd-llvm
+    USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "amd-llvm"
     # Note that LLVM top level CMakeLists.txt is in the llvm subdir of the
@@ -79,6 +80,7 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
 
   therock_cmake_subproject_declare(amd-comgr
+    USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
     BINARY_DIR "amd-comgr"
@@ -109,6 +111,7 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipcc
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/hipcc"
     BINARY_DIR "hipcc"
     BACKGROUND_BUILD
@@ -143,6 +146,7 @@ if(THEROCK_ENABLE_HIPIFY)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipify
+    USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "hipify"
     BACKGROUND_BUILD

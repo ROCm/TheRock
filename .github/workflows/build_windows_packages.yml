@@ -196,52 +196,36 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
-      # TODO: Move to script
-      - name: Create Index Files
+      - name: Create Logs index Files
         if: always()
         run: |
-          curl --silent --fail --show-error --location \
-            https://raw.githubusercontent.com/joshbrunty/Indexer/6d8cbfd15d3853b482e6a49f2d875ded9188b721/indexer.py \
-            --output ${{ env.BUILD_DIR_BASH }}/indexer.py
-          python ${{ env.BUILD_DIR_BASH }}/indexer.py -f '*.tar.xz*' ${{ env.BUILD_DIR_BASH }}/artifacts/
-          python build_tools/create_log_index.py \
+          python3 build_tools/github_actions/create_log_index.py \
             --build-dir=${{ env.BUILD_DIR_BASH }} \
             --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
 
-      # TODO: Move to script
-      - name: Upload Artifacts
-        shell: powershell
+      - name: Upload artifacts
+        if: always()
         run: |
-          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts s3://therock-artifacts/${{github.run_id}}-windows/ `
-            --recursive --no-follow-symlinks `
-            --exclude "*" `
-            --include "*.tar.xz*"
-          aws s3 cp ${{ env.BASE_BUILD_DIR_POWERSHELL }}\artifacts\index.html s3://therock-artifacts/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html
+          python build_tools/github_actions/upload_build_artifacts.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir ${{ env.BUILD_DIR_BASH }}
 
       - name: Upload Logs
         if: always()
-        shell: powershell
         run: |
-          $Env:PATH += ";C:\Program Files\Amazon\AWSCLIV2"
-          python3 build_tools/upload_logs_to_s3.py `
-            --build-dir=${{ env.BASE_BUILD_DIR_POWERSHELL }} `
-            --s3-base-path="s3://therock-artifacts/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}"
+          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
+            --build-dir=${{ env.BUILD_DIR_BASH }} \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
 
       - name: Add Links to Job Summary
         if: always()
         run: |
-          LOG_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/logs/${{env.AMDGPU_FAMILIES}}/index.html"
-          echo "[Build Logs](${LOG_URL})" >> $GITHUB_STEP_SUMMARY
-
-          ARTIFACT_INDEX="${{ env.BASE_BUILD_DIR_POWERSHELL }}/artifacts/index.html"
-          if [ -f "${ARTIFACT_INDEX}" ]; then
-            ARTIFACT_URL="https://therock-artifacts.s3.us-east-2.amazonaws.com/${{github.run_id}}-windows/index-${{env.AMDGPU_FAMILIES}}.html"
-
-            echo "[Artifacts](${ARTIFACT_URL})" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "[INFO] No artifacts index found. Skipping artifact link."
-          fi
+          python build_tools/github_actions/upload_build_summary.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir ${{ env.BUILD_DIR_BASH }}
 
       - name: Save cache
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
