@@ -194,6 +194,14 @@ endfunction()
 # ACTIVATE: Option to signify that this call should end by calling
 #   therock_cmake_subproject_activate. Do not specify this option if wishing to
 #   further configure the sub-project.
+# USE_DIST_AMDGPU_TARGETS: Use the dist GPU targets vs the shard specific GPU
+#   targets. Typically this is set on runtime components that are intended to
+#    work for all supported targets, whereas it is ommitted for components which
+#    are meant to be built only for the given targets (typically for kernel
+#    libraries).
+# DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
+#   in the project. This is largely used for broken projects that cannot
+#   build with an explicit target list.
 # NO_MERGE_COMPILE_COMMANDS: Option to disable merging of this project's
 #   compile_commands.json into the overall project. This is useful for
 #   third-party projects that are excluded from all as it eliminates a
@@ -206,11 +214,16 @@ endfunction()
 #   sub-project installs. Defaults to empty, meaning that it installs at the top
 #   of the namespace.
 # CMAKE_ARGS: Additional CMake configure arguments.
+# CMAKE_INCLUDES: Additional CMake files to include at the top level.
 # BUILD_DEPS: Projects which must build and provide their packages prior to this
 #   one.
 # RUNTIME_DEPS: Projects which must build prior to this one and whose install
 #   files must be distributed with this project's artifacts in order to
 #   function.
+# INTERFACE_INCLUDE_DIRS: Relative paths within the install tree which dependent
+#   sub-projects must have their CPP include path set to include. Use of this
+#   is strongly discouraged (deps should be on proper CMake libraries), but
+#   some old projects still need this.
 # INTERFACE_LINK_DIRS: Relative paths within the install tree which dependent
 #   sub-projects must add to their runtime link library path.
 # INTERFACE_PROGRAM_DIRS: Relative paths within the install tree which
@@ -269,12 +282,15 @@ endfunction()
 #   that all shared libraries are installed to. Defaults to
 #   INSTALL_DESTINATION/lib. Can be overriden on a per target basis by setting
 #   THEROCK_INSTALL_RPATH_LIBRARY_DIR.
+#
+# Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
+# transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
+    "ACTIVATE;USE_DIST_AMDGPU_TAGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -321,10 +337,15 @@ function(therock_cmake_subproject_declare target_name)
 
   # Collect LINK_DIRS and PROGRAM_DIRS from explicit args and RUNTIME_DEPS.
   _therock_cmake_subproject_collect_runtime_deps(
-      _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
+      _private_include_dirs _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
       _transitive_runtime_deps
       _transitive_configure_depend_files
       ${ARG_RUNTIME_DEPS})
+
+  # Include dirs
+  set(_declared_include_dirs "${ARG_INTERFACE_INCLUDE_DIRS}")
+  _therock_cmake_subproject_absolutize(_declared_include_dirs "${_stage_dir}")
+  set(_interface_include_dirs ${_private_include_dirs} ${_declared_include_dirs})
 
   # Link dirs
   set(_declared_link_dirs "${ARG_INTERFACE_LINK_DIRS}")
@@ -351,6 +372,8 @@ function(therock_cmake_subproject_declare target_name)
   set(_private_install_rpath_dirs ${ARG_INSTALL_RPATH_DIRS} ${_interface_install_rpath_dirs})
 
   # Dedup transitives.
+  list(REMOVE_DUPLICATES _private_include_dirs)
+  list(REMOVE_DUPLICATES _interface_include_dirs)
   list(REMOVE_DUPLICATES _private_link_dirs)
   list(REMOVE_DUPLICATES _interface_link_dirs)
   list(REMOVE_DUPLICATES _private_program_dirs)
@@ -386,9 +409,20 @@ function(therock_cmake_subproject_declare target_name)
     set(_build_pool "therock_background")
   endif()
 
+  # GPU Targets.
+  if(ARG_DISABLE_AMDGPU_TARGETS)
+    set(_gpu_targets)
+  elseif(ARG_USE_DIST_AMDGPU_TAGETS)
+    set(_gpu_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
+  else()
+    set(_gpu_targets "${THEROCK_AMDGPU_TARGETS}")
+  endif()
+
   set_target_properties("${target_name}" PROPERTIES
     THEROCK_SUBPROJECT cmake
     THEROCK_BUILD_POOL "${_build_pool}"
+    THEROCK_AMDGPU_TARGETS "${_gpu_targets}"
+    THEROCK_DISABLE_AMDGPU_TARGETS "${ARG_DISABLE_AMDGPU_TARGETS}"
     THEROCK_EXCLUDE_FROM_ALL "${ARG_EXCLUDE_FROM_ALL}"
     THEROCK_NO_MERGE_COMPILE_COMMANDS "${ARG_NO_MERGE_COMPILE_COMMANDS}"
     THEROCK_EXTERNAL_SOURCE_DIR "${ARG_EXTERNAL_SOURCE_DIR}"
@@ -401,10 +435,15 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
     THEROCK_CMAKE_ARGS "${ARG_CMAKE_ARGS}"
+    THEROCK_CMAKE_INCLUDES "${ARG_CMAKE_INCLUDES}"
     # Non-transitive build deps.
     THEROCK_BUILD_DEPS "${ARG_BUILD_DEPS}"
     # Transitive runtime deps.
     THEROCK_RUNTIME_DEPS "${_transitive_runtime_deps}"
+    # Include dirs that this project compiles with.
+    THEROCK_PRIVATE_INCLUDE_DIRS "${_private_include_dirs}"
+    # Include dirs that are advertised to dependents.
+    THEROCK_INTERFACE_INCLUDE_DIRS "${_interface_include_dirs}"
     # That this project compiles with.
     THEROCK_PRIVATE_LINK_DIRS "${_private_link_dirs}"
     # Link dirs that are advertised to dependents
@@ -476,6 +515,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_dist_dir "${target_name}" THEROCK_DIST_DIR)
   get_target_property(_runtime_deps "${target_name}" THEROCK_RUNTIME_DEPS)
   get_target_property(_cmake_args "${target_name}" THEROCK_CMAKE_ARGS)
+  get_target_property(_cmake_includes "${target_name}" THEROCK_CMAKE_INCLUDES)
   get_target_property(_cmake_project_init_file "${target_name}" THEROCK_CMAKE_PROJECT_INIT_FILE)
   get_target_property(_cmake_project_toolchain_file "${target_name}" THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE)
   get_target_property(_cmake_source_dir "${target_name}" THEROCK_CMAKE_SOURCE_DIR)
@@ -485,6 +525,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_ignore_packages "${target_name}" THEROCK_IGNORE_PACKAGES)
   get_target_property(_install_destination "${target_name}" THEROCK_INSTALL_DESTINATION)
   get_target_property(_no_merge_compile_commands "${target_name}" THEROCK_NO_MERGE_COMPILE_COMMANDS)
+  get_target_property(_private_include_dirs "${target_name}" THEROCK_PRIVATE_INCLUDE_DIRS)
   get_target_property(_private_link_dirs "${target_name}" THEROCK_PRIVATE_LINK_DIRS)
   get_target_property(_private_pkg_config_dirs "${target_name}" THEROCK_PRIVATE_PKG_CONFIG_DIRS)
   get_target_property(_private_program_dirs "${target_name}" THEROCK_PRIVATE_PROGRAM_DIRS)
@@ -598,10 +639,23 @@ function(therock_cmake_subproject_activate target_name)
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
 
+  # Include dirs.
+  foreach(_private_include_dir ${_private_include_dirs})
+    if(THEROCK_VERBOSE)
+      message(STATUS "  INCLUDE_DIR: ${_private_include_dir}")
+    endif()
+    string(APPEND _init_contents "include_directories(BEFORE \"${_private_include_dir}\")\n")
+    string(APPEND _init_contents "list(PREPEND CMAKE_REQUIRED_INCLUDES \"${_private_include_dir}\")\n")
+    string(APPEND _init_contents "list(APPEND THEROCK_SUPERPROJECT_INCLUDE_DIRS \"${_private_include_dir}\")\n")
+  endforeach()
+
+  # Link dirs.
   foreach(_private_link_dir ${_private_link_dirs})
     if(THEROCK_VERBOSE)
       message(STATUS "  LINK_DIR: ${_private_link_dir}")
     endif()
+    # Make the link dir visible to CMake find_library.
+    string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_private_link_dir}\")\n")
     if(NOT MSVC)
       # The normal way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
@@ -617,6 +671,7 @@ function(therock_cmake_subproject_activate target_name)
       string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" /LIBPATH:${_private_link_dir}\")\n")
     endif()
   endforeach()
+
   if(THEROCK_VERBOSE AND _private_pkg_config_dirs)
     message(STATUS "  PKG_CONFIG_DIRS: ${_private_pkg_config_dirs}")
   endif()
@@ -635,6 +690,13 @@ function(therock_cmake_subproject_activate target_name)
   endif()
   set(_global_post_include "${THEROCK_SOURCE_DIR}/cmake/therock_global_post_subproject.cmake")
   string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
+  foreach(_addl_cmake_include ${_cmake_includes})
+    if(NOT IS_ABSOLUTE)
+      find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
+      cmake_path(ABSOLUTE_PATH _addl_cmake_include BASE_DIRECTORY "${_addl_cmake_include_path}")
+    endif()
+    string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
+  endforeach()
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
@@ -1017,9 +1079,10 @@ endfunction()
 # and transitive runtime deps. Both lists may contain duplicates if the DAG
 # includes the same dep multiple times.
 function(_therock_cmake_subproject_collect_runtime_deps
-    out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
+    out_include_dirs out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
     out_transitive_deps
     out_transitive_configure_depend_files)
+  set(_include_dirs)
   set(_install_rpath_dirs)
   set(_link_dirs)
   set(_program_dirs)
@@ -1031,6 +1094,10 @@ function(_therock_cmake_subproject_collect_runtime_deps
     get_target_property(_declared_configure_depend_files "${target_name}" THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES)
     list(APPEND _transitive_configure_depend_files ${_declared_configure_depend_files})
     get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
+
+    # Include dirs.
+    get_target_property(_include_dir "${target_name}" THEROCK_INTERFACE_INCLUDE_DIRS)
+    list(APPEND _include_dirs ${_include_dir})
 
     # Link dirs.
     get_target_property(_link_dir "${target_name}" THEROCK_INTERFACE_LINK_DIRS)
@@ -1061,6 +1128,7 @@ function(_therock_cmake_subproject_collect_runtime_deps
       list(APPEND _install_rpath_dirs ${_install_rpath_dir})
     endif()
   endforeach()
+  set("${out_include_dirs}" "${_include_dirs}" PARENT_SCOPE)
   set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
   set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
   set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)
@@ -1080,10 +1148,11 @@ function(_therock_cmake_subproject_absolutize list_var relative_to)
   set("${list_var}" "${_abs_dirs}" PARENT_SCOPE)
 endfunction()
 
-# Filters THEROCK_AMDGPU_TARGETS based on global settings for the project.
+# Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
 function(_therock_filter_project_gpu_targets out_var target_name)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
-  set(_filtered ${THEROCK_AMDGPU_TARGETS})
+  get_target_property(_gpu_targets "${target_name}" THEROCK_AMDGPU_TARGETS)
+  set(_filtered ${_gpu_targets})
   if(_excludes)
     foreach(exclude in ${_excludes})
       if("${exclude}" IN_LIST _filtered)
@@ -1126,7 +1195,14 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_build_env_pairs "${_build_env_pairs}")
   set(_toolchain_contents)
 
-  _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}")
+  get_target_property(_disable_amdgpu_targets "${target_name}" THEROCK_DISABLE_AMDGPU_TARGETS)
+  set(_filtered_gpu_targets)
+  if(NOT _disable_amdgpu_targets)
+    _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}")
+    # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
+    string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
+  endif()
 
   # General settings applicable to all toolchains.
   string(APPEND _toolchain_contents "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)\n")
@@ -1215,9 +1291,6 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_C_COMPILER \"@AMD_LLVM_C_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_CXX_COMPILER \"@AMD_LLVM_CXX_COMPILER@\")\n")
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
-    # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
-    string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
-    string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
     if(THEROCK_VERBOSE)

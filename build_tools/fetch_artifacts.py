@@ -8,16 +8,20 @@
 import argparse
 import concurrent.futures
 from html.parser import HTMLParser
-import os
+from pathlib import Path
 import platform
 from shutil import copyfileobj
 import sys
 import urllib.request
 
+THEROCK_DIR = Path(__file__).resolve().parent.parent
+
+# Importing build_artifact_upload.py
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from upload_build_artifacts import retrieve_bucket_info
+
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
-BUCKET = os.getenv("BUCKET", "therock-artifacts")
-BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com"
 
 
 class FetchArtifactException(Exception):
@@ -59,7 +63,10 @@ def log(*args, **kwargs):
 
 def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
-    index_page_url = f"{BUCKET_URL}/{run_id}-{PLATFORM}/index-{amdgpu_family}.html"
+    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
+    BUCKET_URL = f"https://{BUCKET}.s3.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
+    index_page_url = f"{BUCKET_URL}/index-{amdgpu_family}.html"
+    log(f"Retrieving artifacts from {index_page_url}")
     request = urllib.request.Request(index_page_url)
     try:
         with urllib.request.urlopen(request) as response:
@@ -91,6 +98,8 @@ def collect_artifacts_urls(
     existing_artifacts: set[str],
 ) -> list[str]:
     """Collects S3 artifact URLs to execute later in parallel."""
+    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
+    BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
     artifacts_to_retrieve = []
     for artifact in artifacts:
         file_name = f"{artifact}_{variant}.tar.xz"
@@ -100,7 +109,7 @@ def collect_artifacts_urls(
             artifacts_to_retrieve.append(
                 (
                     f"{build_dir}/{file_name}",
-                    f"{BUCKET_URL}/{run_id}-{PLATFORM}/{file_name}",
+                    f"{BUCKET_URL}/{file_name}",
                 )
             )
 

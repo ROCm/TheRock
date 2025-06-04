@@ -1,11 +1,15 @@
 from pathlib import Path
+import os
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
 import urllib.request
+from unittest.mock import patch
+
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+
 from fetch_artifacts import (
     IndexPageParser,
     retrieve_s3_artifacts,
@@ -13,14 +17,15 @@ from fetch_artifacts import (
     FetchArtifactException,
 )
 
-PARENT_DIR = Path(__file__).resolve().parent.parent
+THIS_DIR = Path(__file__).resolve().parent
+REPO_DIR = THIS_DIR.parent.parent
 
 
 def run_indexer_file(temp_dir):
     subprocess.run(
         [
             sys.executable,
-            PARENT_DIR / "third-party" / "indexer" / "indexer.py",
+            REPO_DIR / "third-party" / "indexer" / "indexer.py",
             "-f",
             "*.tar.xz*",
             temp_dir,

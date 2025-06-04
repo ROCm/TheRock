@@ -172,9 +172,18 @@ def directory_if_exists(dir: Path) -> Path | None:
 
 
 def do_install_rocm(args: argparse.Namespace):
+    # Optional cache dir arguments
+    cache_dir_args = (
+        ["--cache-dir", str(args.pip_cache_dir)] if args.pip_cache_dir else []
+    )
+
     # Because the rocm-sdk package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
-    exec([sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"], cwd=Path.cwd())
+
+    exec(
+        [sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"] + cache_dir_args,
+        cwd=Path.cwd(),
+    )
 
     # Do the main pip install.
     pip_args = [
@@ -190,6 +199,7 @@ def do_install_rocm(args: argparse.Namespace):
         pip_args.extend(["--find-links", args.find_links])
     if args.pip_cache_dir:
         pip_args.extend(["--cache-dir", args.pip_cache_dir])
+    pip_args += cache_dir_args
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
     pip_args.extend([f"rocm-sdk[libraries,devel]{rocm_sdk_version}"])
     exec(pip_args, cwd=Path.cwd())
@@ -382,6 +392,7 @@ def main(argv: list[str]):
     install_rocm_p.set_defaults(func=do_install_rocm)
 
     build_p = sub_p.add_parser("build", help="Build pytorch wheels")
+
     build_p.add_argument(
         "--install-rocm",
         action=argparse.BooleanOptionalAction,

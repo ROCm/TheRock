@@ -158,3 +158,42 @@ Using the CLR submodule as an example:
    ```bash
    python ./build_tools/fetch_sources.py
    ```
+
+## Updating a third-party mirror
+
+Projects in [`third-party/`](../../third-party/) use sources mirrored to AWS
+so we maintain control over all build dependencies and can produce hermetic
+builds (requiring no network access) as needed.
+
+These are declared like so:
+
+```cmake
+therock_subproject_fetch(therock-msgpack-cxx-sources
+  CMAKE_PROJECT
+  # Originally mirrored from: https://github.com/msgpack/msgpack-c/releases/download/cpp-7.0.0/msgpack-cxx-7.0.0.tar.gz
+  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/msgpack-cxx-7.0.0.tar.gz
+  URL_HASH SHA256=7504b7af7e7b9002ce529d4f941e1b7fb1fb435768780ce7da4abaac79bb156f
+)
+```
+
+To update one of these dependencies:
+
+1. Find the version you want to update to, e.g. by choosing the latest release
+   from a page like https://github.com/msgpack/msgpack-c/releases
+
+1. Download the source archive, either uploaded as an asset to the release (like
+   `https://github.com/msgpack/msgpack-c/releases/download/cpp-7.0.0/msgpack-cxx-7.0.0.tar.gz`)
+   or generated from the repository at a tagged commit (like
+   `https://github.com/Dobiasd/frugally-deep/archive/refs/tags/v0.15.31.tar.gz`).
+
+1. Compute the SHA256 checksum of the file.
+
+   - On Linux, you can run `sha256sum [NAME NAME]`
+   - On Windows, you can run `Get-FileHash [FILE NAME]` from powershell
+
+1. Sign in to AWS and upload the file to
+   https://us-east-2.console.aws.amazon.com/s3/buckets/rocm-third-party-deps
+
+1. Update the comment, URL, and URL_HASH in the CMakeLists.txt file
+
+1. Test the build and make any necessary changes to CMake project configuration

@@ -1,3 +1,14 @@
+# aqlprofile
+[components.dbg."profiler/aqlprofile/stage"]
+[components.dev."profiler/aqlprofile/stage"]
+[components.doc."profiler/aqlprofile/stage"]
+[components.lib."profiler/aqlprofile/stage"]
+[components.run."profiler/aqlprofile/stage"]
+[components.test."profiler/aqlprofile/stage"]
+include = [
+  "share/hsa-amd-aqlprofile/**",
+]
+
 # rocprofiler-sdk
 [components.dbg."profiler/rocprofiler-sdk/stage"]
 [components.dev."profiler/rocprofiler-sdk/stage"]
@@ -12,8 +23,17 @@ include = [
 [components.run."profiler/rocprofiler-sdk/stage"]
 include = [
   "bin/**",
+  "share/rocprofiler-sdk/**",
 ]
 [components.test."profiler/rocprofiler-sdk/stage"]
 include = [
   "share/rocprofiler-sdk/tests/**",
 ]
+
+# roctracer
+[components.dbg."profiler/roctracer/stage"]
+[components.dev."profiler/roctracer/stage"]
+[components.doc."profiler/roctracer/stage"]
+[components.lib."profiler/roctracer/stage"]
+[components.run."profiler/roctracer/stage"]
+[components.test."profiler/roctracer/stage"]

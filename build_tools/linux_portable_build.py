@@ -51,6 +51,8 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
     ]
     if sys.stdin.isatty():
         cl.extend(["-i", "-t"])
+
+    # Mount options that must go before execution options.
     cl.extend(
         [
             "--mount",
@@ -59,7 +61,15 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
             f"type=bind,src={args.repo_dir},dst=/therock/src",
         ]
     )
+    if args.build_python_only:
+        cl.extend(
+            [
+                "--mount",
+                f"type=bind,src={args.artifact_dir},dst=/therock/artifacts",
+            ]
+        )
 
+    # Type of execution requested.
     if args.exec:
         cl.extend(
             [
@@ -67,13 +77,6 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
             ]
         )
         cl += rest_args
-    elif args.build_python_only:
-        cl.extend(
-            [
-                "--mount",
-                f"type=bind,src={args.artifact_dir},dst=/therock/artifacts",
-            ]
-        )
     elif args.interactive:
         cl.extend(
             [

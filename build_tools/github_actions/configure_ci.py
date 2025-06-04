@@ -129,6 +129,8 @@ SKIPPABLE_PATH_PATTERNS = [
     # workflows efficient when only nodes closer to the edges of the build graph
     # are changed.
     "external-builds/*",
+    # Changes to experimental code do not run standard build/test workflows.
+    "experimental/*",
 ]
 
 

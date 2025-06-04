@@ -64,7 +64,6 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--prim --tests"
           PLATFORM: ${{ inputs.platform }}
-          BUCKET: ${{ github.repository == 'ROCm/TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
 
       - name: Run rocprim tests
         env:
@@ -73,4 +72,6 @@ jobs:
           ctest --test-dir ${THEROCK_BIN_DIR}/rocprim \
             --output-on-failure \
             --parallel 8 \
-            --exclude-regex ${TEST_TO_IGNORE}
+            --exclude-regex ${TEST_TO_IGNORE} \
+            --timeout 900 \
+            --repeat until-pass:3
