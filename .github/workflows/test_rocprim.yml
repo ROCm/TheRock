@@ -75,4 +75,4 @@ jobs:
             --parallel 8 \
             --exclude-regex ${TEST_TO_IGNORE} \
             --timeout 900 \
-            --rerun-failed
+            --repeat until-pass:3

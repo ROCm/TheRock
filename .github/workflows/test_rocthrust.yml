@@ -73,4 +73,4 @@ jobs:
             --parallel 8 \
             --exclude-regex "^copy.hip$|scan.hip" \
             --timeout 300 \
-            --rerun-failed
+            --repeat until-pass:3
