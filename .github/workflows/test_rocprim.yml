@@ -37,9 +37,6 @@ permissions:
 jobs:
   test_rocprim:
     name: "rocPRIM math-lib test"
-    # Running into memory issues that result in timeout for gfx110X, excluding for now
-    # TODO(geomin12): work with rocPRIM team to ignore high memory tests
-    if: ${{ inputs.amdgpu_families != 'gfx110X-dgpu' }}
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
