@@ -94,31 +94,37 @@ popd
 
 ### From `install_rocm_from_artifacts.py`
 
-This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally.
+This script installs ROCm community builds produced by TheRock from either a
+developer/nightly tarball, a specific CI runner build or a local build. This
+script can be used by both CI workflows and developers.
 
 Examples:
 
 - Downloads all gfx94X S3 artifacts from [GitHub CI workflow run 15052158890](https://github.com/ROCm/TheRock/actions/runs/15052158890) to the default output directory `therock-build`:
 
-  ```
+  ```bash
   python build_tools/install_rocm_from_artifacts.py --run-id 15052158890 --amdgpu-family gfx94X-dcgpu --tests
   ```
 
 - Downloads the version `6.4.0rc20250516` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
 
-  ```
+  ```bash
   python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-dgpu --output-dir build
   ```
 
 - Downloads the version `6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14` gfx110X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
 
-  ```
+  ```bash
   python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-dgpu
   ```
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
 
-By default for CI workflow retrieval, all artifacts (excluding test artifacts) will be downloaded. For specific artifacts, pass in the flag such as `--rand` (RAND artifacts) For test artifacts, pass in the flag `--tests` (test artifacts). For base artifacts only, pass in the flag `--base-only`
+By default, all artifact names will be downloaded.
+
+- For specific artifacts, pass in the flag such as `--names rand,prim`
+- For test artifacts, pass in the flag `--tests`
+- For generic artifacts only, pass in the flag `--generic-only`
 
 ## Testing your installation
 
