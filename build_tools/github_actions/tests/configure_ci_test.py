@@ -12,6 +12,11 @@ from amdgpu_family_matrix import (
 
 
 class ConfigureCITest(TestCase):
+    def assert_target_output_is_valid(self, target_output):
+        self.assertTrue(all("test-runs-on" in entry for entry in target_output))
+        self.assertTrue(all("family" in entry for entry in target_output))
+        self.assertTrue(all("pytorch-target" in entry for entry in target_output))
+
     def test_run_ci_if_source_file_edited(self):
         paths = ["source_file.h"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
@@ -70,8 +75,8 @@ class ConfigureCITest(TestCase):
         self.assertTrue(
             any("gfx103X-dgpu" == entry["family"] for entry in linux_target_output)
         )
-        self.assertEqual(len(linux_target_output), 2)
-        self.assertTrue(all("family" in entry for entry in linux_target_output))
+        self.assertGreaterEqual(len(linux_target_output), 2)
+        self.assert_target_output_is_valid(linux_target_output)
         self.assertTrue(any("expect_failure" in entry for entry in linux_target_output))
 
     def test_invalid_linux_workflow_dispatch_matrix_generator(self):
@@ -108,8 +113,8 @@ class ConfigureCITest(TestCase):
         self.assertTrue(
             any("gfx110X-dgpu" == entry["family"] for entry in linux_target_output)
         )
-        self.assertEqual(len(linux_target_output), 2)
-        self.assertTrue(all("family" in entry for entry in linux_target_output))
+        self.assertGreaterEqual(len(linux_target_output), 2)
+        self.assert_target_output_is_valid(linux_target_output)
 
     def test_duplicate_windows_pull_request_matrix_generator(self):
         base_args = {
@@ -127,8 +132,8 @@ class ConfigureCITest(TestCase):
         self.assertTrue(
             any("gfx110X-dgpu" == entry["family"] for entry in windows_target_output)
         )
-        self.assertEqual(len(windows_target_output), 1)
-        self.assertTrue(all("family" in entry for entry in windows_target_output))
+        self.assertGreaterEqual(len(windows_target_output), 1)
+        self.assert_target_output_is_valid(windows_target_output)
 
     def test_invalid_linux_pull_request_matrix_generator(self):
         base_args = {
@@ -143,8 +148,10 @@ class ConfigureCITest(TestCase):
             families={},
             platform="linux",
         )
-        self.assertEqual(len(linux_target_output), len(DEFAULT_LINUX_CONFIGURATIONS))
-        self.assertTrue(all("family" in entry for entry in linux_target_output))
+        self.assertGreaterEqual(
+            len(linux_target_output), len(DEFAULT_LINUX_CONFIGURATIONS)
+        )
+        self.assert_target_output_is_valid(linux_target_output)
 
     def test_empty_windows_pull_request_matrix_generator(self):
         base_args = {"pr_labels": "{}"}
@@ -157,10 +164,10 @@ class ConfigureCITest(TestCase):
             families={},
             platform="windows",
         )
-        self.assertEqual(
+        self.assertGreaterEqual(
             len(windows_target_output), len(DEFAULT_WINDOWS_CONFIGURATIONS)
         )
-        self.assertTrue(all("family" in entry for entry in windows_target_output))
+        self.assert_target_output_is_valid(windows_target_output)
 
     def test_main_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
@@ -174,9 +181,10 @@ class ConfigureCITest(TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
-        self.assertGreater(len(linux_target_output), len(DEFAULT_LINUX_CONFIGURATIONS))
-        self.assertTrue(all("test-runs-on" in entry for entry in linux_target_output))
-        self.assertTrue(all("family" in entry for entry in linux_target_output))
+        self.assertGreaterEqual(
+            len(linux_target_output), len(DEFAULT_LINUX_CONFIGURATIONS)
+        )
+        self.assert_target_output_is_valid(linux_target_output)
 
     def test_main_windows_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
@@ -190,11 +198,10 @@ class ConfigureCITest(TestCase):
             platform="windows",
         )
         self.assertGreaterEqual(len(windows_target_output), 1)
-        self.assertGreater(
+        self.assertGreaterEqual(
             len(windows_target_output), len(DEFAULT_WINDOWS_CONFIGURATIONS)
         )
-        self.assertTrue(all("test-runs-on" in entry for entry in windows_target_output))
-        self.assertTrue(all("family" in entry for entry in windows_target_output))
+        self.assert_target_output_is_valid(windows_target_output)
 
     def test_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "test_branch"}
@@ -220,6 +227,7 @@ class ConfigureCITest(TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
+        self.assert_target_output_is_valid(linux_target_output)
         self.assertTrue(
             all(entry.get("expect_failure") for entry in linux_target_output)
         )

@@ -22,6 +22,7 @@ amdgpu_family_info_matrix = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
+            "pytorch-target": "gfx1100",
         },
     },
     "gfx115x": {
