@@ -1,4 +1,31 @@
 if(THEROCK_ENABLE_ROCPROFV3)
+  set(_rocprofiler_sdk_optional_deps)
+
+  ##############################################################################
+  # rocprof-trace-decoder-binary
+  # The trace decoder is responsible for decoding advanced thread traces from
+  # the GPU. It is a binary-only dependency of ROCm which is enabled at
+  # runtime via `rocprofv3 --att`. If an appropriate shared library is adjacent
+  # to the profiler shared libraries, it will be used by default.
+  # See: https://github.com/ROCm/rocprof-trace-decoder/
+  ##############################################################################
+  if(THEROCK_ENABLE_ROCPROF_TRACE_DECODER_BINARY)
+    therock_subproject_fetch(rocprof-trace-decoder-download
+      SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download"
+      URL https://github.com/ROCm/rocprof-trace-decoder/releases/download/v0.1.0/rocprof-trace-decoder-manylinux-2.28-0.1.0-Linux.tar.gz
+      URL_HASH SHA256=8a6dfd3c100b88ea54e75809136e323a351e8d3aafbf848d66c371ce55a325cb
+      TOUCH
+        "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download/stamp"
+    )
+    therock_cmake_subproject_declare(rocprof-trace-decoder-binary
+      EXTERNAL_SOURCE_DIR "rocprof-trace-decoder-binary"
+      BACKGROUND_BUILD
+      EXTRA_DEPENDS
+        "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download/stamp"
+    )
+    therock_cmake_subproject_activate(rocprof-trace-decoder-binary)
+    list(APPEND _rocprofiler_sdk_optional_deps rocprof-trace-decoder-binary)
+  endif()
 
   ##############################################################################
   # aqlprofile
@@ -31,6 +58,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       aqlprofile
       hip-clr
       rocprofiler-register
+      ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}

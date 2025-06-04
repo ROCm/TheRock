@@ -177,6 +177,7 @@ else()
   # TODO(#36): Could provide an alternate or no-op "core runtime" instead?
   set(_hip_runtime_platform_requirements "")
 endif()
+
 therock_add_feature(HIP_RUNTIME
   GROUP CORE
   DESCRIPTION "Enables the HIP runtime"
@@ -185,6 +186,10 @@ therock_add_feature(HIP_RUNTIME
 
 # Profiler Features.
 if(NOT WIN32)
+  therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
+    GROUP PROFILER
+    DESCRIPTION "Enables the closed-source rocprof trace decoder binary"
+  )
   # Other platforms (Linux) _do_ have the profiler SDK.
   therock_add_feature(ROCPROFV3
     GROUP PROFILER
