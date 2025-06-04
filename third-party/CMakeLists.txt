@@ -12,6 +12,9 @@ add_subdirectory(FunctionalPlus)
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)
 
+# spdlog depends on fmt.
+add_subdirectory(spdlog)
+
 # Host math libraries.
 if(THEROCK_ENABLE_HOST_BLAS)
   add_subdirectory(host-blas)
