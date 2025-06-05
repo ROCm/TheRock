@@ -92,11 +92,15 @@ jobs:
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://therock-nightly-python/${{ inputs.AMDGPU_FAMILIES }}/ \
             --recursive --exclude "*" --include "*.whl"
 
+      - name: Add Python 3.12 to PATH
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: echo "/opt/python/cp312-cp312/bin" >> $GITHUB_PATH
+
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3
-          ./build_tools/packaging/python/generate_release_index.py \
+          python ./build_tools/packaging/python/generate_release_index.py \
             --bucket=therock-nightly-python \
             --endpoint=s3.us-east-2.amazonaws.com \
             --subdir=${{ inputs.AMDGPU_FAMILIES }} \
