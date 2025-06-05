@@ -1,35 +1,44 @@
 #!/usr/bin/env python
 """install_rocm_from_artifacts.py
 
-This script helps CI workflows, developers and testing suites easily install TheRock to their environment using artifacts.
+This script helps CI workflows, developers, and testing suites easily install
+TheRock to their environment using artifacts.
+
 It installs TheRock to an output directory from one of these sources:
 - GitHub CI workflow run
 - GitHub release tag
-- An existing installation of TheRock
+- A local build directory
 
 Usage:
-python build_tools/install_rocm_from_artifacts.py [--output-dir OUTPUT_DIR] [--amdgpu-family AMDGPU_FAMILY] (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
-                                        [--blas | --no-blas] [--fft | --no-fft] [--miopen | --no-miopen] [--prim | --no-prim]
-                                        [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
+    python build_tools/install_rocm_from_artifacts.py \
+        [--output-dir OUTPUT_DIR] [--amdgpu-family AMDGPU_FAMILY] [--generic-only] \
+        (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR) [--names] \
+        [--test | --no-test] [--dev | --no-dev] [--lib | --no-lib]
 
 Examples:
-- Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
-    - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --tests`
-- Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
+- Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215
+  (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default
+  output directory `therock-build`:
+    - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --test`
+- Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release
+  tag `nightly-tarball` to the specified output directory `build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`
-- Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
+- Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
+  gfx120X artifacts from GitHub release tag `dev-tarball` to the default output
+  directory `therock-build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`
 
-You can select your AMD GPU family from this file https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81
+Tips:
+- You can select your AMD GPU family from therock_amdgpu_targets.cmake.
+- For specific artifacts, pass in the flag such as `--names rand,prim`.
+- For test artifacts, pass in the flag `--test`.
+- For generic artifacts only, pass in the flag `--generic-only`.
 
-By default for CI workflow retrieval, all artifacts (excluding test artifacts) will be downloaded. For specific artifacts, pass in the flag such as `--rand` (RAND artifacts) For test artifacts, pass in the flag `--tests` (test artifacts). For base artifacts only, pass in the flag `--base-only`
-
-Note: the script will overwrite the output directory argument. If no argument is passed, it will overwrite the default "therock-build" directory.
+Warning! The script overwrites the output directory, which defaults to "therock-build".
 """
 
 import argparse
 from fetch_artifacts import (
-    retrieve_base_artifacts,
     retrieve_enabled_artifacts,
     retrieve_s3_artifacts,
 )
@@ -162,13 +171,7 @@ def retrieve_artifacts_by_run_id(args):
     amdgpu_family = args.amdgpu_family
     log(f"Retrieving artifacts for run ID {run_id}")
     s3_artifacts = retrieve_s3_artifacts(run_id, amdgpu_family)
-
-    # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
-    retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
-    if not args.base_only:
-        retrieve_enabled_artifacts(
-            args, amdgpu_family, run_id, output_dir, s3_artifacts
-        )
+    retrieve_enabled_artifacts(args, amdgpu_family, run_id, output_dir, s3_artifacts)
 
     # Flattening artifacts from .tar* files then removing .tar* files
     log(f"Untar-ing artifacts for {run_id}")
@@ -182,9 +185,7 @@ def retrieve_artifacts_by_run_id(args):
 
 
 def retrieve_artifacts_by_release(args):
-    """
-    If the user requested TheRock artifacts by release version, this function will retrieve those assets
-    """
+    """Retrieves artifacts from a GitHub release."""
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
     # In the case that the user passes in latest, we will get the latest nightly-tarball
@@ -257,8 +258,7 @@ def run(args):
         retrieve_artifacts_by_run_id(args)
     elif args.release:
         retrieve_artifacts_by_release(args)
-
-    if args.input_dir:
+    elif args.input_dir:
         retrieve_artifacts_by_input_dir(args)
 
 
@@ -275,78 +275,54 @@ def main(argv):
         "--amdgpu-family",
         type=str,
         default="gfx94X-dcgpu",
-        help="AMD GPU family to install (please refer to this: https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81 for family choices)",
+        help="AMD GPU family to install (please refer to therock_amdgpu_targets.cmake for family choices)",
+    )
+    parser.add_argument(
+        "--generic-only", help="Include only generic artifacts", action="store_true"
     )
 
     # This mutually exclusive group will ensure that only one argument is present
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--run-id", type=str, help="GitHub run ID of TheRock to install")
-
-    group.add_argument(
+    install_source_group = parser.add_mutually_exclusive_group(required=True)
+    install_source_group.add_argument(
+        "--run-id", type=str, help="GitHub run ID of TheRock to install"
+    )
+    install_source_group.add_argument(
         "--release",
         type=str,
         help="Github release version of TheRock to install, from the nightly-tarball (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
     )
-
-    artifacts_group = parser.add_argument_group("artifacts_group")
-    artifacts_group.add_argument(
-        "--blas",
-        default=False,
-        help="Include 'blas' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--fft",
-        default=False,
-        help="Include 'fft' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--miopen",
-        default=False,
-        help="Include 'miopen' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--prim",
-        default=False,
-        help="Include 'prim' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--rand",
-        default=False,
-        help="Include 'rand' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--rccl",
-        default=False,
-        help="Include 'rccl' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--tests",
-        default=False,
-        help="Include all test artifacts for enabled libraries",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--base-only", help="Include only base artifacts", action="store_true"
-    )
-
-    group.add_argument(
+    install_source_group.add_argument(
         "--input-dir",
         type=str,
-        help="Pass in an existing directory of TheRock to provision and test",
+        help="Existing directory of TheRock to install",
     )
+
+    parser.add_argument(
+        "--names",
+        default="",
+        help="Comma-delimited list of artifact names to fetch (e.g. 'prim,rand') or omit to fetch all",
+    )
+
+    components_group = parser.add_argument_group("Components")
+    components_group.add_argument(
+        "--dev",
+        default=False,
+        help="Include 'dev' artifacts (default off)",
+        action=argparse.BooleanOptionalAction,
+    )
+    components_group.add_argument(
+        "--lib",
+        default=True,
+        help="Include 'lib' artifacts (default on)",
+        action=argparse.BooleanOptionalAction,
+    )
+    components_group.add_argument(
+        "--test",
+        default=False,
+        help="Include 'test' artifacts (default off)",
+        action=argparse.BooleanOptionalAction,
+    )
+    # TODO: also include doc and run? Reuse arguments from fetch_artifacts.py?
 
     args = parser.parse_args(argv)
     run(args)

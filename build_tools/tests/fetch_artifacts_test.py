@@ -12,6 +12,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from fetch_artifacts import (
     IndexPageParser,
+    compute_enabled_artifacts,
     retrieve_s3_artifacts,
     ArtifactNotFoundExeption,
     FetchArtifactException,
@@ -48,6 +49,32 @@ def create_sample_tar_files(temp_dir):
 
 
 class ArtifactsIndexPageTest(unittest.TestCase):
+    def testComputeEnabledArtifacts(self):
+        s3_artifacts = set()
+        s3_artifacts.add("foo_dev_generic.tar.xz")
+        s3_artifacts.add("foo_dev_targetABC.tar.xz")
+        s3_artifacts.add("foo_dev_targetXYZ.tar.xz")
+        s3_artifacts.add("bar_dev_generic.tar.xz")
+        s3_artifacts.add("bar_test_generic.tar.xz")
+        s3_artifacts.add("baz_dev_generic.tar.xz")
+
+        enabled_artifacts = compute_enabled_artifacts(
+            s3_artifacts=s3_artifacts,
+            names="foo,bar",
+            generic_only=False,
+            target="targetABC",
+            dev=True,
+            lib=False,
+            test=False,
+        )
+
+        self.assertIn("foo_dev_generic.tar.xz", enabled_artifacts)
+        self.assertIn("foo_dev_targetABC.tar.xz", enabled_artifacts)
+        self.assertNotIn("foo_dev_targetXYZ.tar.xz", enabled_artifacts)
+        self.assertIn("bar_dev_generic.tar.xz", enabled_artifacts)
+        self.assertNotIn("bar_test_generic.tar.xz", enabled_artifacts)
+        self.assertNotIn("baz_dev_generic.tar.xz", enabled_artifacts)
+
     def testCreateIndexPage(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir = Path(temp_dir)
