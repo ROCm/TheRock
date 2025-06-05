@@ -25,6 +25,12 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      subtree:
+        type: string
+    secrets:
+      monorepo_token:
+        required: false
+
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -48,19 +54,25 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
-      BUCKET: ${{ github.event.repository.name == 'TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/TheRock"
+          # temporary
+          ref: "users/geomin12/fix-monorepo-fork"
 
       - name: "Checking out repository for rocm-libraries"
-        if: ${{ github.repository == 'ROCm/rocm-libraries' }}
+        if: ${{ github.event.repository.name == 'rocm-libraries' }}
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: "ROCm/rocm-libraries"
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          sparse-checkout: |
+            .github
+            ${{ inputs.subtree }}
+          fetch-depth: 0  # Needed for subtree splitting
+          token: ${{ secrets.monorepo_token }}
           path: "rocm-libraries"
 
       - name: Runner Health Settings
