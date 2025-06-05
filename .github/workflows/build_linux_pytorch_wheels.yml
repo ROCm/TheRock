@@ -53,17 +53,6 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - name: Compute PYTHON_TAG and FIND_LINKS
-        run: |
-          PYTHON_TAG=cp$(echo "${{ inputs.python_version }}" | tr -d '.')
-          echo "PYTHON_TAG=$PYTHON_TAG" >> $GITHUB_ENV
-          echo "FIND_LINKS=https://${{ inputs.s3_python_bucket }}.s3.us-east-2.amazonaws.com/${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG/index.html" >> $GITHUB_ENV
-
-      - name: Debug Print computed paths
-        run: |
-          echo "PYTHON_TAG=$PYTHON_TAG"
-          echo "FIND_LINKS=$FIND_LINKS"
-
       - name: Checkout PyTorch Source Repos
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout
@@ -75,9 +64,10 @@ jobs:
 
       - name: Build PyTorch Wheels
         run: |
+          echo "Building PyTorch wheels for ${{ inputs.PYTORCH_TARGET_ARCH }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
-            --find-links "${FIND_LINKS}" \
+            --find-links "https://${{ inputs.s3_python_bucket }}.s3.us-east-2.amazonaws.com/${{ inputs.AMDGPU_FAMILIES }}/index.html" \
             build \
             --install-rocm \
             --clean \
@@ -98,8 +88,7 @@ jobs:
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ \
-            s3://${{ env.S3_PYTHON_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG/ \
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_PYTHON_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: (Re-)Generate Python package release index
@@ -109,7 +98,6 @@ jobs:
           python ./build_tools/packaging/python/generate_release_index.py \
             --bucket=${{ env.S3_PYTHON_BUCKET }} \
             --endpoint=s3.us-east-2.amazonaws.com \
-            --subdir=${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG \
+            --subdir=${{ inputs.AMDGPU_FAMILIES }} \
             --output=${{ github.workspace }}/index.html
-          aws s3 cp ${{ github.workspace }}/index.html \
-            s3://${{ env.S3_PYTHON_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG/
+          aws s3 cp ${{ github.workspace }}/index.html s3://${{ env.S3_PYTHON_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/
