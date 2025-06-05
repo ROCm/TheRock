@@ -27,6 +27,12 @@ on:
         type: string
       subtree:
         type: string
+    secrets:
+      rocm_libraries_app_id:
+        required: false
+      rocm_libraries_app_private_key:
+        required: false
+
 
 
 # See the details regarding permissions from the link:
@@ -59,13 +65,13 @@ jobs:
           # temporary
           ref: "users/geomin12/fix-monorepo-fork"
 
-      - name: Generate a token
+      - name: Generate a token for rocm-libraries
         if: ${{ github.event.repository.name == 'rocm-libraries' }}
         id: generate-token
         uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.rocm_libraries_app_id }}
+          private-key: ${{ secrets.rocm_libraries_app_private_key }}
           owner: ${{ github.repository_owner }}
 
       - name: "Checking out repository for rocm-libraries"
