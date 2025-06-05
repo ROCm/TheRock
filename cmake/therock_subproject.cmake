@@ -63,6 +63,17 @@ set(THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS
   -Wno-documentation-unknown-command
   -Wno-documentation-pedantic
   -Wno-unused-command-line-argument
+
+  # See https://github.com/ROCm/rocm-libraries/issues/130.
+  # rocPRIM in particular marks macros and struct as deprecated while
+  # continuing to use them itself, resulting in 1GB+ of warning logs.
+  -Wno-deprecated-pragma
+  -Wno-deprecated-declarations
+
+  # New in clang 20
+  #   * 200MB of warning logs in rocSPARSE
+  #   * 350MB of warning logs in rocBLAS
+  -Wno-explicit-specialization-storage-class
 )
 
 if(WIN32)
