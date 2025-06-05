@@ -54,7 +54,10 @@ jobs:
           git config --global user.email "therockbot@amd.com"
 
       - name: Add selected Python version to PATH
-        run: echo "/opt/python/cp${{ inputs.python_version // '.' }}-cp${{ inputs.python_version // '.' }}/bin" >> $GITHUB_PATH
+        run: |
+          PYTHON_TAG=cp${{ inputs.python_version }}  # e.g., cp3.12
+          PYTHON_TAG_CLEANED=$(echo "$PYTHON_TAG" | sed 's/\.//g')  # e.g., cp312
+          echo "/opt/python/${PYTHON_TAG_CLEANED}-${PYTHON_TAG_CLEANED}/bin" >> "$GITHUB_PATH"
 
       - name: Checkout PyTorch Source Repos
         run: |
