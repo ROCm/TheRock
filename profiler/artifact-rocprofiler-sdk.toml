@@ -37,3 +37,7 @@ include = [
 [components.lib."profiler/roctracer/stage"]
 [components.run."profiler/roctracer/stage"]
 [components.test."profiler/roctracer/stage"]
+
+# rocprof-trace-decoder-binary
+[components.lib."profiler/rocprof-trace-decoder-binary/stage"]
+optional = true

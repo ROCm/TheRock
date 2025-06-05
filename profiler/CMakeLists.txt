@@ -122,6 +122,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       aqlprofile
       rocprofiler-sdk
       roctracer
+      ${_rocprofiler_sdk_optional_deps}
   )
 
 endif(THEROCK_ENABLE_ROCPROFV3)

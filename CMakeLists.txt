@@ -127,11 +127,11 @@ option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go
 # `THEROCK_ENABLE_${group_name}` if a GROUP is present.
 ################################################################################
 option(THEROCK_ENABLE_ALL "Enables building of all feature groups" ON)
-cmake_dependent_option(THEROCK_ENABLE_CORE "Enable building of core libraries" ON "THEROCK_ENABLE_ALL" OFF)
-cmake_dependent_option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" ON "THEROCK_ENABLE_ALL" OFF)
-cmake_dependent_option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" ON "THEROCK_ENABLE_ALL" OFF)
-cmake_dependent_option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" ON "THEROCK_ENABLE_ALL" OFF)
-cmake_dependent_option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" ON "THEROCK_ENABLE_ALL" OFF)
+option(THEROCK_ENABLE_CORE "Enable building of core libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
