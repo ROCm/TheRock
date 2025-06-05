@@ -13,11 +13,11 @@ python build_tools/install_rocm_from_artifacts.py [--output-dir OUTPUT_DIR] [--a
                                         [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
 
 Examples:
-- Downloads the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
+- Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
     - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --tests`
-- Downloads the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
+- Downloads and unpacks the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`
-- Downloads the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
+- Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`
 
 You can select your AMD GPU family from this file https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81
