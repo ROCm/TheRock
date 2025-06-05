@@ -12,7 +12,7 @@ on:
       python_version:
         required: true
         type: string
-      find_links:
+      s3_python_bucket:
         required: true
         type: string
   workflow_dispatch:
@@ -26,7 +26,7 @@ on:
       python_version:
         required: true
         type: string
-      find_links:
+      s3_python_bucket:
         required: true
         type: string
 
@@ -43,6 +43,7 @@ jobs:
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
+      S3_PYTHON_BUCKET: ${{ inputs.s3_python_bucket }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -52,9 +53,14 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
+      - name: Compute PYTHON_TAG and FIND_LINKS
+        run: |
+          PYTHON_TAG=cp${{ inputs.python_version }} | tr -d '.'
+          echo "PYTHON_TAG=$PYTHON_TAG" >> $GITHUB_ENV
+          echo "FIND_LINKS=https://${{ inputs.s3_python_bucket }}.s3.us-east-2.amazonaws.com/${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG/index.html" >> $GITHUB_ENV
+
       - name: Checkout PyTorch Source Repos
         run: |
-          echo "Checking out PyTorch repositories..."
           ./external-builds/pytorch/pytorch_torch_repo.py checkout
           ./external-builds/pytorch/pytorch_audio_repo.py checkout
           ./external-builds/pytorch/pytorch_vision_repo.py checkout
@@ -64,15 +70,14 @@ jobs:
 
       - name: Build PyTorch Wheels
         run: |
-          echo "Building PyTorch wheels for ${{ inputs.PYTORCH_TARGET_ARCH }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
-            --find-links "${{ inputs.find_links }}" \
+            --find-links "${FIND_LINKS}" \
             build \
             --install-rocm \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --pytorch-rocm-arch ${{ inputs.PYTORCH_TARGET_ARCH }} \
+            --pytorch-rocm-arch ${{ inputs.PYTORCH_TARGET_ARCH }}
 
       - name: Configure AWS Credentials
         if: always()
@@ -88,6 +93,18 @@ jobs:
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          # These wheels share the same S3 directory as rocm-sdk to simplify --find-links usage
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://therock-nightly-python/${{ inputs.AMDGPU_FAMILIES }}/ \
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ \
+            s3://${{ env.S3_PYTHON_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG/ \
             --recursive --exclude "*" --include "*.whl"
+
+      - name: (Re-)Generate Python package release index
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          pip install boto3
+          python ./build_tools/packaging/python/generate_release_index.py \
+            --bucket=${{ env.S3_PYTHON_BUCKET }} \
+            --endpoint=s3.us-east-2.amazonaws.com \
+            --subdir=${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG \
+            --output=${{ github.workspace }}/index.html
+          aws s3 cp ${{ github.workspace }}/index.html \
+            s3://${{ env.S3_PYTHON_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG/

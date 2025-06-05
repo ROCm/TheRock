@@ -25,4 +25,4 @@ jobs:
       AMDGPU_FAMILIES: ${{ matrix.config.AMDGPU_FAMILIES }}
       PYTORCH_TARGET_ARCH: ${{ matrix.config.PYTORCH_TARGET_ARCH }}
       python_version: ${{ matrix.python_version }}
-      find_links: https://therock-nightly-python.s3.us-east-2.amazonaws.com/${{ matrix.config.AMDGPU_FAMILIES }}/index.html
+      s3_python_bucket: therock-nightly-python
