@@ -91,3 +91,20 @@ jobs:
           # These wheels share the same S3 directory as rocm-sdk to simplify --find-links usage
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://therock-nightly-python/${{ inputs.AMDGPU_FAMILIES }}/ \
             --recursive --exclude "*" --include "*.whl"
+
+      - name: Setup Python (for boto3)
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        with:
+          python-version: 3.12
+
+      - name: (Re-)Generate Python package release index
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          pip install boto3
+          ./build_tools/packaging/python/generate_release_index.py \
+            --bucket=therock-nightly-python \
+            --endpoint=s3.us-east-2.amazonaws.com \
+            --subdir=${{ inputs.AMDGPU_FAMILIES }} \
+            --output=${{ github.workspace }}/index.html
+          aws s3 cp ${{ github.workspace }}/index.html s3://therock-nightly-python/${{ inputs.AMDGPU_FAMILIES }}/
