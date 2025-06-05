@@ -268,6 +268,6 @@ if(THEROCK_ENABLE_FFT)
 endif(THEROCK_ENABLE_FFT)
 
 if(THEROCK_ENABLE_BLAS)
-  add_subdirectory(BLAS)
   add_subdirectory(support)
+  add_subdirectory(BLAS)
 endif()
