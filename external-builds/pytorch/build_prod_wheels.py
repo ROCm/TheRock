@@ -432,7 +432,7 @@ def main(argv: list[str]):
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
         "--version-suffix",
-        default=f"-rocmsdk{formatted_date}",
+        default=f"+rocmsdk{formatted_date}",
         help="PyTorch version suffix",
     )
     build_p.add_argument(
