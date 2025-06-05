@@ -53,6 +53,9 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
+      - name: Add selected Python version to PATH
+        run: echo "/opt/python/cp${{ inputs.python_version // '.' }}-cp${{ inputs.python_version // '.' }}/bin" >> $GITHUB_PATH
+
       - name: Checkout PyTorch Source Repos
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout
