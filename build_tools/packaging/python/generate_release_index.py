@@ -66,6 +66,7 @@ def get_objects(bucket_name: str, subdir: str):
 
 
 def add_releases(objects: list, base_url: str, subdir: str, file: io.TextIOWrapper):
+
     file.write(
         f'    <h2> <a href="https://github.com/ROCm/TheRock">ROCm/TheRock</a> {subdir} packages</h2>\n'
     )
