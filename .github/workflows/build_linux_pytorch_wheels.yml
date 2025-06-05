@@ -55,9 +55,14 @@ jobs:
 
       - name: Compute PYTHON_TAG and FIND_LINKS
         run: |
-          PYTHON_TAG=cp${{ inputs.python_version }} | tr -d '.'
+          PYTHON_TAG=cp$(echo "${{ inputs.python_version }}" | tr -d '.')
           echo "PYTHON_TAG=$PYTHON_TAG" >> $GITHUB_ENV
           echo "FIND_LINKS=https://${{ inputs.s3_python_bucket }}.s3.us-east-2.amazonaws.com/${{ inputs.AMDGPU_FAMILIES }}/$PYTHON_TAG/index.html" >> $GITHUB_ENV
+
+      - name: Debug Print computed paths
+        run: |
+          echo "PYTHON_TAG=$PYTHON_TAG"
+          echo "FIND_LINKS=$FIND_LINKS"
 
       - name: Checkout PyTorch Source Repos
         run: |
