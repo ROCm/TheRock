@@ -206,6 +206,9 @@ def run(args):
     run_id = args.run_id
     target = args.target
     build_dir = args.build_dir
+    if not Path(build_dir).is_dir():
+        print(f"Build dir '{build_dir}' does not exist. Exiting...")
+        return
     s3_artifacts = retrieve_s3_artifacts(run_id, target)
     if not s3_artifacts:
         print(f"S3 artifacts for {run_id} does not exist. Exiting...")
