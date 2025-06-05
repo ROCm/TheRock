@@ -92,12 +92,6 @@ jobs:
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://therock-nightly-python/${{ inputs.AMDGPU_FAMILIES }}/ \
             --recursive --exclude "*" --include "*.whl"
 
-      - name: Setup Python (for boto3)
-        if: ${{ github.repository_owner == 'ROCm' }}
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
-        with:
-          python-version: 3.12
-
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
