@@ -18,7 +18,7 @@ jobs:
           - { AMDGPU_FAMILIES: gfx94X-dcgpu, PYTORCH_TARGET_ARCH: gfx942 }
           - { AMDGPU_FAMILIES: gfx110X-dgpu, PYTORCH_TARGET_ARCH: gfx1100 }
           - { AMDGPU_FAMILIES: gfx120X-all, PYTORCH_TARGET_ARCH: gfx1201 }
-        python_version: ["3.11", "3.12"]
+        python_version: ["cp311-cp311", "cp312-cp312"]
 
     uses: ./.github/workflows/build_linux_pytorch_wheels.yml
     with:
