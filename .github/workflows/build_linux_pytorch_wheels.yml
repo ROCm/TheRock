@@ -12,7 +12,7 @@ on:
       python_version:
         required: true
         type: string
-      s3_python_bucket:
+      s3_bucket:
         required: true
         type: string
   workflow_dispatch:
