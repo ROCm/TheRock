@@ -44,7 +44,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET: ${{ inputs.s3_bucket }}
-      S3_ENDPOINT: "https://s3.us-east-2.amazonaws.com"
+      S3_ENDPOINT: "s3.us-east-2.amazonaws.com"
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
