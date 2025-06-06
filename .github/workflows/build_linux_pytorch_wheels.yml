@@ -76,7 +76,7 @@ jobs:
           echo "Building PyTorch wheels for ${{ inputs.PYTORCH_TARGET_ARCH }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
-            --find-links "https://${{ inputs.s3_python_bucket }}.s3.us-east-2.amazonaws.com/${{ inputs.AMDGPU_FAMILIES }}/index.html" \
+            --find-links "https://${{ inputs.s3_bucket }}.s3.us-east-2.amazonaws.com/${{ inputs.AMDGPU_FAMILIES }}/index.html" \
             build \
             --install-rocm \
             --clean \
