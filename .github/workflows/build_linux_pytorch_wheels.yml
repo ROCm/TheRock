@@ -105,8 +105,8 @@ jobs:
         run: |
           pip install boto3
           python ./build_tools/packaging/python/generate_release_index.py \
-            --bucket=${{ env.S3_PYTHON_BUCKET }} \
-            --endpoint=s3.us-east-2.amazonaws.com \
+            --bucket=${{ env.S3_BUCKET }} \
+            --endpoint=${{ env.S3_ENDPOINT }} \
             --subdir=${{ inputs.AMDGPU_FAMILIES }} \
             --output=${{ github.workspace }}/index.html
           aws s3 cp ${{ github.workspace }}/index.html s3://${{ env.S3_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/
