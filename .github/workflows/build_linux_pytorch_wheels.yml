@@ -61,7 +61,7 @@ jobs:
             echo "ERROR: Could not find python: ${python_dir}"
             exit 1
           fi
-          echo "${python_dir}/bin" >> "$GITHUB_PATH"
+          echo "/opt/python/${python_dir}/bin" >> "$GITHUB_PATH"
 
       - name: Checkout PyTorch Source Repos
         run: |
