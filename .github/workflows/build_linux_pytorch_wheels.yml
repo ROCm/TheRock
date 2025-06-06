@@ -6,9 +6,6 @@ on:
       AMDGPU_FAMILIES:
         required: true
         type: string
-      PYTORCH_TARGET_ARCH:
-        required: true
-        type: string
       python_version:
         required: true
         type: string
@@ -18,9 +15,6 @@ on:
   workflow_dispatch:
     inputs:
       AMDGPU_FAMILIES:
-        required: true
-        type: string
-      PYTORCH_TARGET_ARCH:
         required: true
         type: string
       python_version:
@@ -74,15 +68,15 @@ jobs:
 
       - name: Build PyTorch Wheels
         run: |
-          echo "Building PyTorch wheels for ${{ inputs.PYTORCH_TARGET_ARCH }}"
+          echo "Building PyTorch wheels for ${{ inputs.AMDGPU_FAMILIES }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
             --find-links "https://${{ env.S3_BUCKET }}.s3.us-east-2.amazonaws.com/${{ inputs.AMDGPU_FAMILIES }}/index.html" \
+            --pre \
             build \
             --install-rocm \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --pytorch-rocm-arch ${{ inputs.PYTORCH_TARGET_ARCH }}
 
       - name: Configure AWS Credentials
         if: always()

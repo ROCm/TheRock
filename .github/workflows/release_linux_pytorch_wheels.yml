@@ -15,14 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - { AMDGPU_FAMILIES: gfx94X-dcgpu, PYTORCH_TARGET_ARCH: gfx942 }
-          - { AMDGPU_FAMILIES: gfx110X-dgpu, PYTORCH_TARGET_ARCH: gfx1100 }
-          - { AMDGPU_FAMILIES: gfx120X-all, PYTORCH_TARGET_ARCH: gfx1201 }
+          - { AMDGPU_FAMILIES: gfx94X-dcgpu }
+          - { AMDGPU_FAMILIES: gfx110X-dgpu }
+          - { AMDGPU_FAMILIES: gfx120X-all }
         python_version: ["cp311-cp311", "cp312-cp312"]
 
     uses: ./.github/workflows/build_linux_pytorch_wheels.yml
     with:
       AMDGPU_FAMILIES: ${{ matrix.config.AMDGPU_FAMILIES }}
-      PYTORCH_TARGET_ARCH: ${{ matrix.config.PYTORCH_TARGET_ARCH }}
       python_version: ${{ matrix.python_version }}
       s3_bucket: therock-nightly-python
