@@ -109,4 +109,4 @@ jobs:
             --endpoint=s3.us-east-2.amazonaws.com \
             --subdir=${{ inputs.AMDGPU_FAMILIES }} \
             --output=${{ github.workspace }}/index.html
-          aws s3 cp ${{ github.workspace }}/index.html s3://${{ env.S3_PYTHON_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/
+          aws s3 cp ${{ github.workspace }}/index.html s3://${{ env.S3_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/
