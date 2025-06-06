@@ -5,12 +5,16 @@ add_subdirectory(boost)
 add_subdirectory(eigen)
 add_subdirectory(fmt)
 add_subdirectory(googletest)
+add_subdirectory(libdivide)
 add_subdirectory(msgpack-cxx)
 add_subdirectory(nlohmann-json)
 add_subdirectory(FunctionalPlus)
 
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)
+
+# spdlog depends on fmt.
+add_subdirectory(spdlog)
 
 # Host math libraries.
 if(THEROCK_ENABLE_HOST_BLAS)
