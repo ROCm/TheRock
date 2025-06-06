@@ -43,7 +43,7 @@ jobs:
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
-      S3_PYTHON_BUCKET: ${{ inputs.s3_python_bucket }}
+      S3_BUCKET: ${{ inputs.s3_bucket }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
