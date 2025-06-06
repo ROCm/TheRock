@@ -1,0 +1,31 @@
+From cd43be77cf5dc4c2cf46d2449c4dddc186da3880 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Thu, 5 Jun 2025 17:51:14 -0700
+Subject: [PATCH 4/4] Unify ROCBLAS_TENSILE_LIBRARY_DIR across Windows and
+ Linux.
+
+Splitting the structure leads to further complexity in all downstream projects and tooling.
+---
+ library/src/CMakeLists.txt | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
+index f4bdfb5f..e39c74cf 100644
+--- a/library/src/CMakeLists.txt
++++ b/library/src/CMakeLists.txt
+@@ -820,11 +820,7 @@ rocm_install_targets(
+ )
+ 
+ if( BUILD_WITH_TENSILE )
+-  if (WIN32)
+-    set( ROCBLAS_TENSILE_LIBRARY_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}/bin/rocblas" CACHE PATH "path to tensile library" )
+-  else()
+-    set( ROCBLAS_TENSILE_LIBRARY_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}${CMAKE_INSTALL_LIBDIR}/rocblas" CACHE PATH "path to tensile library" )
+-  endif()
++  set( ROCBLAS_TENSILE_LIBRARY_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}${CMAKE_INSTALL_LIBDIR}/rocblas" CACHE PATH "path to tensile library" )
+   # For ASAN package, Tensile library files(which are not shared libraries) are not required
+   if( NOT ENABLE_ASAN_PACKAGING )
+     if( BUILD_SHARED_LIBS )
+-- 
+2.45.1.windows.1
+

@@ -1,7 +1,7 @@
-From e2cc40475092e7af4bb92b294b28046a33abf76b Mon Sep 17 00:00:00 2001
+From 5aacae77fa532606e31e98a8ee27ee497084d9ae Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 30 May 2025 18:19:06 -0700
-Subject: [PATCH 2/2] [next-cmake] Link against roctx64.
+Subject: [PATCH 2/3] Link against roctx64.
 
 Prior, we were finding it but left it out of the link.
 ---
@@ -30,5 +30,5 @@ index d2ba9d75..3ba8eabc 100644
  
      if(HIPBLASLT_ENABLE_ASAN)
 -- 
-2.43.0
+2.45.1.windows.1
 
