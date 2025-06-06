@@ -33,7 +33,7 @@
 [submodule "rocm-core"]
 	path = base/rocm-core
 	url = https://github.com/ROCm/rocm-core.git
-	branch = amd-master
+	branch = master
 [submodule "rocminfo"]
 	path = core/rocminfo
 	url = https://github.com/ROCm/rocminfo.git
