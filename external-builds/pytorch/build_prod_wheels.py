@@ -55,7 +55,7 @@ build_prod_wheels.py
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
 
-Typical usage to build a single arch from the host:
+Typical usage to build with default architecture from rocm-sdk targets:
 
 ```
 python build_prod_wheels.py build \
@@ -118,11 +118,15 @@ def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
 
 def capture(args: list[str | Path], cwd: Path) -> str:
     args = [str(arg) for arg in args]
-    return subprocess.check_output(args, cwd=str(cwd)).decode()
+    try:
+        return subprocess.check_output(args, cwd=str(cwd)).decode().strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Error capturing output: {e}")
+        return ""
 
 
 def get_rocm_sdk_version() -> str:
-    # TODO: We should have a `rocm-sdk version` command, but alas, we do not.
+    # Use `rocm-sdk version` command when available
     freeze_lines = capture(
         [sys.executable, "-m", "pip", "freeze"], cwd=Path.cwd()
     ).splitlines()
@@ -131,6 +135,16 @@ def get_rocm_sdk_version() -> str:
         if line.startswith(prefix):
             return line[len(prefix) :]
     raise ValueError(f"No rocm-sdk found in {' '.join(freeze_lines)}")
+
+
+def get_rocm_sdk_targets() -> str:
+    # Run `rocm-sdk targets` to get the default architecture
+    targets = capture([sys.executable, "-m", "rocm_sdk", "targets"], cwd=Path.cwd())
+    if not targets:
+        print("Warning: rocm-sdk targets returned empty or failed")
+        return ""
+    # Convert space-separated targets to comma-separated for PYTORCH_ROCM_ARCH
+    return targets.replace(" ", ",")
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -229,7 +243,19 @@ def do_build(args: argparse.Namespace):
     print(f"  PATH = {system_path}")
 
     pytorch_rocm_arch = args.pytorch_rocm_arch
-    print(f"  PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+    if pytorch_rocm_arch is None:
+        pytorch_rocm_arch = get_rocm_sdk_targets()
+        print(
+            f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
+        )
+    else:
+        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+
+    if not pytorch_rocm_arch:
+        raise ValueError(
+            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
+            "Please specify --pytorch-rocm-arch (e.g., gfx942)."
+        )
 
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
@@ -423,7 +449,8 @@ def main(argv: list[str]):
         help="pytorch_vision source directory",
     )
     build_p.add_argument(
-        "--pytorch-rocm-arch", required=True, help="gfx arch to build pytorch with"
+        "--pytorch-rocm-arch",
+        help="gfx arch to build pytorch with (defaults to rocm-sdk targets)",
     )
     build_p.add_argument(
         "--pytorch-build-number", default="1", help="Build number to append to version"
