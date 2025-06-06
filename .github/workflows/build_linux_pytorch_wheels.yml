@@ -55,9 +55,12 @@ jobs:
 
       - name: Add selected Python version to PATH
         run: |
-          PYTHON_TAG=cp${{ inputs.python_version }}  # e.g., cp3.12
-          PYTHON_TAG_CLEANED=$(echo "$PYTHON_TAG" | sed 's/\.//g')  # e.g., cp312
-          echo "/opt/python/${PYTHON_TAG_CLEANED}-${PYTHON_TAG_CLEANED}/bin" >> "$GITHUB_PATH"
+          python_dir="/opt/python/${{ inputs.python_version }}"
+          if ! [ -x "${python_dir}/bin/python" ]; then
+            echo "ERROR: Could not find python: ${python_dir}"
+            exit 1
+          fi
+          echo "/opt/python/${python_dir}/bin" >> "$GITHUB_PATH"
 
       - name: Checkout PyTorch Source Repos
         run: |
