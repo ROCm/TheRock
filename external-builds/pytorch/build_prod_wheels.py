@@ -122,15 +122,9 @@ def capture(args: list[str | Path], cwd: Path) -> str:
 
 
 def get_rocm_sdk_version() -> str:
-    # TODO: We should have a `rocm-sdk version` command, but alas, we do not.
-    freeze_lines = capture(
-        [sys.executable, "-m", "pip", "freeze"], cwd=Path.cwd()
-    ).splitlines()
-    for line in freeze_lines:
-        prefix = "rocm-sdk=="
-        if line.startswith(prefix):
-            return line[len(prefix) :]
-    raise ValueError(f"No rocm-sdk found in {' '.join(freeze_lines)}")
+    return capture(
+        [sys.executable, "-m", "rocm_sdk", "version"], cwd=Path.cwd()
+    ).strip()
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -234,6 +228,9 @@ def do_build(args: argparse.Namespace):
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
+        "ROCM_PATH": str(root_dir),  # Hard-coded in LoadHIP.cmake
+        # Work-around for https://github.com/ROCm/TheRock/issues/785
+        "HIP_DEVICE_LIB_PATH": str(root_dir / "lib" / "llvm" / "amdgcn" / "bitcode"),
         "PYTORCH_EXTRA_INSTALL_REQUIREMENTS": f"rocm-sdk[libraries]=={rocm_sdk_version}",
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         # TODO: Should get the supported archs from the rocm-sdk install.
