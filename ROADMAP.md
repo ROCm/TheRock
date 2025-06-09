@@ -7,9 +7,9 @@ Our goal here is to document the prioritized roadmap of target architectures we 
 
 ## Prioritized Target Architectures
 
-[Prioritized Target Architectures GitHub Discussion](https://github.com/ROCm/ROCm/discussions/4276)
-
 The following is a list of prioritized roadmaps divided by OS (Linux/Windows) and architecture. Each individual section is its own roadmap and we will be in parallel trying to support at least one *new* architecture per section in parallel working top-to-bottom. Current focus areas are in __bold__. There will be exceptions from the "top-to-bottom" ordering occasionally based on test device availability.
+
+See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com/ROCm/ROCm/discussions/4276)
 
 > [!NOTE]
 > For the purposes of the table below:
@@ -42,9 +42,6 @@ The following is a list of prioritized roadmaps divided by OS (Linux/Windows) an
 | RDNA2        | gfx1035     |               |               |               |
 | RDNA2        | gfx1032     |               |               |               |
 | RDNA2        | gfx1030     |               |               |               |
-| RDNA1        | gfx1012     |               |               |               |
-| RDNA1        | gfx1011     |               |               |               |
-| RDNA1        | gfx1010     |               |               |               |
 | GCN5.1       | gfx906      |               |               |               |
 
 ### HIP Runtime and SDK on Windows
@@ -64,7 +61,4 @@ Check [windows_support.md](docs/development/windows_support.md) on current statu
 | RDNA2        | gfx1035     |               |               |               |
 | RDNA2        | gfx1032     |               |               |               |
 | RDNA2        | gfx1030     |               |               |               |
-| RDNA1        | gfx1012     |               |               |               |
-| RDNA1        | gfx1011     |               |               |               |
-| RDNA1        | gfx1010     |               |               |               |
 | GCN5.1       | gfx906      |               |               |               |
