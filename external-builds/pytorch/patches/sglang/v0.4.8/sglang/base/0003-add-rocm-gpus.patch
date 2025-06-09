@@ -1,0 +1,26 @@
+From eeaaabd234b8aa2e65dd51255d9f0b9fb336816a Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 7 Jul 2025 02:05:53 +0000
+Subject: [PATCH 3/5] add rocm gpus
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ sgl-kernel/setup_rocm.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sgl-kernel/setup_rocm.py b/sgl-kernel/setup_rocm.py
+index 0f15641..05ad5c7 100644
+--- a/sgl-kernel/setup_rocm.py
++++ b/sgl-kernel/setup_rocm.py
+@@ -62,7 +62,7 @@ if torch.cuda.is_available():
+ else:
+     print(f"Warning: torch.cuda not available. Using default target: {amdgpu_target}")
+ 
+-if amdgpu_target not in ["gfx942", "gfx950"]:
++if amdgpu_target not in [ "gfx90a", "gfx942", "gfx950", "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151", "gfx1200", "gfx1201"]:
+     print(
+         f"Warning: Unsupported GPU architecture detected '{amdgpu_target}'. Expected 'gfx942' or 'gfx950'."
+     )
+-- 
+2.43.0
+

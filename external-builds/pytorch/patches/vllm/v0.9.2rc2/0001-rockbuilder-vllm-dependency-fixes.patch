@@ -1,0 +1,31 @@
+From 7b10de40fee7979b5b6ae1b3f7d294e25d2fb661 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 7 Jul 2025 01:13:07 +0000
+Subject: [PATCH 1/2] rockbuilder vllm dependency fixes
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ requirements/rocm-build.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/requirements/rocm-build.txt b/requirements/rocm-build.txt
+index 9420154..3ae1b1a 100644
+--- a/requirements/rocm-build.txt
++++ b/requirements/rocm-build.txt
+@@ -6,11 +6,11 @@ torch==2.7.0
+ torchvision==0.22.0
+ torchaudio==2.7.0
+ 
+-triton==3.2
++triton
+ cmake>=3.26.1,<4
+ packaging>=24.2
+ setuptools>=77.0.3,<80.0.0
+ setuptools-scm>=8
+ wheel
+ jinja2>=3.1.6
+-amdsmi==6.2.4
++amdsmi
+-- 
+2.43.0
+

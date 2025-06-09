@@ -1,6 +1,12 @@
 [projects]
 project_list=
+    dependencies
+    amdsmi
     pytorch
     pytorch_vision
     pytorch_audio
     torch_migraphx
+    triton
+    vllm
+    aiter
+    sglang
