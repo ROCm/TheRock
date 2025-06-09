@@ -1,0 +1,24 @@
+From c0e432f0fc2bbd26934c2cf6c9771c65c45ebfee Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 5 Jun 2025 03:47:27 -0700
+Subject: [PATCH] aiter gfx1150 hack
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ aiter/utility/dtypes.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/aiter/utility/dtypes.py b/aiter/utility/dtypes.py
+index c524068..4d93e06 100644
+--- a/aiter/utility/dtypes.py
++++ b/aiter/utility/dtypes.py
+@@ -4,6 +4,7 @@ import torch
+ from ..jit.utils.chip_info import get_gfx
+
+ defaultDtypes = {
++    "gfx1150": {"fp8": torch.float8_e4m3fn},
+     "gfx942": {"fp8": torch.float8_e4m3fnuz},
+     "gfx950": {"fp8": torch.float8_e4m3fn},
+ }
+--
+2.43.0
