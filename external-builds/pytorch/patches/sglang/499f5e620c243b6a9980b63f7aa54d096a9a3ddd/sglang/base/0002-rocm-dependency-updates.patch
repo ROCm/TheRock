@@ -1,0 +1,55 @@
+From 3fe89f629c4861596e14a5c1b72a246cf874e8c0 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 5 Jun 2025 03:15:47 -0700
+Subject: [PATCH 2/3] rocm dependency updates
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ python/pyproject.toml     |  2 +-
+ sgl-kernel/pyproject.toml | 11 ++---------
+ 2 files changed, 3 insertions(+), 10 deletions(-)
+
+diff --git a/python/pyproject.toml b/python/pyproject.toml
+index ae8b828f..5aa76feb 100644
+--- a/python/pyproject.toml
++++ b/python/pyproject.toml
+@@ -74,7 +74,7 @@ blackwell = [
+ srt_hip = [
+     "sglang[runtime_common]",
+     "torch",
+-    "vllm==0.6.7.dev2",
++    "vllm==0.9.0.2.dev2",
+     "outlines==0.1.11"
+ ]
+
+diff --git a/sgl-kernel/pyproject.toml b/sgl-kernel/pyproject.toml
+index f148ba61..1175d1c3 100644
+--- a/sgl-kernel/pyproject.toml
++++ b/sgl-kernel/pyproject.toml
+@@ -1,10 +1,11 @@
+ [build-system]
+ requires = [
++  "setuptools>=75.0",
+   "scikit-build-core>=0.10",
+   "torch>=2.6.0",
+   "wheel",
+ ]
+-build-backend = "scikit_build_core.build"
++build-backend = "setuptools.build_meta"
+
+ [project]
+ name = "sgl-kernel"
+@@ -29,11 +30,3 @@ exclude = [
+   "dist*",
+   "tests*",
+ ]
+-
+-[tool.scikit-build]
+-cmake.build-type = "Release"
+-minimum-version = "build-system.requires"
+-
+-wheel.py-api = "cp39"
+-wheel.license-files = []
+-wheel.packages = ["python/sgl_kernel"]
+--
+2.43.0
