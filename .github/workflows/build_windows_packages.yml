@@ -144,7 +144,7 @@ jobs:
           extra_cmake_options="${{ inputs.extra_cmake_options }}"
           echo "Building package ${package_version}"
 
-          # Build.
+          # Configure.
           cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
             -DCMAKE_C_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
             -DCMAKE_CXX_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \

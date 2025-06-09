@@ -16,11 +16,15 @@ on:
       build_type:
         description: The type of build version to produce ("rc", or "dev")
         type: string
-        default: "rc"
+        default: "dev"  # TODO(#542): flip default to 'rc' after testing?
       package_suffix:
         type: string
       families:
-        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x)"
+        description: "A comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
+        type: string
+        default: gfx110x
+      extra_cmake_options:
+        description: "Extra options to pass to the CMake configure command"
         type: string
 
   # TODO(#542): Enable schedule once working
@@ -94,26 +98,180 @@ jobs:
       matrix:
         target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
     env:
+      BASE_BUILD_DIR_POWERSHELL: B:\tmpbuild
+      CACHE_DIR: "${{github.workspace}}/.cache"
+      CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
+      CCACHE_MAXSIZE: "4000M"
       TEATIME_LABEL_GH_GROUP: 1
-      # TODO(scotttodd): ${OUTPUT_DIR}/${FILE_NAME} for DIST_ARCHIVE
       OUTPUT_DIR: ${{ github.workspace }}/output
-      DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
+      DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
       S3_TARBALL: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
 
     steps:
+      # TODO(amd-justchen): share with build_windows_packages.yml. Use pre-job hook?
+      - name: "Create build dir"
+        shell: powershell
+        run: |
+          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
+          echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
+          mkdir "$buildDir"
+          Write-Host "Generated Build Directory: $buildDir"
+          $bashBuildDir = $buildDir -replace '\\', '/' -replace '^B:', '/b'
+          echo  "BUILD_DIR_BASH=$bashBuildDir" >> $env:GITHUB_ENV
+          Write-Host "Converted Build Directory For Bash: $bashBuildDir"
+          $fs = Get-PSDrive -PSProvider "FileSystem"
+          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
+          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
+          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
+
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.12'
 
-      - name: Print status
+      - name: Install python deps
         run: |
-          echo "DIST_ARCHIVE: ${DIST_ARCHIVE}"
-          echo "RELEASE_TYPE: ${RELEASE_TYPE}"
-          echo "S3_TARBALL: ${S3_TARBALL}"
+          pip install -r requirements.txt
 
-      # TODO(#542): Build and upload tarballs
+      # TODO(amd-justchen): share with build_windows_packages.yml. Include in VM image? Dockerfile?
+      - name: Install requirements
+        run: |
+          choco install --no-progress -y ccache
+          choco install --no-progress -y ninja
+          choco install --no-progress -y strawberryperl
+          echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
+          choco install --no-progress -y awscli
+          echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+
+      # After other installs, so MSVC get priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      # TODO(#762): Move to script and share with build_windows_packages.yml.
+      - name: Runner Health Settings
+        run: |
+          echo "CCACHE_DIR=${CCACHE_DIR}"
+          df -h
+          mkdir -p $CCACHE_DIR
+
+          echo "cmake: $(which cmake)"
+          cmake --version
+          echo "ninja: $(which ninja)"
+          ninja --version
+          echo "CC: $CC"
+          echo "CXX: $CXX"
+
+          echo "python: $(which python), python3: $(which python3)"
+          python --version
+
+          echo "gcc: $(which gcc)"
+          gcc --version
+          echo "perl: $(which perl)"
+          perl --version
+          echo "gfortran: $(which gfortran)"
+          gfortran --version
+
+          echo "Git version: $(git --version)"
+          git config fetch.parallel 10
+          nthreads=$(nproc --all)
+          echo [*] Logical Processors available: $nthreads...
+
+      # TODO: We shouldn't be using a cache on actual release branches, but it
+      # really helps for iteration time.
+      - name: Enable cache
+        uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+          restore-keys: |
+            windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
+
+      - name: Fetch sources
+        run: |
+          python ./build_tools/fetch_sources.py --jobs 96
+
+      - name: Checkout closed source AMDGPU/ROCm interop library folder
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: nod-ai/amdgpu-windows-interop
+          path: amdgpu-windows-interop
+          lfs: true
+
+      - name: Configure Projects
+        run: |
+          # clear cache before build and after download
+          ccache -z
+
+          # Configure.
+          cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
+            -DCMAKE_C_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
+            -DCMAKE_CXX_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
+            -DCMAKE_LINKER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/link.exe" \
+            -DTHEROCK_BACKGROUND_BUILD_JOBS=4 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }} \
+            -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
+            ${{ inputs.extra_cmake_options }}
+
+      - name: Build therock-dist
+        run: cmake --build "${{ env.BUILD_DIR_BASH }}" --target therock-dist
+
+      - name: Compress dist folder
+        run: |
+          cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
+          echo "Building ${{ env.DIST_ARCHIVE }}"
+          tar cfz "${{ env.DIST_ARCHIVE }}" .
+
       # TODO(#703): Build and upload Python wheels
+
+      - name: Build report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Build dir:"
+          echo "------------"
+          ls -lh "${{ env.BUILD_DIR_BASH }}"
+          echo "Artifact Archives:"
+          echo "------------------"
+          ls -lh "${{ env.BUILD_DIR_BASH }}"/artifacts/*.tar.xz
+          echo "Artifacts:"
+          echo "----------"
+          du -h -d 1 "${{ env.BUILD_DIR_BASH }}"/artifacts
+          echo "CCache Stats:"
+          echo "-------------"
+          ccache -s
+
+      - name: Upload Tarball to GitHub
+        uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
+        with:
+          artifacts: "${{ env.DIST_ARCHIVE }}"
+          tag: "${{ env.RELEASE_TYPE }}-tarball"
+          name: "${{ env.RELEASE_TYPE }}-tarball"
+          body: "Automatic ${{ env.RELEASE_TYPE }} tarball of TheRock."
+          removeArtifacts: false
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: false
+
+      - name: Configure AWS Credentials
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
+
+      - name: Upload Releases to S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_TARBALL }}
+
+      - name: Save cache
+        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        if: always()
+        with:
+          path: ${{ env.OUTPUT_DIR }}/caches
+          key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}

@@ -20,7 +20,7 @@ on:
       package_suffix:
         type: string
       families:
-        description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x)"
+        description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
         type: string
   # Trigger on a schedule to build nightly release candidates.
   schedule:
@@ -145,6 +145,13 @@ jobs:
             -- \
             "--version=${{ needs.setup_metadata.outputs.version }}"
 
+      - name: Build Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Full SDK du:"
+          echo "------------"
+          du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
+
       - name: Upload Tarball to GitHub
         uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1.16.0
         with:
@@ -198,13 +205,6 @@ jobs:
         with:
           workflow: test_release_packages.yml
           inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-tarball", "file_name": "${{ env.FILE_NAME }}", "target": "${{ matrix.target_bundle.amdgpu_family }}" }'
-
-      - name: Report
-        if: ${{ !cancelled() }}
-        run: |
-          echo "Full SDK du:"
-          echo "------------"
-          du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
 
       - name: Save cache
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
