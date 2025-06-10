@@ -12,13 +12,13 @@ import json
 import os
 from urllib.request import urlopen, Request
 
-# TAG_NAME = os.getenv("TAG_NAME")
-# VERSION = os.getenv("VERSION")
+run_id = ${{ github.run_id }}
+attempt = ${{ github.attempt }}
 
 
 def run():
     github_release_url = (
-        f"https://api.github.com/repos/RoCm/TheRock/actions/runs/${{ github.run_id }}/attempts/${{ github.attempt }}/jobs"
+        f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{run_id}/attempts/{attempt}/jobs"
     )
     headers = {
         "Accept": "application/vnd.github+json",
