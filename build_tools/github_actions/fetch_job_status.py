@@ -41,7 +41,7 @@ def run():
             )
 
         job_data = json.loads(response.read().decode("utf-8"))
-        echo $job_data
+        print(job_data)
 
 
 if __name__ == "__main__":
