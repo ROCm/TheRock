@@ -113,6 +113,9 @@ jobs:
 
       - name: Determine job status for jobs run
         if: '!cancelled()'
+        env:
+          run_id: ${{ github.run_id }}
+          attempt: ${{ github.attempt }}
         run: python build_tools/github_actions/fetch_job_status.py
 
       # - name: Build therock-dist
