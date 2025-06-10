@@ -12,8 +12,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
   if(THEROCK_ENABLE_ROCPROF_TRACE_DECODER_BINARY)
     therock_subproject_fetch(rocprof-trace-decoder-download
       SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download"
-      URL https://github.com/ROCm/rocprof-trace-decoder/releases/download/v0.1.0/rocprof-trace-decoder-manylinux-2.28-0.1.0-Linux.tar.gz
-      URL_HASH SHA256=8a6dfd3c100b88ea54e75809136e323a351e8d3aafbf848d66c371ce55a325cb
+      URL https://github.com/ROCm/rocprof-trace-decoder/releases/download/0.1.1/rocprof-trace-decoder-manylinux-2.28-0.1.1-Linux.tar.gz
+      URL_HASH SHA256=31098658f2f4d751e79bf17cb22732683a0d356757be01da5eaf46de0752430b
       TOUCH
         "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download/stamp"
     )
