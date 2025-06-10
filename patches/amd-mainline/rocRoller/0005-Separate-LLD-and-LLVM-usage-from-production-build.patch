@@ -1,0 +1,175 @@
+From 3f7c5f69417003653cf21be6e69424d09760fae2 Mon Sep 17 00:00:00 2001
+From: David <david.dixon@amd.com>
+Date: Fri, 13 Jun 2025 19:36:00 -0500
+Subject: [PATCH 5/5] Separate LLD and LLVM usage from production build
+
+---
+ lib/source/Utilities/ReadELF.cpp         | 13 +++++++------
+ next-cmake/CMakeLists.txt                | 15 ++++++++++-----
+ next-cmake/src/Assemblers/CMakeLists.txt |  2 +-
+ next-cmake/src/CMakeLists.txt            |  8 +++++---
+ next-cmake/test/unit/CMakeLists.txt      |  5 ++++-
+ 5 files changed, 27 insertions(+), 16 deletions(-)
+
+diff --git a/lib/source/Utilities/ReadELF.cpp b/lib/source/Utilities/ReadELF.cpp
+index d015db46..7bc2bcd6 100644
+--- a/lib/source/Utilities/ReadELF.cpp
++++ b/lib/source/Utilities/ReadELF.cpp
+@@ -23,7 +23,7 @@
+  * SOFTWARE.
+  *
+  *******************************************************************************/
+-
++#ifdef ROCROLLER_USE_LLD
+ #include <llvm/BinaryFormat/AMDGPUMetadataVerifier.h>
+ #include <llvm/BinaryFormat/MsgPackDocument.h>
+ #include <llvm/Object/ELF.h>
+@@ -33,16 +33,18 @@
+ #include <llvm/Support/Error.h>
+ #include <llvm/Support/MemoryBuffer.h>
+ #include <llvm/Support/raw_ostream.h>
+-
+-#include <rocRoller/Utilities/Error.hpp>
+-
+ using namespace llvm;
+ using namespace llvm::object;
++#endif
++
++#include <rocRoller/Utilities/Error.hpp>
+ 
+ using namespace rocRoller;
+ 
+ std::string rocRoller::readMetaDataFromCodeObject(std::string const& fileName)
+ {
++    std::string yaml;
++    #ifdef ROCROLLER_USE_LLD
+     auto maybeBuffer = MemoryBuffer::getFile(fileName);
+     if(!maybeBuffer)
+     {
+@@ -62,8 +64,6 @@ std::string rocRoller::readMetaDataFromCodeObject(std::string const& fileName)
+     }
+     auto elf = elf64LE->getELFFile();
+ 
+-    std::string yaml;
+-
+     auto maybeSections = elf.sections();
+     if(!maybeSections)
+     {
+@@ -111,6 +111,7 @@ std::string rocRoller::readMetaDataFromCodeObject(std::string const& fileName)
+             break;
+         }
+     }
++    #endif
+ 
+     return yaml;
+ }
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index 12683da2..8ba8f25d 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -58,6 +58,7 @@ option(ROCROLLER_EMBED_ARCH_DEF "Embed msgpack architecture data in library." ON
+ option(ROCROLLER_BUILD_SHARED_LIBS "Build rocRoller as a shared library." ON)
+ option(ROCROLLER_ENABLE_FETCH "Enable fetch content for dependencies if find_package fails." OFF)
+ option(ROCROLLER_ENABLE_CATCH "Build rocRoller catch unit tests" ON)
++option(ROCROLLER_ENABLE_LLD "Build rocroller functionality requiring LLD" OFF)
+ 
+ find_package(fmt 11.1.3)
+ if(NOT fmt_FOUND)
+@@ -134,8 +135,14 @@ if(NOT Boost_FOUND)
+ endif()
+ 
+ find_package(hip REQUIRED)
+-find_package(LLVM REQUIRED)
+-find_package(LLD REQUIRED)
++if(ROCROLLER_ENABLE_LLVM)
++    find_package(LLVM REQUIRED)
++endif()
++
++if(ROCROLLER_ENABLE_LLD)
++    find_package(LLD REQUIRED)
++    target_include_directories(rocroller PRIVATE "${LLD_INCLUDES}")
++endif()
+ 
+ if(ROCROLLER_BUILD_SHARED_LIBS)
+     add_library(rocroller SHARED)
+@@ -174,10 +181,9 @@ target_compile_definitions(rocroller
+ 
+ if(ROCROLLER_ENABLE_LLVM)
+     llvm_map_components_to_libnames(llvm_yaml_libs objectyaml)
++    llvm_map_components_to_libnames(llvm_libs mc support)
+ endif()
+ 
+-llvm_map_components_to_libnames(llvm_libs mc support)
+-
+ target_link_libraries(rocroller
+     PUBLIC
+        Boost::headers
+@@ -185,7 +191,6 @@ target_link_libraries(rocroller
+     PRIVATE
+         ${msgpack_libs}
+ )
+-target_include_directories(rocroller PUBLIC "${LLD_INCLUDE_DIRS}")
+ 
+ if(ROCROLLER_ENABLE_LLVM)
+     # ROCROLLER_USE_LLVM enables the llvm yaml API
+diff --git a/next-cmake/src/Assemblers/CMakeLists.txt b/next-cmake/src/Assemblers/CMakeLists.txt
+index d63301bf..a1bbe56e 100644
+--- a/next-cmake/src/Assemblers/CMakeLists.txt
++++ b/next-cmake/src/Assemblers/CMakeLists.txt
+@@ -28,6 +28,6 @@ set(_CMAKE_CURRENT_SOURCE_DIR "${ROCROLLER_LIB_DIR}/source/Assemblers")
+ target_sources(rocroller
+     PRIVATE
+         "${_CMAKE_CURRENT_SOURCE_DIR}/Assembler.cpp"
+-        "${_CMAKE_CURRENT_SOURCE_DIR}/InProcessAssembler_assemble.cpp"
++        #"${_CMAKE_CURRENT_SOURCE_DIR}/InProcessAssembler_assemble.cpp"
+         "${_CMAKE_CURRENT_SOURCE_DIR}/SubprocessAssembler.cpp"
+ )
+diff --git a/next-cmake/src/CMakeLists.txt b/next-cmake/src/CMakeLists.txt
+index 285ff067..0a760a42 100644
+--- a/next-cmake/src/CMakeLists.txt
++++ b/next-cmake/src/CMakeLists.txt
+@@ -77,10 +77,13 @@ add_subdirectory(KernelGraph)
+ add_library(rocroller-no-rtti
+     OBJECT
+         "${_CMAKE_CURRENT_SOURCE_DIR}/Utilities/ReadELF.cpp"
+-        "${_CMAKE_CURRENT_SOURCE_DIR}/Assemblers/InProcessAssembler.cpp"
++        #"${_CMAKE_CURRENT_SOURCE_DIR}/Assemblers/InProcessAssembler.cpp"
+         "${_CMAKE_CURRENT_SOURCE_DIR}/ExpressionTransformations/FastDivision.cpp"
+ )
+-
++if(ROCROLLER_ENABLE_LLD)
++    target_compile_definitions(rocroller-no-rtti PRIVATE ROCROLLER_ENABLE_LLD)
++    target_link_libraries(rocroller-no-rtti PRIVATE lldELF)
++endif()
+ target_compile_options(rocroller-no-rtti PRIVATE -fno-rtti)
+ target_compile_features(rocroller-no-rtti PRIVATE cxx_std_20)
+ target_compile_definitions(rocroller-no-rtti
+@@ -98,7 +101,6 @@ target_link_libraries(rocroller-no-rtti
+         hip::host
+         $<BUILD_INTERFACE:spdlog::spdlog_header_only>
+         fmt::fmt-header-only
+-        lldELF
+         Boost::headers
+ )
+ 
+diff --git a/next-cmake/test/unit/CMakeLists.txt b/next-cmake/test/unit/CMakeLists.txt
+index 4cb6575f..45f03d79 100644
+--- a/next-cmake/test/unit/CMakeLists.txt
++++ b/next-cmake/test/unit/CMakeLists.txt
+@@ -10,9 +10,12 @@ target_link_libraries(rocroller-tests
+         libdivide::libdivide
+         ${llvm_libs}
+         ${llvm_yaml_libs}
+-        lldELF
+ )
+ 
++if(ROCROLLER_ENABLE_LLD)
++    target_link_libraries(rocroller-tests PRIVATE lldELF)
++endif()
++
+ set(_CMAKE_CURRENT_SOURCE_DIR "${ROCROLLER_TEST_DIR}/unit")
+ 
+ target_sources(rocroller-tests
+-- 
+2.34.1
+
