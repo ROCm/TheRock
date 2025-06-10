@@ -11,14 +11,6 @@ amdgpu_family_matrix_xfail = {
             "expect_failure": True,
         }
     },
-    "gfx950": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx950-dcgpu",
-            "pytorch-target": "gfx950",
-            "expect_failure": True,
-        }
-    },
     "gfx101x": {
         "linux": {
             "test-runs-on": "",
