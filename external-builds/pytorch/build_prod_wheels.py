@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-r"""Builds production PyTorch wheels based on the rocm-sdk wheels.
+r"""Builds production PyTorch wheels based on the rocm wheels.
 
 This script is designed to be used from CI but should be serviceable for real
 users. It is not optimized for providing a development experience for PyTorch.
@@ -29,12 +29,12 @@ python pytorch_torch_vision_repo.py checkout
 ```
 
 Note that as of 2025-05-28, some small patches are needed to PyTorch's `__init__.py`
-to enable library resolution from `rocm-sdk` wheels. We will aim to land this at head
+to enable library resolution from `rocm` wheels. We will aim to land this at head
 in the PyTorch 2.8 timeframe.
 
-2. Install rocm-sdk wheels:
+2. Install rocm wheels:
 
-You must have the `rocm-sdk[libraries,devel]` packages installed. The `install-rocm`
+You must have the `rocm[libraries,devel]` packages installed. The `install-rocm`
 command gives a one-stop to fetch the latest nightlies from the CI or elsewhere.
 Below we are using nightly rocm-sdk packages from the CI bucket. See `RELEASES.md`
 for further options. Specific versions can be specified via `--rocm-sdk-version`
@@ -131,7 +131,7 @@ def get_rocm_sdk_version() -> str:
         [sys.executable, "-m", "pip", "freeze"], cwd=Path.cwd()
     ).splitlines()
     for line in freeze_lines:
-        prefix = "rocm-sdk=="
+        prefix = "rocm=="
         if line.startswith(prefix):
             return line[len(prefix) :]
     raise ValueError(f"No rocm-sdk found in {' '.join(freeze_lines)}")
@@ -191,7 +191,7 @@ def do_install_rocm(args: argparse.Namespace):
         ["--cache-dir", str(args.pip_cache_dir)] if args.pip_cache_dir else []
     )
 
-    # Because the rocm-sdk package caches current GPU selection and such, we
+    # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
 
     exec(
@@ -215,7 +215,7 @@ def do_install_rocm(args: argparse.Namespace):
         pip_args.extend(["--cache-dir", args.pip_cache_dir])
     pip_args += cache_dir_args
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
-    pip_args.extend([f"rocm-sdk[libraries,devel]{rocm_sdk_version}"])
+    pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
     exec(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
@@ -233,7 +233,7 @@ def do_build(args: argparse.Namespace):
     bin_dir = get_rocm_path("bin")
     root_dir = get_rocm_path("root")
 
-    print(f"rocm-sdk version {rocm_sdk_version}:")
+    print(f"rocm version {rocm_sdk_version}:")
     print(f"  PYTHON VERSION: {sys.version}")
     print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
     print(f"  BIN = {bin_dir}")
@@ -260,7 +260,7 @@ def do_build(args: argparse.Namespace):
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
-        "PYTORCH_EXTRA_INSTALL_REQUIREMENTS": f"rocm-sdk[libraries]=={rocm_sdk_version}",
+        "PYTORCH_EXTRA_INSTALL_REQUIREMENTS": f"rocm[libraries]=={rocm_sdk_version}",
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         # TODO: Should get the supported archs from the rocm-sdk install.
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,

@@ -32,7 +32,7 @@ def run(args: argparse.Namespace):
         artifacts=ArtifactCatalog(args.artifact_dir),
     )
 
-    # Simple populate the top-level "rocm-sdk" package. This gets no platform files.
+    # Simple populate the top-level "rocm" package. This gets no platform files.
     PopulatedDistPackage(params, logical_name="meta")
 
     # Populate each target neutral library package.

@@ -130,9 +130,9 @@ ALL_LIBRARIES: dict[str, LibraryEntry] = {}
 # Always available packages.
 PackageEntry(
     "meta",
-    "rocm-sdk",
+    "rocm",
     pure_py_package_name="rocm_sdk",
-    template_directory="rocm-sdk",
+    template_directory="rocm",
     required=True,
 )
 PackageEntry(
