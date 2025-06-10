@@ -15,7 +15,11 @@ from urllib.request import urlopen, Request
 run_id = os.getenv("run_id")
 attempt = os.getenv("attempt")
 
+print(run_id)
+print(attempt)
+
 def run():
+    print(f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{run_id}/attempts/{attempt}/jobs")
     github_release_url = (
         f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{run_id}/attempts/{attempt}/jobs"
     )
