@@ -1,40 +1,67 @@
 # Releases
 
 This page describes how to install and use our release artifacts for ROCm and
-external builds like PyTorch.
-
-These other pages provide useful context:
-
-- [Roadmap for support](ROADMAP.md)
-- [Build artifacts overview](docs/development/artifacts.md)
-
-## Disclaimers and current status
-
-Currently, we produce build artifacts as part of our Continuous Integration (CI)
-build/test workflows as well as part of Continuous Delivery (CD) nightly
-releases.
+external builds like PyTorch. We produce build artifacts as part of our
+Continuous Integration (CI) build/test workflows as well as release artifacts as
+part of Continuous Delivery (CD) nightly releases. See also the
+[Roadmap for support](ROADMAP.md) and
+[Build artifacts overview](docs/development/artifacts.md) pages.
 
 > [!WARNING]
 > These instructions assume familiarity with how to use ROCm. Please see
 > https://rocm.docs.amd.com/ for general information about the ROCm software
 > platform.
 
-## Installing using pip
+Table of contents:
+
+- [Installing releases using pip](#installing-releases-using-pip)
+  - [Installing ROCm Python packages](#installing-rocm-python-packages)
+  - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
+- [Installing from tarballs](#installing-from-tarballs)
+  - [Installing release tarballs](#installing-release-tarballs)
+  - [Installing per-commit CI build tarballs](#installing-per-commit-ci-build-tarballs)
+  - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
+- [Testing your installation](#testing-your-installation)
+
+## Installing releases using pip
 
 We recommend installing ROCm and projects like PyTorch via `pip`, the
 [Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
 
-### Support status
+### Python packages support status
 
 |         | ROCm Python packages | PyTorch Python packages                                             |
 | ------- | -------------------- | ------------------------------------------------------------------- |
 | Linux   | ✅ Supported         | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
 | Windows | ⚪ Planned           | ⚪ Planned                                                          |
 
+> [!IMPORTANT]
+> Known issues with the Python wheels are tracked at
+> https://github.com/ROCm/TheRock/issues/808.
+
 ### Installing ROCm Python packages
 
+We provide several Python packages which compose together into the complete ROCm
+SDK. These packages are defined in the
+[`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
+directory.
+
+| Package name         | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| `rocm`               | Primary sdist meta package that dynamically determines other deps  |
+| `rocm-sdk-core`      | OS-specific core of the ROCm SDK (e.g. compiler and utility tools) |
+| `rocm-sdk-devel`     | OS-specific development tools                                      |
+| `rocm-sdk-libraries` | OS-specific libraries                                              |
+
+For now these packages are published to GPU architecture-specific index pages
+and must be installed using an appropriate `--find-links` argument to `pip`.
+They will later be pushed to the
+[Python Package Index (PyPI)](https://pypi.org/). **Please check back regularly
+as these instructions will change as we migrate to official indexes and adjust
+project layouts.**
+
 > [!TIP]
-> We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html)
+> We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
 >
 > ```bash
 > python -m venv .venv
@@ -47,13 +74,7 @@ We recommend installing ROCm and projects like PyTorch via `pip`, the
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
-To install TheRock from pip, you must provide a link to the index page for your
-desired GPU architecture. **Please check back regularly as these instructions
-will change as we migrate to official indexes and adjust project layouts.**
-
 <!-- TODO: mapping from product name to gfx family -->
-
-<!-- TODO: link to known issues -->
 
 #### gfx94X-dcgpu
 
@@ -87,7 +108,7 @@ python -m pip install \
   rocm[libraries,devel]
 ```
 
-### Installing PyTorch
+### Installing PyTorch Python packages
 
 Coming soon!
 
@@ -95,13 +116,15 @@ Coming soon!
        * needs new build to be compatible with 'rocm' instead of 'rocm-sdk'
        * For 'rocm-sdk', need an environment workaround -->
 
-## Using our tarballs
+## Installing from tarballs
+
+<!-- TODO: clean up these sections and confirm the instructions work -->
 
 Here's a quick way assuming you copied the all the tar files into `${BUILD_ARTIFACTS_DIR}` to "install" TheRock into `${BUILD_ARTIFACTS_DIR}/output_dir`
 
-### From release builds
+### Installing release tarballs
 
-Our releases are already flattened and simply need untarring, follow the below instructions.
+Release tarballs are already flattened and simply need untarring, follow the below instructions.
 
 ```bash
 echo "Unpacking artifacts"
@@ -111,7 +134,7 @@ tar -xf *.tar.gz -C output_dir
 popd
 ```
 
-### From per-commit CI builds
+### Installing per-commit CI build tarballs
 
 Our CI builds artifacts which need to be "flattened" by the `build_tools/fileset_tool.py artifact-flatten` command before they can be used. You will need to have a checkout (see for example [Clone and fetch sources](https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#clone-and-fetch-sources)) in `${SOURCE_DIR}` to use this tool and a Python environment.
 
@@ -123,7 +146,7 @@ python "${SOURCE_DIR}/build_tools/fileset_tool.py artifact-flatten *.tar.xz -o o
 popd
 ```
 
-### From `install_rocm_from_artifacts.py`
+### Installing tarballs using `install_rocm_from_artifacts.py`
 
 This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally.
 
@@ -131,19 +154,19 @@ Examples:
 
 - Downloads all gfx94X S3 artifacts from [GitHub CI workflow run 15052158890](https://github.com/ROCm/TheRock/actions/runs/15052158890) to the default output directory `therock-build`:
 
-  ```
+  ```bash
   python build_tools/install_rocm_from_artifacts.py --run-id 15052158890 --amdgpu-family gfx94X-dcgpu --tests
   ```
 
 - Downloads the version `6.4.0rc20250516` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
 
-  ```
+  ```bash
   python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-dgpu --output-dir build
   ```
 
 - Downloads the version `6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14` gfx110X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
 
-  ```
+  ```bash
   python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-dgpu
   ```
 
