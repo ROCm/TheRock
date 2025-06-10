@@ -80,7 +80,7 @@ project layouts.**
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx94X-dcgpu/index.html \
+  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx94X-dcgpu/index.html \
   rocm[libraries,devel]
 ```
 
@@ -88,7 +88,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
+  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx110X-dgpu/index.html \
   rocm[libraries,devel]
 ```
 
@@ -96,7 +96,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx1151/index.html \
+  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx1151/index.html \
   rocm[libraries,devel]
 ```
 
@@ -104,7 +104,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx120X-all/index.html \
+  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx120X-all/index.html \
   rocm[libraries,devel]
 ```
 
