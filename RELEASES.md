@@ -11,22 +11,28 @@ part of Continuous Delivery (CD) nightly releases. See also the
 > These instructions assume familiarity with how to use ROCm. Please see
 > https://rocm.docs.amd.com/ for general information about the ROCm software
 > platform.
+>
+> **Note: these install steps are a substitute for those on that website**.
 
 Table of contents:
 
 - [Installing releases using pip](#installing-releases-using-pip)
   - [Installing ROCm Python packages](#installing-rocm-python-packages)
+  - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
+  - [Using PyTorch Python packages](#using-pytorch-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
   - [Installing release tarballs](#installing-release-tarballs)
   - [Installing per-commit CI build tarballs](#installing-per-commit-ci-build-tarballs)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
-- [Testing your installation](#testing-your-installation)
+  - [Using installed tarballs](#using-installed-tarballs)
 
 ## Installing releases using pip
 
 We recommend installing ROCm and projects like PyTorch via `pip`, the
 [Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
+
+We currently support Python 3.11 and 3.12, with 3.13 support coming soon.
 
 ### Python packages support status
 
@@ -108,6 +114,61 @@ python -m pip install \
   rocm[libraries,devel]
 ```
 
+### Using ROCm Python packages
+
+After installing the ROCm Python packages, you should see them in your
+environment:
+
+```bash
+pip freeze | grep rocm
+# rocm==6.5.0rc20250610
+# rocm-sdk-core==6.5.0rc20250610
+# rocm-sdk-devel==6.5.0rc20250610
+# rocm-sdk-libraries-gfx110X-dgpu==6.5.0rc20250610
+```
+
+You should also see various tools on your `PATH` and in the `bin` directory:
+
+```bash
+which rocm-sdk
+# .../.venv/bin/rocm-smi
+
+ls .venv/bin
+# activate       amdclang++    hipcc      python                 rocm-sdk
+# activate.csh   amdclang-cl   hipconfig  python3                rocm-smi
+# activate.fish  amdclang-cpp  pip        python3.12             roc-obj
+# Activate.ps1   amdflang      pip3       rocm_agent_enumerator  roc-obj-extract
+# amdclang       amdlld        pip3.12    rocminfo               roc-obj-ls
+```
+
+The `rocm-sdk` tool can be used to inspect and test the installation:
+
+```console
+$ rocm-sdk --help
+usage: rocm-sdk {command} ...
+
+ROCm SDK Python CLI
+
+positional arguments:
+  {path,test,version,targets}
+    path                Print various paths to ROCm installation
+    test                Run installation tests to verify integrity
+    version             Print version information
+    targets             Print information about the GPU targets that are supported
+
+$ rocm-sdk test
+...
+Ran 22 tests in 8.284s
+OK
+
+$ rocm-sdk targets
+gfx1100;gfx1101;gfx1102
+```
+
+Once you have verified your installation, you can continue to use it for
+standard ROCm development or install PyTorch or another supported Python ML
+framework.
+
 ### Installing PyTorch Python packages
 
 > [!WARNING]
@@ -148,12 +209,25 @@ https://github.com/ROCm/TheRock/issues/808):
 
   # ... then continue as normal
   import torch
-
-  print(torch.cuda.is_available())
-  # True
-  print(torch.cuda.get_device_name(0))
-  # e.g. AMD Radeon Pro W7900 Dual Slot
   ```
+
+### Using PyTorch Python packages
+
+After installing the `torch` package with ROCm support, PyTorch can be used
+normally:
+
+```python
+import torch
+
+print(torch.cuda.is_available())
+# True
+print(torch.cuda.get_device_name(0))
+# e.g. AMD Radeon Pro W7900 Dual Slot
+```
+
+See also the
+[Testing the PyTorch installation](https://rocm.docs.amd.com/projects/install-on-linux/en/develop/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation)
+instructions in the AMD ROCm documentation.
 
 ## Installing from tarballs
 
@@ -213,7 +287,7 @@ Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https:/
 
 By default for CI workflow retrieval, all artifacts (excluding test artifacts) will be downloaded. For specific artifacts, pass in the flag such as `--rand` (RAND artifacts) For test artifacts, pass in the flag `--tests` (test artifacts). For base artifacts only, pass in the flag `--base-only`
 
-## Testing your installation
+### Using installed tarballs
 
 The quickest way is to run `rocminfo`
 
