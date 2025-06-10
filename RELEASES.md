@@ -132,7 +132,8 @@ pip freeze
 # torch==2.7.0a0+rocmsdk20250608
 ```
 
-Current known issues (see also https://github.com/ROCm/TheRock/issues/808):
+Current known issues, expected to be fixed in the next nightly (see also
+https://github.com/ROCm/TheRock/issues/808):
 
 - This currently fetches the old `rocm-sdk` package instead of the new `rocm`
   package.
