@@ -110,11 +110,49 @@ python -m pip install \
 
 ### Installing PyTorch Python packages
 
-Coming soon!
+> [!WARNING]
+> This is under **active** development.
 
-<!-- TODO: add `torch` to install commands
-       * needs new build to be compatible with 'rocm' instead of 'rocm-sdk'
-       * For 'rocm-sdk', need an environment workaround -->
+Using the index pages listed above, you can install `torch==2.7.0a0` instead of
+`rocm[libraries,devel]`.
+
+For example, with gfx110X-dgpu:
+
+```bash
+python -m pip install \
+  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx110X-dgpu/index.html \
+  torch==2.7.0a0
+
+pip freeze
+# ...
+# rocm-sdk==6.5.0rc20250606
+# rocm-sdk-core==6.5.0rc20250606
+# rocm-sdk-libraries-gfx110X-dgpu==6.5.0rc20250606
+# ...
+# torch==2.7.0a0+rocmsdk20250608
+```
+
+Current known issues (see also https://github.com/ROCm/TheRock/issues/808):
+
+- This currently fetches the old `rocm-sdk` package instead of the new `rocm`
+  package.
+
+- This currently needs a workaround on startup to fix import errors:
+
+  ```python
+  # Temporary workaround!
+  import rocm_sdk
+
+  rocm_sdk.preload_libraries("rocprofiler-sdk-roctx", "miopen")
+
+  # ... then continue as normal
+  import torch
+
+  print(torch.cuda.is_available())
+  # True
+  print(torch.cuda.get_device_name(0))
+  # e.g. AMD Radeon Pro W7900 Dual Slot
+  ```
 
 ## Installing from tarballs
 
