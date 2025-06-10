@@ -12,8 +12,8 @@ import json
 import os
 from urllib.request import urlopen, Request
 
-TAG_NAME = os.getenv("TAG_NAME")
-VERSION = os.getenv("VERSION")
+# TAG_NAME = os.getenv("TAG_NAME")
+# VERSION = os.getenv("VERSION")
 
 
 def run():
@@ -33,11 +33,11 @@ def run():
     with urlopen(request) as response:
         if response.status == 403:
             raise Exception(
-                f"Error when retrieving GitHub release assets for release tag '{TAG_NAME}'. This is most likely a rate limiting issue, so please try again"
+                f"Error when retrieving GitHub release assets for release tag. This is most likely a rate limiting issue, so please try again"
             )
         elif response.status != 200:
             raise Exception(
-                f"Error when retrieving GitHub release assets for release tag '{TAG_NAME}' with status code {response.status}. Exiting..."
+                f"Error when retrieving GitHub release assets for release tag with status code {response.status}. Exiting..."
             )
 
         job_data = json.loads(response.read().decode("utf-8"))
