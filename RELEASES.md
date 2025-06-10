@@ -48,8 +48,8 @@ We recommend installing ROCm and projects like PyTorch via `pip`, the
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
 To install TheRock from pip, you must provide a link to the index page for your
-desired GPU architecture. One of the following commands can be used to install
-`rocm[libraries,devel]`:
+desired GPU architecture. **Please check back regularly as these instructions
+will change as we migrate to official indexes and adjust project layouts.**
 
 <!-- TODO: mapping from product name to gfx family -->
 
