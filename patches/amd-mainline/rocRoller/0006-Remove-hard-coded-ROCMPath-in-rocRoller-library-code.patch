@@ -1,0 +1,119 @@
+From d37c7c1906b64dc42129d1804c1dd3b8250a284d Mon Sep 17 00:00:00 2001
+From: David <david.dixon@amd.com>
+Date: Sun, 15 Jun 2025 15:30:08 -0500
+Subject: [PATCH 6/6] Remove hard coded ROCMPath in rocRoller library code
+
+---
+ .../Utilities/{Settings.hpp => Settings.hpp.in}     |  4 ++--
+ lib/source/Assemblers/SubprocessAssembler.cpp       |  3 +--
+ next-cmake/CMakeLists.txt                           | 13 +++++++++++--
+ next-cmake/GPUArchitectureGenerator/CMakeLists.txt  |  1 +
+ next-cmake/include/CMakeLists.txt                   |  1 -
+ next-cmake/src/CMakeLists.txt                       |  1 +
+ 6 files changed, 16 insertions(+), 7 deletions(-)
+ rename lib/include/rocRoller/Utilities/{Settings.hpp => Settings.hpp.in} (98%)
+
+diff --git a/lib/include/rocRoller/Utilities/Settings.hpp b/lib/include/rocRoller/Utilities/Settings.hpp.in
+similarity index 98%
+rename from lib/include/rocRoller/Utilities/Settings.hpp
+rename to lib/include/rocRoller/Utilities/Settings.hpp.in
+index 74c72ee3..65b5e7ef 100644
+--- a/lib/include/rocRoller/Utilities/Settings.hpp
++++ b/lib/include/rocRoller/Utilities/Settings.hpp.in
+@@ -131,8 +131,8 @@ namespace rocRoller
+         static inline const SettingsOption<bool> BreakOnThrow{
+             "ROCROLLER_BREAK_ON_THROW", "Cause exceptions thrown to cause a segfault", false, 2};
+ 
+-        static inline const SettingsOption<std::string> ROCMPath{
+-            "ROCM_PATH", "Path where ROCM is installed", "/opt/rocm", -1};
++        static inline const SettingsOption<std::string> AssemblerPath{
++            "ROCM_PATH", "Path where ROCM is installed", "@CMAKE_CXX_COMPILER@", -1};
+ 
+         static inline const SettingsOption<std::string> ArchitectureFile{
+             "ROCROLLER_ARCHITECTURE_FILE", "GPU Architecture file", "", -1};
+diff --git a/lib/source/Assemblers/SubprocessAssembler.cpp b/lib/source/Assemblers/SubprocessAssembler.cpp
+index 219c9f1f..b4d05961 100644
+--- a/lib/source/Assemblers/SubprocessAssembler.cpp
++++ b/lib/source/Assemblers/SubprocessAssembler.cpp
+@@ -132,8 +132,7 @@ namespace rocRoller
+         std::string assemblerPath = Settings::getInstance()->get(Settings::SubprocessAssemblerPath);
+         if(assemblerPath.empty())
+         {
+-            std::string rocmPath = Settings::getInstance()->get(Settings::ROCMPath);
+-            assemblerPath        = rocmPath + "/bin/amdclang++";
++            assemblerPath = Settings::getInstance()->get(Settings::AssemblerPath);
+         }
+ 
+         {
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index 8ba8f25d..4997b5b8 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -217,6 +217,14 @@ configure_file(
+ )
+ target_sources(rocroller PRIVATE "${PROJECT_BINARY_DIR}/rocRoller/src/Version.cpp")
+ 
++configure_file(
++    "${ROCROLLER_LIB_DIR}/include/rocRoller/Utilities/Settings.hpp.in"
++    "${PROJECT_BINARY_DIR}/rocRoller/include/rocRoller/Utilities/Settings.hpp"
++    @ONLY
++)
++target_include_directories(rocroller PUBLIC $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/rocRoller/include>)
++target_sources(rocroller PRIVATE "${PROJECT_BINARY_DIR}/rocRoller/include/rocRoller/Utilities/Settings.hpp")
++
+ add_subdirectory(src)
+ add_subdirectory(include)
+ add_subdirectory(GPUArchitectureGenerator)
+@@ -235,10 +243,11 @@ if(ROCROLLER_ENABLE_CLIENT)
+ endif()
+ 
+ rocm_install(
+-    TARGETS rocroller
++    TARGETS rocroller rocroller-tests
+     EXPORT rocroller-targets
+     INCLUDE
+-        ${ROCROLLER_LIB_DIR}/include
++        "${ROCROLLER_LIB_DIR}/include"
++        "${PROJECT_BINARY_DIR}/rocRoller/include"
+ )
+ 
+ rocm_export_targets(
+diff --git a/next-cmake/GPUArchitectureGenerator/CMakeLists.txt b/next-cmake/GPUArchitectureGenerator/CMakeLists.txt
+index d3e3b827..ab36a0d7 100644
+--- a/next-cmake/GPUArchitectureGenerator/CMakeLists.txt
++++ b/next-cmake/GPUArchitectureGenerator/CMakeLists.txt
+@@ -63,6 +63,7 @@ target_include_directories(GPUArchitectureGenerator
+         "${ROCROLLER_LIB_DIR}/../GPUArchitectureGenerator/include"
+         "${ROCROLLER_LIB_DIR}/include"
+         "${ROCROLLER_GPUARCH_DIR}/isa_spec_manager"
++        "${PROJECT_BINARY_DIR}/rocRoller/include"
+ )
+ target_compile_features(GPUArchitectureGenerator PRIVATE cxx_std_20)
+ target_link_libraries(GPUArchitectureGenerator
+diff --git a/next-cmake/include/CMakeLists.txt b/next-cmake/include/CMakeLists.txt
+index c9b8f533..631e0ed9 100644
+--- a/next-cmake/include/CMakeLists.txt
++++ b/next-cmake/include/CMakeLists.txt
+@@ -253,7 +253,6 @@ target_sources(rocroller
+         "${_CMAKE_CURRENT_SOURCE_DIR}/rocRoller/Utilities/Random_impl.hpp"
+         "${_CMAKE_CURRENT_SOURCE_DIR}/rocRoller/Utilities/RTTI.hpp"
+         "${_CMAKE_CURRENT_SOURCE_DIR}/rocRoller/Utilities/Settings_fwd.hpp"
+-        "${_CMAKE_CURRENT_SOURCE_DIR}/rocRoller/Utilities/Settings.hpp"
+         "${_CMAKE_CURRENT_SOURCE_DIR}/rocRoller/Utilities/Settings_impl.hpp"
+         "${_CMAKE_CURRENT_SOURCE_DIR}/rocRoller/Utilities/Timer.hpp"
+         "${_CMAKE_CURRENT_SOURCE_DIR}/rocRoller/Utilities/Utils.hpp"
+diff --git a/next-cmake/src/CMakeLists.txt b/next-cmake/src/CMakeLists.txt
+index 0a760a42..b545fbc2 100644
+--- a/next-cmake/src/CMakeLists.txt
++++ b/next-cmake/src/CMakeLists.txt
+@@ -95,6 +95,7 @@ target_include_directories(rocroller-no-rtti
+     PRIVATE
+         "${LLVM_INCLUDE_DIRS}"
+         "${ROCROLLER_LIB_DIR}/include"
++        "${PROJECT_BINARY_DIR}/rocRoller/include"
+ )
+ target_link_libraries(rocroller-no-rtti
+     PRIVATE
+-- 
+2.34.1
+

@@ -262,6 +262,7 @@ def main(argv):
             "rocFFT",
             "rocPRIM",
             "rocRAND",
+            "rocRoller",
             "rocSOLVER",
             "rocSPARSE",
             "rocThrust",
