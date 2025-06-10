@@ -12,9 +12,8 @@ import json
 import os
 from urllib.request import urlopen, Request
 
-run_id = ${{ github.run_id }}
-attempt = ${{ github.attempt }}
-
+run_id = os.getenv("run_id")
+attempt = os.getenv("attempt")
 
 def run():
     github_release_url = (
