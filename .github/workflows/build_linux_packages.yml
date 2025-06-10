@@ -58,7 +58,7 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
     steps:
       - name: Checking out repository
-        run: './.github/actions/checkout_source_linux'
+        uses: './.github/actions/checkout_source_linux'
 
       - name: Runner Health Settings
         run: |
