@@ -33,7 +33,7 @@ def find_libraries(*shortnames: str) -> list[Path]:
         try:
             lib_entry = _dist_info.ALL_LIBRARIES[shortname]
         except KeyError:
-            raise ModuleNotFoundError(f"Unknown rocm-sdk library '{shortname}'")
+            raise ModuleNotFoundError(f"Unknown rocm library '{shortname}'")
         package = lib_entry.package
         target_family = None
         if package.is_target_specific:
@@ -48,15 +48,15 @@ def find_libraries(*shortnames: str) -> list[Path]:
         path = py_root / lib_entry.posix_relpath / lib_entry.soname
         if not path.exists():
             raise FileNotFoundError(
-                f"Could not find rocm-sdk library '{shortname}' at path {path}"
+                f"Could not find rocm library '{shortname}' at path {path}"
             )
         paths.append(path)
 
     if missing_extras:
         raise ModuleNotFoundError(
-            f"Missing required rocm-sdk libraries. Please refer to Python "
+            f"Missing required rocm libraries. Please refer to Python "
             f"setup instructions, reinstall your virtual environment, or attempt to "
-            f"install manually via `pip install rocm-sdk[{','.join(missing_extras)}]`"
+            f"install manually via `pip install rocm[{','.join(missing_extras)}]`"
         )
     return paths
 
@@ -67,7 +67,7 @@ _ALL_CDLLS = {}
 def preload_libraries(*shortnames: str, rtld_global: bool = True):
     """Preloads a list of library names, caching their handles globally.
 
-    This is typically used in applications which depend on rocm-sdk runtime libraries
+    This is typically used in applications which depend on rocm runtime libraries
     prior to loading any of their own shared libraries that depend on them. By
     preloading into the linker namespace, it ensures that subsequent resolution of them
     by name should succeed.

@@ -130,9 +130,9 @@ ALL_LIBRARIES: dict[str, LibraryEntry] = {}
 # Always available packages.
 PackageEntry(
     "meta",
-    "rocm-sdk",
+    "rocm",
     pure_py_package_name="rocm_sdk",
-    template_directory="rocm-sdk",
+    template_directory="rocm",
     required=True,
 )
 PackageEntry(
@@ -169,7 +169,7 @@ LibraryEntry("hiprand", "libraries", "libhiprand.so.1")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1")
 LibraryEntry("rccl", "libraries", "librccl.so.1")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.0")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1")
 LibraryEntry("miopen", "libraries", "libMIOpen.so.1")
 
 # Overall ROCM package version.

@@ -19,9 +19,7 @@ from .exe_stub_gen import generate_exe_link_stub
 
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 PYTHON_PACKAGING_DIR = BUILD_TOOLS_DIR / "packaging" / "python" / "templates"
-DIST_INFO_PATH = (
-    PYTHON_PACKAGING_DIR / "rocm-sdk" / "src" / "rocm_sdk" / "_dist_info.py"
-)
+DIST_INFO_PATH = PYTHON_PACKAGING_DIR / "rocm" / "src" / "rocm_sdk" / "_dist_info.py"
 
 assert BUILD_TOOLS_DIR.exists()
 assert PYTHON_PACKAGING_DIR.exists()
@@ -519,7 +517,7 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
             sys.executable,
             str(child_path / "setup.py"),
         ]
-        if child_name in ["rocm-sdk"]:
+        if child_name in ["rocm"]:
             build_args.append("sdist")
         else:
             build_args.append("bdist_wheel")

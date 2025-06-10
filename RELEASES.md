@@ -1,23 +1,37 @@
 # Releases
 
-This is a quick overview of how to consume our current build, release [artifacts](docs/development/artifacts.md), and Python packages.
+This page describes how to install and use our release artifacts for ROCm and
+external builds like PyTorch.
 
-## Current state
+These other pages provide useful context:
 
-Currently, we produce build artifacts as part of our CI workflows ([example](.github/workflows/build_linux_packages.yml)) as well as part of our release. As the project is still not ready for production (see [ROADMAP](ROADMAP.md)) this doc assumes you are already familiar with how to use ROCm. If not - you should not start here, please start at [ROCm](https://github.com/ROCm/ROCm).
+- [Roadmap for support](ROADMAP.md)
+- [Build artifacts overview](docs/development/artifacts.md)
 
-## Installing TheRock using pip
+## Disclaimers and current status
 
-We leverage `pip` as a convient way to install pre-build libraries and tools. The Python packages do not provide Python APIs for import or usage.
+Currently, we produce build artifacts as part of our Continuous Integration (CI)
+build/test workflows as well as part of Continuous Delivery (CD) nightly
+releases.
+
+> [!WARNING]
+> These instructions assume familiarity with how to use ROCm. Please see
+> https://rocm.docs.amd.com/ for general information about the ROCm software
+> platform.
+
+## Installing using pip
+
+We recommend installing ROCm and projects like PyTorch via `pip`, the
+[Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
 
 ### Support status
 
-|         | Python packages |
-| ------- | --------------- |
-| Linux   | ✅ Supported    |
-| Windows | ⚪Planned       |
+|         | ROCm Python packages | PyTorch Python packages                                             |
+| ------- | -------------------- | ------------------------------------------------------------------- |
+| Linux   | ✅ Supported         | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
+| Windows | ⚪ Planned           | ⚪ Planned                                                          |
 
-### Installing Python packages
+### Installing ROCm Python packages
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html)
@@ -33,36 +47,53 @@ We leverage `pip` as a convient way to install pre-build libraries and tools. Th
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
-To install TheRock from pip, you must provide a link to the index page for your desired GPU architecture.
-One of the following commands can be used to install `rocm-sdk[libraries,devel]`.
+To install TheRock from pip, you must provide a link to the index page for your
+desired GPU architecture. **Please check back regularly as these instructions
+will change as we migrate to official indexes and adjust project layouts.**
 
-### gfx94X-dcgpu
+<!-- TODO: mapping from product name to gfx family -->
 
-```bash
-python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx94X-dcgpu/index.html \
-  rocm-sdk[libraries,devel] --pre
-```
+<!-- TODO: link to known issues -->
 
-### gfx110X-dgpu
+#### gfx94X-dcgpu
 
 ```bash
-python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
-  rocm-sdk[libraries,devel] --pre
+python -m pip install \
+  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx94X-dcgpu/index.html \
+  rocm[libraries,devel]
 ```
 
-### gfx1151
+#### gfx110X-dgpu
 
 ```bash
-python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx1151/index.html \
-  rocm-sdk[libraries,devel] --pre
+python -m pip install \
+  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
+  rocm[libraries,devel]
 ```
 
-### gfx120X-all
+#### gfx1151
 
 ```bash
-python -m pip install --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx120X-all/index.html \
-  rocm-sdk[libraries,devel] --pre
+python -m pip install \
+  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx1151/index.html \
+  rocm[libraries,devel]
 ```
+
+#### gfx120X-all
+
+```bash
+python -m pip install \
+  --pre --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx120X-all/index.html \
+  rocm[libraries,devel]
+```
+
+### Installing PyTorch
+
+Coming soon!
+
+<!-- TODO: add `torch` to install commands
+       * needs new build to be compatible with 'rocm' instead of 'rocm-sdk'
+       * For 'rocm-sdk', need an environment workaround -->
 
 ## Using our tarballs
 
