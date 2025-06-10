@@ -41,8 +41,8 @@ We recommend installing ROCm and projects like PyTorch via `pip`, the
 
 ### Installing ROCm Python packages
 
-We provide several Python packages which compose together into the complete ROCm
-SDK. These packages are defined in the
+We provide several Python packages which together form the complete ROCm SDK.
+These packages are defined in the
 [`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
 directory.
 
