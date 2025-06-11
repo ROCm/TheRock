@@ -1,3 +1,8 @@
+# Copyright Facebook, Inc. and its affiliates.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Forked from https://github.com/pytorch/test-infra/blob/1ffc7f7b3b421b57c380de469e11744f54399f09/s3_management/update_dependencies.py
+
 from typing import Dict, List
 
 import boto3

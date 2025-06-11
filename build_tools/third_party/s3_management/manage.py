@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# Copyright Facebook, Inc. and its affiliates.
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Forked from https://github.com/pytorch/test-infra/blob/6105c6f94a6055fffdbbb7319f8fb10a45dae644/s3_management/manage.py
+
 import argparse
 import base64
 import concurrent.futures
