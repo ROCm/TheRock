@@ -9,3 +9,4 @@ project_list=
     vllm
     aiter
     sglang
+    comfyui
