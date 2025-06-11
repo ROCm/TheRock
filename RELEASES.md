@@ -26,6 +26,7 @@ Table of contents:
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
   - [Using installed tarballs](#using-installed-tarballs)
+- [Using Dockerfiles](#using-dockerfiles)
 
 ## Installing releases using pip
 
@@ -361,12 +362,18 @@ ls install
 You may also want to add the install directory to your `PATH` or set other
 environment variables like `ROCM_HOME`.
 
-## Where to get artifacts
+## Using Dockerfiles
 
-<!-- TODO: move Dockerfiles to their own top level section -->
+We publish [Dockerfiles](https://www.docker.com/) with packages preinstalled
+for your convenience. See
+https://github.com/orgs/ROCm/packages?repo_name=TheRock for the full list.
 
-- [Packages](https://github.com/orgs/ROCm/packages?repo_name=TheRock): We currently publish docker images for LLVM targets we support (as well as a container for our build machines)
+| Package                                                                                                                               | Description                          |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| [`therock_build_manylinux_x86_64`](https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64)                     | ⚠️ Container for our CI/CD pipelines |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx942`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx942)   | Ubuntu with PyTorch for ROCm gfx942  |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx1100`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1100) | Ubuntu with PyTorch for ROCm gfx1100 |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx1151`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1151) | Ubuntu with PyTorch for ROCm gfx1151 |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx1201`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1201) | Ubuntu with PyTorch for ROCm gfx1201 |
 
-<!-- TODO: delete, merged into other sections -->
-
-- [Per-commit CI builds](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess): Each of our latest passing CI builds has its own artifacts you can leverage. This is the latest and greatest! We will eventually support a nightly release that is at a higher quality bar than CI. Note a quick recipe for getting all of these from the s3 bucket is to use this quick command `aws s3 cp s3://therock-artifacts . --recursive --exclude "*" --include "${RUN_ID}-${OPERATING_SYSTEM}/*.tar.xz" --no-sign-request` where ${RUN_ID} is the runner id you selected (see the URL). Check the [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to get the aws cli.
+<!-- TODO: how-to's for using the dockerfiles -->
