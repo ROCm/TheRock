@@ -83,9 +83,9 @@ jobs:
         uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v2-${{ github.sha }}
+          key: linux-build-packages-manylinux-v3-${{ inputs.amdgpu_families }}-${{ github.sha }}
           restore-keys: |
-            linux-build-packages-manylinux-v2-
+            linux-build-packages-manylinux-v3-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
         run: |
@@ -181,4 +181,4 @@ jobs:
         if: always()
         with:
           path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v2-${{ github.sha }}
+          key: linux-build-packages-manylinux-v3-${{ inputs.amdgpu_families }}-${{ github.sha }}
