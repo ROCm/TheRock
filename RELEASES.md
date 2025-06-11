@@ -231,25 +231,73 @@ instructions in the AMD ROCm documentation.
 
 ## Installing from tarballs
 
-<!-- TODO: clean up these sections and confirm the instructions work -->
-
-Here's a quick way assuming you copied the all the tar files into `${BUILD_ARTIFACTS_DIR}` to "install" TheRock into `${BUILD_ARTIFACTS_DIR}/output_dir`
+Standalone "ROCm SDK tarballs" are assembled from the same
+[artifacts](docs/development/artifacts.md) as the Python packages which can be
+[installed using pip](#installing-releases-using-pip), without the additional
+wrapper Python wheels or utility scripts.
 
 ### Installing release tarballs
 
-Release tarballs are already flattened and simply need untarring, follow the below instructions.
+Release tarballs are automatically uploaded to
+[GitHub releases](https://github.com/ROCm/TheRock/releases) and AWS S3 buckets
+for archival. The S3 buckets do not yet have index pages.
+
+| Release page                                                                      | S3 bucket                                                                    | Description                                       |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| [`nightly-tarball`](https://github.com/ROCm/TheRock/releases/tag/nightly-tarball) | [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/) | Nightly builds from the `main` branch             |
+| [`dev-tarball`](https://github.com/ROCm/TheRock/releases/tag/dev-tarball)         | [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/)         | ⚠️ Development builds from project maintainers ⚠️ |
+
+After downloading, simply extract the release tarball into place:
 
 ```bash
-echo "Unpacking artifacts"
-pushd "${BUILD_ARTIFACTS_DIR}"
-mkdir output_dir
-tar -xf *.tar.gz -C output_dir
-popd
+mkdir therock && cd therock
+# For example...
+wget https://github.com/ROCm/TheRock/releases/download/nightly-tarball/therock-dist-linux-gfx110X-dgpu-6.5.0rc20250610.tar.gz
+
+mkdir install
+tar -xf *.tar.gz -C install
+
+ls install
+# bin  include  lib  libexec  llvm  share
+
+# Now test some of the installed tools:
+./install/bin/rocminfo
+./install/bin/test_hip_api
+
+# You may now also want to add the install directory to your PATH.
 ```
 
 ### Installing per-commit CI build tarballs
 
-Our CI builds artifacts which need to be "flattened" by the `build_tools/fileset_tool.py artifact-flatten` command before they can be used. You will need to have a checkout (see for example [Clone and fetch sources](https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#clone-and-fetch-sources)) in `${SOURCE_DIR}` to use this tool and a Python environment.
+<!-- TODO: Hide this section by default?
+           Maybe move into artifacts.md or another developer page. -->
+
+Our CI builds artifacts at every commit. These can be installed by "flattening"
+them from the expanded artifacts down to a ROCm SDK "dist folder" using the
+`artifact-flatten` command from
+[`build_tools/fileset_tool.py`](https://github.com/ROCm/TheRock/blob/main/build_tools/fileset_tool.py).
+
+1. Download TheRock's source code and setup your Python environment:
+
+   ```bash
+   # Clone the repository
+   git clone https://github.com/ROCm/TheRock.git
+   cd TheRock
+
+   # Init python virtual environment and install python dependencies
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+1. Find the CI workflow run that you want to install from. For example, search
+   through recent successful runs of the `ci.yml` workflow for `push` events on
+   the `main` branch
+   [using this page](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess+event%3Apush).
+   (choosing a build that took more than a few minutes)
+
+<!-- TODO: working here, translate this paragraph into a code sample -->
+
+Note a quick recipe for getting all of these from the s3 bucket is to use this quick command `aws s3 cp s3://therock-artifacts . --recursive --exclude "*" --include "${RUN_ID}-${OPERATING_SYSTEM}/*.tar.xz" --no-sign-request` where ${RUN_ID} is the runner id you selected (see the URL). Check the [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to get the aws cli.
 
 ```bash
 echo "Unpacking artifacts"
@@ -260,6 +308,8 @@ popd
 ```
 
 ### Installing tarballs using `install_rocm_from_artifacts.py`
+
+<!-- TODO: move this above the manual `tar -xf` commands? -->
 
 This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally.
 
@@ -300,8 +350,10 @@ popd
 
 ## Where to get artifacts
 
-- [Releases](https://github.com/ROCm/TheRock/releases): Our releases page has the latest "developer" release of our tarball artifacts and source code.
+<!-- TODO: move Dockerfiles to their own top level section -->
 
 - [Packages](https://github.com/orgs/ROCm/packages?repo_name=TheRock): We currently publish docker images for LLVM targets we support (as well as a container for our build machines)
+
+<!-- TODO: delete, merged into other sections -->
 
 - [Per-commit CI builds](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess): Each of our latest passing CI builds has its own artifacts you can leverage. This is the latest and greatest! We will eventually support a nightly release that is at a higher quality bar than CI. Note a quick recipe for getting all of these from the s3 bucket is to use this quick command `aws s3 cp s3://therock-artifacts . --recursive --exclude "*" --include "${RUN_ID}-${OPERATING_SYSTEM}/*.tar.xz" --no-sign-request` where ${RUN_ID} is the runner id you selected (see the URL). Check the [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to get the aws cli.
