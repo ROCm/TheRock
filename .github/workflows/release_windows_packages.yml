@@ -223,8 +223,8 @@ jobs:
       - name: Compress dist folder
         run: |
           cd ${{ env.BUILD_DIR_BASH }}/dist/rocm
-          echo "Compressing ${{ env.DIST_ARCHIVE }}"
-          tar cfz "${{ env.DIST_ARCHIVE }}" .
+          echo "Compressing ${{ env.FILE_NAME }}"
+          tar cfz "${{ env.FILE_NAME }}" .
 
       # TODO(#703): Build and upload Python wheels
 
