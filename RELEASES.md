@@ -131,7 +131,7 @@ You should also see various tools on your `PATH` and in the `bin` directory:
 
 ```bash
 which rocm-sdk
-# .../.venv/bin/rocm-smi
+# .../.venv/bin/rocm-sdk
 
 ls .venv/bin
 # activate       amdclang++    hipcc      python                 rocm-sdk
@@ -233,7 +233,7 @@ instructions in the AMD ROCm documentation.
 
 <!-- TODO: clean up these sections and confirm the instructions work -->
 
-Here's a quick way assuming you copied the all the tar files into `${BUILD_ARTIFACTS_DIR}` to "install" TheRock into `${BUILD_ARTIFACTS_DIR}/output_dir`
+Here's a quick way assuming you copied all the tar files into `${BUILD_ARTIFACTS_DIR}` to "install" TheRock into `${BUILD_ARTIFACTS_DIR}/output_dir`
 
 ### Installing release tarballs
 
@@ -285,7 +285,7 @@ Examples:
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
 
-By default for CI workflow retrieval, all artifacts (excluding test artifacts) will be downloaded. For specific artifacts, pass in the flag such as `--rand` (RAND artifacts) For test artifacts, pass in the flag `--tests` (test artifacts). For base artifacts only, pass in the flag `--base-only`
+By default for CI workflow retrieval, all artifacts (excluding test artifacts) will be downloaded. For specific artifacts, pass in the flag such as `--rand` (RAND artifacts). For test artifacts, pass in the flag `--tests` (test artifacts). For base artifacts only, pass in the flag `--base-only`
 
 ### Using installed tarballs
 
