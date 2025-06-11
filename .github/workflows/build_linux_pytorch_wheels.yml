@@ -57,6 +57,9 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
+      - name: List available Python versions
+        run: ls -1 /opt/python
+
       - name: Checkout PyTorch Source Repos
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout
