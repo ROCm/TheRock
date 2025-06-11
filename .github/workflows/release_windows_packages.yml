@@ -224,7 +224,7 @@ jobs:
         run: |
           cd ${{ env.BUILD_DIR_BASH }}/dist/rocm
           echo "Compressing ${{ env.DIST_ARCHIVE }}"
-          tar cfz "${{ env.DIST_ARCHIVE }}" .
+          tar cfz "${{ env.DIST_ARCHIVE }}" --force-local .
 
       # TODO(#703): Build and upload Python wheels
 
