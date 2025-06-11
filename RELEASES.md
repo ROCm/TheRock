@@ -239,9 +239,9 @@ wrapper Python wheels or utility scripts.
 
 ### Installing release tarballs
 
-Release tarballs are automatically uploaded to
-[GitHub releases](https://github.com/ROCm/TheRock/releases) and AWS S3 buckets
-for archival. The S3 buckets do not yet have index pages.
+Release tarballs are automatically uploaded to both
+[GitHub releases](https://github.com/ROCm/TheRock/releases) and AWS S3 buckets.
+The S3 buckets do not yet have index pages.
 
 | Release page                                                                      | S3 bucket                                                                    | Description                                       |
 | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
@@ -368,12 +368,12 @@ We publish [Dockerfiles](https://www.docker.com/) with packages preinstalled
 for your convenience. See
 https://github.com/orgs/ROCm/packages?repo_name=TheRock for the full list.
 
-| Package                                                                                                                               | Description                          |
-| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| [`therock_build_manylinux_x86_64`](https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64)                     | ⚠️ Container for our CI/CD pipelines |
-| [`therock_pytorch_dev_ubuntu_24_04_gfx942`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx942)   | Ubuntu with PyTorch for ROCm gfx942  |
-| [`therock_pytorch_dev_ubuntu_24_04_gfx1100`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1100) | Ubuntu with PyTorch for ROCm gfx1100 |
-| [`therock_pytorch_dev_ubuntu_24_04_gfx1151`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1151) | Ubuntu with PyTorch for ROCm gfx1151 |
-| [`therock_pytorch_dev_ubuntu_24_04_gfx1201`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1201) | Ubuntu with PyTorch for ROCm gfx1201 |
+| Package                                                                                                                               | Description                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [`therock_build_manylinux_x86_64`](https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_x86_64)                     | Container for our CI/CD pipelines<br>(This does _not_ include ROCm or PyTorch but can be used to build them) |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx942`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx942)   | Ubuntu with PyTorch for ROCm gfx942                                                                          |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx1100`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1100) | Ubuntu with PyTorch for ROCm gfx1100                                                                         |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx1151`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1151) | Ubuntu with PyTorch for ROCm gfx1151                                                                         |
+| [`therock_pytorch_dev_ubuntu_24_04_gfx1201`](https://github.com/ROCm/TheRock/pkgs/container/therock_pytorch_dev_ubuntu_24_04_gfx1201) | Ubuntu with PyTorch for ROCm gfx1201                                                                         |
 
 <!-- TODO: how-to's for using the dockerfiles -->
