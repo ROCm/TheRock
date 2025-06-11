@@ -1,0 +1,58 @@
+From 3d0649f36a86bbd3f26ecf81494c6e4335399d8a Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 10 Jun 2025 17:37:18 -0700
+Subject: [PATCH] therock install scripts for comfyui
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ thr_comfyui.sh | 10 ++++++++++
+ thr_install.sh | 20 ++++++++++++++++++++
+ 2 files changed, 30 insertions(+)
+ create mode 100644 thr_comfyui.sh
+ create mode 100755 thr_install.sh
+
+diff --git a/thr_comfyui.sh b/thr_comfyui.sh
+new file mode 100644
+index 0000000..c7eeea0
+--- /dev/null
++++ b/thr_comfyui.sh
+@@ -0,0 +1,10 @@
++if [ -z "$ROCM_HOME" ]; then
++    echo "Error, ROCM_HOME not specified."
++    exit 1
++fi
++if test -d "${ROCM_HOME}/apps/comfyui"; then
++    cd ${ROCM_HOME}/apps/comfyui
++    python main.py
++else
++	echo "Could not find comfyui install from ${ROCM_HOME}/apps/comfyui"
++fi
+diff --git a/thr_install.sh b/thr_install.sh
+new file mode 100755
+index 0000000..48a2df8
+--- /dev/null
++++ b/thr_install.sh
+@@ -0,0 +1,20 @@
++if [ -z "$1" ]; then
++    echo "Error, application source directory not specified."
++    exit 1
++else
++	APP_SRC_DIR=${1}
++fi
++if [ -z "$2" ]; then
++    echo "Error, no rocm_root_directory parameter specified."
++    exit 1
++else
++    INSTALL_DIR_PREFIX_ROCM=${2}
++    echo "rocm_root_directory parameter: ${install_dir_prefix_rocm}"
++fi
++INSTALL_DIR_PREFIX_APP=${INSTALL_DIR_PREFIX_ROCM}/apps/comfyui
++
++mkdir -p ${INSTALL_DIR_PREFIX_APP}
++cd ${APP_SRC_DIR}
++git archive HEAD | tar -x -C ${INSTALL_DIR_PREFIX_APP}
++cp ${APP_SRC_DIR}/thr_comfyui.sh ${INSTALL_DIR_PREFIX_ROCM}/bin
++chmod u+x ${INSTALL_DIR_PREFIX_ROCM}/bin/thr_comfyui.sh
+-- 
+2.43.0
+
