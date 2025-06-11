@@ -61,5 +61,3 @@ runs:
         echo "CCache Stats:"
         echo "-------------"
         ccache -s
-
-    
