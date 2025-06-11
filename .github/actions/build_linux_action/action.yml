@@ -1,0 +1,65 @@
+name: "Build Linux Package Action"
+
+inputs:
+  package_version:
+    type: string
+  amdgpu_families:
+    type: string
+  extra_cmake_options:
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Fetch sources
+      run: |
+        ./build_tools/fetch_sources.py --jobs 12
+
+    - name: Install python deps
+      run: |
+        pip install -r requirements.txt
+
+    - name: Configure Projects
+      run: |
+        # Generate a new build id.
+        package_version="${{ inputs.package_version }}"
+        extra_cmake_options="${{ inputs.extra_cmake_options }}"
+        echo "Building package ${package_version}"
+
+        # Build.
+        cmake -B build -GNinja . \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DTHEROCK_AMDGPU_FAMILIES=${{env.AMDGPU_FAMILIES}} \
+          -DTHEROCK_PACKAGE_VERSION="${package_version}" \
+          -DTHEROCK_VERBOSE=ON \
+          -DBUILD_TESTING=ON \
+          ${extra_cmake_options}
+
+    - name: Build therock-dist
+      run: cmake --build build --target therock-dist
+
+    - name: Build therock-archives
+      run: cmake --build build --target therock-archives
+
+    - name: Test Packaging
+      if: ${{ github.event.repository.name == 'TheRock' }}
+      run: |
+        ctest --test-dir build --output-on-failure
+
+    - name: Report
+      if: ${{ !cancelled() }}
+      run: |
+        echo "Full SDK du:"
+        echo "------------"
+        du -h -d 1 build/dist/rocm
+        echo "Artifact Archives:"
+        echo "------------------"
+        ls -lh build/artifacts/*.tar.xz
+        echo "Artifacts:"
+        echo "----------"
+        du -h -d 1 build/artifacts
+        echo "CCache Stats:"
+        echo "-------------"
+        ccache -s
+
+    
