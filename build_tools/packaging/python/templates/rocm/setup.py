@@ -1,4 +1,4 @@
-"""Main rocm-sdk meta package.
+"""Main rocm meta package.
 
 This package is a bit unique because we only distribute it as an sdist: it is
 intended to be built implicitly on a target machine, where the environment can
@@ -37,7 +37,7 @@ def import_dist_info():
 
 dist_info = import_dist_info()
 print(
-    f"Loaded rocm-sdk dist_info: version={dist_info.__version__}, "
+    f"Loaded rocm dist_info: version={dist_info.__version__}, "
     f"suffix_nonce='{dist_info.PY_PACKAGE_SUFFIX_NONCE}', "
     f"default_target_family='{dist_info.DEFAULT_TARGET_FAMILY}', "
     f"available_target_families={dist_info.AVAILABLE_TARGET_FAMILIES}, "
@@ -62,7 +62,7 @@ packages = find_packages(where="./src")
 print("Found packages:", packages)
 
 setup(
-    name="rocm-sdk",
+    name="rocm",
     version=dist_info.__version__,
     package_dir={"": "src"},
     packages=packages,

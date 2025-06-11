@@ -1,23 +1,24 @@
-From d4766226a97bda7ac74acd938404f771702399c3 Mon Sep 17 00:00:00 2001
+From 4e33fd6dc6a02b9f609f354e2310b84947c8d384 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Tue, 1 Apr 2025 18:49:42 -0700
 Subject: [PATCH 15/15] Preload rocm-sdk binaries if available.
 
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
 ---
- torch/__init__.py | 28 +++++++++++++++++++++++++++-
- 1 file changed, 27 insertions(+), 1 deletion(-)
+ torch/__init__.py | 29 ++++++++++++++++++++++++++++-
+ 1 file changed, 28 insertions(+), 1 deletion(-)
 
 diff --git a/torch/__init__.py b/torch/__init__.py
-index a531f80bae..5eea9a4c79 100644
+index a531f80bae..a14be9b00a 100644
 --- a/torch/__init__.py
 +++ b/torch/__init__.py
-@@ -299,6 +299,30 @@ def _preload_cuda_deps(lib_folder: str, lib_name: str) -> None:
+@@ -299,6 +299,31 @@ def _preload_cuda_deps(lib_folder: str, lib_name: str) -> None:
  
  # See Note [Global dependencies]
  def _load_global_deps() -> None:
-+    # Preload ROCm deps if this torch was built to link against rocm-sdk wheels.
++    # Preload ROCm deps if this torch was built to link against rocm wheels.
 +    # TODO: Lookup distribution info for the torch package and see if it was
-+    # build with PYTORCH_EXTRA_INSTALL_REQUIREMENTS="rocm-sdk" to enable
++    # build with PYTORCH_EXTRA_INSTALL_REQUIREMENTS="rocm" to enable
 +    # ROCm preloading.
 +    try:
 +        import rocm_sdk
@@ -28,7 +29,7 @@ index a531f80bae..5eea9a4c79 100644
 +        rocm_sdk.preload_libraries(
 +            "amdhip64",
 +            # Enable once aqlprofiler is available.
-+            #"rocprofiler-sdk-roctx",
++            "rocprofiler-sdk-roctx",
 +            "hiprtc",
 +            "hipblas",
 +            "hipfft",
@@ -37,12 +38,13 @@ index a531f80bae..5eea9a4c79 100644
 +            "hipsolver",
 +            "rccl",
 +            "hipblaslt",
++            "miopen",
 +        )
 +
      if _running_with_deploy() or platform.system() == "Windows":
          return
  
-@@ -2574,7 +2598,9 @@ def compile(
+@@ -2574,7 +2599,9 @@ def compile(
          nopython=fullgraph,
          dynamic=dynamic,
          disable=disable,

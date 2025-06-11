@@ -71,18 +71,23 @@ jobs:
       - name: Generating package target matrix
         id: configure
         env:
-          PYTORCH_DEV_DOCKER: "false"
           AMDGPU_FAMILIES: ${{ inputs.families }}
+          PYTORCH_DEV_DOCKER: "false"
+          THEROCK_PACKAGE_PLATFORM: "linux"
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    needs: [setup_metadata]
     permissions:
       contents: write
       actions: write # Added permission to trigger workflows
       id-token: write # Added permission for AWS S3 upload
-    needs: [setup_metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
@@ -92,10 +97,6 @@ jobs:
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
       S3_TARBALL: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
       S3_PYTHON: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
-    strategy:
-      fail-fast: false
-      matrix:
-        target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
 
     steps:
       - name: "Checking out repository"

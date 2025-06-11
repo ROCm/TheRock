@@ -20,8 +20,9 @@ jobs:
       - name: Generating package target matrix
         id: configure
         env:
-          PYTORCH_DEV_DOCKER: "true"
           AMDGPU_FAMILIES: ${{ inputs.families }}
+          PYTORCH_DEV_DOCKER: "true"
+          THEROCK_PACKAGE_PLATFORM: "linux"
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
   build-and-push-image:

@@ -179,15 +179,10 @@ endif(THEROCK_ENABLE_PRIM)
 
 if(THEROCK_ENABLE_FFT)
   if(WIN32)
-    # TODO(#36): enable shared libraries / dynamic linking?
-    #   "lld-link: error: undefined symbol: hiprtcCreateProgram"
-    set(_fft_shared_libs_arg "OFF")
-
     # TODO(#36): enable once `rocfft_aot_helper.exe` can access hiprtc0605.dll
     #   "The code execution cannot proceed because hiprtc0605.dll was not found."
     set(_fft_kernel_cache_enable "OFF")
   else()
-    set(_fft_shared_libs_arg "ON")
     set(_fft_kernel_cache_enable "ON")
   endif()
 
@@ -204,9 +199,9 @@ if(THEROCK_ENABLE_FFT)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_CLIENTS=OFF
+      -DBUILD_SHARED_LIBS=ON
       -DUSE_HIPRAND=ON
       -DROCFFT_KERNEL_CACHE_ENABLE=${_fft_kernel_cache_enable}
-      -DBUILD_SHARED_LIBS=${_fft_shared_libs_arg}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -234,7 +229,7 @@ if(THEROCK_ENABLE_FFT)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_SHARED_LIBS=${_fft_shared_libs_arg}
+      -DBUILD_SHARED_LIBS=ON
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -268,5 +263,6 @@ if(THEROCK_ENABLE_FFT)
 endif(THEROCK_ENABLE_FFT)
 
 if(THEROCK_ENABLE_BLAS)
+  add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
