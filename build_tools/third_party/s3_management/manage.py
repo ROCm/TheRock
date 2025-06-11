@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright Facebook, Inc. and its affiliates.
+# Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Forked from https://github.com/pytorch/test-infra/blob/6105c6f94a6055fffdbbb7319f8fb10a45dae644/s3_management/manage.py
@@ -13,7 +14,7 @@ import functools
 import time
 
 from contextlib import suppress
-from os import path, makedirs
+from os import path, makedirs, getenv
 from datetime import datetime
 from collections import defaultdict
 from typing import Iterable, List, Type, Dict, Set, TypeVar, Optional
@@ -27,25 +28,19 @@ import botocore
 S3 = boto3.resource('s3')
 CLIENT = boto3.client('s3')
 
-# bucket for download.pytorch.org
-BUCKET = S3.Bucket('pytorch')
-# bucket mirror just to hold index used with META CDN
-BUCKET_META_CDN = S3.Bucket('pytorch-test')
-INDEX_BUCKETS = {BUCKET, BUCKET_META_CDN}
+# bucket for TheRock
+BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-nightly-python"))
+# TODO: bucket mirror just to hold index used with CDN
+# BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
+INDEX_BUCKETS = {BUCKET} #, BUCKET_CDN}
 
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
-ACCEPTED_SUBDIR_PATTERNS = [
-    r"cu[0-9]+",            # for cuda
-    r"rocm[0-9]+\.[0-9]+",  # for rocm
-    "cpu",
-    "xpu",
-]
 PREFIXES = [
-    "whl",
-    "whl/nightly",
-    "whl/test",
-    "libtorch",
-    "libtorch/nightly",
+    "v2/gfx110X-dgpu",
+    "v2/gfx1151",
+    "v2/gfx120X-all",
+    "v2/gfx94X-dcgpu",
+    "v2/gfx950-dcgpu",
 ]
 
 # NOTE: This refers to the name on the wheels themselves and not the name of
@@ -53,42 +48,11 @@ PREFIXES = [
 # names you need to convert them to "_" (underscores) in order for them to be
 # allowed here since the name of the wheels is compared here
 PACKAGE_ALLOW_LIST = {x.lower() for x in [
-    # ---- torchtune additional packages ----
-    "aiohttp",
-    "aiosignal",
-    "aiohappyeyeballs",
-    "antlr4_python3_runtime",
-    "antlr4-python3-runtime",
-    "async_timeout",
-    "attrs",
-    "blobfile",
-    "datasets",
-    "dill",
-    "frozenlist",
-    "huggingface_hub",
-    "llnl_hatchet",
-    "lxml",
-    "multidict",
-    "multiprocess",
-    "omegaconf",
-    "pandas",
-    "psutil",
-    "pyarrow",
-    "pyarrow_hotfix",
-    "pycryptodomex",
-    "python_dateutil",
-    "pytz",
-    "PyYAML",
-    "regex",
-    "safetensors",
-    "sentencepiece",
-    "six",
-    "tiktoken",
-    "torchao",
-    "torchao_nightly",
-    "tzdata",
-    "xxhash",
-    "yarl",
+    # ---- ROCm ----
+    "rocm",
+    "rocm_sdk",
+    "rocm_sdk_core",
+    "rocm_sdk_devel",
     # ---- triton additional packages ----
     "Arpeggio",
     "caliper_reader",
@@ -108,25 +72,6 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "importlib_metadata",
     "importlib_resources",
     "zipp",
-    # ---- torch xpu additional packages ----
-    "dpcpp_cpp_rt",
-    "intel_cmplr_lib_rt",
-    "intel_cmplr_lib_ur",
-    "intel_cmplr_lic_rt",
-    "intel_opencl_rt",
-    "intel_sycl_rt",
-    "intel_openmp",
-    "tcmlib",
-    "umf",
-    "intel_pti",
-    "oneccl_devel",
-    "oneccl",
-    "impi_rt",
-    "onemkl_sycl_blas",
-    "onemkl_sycl_dft",
-    "onemkl_sycl_lapack",
-    "onemkl_sycl_sparse",
-    "onemkl_sycl_rng",
     # ----
     "Pillow",
     "certifi",
@@ -150,44 +95,13 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "nestedtensor",
     "networkx",
     "numpy",
-    "nvidia_cublas_cu11",
-    "nvidia_cuda_cupti_cu11",
-    "nvidia_cuda_nvrtc_cu11",
-    "nvidia_cuda_runtime_cu11",
-    "nvidia_cudnn_cu11",
-    "nvidia_cufft_cu11",
-    "nvidia_curand_cu11",
-    "nvidia_cusolver_cu11",
-    "nvidia_cusparse_cu11",
-    "nvidia_nccl_cu11",
-    "nvidia_nvtx_cu11",
-    "nvidia_cublas_cu12",
-    "nvidia_cuda_cupti_cu12",
-    "nvidia_cuda_nvrtc_cu12",
-    "nvidia_cuda_runtime_cu12",
-    "nvidia_cudnn_cu12",
-    "nvidia_cufft_cu12",
-    "nvidia_cufile_cu12",
-    "nvidia_nvshmem_cu12",
-    "nvidia_curand_cu12",
-    "nvidia_cusolver_cu12",
-    "nvidia_cusparse_cu12",
-    "nvidia_cusparselt_cu12",
-    "nvidia_nccl_cu12",
-    "nvidia_nvtx_cu12",
-    "nvidia_nvjitlink_cu12",
     "packaging",
     "portalocker",
     "pyre_extensions",
-    "pytorch_triton",
-    "pytorch_triton_rocm",
-    "pytorch_triton_xpu",
     "requests",
     "sympy",
     "tbb",
-    "torch_no_python",
     "torch",
-    "torch_tensorrt",
     "torcharrow",
     "torchaudio",
     "torchcodec",
@@ -218,11 +132,6 @@ PACKAGE_DATE_REGEX = r"([a-zA-z]*-[0-9.]*.dev)([0-9]*)"
 
 # How many packages should we keep of a specific package?
 KEEP_THRESHOLD = 60
-
-# TODO (huydhn): Clean this up afte https://github.com/pytorch/pytorch/pull/152238
-# is in the release branch, be it via cherry picking to the next release branch
-# cut
-KEEP_NIGHTLY_PACKAGES_FOR_EXECUTORCH = {datetime(2025, 3, 10, 0, 0)}
 
 S3IndexType = TypeVar('S3IndexType', bound='S3Index')
 
@@ -307,14 +216,11 @@ class S3Index:
             full_package_name = path.basename(obj)
             package_name = full_package_name.split('-')[0]
             package_build_time = extract_package_build_time(full_package_name)
-            # Hard pass on packages that are included in our allow list
-            if package_name.lower() not in PACKAGE_ALLOW_LIST:
+            # Hard pass on `rocm_sdk_libraries` and packages that are included in our allow list
+            if not match(r"rocm_sdk_libraries_gfx", package_name.lower()) and package_name.lower() not in PACKAGE_ALLOW_LIST:
                 to_hide.add(obj)
                 continue
-            if package_build_time not in KEEP_NIGHTLY_PACKAGES_FOR_EXECUTORCH and (
-                packages[package_name] >= KEEP_THRESHOLD
-                or between_bad_dates(package_build_time)
-            ):
+            if packages[package_name] >= KEEP_THRESHOLD or between_bad_dates(package_build_time):
                 to_hide.add(obj)
             else:
                 packages[package_name] += 1
@@ -359,29 +265,6 @@ class S3Index:
 
     def obj_to_package_name(self, obj: S3Object) -> str:
         return path.basename(obj.key).split('-', 1)[0].lower()
-
-    def to_libtorch_html(
-        self,
-        subdir: Optional[str] = None
-    ) -> str:
-        """Generates a string that can be used as the HTML index
-
-        Takes our objects and transforms them into HTML that have historically
-        been used by pip for installing pytorch, but now only used to generate libtorch browseable folder.
-        """
-        out: List[str] = []
-        subdir = self._resolve_subdir(subdir)
-        is_root = subdir == self.prefix
-        for obj in self.gen_file_list(subdir, "libtorch"):
-            # Skip root objs, as they are irrelevant for libtorch indexes
-            if not is_root and self.is_obj_at_root(obj):
-                continue
-            # Strip our prefix
-            sanitized_obj = obj.key.replace(subdir, "", 1)
-            if sanitized_obj.startswith('/'):
-                sanitized_obj = sanitized_obj.lstrip("/")
-            out.append(f'<a href="/{obj.key}">{sanitized_obj}</a><br/>')
-        return "\n".join(sorted(out))
 
     def to_simple_package_html(
         self,
@@ -439,20 +322,6 @@ class S3Index:
         out.append(f'<!--TIMESTAMP {int(time.time())}-->')
         return '\n'.join(out)
 
-    def upload_libtorch_html(self) -> None:
-        for subdir in self.subdirs:
-            index_html = self.to_libtorch_html(subdir=subdir)
-            for bucket in INDEX_BUCKETS:
-                print(f"INFO Uploading {subdir}/{self.html_name} to {bucket.name}")
-                bucket.Object(
-                    key=f"{subdir}/{self.html_name}"
-                ).put(
-                    ACL='public-read',
-                    CacheControl='no-cache,no-store,must-revalidate',
-                    ContentType='text/html',
-                    Body=index_html
-                )
-
     def upload_pep503_htmls(self) -> None:
         for subdir in self.subdirs:
             index_html = self.to_simple_packages_html(subdir=subdir)
@@ -461,7 +330,7 @@ class S3Index:
                 bucket.Object(
                     key=f"{subdir}/index.html"
                 ).put(
-                    ACL='public-read',
+                    # ACL='public-read',
                     CacheControl='no-cache,no-store,must-revalidate',
                     ContentType='text/html',
                     Body=index_html
@@ -474,18 +343,11 @@ class S3Index:
                     bucket.Object(
                         key=f"{subdir}/{compat_pkg_name}/index.html"
                     ).put(
-                        ACL='public-read',
+                        # ACL='public-read',
                         CacheControl='no-cache,no-store,must-revalidate',
                         ContentType='text/html',
                         Body=index_html
                     )
-
-    def save_libtorch_html(self) -> None:
-        for subdir in self.subdirs:
-            print(f"INFO Saving {subdir}/{self.html_name}")
-            makedirs(subdir, exist_ok=True)
-            with open(path.join(subdir, self.html_name), mode="w", encoding="utf-8") as f:
-                f.write(self.to_libtorch_html(subdir=subdir))
 
     def save_pep503_htmls(self) -> None:
         for subdir in self.subdirs:
@@ -510,31 +372,10 @@ class S3Index:
                              ChecksumAlgorithm="SHA256")
 
     @classmethod
-    def has_public_read(cls: Type[S3IndexType], key: str) -> bool:
-        def is_all_users_group(o) -> bool:
-            return o.get("Grantee", {}).get("URI") == "http://acs.amazonaws.com/groups/global/AllUsers"
-
-        def can_read(o) -> bool:
-            return o.get("Permission") in ["READ", "FULL_CONTROL"]
-
-        acl_grants = CLIENT.get_object_acl(Bucket=BUCKET.name, Key=key)["Grants"]
-        return any(is_all_users_group(x) and can_read(x) for x in acl_grants)
-
-    @classmethod
-    def grant_public_read(cls: Type[S3IndexType], key: str) -> None:
-        CLIENT.put_object_acl(Bucket=BUCKET.name, Key=key, ACL="public-read")
-
-    @classmethod
     def fetch_object_names(cls: Type[S3IndexType], prefix: str) -> List[str]:
         obj_names = []
         for obj in BUCKET.objects.filter(Prefix=prefix):
-            is_acceptable = any([path.dirname(obj.key) == prefix] + [
-                match(
-                    f"{prefix}/{pattern}",
-                    path.dirname(obj.key)
-                )
-                for pattern in ACCEPTED_SUBDIR_PATTERNS
-            ]) and obj.key.endswith(ACCEPTED_FILE_EXTENSIONS)
+            is_acceptable = ([path.dirname(obj.key) == prefix]) and obj.key.endswith(ACCEPTED_FILE_EXTENSIONS)
             if not is_acceptable:
                 continue
             obj_names.append(obj.key)
@@ -609,24 +450,11 @@ class S3Index:
                            checksum=None,
                            size=None,
                            pep658=None) for key in obj_names], prefix)
-        if prefix == "whl/nightly":
-            rc.objects = rc.nightly_packages_to_show()
+        rc.objects = rc.nightly_packages_to_show()
         if with_metadata:
             rc.fetch_metadata()
             rc.fetch_pep658()
         return rc
-
-    @classmethod
-    def undelete_prefix(cls: Type[S3IndexType], prefix: str) -> None:
-        paginator = CLIENT.get_paginator("list_object_versions")
-        for page in paginator.paginate(Bucket=BUCKET.name, Prefix=prefix):
-            for obj in page.get("DeleteMarkers", []):
-                if not obj.get("IsLatest"):
-                    continue
-                obj_key, obj_version_id = obj["Key"], obj["VersionId"]
-                obj_ver = S3.ObjectVersion(BUCKET.name, obj_key, obj_version_id)
-                print(f"Undeleting {obj_key} deleted on {obj['LastModified']}")
-                obj_ver.delete()
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -650,25 +478,17 @@ def main() -> None:
 
     prefixes = PREFIXES if args.prefix == 'all' else [args.prefix]
     for prefix in prefixes:
-        generate_pep503 = prefix.startswith("whl")
         print(f"INFO: {action} for '{prefix}'")
         stime = time.time()
-        idx = S3Index.from_S3(prefix=prefix, with_metadata=generate_pep503 or args.compute_sha256)
+        idx = S3Index.from_S3(prefix=prefix, with_metadata=True or args.compute_sha256)
         etime = time.time()
         print(f"DEBUG: Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f} seconds")
         if args.compute_sha256:
             idx.compute_sha256()
         elif args.do_not_upload:
-            if generate_pep503:
-                idx.save_pep503_htmls()
-            else:
-                idx.save_libtorch_html()
+            idx.save_pep503_htmls()
         else:
-            if generate_pep503:
-                idx.upload_pep503_htmls()
-            else:
-                idx.upload_libtorch_html()
-
+            idx.upload_pep503_htmls()
 
 if __name__ == "__main__":
     main()

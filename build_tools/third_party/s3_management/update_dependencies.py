@@ -1,4 +1,5 @@
 # Copyright Facebook, Inc. and its affiliates.
+# Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Forked from https://github.com/pytorch/test-infra/blob/1ffc7f7b3b421b57c380de469e11744f54399f09/s3_management/update_dependencies.py
@@ -11,7 +12,8 @@ import re
 
 S3 = boto3.resource("s3")
 CLIENT = boto3.client("s3")
-BUCKET = S3.Bucket("pytorch")
+BUCKET = S3.Bucket("therock-nightly-python")
+VERSION = "v2"
 
 PACKAGES_PER_PROJECT = {
     "torch": [
@@ -21,91 +23,14 @@ PACKAGES_PER_PROJECT = {
         "networkx",
         "numpy",
         "jinja2",
+        "MarkupSafe",
         "filelock",
         "fsspec",
-        "nvidia-cudnn-cu11",
-        "nvidia-cudnn-cu12",
         "typing-extensions",
     ],
-    "triton": [
-        "arpeggio",
-        "caliper-reader",
-        "contourpy",
-        "cycler",
-        "dill",
-        "fonttools",
-        "kiwisolver",
-        "llnl-hatchet",
-        "matplotlib",
-        "pandas",
-        "pydot",
-        "pyparsing",
-        "pytz",
-        "textX",
-        "tzdata",
-        "importlib-metadata",
-        "importlib-resources",
-        "zipp",
+    "rocm": [
+        "setuptools",
     ],
-    "torchtune": [
-        "aiohttp",
-        "aiosignal",
-        "antlr4-python3-runtime",
-        "attrs",
-        "blobfile",
-        "certifi",
-        "charset-normalizer",
-        "datasets",
-        "dill",
-        "frozenlist",
-        "huggingface-hub",
-        "idna",
-        "lxml",
-        "markupsafe",
-        "multidict",
-        "multiprocess",
-        "omegaconf",
-        "pandas",
-        "pyarrow",
-        "pyarrow-hotfix",
-        "pycryptodomex",
-        "python-dateutil",
-        "pytz",
-        "pyyaml",
-        "regex",
-        "requests",
-        "safetensors",
-        "sentencepiece",
-        "six",
-        "tiktoken",
-        "tqdm",
-        "tzdata",
-        "urllib3",
-        "xxhash",
-        "yarl",
-    ],
-    "torch_xpu": [
-        "dpcpp-cpp-rt",
-        "intel-cmplr-lib-rt",
-        "intel-cmplr-lib-ur",
-        "intel-cmplr-lic-rt",
-        "intel-opencl-rt",
-        "intel-sycl-rt",
-        "intel-openmp",
-        "tcmlib",
-        "umf",
-        "intel-pti",
-        "tbb",
-        "oneccl-devel",
-        "oneccl",
-        "impi-rt",
-        "onemkl-sycl-blas",
-        "onemkl-sycl-dft",
-        "onemkl-sycl-lapack",
-        "onemkl-sycl-sparse",
-        "onemkl-sycl-rng",
-        "mkl",
-    ]
 }
 
 
@@ -148,9 +73,9 @@ def upload_missing_whls(
     pypi_latest_packages = get_wheels_of_version(pypi_idx, pypi_versions[-1])
 
     download_latest_packages = []
-    if not only_pypi:
-        download_idx = parse_simple_idx(f"https://download.pytorch.org/{prefix}/{pkg_name}")
-        download_latest_packages = get_wheels_of_version(download_idx, pypi_versions[-1])
+    # if not only_pypi:
+    #     download_idx = parse_simple_idx(f"https://download.pytorch.org/{prefix}/{pkg_name}")
+    #     download_latest_packages = get_wheels_of_version(download_idx, pypi_versions[-1])
 
     has_updates = False
     for pkg in pypi_latest_packages:
@@ -162,17 +87,39 @@ def upload_missing_whls(
         # Skip win32 packages
         if "-win32" in pkg:
             continue
+        # Skip win_arm64 packages
+        if "-win_arm64" in pkg:
+            continue
+        # Skip win_amd64 packages
+        if "-win_amd64" in pkg:
+            continue
         # Skip muslinux packages
         if "-musllinux" in pkg:
+            continue
+        # Skip macosx packages
+        if "-macosx" in pkg:
+            continue
+        # Skip aarch64 packages
+        if "aarch64" in pkg:
+            continue
+        # Skip i686 packages
+        if "i686" in pkg:
+            continue
+        # Skip unsupported Python version
+        if "cp39" in pkg:
+            continue
+        if "cp310" in pkg:
+            continue
+        if "cp313t" in pkg:
             continue
         print(f"Downloading {pkg}")
         if dry_run:
             has_updates = True
             continue
         data = download(pypi_idx[pkg])
-        print(f"Uploading {pkg} to s3://pytorch/{prefix}/")
+        print(f"Uploading {pkg} to s3://{BUCKET}/{prefix}/")
         BUCKET.Object(key=f"{prefix}/{pkg}").put(
-            ACL="public-read", ContentType="binary/octet-stream", Body=data
+            ContentType="binary/octet-stream", Body=data
         )
         has_updates = True
     if not has_updates:
@@ -184,20 +131,23 @@ def upload_missing_whls(
 def main() -> None:
     from argparse import ArgumentParser
 
-    parser = ArgumentParser("Upload dependent packages to s3://pytorch")
+    parser = ArgumentParser(f"Upload dependent packages to s3://{BUCKET}")
     parser.add_argument("--package", choices=PACKAGES_PER_PROJECT.keys(), default="torch")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only-pypi", action="store_true")
-    parser.add_argument("--include-stable", action="store_true")
     args = parser.parse_args()
 
-    SUBFOLDERS = ["whl/nightly", "whl/test"]
-    if args.include_stable:
-        SUBFOLDERS.append("whl")
+    SUBFOLDERS =  [
+        "gfx110X-dgpu",
+        "gfx1151",
+        "gfx120X-all",
+        "gfx94X-dcgpu",
+        "gfx950-dcgpu",
+    ]
 
     for prefix in SUBFOLDERS:
         for package in PACKAGES_PER_PROJECT[args.package]:
-            upload_missing_whls(package, prefix, dry_run=args.dry_run, only_pypi=args.only_pypi)
+            upload_missing_whls(package, f"{VERSION}/{prefix}", dry_run=args.dry_run, only_pypi=args.only_pypi)
 
 
 if __name__ == "__main__":
