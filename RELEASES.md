@@ -23,7 +23,7 @@ Table of contents:
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
   - [Installing release tarballs](#installing-release-tarballs)
-  - [Installing per-commit CI build tarballs](#installing-per-commit-ci-build-tarballs)
+  - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
   - [Using installed tarballs](#using-installed-tarballs)
 
@@ -250,24 +250,15 @@ for archival. The S3 buckets do not yet have index pages.
 After downloading, simply extract the release tarball into place:
 
 ```bash
-mkdir therock && cd therock
+mkdir therock-tarball && cd therock-tarball
 # For example...
 wget https://github.com/ROCm/TheRock/releases/download/nightly-tarball/therock-dist-linux-gfx110X-dgpu-6.5.0rc20250610.tar.gz
 
 mkdir install
 tar -xf *.tar.gz -C install
-
-ls install
-# bin  include  lib  libexec  llvm  share
-
-# Now test some of the installed tools:
-./install/bin/rocminfo
-./install/bin/test_hip_api
-
-# You may now also want to add the install directory to your PATH.
 ```
 
-### Installing per-commit CI build tarballs
+### Installing per-commit CI build tarballs manually
 
 <!-- TODO: Hide this section by default?
            Maybe move into artifacts.md or another developer page. -->
@@ -292,20 +283,36 @@ them from the expanded artifacts down to a ROCm SDK "dist folder" using the
 1. Find the CI workflow run that you want to install from. For example, search
    through recent successful runs of the `ci.yml` workflow for `push` events on
    the `main` branch
-   [using this page](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess+event%3Apush).
-   (choosing a build that took more than a few minutes)
+   [using this page](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess+event%3Apush)
+   (choosing a build that took more than a few minutes - documentation only
+   changes skip building and uploading).
 
-<!-- TODO: working here, translate this paragraph into a code sample -->
+1. Download the artifacts for that workflow run from S3 using either the
+   [AWS CLI](https://aws.amazon.com/cli/) or
+   [AWS SDK for Python (Boto3)](https://aws.amazon.com/sdk-for-python/):
 
-Note a quick recipe for getting all of these from the s3 bucket is to use this quick command `aws s3 cp s3://therock-artifacts . --recursive --exclude "*" --include "${RUN_ID}-${OPERATING_SYSTEM}/*.tar.xz" --no-sign-request` where ${RUN_ID} is the runner id you selected (see the URL). Check the [AWS docs](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) to get the aws cli.
+   <!-- TODO: replace URLs with cloudfront / some other CDN instead of raw S3 -->
 
-```bash
-echo "Unpacking artifacts"
-pushd "${BUILD_ARTIFACTS_DIR}"
-mkdir output_dir
-python "${SOURCE_DIR}/build_tools/fileset_tool.py artifact-flatten *.tar.xz -o output_dir --verbose
-popd
-```
+   ```bash
+   export LOCAL_ARTIFACTS_DIR=~/therock-artifacts
+   export LOCAL_INSTALL_DIR=${LOCAL_ARTIFACTS_DIR}/install
+   mkdir -p ${LOCAL_ARTIFACTS_DIR}
+   mkdir -p ${LOCAL_INSTALL_DIR}
+
+   # Example: https://github.com/ROCm/TheRock/actions/runs/15575624591
+   export RUN_ID=15575624591
+   export OPERATING_SYSTEM=linux # or 'windows'
+   aws s3 cp s3://therock-artifacts/${RUN_ID}-${OPERATING_SYSTEM}/ \
+     ${LOCAL_ARTIFACTS_DIR} \
+     --no-sign-request --recursive --exclude "*" --include "*.tar.xz"
+   ```
+
+1. Flatten the artifacts:
+
+   ```bash
+   python build_tools/fileset_tool.py artifact-flatten \
+     ${LOCAL_ARTIFACTS_DIR}/*.tar.xz -o ${LOCAL_INSTALL_DIR}
+   ```
 
 ### Installing tarballs using `install_rocm_from_artifacts.py`
 
@@ -339,14 +346,20 @@ By default for CI workflow retrieval, all artifacts (excluding test artifacts) w
 
 ### Using installed tarballs
 
-The quickest way is to run `rocminfo`
+After installing (downloading and extracting) a tarball, you can test it by
+running programs from the `bin/` directory:
 
 ```bash
-echo "Running rocminfo"
-pushd "${BUILD_ARTIFACTS_DIR}"
-./output_dir/bin/rocminfo
-popd
+ls install
+# bin  include  lib  libexec  llvm  share
+
+# Now test some of the installed tools:
+./install/bin/rocminfo
+./install/bin/test_hip_api
 ```
+
+You may also want to add the install directory to your `PATH` or set other
+environment variables like `ROCM_HOME`.
 
 ## Where to get artifacts
 
