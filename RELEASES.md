@@ -86,7 +86,15 @@ project layouts.**
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx94X-dcgpu/index.html \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
+  rocm[libraries,devel]
+```
+
+#### gfx950-dcgpu
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
   rocm[libraries,devel]
 ```
 
@@ -94,7 +102,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx110X-dgpu/index.html \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
   rocm[libraries,devel]
 ```
 
@@ -102,7 +110,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx1151/index.html \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
   rocm[libraries,devel]
 ```
 
@@ -110,7 +118,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx120X-all/index.html \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
   rocm[libraries,devel]
 ```
 
@@ -181,8 +189,8 @@ For example, with gfx110X-dgpu:
 
 ```bash
 python -m pip install \
-  --pre --find-links https://therock-nightly-python.s3.amazonaws.com/gfx110X-dgpu/index.html \
-  torch==2.7.0a0
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+  torch
 
 pip freeze
 # ...
