@@ -103,9 +103,8 @@ jobs:
       CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
       TEATIME_LABEL_GH_GROUP: 1
-      OUTPUT_DIR: ${{ github.workspace }}/output
       FILE_NAME: "therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
-      DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
+      DIST_ARCHIVE: "B:/tmpbuild/artifacts/therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
       S3_TARBALL: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
 
@@ -223,8 +222,8 @@ jobs:
 
       - name: Compress dist folder
         run: |
-          cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
-          echo "Building ${{ env.DIST_ARCHIVE }}"
+          cd ${{ env.BUILD_DIR_BASH }}/dist/rocm
+          echo "Compressing ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
 
       # TODO(#703): Build and upload Python wheels
@@ -235,12 +234,6 @@ jobs:
           echo "Build dir:"
           echo "------------"
           ls -lh "${{ env.BUILD_DIR_BASH }}"
-          echo "Artifact Archives:"
-          echo "------------------"
-          ls -lh "${{ env.BUILD_DIR_BASH }}"/artifacts/*.tar.xz
-          echo "Artifacts:"
-          echo "----------"
-          du -h -d 1 "${{ env.BUILD_DIR_BASH }}"/artifacts
           echo "CCache Stats:"
           echo "-------------"
           ccache -s
@@ -273,5 +266,5 @@ jobs:
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         if: always()
         with:
-          path: ${{ env.OUTPUT_DIR }}/caches
+          path: ${{ env.CACHE_DIR }}
           key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
