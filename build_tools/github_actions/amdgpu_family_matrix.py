@@ -13,6 +13,13 @@ amdgpu_family_info_matrix = {
             "pytorch-target": "gfx942",
         }
     },
+    "gfx950": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx950-dcgpu",
+            "pytorch-target": "gfx950",
+        }
+    },
     "gfx110x": {
         "linux": {
             "test-runs-on": "",

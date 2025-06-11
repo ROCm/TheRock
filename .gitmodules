@@ -33,7 +33,7 @@
 [submodule "rocm-core"]
 	path = base/rocm-core
 	url = https://github.com/ROCm/rocm-core.git
-	branch = amd-master
+	branch = master
 [submodule "rocminfo"]
 	path = core/rocminfo
 	url = https://github.com/ROCm/rocminfo.git
@@ -128,3 +128,7 @@
 [submodule "roctracer"]
 	path = profiler/roctracer
 	url = https://github.com/ROCm/roctracer.git
+[submodule "mxDataGenerator"]
+	path = math-libs/support/mxDataGenerator
+	url = https://github.com/ROCm/mxDataGenerator.git
+	branch = main

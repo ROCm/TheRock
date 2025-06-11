@@ -8,10 +8,11 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build pl
 
 TheRock includes:
 
+- Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
-- Tools for developing individual ROCm components
 - Support for building PyTorch with ROCm from source
   - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
 
 ### Support status
@@ -30,9 +31,23 @@ For PyTorch with ROCm:
 | Linux   | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) | ✅ Supported          |
 | Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned                                                          | N/A                   |
 
+## Installing from releases
+
+See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
+ROCm and PyTorch packages.
+
 ## Building from source
 
-We keep the following instructions for recent, commonly used operating system versions. Most build failures are due to minor operating system differences in dependencies and project setup. Refer to the [Environment Setup Guide](docs/environment_setup_guide.md) for contributed instructions and configurations for alternatives.
+We keep the following instructions for recent, commonly used operating system
+versions. Most build failures are due to minor operating system differences in
+dependencies and project setup. Refer to the
+[Environment Setup Guide](docs/environment_setup_guide.md) for contributed
+instructions and configurations for alternatives.
+
+> [!TIP]
+> While building from source offers the greatest flexibility,
+> [installing from releases](#installing-from-releases) in supported
+> configurations is often faster and easier.
 
 ### Setup - Ubuntu (24.04)
 

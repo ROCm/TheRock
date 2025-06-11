@@ -8,8 +8,10 @@ import string
 
 
 def main(args):
-    pytorch_dev_docker = args.get("PYTORCH_DEV_DOCKER") == "true"
     amdgpu_families = args.get("AMDGPU_FAMILIES")
+    pytorch_dev_docker = args.get("PYTORCH_DEV_DOCKER") == "true"
+    package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
+
     family_matrix = amdgpu_family_info_matrix
     package_targets = []
     # If the workflow does specify AMD GPU family, package those. Otherwise, then package all families
@@ -23,15 +25,14 @@ def main(args):
         ]
 
     for key in family_matrix:
+        info_for_key = amdgpu_family_info_matrix.get(key)
         if pytorch_dev_docker:
             # If there is not a target specified for the family
-            if not "pytorch-target" in amdgpu_family_info_matrix.get(key).get("linux"):
+            if not "pytorch-target" in info_for_key.get(package_platform):
                 continue
-            family = (
-                amdgpu_family_info_matrix.get(key).get("linux").get("pytorch-target")
-            )
+            family = info_for_key.get(package_platform).get("pytorch-target")
         else:
-            family = amdgpu_family_info_matrix.get(key).get("linux").get("family")
+            family = info_for_key.get(package_platform).get("family")
 
         package_targets.append({"amdgpu_family": family})
 
@@ -40,6 +41,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = {}
-    args["PYTORCH_DEV_DOCKER"] = os.getenv("PYTORCH_DEV_DOCKER")
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
+    args["PYTORCH_DEV_DOCKER"] = os.getenv("PYTORCH_DEV_DOCKER")
+    args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
     main(args)

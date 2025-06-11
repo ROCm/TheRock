@@ -1,0 +1,32 @@
+From 03d5381a7a15e42033611a48f433e64b1dd8e751 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Thu, 5 Jun 2025 12:14:25 -0700
+Subject: [PATCH] Remove failing sysconf import on Windows.
+
+---
+ tensilelite/Tensile/Toolchain/Component.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tensilelite/Tensile/Toolchain/Component.py b/tensilelite/Tensile/Toolchain/Component.py
+index 901b36f8..415069b6 100644
+--- a/tensilelite/Tensile/Toolchain/Component.py
++++ b/tensilelite/Tensile/Toolchain/Component.py
+@@ -24,7 +24,6 @@
+ ################################################################################
+ from os import name as os_name
+ from os import environ
+-from os import sysconf
+ from pathlib import Path
+ from re import search, IGNORECASE
+ from shlex import split
+@@ -369,6 +368,7 @@ class Linker(Component):
+         """
+         if os_name == "nt":
+             return True  
++        from os import sysconf
+         line_length = sum(len(arg) for arg in args) + len(args) - 1
+         return line_length >= sysconf("SC_ARG_MAX")
+ 
+-- 
+2.47.1.windows.2
+

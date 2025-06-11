@@ -1,18 +1,18 @@
-From 106bf269597b04a3779349b3683005326f66bc1c Mon Sep 17 00:00:00 2001
-From: Stella Laurenzo <stellaraccident@gmail.com>
-Date: Fri, 14 Feb 2025 16:52:43 -0800
-Subject: [PATCH 2/3] Capture configure-time PATH when invoking tensile at
- build time.
+From f90b28f1d1a25a1a92d82d403e42d9fb3e5d27ab Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Thu, 5 Jun 2025 12:12:40 -0700
+Subject: [PATCH 3/3] Re-apply Windows compatibility fixes to command
+ construction.
 
 ---
- Tensile/cmake/TensileConfig.cmake | 29 +++++++++++++++++++++++++----
- 1 file changed, 25 insertions(+), 4 deletions(-)
+ Tensile/cmake/TensileConfig.cmake | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
 
 diff --git a/Tensile/cmake/TensileConfig.cmake b/Tensile/cmake/TensileConfig.cmake
-index e5d0f62a..dfd848f1 100644
+index 7fe89bf4..f905935f 100644
 --- a/Tensile/cmake/TensileConfig.cmake
 +++ b/Tensile/cmake/TensileConfig.cmake
-@@ -215,10 +215,24 @@ function(TensileCreateLibraryFiles
+@@ -215,6 +215,9 @@ function(TensileCreateLibraryFiles
      set(Options ${Options} "--architecture=${archString}")
    endif()
  
@@ -22,31 +22,22 @@ index e5d0f62a..dfd848f1 100644
    set(CommandLine ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
    if (WIN32 OR (VIRTUALENV_BIN_DIR AND VIRTUALENV_PYTHON_EXENAME))
      set(CommandLine ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${CommandLine})
-   endif()
-+  # Tensile relies on the tools from the path, so capture the configure time 
-+  # path. It would be better if this were explicit, but that would be a pretty 
-+  # big change.
+@@ -222,8 +225,13 @@ function(TensileCreateLibraryFiles
+   # Tensile relies on the tools from the path, so capture the configure time
+   # path. It would be better if this were explicit, but that would be a pretty
+   # big change.
 +  set(ESC_PATH "$ENV{PATH}")
 +  if(WIN32)
 +    string(REPLACE ";" "$<SEMICOLON>" ESC_PATH "${ESC_PATH}")
 +  endif()
 +  set(ENV_PATH_ARG "PATH=${ESC_PATH}")
-+  set(CommandLine 
+   set(CommandLine
+-    "${CMAKE_COMMAND}" -E env "'PATH=$ENV{PATH}'" --
 +    "${CMAKE_COMMAND}" -E env "PATH=${ESC_PATH}" --
-+    ${CommandLine})
+     ${CommandLine})
    message(STATUS "Tensile_CREATE_COMMAND: ${CommandLine}")
  
-   if(Tensile_EMBED_LIBRARY)
-@@ -244,19 +258,25 @@ function(TensileCreateLibraryFiles
-           OUTPUT_VARIABLE ASAN_LIB_PATH
-           COMMAND_ECHO STDOUT)
-         string(STRIP ${ASAN_LIB_PATH} ASAN_LIB_PATH)
--        set(CommandLine env LD_PRELOAD=${ASAN_LIB_PATH} ${CommandLine})
-+        set(CommandLine ${CMAKE_COMMAND} -E env "'LD_PRELOAD=${ASAN_LIB_PATH}'" -- 
-+            ${CommandLine})
-       endif()
- 
-       add_custom_command(
+@@ -258,12 +266,17 @@ function(TensileCreateLibraryFiles
          OUTPUT "${Tensile_OUTPUT_PATH}/library"
          DEPENDS ${Tensile_LOGIC_PATH}
          COMMAND ${CommandLine}
@@ -66,7 +57,7 @@ index e5d0f62a..dfd848f1 100644
    endif()
  
    if(Tensile_EMBED_LIBRARY)
-@@ -272,7 +292,8 @@ function(TensileCreateLibraryFiles
+@@ -279,7 +292,8 @@ function(TensileCreateLibraryFiles
            COMMAND ${CMAKE_COMMAND} -E copy
                    ${Tensile_EMBED_LIBRARY_SOURCE}
                    "${Tensile_OUTPUT_PATH}/library"
@@ -77,5 +68,5 @@ index e5d0f62a..dfd848f1 100644
  
  endfunction()
 -- 
-2.41.0.windows.1
+2.47.1.windows.2
 

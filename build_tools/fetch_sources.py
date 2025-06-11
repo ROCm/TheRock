@@ -256,6 +256,7 @@ def main(argv):
             "hipRAND",
             "hipSOLVER",
             "hipSPARSE",
+            "mxDataGenerator",
             "Tensile",
             "rocBLAS",
             "rocFFT",
