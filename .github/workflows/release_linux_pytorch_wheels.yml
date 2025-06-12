@@ -2,6 +2,19 @@ name: Release Linux PyTorch Wheels
 
 on:
   workflow_dispatch:
+    inputs:
+      s3_bucket:
+        description: "S3 bucket to upload the wheels"
+        type: string
+        default: "therock-nightly-python"
+      s3_subdir:
+        description: "Subdirectory used in the bucket and CloudFront URL"
+        type: string
+        default: "v2"
+      s3_cloudfront:
+        description: "CloudFront URL pointing to the bucket"
+        type: string
+        default: "d2awnip2yjpvqn.cloudfront.net"
   schedule:
     - cron: "0 2 * * *"  # Nightly at 2 AM UTC
 
@@ -24,4 +37,6 @@ jobs:
     with:
       AMDGPU_FAMILIES: ${{ matrix.config.AMDGPU_FAMILIES }}
       python_version: ${{ matrix.python_version }}
-      s3_bucket: therock-nightly-python
+      s3_bucket: ${{ inputs.s3_bucket || 'therock-nightly-python' }}
+      s3_subdir: ${{ inputs.s3_subdir || 'v2' }}
+      s3_cloudfront: ${{ inputs.s3_cloudfront  || 'd2awnip2yjpvqn.cloudfront.net' }}
