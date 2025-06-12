@@ -12,14 +12,17 @@ runs:
   using: "composite"
   steps:
     - name: Fetch sources
+      shell: bash
       run: |
         ./build_tools/fetch_sources.py --jobs 12
 
     - name: Install python deps
+      shell: bash
       run: |
         pip install -r requirements.txt
 
     - name: Configure Projects
+      shell: bash
       run: |
         # Generate a new build id.
         package_version="${{ inputs.package_version }}"
@@ -36,17 +39,21 @@ runs:
           ${extra_cmake_options}
 
     - name: Build therock-dist
+      shell: bash
       run: cmake --build build --target therock-dist
 
     - name: Build therock-archives
+      shell: bash
       run: cmake --build build --target therock-archives
 
     - name: Test Packaging
+      shell: bash
       if: ${{ github.event.repository.name == 'TheRock' }}
       run: |
         ctest --test-dir build --output-on-failure
 
     - name: Report
+      shell: bash
       if: ${{ !cancelled() }}
       run: |
         echo "Full SDK du:"
