@@ -156,6 +156,11 @@ jobs:
           allowUpdates: true
           replacesArtifacts: true
           makeLatest: false
+          # Keep existing name/body/status.
+          omitNameDuringUpdate: true
+          omitBodyDuringUpdate: true
+          omitDraftDuringUpdate: true
+          omitPrereleaseDuringUpdate: true
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
