@@ -16,7 +16,7 @@ on:
       build_type:
         description: The type of build version to produce ("rc", or "dev")
         type: string
-        default: "dev"  # TODO(#542): flip default to 'rc' after testing?
+        default: "rc"
       package_suffix:
         type: string
       families:
@@ -110,6 +110,7 @@ jobs:
 
     steps:
       # TODO(amd-justchen): share with build_windows_packages.yml. Use pre-job hook?
+      #     Maybe we can remove _POWERSHELL entirely now that commands are all bash?
       - name: "Create build dir"
         shell: powershell
         run: |
