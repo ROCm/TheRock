@@ -111,81 +111,74 @@ jobs:
             -DBUILD_TESTING=ON \
             ${extra_cmake_options}
 
-      - name: Determine job status for jobs run
-        if: '!cancelled()'
-        env:
-          run_id: ${{ github.run_id }}
-          attempt: ${{ github.attempt }}
-        run: python build_tools/github_actions/fetch_job_status.py
+      - name: Build therock-dist
+        run: cmake --build build --target therock-dist
 
-      # - name: Build therock-dist
-      #   run: cmake --build build --target therock-dist
+      - name: Build therock-archives
+        run: cmake --build build --target therock-archives
 
-      # - name: Build therock-archives
-      #   run: cmake --build build --target therock-archives
+      - name: Test Packaging
+        if: ${{ github.event.repository.name == 'TheRock' }}
+        run: |
+          ctest --test-dir build --output-on-failure
 
-      # - name: Test Packaging
-      #   if: ${{ github.event.repository.name == 'TheRock' }}
-      #   run: |
-      #     ctest --test-dir build --output-on-failure
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Full SDK du:"
+          echo "------------"
+          du -h -d 1 build/dist/rocm
+          echo "Artifact Archives:"
+          echo "------------------"
+          ls -lh build/artifacts/*.tar.xz
+          echo "Artifacts:"
+          echo "----------"
+          du -h -d 1 build/artifacts
+          echo "CCache Stats:"
+          echo "-------------"
+          ccache -s
 
-      # - name: Report
-      #   if: ${{ !cancelled() }}
-      #   run: |
-      #     echo "Full SDK du:"
-      #     echo "------------"
-      #     du -h -d 1 build/dist/rocm
-      #     echo "Artifact Archives:"
-      #     echo "------------------"
-      #     ls -lh build/artifacts/*.tar.xz
-      #     echo "Artifacts:"
-      #     echo "----------"
-      #     du -h -d 1 build/artifacts
-      #     echo "CCache Stats:"
-      #     echo "-------------"
-      #     ccache -s
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
-      # - name: Configure AWS Credentials
-      #   if: always()
-      #   uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
-      #   with:
-      #     aws-region: us-east-2
-      #     role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+      - name: Create Logs index Files
+        if: always()
+        run: |
+          python3 build_tools/github_actions/create_log_index.py \
+            --build-dir=build \
+            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
 
-      # - name: Create Logs index Files
-      #   if: always()
-      #   run: |
-      #     python3 build_tools/github_actions/create_log_index.py \
-      #       --build-dir=build \
-      #       --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+      - name: Upload artifacts
+        if: always()
+        run: |
+          python build_tools/github_actions/upload_build_artifacts.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir build/
 
-      # - name: Upload artifacts
-      #   if: always()
-      #   run: |
-      #     python build_tools/github_actions/upload_build_artifacts.py \
-      #       --run-id ${{ github.run_id }} \
-      #       --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-      #       --build-dir build/
+      - name: Upload Logs
+        if: always()
+        run: |
+          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
+            --build-dir=build \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
 
-      # - name: Upload Logs
-      #   if: always()
-      #   run: |
-      #     python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-      #       --build-dir=build \
-      #       --run-id ${{ github.run_id }} \
-      #       --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
+      - name: Add Links to Job Summary
+        if: always()
+        run: |
+          python build_tools/github_actions/upload_build_summary.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir build/
 
-      # - name: Add Links to Job Summary
-      #   if: always()
-      #   run: |
-      #     python build_tools/github_actions/upload_build_summary.py \
-      #       --run-id ${{ github.run_id }} \
-      #       --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-      #       --build-dir build/
-
-      # - name: Save cache
-      #   uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
-      #   if: always()
-      #   with:
-      #     path: ${{ env.CACHE_DIR }}
-      #     key: linux-build-packages-manylinux-v2-${{ github.sha }}
+      - name: Save cache
+        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        if: always()
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: linux-build-packages-manylinux-v2-${{ github.sha }}
