@@ -16,7 +16,6 @@ run_id = os.getenv("run_id")
 attempt = os.getenv("attempt")
 
 def run():
-    print(f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{run_id}/attempts/1/jobs")
     github_release_url = (
         f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{run_id}/attempts/1/jobs"
     )
@@ -41,9 +40,9 @@ def run():
             )
 
         job_data = json.loads(response.read().decode("utf-8"))
-        if job_data['jobs'].keys()>=0:
+        if job_data['jobs'].keys() >= 0:
             # Determine is number of jobs run in the workflow is atleast 1
-            set_github_output({"append": json.dumps(append_release_note)})
+            set_github_output({"append": json.dumps(job_data)})
 
 if __name__ == "__main__":
     run()
