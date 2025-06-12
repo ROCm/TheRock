@@ -23,11 +23,10 @@ on:
         description: "Please enter a comma separated list of AMD GPU family (ex: gfx94X, gfx103x)"
         type: string
 
-  # TODO(#542): Enable schedule once working
-  # # Trigger on a schedule to build nightly release candidates.
-  # schedule:
-  #   # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
-  #   - cron: '0 11 * * *'
+  # Trigger on a schedule to build nightly release candidates.
+  schedule:
+    # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
+    - cron: '0 11 * * *'
 
 permissions:
   contents: read
