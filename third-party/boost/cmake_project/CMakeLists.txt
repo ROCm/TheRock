@@ -10,7 +10,7 @@ set(B2_NJOBS "1")
 if(PROCESSOR_COUNT GREATER 8)
   set(B2_NJOBS "8")
 endif()
-message("[boost] b2 jobs set to: ${B2_NJOBS} / ${PROCESSOR_COUNT} cpu threads")
+message(STATUS "Setting b2 jobs to: ${B2_NJOBS} / ${PROCESSOR_COUNT} cpu threads")
 
 set(_terminal_option)
 if("$ENV{THEROCK_INTERACTIVE}")
