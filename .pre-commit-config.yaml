@@ -22,11 +22,11 @@ repos:
     rev: 'v18.1.4'
     hooks:
     -   id: clang-format
+
 - repo: https://github.com/hukkin/mdformat
-  rev: 0.7.21  # Use the ref you want to point at
+  rev: 0.7.21
   hooks:
   - id: mdformat
-    # Optionally add plugins
     additional_dependencies:
     - mdformat-gfm
     - mdformat-black
