@@ -6,7 +6,7 @@ include(ProcessorCount)
 ProcessorCount(PROCESSOR_COUNT)
 
 # Limit Boost B2 threads to 1 by default unless more than 8 cpu threads available
-set(B2_NJOBS "1") 
+set(B2_NJOBS "1")
 if(PROCESSOR_COUNT GREATER 8)
   set(B2_NJOBS "8")
 endif()
