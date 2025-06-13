@@ -27,12 +27,6 @@ on:
         type: string
       subtree:
         type: string
-    secrets:
-      rocm_libraries_app_id:
-        required: false
-      rocm_libraries_app_private_key:
-        required: false
-
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -84,18 +78,79 @@ jobs:
           restore-keys: |
             linux-build-packages-manylinux-v3-${{ inputs.amdgpu_families }}-
 
-      - name: Build Linux Packages
-        uses: './.github/actions/build_linux_action'
-        with:
-          package_version: ${{ inputs.package_version }}
-          amdgpu_families: ${{ inputs.amdgpu_families }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+      - name: Fetch sources
+        run: |
+          ./build_tools/fetch_sources.py --jobs 12
 
-      - name: Artifact Upload
-        uses: './.github/actions/artifact_upload_action'
-        with:
-          build_directory: "build"
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+
+      - name: Configure Projects
+        env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ${{ inputs.package_version }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+        run: |
+            python3 build_tools/github_actions/build_linux_configure.py
+
+      - name: Build Projects
+        run: |
+            python3 build_tools/github_actions/build_linux_packages.py
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Full SDK du:"
+          echo "------------"
+          du -h -d 1 build/dist/rocm
+          echo "Artifact Archives:"
+          echo "------------------"
+          ls -lh build/artifacts/*.tar.xz
+          echo "Artifacts:"
+          echo "----------"
+          du -h -d 1 build/artifacts
+          echo "CCache Stats:"
+          echo "-------------"
+          ccache -s
+
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+
+      - name: Create Logs index Files
+        if: always()
+        run: |
+          python3 build_tools/github_actions/create_log_index.py \
+            --build-dir=build \
+            --amdgpu-family=${{ inputs.amdgpu_families }}
+
+      - name: Upload artifacts
+        if: always()
+        run: |
+          python build_tools/github_actions/upload_build_artifacts.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
+
+      - name: Upload Logs
+        if: always()
+        run: |
+          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
+            --build-dir=build \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ inputs.amdgpu_families }}
+
+      - name: Add Links to Job Summary
+        if: always()
+        run: |
+          python build_tools/github_actions/upload_build_summary.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
       - name: Save cache
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
