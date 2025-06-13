@@ -189,11 +189,43 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
-      - name: Artifact Upload
-        uses: './.github/actions/artifact_upload_action'
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
-          build_directory: ${{ env.BUILD_DIR_BASH }}
-          amdgpu_families: ${{ inputs.amdgpu_families }}
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+
+      - name: Create Logs index Files
+        if: always()
+        run: |
+          python3 build_tools/github_actions/create_log_index.py \
+            --build-dir=${{ env.BUILD_DIR_BASH }} \
+            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+
+      - name: Upload artifacts
+        if: always()
+        run: |
+          python build_tools/github_actions/upload_build_artifacts.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir ${{ env.BUILD_DIR_BASH }}
+
+      - name: Upload Logs
+        if: always()
+        run: |
+          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
+            --build-dir=${{ env.BUILD_DIR_BASH }} \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
+
+      - name: Add Links to Job Summary
+        if: always()
+        run: |
+          python build_tools/github_actions/upload_build_summary.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir ${{ env.BUILD_DIR_BASH }}
 
       - name: Save cache
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
