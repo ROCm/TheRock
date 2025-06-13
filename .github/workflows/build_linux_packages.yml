@@ -94,9 +94,16 @@ jobs:
         run: |
             python3 build_tools/github_actions/build_linux_configure.py
 
-      - name: Build Projects
+      - name: Build therock-dist
+        run: cmake --build build --target therock-dist
+
+      - name: Build therock-archives
+        run: cmake --build build --target therock-archives
+
+      - name: Test Packaging
+        if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
-            python3 build_tools/github_actions/build_linux_packages.py
+          ctest --test-dir build --output-on-failure
 
       - name: Report
         if: ${{ !cancelled() }}
