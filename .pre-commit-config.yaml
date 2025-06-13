@@ -40,4 +40,4 @@ repos:
   rev: v1.5.5
   hooks:
   - id: forbid-tabs
-    exclude: ".gitmodules"
+    exclude: ".gitmodules|docs/development/git_chores.md"
