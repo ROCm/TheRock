@@ -36,21 +36,21 @@ cd $SCRIPT_DIR/pytorch_audio
 ROCM_PATH=${CMAKE_PREFIX_PATH} USE_ROCM=1 USE_CUDA=0 USE_FFMPEG=1 USE_OPENMP=1 BUILD_SOX=0 CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} BUILD_VERSION="2.7.0" BUILD_NUMBER=1 python3 setup.py bdist_wheel
 
 if [ ${DO_INSTALL_STEP} -eq 1 ]; then
-	# if there are multiple wheel files, find the newest one and install it
-	unset -v latest_wheel_file
-	for cur_file in dist/*.whl; do
-		[[ $cur_file -nt "$latest_wheel_file" ]] && latest_wheel_file=$cur_file
-	done
-	if [ ! -z "$latest_wheel_file" ]; then
-		echo "installing $latest_wheel_file"
-		# pip uninstall would fail if there is no whl already installed, we do not want to break there
-		set +e
-		pip uninstall --yes "$latest_wheel_file"
-		set -e
-		PIP_BREAK_SYSTEM_PACKAGES=1 pip install "$latest_wheel_file"
-	else
-		echo "Failed to build and find pytorch audio wheel for pip install in directory $SCRIPT_DIR/pytorch_audio/dist"
-		exit 1
-	fi
+    # if there are multiple wheel files, find the newest one and install it
+    unset -v latest_wheel_file
+    for cur_file in dist/*.whl; do
+        [[ $cur_file -nt "$latest_wheel_file" ]] && latest_wheel_file=$cur_file
+    done
+    if [ ! -z "$latest_wheel_file" ]; then
+        echo "installing $latest_wheel_file"
+        # pip uninstall would fail if there is no whl already installed, we do not want to break there
+        set +e
+        pip uninstall --yes "$latest_wheel_file"
+        set -e
+        PIP_BREAK_SYSTEM_PACKAGES=1 pip install "$latest_wheel_file"
+    else
+        echo "Failed to build and find pytorch audio wheel for pip install in directory $SCRIPT_DIR/pytorch_audio/dist"
+        exit 1
+    fi
 fi
 cd $SCRIPT_DIR
