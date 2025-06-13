@@ -7,6 +7,7 @@
 
 import argparse
 import concurrent.futures
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 import platform
@@ -90,34 +91,42 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
             )
 
 
-def collect_artifacts_urls(
-    artifacts: list[str],
+@dataclass
+class ArtifactDownloadRequest:
+    """Information about a request to download an artifact to a local path."""
+
+    artifact_url: str
+    output_path: Path
+
+
+def collect_artifacts_download_requests(
+    artifact_names: list[str],
     run_id: str,
     build_dir: str,
     variant: str,
     existing_artifacts: set[str],
-) -> list[str]:
+) -> list[ArtifactDownloadRequest]:
     """Collects S3 artifact URLs to execute later in parallel."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
     artifacts_to_retrieve = []
-    for artifact in artifacts:
-        file_name = f"{artifact}_{variant}.tar.xz"
+    for artifact_name in artifact_names:
+        file_name = f"{artifact_name}_{variant}.tar.xz"
         # If artifact does exist in s3 bucket
         if file_name in existing_artifacts:
-            # Tuple of (FILE_PATH_TO_WRITE, S3_ARTIFACT_URL)
             artifacts_to_retrieve.append(
-                (
-                    f"{build_dir}/{file_name}",
-                    f"{BUCKET_URL}/{file_name}",
+                ArtifactDownloadRequest(
+                    artifact_url=f"{BUCKET_URL}/{file_name}",
+                    output_path=f"{build_dir}/{file_name}",
                 )
             )
 
     return artifacts_to_retrieve
 
 
-def urllib_retrieve_artifact(artifact):
-    output_path, artifact_url = artifact
+def download_artifact(artifact_download_request: ArtifactDownloadRequest):
+    artifact_url = artifact_download_request.artifact_url
+    output_path = artifact_download_request.output_path
     log(f"++ Downloading from {artifact_url} to {output_path}")
     with urllib.request.urlopen(artifact_url) as in_stream, open(
         output_path, "wb"
@@ -126,12 +135,12 @@ def urllib_retrieve_artifact(artifact):
     log(f"++ Download complete for {output_path}")
 
 
-def parallel_exec_commands(artifacts):
-    """Runs parallelized urllib calls using a thread pool executor"""
+def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]):
+    """Downloads artifacts in parallel using a thread pool executor."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [
-            executor.submit(urllib_retrieve_artifact, artifact)
-            for artifact in artifacts
+            executor.submit(download_artifact, artifact_download_request)
+            for artifact_download_request in artifact_download_requests
         ]
         for future in concurrent.futures.as_completed(futures):
             future.result(timeout=60)
@@ -154,10 +163,10 @@ def retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts):
     if args.blas:
         base_artifacts.append("host-blas_lib")
 
-    artifacts_to_retrieve = collect_artifacts_urls(
+    artifacts_to_retrieve = collect_artifacts_download_requests(
         base_artifacts, run_id, build_dir, GENERIC_VARIANT, s3_artifacts
     )
-    parallel_exec_commands(artifacts_to_retrieve)
+    download_artifacts(artifacts_to_retrieve)
 
 
 def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
@@ -196,10 +205,10 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
-    artifacts_to_retrieve = collect_artifacts_urls(
+    artifacts_to_retrieve = collect_artifacts_download_requests(
         enabled_artifacts, run_id, build_dir, target, s3_artifacts
     )
-    parallel_exec_commands(artifacts_to_retrieve)
+    download_artifacts(artifacts_to_retrieve)
 
 
 def run(args):
