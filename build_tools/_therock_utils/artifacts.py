@@ -45,12 +45,16 @@ class ArtifactName:
                 return None
             return ArtifactName(m.group(1), m.group(2), m.group(3))
         else:
-            # Matches {name}_{component}_{target_family} with an optional
-            # extra suffix that we ignore and an archive extension.
-            m = re.match(r"^([^_]+)_([^_]+)_([^_]+)(_.+)?\.tar.xz$", filename)
-            if not m:
-                return None
-            return ArtifactName(m.group(1), m.group(2), m.group(3))
+            return ArtifactName.from_filename(filename)
+
+    @staticmethod
+    def from_filename(filename: str) -> Optional["ArtifactName"]:
+        # Matches {name}_{component}_{target_family} with an optional
+        # extra suffix that we ignore and an archive extension.
+        m = re.match(r"^([^_]+)_([^_]+)_([^_]+)(_.+)?\.tar.xz$", filename)
+        if not m:
+            return None
+        return ArtifactName(m.group(1), m.group(2), m.group(3))
 
     def __repr__(self):
         return f"Artifact({self.name}[{self.component}:{self.target_family}])"
