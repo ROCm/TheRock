@@ -43,10 +43,10 @@ class RockProjectRepo:
         os.environ["ROCK_BUILDER_APP_BUILD_DIR"] = project_build_dir.as_posix()
 
     # private methods
-    def __exec_subprocess_cmd(self, exec_cmd, exec_dir):
+    def _exec_subprocess_cmd(self, exec_cmd, exec_dir):
         ret = True
         if exec_cmd is not None:
-            exec_dir = self.__replace_env_variables(exec_dir)
+            exec_dir = self._replace_env_variables(exec_dir)
             print("exec_cmd: " + exec_cmd)
             # capture_output=True --> can print output after process exist, not possible to see the output during the build time
             # capture_output=False --> can print output only during build time
@@ -63,7 +63,7 @@ class RockProjectRepo:
                 print(f"Error: {result.stderr}")
         return ret
 
-    def __exec_subprocess_batch_file(self, batch_file):
+    def _exec_subprocess_batch_file(self, batch_file):
         ret = True
         if batch_file is not None:
             print("batch_file: " + batch_file)
@@ -81,13 +81,13 @@ class RockProjectRepo:
                 print(f"Error: {result.stderr}")
         return ret
 
-    def __replace_env_variables(self, cmd_str):
+    def _replace_env_variables(self, cmd_str):
         ret = os.path.expandvars(cmd_str)
         # print("orig: " + cmd_str)
         # print("new: " + ret)
         return ret
 
-    def __get_latest_file(self, path, extension=None):
+    def _get_latest_file(self, path, extension=None):
         ret = None
         if path is not None:
             search_key = path.rstrip()
@@ -108,16 +108,16 @@ class RockProjectRepo:
     # 1) search the latest wheel file from certain directory
     # 2) copy wheel to packages/wheel directory
     # 3) install wheel to current python environment
-    def __handle_FIND_AND_HANDLE_LATEST_PYTHON_WHEEL_CMD(self, install_cmd):
+    def _handle_FIND_AND_HANDLE_LATEST_PYTHON_WHEEL_CMD(self, install_cmd):
         ret = True
         install_cmd_arr = install_cmd.split()
         print("len(install_cmd_arr): " + str(len(install_cmd_arr)))
         if len(install_cmd_arr) == 2:
             wheel_search_path = install_cmd_arr[1]
-            wheel_search_path = self.__replace_env_variables(wheel_search_path)
+            wheel_search_path = self._replace_env_variables(wheel_search_path)
             print("wheel_search_path: " + wheel_search_path)
             # 1) search the wheel
-            latest_whl = self.__get_latest_file(wheel_search_path, "*.whl")
+            latest_whl = self._get_latest_file(wheel_search_path, "*.whl")
             if latest_whl:
                 # shutil.copy will throw exception in error cases
                 try:
@@ -138,9 +138,9 @@ class RockProjectRepo:
                     # is not installed. But in cases that we do multiple builds for same
                     # wheel version with little changes, we need to do the uninstall first
                     # before we do the install for the package with same wheel version.
-                    self.__exec_subprocess_cmd(inst_cmd, self.project_exec_dir)
+                    self._exec_subprocess_cmd(inst_cmd, self.project_exec_dir)
                     inst_cmd = "pip install " + latest_whl
-                    ret = self.__exec_subprocess_cmd(inst_cmd, self.project_exec_dir)
+                    ret = self._exec_subprocess_cmd(inst_cmd, self.project_exec_dir)
                     if not ret:
                         print("Install failed for " + self.project_name)
                         print("Failed command: " + install_cmd)
@@ -157,7 +157,7 @@ class RockProjectRepo:
                 ret = False
         return ret
 
-    def __handle_command_exec(self, exec_phase, exec_cmd, cmd_exec_dir):
+    def _handle_command_exec(self, exec_phase, exec_cmd, cmd_exec_dir):
         cmd_exec_dir = Path(os.path.expandvars(str(cmd_exec_dir)))
         if exec_cmd:
             exec_cmd = os.path.expandvars(exec_cmd)
@@ -184,7 +184,7 @@ class RockProjectRepo:
                 exec_cmd = "".join(line_arr[1:])
             else:
                 exec_cmd = None
-            ret = self.__handle_FIND_AND_HANDLE_LATEST_PYTHON_WHEEL_CMD(special_cmd)
+            ret = self._handle_FIND_AND_HANDLE_LATEST_PYTHON_WHEEL_CMD(special_cmd)
         # then handle regular command or multiple commands
         if (ret == True) and (exec_cmd is not None):
             is_multiline = self.is_multiline_text(exec_cmd)
@@ -203,21 +203,21 @@ class RockProjectRepo:
                     )
                     with open(build_cmd_file, "w") as file:
                         file.write(exec_cmd)
-                    ret = self.__exec_subprocess_batch_file(str(build_cmd_file))
+                    ret = self._exec_subprocess_batch_file(str(build_cmd_file))
                 else:
                     # bash can execute multiple commands in same subprocess.run process
                     print("------ " + exec_phase + " start ----------")
-                    self.__exec_subprocess_cmd("env", cmd_exec_dir)
+                    self._exec_subprocess_cmd("env", cmd_exec_dir)
                     print("------ " + exec_phase + " end ----------")
                     time.sleep(1)
-                    ret = self.__exec_subprocess_cmd(exec_cmd, cmd_exec_dir)
+                    ret = self._exec_subprocess_cmd(exec_cmd, cmd_exec_dir)
             else:
                 # execute just a single command
                 print("------ " + exec_phase + " start ----------")
-                self.__exec_subprocess_cmd("env", cmd_exec_dir)
+                self._exec_subprocess_cmd("env", cmd_exec_dir)
                 print("------ " + exec_phase + " end ----------")
                 time.sleep(1)
-                ret = self.__exec_subprocess_cmd(exec_cmd, cmd_exec_dir)
+                ret = self._exec_subprocess_cmd(exec_cmd, cmd_exec_dir)
         return ret
 
     # public methods
@@ -425,7 +425,7 @@ class RockProjectRepo:
         else:
             print("No environment settings specified")
         print("------ env-settings start ----------")
-        self.__exec_subprocess_cmd("env", ".")
+        self._exec_subprocess_cmd("env", ".")
         print("------ env-settings end ----------")
         return ret
 
@@ -454,14 +454,14 @@ class RockProjectRepo:
         cur_p.mkdir(parents=True, exist_ok=True)
         ret = cur_p.is_dir()
         if ret:
-            ret = self.__handle_command_exec("init", init_cmd, self.project_exec_dir)
+            ret = self._handle_command_exec("init", init_cmd, self.project_exec_dir)
         return ret
 
     def do_clean(self, clean_cmd):
         ret = True
         # we want to return true for clean command even if the project has not been checked out yet
         if self.project_src_dir.is_dir() == True:
-            ret = self.__handle_command_exec("clean", clean_cmd, self.project_exec_dir)
+            ret = self._handle_command_exec("clean", clean_cmd, self.project_exec_dir)
         return ret
 
     def do_checkout(
@@ -559,7 +559,7 @@ class RockProjectRepo:
         ret = True
         print("do_hipify started")
         if hipify_cmd:
-            ret = self.__exec_subprocess_cmd(hipify_cmd, self.project_exec_dir)
+            ret = self._exec_subprocess_cmd(hipify_cmd, self.project_exec_dir)
             # Iterate over the base repository and all submodules. Because we process
             # the root repo first, it will not add submodule changes.
             repo_dir: Path = self.project_src_dir
@@ -588,25 +588,25 @@ class RockProjectRepo:
         return ret
 
     def do_pre_config(self, pre_config_cmd):
-        return self.__handle_command_exec(
+        return self._handle_command_exec(
             "pre_config", pre_config_cmd, self.project_exec_dir
         )
 
     def do_config(self, config_cmd):
-        return self.__handle_command_exec("config", config_cmd, self.project_exec_dir)
+        return self._handle_command_exec("config", config_cmd, self.project_exec_dir)
 
     def do_cmake_config(self, cmake_config):
         ret = True
         if cmake_config:
             cmake_config = os.path.expandvars(str(cmake_config))
             cmake_config = "cmake " + cmake_config
-            ret = self.__handle_command_exec(
+            ret = self._handle_command_exec(
                 "cmake_config", cmake_config, self.project_build_dir
             )
         return ret
 
     def do_post_config(self, post_config_cmd):
-        return self.__handle_command_exec(
+        return self._handle_command_exec(
             "post_config", post_config_cmd, self.project_exec_dir
         )
 
@@ -615,26 +615,26 @@ class RockProjectRepo:
         if cmake_config:
             cpu_count = os.cpu_count()
             build_cmd = "make -j" + str(cpu_count)
-            ret = self.__handle_command_exec("make", build_cmd, self.project_build_dir)
+            ret = self._handle_command_exec("make", build_cmd, self.project_build_dir)
         return ret
 
     def do_build(self, build_cmd):
-        return self.__handle_command_exec("build", build_cmd, self.project_exec_dir)
+        return self._handle_command_exec("build", build_cmd, self.project_exec_dir)
 
     def do_install(self, install_cmd):
-        return self.__handle_command_exec("install", install_cmd, self.project_exec_dir)
+        return self._handle_command_exec("install", install_cmd, self.project_exec_dir)
 
     def do_cmake_install(self, cmake_config):
         ret = True
         if cmake_config:
             install_cmd = "make install"
-            ret = self.__handle_command_exec(
+            ret = self._handle_command_exec(
                 "make install", install_cmd, self.project_build_dir
             )
         return ret
 
     def do_post_install(self, post_install_cmd):
-        return self.__exec_subprocess_cmd(post_install_cmd, self.project_exec_dir)
+        return self._exec_subprocess_cmd(post_install_cmd, self.project_exec_dir)
 
     def do_save_patches(self):
         ret = True
