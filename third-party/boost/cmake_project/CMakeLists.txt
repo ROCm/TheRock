@@ -5,12 +5,19 @@ project(BOOST_BUILD)
 include(ProcessorCount)
 ProcessorCount(PROCESSOR_COUNT)
 
+# Limit Boost B2 threads to 1 by default unless more than 8 cpu threads available
+set(B2_NJOBS "1") 
+if(PROCESSOR_COUNT GREATER 8)
+  set(B2_NJOBS "8")
+endif()
+message("[boost] b2 jobs set to: ${B2_NJOBS} / ${PROCESSOR_COUNT} cpu threads")
+
 set(_terminal_option)
 if("$ENV{THEROCK_INTERACTIVE}")
   set(_terminal_option "USES_TERMINAL")
 endif()
 
-set(_b2_args -j "${PROCESSOR_COUNT}" link=static threading=multi variant=release)
+set(_b2_args -j "${B2_NJOBS}" link=static threading=multi variant=release)
 
 if(WIN32)
   # The boost batch file does not handle --with-libraries and silently builds
