@@ -49,6 +49,12 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+      REDSHIFT_HOST: "therockcluster-1.cgwwfykpw9ix.us-east-2.redshift.amazonaws.com"
+      REDSHIFT_PORT: 5439
+      REDSHIFT_DBNAME: "workflow_database"
+      REDSHIFT_USER: "awsuser"
+      REDSHIFT_PASSWD: ${{ secrets.REDSHIFT_THEROCKCLUSTER_1_AWSUSER }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -149,6 +155,28 @@ jobs:
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }} \
             --build-dir build
+
+      - name: Determine job status for workflow run
+        if: '!cancelled()'
+        id: job-status-step
+        env:
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: python build_tools/github_actions/fetch_job_status.py
+
+      - name: Install psycopg2
+        if: always()
+        run: |
+          echo 'Install psycopg2'
+          pip install psycopg2-binary
+
+      - name: Populate tables in redshift
+        if: always()
+        run: |
+          echo "Job Status details ${{ steps.job-status-step.outputs.job_summary }}"
+          python3 build_tools/github_actions/populate_redshift_db.py \
+            --api_op '${{ steps.job-status-step.outputs.job_summary }}' --redshift_cluster_endpoint ${{ env.REDSHIFT_HOST }} \
+            --redshift_username ${{ env.REDSHIFT_USER }} --dbname ${{ env.REDSHIFT_DBNAME  }} --redshift_password ${{ env.REDSHIFT_PASSWD }} --build_id ${{ github.run_number }}
 
       - name: Upload Logs
         if: always()
