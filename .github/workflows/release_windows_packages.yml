@@ -20,9 +20,8 @@ on:
       package_suffix:
         type: string
       families:
-        description: "A comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
+        description: "A comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`, or empty for the default list"
         type: string
-        default: gfx110x
       extra_cmake_options:
         description: "Extra options to pass to the CMake configure command"
         type: string
