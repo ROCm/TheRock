@@ -23,15 +23,20 @@ extra_cmake_options = os.getenv("extra_cmake_options")
 
 def build_linux_configure():
     logging.info(f"Building package {package_version}")
-    cmd = f"""
-    cmake -B build -GNinja .
-          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-          -DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}
-          -DTHEROCK_PACKAGE_VERSION="{package_version}"
-          -DTHEROCK_VERBOSE=ON
-          -DBUILD_TESTING=ON
-          {extra_cmake_options}
-    """
+    cmd = [
+        "cmake",
+        "-B",
+        "build",
+        "-GNinja",
+        ".",
+        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+        f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
+        f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
+        "-DTHEROCK_VERBOSE=ON",
+        "-DBUILD_TESTING=ON",
+        extra_cmake_options,
+    ]
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
 
 
