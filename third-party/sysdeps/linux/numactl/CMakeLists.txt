@@ -69,6 +69,9 @@ add_custom_target(
   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
+    # reconfigure the project as the version of autoconf available may differ
+    autoreconf -f -i "${CMAKE_CURRENT_BINARY_DIR}/s"
+  COMMAND
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --disable-static
