@@ -1,0 +1,146 @@
+From 0f05ca3f2891783e905d8fcce81f1c582388dcc2 Mon Sep 17 00:00:00 2001
+From: David <david.dixon@amd.com>
+Date: Fri, 13 Jun 2025 19:24:36 -0500
+Subject: [PATCH 1/5] Conditionally enable catch tests
+
+---
+ next-cmake/CMakeLists.txt            |  1 +
+ next-cmake/test/CMakeLists.txt       | 41 ++++------------------------
+ next-cmake/test/catch/CMakeLists.txt | 21 ++++++++++++++
+ next-cmake/test/unit/CMakeLists.txt  | 14 ++++++++++
+ 4 files changed, 42 insertions(+), 35 deletions(-)
+
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index 42faaf24..08ca0453 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -57,6 +57,7 @@ option(ROCROLLER_BUILD_TESTING "Build rocRoller testing." ON)
+ option(ROCROLLER_EMBED_ARCH_DEF "Embed msgpack architecture data in library." ON)
+ option(ROCROLLER_BUILD_SHARED_LIBS "Build rocRoller as a shared library." ON)
+ option(ROCROLLER_ENABLE_FETCH "Enable fetch content for dependencies if find_package fails." OFF)
++option(ROCROLLER_ENABLE_CATCH "Build rocRoller catch unit tests" ON)
+ 
+ find_package(fmt 11.1.3)
+ if(NOT fmt_FOUND)
+diff --git a/next-cmake/test/CMakeLists.txt b/next-cmake/test/CMakeLists.txt
+index 1e24dd32..c314bd4e 100644
+--- a/next-cmake/test/CMakeLists.txt
++++ b/next-cmake/test/CMakeLists.txt
+@@ -25,20 +25,6 @@
+ 
+ include(CTest)
+ 
+-find_package(Catch2)
+-if(NOT Catch2_FOUND)
+-    if(ROCROLLER_ENABLE_FETCH)
+-        FetchContent_Declare(
+-            Catch2
+-            GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+-            GIT_TAG devel
+-        )
+-        FetchContent_MakeAvailable(Catch2)
+-    else()
+-        message(FATAL_ERROR "Failed to find Catch2")
+-    endif()
+-endif()
+-
+ find_package(GTest)
+ if(NOT GTest_FOUND)
+     if(ROCROLLER_ENABLE_FETCH)
+@@ -67,7 +53,9 @@ if(NOT mxDataGenerator_FOUND)
+ endif()
+ 
+ add_executable(rocroller-tests)
+-add_executable(rocroller-tests-catch)
++if(ROCROLLER_ENABLE_CATCH AND (ROCROLLER_BUILD_TESTING OR BUILDTESTING))
++    add_executable(rocroller-tests-catch)
++endif()
+ 
+ find_package(BLAS REQUIRED)
+ find_package(OpenMP REQUIRED)
+@@ -76,25 +64,8 @@ if(ROCROLLER_ENABLE_YAML_CPP)
+     target_compile_definitions(rocroller-tests PUBLIC ROCROLLER_TESTS_USE_YAML_CPP)
+ endif()
+ 
++if(ROCROLLER_ENABLE_CATCH)
++    add_subdirectory(catch)
++endif()
+ add_subdirectory(common)
+-add_subdirectory(catch)
+ add_subdirectory(unit)
+-
+-target_link_libraries(rocroller-tests
+-    PRIVATE
+-        rocroller::common-test-utilities
+-        ${BLAS_LIBRARIES}
+-        GTest::gtest_main
+-        GTest::gmock
+-        libdivide::libdivide
+-        ${llvm_libs}
+-        ${llvm_yaml_libs}
+-        lldELF
+-)
+-
+-target_link_libraries(rocroller-tests-catch
+-    PRIVATE
+-        rocroller::common-test-utilities
+-        Catch2::Catch2WithMain
+-        ${BLAS_LIBRARIES}
+-)
+diff --git a/next-cmake/test/catch/CMakeLists.txt b/next-cmake/test/catch/CMakeLists.txt
+index 8cd97544..8f30b4d5 100644
+--- a/next-cmake/test/catch/CMakeLists.txt
++++ b/next-cmake/test/catch/CMakeLists.txt
+@@ -23,6 +23,27 @@
+ #
+ ################################################################################
+ 
++find_package(Catch2)
++if(NOT Catch2_FOUND)
++    if(ROCROLLER_ENABLE_FETCH)
++        FetchContent_Declare(
++            Catch2
++            GIT_REPOSITORY https://github.com/catchorg/Catch2.git
++            GIT_TAG devel
++        )
++        FetchContent_MakeAvailable(Catch2)
++    else()
++        message(FATAL_ERROR "Failed to find Catch2")
++    endif()
++endif()
++
++target_link_libraries(rocroller-tests-catch
++    PRIVATE
++        rocroller::common-test-utilities
++        Catch2::Catch2WithMain
++        ${BLAS_LIBRARIES}
++)
++
+ set(_CMAKE_CURRENT_SOURCE_DIR "${ROCROLLER_TEST_DIR}/catch")
+ target_sources(rocroller-tests-catch
+     PRIVATE
+diff --git a/next-cmake/test/unit/CMakeLists.txt b/next-cmake/test/unit/CMakeLists.txt
+index 3c803d64..4cb6575f 100644
+--- a/next-cmake/test/unit/CMakeLists.txt
++++ b/next-cmake/test/unit/CMakeLists.txt
+@@ -1,3 +1,17 @@
++# Copyright Advanced Micro Devices, Inc., or its affiliates.
++# SPDX-License-Identifier:  MIT
++
++target_link_libraries(rocroller-tests
++    PRIVATE
++        rocroller::common-test-utilities
++        ${BLAS_LIBRARIES}
++        GTest::gtest_main
++        GTest::gmock
++        libdivide::libdivide
++        ${llvm_libs}
++        ${llvm_yaml_libs}
++        lldELF
++)
+ 
+ set(_CMAKE_CURRENT_SOURCE_DIR "${ROCROLLER_TEST_DIR}/unit")
+ 
+-- 
+2.34.1
+

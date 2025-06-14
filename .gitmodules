@@ -132,3 +132,7 @@
 	path = math-libs/support/mxDataGenerator
 	url = https://github.com/ROCm/mxDataGenerator.git
 	branch = main
+[submodule "rocRoller"]
+	path = math-libs/BLAS/rocRoller
+	url = https://github.com/ROCm/rocRoller.git
+	branch = main
