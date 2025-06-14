@@ -59,7 +59,7 @@ PYTORCH_SRC_DIR="${SCRIPT_DIR?}/pytorch"
 cd ${PYTORCH_SRC_DIR}
 
 # TODO(#590): Fix/disable warning logs that flood the console buffer and output
-# 			  to console instead, or match TheRock's build/logs/ setup.
+#             to console instead, or match TheRock's build/logs/ setup.
 LOGS_DIR="${HOME}/.therock"
 mkdir -p ${LOGS_DIR}
 printf -v DATE_STR '%(%Y-%m-%d_%H%M%S)T' -1
