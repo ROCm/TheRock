@@ -309,7 +309,10 @@ class RockProjectRepo:
             cwd=self.project_src_dir,
         )
         self.exec(["git", "checkout", "FETCH_HEAD"], cwd=self.project_src_dir)
-        self.exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE], cwd=self.project_src_dir)
+        self.exec(
+            ["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"],
+            cwd=self.project_src_dir,
+        )
         try:
             self.exec(
                 ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
@@ -324,7 +327,7 @@ class RockProjectRepo:
                 "submodule",
                 "foreach",
                 "--recursive",
-                f"git tag -f {TAG_UPSTREAM_DIFFBASE}",
+                f"git tag -f {TAG_UPSTREAM_DIFFBASE} --no-sign",
             ],
             cwd=self.project_src_dir,
             stdout_devnull=True,
@@ -377,7 +380,9 @@ class RockProjectRepo:
             print(f"HIPIFY made changes to {module_path}: Committing")
             self.exec(["git", "add", "-A"], cwd=module_path)
             self.exec(["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE], cwd=module_path)
-            self.exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE], cwd=module_path)
+            self.exec(
+                ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path
+            )
 
     def do_clean(self, clean_cmd):
         return self.__exec_subprocess_cmd(clean_cmd)
