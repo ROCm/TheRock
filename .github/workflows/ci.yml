@@ -38,7 +38,7 @@ on:
         type: string
         description: "If provided, the tests will run on this artifact ID"
         default: ""
-  pull_request:
+  pull_request_target:
     types:
       - labeled
       - opened
