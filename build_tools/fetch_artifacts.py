@@ -1,9 +1,18 @@
 #!/usr/bin/env python
-# This script provides a somewhat dynamic way to
-# retrieve artifacts from s3
 
-# NOTE: This script currently only retrieves the requested artifacts,
-# but those artifacts may not have all required dependencies.
+"""Fetches artifacts from S3.
+
+NOTE: This script currently only retrieves the requested artifacts,
+but those artifacts may not have all required dependencies.
+
+The install_rocm_from_artifacts.py script builds on top of this script to both
+download artifacts then unpack them into a usable install directory.
+
+Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
+  mkdir -p ~/.therock/artifacts_15685736080
+  python build_tools/fetch_artifacts.py \
+    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
+"""
 
 import argparse
 import concurrent.futures
@@ -66,6 +75,7 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     BUCKET_URL = f"https://{BUCKET}.s3.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
+    # TODO(scotttodd): hint when amdgpu_family is wrong/missing (root index for all families/platforms)?
     index_page_url = f"{BUCKET_URL}/index-{amdgpu_family}.html"
     log(f"Retrieving artifacts from {index_page_url}")
     request = urllib.request.Request(index_page_url)
