@@ -250,8 +250,9 @@ information about the build outputs.
 
 #### Building PyTorch
 
-Once you have `build/dist/rocm`, you can follow the instructions to build
-PyTorch from source over at
+Once you have `build/dist/rocm`, or you have
+[installed a release tarball](../../RELEASES.md#installing-from-tarballs), you
+can follow the instructions to build PyTorch from source over at
 [external-builds/pytorch](../../external-builds/pytorch/README.md).
 
 ### Run tests

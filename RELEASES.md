@@ -37,10 +37,10 @@ We currently support Python 3.11 and 3.12, with 3.13 support coming soon.
 
 ### Python packages support status
 
-|         | ROCm Python packages | PyTorch Python packages                                             |
-| ------- | -------------------- | ------------------------------------------------------------------- |
-| Linux   | ✅ Supported         | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
-| Windows | ⚪ Planned           | ⚪ Planned                                                          |
+|         | ROCm Python packages                                                | PyTorch Python packages                                             |
+| ------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Linux   | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
+| Windows | 🟡 In Progress ([#827](https://github.com/ROCm/TheRock/issues/827)) | 🟡 In Progress ([#827](https://github.com/ROCm/TheRock/issues/827)) |
 
 > [!IMPORTANT]
 > Known issues with the Python wheels are tracked at

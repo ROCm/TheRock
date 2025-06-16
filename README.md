@@ -22,14 +22,14 @@ For HIP and ROCm:
 |         | Build from source | Prebuilt packages                                                   | Python packages                                                     |
 | ------- | ----------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Linux   | ✅ Supported      | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
-| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | ⚪ Planned                                                          |
+| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | 🟡 In Progress ([#827](https://github.com/ROCm/TheRock/issues/827)) |
 
 For PyTorch with ROCm:
 
 |         | PyTorch source build                                                | PyTorch Python packages                                             | PyTorch Docker images |
 | ------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------- |
 | Linux   | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) | ✅ Supported          |
-| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned                                                          | N/A                   |
+| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | 🟡 In Progress ([#827](https://github.com/ROCm/TheRock/issues/827)) | N/A                   |
 
 ## Installing from releases
 

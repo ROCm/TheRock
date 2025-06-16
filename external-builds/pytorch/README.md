@@ -34,7 +34,7 @@ You will need either a source build or binary distribution of the dist packages.
 - For binary distributions, see [RELEASES.md](../../RELEASES.md). Both tarballs
   and Python packages should include the necessary files.
 
-  - Note: windows binary releases of TheRock are not yet available.
+  - Note: Windows ROCm Python packages are not yet available.
 
 - For source builds:
 
