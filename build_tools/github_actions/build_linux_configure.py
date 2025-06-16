@@ -10,6 +10,7 @@ Required environment variables:
 import logging
 import os
 from pathlib import Path
+import shlex
 import subprocess
 
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +41,7 @@ def build_linux_configure():
         "-DTHEROCK_VERBOSE=ON",
         "-DBUILD_TESTING=ON",
     ] + cmake_options_arr
+    logging.info(shlex.join(cmd))
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
 
 
