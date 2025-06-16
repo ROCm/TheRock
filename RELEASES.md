@@ -49,9 +49,12 @@ We currently support Python 3.11 and 3.12, with 3.13 support coming soon.
 ### Installing ROCm Python packages
 
 We provide several Python packages which together form the complete ROCm SDK.
-These packages are defined in the
-[`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
-directory.
+
+- See [ROCm Python Packaging via TheRock](./docs/packaging/python_packaging.md)
+  for information about the each package.
+- The packages are defined in the
+  [`build_tools/packaging/python/templates/`](https://github.com/ROCm/TheRock/tree/main/build_tools/packaging/python/templates)
+  directory.
 
 | Package name         | Description                                                        |
 | -------------------- | ------------------------------------------------------------------ |
@@ -183,7 +186,7 @@ framework.
 > [!WARNING]
 > This is under **active** development.
 
-Using the index pages listed above, you can install `torch==2.7.0a0` instead of
+Using the index pages listed above, you can install `torch` instead of
 `rocm[libraries,devel]`.
 
 For example, with gfx110X-dgpu:
@@ -195,30 +198,12 @@ python -m pip install \
 
 pip freeze
 # ...
-# rocm-sdk==6.5.0rc20250606
-# rocm-sdk-core==6.5.0rc20250606
-# rocm-sdk-libraries-gfx110X-dgpu==6.5.0rc20250606
+# rocm-sdk==7.0.0rc20250615
+# rocm-sdk-core==7.0.0rc20250615
+# rocm-sdk-libraries-gfx110X-dgpu==7.0.0rc20250615
 # ...
-# torch==2.7.0a0+rocmsdk20250608
+# torch==2.7.0a0+rocmsdk20250616
 ```
-
-Current known issues, expected to be fixed in the next nightly (see also
-https://github.com/ROCm/TheRock/issues/808):
-
-- This currently fetches the old `rocm-sdk` package instead of the new `rocm`
-  package.
-
-- This currently needs a workaround on startup to fix import errors:
-
-  ```python
-  # Temporary workaround!
-  import rocm_sdk
-
-  rocm_sdk.preload_libraries("rocprofiler-sdk-roctx", "miopen")
-
-  # ... then continue as normal
-  import torch
-  ```
 
 ### Using PyTorch Python packages
 
