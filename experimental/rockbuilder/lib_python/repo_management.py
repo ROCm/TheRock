@@ -241,7 +241,13 @@ class RockProjectRepo:
             return
         patch_files.sort(key=lambda p: p.name)
         self.exec(
-            ["git", "am", "--whitespace=nowarn", "--committer-date-is-author-date"]
+            [
+                "git",
+                "am",
+                "--whitespace=nowarn",
+                "--committer-date-is-author-date",
+                "--no-gpg-sign",
+            ]
             + patch_files,
             cwd=repo_path,
         )
@@ -379,7 +385,10 @@ class RockProjectRepo:
                 continue
             print(f"HIPIFY made changes to {module_path}: Committing")
             self.exec(["git", "add", "-A"], cwd=module_path)
-            self.exec(["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE], cwd=module_path)
+            self.exec(
+                ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
+                cwd=module_path,
+            )
             self.exec(
                 ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path
             )

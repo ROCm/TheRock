@@ -159,7 +159,13 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
         return
     patch_files.sort(key=lambda p: p.name)
     exec(
-        ["git", "am", "--whitespace=nowarn", "--committer-date-is-author-date"]
+        [
+            "git",
+            "am",
+            "--whitespace=nowarn",
+            "--committer-date-is-author-date",
+            "--no-gpg-sign",
+        ]
         + patch_files,
         cwd=repo_path,
     )
@@ -267,7 +273,10 @@ def do_hipify(args: argparse.Namespace):
             continue
         print(f"HIPIFY made changes to {module_path}: Committing")
         exec(["git", "add", "-A"], cwd=module_path)
-        exec(["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE], cwd=module_path)
+        exec(
+            ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
+            cwd=module_path,
+        )
         exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
 
