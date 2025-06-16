@@ -198,7 +198,7 @@ python -m pip install \
 
 pip freeze
 # ...
-# rocm-sdk==7.0.0rc20250615
+# rocm==7.0.0rc20250615
 # rocm-sdk-core==7.0.0rc20250615
 # rocm-sdk-libraries-gfx110X-dgpu==7.0.0rc20250615
 # ...
