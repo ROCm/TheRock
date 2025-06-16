@@ -25,7 +25,7 @@ def build_linux_configure():
     logging.info(f"Building package {package_version}")
 
     # Splitting cmake options into an array (ex: "-flag X" -> ["-flag", "X"]) for subprocess.run
-    cmake_options_arr = extra_cmake_options.split(" ")
+    cmake_options_arr = extra_cmake_options.split()
 
     cmd = [
         "cmake",
