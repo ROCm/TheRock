@@ -10,9 +10,9 @@ DO_INSTALL_STEP="${DO_INSTALL_STEP:-1}"
 
 SCRIPT_DIR="$(cd $(dirname $0) && pwd)"
 if ! source $SCRIPT_DIR/env_init.sh; then
-        echo "Failed to find python virtual-env"
-        echo "Make sure that TheRock has been build first"
-        exit 1
+    echo "Failed to find python virtual-env"
+    echo "Make sure that TheRock has been build first"
+    exit 1
 fi
 
 unset LDFLAGS
