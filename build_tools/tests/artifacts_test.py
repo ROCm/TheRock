@@ -39,6 +39,17 @@ class ArtifactNameTest(unittest.TestCase):
         self.assertEqual(an1, an2)
         self.assertEqual(hash(an1), hash(an2))
 
+    def testFromFilename(self):
+        f1 = "name_component_generic.tar.xz"
+        an1 = ArtifactName.from_filename(f1)
+        self.assertEqual(an1.name, "name")
+        self.assertEqual(an1.component, "component")
+        self.assertEqual(an1.target_family, "generic")
+
+        f2 = "invalid_name.zip"
+        an2 = ArtifactName.from_filename(f2)
+        self.assertIsNone(an2)
+
 
 if __name__ == "__main__":
     unittest.main()

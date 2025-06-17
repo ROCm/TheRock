@@ -102,6 +102,7 @@ echo "[INFO] Output dir: $OUTPUT_ARTIFACTS_DIR"
 fallback_target_name() {
   case "$1" in
     gfx942) echo "gfx94X-dcgpu" ;;
+    gfx950) echo "gfx950-dcgpu" ;;
     gfx1100) echo "gfx110X-dgpu" ;;
     gfx1201) echo "gfx120X-all" ;;
     *) echo "" ;;

@@ -11,10 +11,11 @@
 # new upstream versions as needed.
 FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:634656edbdeb07f955667e645762ad218eefe25f0d185fef913221855d610456
 
-######## Python setup #######
+######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for
 # default use.
-ENV PATH="/opt/python/cp312-cp312/bin:${PATH}"
+# Prepend therock-tools to PATH
+ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 
 ######## Pip Packages ########
 RUN pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
