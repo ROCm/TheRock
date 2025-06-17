@@ -47,26 +47,21 @@ WORKDIR /install-awscli
 COPY install_awscli.sh ./
 RUN ./install_awscli.sh && rm -rf /install-awscli
 
-######## Yum Packages #######
-# TODO: Figure out why gcc-toolset-12-libatomic-devel doesn't install with the
-# rest of the dev toolset.
-RUN yum install -y epel-release && \
-    yum install -y \
-        gcc \
-        gcc-c++ \
-        make \
-        gcc-toolset-12-libatomic-devel \
-        patchelf \
-        vim-common \
-        git-lfs && \
-    yum clean all && \
-    rm -rf /var/cache/yum
-
 ######## Installing Google test #######
 WORKDIR /install-googletest
 ENV GOOGLE_TEST_VERSION="1.16.0"
 COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
+
+######## Yum Packages #######
+# TODO: Figure out why gcc-toolset-12-libatomic-devel doesn't install with the
+# rest of the dev toolset.
+RUN yum install -y epel-release && \
+    yum install -y gcc-toolset-12-libatomic-devel && \
+    yum install -y patchelf && \
+    yum install -y vim-common git-lfs && \
+    yum clean all && \
+    rm -rf /var/cache/yum
 
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version
