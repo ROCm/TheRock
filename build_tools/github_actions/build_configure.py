@@ -30,7 +30,7 @@ github_workspace = os.getenv("GITHUB_WORKSPACE")
 platform_options = {
     "linux": ["-DTHEROCK_VERBOSE=ON", "-DBUILD_TESTING=ON"],
     "windows": [
-        f"-DCMAKE_C_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe"
+        f"-DCMAKE_C_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
         f"-DCMAKE_CXX_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
         f"-DCMAKE_LINKER={vctools_install_dir}/bin/Hostx64/x64/link.exe",
         "-DTHEROCK_BACKGROUND_BUILD_JOBS=4",
