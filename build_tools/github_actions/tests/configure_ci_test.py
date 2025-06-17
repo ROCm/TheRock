@@ -1,7 +1,7 @@
 from pathlib import Path
-from unittest import TestCase, main
 import os
 import sys
+import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
@@ -11,7 +11,7 @@ from amdgpu_family_matrix import (
 )
 
 
-class ConfigureCITest(TestCase):
+class ConfigureCITest(unittest.TestCase):
     def assert_target_output_is_valid(self, target_output):
         self.assertTrue(all("test-runs-on" in entry for entry in target_output))
         self.assertTrue(all("family" in entry for entry in target_output))
@@ -246,4 +246,4 @@ class ConfigureCITest(TestCase):
 
 
 if __name__ == "__main__":
-    main()
+    unittest.main()

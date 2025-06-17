@@ -1,0 +1,32 @@
+name: Release Windows PyTorch Wheels
+
+on:
+  workflow_dispatch:
+
+  # TODO(scotttodd): add schedule once working
+  # schedule:
+  #   - cron: "0 2 * * *"  # Nightly at 2 AM UTC
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { AMDGPU_FAMILIES: gfx110X-dgpu }
+          # TODO(scotttodd): enable once nightly builds include these
+          # - { AMDGPU_FAMILIES: gfx1151 }
+          # - { AMDGPU_FAMILIES: gfx120X-all }
+        python_version: ["3.11", "3.12"]
+
+    uses: ./.github/workflows/build_windows_pytorch_wheels.yml
+    with:
+      AMDGPU_FAMILIES: ${{ matrix.config.AMDGPU_FAMILIES }}
+      python_version: ${{ matrix.python_version }}
+      # TODO: switch to nightly once ready (and allow 'dev' from workflow_dispatch)
+      # s3_bucket: therock-nightly-python
+      s3_bucket: therock-dev-python
