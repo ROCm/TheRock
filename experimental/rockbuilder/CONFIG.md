@@ -226,4 +226,3 @@ Example:
 ```
 cmake_config=-DCMAKE_INSTALL_PREFIX=${ROCM_HOME} ${ROCK_BUILDER_APP_SRC_DIR}
 ```
-
