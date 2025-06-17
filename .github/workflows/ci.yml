@@ -38,11 +38,13 @@ on:
         type: string
         description: "If provided, the tests will run on this artifact ID"
         default: ""
-  pull_request:
+  pull_request_target:
     types:
       - labeled
       - opened
       - synchronize
+    branches:
+      - 'main'
   # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
