@@ -14,6 +14,7 @@ FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:634656edbdeb07f955667e645762ad218
 ######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for
 # default use.
+# Prepend therock-tools to PATH
 ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 
 ######## Pip Packages ########
