@@ -22,6 +22,7 @@ from pathlib import Path
 import platform
 from shutil import copyfileobj
 import sys
+import tarfile
 import urllib.request
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
@@ -221,6 +222,29 @@ def retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts):
     download_artifacts(artifacts_to_retrieve)
 
 
+def _extract_archives_into_subdirectories(output_dir: Path):
+    """
+    Extracts all files in output_dir to output_dir/{filename}, matching
+    the directory structure of the `therock-archives` CMake target. This
+    operation is different from the modes in other files that merge the
+    extracted files by component type or flatten into just bin/dist/.
+    """
+    # TODO(scotttodd): Move this code to artifacts.py? should move more of this
+    #                  logic into that file and add comprehensive unit tests
+    log(f"Extracting archives in '{output_dir}'")
+    archive_files = list(output_dir.glob("*.tar.*"))
+    for archive_file in archive_files:
+        # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
+        # We can't just use .stem since that only removes the last extension.
+        #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
+        #   2. .partition('.') gets (before, sep, after), discard all but 'before'
+        archive_file_stem, _, _ = archive_file.name.partition(".")
+
+        with tarfile.TarFile.open(archive_file, mode="r:xz") as tf:
+            log(f"++ Extracting '{archive_file.name}' to '{archive_file_stem}'")
+            tf.extractall(output_dir / archive_file_stem, filter="tar")
+
+
 def run(args):
     run_id = args.run_id
     target = args.target
@@ -235,6 +259,9 @@ def run(args):
     retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
     if not args.base_only:
         retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
+
+    if args.extract:
+        _extract_archives_into_subdirectories(output_dir)
 
 
 def main(argv):
@@ -258,6 +285,13 @@ def main(argv):
         type=Path,
         default="build/artifacts",
         help="Output path for fetched artifacts, defaults to `build/artifacts/` as in source builds",
+    )
+
+    parser.add_argument(
+        "--extract",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Extract files after fetching them",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
