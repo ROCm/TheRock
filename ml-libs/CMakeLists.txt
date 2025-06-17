@@ -85,7 +85,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      -DMIOPEN_USE_COMPOSABLEKERNEL=OFF  # TODO: enable
+      -DMIOPEN_USE_COMPOSABLEKERNEL=ON
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
@@ -102,6 +102,7 @@ if(THEROCK_ENABLE_MIOPEN)
       therock-nlohmann-json
       therock-FunctionalPlus
     RUNTIME_DEPS
+      composable_kernel
       hipBLAS-common
       hip-clr
       hipBLAS
