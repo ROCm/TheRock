@@ -173,7 +173,7 @@ class RockProjectRepo:
             and (exec_cmd is not None)
             and (
                 exec_cmd.startswith(
-                    "ROCK_CONFIG_CMD__FIND_AND_INSTALL_LATEST_PYTHON_WHEEL"
+                    "RCB_CMD__FIND_AND_INSTALL_LATEST_PYTHON_WHEEL"
                 )
             )
         ):

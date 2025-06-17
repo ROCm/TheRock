@@ -1,22 +1,29 @@
 # RockBuilder
 
-RockBuilder provides a configuration file based way of building
-one or multiple external projects on top of the existing
-ROCM core installation.
+RockBuilder provides a configuration file based way of building one or multiple external projects on top of the existing ROCM core installation.
 
 Project can be application, library or some other buildable or installable entity.
 
-## List of applications build
+RockBuilder supports both the Linux and Windows but some of the applications build may be operating system-specific.
+
+## Applications Build
+
+RockBuilder will build the list of applications that are listed in the in the project list configuration file:
+
+```
+projects/core_apps.pcfg
+```
+
+For each application build there is a application specific configuration file which will then specify the application name, version, source code checkout address and required configure, build and install commands.
 
 At the moment RockBuilder will build by default a following list of applications in Linux and Windows:
 
-- pytorch
-- pytorch vision
-- pytorch audio
-- torch migraphx (linux only)
+- pytorch (projects/pytorch.cfg)
+- pytorch vision (projects/pytorch_vision.cfg)
+- pytorch audio (projects/pytorch_audio.cfg)
+- torch migraphx (projects/torch_migraphx.cfg)
 
-Full list of applications build is defined in the project list configuration file.
-(projects/core_apps.pcfg)
+Configuration file format is specified in [CONFIG.md](CONFIG.md) document.
 
 # Usage
 
@@ -228,18 +235,3 @@ There can be separate action commands for posix based systems(Linux) and windows
 If optional action parameter is specified (for example --build), RockBuilder does not yet
 check whether other actions would be needed to be executed before that.
 This is expected to be changed in the future.
-
-## Managing python wheel install and copy in configuration files
-
-If the project's build procedure generates a python wheel installation package,
-there is a built-in API call in the RockBuilder to help the handling of it's
-installation and copy to common directory:
-
-ROCK_CONFIG_CMD\_\_FIND_AND_INSTALL_LATEST_PYTHON_WHEEL <search-path for wheel>
-
-This command will search the latest wheel file from the directory specified,
-then copy it to 'packages/wheels' directory
-and finally install it to the current python environment.
-
-Note that the installation of python wheel may be required to handle
-the build time dependencies to other applications build later.
