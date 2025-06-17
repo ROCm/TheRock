@@ -135,3 +135,4 @@
 [submodule "ml-libs/composable_kernel"]
 	path = ml-libs/composable_kernel
 	url = https://github.com/ROCm/composable_kernel.git
+	branch = develop
