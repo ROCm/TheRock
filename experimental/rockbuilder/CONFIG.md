@@ -57,10 +57,10 @@ Each application has its own INI-format configuration file that defines build op
 
 Build options can be categorized into the following:
 
-* Application Base Information
-* Environment Variables
-* Build Phase Commands
-* CMake Build Support
+- Application Base Information
+- Environment Variables
+- Build Phase Commands
+- CMake Build Support
 
 Depending on the application, build options for Linux and Windows may be the same or different. RockBuilder supports both via configuration files.
 
@@ -94,11 +94,11 @@ These variables are set for each project when its build process starts, and are 
 
 Base environment variables are automatically specified for each application that are build. These variables can be referenced in the project-specific configuration files:
 
-* `ROCM_HOME`:
+- `ROCM_HOME`:
   The ROCm SDK install prefix directory
-* `ROCK_BUILDER_APP_SRC_DIR`:
+- `ROCK_BUILDER_APP_SRC_DIR`:
   The source code directory for the currently built application
-* `ROCK_BUILDER_APP_BUILD_DIR`:
+- `ROCK_BUILDER_APP_BUILD_DIR`:
   The build directory for the currently built application
 
 #### Application-Specific Environment Variables
@@ -121,15 +121,15 @@ In addition to supporting configure, build, and install phases for CMake-based p
 
 The following optional build phase commands are supported:
 
-* `clean_cmd`
-* `hipify_cmd`
-* `init_cmd`
-* `pre_config_cmd`
-* `config_cmd`
-* `post_config_cmd`
-* `build_cmd`
-* `install_cmd`
-* `post_install_cmd`
+- `clean_cmd`
+- `hipify_cmd`
+- `init_cmd`
+- `pre_config_cmd`
+- `config_cmd`
+- `post_config_cmd`
+- `build_cmd`
+- `install_cmd`
+- `post_install_cmd`
 
 Each command can be a single command or a sequence of commands.
 
@@ -164,16 +164,16 @@ cmd_exec_dir=${ROCK_BUILDER_APP_SRC_DIR}/py
 The `hipify_cmd` is somewhat special compared to other commands.
 It is partially tied to the source code checkout phase, where patches are split into:
 
-* Base patches (applied immediately after checkout)
-* HIPIFY patches (applied after the hipify command is run)
+- Base patches (applied immediately after checkout)
+- HIPIFY patches (applied after the hipify command is run)
 
 If a hipify command is specified, the execution flow is:
 
 1. Source code checkout
-2. Tagging of source code base
-3. Applying base patches
-4. Executing `hipify_cmd`
-5. Tagging HIPIFY patches
+1. Tagging of source code base
+1. Applying base patches
+1. Executing `hipify_cmd`
+1. Tagging HIPIFY patches
 
 The ROCm SDK provides a hipify tool that converts CUDA files and APIs to ROCm-compatible equivalents.
 Some projects, like PyTorch, provide their own HIPIFY command.
@@ -202,8 +202,8 @@ ROCK_CONFIG_CMD__FIND_AND_INSTALL_LATEST_PYTHON_WHEEL <search-path>
 This command:
 
 1. Searches for the latest wheel in the specified path
-2. Copies it to the `packages/wheels` directory
-3. Installs it into the current Python environment
+1. Copies it to the `packages/wheels` directory
+1. Installs it into the current Python environment
 
 Note: Installing the Python wheel may be necessary to resolve build-time dependencies for other projects built later.
 

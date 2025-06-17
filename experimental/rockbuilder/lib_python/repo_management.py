@@ -171,11 +171,7 @@ class RockProjectRepo:
         while (
             (ret == True)
             and (exec_cmd is not None)
-            and (
-                exec_cmd.startswith(
-                    "RCB_CMD__FIND_AND_INSTALL_LATEST_PYTHON_WHEEL"
-                )
-            )
+            and (exec_cmd.startswith("RCB_CMD__FIND_AND_INSTALL_LATEST_PYTHON_WHEEL"))
         ):
             line_arr = exec_cmd.splitlines(True)
             special_cmd = line_arr[0]
