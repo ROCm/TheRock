@@ -10,10 +10,13 @@ set -euo pipefail
 CMAKE_VERSION="$1"
 
 ARCH="$(uname -m)"
+INSTALL_PREFIX="/usr/local/therock-tools"
+
+mkdir -p "${INSTALL_PREFIX}"
 
 curl --silent --fail --show-error --location \
     "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${ARCH}.sh" \
     --output cmake-installer.sh
 
 chmod +x cmake-installer.sh
-./cmake-installer.sh --skip-license --prefix=/usr/
+./cmake-installer.sh --skip-license --prefix="${INSTALL_PREFIX}"

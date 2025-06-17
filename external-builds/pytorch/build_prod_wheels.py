@@ -49,7 +49,7 @@ build sub-command (useful for docker invocations).
 
 ```
 build_prod_wheels.py
-    --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
+    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     install-rocm
 ```
 
@@ -79,7 +79,7 @@ versions):
     /opt/python/cp312-cp312/bin/python \
     /therock/src/external-builds/pytorch/build_prod_wheels.py \
     --pip-cache-dir /therock/output/pip_cache \
-    --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
+    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     build \
         --install-rocm \
         --clean \
@@ -209,8 +209,8 @@ def do_install_rocm(args: argparse.Namespace):
     ]
     if args.pre:
         pip_args.extend(["--pre"])
-    if args.find_links:
-        pip_args.extend(["--find-links", args.find_links])
+    if args.index_url:
+        pip_args.extend(["--index-url", args.index_url])
     if args.pip_cache_dir:
         pip_args.extend(["--cache-dir", args.pip_cache_dir])
     pip_args += cache_dir_args
@@ -394,7 +394,7 @@ def do_build_pytorch_vision(
 
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
-    p.add_argument("--find-links", help="Pip find-links to pass to pip install")
+    p.add_argument("--index-url", help="Base URL of the Python Package Index.")
     p.add_argument("--pip-cache-dir", type=Path, help="Pip cache dir")
     # Note that we default to >1.0 because at the time of writing, we had
     # 0.1.0 release placeholder packages out on pypi and we don't want them

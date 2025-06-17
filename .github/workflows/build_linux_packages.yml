@@ -48,18 +48,9 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
-      BUCKET: ${{ github.event.repository.name == 'TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
     steps:
-      - name: "Checking out repository"
+      - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: "Checking out repository for rocm-libraries"
-        if: ${{ github.repository == 'ROCm/rocm-libraries' }}
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: "ROCm/rocm-libraries"
-          ref: ${{ github.head_ref || github.ref_name }}
-          path: "rocm-libraries"
 
       - name: Runner Health Settings
         run: |
@@ -94,20 +85,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Configure Projects
+        env:
+          amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ${{ inputs.package_version }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
-          # Generate a new build id.
-          package_version="${{ inputs.package_version }}"
-          extra_cmake_options="${{ inputs.extra_cmake_options }}"
-          echo "Building package ${package_version}"
-
-          # Build.
-          cmake -B build -GNinja . \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_AMDGPU_FAMILIES=${{env.AMDGPU_FAMILIES}} \
-            -DTHEROCK_PACKAGE_VERSION="${package_version}" \
-            -DTHEROCK_VERBOSE=ON \
-            -DBUILD_TESTING=ON \
-            ${extra_cmake_options}
+            python3 build_tools/github_actions/build_linux_configure.py
 
       - name: Build therock-dist
         run: cmake --build build --target therock-dist
@@ -156,15 +139,15 @@ jobs:
         run: |
           python3 build_tools/github_actions/create_log_index.py \
             --build-dir=build \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+            --amdgpu-family=${{ inputs.amdgpu_families }}
 
       - name: Upload artifacts
         if: always()
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build/
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
       - name: Upload Logs
         if: always()
@@ -172,15 +155,15 @@ jobs:
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
+            --amdgpu-family ${{ inputs.amdgpu_families }}
 
       - name: Add Links to Job Summary
         if: always()
         run: |
           python build_tools/github_actions/upload_build_summary.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build/
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
       - name: Save cache
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2

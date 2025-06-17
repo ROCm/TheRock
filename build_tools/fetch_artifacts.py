@@ -1,12 +1,22 @@
 #!/usr/bin/env python
-# This script provides a somewhat dynamic way to
-# retrieve artifacts from s3
 
-# NOTE: This script currently only retrieves the requested artifacts,
-# but those artifacts may not have all required dependencies.
+"""Fetches artifacts from S3.
+
+NOTE: This script currently only retrieves the requested artifacts,
+but those artifacts may not have all required dependencies.
+
+The install_rocm_from_artifacts.py script builds on top of this script to both
+download artifacts then unpack them into a usable install directory.
+
+Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
+  mkdir -p ~/.therock/artifacts_15685736080
+  python build_tools/fetch_artifacts.py \
+    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
+"""
 
 import argparse
 import concurrent.futures
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 import platform
@@ -65,6 +75,7 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     BUCKET_URL = f"https://{BUCKET}.s3.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
+    # TODO(scotttodd): hint when amdgpu_family is wrong/missing (root index for all families/platforms)?
     index_page_url = f"{BUCKET_URL}/index-{amdgpu_family}.html"
     log(f"Retrieving artifacts from {index_page_url}")
     request = urllib.request.Request(index_page_url)
@@ -90,34 +101,42 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
             )
 
 
-def collect_artifacts_urls(
-    artifacts: list[str],
+@dataclass
+class ArtifactDownloadRequest:
+    """Information about a request to download an artifact to a local path."""
+
+    artifact_url: str
+    output_path: Path
+
+
+def collect_artifacts_download_requests(
+    artifact_names: list[str],
     run_id: str,
-    build_dir: str,
+    output_dir: Path,
     variant: str,
     existing_artifacts: set[str],
-) -> list[str]:
+) -> list[ArtifactDownloadRequest]:
     """Collects S3 artifact URLs to execute later in parallel."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
     artifacts_to_retrieve = []
-    for artifact in artifacts:
-        file_name = f"{artifact}_{variant}.tar.xz"
+    for artifact_name in artifact_names:
+        file_name = f"{artifact_name}_{variant}.tar.xz"
         # If artifact does exist in s3 bucket
         if file_name in existing_artifacts:
-            # Tuple of (FILE_PATH_TO_WRITE, S3_ARTIFACT_URL)
             artifacts_to_retrieve.append(
-                (
-                    f"{build_dir}/{file_name}",
-                    f"{BUCKET_URL}/{file_name}",
+                ArtifactDownloadRequest(
+                    artifact_url=f"{BUCKET_URL}/{file_name}",
+                    output_path=output_dir / file_name,
                 )
             )
 
     return artifacts_to_retrieve
 
 
-def urllib_retrieve_artifact(artifact):
-    output_path, artifact_url = artifact
+def download_artifact(artifact_download_request: ArtifactDownloadRequest):
+    artifact_url = artifact_download_request.artifact_url
+    output_path = artifact_download_request.output_path
     log(f"++ Downloading from {artifact_url} to {output_path}")
     with urllib.request.urlopen(artifact_url) as in_stream, open(
         output_path, "wb"
@@ -126,18 +145,18 @@ def urllib_retrieve_artifact(artifact):
     log(f"++ Download complete for {output_path}")
 
 
-def parallel_exec_commands(artifacts):
-    """Runs parallelized urllib calls using a thread pool executor"""
+def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]):
+    """Downloads artifacts in parallel using a thread pool executor."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [
-            executor.submit(urllib_retrieve_artifact, artifact)
-            for artifact in artifacts
+            executor.submit(download_artifact, artifact_download_request)
+            for artifact_download_request in artifact_download_requests
         ]
         for future in concurrent.futures.as_completed(futures):
             future.result(timeout=60)
 
 
-def retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts):
+def retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts):
     """Retrieves TheRock base artifacts using urllib."""
     base_artifacts = [
         "core-runtime_run",
@@ -154,13 +173,13 @@ def retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts):
     if args.blas:
         base_artifacts.append("host-blas_lib")
 
-    artifacts_to_retrieve = collect_artifacts_urls(
-        base_artifacts, run_id, build_dir, GENERIC_VARIANT, s3_artifacts
+    artifacts_to_retrieve = collect_artifacts_download_requests(
+        base_artifacts, run_id, output_dir, GENERIC_VARIANT, s3_artifacts
     )
-    parallel_exec_commands(artifacts_to_retrieve)
+    download_artifacts(artifacts_to_retrieve)
 
 
-def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
+def retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts):
     """Retrieves TheRock artifacts using urllib, based on the enabled arguments.
 
     If no artifacts have been collected, we assume that we want to install all artifacts
@@ -196,26 +215,26 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
         if args.tests:
             enabled_artifacts.append(f"{base_path}_test")
 
-    artifacts_to_retrieve = collect_artifacts_urls(
-        enabled_artifacts, run_id, build_dir, target, s3_artifacts
+    artifacts_to_retrieve = collect_artifacts_download_requests(
+        enabled_artifacts, run_id, output_dir, target, s3_artifacts
     )
-    parallel_exec_commands(artifacts_to_retrieve)
+    download_artifacts(artifacts_to_retrieve)
 
 
 def run(args):
     run_id = args.run_id
     target = args.target
-    build_dir = args.build_dir
-    if not Path(build_dir).is_dir():
-        print(f"Build dir '{build_dir}' does not exist. Exiting...")
+    output_dir = args.output_dir
+    if not output_dir.is_dir():
+        print(f"Output dir '{output_dir}' does not exist. Exiting...")
         return
     s3_artifacts = retrieve_s3_artifacts(run_id, target)
     if not s3_artifacts:
         print(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
-    retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts)
+    retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
     if not args.base_only:
-        retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts)
+        retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
 
 
 def main(argv):
@@ -235,10 +254,10 @@ def main(argv):
     )
 
     parser.add_argument(
-        "--build-dir",
-        type=str,
+        "--output-dir",
+        type=Path,
         default="build/artifacts",
-        help="Path to the artifact build directory",
+        help="Output path for fetched artifacts, defaults to `build/artifacts/` as in source builds",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
