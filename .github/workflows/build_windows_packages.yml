@@ -37,30 +37,16 @@ jobs:
     strategy:
       fail-fast: true
     env:
-      BASE_BUILD_DIR_POWERSHELL: B:\tmpbuild
+      BUILD_DIR: B:\build
       CACHE_DIR: "${{github.workspace}}/.cache"
       CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
-      - name: "Create build dir"
-        shell: powershell
-        run: |
-          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
-          echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
-          mkdir "$buildDir"
-          Write-Host "Generated Build Directory: $buildDir"
-          $bashBuildDir = $buildDir -replace '\\', '/' -replace '^B:', '/b'
-          echo  "BUILD_DIR_BASH=$bashBuildDir" >> $env:GITHUB_ENV
-          Write-Host "Converted Build Directory For Bash: $bashBuildDir"
-          $fs = Get-PSDrive -PSProvider "FileSystem"
-          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
-          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
-          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
-
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
       - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: "3.12"
@@ -142,23 +128,23 @@ jobs:
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}" --target therock-dist
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-dist
 
       - name: Build therock-archives
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}" --target therock-archives
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives
 
       - name: Report
         if: ${{ !cancelled() }}
         run: |
           echo "Build dir:"
           echo "------------"
-          ls -lh "${{ env.BUILD_DIR_BASH }}"
+          ls -lh "${{ env.BUILD_DIR }}"
           echo "Artifact Archives:"
           echo "------------------"
-          ls -lh "${{ env.BUILD_DIR_BASH }}"/artifacts/*.tar.xz
+          ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
           echo "Artifacts:"
           echo "----------"
-          du -h -d 1 "${{ env.BUILD_DIR_BASH }}"/artifacts
+          du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
           echo "CCache Stats:"
           echo "-------------"
           ccache -s
@@ -183,7 +169,7 @@ jobs:
         if: always()
         run: |
           python3 build_tools/github_actions/create_log_index.py \
-            --build-dir=${{ env.BUILD_DIR_BASH }} \
+            --build-dir=${{ env.BUILD_DIR }} \
             --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
 
       - name: Upload artifacts
@@ -192,13 +178,13 @@ jobs:
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir ${{ env.BUILD_DIR_BASH }}
+            --build-dir ${{ env.BUILD_DIR }}
 
       - name: Upload Logs
         if: always()
         run: |
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=${{ env.BUILD_DIR_BASH }} \
+            --build-dir=${{ env.BUILD_DIR }} \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
 
@@ -208,7 +194,7 @@ jobs:
           python build_tools/github_actions/upload_build_summary.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir ${{ env.BUILD_DIR_BASH }}
+            --build-dir ${{ env.BUILD_DIR }}
 
       - name: Save cache
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2

@@ -23,7 +23,7 @@ PLATFORM = platform.system().lower()
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
-build_dir = os.getenv("BUILD_DIR_BASH")
+build_dir = os.getenv("BUILD_DIR")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 
@@ -61,7 +61,7 @@ def build_configure():
         # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist
         if not vctools_install_dir:
             raise Exception(
-                "Environment variable VCToolsInstallDir is not set. Exiting."
+                "Environment variable VCToolsInstallDir is not set. Please see https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#important-tool-settings about Windows tool configurations. Exiting."
             )
 
         if os.path.isdir(f"{github_workspace}/amdgpu-windows-interop"):
