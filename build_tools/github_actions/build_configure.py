@@ -28,7 +28,6 @@ vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 
 platform_options = {
-    "linux": ["-DTHEROCK_VERBOSE=ON", "-DBUILD_TESTING=ON"],
     "windows": [
         f"-DCMAKE_C_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
         f"-DCMAKE_CXX_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
@@ -51,10 +50,12 @@ def build_configure():
         f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
         "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
         "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+        "-DTHEROCK_VERBOSE=ON",
+        "-DBUILD_TESTING=ON",
     ]
 
     # Adding platform specific options
-    cmd += platform_options[PLATFORM]
+    cmd += platform_options.get(PLATFORM, [])
 
     if PLATFORM == "windows":
         # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist
