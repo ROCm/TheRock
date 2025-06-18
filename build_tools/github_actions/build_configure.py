@@ -1,10 +1,15 @@
 """
-This script runs the Linux build configuration
+This script runs the Linux and Windows build configurations
 
 Required environment variables:
   - amdgpu_families
   - package_version
   - extra_cmake_options
+  - BUILD_DIR
+
+Optional environment variables:
+  - VCToolsInstallDir
+  - GITHUB_WORKSPACE
 """
 
 import logging
