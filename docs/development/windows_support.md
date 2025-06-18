@@ -53,6 +53,7 @@ mainline, in open source, using MSVC, etc.).
 | math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ✅        | No shared libraries                                                                  |
 | math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ✅        | No shared libraries                                                                  |
 | math-libs (BLAS) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ✅        |                                                                                      |
+| math-libs (BLAS) | [rocRoller](https://github.com/ROCm/rocRoller)                               | ❌        | Unsupported                                                                          |
 | math-libs (BLAS) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ✅        |                                                                                      |
 | math-libs (BLAS) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
 | math-libs (BLAS) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |

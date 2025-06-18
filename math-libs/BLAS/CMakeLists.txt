@@ -41,6 +41,9 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # rocRoller
 ##############################################################################
 
+# rocRoller only works from build tree
+# https://github.com/ROCm/TheRock/issues/870
+
 if(WIN32)
   set(_enable_rocRoller "OFF")
 else()
@@ -64,13 +67,13 @@ if(_enable_rocRoller)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
+      mxDataGenerator
       rocm-cmake
       therock-boost
       therock-fmt
       therock-googletest
       therock-libdivide
       therock-msgpack-cxx
-      mxDataGenerator
       therock-spdlog
       therock-yaml-cpp
       # therock-cl11 # will need this dep to enable client
