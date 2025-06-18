@@ -66,9 +66,10 @@ RUN yum install -y epel-release && \
     yum clean all && \
     rm -rf /var/cache/yum
 
-ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64"
-ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64"
-ENV LDFLAGS="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
+ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}" \
+    LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}" \
+    LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}" \
+    CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
 
 ######## Enable GCC Toolset ########
 SHELL ["/bin/bash", "-c"]
