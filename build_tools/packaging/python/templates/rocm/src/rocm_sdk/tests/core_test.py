@@ -2,6 +2,7 @@
 
 import importlib
 from pathlib import Path
+import platform
 import subprocess
 import sys
 import sysconfig
@@ -19,6 +20,8 @@ core_mod = importlib.import_module(core_mod_name)
 utils.assert_is_physical_package(core_mod)
 
 so_paths = utils.get_module_shared_libraries(core_mod)
+is_windows = platform.system() == "Windows"
+
 
 CONSOLE_SCRIPT_TESTS = [
     ("amdclang", ["--help"], "clang LLVM compiler", True),
@@ -29,10 +32,13 @@ CONSOLE_SCRIPT_TESTS = [
     ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
-    ("rocm_agent_enumerator", [], "", True),
-    ("rocminfo", [], "", True),
-    ("rocm-smi", [], "Management", True),
+    # These tools are only available on Linux.
+    ("rocm_agent_enumerator", [], "", not is_windows),
+    ("rocminfo", [], "", not is_windows),
+    ("rocm-smi", [], "Management", not is_windows),
 ]
+
+exe_suffix = ".exe" if is_windows else ""
 
 
 class ROCmCoreTest(unittest.TestCase):
@@ -86,7 +92,7 @@ class ROCmCoreTest(unittest.TestCase):
     def testConsoleScripts(self):
         scripts_path = Path(sysconfig.get_path("scripts"))
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
-            script_path = scripts_path / script_name
+            script_path = (scripts_path / script_name).with_suffix(exe_suffix)
             if not required and not script_path.exists():
                 continue
             with self.subTest(msg=f"Check console-script {script_name}"):

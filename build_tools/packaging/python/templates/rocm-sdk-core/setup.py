@@ -2,6 +2,7 @@
 
 import importlib.util
 import os
+import platform
 from setuptools import setup, find_packages
 import sys
 import sysconfig
@@ -63,9 +64,18 @@ setup(
             "roc-obj=rocm_sdk_core._cli:roc_obj",
             "roc-obj-extract=rocm_sdk_core._cli:roc_obj_extract",
             "roc-obj-ls=rocm_sdk_core._cli:roc_obj_ls",
-            "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
-            "rocminfo=rocm_sdk_core._cli:rocm_info",
-            "rocm-smi=rocm_sdk_core._cli:rocm_smi",
-        ],
+        ]
+        + (
+            [
+                # These tools are only available on Linux.
+                "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
+                "rocminfo=rocm_sdk_core._cli:rocm_info",
+                "rocm-smi=rocm_sdk_core._cli:rocm_smi",
+            ]
+            if platform.system() != "Windows"
+            else [
+                # TODO(#600): add hipInfo on Windows
+            ]
+        ),
     },
 )
