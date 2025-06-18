@@ -39,9 +39,8 @@ if(THEROCK_ENABLE_MIOPEN)
       ${THEROCK_BUNDLED_SQLITE3}
       ${optional_profiler_deps}
   )
-  therock_cmake_subproject_provide_package(composable_kernel libdevice_conv_operations lib/libdevice_conv_operations)
-  therock_cmake_subproject_provide_package(composable_kernel libdevice_other_operations lib/libdevice_other_operations)
-
+  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib)
+  
   therock_cmake_subproject_activate(composable_kernel)
 
   therock_provide_artifact(composable_kernel
