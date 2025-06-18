@@ -63,7 +63,7 @@ def build_configure():
                 "Environment variable VCToolsInstallDir is not set. Exiting."
             )
 
-        if os.path.isdir(Path(f"{github_workspace}/amdgpu-windows-interop")):
+        if os.path.isdir(f"{github_workspace}/amdgpu-windows-interop"):
             cmd.append(
                 f"-DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR={github_workspace}/amdgpu-windows-interop"
             )
