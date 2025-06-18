@@ -23,8 +23,8 @@ PLATFORM = platform.system().lower()
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
-build_dir = os.getenv("build_dir")
-vctools_install_dir = os.getenv("vctools_install_dir")
+build_dir = os.getenv("BUILD_DIR_BASH")
+vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 
 platform_options = {
@@ -34,8 +34,6 @@ platform_options = {
         f"-DCMAKE_CXX_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
         f"-DCMAKE_LINKER={vctools_install_dir}/bin/Hostx64/x64/link.exe",
         "-DTHEROCK_BACKGROUND_BUILD_JOBS=4",
-        "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded",
-        f"-DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR={github_workspace}/amdgpu-windows-interop",
     ],
 }
 
@@ -57,6 +55,18 @@ def build_configure():
 
     # Adding platform specific options
     cmd += platform_options[PLATFORM]
+
+    if PLATFORM == "windows":
+        # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist
+        if not vctools_install_dir:
+            raise Exception(
+                "Environment variable VCToolsInstallDir is not set. Exiting."
+            )
+
+        if os.path.isdir(Path(f"{github_workspace}/amdgpu-windows-interop")):
+            cmd.append(
+                f"-DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR={github_workspace}/amdgpu-windows-interop"
+            )
 
     # Splitting cmake options into an array (ex: "-flag X" -> ["-flag", "X"]) for subprocess.run
     cmake_options_arr = extra_cmake_options.split()
