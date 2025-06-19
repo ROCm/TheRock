@@ -67,9 +67,9 @@ RUN yum install -y epel-release && \
     yum clean all && \
     rm -rf /var/cache/yum
 
-ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64"
-ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64"
-ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
+ENV LIBRARY_PATH="/usr/local/therock-tools/lib64"
+ENV LD_LIBRARY_PATH="/usr/local/therock-tools/lib64"
+ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/usr/local/therock-tools/lib64 -lstdc++"
 
 ######## Enable GCC Toolset ########
 SHELL ["/bin/bash", "-c"]
@@ -80,7 +80,6 @@ RUN source /opt/rh/gcc-toolset-12/enable && \
     which gcc && gcc --version && \
     which g++ && g++ --version && \
     which clang++ || true
-
 
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version
