@@ -196,7 +196,7 @@ If a project generates a Python wheel package during its build,
 RockBuilder provides a built-in command to help install and manage it:
 
 ```
-ROCK_CONFIG_CMD__FIND_AND_INSTALL_LATEST_PYTHON_WHEEL <search-path>
+RCB_CMD__FIND_AND_INSTALL_LATEST_PYTHON_WHEEL <search-path>
 ```
 
 This command:
