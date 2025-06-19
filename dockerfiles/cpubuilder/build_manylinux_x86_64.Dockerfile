@@ -9,7 +9,7 @@
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
-FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:634656edbdeb07f955667e645762ad218eefe25f0d185fef913221855d610456
+FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017
 
 ######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for
@@ -18,7 +18,8 @@ FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:634656edbdeb07f955667e645762ad218
 ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 
 ######## Pip Packages ########
-RUN pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
+RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.42.0 && \
+pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
 ######## Repo ########
 RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo
@@ -54,12 +55,32 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 ######## Yum Packages #######
 # TODO: Figure out why gcc-toolset-12-libatomic-devel doesn't install with the
 # rest of the dev toolset.
-RUN yum install -y epel-release && \
-    yum install -y gcc-toolset-12-libatomic-devel && \
-    yum install -y patchelf && \
-    yum install -y vim-common git-lfs && \
+RUN yum install -y \
+      epel-release && \
+      yum install -y \
+      gcc-toolset-12 \
+      gcc-toolset-12-libstdc++-devel \
+      gcc-toolset-12-libatomic-devel \
+      patchelf \
+      vim-common \
+      git-lfs && \
     yum clean all && \
     rm -rf /var/cache/yum
+
+ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}" \
+    LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}" \
+    LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}" \
+    CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
+
+######## Enable GCC Toolset ########
+SHELL ["/bin/bash", "-c"]
+RUN echo 'source /opt/rh/gcc-toolset-12/enable' >> /etc/profile.d/gcc-toolset.sh && \
+    chmod +x /etc/profile.d/gcc-toolset.sh
+
+RUN source /opt/rh/gcc-toolset-12/enable && \
+    which gcc && gcc --version && \
+    which g++ && g++ --version && \
+    which clang++ || true
 
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version
