@@ -67,8 +67,7 @@ RUN yum install -y epel-release && \
     yum clean all && \
     rm -rf /var/cache/yum
 
-ENV LIBRARY_PATH="/usr/local/therock-tools/lib64"
-ENV LD_LIBRARY_PATH="/usr/local/therock-tools/lib64"
+ENV LD_LIBRARY_PATH="/usr/local/therock-tools/lib64:${LD_LIBRARY_PATH}" 
 ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/usr/local/therock-tools/lib64 -lstdc++"
 
 ######## Enable GCC Toolset ########
