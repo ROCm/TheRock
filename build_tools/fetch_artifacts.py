@@ -1,9 +1,18 @@
 #!/usr/bin/env python
-# This script provides a somewhat dynamic way to
-# retrieve artifacts from s3
 
-# NOTE: This script currently only retrieves the requested artifacts,
-# but those artifacts may not have all required dependencies.
+"""Fetches artifacts from S3.
+
+NOTE: This script currently only retrieves the requested artifacts,
+but those artifacts may not have all required dependencies.
+
+The install_rocm_from_artifacts.py script builds on top of this script to both
+download artifacts then unpack them into a usable install directory.
+
+Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
+  mkdir -p ~/.therock/artifacts_15685736080
+  python build_tools/fetch_artifacts.py \
+    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
+"""
 
 import argparse
 import concurrent.futures
@@ -13,6 +22,7 @@ from pathlib import Path
 import platform
 from shutil import copyfileobj
 import sys
+import tarfile
 import urllib.request
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
@@ -66,6 +76,7 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     BUCKET_URL = f"https://{BUCKET}.s3.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
+    # TODO(scotttodd): hint when amdgpu_family is wrong/missing (root index for all families/platforms)?
     index_page_url = f"{BUCKET_URL}/index-{amdgpu_family}.html"
     log(f"Retrieving artifacts from {index_page_url}")
     request = urllib.request.Request(index_page_url)
@@ -102,7 +113,7 @@ class ArtifactDownloadRequest:
 def collect_artifacts_download_requests(
     artifact_names: list[str],
     run_id: str,
-    build_dir: str,
+    output_dir: Path,
     variant: str,
     existing_artifacts: set[str],
 ) -> list[ArtifactDownloadRequest]:
@@ -117,7 +128,7 @@ def collect_artifacts_download_requests(
             artifacts_to_retrieve.append(
                 ArtifactDownloadRequest(
                     artifact_url=f"{BUCKET_URL}/{file_name}",
-                    output_path=f"{build_dir}/{file_name}",
+                    output_path=output_dir / file_name,
                 )
             )
 
@@ -146,7 +157,7 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
             future.result(timeout=60)
 
 
-def retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts):
+def retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts):
     """Retrieves TheRock base artifacts using urllib."""
     base_artifacts = [
         "core-runtime_run",
@@ -164,12 +175,12 @@ def retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts):
         base_artifacts.append("host-blas_lib")
 
     artifacts_to_retrieve = collect_artifacts_download_requests(
-        base_artifacts, run_id, build_dir, GENERIC_VARIANT, s3_artifacts
+        base_artifacts, run_id, output_dir, GENERIC_VARIANT, s3_artifacts
     )
     download_artifacts(artifacts_to_retrieve)
 
 
-def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
+def retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts):
     """Retrieves TheRock artifacts using urllib, based on the enabled arguments.
 
     If no artifacts have been collected, we assume that we want to install all artifacts
@@ -206,25 +217,51 @@ def retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts):
             enabled_artifacts.append(f"{base_path}_test")
 
     artifacts_to_retrieve = collect_artifacts_download_requests(
-        enabled_artifacts, run_id, build_dir, target, s3_artifacts
+        enabled_artifacts, run_id, output_dir, target, s3_artifacts
     )
     download_artifacts(artifacts_to_retrieve)
+
+
+def _extract_archives_into_subdirectories(output_dir: Path):
+    """
+    Extracts all files in output_dir to output_dir/{filename}, matching
+    the directory structure of the `therock-archives` CMake target. This
+    operation is different from the modes in other files that merge the
+    extracted files by component type or flatten into just bin/dist/.
+    """
+    # TODO(scotttodd): Move this code to artifacts.py? should move more of this
+    #                  logic into that file and add comprehensive unit tests
+    log(f"Extracting archives in '{output_dir}'")
+    archive_files = list(output_dir.glob("*.tar.*"))
+    for archive_file in archive_files:
+        # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
+        # We can't just use .stem since that only removes the last extension.
+        #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
+        #   2. .partition('.') gets (before, sep, after), discard all but 'before'
+        archive_file_stem, _, _ = archive_file.name.partition(".")
+
+        with tarfile.TarFile.open(archive_file, mode="r:xz") as tf:
+            log(f"++ Extracting '{archive_file.name}' to '{archive_file_stem}'")
+            tf.extractall(output_dir / archive_file_stem, filter="tar")
 
 
 def run(args):
     run_id = args.run_id
     target = args.target
-    build_dir = args.build_dir
-    if not Path(build_dir).is_dir():
-        print(f"Build dir '{build_dir}' does not exist. Exiting...")
+    output_dir = args.output_dir
+    if not output_dir.is_dir():
+        print(f"Output dir '{output_dir}' does not exist. Exiting...")
         return
     s3_artifacts = retrieve_s3_artifacts(run_id, target)
     if not s3_artifacts:
         print(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
-    retrieve_base_artifacts(args, run_id, build_dir, s3_artifacts)
+    retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
     if not args.base_only:
-        retrieve_enabled_artifacts(args, target, run_id, build_dir, s3_artifacts)
+        retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
+
+    if args.extract:
+        _extract_archives_into_subdirectories(output_dir)
 
 
 def main(argv):
@@ -244,10 +281,17 @@ def main(argv):
     )
 
     parser.add_argument(
-        "--build-dir",
-        type=str,
+        "--output-dir",
+        type=Path,
         default="build/artifacts",
-        help="Path to the artifact build directory",
+        help="Output path for fetched artifacts, defaults to `build/artifacts/` as in source builds",
+    )
+
+    parser.add_argument(
+        "--extract",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Extract files after fetching them",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")

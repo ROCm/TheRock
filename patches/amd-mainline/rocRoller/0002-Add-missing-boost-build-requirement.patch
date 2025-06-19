@@ -1,0 +1,24 @@
+From 85ec4b65d29b0598c2e7e95d53731b2a009d2342 Mon Sep 17 00:00:00 2001
+From: David <david.dixon@amd.com>
+Date: Fri, 13 Jun 2025 19:29:01 -0500
+Subject: [PATCH 2/5] 0002 Add missing boost build requirement
+
+---
+ next-cmake/src/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/next-cmake/src/CMakeLists.txt b/next-cmake/src/CMakeLists.txt
+index 99a2e323..05590a1a 100644
+--- a/next-cmake/src/CMakeLists.txt
++++ b/next-cmake/src/CMakeLists.txt
+@@ -99,6 +99,7 @@ target_link_libraries(rocroller-no-rtti
+         spdlog::spdlog_header_only
+         fmt::fmt-header-only
+         lldELF
++        Boost::headers
+ )
+ 
+ target_link_libraries(rocroller PRIVATE $<BUILD_INTERFACE:rocroller-no-rtti>)
+-- 
+2.34.1
+

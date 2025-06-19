@@ -1,76 +1,43 @@
 # RockBuilder
 
-RockBuilder provides a configuration file based way of building
-one or multiple projects external projects on top of the existing
-ROCM installation.
+RockBuilder provides a configuration file based way of building one or multiple external projects on top of the existing ROCM core installation.
 
 Project can be application, library or some other buildable or installable entity.
 
-## List of applications build
+RockBuilder supports both the Linux and Windows but some of the applications build may be operating system-specific.
 
-At the moment RockBuilder will build following application:
+## Applications Build
 
-- pytorch
-- pytorch vision
-- pytorch audio
-- torch migraphx
+RockBuilder will build the list of applications that are listed in the in the project list configuration file:
 
-Full list of applications build is defined the project list configuration file
-projects/core_apps.pcfg.
+```
+projects/core_apps.pcfg
+```
+
+For each application build there is a application specific configuration file which will then specify the application name, version, source code checkout address and required configure, build and install commands.
+
+At the moment RockBuilder will build by default a following list of applications in Linux and Windows:
+
+- pytorch (projects/pytorch.cfg)
+- pytorch vision (projects/pytorch_vision.cfg)
+- pytorch audio (projects/pytorch_audio.cfg)
+- torch migraphx (projects/torch_migraphx.cfg)
+
+Configuration file format is specified in [CONFIG.md](CONFIG.md) document.
 
 # Usage
 
 Below are described the steps required for setting up the RockBuilder environment
 and how to use it either to build all projects or to use it for just to execute some smaller task.
 
-## Environment setup
+## Build everything by using TheRock ROCm build
 
-Rockbuilder requires the existing ROCM environment and Python installation.
+First build the TheRock base system by following the instructions in
+[README.md](../../README.md#building-from-source).
+Then build the RockBuilder projects from the
+experimental/rockbuilder directory. Example:
 
-### ROCM Environment
-
-If ROCM_HOME environment variable is defined, then the ROCM environment is
-used from that directory.
-
-If ROCM_HOME is not defined, RockBuilder will try to find it from the directory
-
-```
-  therock/build/dist/rocm
-```
-
-### Python Environment
-
-Rockbuilder expects by default that Python venv is activated as it is the
-recommended way to use and install python applications that are required by the
-RockBuilder. Applications that are build by the RockBuilder will also be installed
-to the python environment that is used.
-
-Recommended python version should be same than what is used to build TheRock and
-can be for example python 3.11, 3.12 or 3.13.
-
-You can either create a new python venv or use the one already done and used for TheRock build.
-
-```bash
-cd TheRock
-source .venv/bin/activate
-```
-
-If you want to use instead real python environment instead of venv,
-you must force that by defining ROCK_PYTHON_PATH environment variable.
-For example on Linux:
-
-```bash
-export ROCK_PYTHON_PATH=/usr/bin
-```
-
-## Build and install all RockBuilder projects
-
-### Building and using ROCM from TheRock build environment
-
-Build firth the Rock base system by following the instructions in
-the TheRock/README.md and then build the RockBuilder projects from the external folder.
-
-Example for building on Linux.
+Example commands to build and test on Linux:
 
 ```bash
 cd TheRock
@@ -80,21 +47,77 @@ pip install -r requirements.txt
 python ./build_tools/fetch_sources.py
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_TARGETS=gfx1201
 cmake --build build
-cd external-projects
+cd experimental/rockbuilder
 python rockbuilder.py
+cd examples
+export ROCM_HOME=TheRock/build/dist/rocm
+export LD_LIBRARY_PATH=${ROCM_HOME}/lib:${ROCM_HOME}/lib/llvm/lib
+python torch_gpu_hello_world.py
+python torch_vision_hello_world.py
+python torch_audio_hello_world.py
 ```
 
-### Using existing ROCM Installation
-
-Build firth the Rock base system by following the instructions in
-the TheRock/README.md and then build the RockBuilder projects from the
-external folder. For example:
+Example commands to build and test on Windows by using the 'x64 Native MSVC command prompt':
 
 ```bash
-SET ROCM_HOME=/opt/rocm
-source .venv/bin/activate
-cd TheRock/external-projects
+cd c:\TheRock
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python ./build_tools/fetch_sources.py
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_TARGETS=gfx1201
+cmake --build build
+cd experimental\rockbuilder
+set PYTORCH_ROCM_ARCH=gfx1201
 python rockbuilder.py
+cd examples
+set PATH=c:\TheRock\build\dist\rocm\bin;c:\TheRock\build\dist\rocm\lib;%PATH%
+python torch_gpu_hello_world.py
+python torch_vision_hello_world.py
+python torch_audio_hello_world.py
+
+```
+
+Example output from test apps in Windows when using the AMD Radeon W7900 GPU:
+
+```bash
+(.venv) D:\rock\TheRock\experimental\rockbuilder\examples>python torch_gpu_hello_world.py
+Pytorch version: 2.7.0
+ROCM HIP version: 6.5.25222-1f8e4aaca
+cuda device count: 1
+default cuda device name: AMD Radeon PRO W7900 Dual Slot
+device type: cuda
+Tensor training running on cuda: True
+Running simple model training test
+    tensor([0., 1., 2.], device='cuda:0')
+Hello World, test executed succesfully
+
+(.venv) D:\rock\TheRock\experimental\rockbuilder\examples>python torch_vision_hello_world.py
+pytorch version: 2.7.0
+pytorch vision version: 0.22.0
+
+(.venv) D:\rock\TheRock\experimental\rockbuilder\examples>python torch_audio_hello_world.py
+pytorch version: 2.7.0
+pytorch audio version: 2.7.0
+
+```
+
+## Build everything by using TheRock ROCm install
+
+1. First build the TheRock base system by following the instructions in
+   [README.md](../../README.md#building-from-source).
+   Then build the RockBuilder projects from the
+   experimental/rockbuilder directory. Example:
+
+```bash
+export ROCM_HOME=/opt/rocm
+source ${ROCM_HOME}/.venv/bin/activate
+cd TheRock/experimental/rockbuilder
+python rockbuilder.py
+cd examples
+python torch_gpu_hello_world.py
+python torch_vision_hello_world.py
+python torch_audio_hello_world.py
 ```
 
 ## Checkout all projects (without build and install)
@@ -119,6 +142,48 @@ python rockbuilder.py --build --project pytorch_audio
 
 ```bash
 python rockbuilder.py --install --project pytorch_audio
+```
+
+# Environment setup
+
+Rockbuilder requires the existing ROCM environment and Python installation.
+
+## ROCM Environment
+
+If ROCM_HOME environment variable is defined, then the ROCM environment is
+used from that directory.
+
+If ROCM_HOME is not defined, RockBuilder will try to find it from the directory
+
+```
+  therock/build/dist/rocm
+```
+
+## Python Environment
+
+Rockbuilder expects by default that Python venv is activated as it is the
+recommended way to use and install python applications that are required by the
+RockBuilder. Applications that are build by the RockBuilder will also be installed
+to the python environment that is used as they may be required by other applications
+that are later build by the rockbuilder.
+
+Recommended python version should be same than what is used to build TheRock and
+can be for example python 3.11, 3.12 or 3.13.
+
+You can either create a new python venv or use the one already done and used for TheRock build.
+
+```bash
+cd TheRock
+source .venv/bin/activate
+```
+
+By default the RockBuilder will refuse to run if you are trying to use a real
+python virtual environment instead of using a virtual env. You can change that behaviour
+by setting the ROCK_PYTHON_PATH environment variable that will point to python directory.
+In Linux this can be set for example in a following way:
+
+```bash
+export ROCK_PYTHON_PATH=/usr/bin
 ```
 
 # Adding new projects to RockBuilder
@@ -146,7 +211,7 @@ project_list=
     torch_migraphx
 ```
 
-## Project specific configuration file
+## Project specific configuration files
 
 projects/pytorch.cfg is an example from the project configuration file.
 
@@ -165,8 +230,8 @@ can override this for example by specifying single command. For example:
 python rockbuilder.py --checkout
 ```
 
-There can be separate action commands for posix based systems(Linux) and dos-based systems(Windows).
+There can be separate action commands for posix based systems(Linux) and windows-based systems.
 
-If specific action is specified (for example --build), RockBuilder does not yet
-check whether other actions needed by the build action are already done. Instead it expected that
-the user knows that before that the checkout and configure steps are needed. This may change in the future.
+If optional action parameter is specified (for example --build), RockBuilder does not yet
+check whether other actions would be needed to be executed before that.
+This is expected to be changed in the future.

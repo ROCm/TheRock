@@ -136,3 +136,7 @@
 	path = ml-libs/composable_kernel
 	url = https://github.com/ROCm/composable_kernel.git
 	branch = develop
+[submodule "rocRoller"]
+	path = math-libs/BLAS/rocRoller
+	url = https://github.com/ROCm/rocRoller.git
+	branch = main
