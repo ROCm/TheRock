@@ -39,7 +39,7 @@ if(THEROCK_ENABLE_MIOPEN)
       ${THEROCK_BUNDLED_SQLITE3}
       ${optional_profiler_deps}
   )
-  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib)
+  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
   
   therock_cmake_subproject_activate(composable_kernel)
 
