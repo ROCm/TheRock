@@ -128,7 +128,7 @@ def main(argv: list[str]):
     p.add_argument("--docker", default="docker", help="Docker or podman binary")
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cbc2a1cd1aa4e0a072d3c3aeea8c4a1fadbd53d906873eb442facdc5e3aedd7b",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:962d44945da1684217a1a015fccd0558a076b21897cacc2c3754d63fdf1af33a",
         help="Build docker image",
     )
     p.add_argument(

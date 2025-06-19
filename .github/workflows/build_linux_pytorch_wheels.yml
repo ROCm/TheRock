@@ -45,7 +45,7 @@ jobs:
     name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:cbc2a1cd1aa4e0a072d3c3aeea8c4a1fadbd53d906873eb442facdc5e3aedd7b
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:962d44945da1684217a1a015fccd0558a076b21897cacc2c3754d63fdf1af33a
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
