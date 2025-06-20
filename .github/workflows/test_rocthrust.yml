@@ -66,12 +66,12 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run rocthrust tests
-        timeout-minutes: 5
+        timeout-minutes: 6
         run: |
           ctest \
             --test-dir ${THEROCK_BIN_DIR}/rocthrust \
             --output-on-failure \
             --parallel 8 \
             --exclude-regex "^copy.hip$|scan.hip" \
-            --timeout 300 \
+            --timeout 120 \
             --repeat until-pass:3
