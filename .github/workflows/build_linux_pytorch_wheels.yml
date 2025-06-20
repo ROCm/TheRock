@@ -90,13 +90,15 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e PYTORCH_TEST_WITH_ROCM=1 \
-            ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d904e6011375733b22fbfaa1aa27d693030fd9312262ae3c4b61a7d9efa268a7 \
+            ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292 \
             bash -c "
               python_dir=/opt/python/${{ inputs.python_version }} && \
-              if ! [ -x \$python_dir/bin/python ]; then
-                echo 'ERROR: Python not found at \$python_dir' && exit 1
-              fi && \
               export PATH=\$python_dir/bin:\$PATH && \
+              cd /workspace/external-builds/pytorch/pytorch && \
+              git am --abort || true && \
+              git reset --hard && \
+              git clean -xfd && \
+              cd /workspace && \
               ./external-builds/pytorch/pytorch_torch_repo.py checkout && \
               ./external-builds/pytorch/pytorch_audio_repo.py checkout && \
               ./external-builds/pytorch/pytorch_vision_repo.py checkout && \
@@ -109,18 +111,18 @@ jobs:
                 --clean \
                 --output-dir output/packages/dist && \
               python -m pip install output/packages/dist/torch-*.whl && \
-              echo 'Running rocm-smi...' && rocm-smi && \
+              rocm-smi && \
               cd external-builds/pytorch/pytorch && \
               python -m pip install pytest pytest-xdist && \
               pytest test/test_nn.py -v && \
               pytest test/test_torch.py -v && \
-              pytest test/test_cuda.py -v && \
-              pytest test/test_ops.py -v && \
-              pytest test/test_unary_ufuncs.py -v && \
-              pytest test/test_binary_ufuncs.py -v && \
-              pytest test/test_autograd.py -v && \
-              pytest torch/_inductor/test_torchinductor.py -v
-            "
+                pytest test/test_cuda.py -v && \
+                pytest test/test_ops.py -v && \
+                pytest test/test_unary_ufuncs.py -v && \
+                pytest test/test_binary_ufuncs.py -v && \
+                pytest test/test_autograd.py -v && \
+                pytest torch/_inductor/test_torchinductor.py -v
+              "
 
       - name: Configure AWS Credentials
         if: always()
