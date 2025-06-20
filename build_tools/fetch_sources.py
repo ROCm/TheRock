@@ -43,6 +43,7 @@ def get_enabled_projects(args) -> list[str]:
 def run(args):
     projects = get_enabled_projects(args)
     submodule_paths = [get_submodule_path(project) for project in projects]
+    # TODO(scotttodd): Check for git lfs?
     update_args = []
     if args.depth:
         update_args += ["--depth", str(args.depth)]
@@ -241,7 +242,14 @@ def main(argv):
             # "rocprofiler-systems",
             "roctracer",
             "ROCR-Runtime",
-        ],
+        ]
+        + (
+            [
+                "amdgpu-windows-interop",
+            ]
+            if is_windows()
+            else []
+        ),
     )
     parser.add_argument(
         "--math-lib-projects",

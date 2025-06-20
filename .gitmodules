@@ -140,3 +140,6 @@
 	path = math-libs/BLAS/rocRoller
 	url = https://github.com/ROCm/rocRoller.git
 	branch = main
+[submodule "amdgpu-windows-interop"]
+	path = core/amdgpu-windows-interop
+	url = https://github.com/nod-ai/amdgpu-windows-interop.git
