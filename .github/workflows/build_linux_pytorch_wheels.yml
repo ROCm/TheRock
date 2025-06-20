@@ -90,6 +90,7 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e PYTORCH_TEST_WITH_ROCM=1 \
+            -e PYTORCH_PRINT_REPRO_ON_FAILURE=0 \
             ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292 \
             bash -c "
               git config --global user.name 'therockbot' && \
@@ -98,6 +99,10 @@ jobs:
               export PATH=\$python_dir/bin:\$PATH && \
 
               cd /workspace/external-builds/pytorch/pytorch && \
+              # Ensure clean working directory before applying patches:
+              # - abort any in-progress patch (`git am`)
+              # - discard any local changes (`reset --hard`)
+              # - remove untracked files and directories (`clean -xfd`)
               git am --abort || true && git reset --hard && git clean -xfd && \
               cd /workspace && \
               ./external-builds/pytorch/pytorch_torch_repo.py checkout && \
