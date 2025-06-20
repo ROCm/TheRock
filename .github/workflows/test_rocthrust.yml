@@ -66,6 +66,7 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run rocthrust tests
+        timeout-minutes: 5
         run: |
           ctest \
             --test-dir ${THEROCK_BIN_DIR}/rocthrust \

@@ -64,6 +64,7 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run hipcub tests
+        timeout-minutes: 6
         run: |
           ctest \
             --test-dir ${THEROCK_BIN_DIR}/hipcub \

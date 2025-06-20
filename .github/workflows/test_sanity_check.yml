@@ -66,6 +66,7 @@ jobs:
         run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
 
       - name: Run ROCm Sanity Tests
+        timeout-minutes: 1
         run: |
           if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           pytest tests/ --log-cli-level=info --timeout=60
