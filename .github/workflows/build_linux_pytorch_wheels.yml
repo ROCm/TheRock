@@ -67,8 +67,6 @@ jobs:
     needs: set-runner
     runs-on: ${{ needs.set-runner.outputs.runner_label }}
     name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
-    container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -82,61 +80,47 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - name: Add selected Python version to PATH
+      - name: Run Docker container with ROCm access
         run: |
-          python_dir="/opt/python/${{ inputs.python_version }}"
-          if ! [ -x "${python_dir}/bin/python" ]; then
-            echo "ERROR: Could not find python: ${python_dir}"
-            exit 1
-          fi
-          echo "${python_dir}/bin" >> "$GITHUB_PATH"
-
-      - name: Checkout PyTorch Source Repos
-        run: |
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout
-
-      - name: Create pip cache directory
-        run: mkdir -p /tmp/pipcache
-
-      - name: Build PyTorch Wheels
-        run: |
-          echo "Building PyTorch wheels for ${{ inputs.AMDGPU_FAMILIES }}"
-          export PYTORCH_TEST_WITH_ROCM=1
-          ./external-builds/pytorch/build_prod_wheels.py \
-            --pip-cache-dir /tmp/pipcache \
-            --index-url "https://${{ inputs.s3_cloudfront }}/${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES }}/" \
-            build \
-            --install-rocm \
-            --clean \
-            --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-
-      - name: Run Selected PyTorch Tests
-        run: |
-          # Install the built torch wheel
-          python -m pip install ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl
-
-
-          # Show ROCm GPU info
-          echo "Running rocm-smi..."
-          rocm-smi
-
-          # Change to pytorch source dir
-          cd external-builds/pytorch/pytorch
-
-          # Install test dependencies
-          python -m pip install pytest pytest-xdist
-
-          # Run specific tests
-          pytest test/test_nn.py -v
-          pytest test/test_torch.py -v
-          pytest test/test_cuda.py -v
-          pytest test/test_ops.py -v
-          pytest test/test_unary_ufuncs.py -v
-          pytest test/test_binary_ufuncs.py -v
-          pytest test/test_autograd.py -v
-          pytest torch/_inductor/test_torchinductor.py -v
+          docker run --rm \
+            --device=/dev/kfd \
+            --device=/dev/dri \
+            --group-add video \
+            --group-add render \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            -e PYTORCH_TEST_WITH_ROCM=1 \
+            ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292 \
+            bash -c "
+              python_dir=/opt/python/${{ inputs.python_version }} && \
+              if ! [ -x \$python_dir/bin/python ]; then
+                echo 'ERROR: Python not found at \$python_dir' && exit 1
+              fi && \
+              export PATH=\$python_dir/bin:\$PATH && \
+              ./external-builds/pytorch/pytorch_torch_repo.py checkout && \
+              ./external-builds/pytorch/pytorch_audio_repo.py checkout && \
+              ./external-builds/pytorch/pytorch_vision_repo.py checkout && \
+              mkdir -p /tmp/pipcache && \
+              ./external-builds/pytorch/build_prod_wheels.py \
+                --pip-cache-dir /tmp/pipcache \
+                --index-url https://${{ inputs.s3_cloudfront }}/${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES }}/ \
+                build \
+                --install-rocm \
+                --clean \
+                --output-dir output/packages/dist && \
+              python -m pip install output/packages/dist/torch-*.whl && \
+              echo 'Running rocm-smi...' && rocm-smi && \
+              cd external-builds/pytorch/pytorch && \
+              python -m pip install pytest pytest-xdist && \
+              pytest test/test_nn.py -v && \
+              pytest test/test_torch.py -v && \
+              pytest test/test_cuda.py -v && \
+              pytest test/test_ops.py -v && \
+              pytest test/test_unary_ufuncs.py -v && \
+              pytest test/test_binary_ufuncs.py -v && \
+              pytest test/test_autograd.py -v && \
+              pytest torch/_inductor/test_torchinductor.py -v
+            "
 
       - name: Configure AWS Credentials
         if: always()
@@ -159,4 +143,4 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES  }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES }}
