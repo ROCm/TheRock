@@ -262,6 +262,7 @@ def main(argv):
             "rocFFT",
             "rocPRIM",
             "rocRAND",
+            "rocRoller",
             "rocSOLVER",
             "rocSPARSE",
             "rocThrust",
@@ -273,7 +274,15 @@ def main(argv):
         type=str,
         default=[
             "MIOpen",
-        ],
+        ]
+        + (
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "composable_kernel",
+            ]
+        ),
     )
     args = parser.parse_args(argv)
     run(args)

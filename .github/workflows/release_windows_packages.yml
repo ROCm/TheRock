@@ -96,36 +96,20 @@ jobs:
       matrix:
         target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
     env:
-      BASE_BUILD_DIR_POWERSHELL: B:\tmpbuild
+      BUILD_DIR: B:\build
       CACHE_DIR: "${{github.workspace}}/.cache"
       CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
       CCACHE_MAXSIZE: "4000M"
       TEATIME_LABEL_GH_GROUP: 1
       FILE_NAME: "therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
-      DIST_ARCHIVE: "B:/tmpbuild/artifacts/therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
+      DIST_ARCHIVE: "B:/build/artifacts/therock-dist-windows-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
       S3_TARBALL: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
 
     steps:
-      # TODO(amd-justchen): share with build_windows_packages.yml. Use pre-job hook?
-      #     Maybe we can remove _POWERSHELL entirely now that commands are all bash?
-      - name: "Create build dir"
-        shell: powershell
-        run: |
-          $buildDir = "$env:BASE_BUILD_DIR_POWERSHELL\"
-          echo "BUILD_DIR_POWERSHELL=$buildDir" >> $env:GITHUB_ENV
-          mkdir "$buildDir"
-          Write-Host "Generated Build Directory: $buildDir"
-          $bashBuildDir = $buildDir -replace '\\', '/' -replace '^B:', '/b'
-          echo  "BUILD_DIR_BASH=$bashBuildDir" >> $env:GITHUB_ENV
-          Write-Host "Converted Build Directory For Bash: $bashBuildDir"
-          $fs = Get-PSDrive -PSProvider "FileSystem"
-          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
-          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
-          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
-
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
       - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.12'
@@ -199,29 +183,22 @@ jobs:
           lfs: true
 
       - name: Configure Projects
+        env:
+          amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
+          package_version: "ADHOCBUILD"
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
           # clear cache before build and after download
           ccache -z
 
-          # Configure.
-          cmake -B "${{ env.BUILD_DIR_BASH }}" -GNinja . \
-            -DCMAKE_C_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
-            -DCMAKE_CXX_COMPILER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/cl.exe" \
-            -DCMAKE_LINKER="${{ env.VCToolsInstallDir }}/bin/Hostx64/x64/link.exe" \
-            -DTHEROCK_BACKGROUND_BUILD_JOBS=4 \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
-            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }} \
-            -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=${GITHUB_WORKSPACE}/amdgpu-windows-interop \
-            ${{ inputs.extra_cmake_options }}
+          python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist
-        run: cmake --build "${{ env.BUILD_DIR_BASH }}" --target therock-dist
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-dist
 
       - name: Compress dist folder
         run: |
-          cd ${{ env.BUILD_DIR_BASH }}/dist/rocm
+          cd ${{ env.BUILD_DIR }}/dist/rocm
           echo "Compressing ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" --force-local .
 
@@ -232,7 +209,7 @@ jobs:
         run: |
           echo "Build dir:"
           echo "------------"
-          ls -lh "${{ env.BUILD_DIR_BASH }}"
+          ls -lh "${{ env.BUILD_DIR }}"
           echo "CCache Stats:"
           echo "-------------"
           ccache -s

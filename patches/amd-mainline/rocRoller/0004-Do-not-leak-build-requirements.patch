@@ -1,0 +1,50 @@
+From 4f869250a28425ff54c3761f6c7fcf77ed06fee3 Mon Sep 17 00:00:00 2001
+From: David <david.dixon@amd.com>
+Date: Fri, 13 Jun 2025 19:34:14 -0500
+Subject: [PATCH 4/5] Do not leak build requirements
+
+---
+ next-cmake/CMakeLists.txt     | 6 +++---
+ next-cmake/src/CMakeLists.txt | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index 08ca0453..12683da2 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -140,7 +140,7 @@ find_package(LLD REQUIRED)
+ if(ROCROLLER_BUILD_SHARED_LIBS)
+     add_library(rocroller SHARED)
+ else()
+-    add_library(rocroller)
++    add_library(rocroller STATIC)
+     set_target_properties(rocroller PROPERTIES POSITION_INDEPENDENT_CODE ON)
+ endif()
+ add_library(roc::rocroller ALIAS rocroller)
+@@ -196,8 +196,8 @@ target_link_libraries(rocroller
+     PUBLIC
+         fmt::fmt-header-only
+     PRIVATE
+-        spdlog::spdlog_header_only
+-        libdivide::libdivide
++        $<BUILD_INTERFACE:spdlog::spdlog_header_only>
++        $<BUILD_INTERFACE:libdivide::libdivide>
+         ${llvm_yaml_libs}
+         ${llvm_libs}
+ )
+diff --git a/next-cmake/src/CMakeLists.txt b/next-cmake/src/CMakeLists.txt
+index 05590a1a..285ff067 100644
+--- a/next-cmake/src/CMakeLists.txt
++++ b/next-cmake/src/CMakeLists.txt
+@@ -96,7 +96,7 @@ target_include_directories(rocroller-no-rtti
+ target_link_libraries(rocroller-no-rtti
+     PRIVATE
+         hip::host
+-        spdlog::spdlog_header_only
++        $<BUILD_INTERFACE:spdlog::spdlog_header_only>
+         fmt::fmt-header-only
+         lldELF
+         Boost::headers
+-- 
+2.34.1
+

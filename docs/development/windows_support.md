@@ -53,6 +53,7 @@ mainline, in open source, using MSVC, etc.).
 | math-libs        | [rocFFT](https://github.com/ROCm/rocFFT)                                     | ✅        | No shared libraries                                                                  |
 | math-libs        | [hipFFT](https://github.com/ROCm/hipFFT)                                     | ✅        | No shared libraries                                                                  |
 | math-libs (BLAS) | [hipBLAS-common](https://github.com/ROCm/hipBLAS-common)                     | ✅        |                                                                                      |
+| math-libs (BLAS) | [rocRoller](https://github.com/ROCm/rocRoller)                               | ❌        | Unsupported                                                                          |
 | math-libs (BLAS) | [hipBLASLt](https://github.com/ROCm/hipBLASLt)                               | ✅        |                                                                                      |
 | math-libs (BLAS) | [rocBLAS](https://github.com/ROCm/rocBLAS)                                   | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
 | math-libs (BLAS) | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                               | ✅        | Tests need dlls ([#513](https://github.com/ROCm/TheRock/issues/513))                 |
@@ -250,8 +251,9 @@ information about the build outputs.
 
 #### Building PyTorch
 
-Once you have `build/dist/rocm`, you can follow the instructions to build
-PyTorch from source over at
+Once you have `build/dist/rocm`, or you have
+[installed a release tarball](../../RELEASES.md#installing-from-tarballs), you
+can follow the instructions to build PyTorch from source over at
 [external-builds/pytorch](../../external-builds/pytorch/README.md).
 
 ### Run tests

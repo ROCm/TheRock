@@ -608,7 +608,7 @@ class RockProjectRepo:
         ret = True
         if cmake_config:
             cmake_config = os.path.expandvars(str(cmake_config))
-            cmake_config = "cmake " + cmake_config
+            cmake_config = "cmake -GNinja " + cmake_config
             ret = self._handle_command_exec(
                 "cmake_config", cmake_config, self.project_build_dir
             )
@@ -622,9 +622,10 @@ class RockProjectRepo:
     def do_cmake_build(self, cmake_config):
         ret = True
         if cmake_config:
-            cpu_count = os.cpu_count()
-            build_cmd = "make -j" + str(cpu_count)
-            ret = self._handle_command_exec("make", build_cmd, self.project_build_dir)
+            build_cmd = "cmake --build " + self.project_build_dir.as_posix()
+            ret = self._handle_command_exec(
+                "cmake build", build_cmd, self.project_build_dir
+            )
         return ret
 
     def do_build(self, build_cmd):
@@ -636,9 +637,9 @@ class RockProjectRepo:
     def do_cmake_install(self, cmake_config):
         ret = True
         if cmake_config:
-            install_cmd = "make install"
+            install_cmd = "cmake --install " + self.project_build_dir.as_posix()
             ret = self._handle_command_exec(
-                "make install", install_cmd, self.project_build_dir
+                "cmake install", install_cmd, self.project_build_dir
             )
         return ret
 

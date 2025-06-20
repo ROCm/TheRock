@@ -252,6 +252,14 @@ therock_add_feature(SOLVER
   REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
+if(NOT WIN32)
+  therock_add_feature(COMPOSABLE_KERNEL
+    GROUP MATH_LIBS
+    DESCRIPTION "Enables build of composable kernel, including minimal kernel library"
+    REQUIRES COMPILER HIP_RUNTIME RAND
+  )
+endif()
+
 # ML-Libs Features.
 therock_add_feature(MIOPEN
   GROUP ML_LIBS
