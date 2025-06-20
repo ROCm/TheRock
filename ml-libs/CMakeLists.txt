@@ -1,14 +1,15 @@
-if(THEROCK_ENABLE_MIOPEN)
-  # Most libraries need to depend on the profiler, but is conditionally only used
-  # on Posix.
-  set(optional_profiler_deps)
-  if(NOT WIN32)
-    list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
-  endif()
+# Most libraries need to depend on the profiler, but is conditionally only used
+# on Posix.
+set(optional_profiler_deps)
+if(NOT WIN32)
+  list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+endif()
 
+if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   ##############################################################################
   # Composable_kernel
   ##############################################################################
+  # TODO: Move this to math-libs
 
   therock_cmake_subproject_declare(composable_kernel
     EXTERNAL_SOURCE_DIR "composable_kernel"
@@ -53,10 +54,18 @@ if(THEROCK_ENABLE_MIOPEN)
     SUBPROJECT_DEPS
       composable_kernel
   )
+endif()
 
+if(THEROCK_ENABLE_MIOPEN)
   ##############################################################################
   # MIOpen
   ##############################################################################
+
+  # If composable kernel is enabled, add it as an MIOpen dep.
+  set(optional_miopen_build_deps)
+  if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+    list(APPEND optional_miopen_build_deps composable_kernel)
+  endif()
 
   if(MSVC)
     # HACK, see https://github.com/ROCm/TheRock/issues/525.
@@ -83,7 +92,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      -DMIOPEN_USE_COMPOSABLEKERNEL=ON
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_ENABLE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
@@ -99,8 +108,8 @@ if(THEROCK_ENABLE_MIOPEN)
       therock-googletest
       therock-nlohmann-json
       therock-FunctionalPlus
+      ${optional_miopen_build_deps}
     RUNTIME_DEPS
-      composable_kernel
       hipBLAS-common
       hip-clr
       hipBLAS
