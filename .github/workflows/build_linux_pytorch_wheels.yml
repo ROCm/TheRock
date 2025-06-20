@@ -41,14 +41,32 @@ permissions:
   contents: read
 
 jobs:
+  set-runner:
+    runs-on: ubuntu-24.04
+    outputs:
+      runner_label: ${{ steps.set.outputs.runner_label }}
+    steps:
+      - id: set
+        run: |
+          case "${{ inputs.AMDGPU_FAMILIES }}" in
+            gfx94X-dcgpu)
+              echo "runner_label=linux-mi300-1gpu-ossci-rocm" >> "$GITHUB_OUTPUT"
+              ;;
+            gfx120X-all)
+              echo "runner_label=linux-rx9070-gpu-rocm" >> "$GITHUB_OUTPUT"
+              ;;
+            gfx110X-dgpu)
+              echo "runner_label=linux-rx7900-gpu-rocm" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "runner_label=ubuntu-24.04" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
   build_pytorch_wheels:
+    needs: set-runner
+    runs-on: ${{ needs.set-runner.outputs.runner_label }}
     name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
-    runs-on: ${{ 
-      inputs.AMDGPU_FAMILIES == 'gfx94X-dcgpu' && 'linux-mi300-1gpu-ossci-rocm' ||
-      inputs.AMDGPU_FAMILIES == 'gfx120X-all' && 'linux-rx9070-gpu-rocm' ||
-      inputs.AMDGPU_FAMILIES == 'gfx110X-dgpu' && 'linux-rx7900-gpu-rocm' ||
-      'ubuntu-24.04'
-    }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292
     env:
