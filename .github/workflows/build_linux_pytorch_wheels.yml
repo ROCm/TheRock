@@ -44,9 +44,9 @@ jobs:
   build_pytorch_wheels:
     name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
     runs-on: ${{ 
-      matrix.targets.amdgpu_family == 'gfx94X-dcgpu' && 'linux-mi300-1gpu-ossci-rocm' ||
-      matrix.targets.amdgpu_family == 'gfx120X-all' && 'linux-rx9070-gpu-rocm' ||
-      matrix.targets.amdgpu_family == 'gfx110X-dgpu' && 'linux-rx7900-gpu-rocm' ||
+      inputs.AMDGPU_FAMILIES == 'gfx94X-dcgpu' && 'linux-mi300-1gpu-ossci-rocm' ||
+      inputs.AMDGPU_FAMILIES == 'gfx120X-all' && 'linux-rx9070-gpu-rocm' ||
+      inputs.AMDGPU_FAMILIES == 'gfx110X-dgpu' && 'linux-rx7900-gpu-rocm' ||
       'ubuntu-24.04'
     }}
     container:
