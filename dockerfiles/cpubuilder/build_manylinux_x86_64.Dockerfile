@@ -17,6 +17,22 @@ FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b2
 # Prepend therock-tools to PATH
 ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 
+
+# Docker requires environment variables to be explicitly defined before being used in other ENV lines.
+# This ensures that later references like ${LIBRARY_PATH} won't trigger a warning or fail linting.
+ENV LIBRARY_PATH=""
+ENV LD_LIBRARY_PATH=""
+
+# -- Append therock-tools lib64 path to library environment variables --
+# These paths are needed to find the C++ standard library and other toolchain dependencies
+# installed under /usr/local/therock-tools, which overrides system defaults.
+ENV LIBRARY_PATH="/usr/local/therock-tools/lib64:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/therock-tools/lib64:${LD_LIBRARY_PATH}"
+
+# -- Configure CMake to use the correct standard C++ library --
+# This helps avoid link errors like `undefined symbol: __cxa_call_terminate` when using custom GCC/Clang
+ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/usr/local/therock-tools/lib64 -lstdc++"
+
 ######## Pip Packages ########
 RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.42.0 && \
     pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
@@ -66,9 +82,6 @@ RUN yum install -y epel-release && \
       git-lfs && \
     yum clean all && \
     rm -rf /var/cache/yum
-
-ENV LD_LIBRARY_PATH="/usr/local/therock-tools/lib64:${LD_LIBRARY_PATH}" 
-ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/usr/local/therock-tools/lib64 -lstdc++"
 
 ######## Enable GCC Toolset ########
 SHELL ["/bin/bash", "-c"]
