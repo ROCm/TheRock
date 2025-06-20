@@ -93,6 +93,10 @@ jobs:
           # Install the built torch wheel
           python -m pip install ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl
 
+          # Show ROCm GPU info
+          echo "Running rocm-smi..."
+          rocm-smi || echo "[WARN] rocm-smi failed or is not available"
+
           export PYTORCH_TEST_WITH_ROCM=1
 
           # Change to pytorch source dir
