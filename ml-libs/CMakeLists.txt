@@ -20,7 +20,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       -DMIOPEN_REQ_LIBS_ONLY=ON
-      -DCMAKE_BUILD_TYPE=Release
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -28,15 +27,10 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
     BUILD_DEPS
       rocm-cmake
     RUNTIME_DEPS
-      hipBLAS-common
       hip-clr
-      hipBLAS
-      hipBLASLt
       rocm-half
-      rocBLAS
       rocRAND
       ${THEROCK_BUNDLED_BZIP2}
-      ${THEROCK_BUNDLED_SQLITE3}
       ${optional_profiler_deps}
   )
   therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
@@ -101,6 +95,7 @@ if(THEROCK_ENABLE_MIOPEN)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
+      composable_kernel
       rocm-cmake
       therock-boost
       therock-eigen
