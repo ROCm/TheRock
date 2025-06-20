@@ -95,7 +95,6 @@ if(THEROCK_ENABLE_MIOPEN)
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
-      composable_kernel
       rocm-cmake
       therock-boost
       therock-eigen
