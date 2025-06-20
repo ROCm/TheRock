@@ -118,6 +118,10 @@ jobs:
 
           export PYTORCH_TEST_WITH_ROCM=1
 
+          # Show ROCm GPU info
+          echo "Running rocm-smi..."
+          rocm-smi
+          
           # Change to pytorch source dir
           cd external-builds/pytorch/pytorch
 
