@@ -43,7 +43,12 @@ permissions:
 jobs:
   build_pytorch_wheels:
     name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
-    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ 
+      matrix.targets.amdgpu_family == 'gfx94X-dcgpu' && 'linux-mi300-1gpu-ossci-rocm' ||
+      matrix.targets.amdgpu_family == 'gfx120X-all' && 'linux-rx9070-gpu-rocm' ||
+      matrix.targets.amdgpu_family == 'gfx110X-dgpu' && 'linux-rx7900-gpu-rocm' ||
+      'ubuntu-24.04'
+    }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292
     env:
@@ -93,17 +98,12 @@ jobs:
           # Install the built torch wheel
           python -m pip install ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl
 
-          # Show ROCm GPU info
-          echo "Running rocm-smi..."
-          rocm-smi || echo "[WARN] rocm-smi failed or is not available"
-
           export PYTORCH_TEST_WITH_ROCM=1
 
           # Change to pytorch source dir
           cd external-builds/pytorch/pytorch
 
           # Install test dependencies
-          python -m pip install -r requirements.txt
           python -m pip install pytest pytest-xdist
 
           # Run specific tests
