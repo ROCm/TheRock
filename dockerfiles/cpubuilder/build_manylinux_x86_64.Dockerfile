@@ -55,9 +55,8 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 ######## Yum Packages #######
 # TODO: Figure out why gcc-toolset-12-libatomic-devel doesn't install with the
 # rest of the dev toolset.
-RUN yum install -y \
-      epel-release && \
-      yum install -y \
+RUN yum install -y epel-release && \
+    yum install -y \
       gcc-toolset-12 \
       gcc-toolset-12-libstdc++-devel \
       gcc-toolset-12-libatomic-devel \
@@ -67,10 +66,21 @@ RUN yum install -y \
     yum clean all && \
     rm -rf /var/cache/yum
 
-ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}" \
-    LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}" \
-    CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
+ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
+
+# -- Predefine variables to avoid Dockerfile linting warnings --
+# Docker requires environment variables to be defined before reuse.
+ENV LIBRARY_PATH=""
+
+# -- Append therock-tools lib64 path to library environment variables --
+# These ensure the runtime and linker can locate libstdc++ and other libraries
+# installed under /usr/local/therock-tools/lib64
+ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
+
+# -- Configure CMake to use the correct standard C++ library from therock-tools --
+# This avoids linker errors like `undefined symbol: __cxa_call_terminate`
+ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
 
 ######## Enable GCC Toolset ########
 SHELL ["/bin/bash", "-c"]
