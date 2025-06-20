@@ -92,17 +92,13 @@ jobs:
             -e PYTORCH_TEST_WITH_ROCM=1 \
             ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292 \
             bash -c "
-              python_dir=/opt/python/${{ inputs.python_version }} && \
-              export PATH=\$python_dir/bin:\$PATH && \
-              cd /workspace/external-builds/pytorch/pytorch && \
-              # Set Git identity for patch application
               git config --global user.name 'therockbot' && \
               git config --global user.email 'therockbot@amd.com' && \
+              python_dir=/opt/python/${{ inputs.python_version }} && \
+              export PATH=\$python_dir/bin:\$PATH && \
 
               cd /workspace/external-builds/pytorch/pytorch && \
-              git am --abort || true && \
-              git reset --hard && \
-              git clean -xfd && \
+              git am --abort || true && git reset --hard && git clean -xfd && \
               cd /workspace && \
               ./external-builds/pytorch/pytorch_torch_repo.py checkout && \
               ./external-builds/pytorch/pytorch_audio_repo.py checkout && \
