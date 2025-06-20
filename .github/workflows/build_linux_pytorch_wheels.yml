@@ -93,6 +93,8 @@ jobs:
           # Install the built torch wheel
           python -m pip install ${{ env.PACKAGE_DIST_DIR }}/torch-*.whl
 
+          export PYTORCH_TEST_WITH_ROCM=1
+
           # Change to pytorch source dir
           cd external-builds/pytorch/pytorch
 
