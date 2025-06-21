@@ -237,8 +237,8 @@ To add a new submodule, using https://github.com/ROCm/rocRoller as an example:
    ```
 
 1. Edit [`fetch_sources.py`](../../build_tools/fetch_sources.py), adding the
-  submodule name to one of the project lists and adding any special handling
-  (e.g. disabling on Windows) as needed:
+   submodule name to one of the project lists and adding any special handling
+   (e.g. disabling on Windows) as needed:
 
    ```diff
    diff --git a/build_tools/fetch_sources.py b/build_tools/fetch_sources.py
@@ -255,7 +255,7 @@ To add a new submodule, using https://github.com/ROCm/rocRoller as an example:
    ```
 
 1. Run [`fetch_sources.py`](../../build_tools/fetch_sources.py) to initialize
-  the submodule:
+   the submodule:
 
    ```bash
    python build_tools/fetch_sources.py
