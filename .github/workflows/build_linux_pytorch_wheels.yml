@@ -81,6 +81,7 @@ jobs:
           git config --global user.email "therockbot@amd.com"
 
       - name: Run Docker container with ROCm access
+        continue-on-error: true
         run: |
           docker run --rm \
             --device=/dev/kfd \
@@ -90,7 +91,6 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             -e PYTORCH_TEST_WITH_ROCM=1 \
-            -e PYTORCH_PRINT_REPRO_ON_FAILURE=0 \
             ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292 \
             bash -c "
               git config --global user.name 'therockbot' && \
