@@ -241,7 +241,7 @@ jobs:
           PGPASSWORD=$REDSHIFT_PASSWORD psql \
             -h $REDSHIFT_HOST -p $REDSHIFT_PORT \
             -U $REDSHIFT_USER -d my_new_db \
-            -c "COPY users FROM 's3://$BUCKET/logs/job_status.json'
+            -c "COPY users FROM 's3://$BUCKET/${{env.AMDGPU_FAMILIES}}/logs/job_status.json'
                 IAM_ROLE '$IAM_ROLE_ARN'
                 JSON 'auto'
                 REGION 'us-east-2';"
