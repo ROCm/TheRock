@@ -130,6 +130,14 @@ jobs:
               pytest torch/_inductor/test_torchinductor.py -v
               "
 
+      - name: Setup Python
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        with:
+          python-version: 3.12
+
+      - name: Run Sanity Check on Wheel
+        run: python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
+
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
