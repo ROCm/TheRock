@@ -197,3 +197,87 @@ To update one of these dependencies:
 1. Update the comment, URL, and URL_HASH in the CMakeLists.txt file
 
 1. Test the build and make any necessary changes to CMake project configuration
+
+## Adding a new submodule
+
+Submodules are tracked in `.gitmodules` and are managed by
+[`fetch_sources.py`](../../build_tools/fetch_sources.py). See
+https://git-scm.com/docs/git-submodule for general instructions.
+
+To add a new submodule, using https://github.com/ROCm/rocRoller as an example:
+
+1. Add the submodule using git, specifying options for the name, branch, and
+   path:
+
+   ```bash
+   git submodule add \
+      --name rocRoller \
+      -b main \
+      https://github.com/ROCm/rocRoller.git \
+      math-libs/BLAS/rocRoller
+   ```
+
+   This should add a few lines to [`.gitmodules`](../../.gitmodules). Check that
+   the new lines there are similar to the existing lines in the file:
+
+   ```diff
+   $ git diff --staged
+   diff --git a/.gitmodules b/.gitmodules
+   index 9b4d996..e5a5ec9 100644
+   --- a/.gitmodules
+   +++ b/.gitmodules
+   @@ -140,3 +140,6 @@
+         path = ml-libs/composable_kernel
+         url = https://github.com/ROCm/composable_kernel.git
+         branch = develop
+   +[submodule "rocRoller"]
+   +       path = math-libs/BLAS/rocRoller
+   +       url = https://github.com/ROCm/rocRoller.git
+   +       branch = main
+   ```
+
+1. Edit [`fetch_sources.py`](../../build_tools/fetch_sources.py), adding the
+   submodule name to one of the project lists and adding any special handling
+   (e.g. disabling on Windows) as needed:
+
+   ```diff
+   diff --git a/build_tools/fetch_sources.py b/build_tools/fetch_sources.py
+   index 18746f1..ebf534e 100755
+   --- a/build_tools/fetch_sources.py
+   +++ b/build_tools/fetch_sources.py
+   @@ -263,6 +271,7 @@ def main(argv):
+               "rocPRIM",
+               "rocRAND",
+   +           "rocRoller",
+               "rocSOLVER",
+               "rocSPARSE",
+               "rocThrust",
+   ```
+
+1. Run [`fetch_sources.py`](../../build_tools/fetch_sources.py) to initialize
+   the submodule:
+
+   ```bash
+   python build_tools/fetch_sources.py
+   ```
+
+   You should see a `git submodule update --init` call and more in the logs.
+
+1. Check that the submodule was checked out:
+
+   ```console
+   $ ls math-libs/BLAS/rocRoller
+
+   client/                   docker/                    LICENSE.md   requirements.txt
+   cmake/                    docs/                      next-cmake/  scripts/
+   CMakeLists.txt            extern/                    patches/     test/
+   codeql/                   GPUArchitectureGenerator/  pytest.ini   valgrind.supp
+   CppCheckSuppressions.txt  lib/                       README.md
+   ```
+
+The submodule should be fully configured now!
+
+> [!TIP]
+> Now that the source directory is populated, see
+> [TheRock Build System Manual: Adding Sub-Projects](./build_system.md#adding-sub-projects)
+> to use it from the CMake build system.
