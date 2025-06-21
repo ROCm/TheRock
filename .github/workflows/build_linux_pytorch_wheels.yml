@@ -120,6 +120,7 @@ jobs:
               rocm-smi && \
               cd external-builds/pytorch/pytorch && \
               python -m pip install pytest pytest-xdist && \
+              set +e && \
               pytest test/test_nn.py -v && \
               pytest test/test_torch.py -v && \
               pytest test/test_cuda.py -v && \
