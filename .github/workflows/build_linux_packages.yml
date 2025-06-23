@@ -60,6 +60,10 @@ jobs:
             --local-path "${{ github.workspace }}/.container-cache/ccache"
           df -h
           echo "ccache version: $(ccache --version)"
+          echo "ccache config:"
+          echo "---"
+          cat "$CCACHE_CONFIGPATH"
+          echo "---"
           ccache -z
           echo cmake --version
           echo "Installed Python versions:"
