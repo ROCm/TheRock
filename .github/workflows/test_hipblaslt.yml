@@ -67,8 +67,6 @@ jobs:
 
       - name: Run hipBLASLt tests
         timeout-minutes: 30
-        env:
-          TESTS_TO_IGNORE: "-*pre_checkin_matmul_groupedgemm_zero_n_f16_rf16_rf16_rf16_rf32_r*127_127_1_GG7_APIExt_APIAlgoIndex"
         run: |
           if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
-          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter="*pre_checkin*:${{ env.TESTS_TO_IGNORE }}"
+          ${THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*
