@@ -126,7 +126,7 @@ Wheels that have been build can be found from the packages/wheels directory.
 
 In this example we build and install only the pytorch audio and
 copy the produced pytorch audio wheel to directory "test" instead of using default "packages/wheels"
-Note that pytorch audio requires that pytorch has been build and installed first.
+Note that pytorch audio requires that pytorch has been built and installed first.
 
 ```bash
 python rockbuilder.py --project pytorch_audio --output-dir test
@@ -152,7 +152,7 @@ python rockbuilder.py --checkout --project pytorch_audio
 
 ## Build only pytorch audio
 
-Note that pytorch audio requires that pytorch has been build and installed first.
+Note that pytorch audio requires that pytorch has been built and installed first.
 
 ```bash
 python rockbuilder.py --build --project pytorch_audio
@@ -160,7 +160,7 @@ python rockbuilder.py --build --project pytorch_audio
 
 ## Install only pytorch audio
 
-Note that pytorch audio requires that pytorch has been build and installed first.
+Note that pytorch audio requires that pytorch has been built and installed first.
 
 ```bash
 python rockbuilder.py --install --project pytorch_audio

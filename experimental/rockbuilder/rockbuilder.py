@@ -107,7 +107,7 @@ def get_build_arguments():
         "--output-dir",
         type=Path,
         help="Directory to copy built wheels to",
-        default=rock_builder_home_dir + "/packages/wheels",
+        default=Path(rock_builder_home_dir) / "packages" / "wheels",
     )
 
     # Parse the arguments
