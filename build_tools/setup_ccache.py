@@ -40,7 +40,9 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         ...
     else:
         # Default, local.
-        local_path = dir / "local"
+        local_path: Path = args.local_path
+        if local_path is None:
+            local_path = dir / "local"
         local_path.mkdir(parents=True, exist_ok=True)
         lines.append(f"cache_dir = {local_path}")
 
@@ -116,6 +118,12 @@ def main(argv: list[str]):
     type_group = p.add_mutually_exclusive_group()
     type_group.add_argument(
         "--local", action="store_true", help="Use a local cache (default)"
+    )
+
+    p.add_argument(
+        "--local-path",
+        type=Path,
+        help="Use a non-default local ccache directory (defaults to 'local/' in --dir)",
     )
 
     args = p.parse_args(argv)

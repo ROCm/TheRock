@@ -44,7 +44,8 @@ jobs:
       fail-fast: true
     env:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
-      CCACHE_DIR: "${{ github.workspace }}/.container-cache/ccache"
+      # The ccache.conf will be written by setup_ccache.py before this gets used.
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
@@ -54,11 +55,13 @@ jobs:
 
       - name: Runner Health Settings
         run: |
-          echo "CCACHE_DIR=${CCACHE_DIR}"
+          ./build_tools/setup_ccache.py \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "${{ github.workspace }}/.container-cache/ccache"
           df -h
+          echo "ccache version: $(ccache --version)"
           ccache -z
-          mkdir -p $CCACHE_DIR
-          cmake --version
+          echo cmake --version
           echo "Installed Python versions:"
           ls -d /opt/python
           echo "python: $(which python), python3: $(which python3)"
@@ -72,9 +75,9 @@ jobs:
         uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
           path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v3-${{ inputs.amdgpu_families }}-${{ github.sha }}
+          key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
           restore-keys: |
-            linux-build-packages-manylinux-v3-${{ inputs.amdgpu_families }}-
+            linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
         run: |
@@ -163,4 +166,4 @@ jobs:
         if: always()
         with:
           path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v3-${{ inputs.amdgpu_families }}-${{ github.sha }}
+          key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
