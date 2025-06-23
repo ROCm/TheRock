@@ -220,8 +220,8 @@ jobs:
             --jobs_output_dir=job_status_dir \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get install postgresql-client -y
+      # - name: Install PostgreSQL client
+      #   run: sudo apt-get install postgresql-client -y
 
 
       # - name: Create Redshift database and table
