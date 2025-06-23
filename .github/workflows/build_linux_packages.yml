@@ -199,7 +199,7 @@ jobs:
         id: job-status-step
         env:
           RUN_ID: ${{ github.run_id }}
-          ATTEMPT: ${{ github.attempt }}
+          ATTEMPT: ${{ github.run_attempt }}
         run: python build_tools/github_actions/fetch_job_status.py
         
       - name: Create job status JSON file for S3 upload
@@ -236,15 +236,15 @@ jobs:
       #       -U $REDSHIFT_USER -d awsuser \
       #       -c "CREATE TABLE workflow_run_details (id int, build_id: INT, run_url: varchar(80), workflow_name: varchar(30), project: varchar(30), started_at: date);"
 
-      - name: Load JSON into Redshift
-        run: |
-          PGPASSWORD=$REDSHIFT_PASSWORD psql \
-            -h $REDSHIFT_HOST -p $REDSHIFT_PORT \
-            -U $REDSHIFT_USER -d my_new_db \
-            -c "COPY users FROM 's3://$BUCKET/${{env.AMDGPU_FAMILIES}}/logs/job_status.json'
-                IAM_ROLE '$IAM_ROLE_ARN'
-                JSON 'auto'
-                REGION 'us-east-2';"
+      # - name: Load JSON into Redshift
+      #   run: |
+      #     PGPASSWORD=$REDSHIFT_PASSWORD psql \
+      #       -h $REDSHIFT_HOST -p $REDSHIFT_PORT \
+      #       -U $REDSHIFT_USER -d my_new_db \
+      #       -c "COPY users FROM 's3://$BUCKET/${{env.AMDGPU_FAMILIES}}/logs/job_status.json'
+      #           IAM_ROLE '$IAM_ROLE_ARN'
+      #           JSON 'auto'
+      #           REGION 'us-east-2';"
             
       # - name: Add Links to Job Summary
       #   if: always()

@@ -18,7 +18,7 @@ ATTEMPT = os.getenv("ATTEMPT")
 def run():
     # TODO: Remove hardcoding for ATTEMPT once github variables fetch is fixed
     github_workflow_jobs_url = (
-        f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{RUN_ID}/attempts/1/jobs"
+        f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{ATTEMPT}/attempts/1/jobs"
     )
     print(github_workflow_jobs_url)
     headers = {
