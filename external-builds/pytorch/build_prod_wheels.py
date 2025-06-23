@@ -23,9 +23,15 @@ own and specify with `--pytorch-dir`, `--pytorch-audio-dir`, `--pytorch-vision-d
 during the build step.
 
 ```
+# On Linux, using default paths (nested under this folder):
 python pytorch_torch_repo.py checkout
 python pytorch_torch_audio_repo.py checkout
 python pytorch_torch_vision_repo.py checkout
+
+# On Windows, using shorter paths to avoid compile command length limits:
+python pytorch_torch_repo.py checkout --repo C:/b/pytorch
+python pytorch_torch_audio_repo.py checkout --repo C:/b/pytorch_audio
+python pytorch_torch_vision_repo.py checkout --repo C:/b/pytorch_vision
 ```
 
 Note that as of 2025-05-28, some small patches are needed to PyTorch's `__init__.py`
@@ -58,10 +64,20 @@ build_prod_wheels.py
 Typical usage to build with default architecture from rocm-sdk targets:
 
 ```
+# On Linux, using default paths for each repository:
 python build_prod_wheels.py build \
     --pytorch-rocm-arch=gfx1100 \
     --output-dir $HOME/tmp/pyout
+
+# On Windows, using shorter custom paths:
+python build_prod_wheels.py build \
+    --pytorch-rocm-arch=gfx1100 \
+    --output-dir %HOME%/tmp/pyout \
+    --pytorch-dir C:/b/pytorch \
+    --pytorch-audio-dir C:/b/pytorch_audio \
+    --pytorch-vision-dir C:/b/pytorch_vision \
 ```
+
 
 ## Building Linux portable wheels
 
@@ -95,6 +111,7 @@ import argparse
 from datetime import date
 import os
 from pathlib import Path
+import platform
 import shutil
 import shlex
 import subprocess
@@ -102,6 +119,8 @@ import sys
 import tempfile
 
 script_dir = Path(__file__).resolve().parent
+
+is_windows = platform.system() == "Windows"
 
 
 def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
@@ -262,16 +281,28 @@ def do_build(args: argparse.Namespace):
         "ROCM_HOME": str(root_dir),
         "PYTORCH_EXTRA_INSTALL_REQUIREMENTS": f"rocm[libraries]=={rocm_sdk_version}",
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # TODO: Should get the supported archs from the rocm-sdk install.
-        "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         # TODO: Figure out what is blocking GLOO and enable.
         "USE_GLOO": "OFF",
         # TODO: Fix source dep on rocprofiler and enable.
         "USE_KINETO": "OFF",
-        # Workaround GCC12 compiler flags.
-        "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-        "CPPFLAGS": "  -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
     }
+
+    if is_windows:
+        env.update(
+            {
+                "HIP_CLANG_PATH": str((root_dir / "lib" / "llvm" / "bin").as_posix()),
+                "CC": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+                "CXX": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+            }
+        )
+    else:
+        env.update(
+            {
+                # Workaround GCC12 compiler flags.
+                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CPPFLAGS": "  -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+            }
+        )
 
     if pytorch_dir:
         do_build_pytorch(args, pytorch_dir, dict(env))
@@ -297,8 +328,29 @@ def do_build_pytorch(args: argparse.Namespace, pytorch_dir: Path, env: dict[str,
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
+    if is_windows:
+        env.update(
+            {
+                "USE_ROCM": "ON",
+                "USE_FLASH_ATTENTION": "0",
+                "USE_MEM_EFF_ATTENTION": "0",
+                "DISTUTILS_USE_SDK": "1",
+                # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
+                # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
+                #   error: no member named 'modern' in namespace 'at::native'
+                #     using namespace at::native::modern::detail;
+                #   error: no template named 'has_same_arg_types'
+                #     static_assert(has_same_arg_types<func1_t>::value, "func1_t has the same argument types");
+                # We may want to fix that and other issues to then enable building tests.
+                "BUILD_TEST": "0",
+            }
+        )
+
     print("+++ Uninstalling pytorch:")
-    exec([sys.executable, "-m", "pip", "uninstall", "torch"], cwd=tempfile.gettempdir())
+    exec(
+        [sys.executable, "-m", "pip", "uninstall", "torch", "-y"],
+        cwd=tempfile.gettempdir(),
+    )
 
     print("+++ Installing pytorch requirements:")
     pip_install_args = []
@@ -318,6 +370,23 @@ def do_build_pytorch(args: argparse.Namespace, pytorch_dir: Path, env: dict[str,
         + pip_install_args,
         cwd=pytorch_dir,
     )
+    if is_windows:
+        # As of 2025-06-24, the 'ninja' package on pypi is trailing too far
+        # behind upstream:
+        # * https://pypi.org/project/ninja/#history
+        # * https://github.com/ninja-build/ninja/releases
+        # Version 1.11.1 is buggy on Windows (looping without making progress):
+        exec(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "uninstall",
+                "ninja",
+                "-y",
+            ],
+            cwd=pytorch_dir,
+        )
     print("+++ Building pytorch:")
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:

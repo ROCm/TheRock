@@ -65,11 +65,17 @@ throw-away container or CI environment.
 
 ### Build PyTorch, PyTorch vision and PyTorch audio on Linux
 
+> [!WARNING]
+> This is being migrated to `build_prod_wheels.py`, using `rocm` (sdk) wheels.
+
 ```bash
 ./checkout_and_build_all.sh
 ```
 
 ### Build PyTorch on Windows (or the old way on Linux)
+
+> [!WARNING]
+> This is being migrated to `build_prod_wheels.py`, using `rocm` (sdk) wheels.
 
 #### Step 1: Preparing sources
 
@@ -107,6 +113,9 @@ bash build_pytorch_windows.sh gfx1100
 
 ### Windows DLL setup
 
+> [!IMPORTANT]
+> This will no longer be necessary after `rocm` wheels are available.
+
 On Windows, PyTorch needs to be able to find DLL files from the `dist/rocm`
 directory. This can be achieved by either
 
@@ -119,6 +128,9 @@ directory. This can be achieved by either
 - Creating a "fat wheel" that bundles the files together (see the next section).
 
 ### Bundling PyTorch and ROCm together into a "fat wheel"
+
+> [!IMPORTANT]
+> This will no longer be necessary after `rocm` wheels are available.
 
 By default, Python wheels produced by the PyTorch build do not include ROCm
 binaries. Instead, they expect those binaries to be installed elsewhere on the

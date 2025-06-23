@@ -77,7 +77,7 @@ variables. Examples (exact settings needed will vary by project being built):
 
 ```bash
 -DCMAKE_PREFIX_PATH=$(rocm-sdk path --cmake)
--DROCM_HOM=$(rocm-sdk path --root)
+-DROCM_HOME=$(rocm-sdk path --root)
 export PATH="$(rocm-sdk path --bin):$PATH"
 ```
 
