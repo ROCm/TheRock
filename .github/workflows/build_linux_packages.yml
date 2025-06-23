@@ -46,7 +46,7 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      CCACHE_MAXSIZE: "700M"
+      CCACHE_MAXSIZE: "1G"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
     steps:
@@ -57,7 +57,7 @@ jobs:
         run: |
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "${{ github.workspace }}/.container-cache/ccache"
+            --local-path "$CACHE_DIR/ccache"
           df -h
           echo "ccache version: $(ccache --version)"
           echo "ccache config:"
@@ -65,6 +65,7 @@ jobs:
           cat "$CCACHE_CONFIGPATH"
           echo "---"
           ccache -z
+          ccache -s -v
           echo cmake --version
           echo "Installed Python versions:"
           ls -d /opt/python
@@ -125,7 +126,7 @@ jobs:
           du -h -d 1 build/artifacts
           echo "CCache Stats:"
           echo "-------------"
-          ccache -s
+          ccache -s -v
 
       - name: Configure AWS Credentials
         if: always()
