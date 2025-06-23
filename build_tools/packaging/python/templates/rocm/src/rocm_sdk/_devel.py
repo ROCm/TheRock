@@ -27,7 +27,10 @@ symlink relationships.
 """
 
 import importlib.metadata as md
+import io
+import os
 from pathlib import Path
+import platform
 import shutil
 import tarfile
 
@@ -140,7 +143,7 @@ def _lock_and_expand(
             shutil.rmtree(dir, ignore_errors=False)
 
     with open(record_path, "at") as record_file:
-        _lock_file(record_file)
+        file_lock = FileLock(record_file)
         try:
             with tarfile.open(tarfile_path, tarfile_mode) as tf:
                 while ti := tf.next():
@@ -164,20 +167,47 @@ def _lock_and_expand(
                         tf.extract(ti, path=site_lib_path)
             tarfile_path.unlink()
         finally:
-            _unlock_file(record_file)
+            file_lock.unlock()
 
 
-def _lock_file(f):
-    # TODO: This is Posix specific file locking. We should fork on Windows to use
-    # msvcrt locking.
-    import fcntl, os
-
-    fcntl.lockf(f, fcntl.LOCK_EX)
+def _is_windows():
+    return platform.system() == "Windows"
 
 
-def _unlock_file(f):
-    # TODO: This is Posix specific file locking. We should fork on Windows to use
-    # msvcrt locking.
-    import fcntl, os
+class FileLock:
+    """Small portability shim between fcntl.lockf and msvcrt.locking for our uses."""
 
-    fcntl.lockf(f, fcntl.LOCK_UN)
+    def __init__(self, file: io.TextIOWrapper):
+        self.file = file
+        self.original_file_size = os.path.getsize(file.name)
+
+        if _is_windows():
+            # The Windows APIs for file locking apply to only a given range
+            # within the file and lock/unlock calls must be balanced. Since we
+            # will be appending to the locked file, we lock as much as we know
+            # about (the 'nbytes' parameter can continue beyond the end of the
+            # file, but we don't know how much we'll be writing ahead of time).
+            import msvcrt
+
+            original_position = self.file.tell()
+            self.file.seek(0)
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, self.original_file_size)
+            self.file.seek(original_position)
+        else:
+            # The Unix APIs for file locking apply to the entire file descriptor.
+            import fcntl
+
+            fcntl.lockf(self.file, fcntl.LOCK_EX)
+
+    def unlock(self):
+        if _is_windows():
+            import msvcrt
+
+            original_position = self.file.tell()
+            self.file.seek(0)
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, self.original_file_size)
+            self.file.seek(original_position)
+        else:
+            import fcntl
+
+            fcntl.lockf(self.file, fcntl.LOCK_UN)

@@ -64,10 +64,11 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run hipcub tests
+        timeout-minutes: 15
         run: |
           ctest \
             --test-dir ${THEROCK_BIN_DIR}/hipcub \
             --output-on-failure \
             --parallel 8 \
-            --timeout 360 \
+            --timeout 300 \
             --repeat until-pass:3

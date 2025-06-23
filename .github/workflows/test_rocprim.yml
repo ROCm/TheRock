@@ -66,6 +66,7 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Run rocprim tests
+        timeout-minutes: 60
         env:
           TEST_TO_IGNORE: "'rocprim.lookback_reproducibility|rocprim.linking|rocprim.device_merge_inplace|rocprim.device_merge_sort|rocprim.device_partition|rocprim.device_radix_sort|rocprim.device_select'"
         run: |

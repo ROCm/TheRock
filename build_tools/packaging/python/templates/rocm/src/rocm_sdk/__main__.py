@@ -16,11 +16,12 @@ def _do_path(args: argparse.Namespace):
         root_path = _devel.get_devel_root()
     except ModuleNotFoundError as e:
         print(
-            "ERROR: Could not find the `rocm[devel]` package, which is required "
+            "ERROR: Could not load the `rocm[devel]` package, which is required "
             "to access runtime tools and development files. Please install it with "
             "your package manager (pip, uv, etc)",
             file=sys.stderr,
         )
+        print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
     if args.cmake:
         print(root_path / "lib" / "cmake")
