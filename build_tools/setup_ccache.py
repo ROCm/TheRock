@@ -25,78 +25,10 @@ import argparse
 from pathlib import Path
 import sys
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-
-# We use a compiler check script which can deal with our compiler bootstrapping
-# process. This script will be written to the .ccache directory next to the
-# ccache.conf file.
-COMPILER_CHECK_SCRIPT_POSIX = r"""
-import hashlib
-from pathlib import Path
-import sys
-
-compiler_exe = Path(sys.argv[1]).resolve()
-compiler_exe_stat = compiler_exe.stat()
-compiler_hash_cache_dir = Path(__file__).parent / "compiler_check_cache"
-
-# First hash the canonical path of the compiler and the mtime. We use this to
-# store a full compiler check output in the compiler_hash dir by this hash.
-hasher = hashlib.sha256()
-hasher.update(f"{compiler_exe_stat.st_mtime},".encode())
-hasher.update(str(compiler_exe).encode())
-compiler_exe_path_hash = hasher.hexdigest()
-compiler_exe_path_hash_file = compiler_hash_cache_dir / compiler_exe_path_hash
-
-# Common case: We have previously computed this. Just read the file and print it.
-if compiler_exe_path_hash_file.exists():
-    print(compiler_exe_path_hash_file.read_text())
-    sys.exit(0)
-
-
-# Cache miss: compute a full content hash.
-import os
-import re
-import subprocess
-def compute_compiler_hash():
-    ldd_lines = subprocess.check_output(["ldd", str(compiler_exe)]).decode().splitlines()
-    ldd_pattern = re.compile(r"^(.+ => )?(.+) \(.+\)$")
-    lib_paths = [str(compiler_exe)]
-    for ldd_line in ldd_lines:
-        m = re.match(ldd_pattern, ldd_line)
-        if not m:
-            print(f"Could not match ldd output: {ldd_line}")
-            sys.exit(1)
-        lib_path_str = m.group(2).strip()
-        lib_path = Path(lib_path_str)
-        if not lib_path.is_absolute():
-            # Skip loaders like vdso.
-            continue
-        lib_paths.append(lib_path_str)
-
-    hash = subprocess.check_output(["sha256sum"] + lib_paths).decode().strip()
-    return hash
-
-compiler_hash = compute_compiler_hash()
-
-# Atomically write the hash cache file using rename. It is ok if this is
-# racy: we just need it to be atomic.
-hash_commit_file = Path(f"{compiler_exe_path_hash_file}.tmp{os.getpid()}")
-hash_commit_file.parent.mkdir(parents=True, exist_ok=True)
-try:
-    hash_commit_file.write_text(compiler_hash)
-    os.rename(hash_commit_file, compiler_exe_path_hash_file)
-except OSError:
-    # Ignore.
-    ...
-
-try:
-    hash_commit_file.unlink()
-except OSError:
-    # Ignore.
-    ...
-
-print(compiler_hash)
-"""
+THIS_DIR = Path(__file__).resolve().parent
+REPO_ROOT = THIS_DIR.parent
+POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
+POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
 
 
 def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
@@ -113,7 +45,21 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         lines.append(f"cache_dir = {local_path}")
 
     # Compiler check.
-    lines.append(f"compiler_check = {sys.executable} {compiler_check_file} %compiler%")
+    lines.append(
+        f"compiler_check = {sys.executable} {compiler_check_file} "
+        f"{dir / 'compiler_check_cache'} %compiler%"
+    )
+
+    # Slop settings.
+    # Creating a hard link to a file increasing the link count, which triggers
+    # a ctime update (since ctime tracks changes to the inode metadata) for
+    # *all* links to the file. Since we are basically always creating hard
+    # link farms in parallel as part of sandboxing, we have to disable this
+    # check as it is never valid for our build system and will result in
+    # spurious ccache panics where it randomly falls back to the real compiler
+    # if the ccache invocation happens to coincide with parallel sandbox
+    # creation for another sub-project.
+    lines.append(f"sloppiness = include_file_ctime")
 
     # End with blank line.
     lines.append("")
@@ -125,11 +71,28 @@ def run(args: argparse.Namespace):
     config_file = dir / "ccache.conf"
     compiler_check_file = dir / "compiler_check.py"
 
+    config_contents = gen_config(dir, compiler_check_file, args)
+    compiler_check_script = POSIX_COMPILER_CHECK_SCRIPT
     if args.init or not config_file.exists():
         print(f"Initializing ccache dir: {dir}", file=sys.stderr)
         dir.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(gen_config(dir, compiler_check_file, args))
-        compiler_check_file.write_text(COMPILER_CHECK_SCRIPT_POSIX)
+        config_file.write_text(config_contents)
+        compiler_check_file.write_text(compiler_check_script)
+    else:
+        # Check to see if updated.
+        if config_file.read_text() != config_contents:
+            print(
+                f"NOTE: {config_file} does not match expected. Run with --init to regenerate",
+                file=sys.stderr,
+            )
+        if (
+            not compiler_check_file.exists()
+            or compiler_check_file.read_text() != compiler_check_script
+        ):
+            print(
+                f"NOTE: {compiler_check_file} does not match expected. Run with --init to regenerate if",
+                file=sys.stderr,
+            )
 
     # Output options.
     print(f"export CCACHE_CONFIGPATH={config_file}")
