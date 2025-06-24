@@ -61,6 +61,11 @@ def compute_compiler_fingerprint():
     ldd_lines = (
         subprocess.check_output(["ldd", str(compiler_exe)]).decode().splitlines()
     )
+    # Matching ldd output lines like:
+    #   linux-vdso.so.1 (0x00007481bc7ed000)
+    #   libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007481bc400000)
+    #   /lib64/ld-linux-x86-64.so.2 (0x00007481bc7ef000)
+    # Ignores optional soname (group1). Captures path (group2). Ignores addr.
     ldd_pattern = re.compile(r"^(.+ => )?(.+) \(.+\)$")
     lib_paths = [str(compiler_exe)]
     for ldd_line in ldd_lines:
