@@ -1,12 +1,32 @@
 # This CI workflow is triggered by:
 #   - scheduled run
 #
-# In the scheduled run, we run all targets from amdgpu_family_matrix_xfail.py
-# As these builds are xfail, we allow errors to occur with `continue-on-error`, where the job will fail but the workflow is green
+# In the scheduled run, we run all targets from amdgpu_family_matrix.py and amdgpu_family_matrix_xfail.py
+# As some of these builds are xfail, we allow errors to occur with `continue-on-error`, where the job will fail but the workflow is green
 
-name: CI xfail
+name: CI Nigthly
 
 on:
+  workflow_dispatch:
+    inputs:
+      linux_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      linux_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
+      windows_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      windows_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
+      artifact_run_id:
+        type: string
+        description: "If provided, the tests will run on this artifact ID"
+        default: ""
   # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC

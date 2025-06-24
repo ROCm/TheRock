@@ -285,7 +285,7 @@ def matrix_generator(
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
         # For schedule runs, we will run build and tests for only expect_failure families
-        matrix = amdgpu_family_matrix_xfail
+        matrix = amdgpu_family_info_matrix | amdgpu_family_matrix_xfail
 
         # Add all options that allow failures
         for key in amdgpu_family_matrix_xfail:
