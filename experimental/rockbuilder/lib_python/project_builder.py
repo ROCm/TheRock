@@ -22,7 +22,7 @@ class RockProjectBuilder(configparser.ConfigParser):
             ret = None
         return ret
 
-    def __init__(self, rock_builder_root_dir, project_name):
+    def __init__(self, rock_builder_root_dir, project_name, package_output_dir):
         super(RockProjectBuilder, self).__init__(allow_no_value=True)
 
         self.is_posix = not any(platform.win32_ver())
@@ -31,7 +31,7 @@ class RockProjectBuilder(configparser.ConfigParser):
         self.cfg_file_path = (
             Path(rock_builder_root_dir) / "projects" / f"{project_name}.cfg"
         )
-        self.wheel_install_dir = Path(rock_builder_root_dir) / "packages" / "wheels"
+        self.package_output_dir = package_output_dir
         if self.cfg_file_path.exists():
             self.read(self.cfg_file_path)
         else:
@@ -110,7 +110,7 @@ class RockProjectBuilder(configparser.ConfigParser):
         )
         self.project_patch_dir_root = self.project_patch_dir_root.resolve()
         self.project_repo = RockProjectRepo(
-            self.wheel_install_dir,
+            self.package_output_dir,
             self.project_name,
             self.project_root_dir_path,
             self.project_src_dir_path,
@@ -225,10 +225,11 @@ class RockProjectBuilder(configparser.ConfigParser):
 
 
 class RockExternalProjectListManager(configparser.ConfigParser):
-    def __init__(self, rock_builder_root_dir):
+    def __init__(self, rock_builder_root_dir, package_output_dir):
         # default application list to builds
         self.cfg_file_path = Path(rock_builder_root_dir) / "projects" / "core_apps.pcfg"
         self.rock_builder_root_dir = rock_builder_root_dir
+        self.package_output_dir = package_output_dir
         super(RockExternalProjectListManager, self).__init__(allow_no_value=True)
         if self.cfg_file_path.exists():
             self.read(self.cfg_file_path)
@@ -241,7 +242,9 @@ class RockExternalProjectListManager(configparser.ConfigParser):
     def get_rock_project_builder(self, project_name):
         ret = None
         try:
-            ret = RockProjectBuilder(self.rock_builder_root_dir, project_name)
+            ret = RockProjectBuilder(
+                self.rock_builder_root_dir, project_name, self.package_output_dir
+            )
         except ValueError as e:
             print(str(e))
         return ret

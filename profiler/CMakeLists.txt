@@ -8,23 +8,16 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # runtime via `rocprofv3 --att`. If an appropriate shared library is adjacent
   # to the profiler shared libraries, it will be used by default.
   # See: https://github.com/ROCm/rocprof-trace-decoder/
+  # The binaries are contained in the submodule rocprof-trace-decoder/binaries
+  # Our CMakeLists which installs them is local to this project.
   ##############################################################################
   if(THEROCK_ENABLE_ROCPROF_TRACE_DECODER_BINARY)
-    therock_subproject_fetch(rocprof-trace-decoder-download
-      SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download"
-      URL https://github.com/ROCm/rocprof-trace-decoder/releases/download/0.1.1/rocprof-trace-decoder-manylinux-2.28-0.1.1-Linux.tar.gz
-      URL_HASH SHA256=31098658f2f4d751e79bf17cb22732683a0d356757be01da5eaf46de0752430b
-      TOUCH
-        "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download/stamp"
-    )
-    therock_cmake_subproject_declare(rocprof-trace-decoder-binary
-      EXTERNAL_SOURCE_DIR "rocprof-trace-decoder-binary"
+    therock_cmake_subproject_declare(rocprof-trace-decoder
+      EXTERNAL_SOURCE_DIR "rocprof-trace-decoder"
       BACKGROUND_BUILD
-      EXTRA_DEPENDS
-        "${CMAKE_CURRENT_BINARY_DIR}/rocprof-trace-decoder-binary/download/stamp"
     )
-    therock_cmake_subproject_activate(rocprof-trace-decoder-binary)
-    list(APPEND _rocprofiler_sdk_optional_deps rocprof-trace-decoder-binary)
+    therock_cmake_subproject_activate(rocprof-trace-decoder)
+    list(APPEND _rocprofiler_sdk_optional_deps rocprof-trace-decoder)
   endif()
 
   ##############################################################################
