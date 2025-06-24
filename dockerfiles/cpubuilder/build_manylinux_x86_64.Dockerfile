@@ -81,12 +81,7 @@ ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
 ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}"
 ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
 
-# -- Configure CMake to use the correct standard C++ library from therock-tools --
-# This avoids linker errors like `undefined symbol: __cxa_call_terminate`
-#ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
-
 ######## Enable GCC Toolset and verify ########
-#RUN echo 'source /opt/rh/gcc-toolset-12/enable' >> /etc/bashrc
 RUN which gcc && gcc --version && \
     which g++ && g++ --version && \
     which clang++ || true
