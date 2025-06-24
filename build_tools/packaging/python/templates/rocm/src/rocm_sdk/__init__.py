@@ -34,10 +34,12 @@ def find_libraries(*shortnames: str) -> list[Path]:
             lib_entry = _dist_info.ALL_LIBRARIES[shortname]
         except KeyError:
             raise ModuleNotFoundError(f"Unknown rocm library '{shortname}'")
-        if not lib_entry.dllname:
+
+        if is_windows and not lib_entry.dllname:
             # Library is missing on Windows, skip it.
             # TODO(#827): Require callers to filter and error here instead?
             continue
+
         package = lib_entry.package
         target_family = None
         if package.is_target_specific:
