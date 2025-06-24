@@ -6,4 +6,8 @@
 include = [
   "share/miopen/**",
 ]
+[components.test."ml-libs/MIOpen/stage"]
+include = [
+  "bin/miopen_gtest*",
+]
 [components.run."ml-libs/MIOpen/stage"]
