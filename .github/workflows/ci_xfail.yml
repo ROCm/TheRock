@@ -1,48 +1,15 @@
 # This CI workflow is triggered by:
-#   - push to main branch
-#   - pull request
-#   - workflow dispatch
+#   - scheduled run
 #
-# For pull requests, we run default builds and tests for:
-#   - Linux: gfx94X gfx110X
-#   - Windows: gfx110X
-# If you want to trigger jobs for additional targets, please add a defined label (ex: gfx120X-linux) to the pull request
-#
-# For push to main branch, all AMD families will built and tested from `amdgpu_family_matrix.py`.
-#
-# Note: If a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
+# In the scheduled run, we run all targets from amdgpu_family_matrix_xfail.py
+# As these builds are xfail, we allow errors to occur with `continue-on-error`, where the job will fail but the workflow is green
 
-name: CI
+name: CI xfail
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
-        default: ""
-      linux_use_prebuilt_artifacts:
-        type: boolean
-        description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
-      windows_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
-        default: ""
-      windows_use_prebuilt_artifacts:
-        type: boolean
-        description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
-      artifact_run_id:
-        type: string
-        description: "If provided, the tests will run on this artifact ID"
-        default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
+  # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
+  schedule:
+    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
 
 permissions:
   contents: read
