@@ -53,42 +53,41 @@ COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
 
 ######## Yum Packages #######
-# TODO: Figure out why gcc-toolset-12-libatomic-devel doesn't install with the
-# rest of the dev toolset.
+# We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest
+# manylinux containers use gcc-toolset-14 or later, which is not yet compatible
+# with the LLVM that ROCm builds. This can be upgraded when clang-21 is used.
 RUN yum install -y epel-release && \
+    yum remove -y gcc-toolset* && \
     yum install -y \
-      gcc-toolset-12 \
-      gcc-toolset-12-libstdc++-devel \
+      gcc-toolset-12-binutils \
+      gcc-toolset-12-gcc \
+      gcc-toolset-12-gcc-c++ \
+      gcc-toolset-12-gcc-gfortran \
       gcc-toolset-12-libatomic-devel \
+      gcc-toolset-12-libstdc++-devel \
       patchelf \
       vim-common \
       git-lfs && \
     yum clean all && \
     rm -rf /var/cache/yum
 
-ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
-
+######## Enable GCC Toolset and verify ########
+# This is a subset of what is typically sourced in the gcc-toolset enable
+# script.
 # -- Predefine variables to avoid Dockerfile linting warnings --
 # Docker requires environment variables to be defined before reuse.
 ENV LIBRARY_PATH=""
-
-# -- Append therock-tools lib64 path to library environment variables --
-# These ensure the runtime and linker can locate libstdc++ and other libraries
-# installed under /usr/local/therock-tools/lib64
+ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
 ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}"
 ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
 
 # -- Configure CMake to use the correct standard C++ library from therock-tools --
 # This avoids linker errors like `undefined symbol: __cxa_call_terminate`
-ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
+#ENV CMAKE_CXX_STANDARD_LIBRARIES="-L/opt/rh/gcc-toolset-12/root/usr/lib64 -lstdc++"
 
-######## Enable GCC Toolset ########
-SHELL ["/bin/bash", "-c"]
-RUN echo 'source /opt/rh/gcc-toolset-12/enable' >> /etc/profile.d/gcc-toolset.sh && \
-    chmod +x /etc/profile.d/gcc-toolset.sh
-
-RUN source /opt/rh/gcc-toolset-12/enable && \
-    which gcc && gcc --version && \
+######## Enable GCC Toolset and verify ########
+#RUN echo 'source /opt/rh/gcc-toolset-12/enable' >> /etc/bashrc
+RUN which gcc && gcc --version && \
     which g++ && g++ --version && \
     which clang++ || true
 
