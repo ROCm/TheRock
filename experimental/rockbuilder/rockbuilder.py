@@ -103,6 +103,12 @@ def get_build_arguments():
         help="post-install command for project",
         default=False,
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory to copy built wheels to",
+        default=Path(rock_builder_home_dir) / "packages" / "wheels",
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -366,7 +372,9 @@ args = get_build_arguments()
 printout_build_arguments(args)
 verify_build_env(args)
 
-project_manager = project_builder.RockExternalProjectListManager(rock_builder_home_dir)
+project_manager = project_builder.RockExternalProjectListManager(
+    rock_builder_home_dir, args.output_dir
+)
 # allow_no_value param says that no value keys are ok
 sections = project_manager.sections()
 # print(sections)

@@ -120,6 +120,24 @@ python torch_vision_hello_world.py
 python torch_audio_hello_world.py
 ```
 
+Wheels that have been build can be found from the packages/wheels directory.
+
+## Checkout and build only pytorch_audio
+
+In this example we build and install only the pytorch audio and
+copy the produced pytorch audio wheel to directory "test" instead of using default "packages/wheels"
+Note that pytorch audio requires that pytorch has been built and installed first.
+
+```bash
+python rockbuilder.py --project pytorch_audio --output-dir test
+```
+
+## Checkout only the pytorch_audio sources
+
+```bash
+python rockbuilder.py --checkout --project pytorch_audio
+```
+
 ## Checkout all projects (without build and install)
 
 ```bash
@@ -134,11 +152,15 @@ python rockbuilder.py --checkout --project pytorch_audio
 
 ## Build only pytorch audio
 
+Note that pytorch audio requires that pytorch has been built and installed first.
+
 ```bash
 python rockbuilder.py --build --project pytorch_audio
 ```
 
 ## Install only pytorch audio
+
+Note that pytorch audio requires that pytorch has been built and installed first.
 
 ```bash
 python rockbuilder.py --install --project pytorch_audio

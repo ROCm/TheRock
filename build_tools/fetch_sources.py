@@ -238,6 +238,7 @@ def main(argv):
             # TODO: Re-enable when used.
             # "rocprofiler-compute",
             "rocprofiler-sdk",
+            "rocprof-trace-decoder",
             # TODO: Re-enable when used.
             # "rocprofiler-systems",
             "roctracer",

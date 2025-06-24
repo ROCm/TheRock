@@ -199,6 +199,11 @@ The entire sub-project facility is defined in
 and it may be useful to refer to that if doing anything advanced. This section
 attempts to document the basics.
 
+> [!TIP]
+> These instructions assume the source directory is already populated.<br>
+> You may want to first follow
+> [Git Maintenance Chores: Adding a new submodule](./git_chores.md#adding-a-new-submodule).
+
 Consider an example that is typical. This is taken from the tree but annotated
 with comments, describing what is going on.
 
@@ -210,7 +215,7 @@ with comments, describing what is going on.
 # `therock_cmake_subproject_activate()`
 # Specific settings used here:
 #   * EXTERNAL_SOURCE_DIR: Tells the system that the sources are located
-#     somewhere else (in this case in the standard location we use for `repo`).
+#     somewhere else (in this case within the same subdirectory).
 #   * CMAKE_ARGS: Additional arguments to pass to CMake. This is in addition
 #     to a number of default arguments.
 #   * BUILD_DEPS: Sub-projects that must be built and staged before this
@@ -218,7 +223,7 @@ with comments, describing what is going on.
 #   * RUNTIME_DEPS: Sub-projects that should be considered a BUILD_DEP and
 #     also are required to be in a unified distribution tree at runtime.
 therock_cmake_subproject_declare(ROCR-Runtime
-  EXTERNAL_SOURCE_DIR "${SOME_PATH}/ROCR-Runtime"
+  EXTERNAL_SOURCE_DIR "ROCR-Runtime"
   CMAKE_ARGS
     "-DBUILD_SHARED_LIBS=ON"
   BUILD_DEPS

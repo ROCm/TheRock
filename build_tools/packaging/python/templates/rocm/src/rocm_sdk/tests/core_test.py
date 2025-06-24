@@ -22,21 +22,24 @@ utils.assert_is_physical_package(core_mod)
 so_paths = utils.get_module_shared_libraries(core_mod)
 is_windows = platform.system() == "Windows"
 
-
-CONSOLE_SCRIPT_TESTS = [
+LINUX_CONSOLE_SCRIPT_TESTS = [
+    # These currently only have unprefixed names (e.g. 'clang') on Windows.
     ("amdclang", ["--help"], "clang LLVM compiler", True),
     ("amdclang++", ["--help"], "clang LLVM compiler", True),
     ("amdclang-cpp", ["--help"], "clang LLVM compiler", True),
     ("amdclang-cl", ["-help"], "clang LLVM compiler", True),
     ("amdflang", ["--help"], "clang LLVM compiler", True),
     ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
+    # These tools are only available on Linux.
+    ("rocm_agent_enumerator", [], "", True),
+    ("rocminfo", [], "", True),
+    ("rocm-smi", [], "Management", True),
+]
+
+CONSOLE_SCRIPT_TESTS = [
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
-    # These tools are only available on Linux.
-    ("rocm_agent_enumerator", [], "", not is_windows),
-    ("rocminfo", [], "", not is_windows),
-    ("rocm-smi", [], "Management", not is_windows),
-]
+] + (LINUX_CONSOLE_SCRIPT_TESTS if not is_windows else [])
 
 exe_suffix = ".exe" if is_windows else ""
 
