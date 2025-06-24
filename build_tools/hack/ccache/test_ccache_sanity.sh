@@ -13,7 +13,7 @@ echo "CCACHE_CONFIGPATH=$CCACHE_CONFIGPATH"
 
 CXX="${CXX:-c++}"
 ccache --version
-ccache -z
+ccache --zero-stats
 rm -f $td/hello.o $td/hello.o.*
 ccache debug=true $CXX -c $td/hello.cc -o $td/hello.o
-ccache -s
+ccache --show-stats
