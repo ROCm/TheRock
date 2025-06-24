@@ -92,7 +92,7 @@ def run(args: argparse.Namespace):
             or compiler_check_file.read_text() != compiler_check_script
         ):
             print(
-                f"NOTE: {compiler_check_file} does not match expected. Run with --init to regenerate if",
+                f"NOTE: {compiler_check_file} does not match expected. Run with --init to regenerate it",
                 file=sys.stderr,
             )
 
