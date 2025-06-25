@@ -47,14 +47,14 @@ built-in tests (via `rocm-sdk test`) verify these conditions.
 ### Example
 
 ```bash
-./build_tools/linux_python_package.py \
+./build_tools/build_python_packages.py \
     --artifact-dir ./output-linux-portable/build/artifacts \
     --dest-dir $HOME/tmp/packages
 ```
 
 Note that this does do some dynamic compilation of files and it performs
-patching via patchelf. It is recommended to run this in the same portable
-Linux container as was used to build the SDK (so as to avoid the possibility
+patching via patchelf. On Linux, it is recommended to run this in the same
+portable container as was used to build the SDK (so as to avoid the possibility
 of accidentally referencing too-new glibc symbols).
 
 ## Using Packages from Frameworks

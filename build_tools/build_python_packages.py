@@ -2,13 +2,16 @@
 """Given ROCm artifacts directories, performs surgery to re-layout them for
 distribution as Python packages and builds sdists and wheels as appropriate.
 
+Under Linux, it is standard to run this under an appropriate manylinux container
+for producing portable binaries. On Windows, it can be run natively.
+
 See docs/packaging/python_packaging.md for more information.
 
 Example
 -------
 
 ```
-./build_tools/linux_python_package.py \
+./build_tools/build_python_packages.py \
     --artifact-dir ./output-linux-portable/build/artifacts \
     --dest-dir $HOME/tmp/packages
 ```
@@ -16,7 +19,6 @@ Example
 
 import argparse
 import functools
-import re
 from pathlib import Path
 import sys
 
