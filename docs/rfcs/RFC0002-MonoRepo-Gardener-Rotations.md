@@ -1,22 +1,27 @@
-# Mono-repo Gardener
+# Gardeners
 
-Gardeners<sup>[1]</sup> are responsible for keeping their mono-repos shippable;
-ensuring bad commits get reverted by keeping build, test, and nightly release
-workflows green so that developers can remain productive and bugs are caught
-closer to commit times.
+Gardeners[^1] are responsible for keeping their component areas continually shippable.
+Build, test, and nightly release workflows should be kept passing ("green").
+When tests fail ("red") or builds fail ("black"), corrective action like identifying
+and reverting culprit commits should be taken quickly, so that developers can remain
+productive and bugs are caught closer to commit times.
 
 In order to facilitate this work, gardeners have some super powers afforded to them
 that other developers do not such as ability to bypass any checks in CI.
 
-Note this concept isn't novel and can be referred to as build cops or build sheriffs
+Note this concept isn't novel and can be referred to as "build cops" or "build sheriffs"
 in other projects. Good judgement and commitment are critical to being a good gardener.
 
 ## Overview
 
 ### Responsibilities and priorities
 
-1. When regressions occur that break CI workflows, revert those changes.
-If it's not obvious how to, facilitate getting changes in to get back to green (see 2)
+1. When regressions occur that break CI workflows
+  1.1 Communicate that something is broken
+  1.2 Identify the culprit commit(s)
+  1.3 Notify the authors/reviewers of those commits
+  1.4 Revert those changes
+  1.5 If it's not obvious how to, facilitate getting changes in to get back to green (see 2)
 2. For changes that need to bypass presubmit checks (to get back to green), serve as a
 central point of contact to help land those changes using your judgement.
 3. File issues for (or add) presubmit tests that could have caught regressions that were fixed
@@ -34,6 +39,11 @@ they are needed.
 This is _not_ an "on-call" position and responses outside of working hours are
 not expected. In the event that a failure occurs while there is no gardener available,
 a list of non on-duty gardeners will be available who have shared superpowers and similar duties.
+
+> [!IMPORTANT]
+> It's an expectation that on-duty gardeners adhere to an SLO to start responding to issues
+> within 2 hours. This means that gardeners will need to routinely check for issues at least
+> that often while they are working.
 
 > [!NOTE]
 > The gardener does not need to personally fix every issue/incident
@@ -66,8 +76,7 @@ When responding to an incident, communicate early and often:
 
 Primary communication about the changes in a commit should happen on the pull
 request that commit came from. This ensures that members of the open source
-community (who may not be members of Discord or Slack servers) can see the
-discussion and avoid duplicating effort.
+community can see the discussion and avoid duplicating effort.
 
 Secondary communication like real time discussion can occur on Discord, Slack,
 or Teams. Initially we will be leveraging Teams for these discussions.
@@ -123,7 +132,7 @@ all sequentially is less risky than reverting manually.
 
 Google SWE Book:
 
-* https://abseil.io/resources/swe-book/html/ch23.html#ci_at_google
+[^1]: https://abseil.io/resources/swe-book/html/ch23.html#ci_at_google
 
 Similar rotations and playbooks on other projects:
 
