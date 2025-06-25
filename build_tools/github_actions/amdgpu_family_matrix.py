@@ -2,22 +2,12 @@
 This AMD GPU Family Matrix is the "source of truth" for GitHub workflows, indicating which families and test runners are available to use
 """
 
-DEFAULT_LINUX_CONFIGURATIONS = ["gfx94x", "gfx110x"]
-DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110x"]
-
-amdgpu_family_info_matrix = {
+amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
             "pytorch-target": "gfx942",
-        }
-    },
-    "gfx950": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx950-dcgpu",
-            "pytorch-target": "gfx950",
         }
     },
     "gfx110x": {
@@ -31,6 +21,16 @@ amdgpu_family_info_matrix = {
             "family": "gfx110X-dgpu",
             "pytorch-target": "gfx1100",
         },
+    },
+}
+
+amdgpu_family_info_matrix_postsubmit = {
+    "gfx950": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx950-dcgpu",
+            "pytorch-target": "gfx950",
+        }
     },
     "gfx115x": {
         "linux": {"test-runs-on": "", "family": "gfx1151", "pytorch-target": "gfx1151"},
@@ -51,5 +51,32 @@ amdgpu_family_info_matrix = {
             "family": "gfx120X-all",
             "pytorch-target": "gfx1201",
         },
+    },
+}
+
+amdgpu_family_matrix_xfail = {
+    "gfx90x": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx90X-dcgpu",
+            "pytorch-target": "gfx90a",
+            "expect_failure": True,
+        }
+    },
+    "gfx101x": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx101X-dgpu",
+            "pytorch-target": "gfx1010",
+            "expect_failure": True,
+        }
+    },
+    "gfx103x": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx103X-dgpu",
+            "pytorch-target": "gfx1030",
+            "expect_failure": True,
+        }
     },
 }

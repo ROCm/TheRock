@@ -7,26 +7,6 @@
 name: CI Nigthly
 
 on:
-  workflow_dispatch:
-    inputs:
-      linux_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
-        default: ""
-      linux_use_prebuilt_artifacts:
-        type: boolean
-        description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
-      windows_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
-        default: ""
-      windows_use_prebuilt_artifacts:
-        type: boolean
-        description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
-      artifact_run_id:
-        type: string
-        description: "If provided, the tests will run on this artifact ID"
-        default: ""
   # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
   schedule:
     - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
@@ -62,9 +42,9 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_run_id: ''
       expect_failure: ${{ matrix.families.expect_failure == true }}
-      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      linux_use_prebuilt_artifacts: 'false'
     permissions:
       contents: read
       id-token: write
@@ -85,9 +65,9 @@ jobs:
     with:
       amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_run_id: ''
       extra_cmake_options: ${{ matrix.extra_cmake_options }}
-      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      windows_use_prebuilt_artifacts: 'false'
     permissions:
       contents: read
       id-token: write
