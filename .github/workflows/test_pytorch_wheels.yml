@@ -1,0 +1,37 @@
+name: Test PyTorch Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      amdgpu_families:
+        required: true
+        type: string
+      python_version:
+        required: true
+        type: string
+      s3_bucket:
+        required: true
+        type: string
+      s3_subdir:
+        required: true
+        type: string
+      s3_cloudfront:
+        required: true
+        type: string
+      test_runs_on:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test_wheels:
+    name: Test PyTorch Wheels | ${{ inputs.amdgpu_families }}
+    runs-on: ${{ inputs.test_runs_on }}
+
+    env:
+      PACKAGE_DIST_DIR: /tmp/wheels
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

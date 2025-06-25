@@ -21,7 +21,7 @@ set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
 # line up thing. We require the version explicitly from the caller and complain
 # loudly if not present.
 function(therock_patch_comgr_win_output_name)
-  if(NOT THEROCK_HIP_MAJOR_VERSION OR NOT THEROCK_HIP_MINOR_VERSION)
+  if(NOT DEFINED THEROCK_HIP_MAJOR_VERSION OR NOT DEFINED THEROCK_HIP_MINOR_VERSION)
     message(FATAL_ERROR "Super-project must set THEROCK_HIP_MAJOR_VERSION and THEROCK_HIP_MINOR_VERSION")
   endif()
   if(THEROCK_HIP_MAJOR_VERSION LESS_EQUAL 9)
