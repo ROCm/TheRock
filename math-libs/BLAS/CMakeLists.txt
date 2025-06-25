@@ -41,9 +41,6 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # rocRoller
 ##############################################################################
 
-# rocRoller only works from build tree
-# https://github.com/ROCm/TheRock/issues/870
-
 if(WIN32)
   set(_enable_rocRoller "OFF")
 else()
@@ -60,7 +57,6 @@ if(_enable_rocRoller)
       -DROCROLLER_ENABLE_YAML_CPP=ON
       -DROCROLLER_ENABLE_CLIENT=OFF
       -DROCROLLER_BUILD_TESTING=${THEROCK_BUILD_TESTING}
-      -DROCROLLER_ENABLE_CATCH=OFF
       -DROCROLLER_BUILD_SHARED_LIBS=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -70,6 +66,7 @@ if(_enable_rocRoller)
       mxDataGenerator
       rocm-cmake
       therock-boost
+      therock-catch2
       therock-fmt
       therock-googletest
       therock-libdivide
@@ -90,6 +87,7 @@ if(_enable_rocRoller)
   therock_cmake_subproject_activate(rocRoller)
   list(APPEND _blas_subproject_names rocRoller)
 endif()
+
 
 ##############################################################################
 # hipBLASLt
