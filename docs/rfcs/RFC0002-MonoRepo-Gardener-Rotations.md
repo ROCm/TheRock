@@ -5,7 +5,7 @@ ensuring bad commits get reverted by keeping build, test, and nightly release
 workflows green so that developers can remain productive and bugs are caught
 closer to commit times.
 
-In order to faciltate this work, gardeners have some super powers afforded to them
+In order to facilitate this work, gardeners have some super powers afforded to them
 that other developers do not such as ability to bypass any checks in CI.
 
 Note this concept isn't novel and can be referred to as build cops or build sheriffs
