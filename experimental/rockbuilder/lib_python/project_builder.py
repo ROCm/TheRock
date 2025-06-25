@@ -39,8 +39,16 @@ class RockProjectBuilder(configparser.ConfigParser):
                 "Could not find the configuration file: "
                 + self.cfg_file_path.as_posix()
             )
-        self.repo_url = self.get("project_info", "repo_url")
-        self.project_version = self.get("project_info", "version")
+        # repo_url and version are not mandatory
+        # (project could want to run pip install command for example)
+        if self.has_option("project_info", "repo_url"):
+            self.repo_url = self.get("project_info", "repo_url")
+        else:
+            self.repo_url = None
+        if self.has_option("project_info", "version"):
+            self.project_version = self.get("project_info", "version")
+        else:
+            self.project_version = None
 
         # environment setup can have common and os-specific sections that needs to be appended together
         if self.is_posix:
@@ -126,7 +134,8 @@ class RockProjectBuilder(configparser.ConfigParser):
         print("Project build phase " + phase + ": -----")
         print("    Project_name: " + self.project_name)
         print("    Config_path: " + self.cfg_file_path.as_posix())
-        print("    Version:     " + self.project_version)
+        if self.project_version:
+            print("    Version:     " + self.project_version)
         print("    Source_dir:  " + self.project_src_dir_path.as_posix())
         print("    Patch_dir:   " + self.project_patch_dir_root.as_posix())
         print("    Build_dir:   " + self.project_build_dir_path.as_posix())
@@ -170,14 +179,16 @@ class RockProjectBuilder(configparser.ConfigParser):
             self.printout_error_and_terminate("clean")
 
     def checkout(self):
-        res = self.project_repo.do_checkout()
-        if not res:
-            self.printout_error_and_terminate("checkout")
+        if self.repo_url:
+            res = self.project_repo.do_checkout()
+            if not res:
+                self.printout_error_and_terminate("checkout")
 
     def hipify(self):
-        res = self.project_repo.do_hipify(self.hipify_cmd)
-        if not res:
-            self.printout_error_and_terminate("hipify")
+        if self.repo_url:
+            res = self.project_repo.do_hipify(self.hipify_cmd)
+            if not res:
+                self.printout_error_and_terminate("hipify")
 
     def pre_config(self):
         res = self.project_repo.do_pre_config(self.pre_config_cmd)

@@ -100,6 +100,10 @@ Base environment variables are automatically specified for each application that
   The source code directory for the currently built application
 - `ROCK_BUILDER_APP_BUILD_DIR`:
   The build directory for the currently built application
+- `ROCK_BUILDER_CLANG_HOME`:
+  Home directory for the clang. It location may vary depending whether the rocm_sdk used is build locally or used from the rocm_sdk python wheel.
+- `ROCK_BUILDER_BITCODE_HOME`:
+  Directory containing gpu specific bitcode (\*.bc) files
 
 #### Application-Specific Environment Variables
 
