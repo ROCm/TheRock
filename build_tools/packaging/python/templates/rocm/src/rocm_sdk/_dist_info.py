@@ -88,7 +88,7 @@ class PackageEntry:
         return importlib.util.find_spec(self.get_py_package_name(target_family))
 
     def has_py_package(self, target_family: str | None = None) -> bool:
-        return self.get_py_package(self.get_py_package_name(target_family)) is not None
+        return self.get_py_package(target_family) is not None
 
     def __repr__(self):
         return self.dist_package_template
