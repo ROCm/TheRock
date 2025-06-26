@@ -95,5 +95,6 @@ jobs:
         timeout-minutes: ${{ matrix.components.timeout }}
         run: |
           echo "venv done"
-          echo "${{ matrix.components.executable_command }}"
-          ${{ fromJSON(matrix.components.executable_command) }}
+
+        # echo "${{ matrix.components.executable_command }}"
+        # ${{ fromJSON(matrix.components.executable_command) }}
