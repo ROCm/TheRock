@@ -83,6 +83,7 @@ test_matrix = {
 }
 
 def run():
+    print(THEROCK_BIN_DIR)
     platform = os.getenv("PLATFORM")
     project_to_test = os.getenv("project_to_test", "*")
     
