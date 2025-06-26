@@ -21,11 +21,11 @@ in other projects. Good judgement and commitment are critical to being a good ga
 ### Responsibilities and priorities
 
 1. When regressions occur that break CI workflows
-1. Communicate that something is broken
-1. Identify the culprit commit(s)
-1. Notify the authors/reviewers of those commits
-1. Revert those changes
-1. If it's not obvious how to, facilitate getting changes in to get back to green (see 2)
+  1. Communicate that something is broken
+  1. Identify the culprit commit(s)
+  1. Notify the authors/reviewers of those commits
+  1. Revert those changes
+  1. If it's not obvious how to, facilitate getting changes in to get back to green (see 2)
 1. For changes that need to bypass presubmit checks (to get back to green), serve as a
    central point of contact to help land those changes using your judgement.
 1. File issues for (or add) presubmit tests that could have caught regressions that were fixed
