@@ -17,8 +17,8 @@ import os
 from pathlib import Path
 from configure_ci import set_github_output
 
-
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_BIN_DIR = str(THIS_SCRIPT_DIR.parent.parent / "build/bin")
 
 test_matrix = {
     # BLAS tests
