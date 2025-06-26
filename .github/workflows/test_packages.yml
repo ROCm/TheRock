@@ -92,7 +92,10 @@ jobs:
         run: sudo apt install libgfortran5 -y
 
       - name: Run ${{ matrix.components.name }} tests
+        shell: bash
         timeout-minutes: ${{ matrix.components.timeout }}
         run: |
           if [ "${{ inputs.platform }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+          echo "venv done"
+          echo "${{ matrix.components.executable_command }}"
           ${{ fromJSON(matrix.components.executable_command) }}
