@@ -114,8 +114,15 @@ if(_enable_rocRoller)
   )
 endif()
 
+ if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_hipblaslt_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt")
+  else()
+    set(_hipblaslt_source_dir "hipBLASLt")
+  endif()
+
 therock_cmake_subproject_declare(hipBLASLt
-  EXTERNAL_SOURCE_DIR "hipBLASLt"
+  EXTERNAL_SOURCE_DIR "${_hipblaslt_source_dir}"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
   BACKGROUND_BUILD
   CMAKE_LISTS_RELPATH "next-cmake"
   CMAKE_ARGS
