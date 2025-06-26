@@ -7,7 +7,10 @@ and reverting culprit commits should be taken quickly, so that developers can re
 productive and bugs are caught closer to commit times.
 
 In order to facilitate this work, gardeners have some super powers afforded to them
-that other developers do not such as ability to bypass any checks in CI.
+that other developers do not such as:
+* The ability to bypass any checks in the CI.
+* Authority to request that any developer on the project who is implicated in a breakage/* degradation of service/resolution stop what they are doing and participate.
+* In the event of major breakages, the ability to escalate and pull higher level management in to resolve issues.
 
 Note this concept isn't novel and can be referred to as "build cops" or "build sheriffs"
 in other projects. Good judgement and commitment are critical to being a good gardener.
@@ -17,11 +20,11 @@ in other projects. Good judgement and commitment are critical to being a good ga
 ### Responsibilities and priorities
 
 1. When regressions occur that break CI workflows
-  1.1 Communicate that something is broken
-  1.2 Identify the culprit commit(s)
-  1.3 Notify the authors/reviewers of those commits
-  1.4 Revert those changes
-  1.5 If it's not obvious how to, facilitate getting changes in to get back to green (see 2)
+  1. Communicate that something is broken
+  2. Identify the culprit commit(s)
+  3. Notify the authors/reviewers of those commits
+  4. Revert those changes
+  5. If it's not obvious how to, facilitate getting changes in to get back to green (see 2)
 2. For changes that need to bypass presubmit checks (to get back to green), serve as a
 central point of contact to help land those changes using your judgement.
 3. File issues for (or add) presubmit tests that could have caught regressions that were fixed
