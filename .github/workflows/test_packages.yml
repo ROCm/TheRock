@@ -53,7 +53,7 @@ jobs:
           THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
           PLATFORM: ${{ inputs.platform }}
         id: configure
-        run: ./build_tools/github_actions/fetch_test_configurations.py
+        run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_libs:
     name: 'Test ${{ matrix.components.name }}'
