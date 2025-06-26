@@ -207,8 +207,8 @@ jobs:
         run: |
           mkdir job_status_dir
           mkdir job_status_dir/logs
-          echo '${{ toJSON(steps.job-status-step.outputs.job_summary) }}' | python3 -m json.tool
-          echo '${{ toJSON(steps.job-status-step.outputs.job_summary) }}' | python3 -m json.tool >> job_status_dir/logs/job_status.json
+          echo '${{ toJSON(steps.job-status-step.outputs.job_summary) }}'
+          echo '${{ toJSON(steps.job-status-step.outputs.job_summary) }}'
           cat job_status_dir/logs/job_status.json
 
       - name: Upload Logs
