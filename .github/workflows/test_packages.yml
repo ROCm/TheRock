@@ -94,7 +94,5 @@ jobs:
       - name: Test
         timeout-minutes: ${{ matrix.components.timeout }}
         run: |
-          echo "venv done"
-
-        # echo "${{ matrix.components.executable_command }}"
-        # ${{ fromJSON(matrix.components.executable_command) }}
+          if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+          ${{ matrix.components.executable_command }}
