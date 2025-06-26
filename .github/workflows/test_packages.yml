@@ -38,54 +38,61 @@ jobs:
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ inputs.platform }}
 
-  # BLAS tests
-  test_hipblaslt:
-    name: 'Test hipBLASLt math-lib'
-    uses: './.github/workflows/test_hipblaslt.yml'
+  configure_test_matrix:
+    name: "Configure test matrix"
     needs: test_sanity_check
-    with:
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-      platform: ${{ inputs.platform }}
+    runs-on: ubuntu-24.04
+    outputs:
+      components: ${{ steps.configure.outputs.components }}
+    steps:
+      - name: "Checking out repository"
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-  test_rocblas:
-    name: 'Test rocBLAS math-lib'
-    uses: './.github/workflows/test_rocblas.yml'
-    needs: test_sanity_check
-    with:
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-      platform: ${{ inputs.platform }}
+      - name: "Configuring CI options"
+        env:
+          THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
+          PLATFORM: ${{ inputs.platform }}
+        id: configure
+        run: ./build_tools/github_actions/fetch_test_configurations.py
 
-  # PRIM tests
-  test_rocprim:
-    name: 'Test rocPRIM math-lib'
-    uses: './.github/workflows/test_rocprim.yml'
-    needs: test_sanity_check
-    with:
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-      platform: ${{ inputs.platform }}
+  test_libs:
+    name: 'Test ${{ matrix.components.name }}'
+    runs-on: ${{ inputs.test_runs_on }}
+    needs: configure_test_matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: "ROCm/TheRock"
 
-  test_rocthrust:
-    name: 'Test rocTHRUST math-lib'
-    uses: './.github/workflows/test_rocthrust.yml'
-    needs: test_sanity_check
-    with:
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-      platform: ${{ inputs.platform }}
+      - name: Run setup test environment workflow
+        uses: './.github/actions/setup_test_environment'
+        with:
+          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: ${{ matrix.components.artifact_flags }}
+          PLATFORM: ${{ inputs.platform }}
 
-  test_hipcub:
-    name: 'Test hipCUB math-lib'
-    uses: './.github/workflows/test_hipcub.yml'
-    needs: test_sanity_check
-    with:
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-      platform: ${{ inputs.platform }}
+      - name: Install additional packages
+        if: ${{ inputs.platform == 'linux' && (matrix.components.name == 'rocblas' || matrix.components.name == 'hipblaslt') }}
+        run: sudo apt install libgfortran5 -y
+
+      - name: Run ${{ matrix.components.name }} tests
+        timeout-minutes: ${{ matrix.components.timeout }}
+        run: |
+          if [ "${{ inputs.platform }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+          ${{ fromJSON(matrix.components.executable_command) }}
