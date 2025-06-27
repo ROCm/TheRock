@@ -211,12 +211,6 @@ jobs:
           echo '${{ toJSON(steps.job-status-step.outputs.job_summary) }}' >> job_status_dir/logs/job_status.json
           cat job_status_dir/logs/job_status.json
 
-      - name: Install system packages for psycopg2-binary
-        if: always()
-        run: |
-          echo 'Install system packages for psycopg2'
-          sudo apt-get update
-
       - name: Install psycopg2
         if: always()
         run: |
@@ -227,7 +221,7 @@ jobs:
         if: always()
         run: |
           python3 build_tools/github_actions/redshift_script.py \
-            --input=${{ steps.job-status-step.outputs.job_summary }}
+            --input ${{ steps.job-status-step.outputs.job_summary }}
 
       - name: Upload Logs
         if: always()
