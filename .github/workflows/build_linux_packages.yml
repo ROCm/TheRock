@@ -211,6 +211,12 @@ jobs:
           echo '${{ toJSON(steps.job-status-step.outputs.job_summary) }}' >> job_status_dir/logs/job_status.json
           cat job_status_dir/logs/job_status.json
 
+      - name: Populate tables in redshift
+        if: always()
+        run: |
+          python3 build_tools/github_actions/redshift_script.py \
+            --input=${{ steps.job-status-step.outputs.job_summary }}
+
       - name: Upload Logs
         if: always()
         run: |
