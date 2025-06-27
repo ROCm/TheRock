@@ -2,11 +2,12 @@
 
 import argparse
 import configparser
-import lib_python.project_builder as project_builder
 import sys
 import os
 import time
 import platform
+import lib_python.project_builder as project_builder
+import lib_python.rockbuilder_config as RockBuilderConfig
 from pathlib import Path, PurePosixPath
 
 ROCK_BUILDER_VERSION = "2025-06-25_01"
@@ -238,7 +239,7 @@ def verify_build_env__python(self):
             sys.exit(1)
 
 
-def verify_build_env(args, rock_builder_home_dir):
+def verify_build_env(args, rock_builder_home_dir: Path, rock_builder_build_dir: Path):
     # we may actually need to have the build environment
     # even during the checkout as we do the hipify during the checkout process
     """"
@@ -263,6 +264,14 @@ def verify_build_env(args, rock_builder_home_dir):
         ENV_VARIABLE_NAME__LIB = "LD_LIBRARY_PATH"
     else:
         ENV_VARIABLE_NAME__LIB = "LIBPATH"
+
+    # read and set up env based on to rockbuilder.ini file if it exist
+    rcb_config = RockBuilderConfig.RockBuilderConfig(
+        rock_builder_home_dir, rock_builder_build_dir
+    )
+    res = rcb_config.read_cfg()
+    if res:
+        rcb_config.setup_build_env()
 
     # check that THEROCK_AMDGPU_TARGETS has been specified on Windows builds.
     # This is needdd because on locally build rocm sdk we can not automatically query
@@ -450,10 +459,11 @@ def do_therock(prj_builder):
 is_posix = not any(platform.win32_ver())
 
 rock_builder_home_dir = get_rocm_builder_root_dir()
+rock_builder_build_dir = rock_builder_home_dir / "builddir"
 default_src_base_dir = rock_builder_home_dir / "src_projects"
 
 os.environ["ROCK_BUILDER_HOME_DIR"] = rock_builder_home_dir.as_posix()
-os.environ["ROCK_BUILDER_BUILD_DIR"] = (rock_builder_home_dir / "builddir").as_posix()
+os.environ["ROCK_BUILDER_BUILD_DIR"] = rock_builder_build_dir.as_posix()
 
 project_manager = project_builder.RockExternalProjectListManager(rock_builder_home_dir)
 # allow_no_value param says that no value keys are ok
@@ -467,7 +477,7 @@ args = get_build_arguments(rock_builder_home_dir, default_src_base_dir, project_
 args_dict = args.__dict__
 printout_build_arguments(args)
 verify_build_env__python(args)
-verify_build_env(args, rock_builder_home_dir)
+verify_build_env(args, rock_builder_home_dir, rock_builder_build_dir)
 
 for ii, prj_item in enumerate(project_list):
     print(f"    Project [{ii}]: {prj_item}")
