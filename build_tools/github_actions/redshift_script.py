@@ -9,10 +9,10 @@ user = "awsuser"
 password = "7mP+a[61{tIFDK!0"
 
 parser = argparse.ArgumentParser(description="JSON input to parse")
-    parser.add_argument(
+parser.add_argument(
         "--input",
-        type=Path,
-        help="JSON input to populate the tables in DB",
+        type=str,
+        help="input to populate the tables in DB",
     )
 
 args = parser.parse_args()
