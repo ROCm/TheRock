@@ -234,9 +234,9 @@ def verify_build_env(args, rock_builder_home_dir):
     else:
         ENV_VARIABLE_NAME__LIB = "LIBPATH"
 
-    # check that THEROCK_AMDGPU_TARGETS has been specified on Windows build
-    # because the pytorch build on windows can not automatically resolve the
-    # build targets by checking the targets support build into the used rocm_sdk
+    # check that THEROCK_AMDGPU_TARGETS has been specified on Windows builds.
+    # This is needdd because on locally build rocm sdk we can not automatically query
+    # what are the build targets that are supported by rocm_sdk used.
     if not is_posix:
         if not "THEROCK_AMDGPU_TARGETS" in os.environ:
             print(
@@ -250,9 +250,12 @@ def verify_build_env(args, rock_builder_home_dir):
     # check rocm
     if "ROCM_HOME" in os.environ:
         rocm_home_root_path = Path(os.environ["ROCM_HOME"])
+        rocm_home_root_path = rocm_home_root_path.resolve()
     else:
         rocm_home_root_path = rock_builder_home_dir / "../../build/dist/rocm"
-    rocm_home_root_path = rocm_home_root_path.resolve()
+        rocm_home_root_path = rocm_home_root_path.resolve()
+        print("using locally build rocm sdk from TheRock:")
+        print("    " + rocm_home_root_path.as_posix())
     if rocm_home_root_path.exists():
         # set ROCM_HOME if not yet set
         if not "ROCM_HOME" in os.environ:
