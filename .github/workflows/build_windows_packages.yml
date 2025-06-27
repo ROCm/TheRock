@@ -58,7 +58,9 @@ jobs:
       - name: Install requirements
         run: |
           choco install --no-progress -y ccache
-          choco install --no-progress -y ninja
+          # ninja pinned due to a bug in the 1.13.0 release:
+          # https://github.com/ninja-build/ninja/issues/2616
+          choco install --no-progress -y ninja --version 1.12.1
           choco install --no-progress -y strawberryperl
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
           choco install --no-progress -y awscli
