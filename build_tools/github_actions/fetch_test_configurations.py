@@ -13,7 +13,7 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
 
 test_matrix = {
     # BLAS tests
@@ -21,16 +21,14 @@ test_matrix = {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 5,
-        "test_script": str(SCRIPT_DIR / "test_executable_scripts" / "test_rocblas.py"),
+        "test_script": str(SCRIPT_DIR / "test_rocblas.py"),
         "platform": ["linux", "windows"],
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": str(
-            SCRIPT_DIR / "test_executable_scripts" / "test_hipblaslt.py"
-        ),
+        "test_script": str(SCRIPT_DIR / "test_hipblaslt.py"),
         "platform": ["linux"],
     },
     # PRIM tests
@@ -38,23 +36,21 @@ test_matrix = {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 60,
-        "test_script": str(SCRIPT_DIR / "test_executable_scripts" / "test_rocprim.py"),
+        "test_script": str(SCRIPT_DIR / "test_rocprim.py"),
         "platform": ["linux", "windows"],
     },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
-        "test_script": str(SCRIPT_DIR / "test_executable_scripts" / "test_hipcub.py"),
+        "test_script": str(SCRIPT_DIR / "test_hipcub.py"),
         "platform": ["linux", "windows"],
     },
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 5,
-        "test_script": str(
-            SCRIPT_DIR / "test_executable_scripts" / "test_rocthrust.py"
-        ),
+        "test_script": str(SCRIPT_DIR / "test_rocthrust.py"),
         "platform": ["linux"],
     },
 }
