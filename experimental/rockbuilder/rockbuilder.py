@@ -2,11 +2,13 @@
 
 import argparse
 import configparser
-import lib_python.project_builder as project_builder
 import sys
 import os
 import time
 import platform
+import subprocess
+import lib_python.project_builder as project_builder
+import lib_python.rockbuilder_config as RockBuilderConfig
 from pathlib import Path, PurePosixPath
 
 ROCK_BUILDER_VERSION = "2025-06-25_01"
@@ -37,7 +39,37 @@ def printout_build_env_info():
     time.sleep(1)
 
 
-def get_build_arguments(
+# This argument parser is used to parse the project list.
+# This is needed to do first before parsing other arguments
+# because we need to add the --<project-name>-version arguments for the second parser that
+# is used to parse all possible parameters.
+def get_project_list_manager(rock_builder_home_dir: Path):
+    parser = argparse.ArgumentParser(description="Project and Project List Parser")
+
+    # Add arguments
+    parser.add_argument(
+        "--project_list",
+        type=str,
+        help="select project list for the actions.",
+        default=None,
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        help="select target for the action. Must be one project from projects-directory.",
+        default=None,
+    )
+    prj = None
+    prj_list = None
+    args, unknown = parser.parse_known_args()
+    ret = project_builder.RockExternalProjectListManager(
+        rock_builder_home_dir, args.project_list, args.project
+    )
+    return ret
+
+
+# create user parameter parser
+def create_build_argument_parser(
     rock_builder_home_dir, default_src_base_dir: Path, project_list
 ):
     # Create an ArgumentParser object
@@ -45,9 +77,15 @@ def get_build_arguments(
 
     # Add arguments
     parser.add_argument(
+        "--project_list",
+        type=str,
+        help="select project list for the actions.",
+        default=None,
+    )
+    parser.add_argument(
         "--project",
         type=str,
-        help="select target for the action. Can be either one project or all projects in core_apps.pcfg.",
+        help="select target for the action. Must be one project from projects-directory.",
         default=None,
     )
     parser.add_argument(
@@ -120,13 +158,18 @@ def get_build_arguments(
         default=rock_builder_home_dir / "packages" / "wheels",
     )
     for ii, prj_item in enumerate(project_list):
+        arg_name = "--" + prj_item + "-version"
+        print("arg_name: " + arg_name)
         parser.add_argument(
             "--" + prj_item + "-version",
             help=prj_item + " version used for the operations",
             default=None,
         )
+    return parser
 
-    # Parse the arguments
+
+def parse_build_arguments(parser):
+    # parse command line parameters
     args = parser.parse_args()
     if (
         ("--checkout" in sys.argv)
@@ -238,7 +281,37 @@ def verify_build_env__python(self):
             sys.exit(1)
 
 
-def verify_build_env(args, rock_builder_home_dir):
+def get_rocm_sdk_targets_on_linux(exec_dir: Path):
+    ret = ""
+    if exec_dir is not None:
+        exec_cmd = "rocm_agent_enumerator"
+        print("exec_dir: " + str(exec_dir))
+        print("exec_cmd: " + exec_cmd)
+        result = subprocess.run(
+            exec_cmd, cwd=exec_dir, shell=False, capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            if result.stdout:
+                print(result.stdout)
+                gpu_list = result.stdout.splitlines()
+                # remove duplicates in case there are multiple instances of same gpu
+                gpu_list = list(set(gpu_list))
+                for ii, val in enumerate(gpu_list):
+                    if ii == 0:
+                        ret = val
+                    else:
+                        ret = ret + ";" + val
+        else:
+            ret = False
+            print(result.stdout)
+            print(
+                f"Failed use to rocm_agent_enumerator to get gpu list: {result.stderr}"
+            )
+            sys.exit(1)
+    return ret
+
+
+def verify_build_env(args, rock_builder_home_dir: Path, rock_builder_build_dir: Path):
     # we may actually need to have the build environment
     # even during the checkout as we do the hipify during the checkout process
     """"
@@ -264,18 +337,13 @@ def verify_build_env(args, rock_builder_home_dir):
     else:
         ENV_VARIABLE_NAME__LIB = "LIBPATH"
 
-    # check that THEROCK_AMDGPU_TARGETS has been specified on Windows builds.
-    # This is needdd because on locally build rocm sdk we can not automatically query
-    # what are the build targets that are supported by rocm_sdk used.
-    if not is_posix:
-        if not "THEROCK_AMDGPU_TARGETS" in os.environ:
-            print(
-                "Error, THEROCK_AMDGPU_TARGETS must be set on Windows to select the target GPUs"
-            )
-            print("Target GPU must match with the GPU selected on TheRock core build")
-            print("Example for building for AMD Strix Halo and RX 9070:")
-            print("  set THEROCK_AMDGPU_TARGETS=gfx1151;gfx1201")
-            sys.exit(1)
+    # read and set up env based on to rockbuilder.ini file if it exist
+    rcb_config = RockBuilderConfig.RockBuilderConfig(
+        rock_builder_home_dir, rock_builder_build_dir
+    )
+    res = rcb_config.read_cfg()
+    if res:
+        rcb_config.setup_build_env()
 
     # check rocm
     if "ROCM_HOME" in os.environ:
@@ -287,11 +355,6 @@ def verify_build_env(args, rock_builder_home_dir):
         print("using locally build rocm sdk from TheRock:")
         print("    " + rocm_home_root_path.as_posix())
     if rocm_home_root_path.exists():
-        # set ROCM_HOME if not yet set
-        if not "ROCM_HOME" in os.environ:
-            # print("ROCM_HOME: " + rocm_home_root_path.as_posix())
-            os.environ["ROCM_HOME"] = rocm_home_root_path.as_posix()
-
         rocm_home_bin_path = rocm_home_root_path / "bin"
         rocm_home_lib_path = rocm_home_root_path / "lib"
         rocm_home_bin_path = rocm_home_bin_path.resolve()
@@ -299,67 +362,79 @@ def verify_build_env(args, rock_builder_home_dir):
         rocm_home_llvm_path = rocm_home_root_path / "lib" / "llvm" / "bin"
         rocm_home_llvm_path = rocm_home_llvm_path.resolve()
         if rocm_home_bin_path.exists():
-            if rocm_home_lib_path.exists():
-                if not is_directory_in_env_variable_path(
-                    "PATH", rocm_home_bin_path.as_posix()
-                ):
-                    # print("Adding " + rocm_home_bin_path.as_posix() + " to PATH")
-                    os.environ["PATH"] = (
-                        rocm_home_bin_path.as_posix()
-                        + os.pathsep
-                        + os.environ.get("PATH", "")
-                    )
-                if not is_directory_in_env_variable_path(
-                    "PATH", rocm_home_llvm_path.as_posix()
-                ):
-                    # print("Adding " + rocm_home_llvm_path.as_posix() + " to PATH")
-                    os.environ["PATH"] = (
-                        rocm_home_llvm_path.as_posix()
-                        + os.pathsep
-                        + os.environ.get("PATH", "")
-                    )
-                if not is_directory_in_env_variable_path(
-                    ENV_VARIABLE_NAME__LIB, rocm_home_lib_path.as_posix()
-                ):
-                    # print("Adding " + rocm_home_lib_path.as_posix() + " to " + ENV_VARIABLE_NAME__LIB)
-                    os.environ[ENV_VARIABLE_NAME__LIB] = (
-                        rocm_home_lib_path.as_posix()
-                        + os.pathsep
-                        + os.environ.get(ENV_VARIABLE_NAME__LIB, "")
-                    )
-                # find bitcode and put it to path
-                for folder_path in Path(rocm_home_root_path).glob("**/bitcode"):
-                    folder_path = folder_path.resolve()
-                    os.environ["ROCK_BUILDER_BITCODE_HOME"] = folder_path.as_posix()
-                    break
-                # find clang
+            # check that THEROCK_AMDGPU_TARGETS has been specified on Windows builds.
+            # This is needdd because on locally build rocm sdk we can not automatically query
+            # what are the build targets that are supported by rocm_sdk used.
+            if not "THEROCK_AMDGPU_TARGETS" in os.environ:
                 if is_posix:
-                    clang_exec_name = "clang"
+                    gpu_targets = get_rocm_sdk_targets_on_linux(rocm_home_bin_path)
+                    os.environ["THEROCK_AMDGPU_TARGETS"] = gpu_targets
+                    print("gpu_targets: " + gpu_targets)
                 else:
-                    clang_exec_name = "clang.exe"
-                for folder_path in Path(rocm_home_root_path).glob(
-                    "**/" + clang_exec_name
-                ):
-                    clang_home = folder_path.parent
-                    # make sure that we found bin/clang and not clang folder
-                    if clang_home.name.lower() == "bin":
-                        clang_home = clang_home.parent
-                        if clang_home.is_dir():
-                            clang_home = clang_home.resolve()
-                            os.environ[
-                                "ROCK_BUILDER_CLANG_HOME"
-                            ] = clang_home.as_posix()
-                            break
-            else:
-                print(
-                    "Error, could not find directory ROCM_SDK/lib: "
-                    + rocm_home_lib_path.as_posix()
+                    print(
+                        "Error, THEROCK_AMDGPU_TARGETS must be set on Windows to select the target GPUs"
+                    )
+                    print(
+                        "Target GPU must match with the GPU selected on TheRock core build"
+                    )
+                    print("Example for building for AMD Strix Halo and RX 9070:")
+                    print("  set THEROCK_AMDGPU_TARGETS=gfx1151;gfx1201")
+                    sys.exit(1)
+        # set ROCM_HOME if not yet set
+        if not "ROCM_HOME" in os.environ:
+            # print("ROCM_HOME: " + rocm_home_root_path.as_posix())
+            os.environ["ROCM_HOME"] = rocm_home_root_path.as_posix()
+        if rocm_home_lib_path.exists():
+            if not is_directory_in_env_variable_path(
+                "PATH", rocm_home_bin_path.as_posix()
+            ):
+                # print("Adding " + rocm_home_bin_path.as_posix() + " to PATH")
+                os.environ["PATH"] = (
+                    rocm_home_bin_path.as_posix()
+                    + os.pathsep
+                    + os.environ.get("PATH", "")
                 )
-                sys.exit(1)
+            if not is_directory_in_env_variable_path(
+                "PATH", rocm_home_llvm_path.as_posix()
+            ):
+                # print("Adding " + rocm_home_llvm_path.as_posix() + " to PATH")
+                os.environ["PATH"] = (
+                    rocm_home_llvm_path.as_posix()
+                    + os.pathsep
+                    + os.environ.get("PATH", "")
+                )
+            if not is_directory_in_env_variable_path(
+                ENV_VARIABLE_NAME__LIB, rocm_home_lib_path.as_posix()
+            ):
+                # print("Adding " + rocm_home_lib_path.as_posix() + " to " + ENV_VARIABLE_NAME__LIB)
+                os.environ[ENV_VARIABLE_NAME__LIB] = (
+                    rocm_home_lib_path.as_posix()
+                    + os.pathsep
+                    + os.environ.get(ENV_VARIABLE_NAME__LIB, "")
+                )
+            # find bitcode and put it to path
+            for folder_path in Path(rocm_home_root_path).glob("**/bitcode"):
+                folder_path = folder_path.resolve()
+                os.environ["ROCK_BUILDER_BITCODE_HOME"] = folder_path.as_posix()
+                break
+            # find clang
+            if is_posix:
+                clang_exec_name = "clang"
+            else:
+                clang_exec_name = "clang.exe"
+            for folder_path in Path(rocm_home_root_path).glob("**/" + clang_exec_name):
+                clang_home = folder_path.parent
+                # make sure that we found bin/clang and not clang folder
+                if clang_home.name.lower() == "bin":
+                    clang_home = clang_home.parent
+                    if clang_home.is_dir():
+                        clang_home = clang_home.resolve()
+                        os.environ["ROCK_BUILDER_CLANG_HOME"] = clang_home.as_posix()
+                        break
         else:
             print(
-                "Error, could not find directory ROCM_SDK/bin: "
-                + rocm_home_bin_path.as_posix()
+                "Error, could not find directory ROCM_SDK/lib: "
+                + rocm_home_lib_path.as_posix()
             )
             sys.exit(1)
     else:
@@ -450,24 +525,25 @@ def do_therock(prj_builder):
 is_posix = not any(platform.win32_ver())
 
 rock_builder_home_dir = get_rocm_builder_root_dir()
+rock_builder_build_dir = rock_builder_home_dir / "builddir"
 default_src_base_dir = rock_builder_home_dir / "src_projects"
 
 os.environ["ROCK_BUILDER_HOME_DIR"] = rock_builder_home_dir.as_posix()
-os.environ["ROCK_BUILDER_BUILD_DIR"] = (rock_builder_home_dir / "builddir").as_posix()
+os.environ["ROCK_BUILDER_BUILD_DIR"] = rock_builder_build_dir.as_posix()
 
-project_manager = project_builder.RockExternalProjectListManager(rock_builder_home_dir)
-# allow_no_value param says that no value keys are ok
-sections = project_manager.sections()
-# print(sections)
+project_manager = get_project_list_manager(rock_builder_home_dir)
 project_list = project_manager.get_external_project_list()
-# print(project_list)
+print(project_list)
 
-args = get_build_arguments(rock_builder_home_dir, default_src_base_dir, project_list)
+arg_parser = create_build_argument_parser(
+    rock_builder_home_dir, default_src_base_dir, project_list
+)
+args = parse_build_arguments(arg_parser)
 # store the arguments to dictionary to make it easier to get "project_name"-version parameters
 args_dict = args.__dict__
 printout_build_arguments(args)
 verify_build_env__python(args)
-verify_build_env(args, rock_builder_home_dir)
+verify_build_env(args, rock_builder_home_dir, rock_builder_build_dir)
 
 for ii, prj_item in enumerate(project_list):
     print(f"    Project [{ii}]: {prj_item}")
