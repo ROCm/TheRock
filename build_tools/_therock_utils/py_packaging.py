@@ -529,9 +529,10 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
         # and opinions about how to pass arguments to the backends. So we skip
         # the frontends for such a closed case as this.
         build_args = [sys.executable, "-m", "build", "-v", "--outdir", str(dist_dir)]
+        setuppy_path = child_path / "setup.py"
         build_args = [
             sys.executable,
-            str(child_path / "setup.py"),
+            str(setuppy_path.resolve()),
         ]
         if child_name in ["rocm"]:
             build_args.append("sdist")
@@ -544,7 +545,7 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
             [
                 "-v",
                 "--dist-dir",
-                str(dist_dir),
+                str(dist_dir.resolve()),
             ]
         )
 
