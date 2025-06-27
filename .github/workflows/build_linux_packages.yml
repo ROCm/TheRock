@@ -221,7 +221,7 @@ jobs:
         if: always()
         run: |
           python3 build_tools/github_actions/redshift_script.py \
-            --input "${{ steps.job-status-step.outputs.job_summary }}"
+            --input '${{ steps.job-status-step.outputs.job_summary }}'
 
       - name: Upload Logs
         if: always()
