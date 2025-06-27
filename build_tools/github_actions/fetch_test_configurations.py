@@ -1,15 +1,9 @@
 """
-This script runs the Linux and Windows build configurations
+This script determines what test configurations to run
 
 Required environment variables:
-  - amdgpu_families
-  - package_version
-  - extra_cmake_options
-  - BUILD_DIR
-
-Optional environment variables:
-  - VCToolsInstallDir
-  - GITHUB_WORKSPACE
+  - THEROCK_BIN_DIR
+  - PLATFORM
 """
 
 import json
