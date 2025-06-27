@@ -216,7 +216,6 @@ jobs:
         run: |
           echo 'Install system packages for psycopg2'
           sudo apt-get update
-          sudo apt-get install -y libpq-dev python3-dev
           echo 'Install psycopg2'
           pip install psycopg2
           python3 build_tools/github_actions/redshift_script.py \
