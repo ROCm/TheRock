@@ -28,7 +28,9 @@ test_matrix = {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": str(SCRIPT_DIR / "test_executable_scripts" / "test_hipblaslt.py"),
+        "test_script": str(
+            SCRIPT_DIR / "test_executable_scripts" / "test_hipblaslt.py"
+        ),
         "platform": ["linux"],
     },
     # PRIM tests
@@ -50,7 +52,9 @@ test_matrix = {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 5,
-        "test_script": str(SCRIPT_DIR / "test_executable_scripts" / "test_rocthrust.py"),
+        "test_script": str(
+            SCRIPT_DIR / "test_executable_scripts" / "test_rocthrust.py"
+        ),
         "platform": ["linux"],
     },
 }
@@ -68,7 +72,8 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key in project_to_test or project_to_test == "*"
         ):
-            logging.info(f"Including job {test_matrix[key]["job_name"]}")
+            job_name = test_matrix[key]["job_name"]
+            logging.info(f"Including job {job_name}")
             output_matrix.append(test_matrix[key])
 
     set_github_output({"components": json.dumps(output_matrix)})
