@@ -14,10 +14,9 @@ Optional environment variables:
 
 import json
 import os
-from pathlib import Path
 from configure_ci import set_github_output
 
-THEROCK_BIN_DIR = "./build/bin"
+THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 
 test_matrix = {
     # BLAS tests
@@ -26,14 +25,14 @@ test_matrix = {
         "artifact_flags": "--blas --tests",
         "timeout": 5,
         "executable_command": f"{THEROCK_BIN_DIR}/rocblas-test --yaml {THEROCK_BIN_DIR}/rocblas_smoke.yaml",
-        "platform": ["linux", "windows"]
+        "platform": ["linux", "windows"],
     },
     "hipblaslt": {
         "name": "hipblaslt",
         "artifact_flags": "--blas --tests",
         "timeout": 30,
         "executable_command": f"{THEROCK_BIN_DIR}/hipblaslt-test --gtest_filter=*pre_checkin*",
-        "platform": ["linux"]
+        "platform": ["linux"],
     },
     # PRIM tests
     "rocprim": {
@@ -48,7 +47,7 @@ test_matrix = {
                 --timeout 900 \\
                 --repeat until-pass:3
         """,
-        "platform": ["linux", "windows"]
+        "platform": ["linux", "windows"],
     },
     "hipcub": {
         "name": "hipcub",
@@ -62,7 +61,7 @@ test_matrix = {
                 --timeout 300 \\
                 --repeat until-pass:3
         """,
-        "platform": ["linux", "windows"]
+        "platform": ["linux", "windows"],
     },
     "rocthrust": {
         "name": "rocthrust",
@@ -77,21 +76,23 @@ test_matrix = {
                 --timeout 60 \\
                 --repeat until-pass:3
         """,
-        "platform": ["linux"]
+        "platform": ["linux"],
     },
 }
 
+
 def run():
-    print(THEROCK_BIN_DIR)
     platform = os.getenv("PLATFORM")
     project_to_test = os.getenv("project_to_test", "*")
-    
+
     output_matrix = []
     for key in test_matrix:
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
-        if platform in test_matrix[key]["platform"] and (key in project_to_test or project_to_test == "*"):
+        if platform in test_matrix[key]["platform"] and (
+            key in project_to_test or project_to_test == "*"
+        ):
             output_matrix.append(test_matrix[key])
-            
+
     set_github_output({"components": json.dumps(output_matrix)})
 
 
