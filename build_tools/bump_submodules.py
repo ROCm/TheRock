@@ -33,6 +33,22 @@ def pin_tensile():
     )
 
 
+def pin_ck():
+    requirements_file_path = THEROCK_DIR / "ml-libs" / "MIOpen" / "requirements.txt"
+    with open(requirements_file_path) as requirements_file:
+        requirements = requirements_file.read().splitlines()
+
+    ck_requirement = list(
+        filter(lambda x: "ROCm/composable_kernel" in x, requirements)
+    )[0]
+    ck_commit = ck_requirement.split("@")[-1].split()[0]
+
+    exec(
+        ["git", "checkout", ck_commit],
+        cwd=THEROCK_DIR / "ml-libs" / "composable_kernel",
+    )
+
+
 def run(args):
     date = datetime.today().strftime("%Y%m%d")
 
@@ -54,6 +70,9 @@ def run(args):
 
     if args.pin_tensile:
         pin_tensile()
+
+    if args.pin_ck:
+        pin_ck()
 
     exec(
         ["git", "commit", "-a", "-m", "Bump submodules " + date],
@@ -101,6 +120,12 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Pin Tensile to version tagged in rocBLAS",
+    )
+    parser.add_argument(
+        "--pin-ck",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Pin composable_kernel to version tagged in MIOpen",
     )
     args = parser.parse_args(argv)
     run(args)
