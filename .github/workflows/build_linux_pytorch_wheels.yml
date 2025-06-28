@@ -21,9 +21,9 @@ on:
         description: CloudFront base URL pointing to Python index
         required: true
         type: string
-      rocm_version:
-        description: ROCm version to install
-        type: string
+      # rocm_version:
+      #   description: ROCm version to install
+      #   type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -45,9 +45,9 @@ on:
         description: CloudFront base URL pointing to Python index
         type: string
         default: "d25kgig7rdsyks.cloudfront.net"
-      rocm_version:
-        description: ROCm version to install, e.g. ==1.0, >1.0
-        type: string
+      # rocm_version:
+      #   description: ROCm version to install (e.g. "==1.0", ">1.0")
+      #   type: string
 
 permissions:
   id-token: write
@@ -97,11 +97,12 @@ jobs:
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
             --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
-            --rocm-sdk-version "${{ env.ROCM_VERSION }}" \
             build \
             --install-rocm \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
+            # TODO(marbre): Enable ones dependencies in rocm package are fixed \
+            # --rocm-sdk-version "${{ env.ROCM_VERSION }}" \
 
       - name: Configure AWS Credentials
         if: always()

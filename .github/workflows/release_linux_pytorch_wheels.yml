@@ -15,9 +15,9 @@ on:
         description: CloudFront base URL pointing to Python index
         type: string
         default: "d25kgig7rdsyks.cloudfront.net/v2"
-      rocm_version:
-        description: ROCm version to install
-        type: string
+      # rocm_version:
+      #   description: ROCm version to install (e.g. "==1.0", ">1.0")
+      #   type: string
   schedule:
     - cron: "0 2 * * *"  # Nightly at 2 AM UTC
 
@@ -43,4 +43,4 @@ jobs:
       release_type: ${{ inputs.release_type || 'nightly' }}
       s3_subdir: ${{ inputs.s3_subdir || 'v2' }}
       cloudfront_url: ${{ inputs.cloudfront_url  || 'd2awnip2yjpvqn.cloudfront.net/v2' }}
-      rocm_version: ${{ inputs.rocm_version }}
+      # rocm_version: ${{ inputs.rocm_version }}
