@@ -38,7 +38,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   therock_cmake_subproject_activate(composable_kernel)
 
   therock_provide_artifact(composable_kernel
-    DESCRIPTOR artifact-composable_kernel.toml
+    DESCRIPTOR artifact-composable-kernel.toml
     COMPONENTS
       dbg
       dev
