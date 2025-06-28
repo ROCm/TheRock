@@ -12,7 +12,7 @@ on:
         type: string
         default: "v2"
       cloudfront_url:
-        description: CloudFront base URL pointing to Python index
+        description: CloudFront URL pointing to Python index
         type: string
         default: "d25kgig7rdsyks.cloudfront.net/v2"
       # rocm_version:

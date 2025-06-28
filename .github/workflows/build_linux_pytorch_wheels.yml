@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       cloudfront_url:
-        description: CloudFront base URL pointing to Python index
+        description: CloudFront URL pointing to Python index
         required: true
         type: string
       # rocm_version:
