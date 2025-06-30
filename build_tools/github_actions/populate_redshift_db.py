@@ -50,17 +50,15 @@ input_dict = json.loads(args.api_op)
 print(args.api_op)
 
 conn = psycopg2.connect(
-    host=redshift_cluster_endpoint,
-    port=redshift_port,
-    dbname=dbname,
-    user=redshift_username,
-    password=redshift_password,
+    host=args.redshift_cluster_endpoint,
+    port=args.redshift_port,
+    dbname=args.dbname,
+    user=args.redshift_username,
+    password=args.redshift_password,
     connect_timeout=60
 )
 
 cur = conn.cursor()
-
-# Example insert - change table/values as needed
 
 cur.execute("Select * FROM workflow_run_details LIMIT 0")
 
