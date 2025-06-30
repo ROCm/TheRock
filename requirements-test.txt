@@ -2,3 +2,10 @@ pytest==8.3.5
 pytest-check==2.5.3
 pytest-timeout==2.4.0
 PyYAML==6.0.2
+
+# pytorch test deps
+pytest-xdist>=3.5.0
+numpy>=1.24.0
+psutil>=5.9.0
+expecttest>=0.2.0
+hypothesis>=6.75.0
