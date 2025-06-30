@@ -122,6 +122,22 @@ python torch_audio_hello_world.py
 
 Wheels that have been build can be found from the packages/wheels directory.
 
+## Checkout all projects (without build and install)
+
+```bash
+python rockbuilder.py --checkout
+```
+
+Source code would be checked out to directory `src_projects`
+
+## Checkout all projects to custom directory
+
+```bash
+python rockbuilder.py --checkout --src-base-dir src_prj
+```
+
+Source code for each project would be checked out under the directory `src_prj`
+
 ## Checkout and build only pytorch_audio
 
 In this example we build and install only the pytorch audio and
@@ -132,13 +148,7 @@ Note that pytorch audio requires that pytorch has been built and installed first
 python rockbuilder.py --project pytorch_audio --output-dir test
 ```
 
-## Checkout only the pytorch_audio sources
-
-```bash
-python rockbuilder.py --checkout --project pytorch_audio
-```
-
-By default this checks out source to `src_projects/`:
+By default this checks out pytorch audio source to directory `src_projects/pytorch_audio`:
 
 ```bash
 $ ls src_projects/
@@ -158,26 +168,12 @@ $ ls src_prj/
 py_audio/
 ```
 
-## Checkout all projects (without build and install)
+## Checkout custom pytorch_audio version
+
+This would checkout the v2.6.0 version instead of the version specified in the pytorch_audio.cfg file
 
 ```bash
-python rockbuilder.py --checkout
-```
-
-Source code would be checked out to directory `src_projects`
-
-## Checkout all projects to custom directory
-
-```bash
-python rockbuilder.py --checkout --src-base-dir src_prj
-```
-
-Source code for each project would be checked out under directory `src_prj`
-
-## Checkout only the pytorch_audio sources
-
-```bash
-python rockbuilder.py --checkout --project pytorch_audio
+python rockbuilder.py --checkout --project pytorch_audio --pytorch_audio-version=v2.6.0
 ```
 
 ## Build only pytorch audio
