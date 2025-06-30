@@ -132,6 +132,7 @@ optional = true
 include = [
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
+  "bin/rocsparse_test.data"
 ]
 optional = true
 
@@ -148,5 +149,6 @@ optional = true
 include = [
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
+  "bin/*matrices*",
 ]
 optional = true
