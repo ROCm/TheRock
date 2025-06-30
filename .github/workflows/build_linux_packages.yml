@@ -39,37 +39,34 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292
     strategy:
       fail-fast: true
     env:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
-      CCACHE_DIR: "${{ github.workspace }}/.container-cache/ccache"
+      # The ccache.conf will be written by setup_ccache.py before this gets used.
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
-      BUCKET: ${{ github.event.repository.name == 'TheRock'  && 'therock-artifacts' || 'therock-artifacts-external' }}
     steps:
-      - name: "Checking out repository"
+      - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: "ROCm/TheRock"
-
-      - name: "Checking out repository for rocm-libraries"
-        if: ${{ github.repository == 'ROCm/rocm-libraries' }}
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: "ROCm/rocm-libraries"
-          ref: ${{ github.head_ref || github.ref_name }}
-          path: "rocm-libraries"
 
       - name: Runner Health Settings
         run: |
-          echo "CCACHE_DIR=${CCACHE_DIR}"
+          ./build_tools/setup_ccache.py \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
           df -h
+          echo "ccache version: $(ccache --version)"
+          echo "ccache config:"
+          echo "---"
+          cat "$CCACHE_CONFIGPATH"
+          echo "---"
           ccache -z
-          mkdir -p $CCACHE_DIR
-          cmake --version
+          ccache -s -v
+          echo cmake --version
           echo "Installed Python versions:"
           ls -d /opt/python
           echo "python: $(which python), python3: $(which python3)"
@@ -80,12 +77,12 @@ jobs:
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
-        uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v2-${{ github.sha }}
+          key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
           restore-keys: |
-            linux-build-packages-manylinux-v2-
+            linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
         run: |
@@ -96,20 +93,13 @@ jobs:
           pip install -r requirements.txt
 
       - name: Configure Projects
+        env:
+          amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ${{ inputs.package_version }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          BUILD_DIR: build
         run: |
-          # Generate a new build id.
-          package_version="${{ inputs.package_version }}"
-          extra_cmake_options="${{ inputs.extra_cmake_options }}"
-          echo "Building package ${package_version}"
-
-          # Build.
-          cmake -B build -GNinja . \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_AMDGPU_FAMILIES=${{env.AMDGPU_FAMILIES}} \
-            -DTHEROCK_PACKAGE_VERSION="${package_version}" \
-            -DTHEROCK_VERBOSE=ON \
-            -DBUILD_TESTING=ON \
-            ${extra_cmake_options}
+          python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist
         run: cmake --build build --target therock-dist
@@ -136,11 +126,11 @@ jobs:
           du -h -d 1 build/artifacts
           echo "CCache Stats:"
           echo "-------------"
-          ccache -s
+          ccache -s -v
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
@@ -150,15 +140,15 @@ jobs:
         run: |
           python3 build_tools/github_actions/create_log_index.py \
             --build-dir=build \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
+            --amdgpu-family=${{ inputs.amdgpu_families }}
 
       - name: Upload artifacts
         if: always()
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build/
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
       - name: Upload Logs
         if: always()
@@ -166,19 +156,19 @@ jobs:
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
+            --amdgpu-family ${{ inputs.amdgpu_families }}
 
       - name: Add Links to Job Summary
         if: always()
         run: |
           python build_tools/github_actions/upload_build_summary.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir build/
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
       - name: Save cache
-        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         if: always()
         with:
           path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v2-${{ github.sha }}
+          key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}

@@ -237,6 +237,7 @@ def main(argv):
             # TODO: Re-enable when used.
             # "rocprofiler-compute",
             "rocprofiler-sdk",
+            "rocprof-trace-decoder",
             # TODO: Re-enable when used.
             # "rocprofiler-systems",
             "roctracer",
@@ -262,6 +263,7 @@ def main(argv):
             "rocFFT",
             "rocPRIM",
             "rocRAND",
+            "rocRoller",
             "rocSOLVER",
             "rocSPARSE",
             "rocThrust",
@@ -273,7 +275,15 @@ def main(argv):
         type=str,
         default=[
             "MIOpen",
-        ],
+        ]
+        + (
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "composable_kernel",
+            ]
+        ),
     )
     args = parser.parse_args(argv)
     run(args)

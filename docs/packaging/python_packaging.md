@@ -10,10 +10,13 @@ alterations.
 
 We generate three types of packages:
 
-- Selector package: The `rocm-sdk` package is built as an sdist so that it is
+- Selector package: The `rocm` package is built as an sdist so that it is
   evaluated at the point of install, allowing it to perform some selection logic
   to detect dependencies and needs. Most other packages are installed by
-  asking to install extras of this one (i.e. `rocm-sdk[libraries]`, etc).
+  asking to install extras of this one (i.e. `rocm[libraries]`, etc).
+  - The `rocm` package provides the `rocm-sdk` tool.
+  - The `rocm` package uses the `import rocm_sdk` Python namespace as we do
+    not want a barename `rocm`.
 - Runtime packages: Most packages are runtime packages. These are wheel files
   that are ready to be expanded directly into a site-lib directory. They contain
   only the minimal set of files needed to run. Critically, they do not contain
@@ -39,23 +42,19 @@ It is expected that all packages are installed in the same site-lib, as they use
 relative symlinks and RPATHs that cross the top-level package boundary. The
 built-in tests (via `rocm-sdk test`) verify these conditions.
 
-TODO: For launch, we will be renaming the `rocm-sdk` dist package to `rocm`. The
-Python `import rocm_sdk` Python namespace will still be used as we do not want
-a barename `rocm` for such a use.
-
 ## Building Packages
 
 ### Example
 
-```
-./build_tools/linux_python_package.py \
+```bash
+./build_tools/build_python_packages.py \
     --artifact-dir ./output-linux-portable/build/artifacts \
     --dest-dir $HOME/tmp/packages
 ```
 
 Note that this does do some dynamic compilation of files and it performs
-patching via patchelf. It is recommended to run this in the same portable
-Linux container as was used to build the SDK (so as to avoid the possibility
+patching via patchelf. On Linux, it is recommended to run this in the same
+portable container as was used to build the SDK (so as to avoid the possibility
 of accidentally referencing too-new glibc symbols).
 
 ## Using Packages from Frameworks
@@ -67,18 +66,18 @@ Python development packages. For frameworks that only depend on the core ROCm
 subset (including runtime, HIP, system libraries and critical path math
 libraries), this is a process of installing the development packages like:
 
-```
-# See RELEASES.md fo exact arch specific incantations, --index-url combinations,
-# etc.
-pip install rocm-sdk[libraries,devel]
+```bash
+# See RELEASES.md for exact arch specific incantations, --index-url
+# combinations, etc.
+pip install rocm[libraries,devel]
 ```
 
 Then build your framework by setting appropriate CMake settings or environment
 variables. Examples (exact settings needed will vary by project being built):
 
-```
+```bash
 -DCMAKE_PREFIX_PATH=$(rocm-sdk path --cmake)
--DROCM_HOM=$(rocm-sdk path --root)
+-DROCM_HOME=$(rocm-sdk path --root)
 export PATH="$(rocm-sdk path --bin):$PATH"
 ```
 
@@ -93,8 +92,8 @@ Taking PyTorch as an example, you want to inject an install requirement on
 the ROCm python packages for a specific version (all projects will have their
 own way to do this):
 
-```
-export PYTORCH_EXTRA_INSTALL_REQUIREMENTS="rocm-sdk[libraries]=={$(rocm-sdk version)}"
+```bash
+export PYTORCH_EXTRA_INSTALL_REQUIREMENTS="rocm[libraries]=={$(rocm-sdk version)}"
 ```
 
 ### Performing Initialization
@@ -108,16 +107,16 @@ When building from ROCm wheels, add a `_rocm_init.py` to the root of the
 project such that it is included in built wheels. Then in your `__init__.py`
 add code like this:
 
-```
+```python
 try:
-  from . import _rocm_init
+    from . import _rocm_init
 except ModuleNotFoundError:
-  pass
+    pass
 ```
 
 Generate a `_rocm_init.py` file like this (using any suitable scripting):
 
-```
+```bash
 echo "
 import rocm_sdk
 rocm_sdk.initialize_process(library_shortnames=[
@@ -159,12 +158,12 @@ absolute path to a given named library that is known to the distribution.
 
 ### Testing
 
-The `rocm-sdk` distribution, if installed, bundles self tests which verify
+The `rocm` distribution, if installed, bundles self tests which verify
 API contracts and file/directory layout. Since the Python ecosystem is ever
 evolving, and packages like this use several "adventurous" features, we
 bundle the ability for detailed self checks. Run them with:
 
-```
+```bash
 rocm-sdk test
 ```
 

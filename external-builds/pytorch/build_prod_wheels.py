@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-r"""Builds production PyTorch wheels based on the rocm-sdk wheels.
+r"""Builds production PyTorch wheels based on the rocm wheels.
 
 This script is designed to be used from CI but should be serviceable for real
 users. It is not optimized for providing a development experience for PyTorch.
@@ -23,18 +23,24 @@ own and specify with `--pytorch-dir`, `--pytorch-audio-dir`, `--pytorch-vision-d
 during the build step.
 
 ```
+# On Linux, using default paths (nested under this folder):
 python pytorch_torch_repo.py checkout
 python pytorch_torch_audio_repo.py checkout
 python pytorch_torch_vision_repo.py checkout
+
+# On Windows, using shorter paths to avoid compile command length limits:
+python pytorch_torch_repo.py checkout --repo C:/b/pytorch
+python pytorch_torch_audio_repo.py checkout --repo C:/b/pytorch_audio
+python pytorch_torch_vision_repo.py checkout --repo C:/b/pytorch_vision
 ```
 
 Note that as of 2025-05-28, some small patches are needed to PyTorch's `__init__.py`
-to enable library resolution from `rocm-sdk` wheels. We will aim to land this at head
+to enable library resolution from `rocm` wheels. We will aim to land this at head
 in the PyTorch 2.8 timeframe.
 
-2. Install rocm-sdk wheels:
+2. Install rocm wheels:
 
-You must have the `rocm-sdk[libraries,devel]` packages installed. The `install-rocm`
+You must have the `rocm[libraries,devel]` packages installed. The `install-rocm`
 command gives a one-stop to fetch the latest nightlies from the CI or elsewhere.
 Below we are using nightly rocm-sdk packages from the CI bucket. See `RELEASES.md`
 for further options. Specific versions can be specified via `--rocm-sdk-version`
@@ -49,19 +55,29 @@ build sub-command (useful for docker invocations).
 
 ```
 build_prod_wheels.py
-    --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
+    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     install-rocm
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
 
-Typical usage to build a single arch from the host:
+Typical usage to build with default architecture from rocm-sdk targets:
 
 ```
+# On Linux, using default paths for each repository:
 python build_prod_wheels.py build \
     --pytorch-rocm-arch=gfx1100 \
     --output-dir $HOME/tmp/pyout
+
+# On Windows, using shorter custom paths:
+python build_prod_wheels.py build \
+    --pytorch-rocm-arch=gfx1100 \
+    --output-dir %HOME%/tmp/pyout \
+    --pytorch-dir C:/b/pytorch \
+    --pytorch-audio-dir C:/b/pytorch_audio \
+    --pytorch-vision-dir C:/b/pytorch_vision \
 ```
+
 
 ## Building Linux portable wheels
 
@@ -79,7 +95,7 @@ versions):
     /opt/python/cp312-cp312/bin/python \
     /therock/src/external-builds/pytorch/build_prod_wheels.py \
     --pip-cache-dir /therock/output/pip_cache \
-    --find-links https://therock-nightly-python.s3.us-east-2.amazonaws.com/gfx110X-dgpu/index.html \
+    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     build \
         --install-rocm \
         --clean \
@@ -95,6 +111,7 @@ import argparse
 from datetime import date
 import os
 from pathlib import Path
+import platform
 import shutil
 import shlex
 import subprocess
@@ -102,6 +119,8 @@ import sys
 import tempfile
 
 script_dir = Path(__file__).resolve().parent
+
+is_windows = platform.system() == "Windows"
 
 
 def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
@@ -118,19 +137,33 @@ def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
 
 def capture(args: list[str | Path], cwd: Path) -> str:
     args = [str(arg) for arg in args]
-    return subprocess.check_output(args, cwd=str(cwd)).decode()
+    try:
+        return subprocess.check_output(args, cwd=str(cwd)).decode().strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Error capturing output: {e}")
+        return ""
 
 
 def get_rocm_sdk_version() -> str:
-    # TODO: We should have a `rocm-sdk version` command, but alas, we do not.
+    # Use `rocm-sdk version` command when available
     freeze_lines = capture(
         [sys.executable, "-m", "pip", "freeze"], cwd=Path.cwd()
     ).splitlines()
     for line in freeze_lines:
-        prefix = "rocm-sdk=="
+        prefix = "rocm=="
         if line.startswith(prefix):
             return line[len(prefix) :]
     raise ValueError(f"No rocm-sdk found in {' '.join(freeze_lines)}")
+
+
+def get_rocm_sdk_targets() -> str:
+    # Run `rocm-sdk targets` to get the default architecture
+    targets = capture([sys.executable, "-m", "rocm_sdk", "targets"], cwd=Path.cwd())
+    if not targets:
+        print("Warning: rocm-sdk targets returned empty or failed")
+        return ""
+    # Convert space-separated targets to comma-separated for PYTORCH_ROCM_ARCH
+    return targets.replace(" ", ",")
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -177,7 +210,7 @@ def do_install_rocm(args: argparse.Namespace):
         ["--cache-dir", str(args.pip_cache_dir)] if args.pip_cache_dir else []
     )
 
-    # Because the rocm-sdk package caches current GPU selection and such, we
+    # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
 
     exec(
@@ -195,13 +228,13 @@ def do_install_rocm(args: argparse.Namespace):
     ]
     if args.pre:
         pip_args.extend(["--pre"])
-    if args.find_links:
-        pip_args.extend(["--find-links", args.find_links])
+    if args.index_url:
+        pip_args.extend(["--index-url", args.index_url])
     if args.pip_cache_dir:
         pip_args.extend(["--cache-dir", args.pip_cache_dir])
     pip_args += cache_dir_args
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
-    pip_args.extend([f"rocm-sdk[libraries,devel]{rocm_sdk_version}"])
+    pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
     exec(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
@@ -219,7 +252,7 @@ def do_build(args: argparse.Namespace):
     bin_dir = get_rocm_path("bin")
     root_dir = get_rocm_path("root")
 
-    print(f"rocm-sdk version {rocm_sdk_version}:")
+    print(f"rocm version {rocm_sdk_version}:")
     print(f"  PYTHON VERSION: {sys.version}")
     print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
     print(f"  BIN = {bin_dir}")
@@ -229,23 +262,47 @@ def do_build(args: argparse.Namespace):
     print(f"  PATH = {system_path}")
 
     pytorch_rocm_arch = args.pytorch_rocm_arch
-    print(f"  PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+    if pytorch_rocm_arch is None:
+        pytorch_rocm_arch = get_rocm_sdk_targets()
+        print(
+            f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
+        )
+    else:
+        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+
+    if not pytorch_rocm_arch:
+        raise ValueError(
+            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
+            "Please specify --pytorch-rocm-arch (e.g., gfx942)."
+        )
 
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
-        "PYTORCH_EXTRA_INSTALL_REQUIREMENTS": f"rocm-sdk[libraries]=={rocm_sdk_version}",
-        "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # TODO: Should get the supported archs from the rocm-sdk install.
+        "PYTORCH_EXTRA_INSTALL_REQUIREMENTS": f"rocm[libraries]=={rocm_sdk_version}",
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         # TODO: Figure out what is blocking GLOO and enable.
         "USE_GLOO": "OFF",
         # TODO: Fix source dep on rocprofiler and enable.
         "USE_KINETO": "OFF",
-        # Workaround GCC12 compiler flags.
-        "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-        "CPPFLAGS": "  -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
     }
+
+    if is_windows:
+        env.update(
+            {
+                "HIP_CLANG_PATH": str((root_dir / "lib" / "llvm" / "bin").as_posix()),
+                "CC": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+                "CXX": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+            }
+        )
+    else:
+        env.update(
+            {
+                # Workaround GCC12 compiler flags.
+                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CPPFLAGS": "  -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+            }
+        )
 
     if pytorch_dir:
         do_build_pytorch(args, pytorch_dir, dict(env))
@@ -271,8 +328,29 @@ def do_build_pytorch(args: argparse.Namespace, pytorch_dir: Path, env: dict[str,
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
+    if is_windows:
+        env.update(
+            {
+                "USE_ROCM": "ON",
+                "USE_FLASH_ATTENTION": "0",
+                "USE_MEM_EFF_ATTENTION": "0",
+                "DISTUTILS_USE_SDK": "1",
+                # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
+                # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
+                #   error: no member named 'modern' in namespace 'at::native'
+                #     using namespace at::native::modern::detail;
+                #   error: no template named 'has_same_arg_types'
+                #     static_assert(has_same_arg_types<func1_t>::value, "func1_t has the same argument types");
+                # We may want to fix that and other issues to then enable building tests.
+                "BUILD_TEST": "0",
+            }
+        )
+
     print("+++ Uninstalling pytorch:")
-    exec([sys.executable, "-m", "pip", "uninstall", "torch"], cwd=tempfile.gettempdir())
+    exec(
+        [sys.executable, "-m", "pip", "uninstall", "torch", "-y"],
+        cwd=tempfile.gettempdir(),
+    )
 
     print("+++ Installing pytorch requirements:")
     pip_install_args = []
@@ -292,6 +370,23 @@ def do_build_pytorch(args: argparse.Namespace, pytorch_dir: Path, env: dict[str,
         + pip_install_args,
         cwd=pytorch_dir,
     )
+    if is_windows:
+        # As of 2025-06-24, the 'ninja' package on pypi is trailing too far
+        # behind upstream:
+        # * https://pypi.org/project/ninja/#history
+        # * https://github.com/ninja-build/ninja/releases
+        # Version 1.11.1 is buggy on Windows (looping without making progress):
+        exec(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "uninstall",
+                "ninja",
+                "-y",
+            ],
+            cwd=pytorch_dir,
+        )
     print("+++ Building pytorch:")
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
@@ -368,7 +463,7 @@ def do_build_pytorch_vision(
 
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
-    p.add_argument("--find-links", help="Pip find-links to pass to pip install")
+    p.add_argument("--index-url", help="Base URL of the Python Package Index.")
     p.add_argument("--pip-cache-dir", type=Path, help="Pip cache dir")
     # Note that we default to >1.0 because at the time of writing, we had
     # 0.1.0 release placeholder packages out on pypi and we don't want them
@@ -423,7 +518,8 @@ def main(argv: list[str]):
         help="pytorch_vision source directory",
     )
     build_p.add_argument(
-        "--pytorch-rocm-arch", required=True, help="gfx arch to build pytorch with"
+        "--pytorch-rocm-arch",
+        help="gfx arch to build pytorch with (defaults to rocm-sdk targets)",
     )
     build_p.add_argument(
         "--pytorch-build-number", default="1", help="Build number to append to version"

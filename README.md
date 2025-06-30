@@ -1,6 +1,6 @@
 # TheRock
 
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain) [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) [![Publish PyTorch Dev Dockers](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml?query=branch%3Amain)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain)
 
 TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
 
@@ -8,37 +8,52 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build pl
 
 TheRock includes:
 
+- Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
-- Tools for developing individual ROCm components
 - Support for building PyTorch with ROCm from source
   - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
 
 ### Support status
 
 For HIP and ROCm:
 
-|         | Build from source | Prebuilt packages                                                   | Python packages                                                     |
-| ------- | ----------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Linux   | ✅ Supported      | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) |
-| Windows | ✅ Supported      | 🟡 In progress ([#542](https://github.com/ROCm/TheRock/issues/542)) | ⚪ Planned                                                          |
+|         | Build from source | Prebuilt packages                                                                                                                                                                                                                                                           | Python packages                                                                                                                                                                                                                                                             |
+| ------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux   | ✅ Supported      | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) |
+| Windows | ✅ Supported      | [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain)                      | 🟡 In Progress ([#827](https://github.com/ROCm/TheRock/issues/827))                                                                                                                                                                                                         |
 
 For PyTorch with ROCm:
 
-|         | PyTorch source build                                                | PyTorch Python packages                                             | PyTorch Docker images |
-| ------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------- |
-| Linux   | ✅ Supported                                                        | 🟡 In progress ([#703](https://github.com/ROCm/TheRock/issues/703)) | ✅ Supported          |
-| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | ⚪ Planned                                                          | N/A                   |
+|         | PyTorch source build                                                | PyTorch Python packages                                                                                                                                                                                                                                            | PyTorch Docker images                                                                                                                                                                                                                                         |
+| ------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux   | ✅ Supported                                                        | [![Release Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_linux_pytorch_wheels.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_linux_pytorch_wheels.yml?query=branch%3Amain) | [![Publish PyTorch Dev Dockers](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml?query=branch%3Amain) |
+| Windows | 🟡 In progress ([#589](https://github.com/ROCm/TheRock/issues/589)) | 🟡 In Progress ([#827](https://github.com/ROCm/TheRock/issues/827))                                                                                                                                                                                                | N/A                                                                                                                                                                                                                                                           |
+
+## Installing from releases
+
+See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
+ROCm and PyTorch packages.
 
 ## Building from source
 
-We keep the following instructions for recent, commonly used operating system versions. Most build failures are due to minor operating system differences in dependencies and project setup. Refer to the [Environment Setup Guide](docs/environment_setup_guide.md) for contributed instructions and configurations for alternatives.
+We keep the following instructions for recent, commonly used operating system
+versions. Most build failures are due to minor operating system differences in
+dependencies and project setup. Refer to the
+[Environment Setup Guide](docs/environment_setup_guide.md) for contributed
+instructions and configurations for alternatives.
+
+> [!TIP]
+> While building from source offers the greatest flexibility,
+> [installing from releases](#installing-from-releases) in supported
+> configurations is often faster and easier.
 
 ### Setup - Ubuntu (24.04)
 
 ```bash
 # Install Ubuntu dependencies
-sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake python3-venv python3-dev libegl1-mesa-dev
+sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
@@ -149,9 +164,28 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 cmake --build build
 ```
 
+#### CCache usage on Linux
+
 To build with the [ccache](https://ccache.dev/) compiler cache:
 
+- You must have a recent ccache (>= 4.11 at the time of writing) that supports
+  proper caching with the `--offload-compress` option used for compressing
+  AMDGPU device code.
+- `export CCACHE_SLOPPINESS=include_file_ctime` to support hard-linking
+- Proper setup of the `compiler_check` directive to do safe caching in the
+  presence of compiler bootstrapping
+- Set the C/CXX compiler launcher options to cmake appropriately.
+
+Since these options are very fiddly and prone to change over time, we recommend
+using the `./build_tools/setup_ccache.py` script to create a `.ccache` directory
+in the repository root with hard coded configuration suitable for the project.
+
+Example:
+
 ```bash
+# Any shell used to build must eval setup_ccache.py to set environment
+# variables.
+eval "$(./build_tools/setup_ccache.py)"
 cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -159,6 +193,11 @@ cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
 
 cmake --build build
 ```
+
+#### CCache usage on Windows
+
+We are still investigating the exact proper options for ccache on Windows and
+do not currently recommend that end users enable it.
 
 ### Running tests
 

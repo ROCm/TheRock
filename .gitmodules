@@ -33,7 +33,7 @@
 [submodule "rocm-core"]
 	path = base/rocm-core
 	url = https://github.com/ROCm/rocm-core.git
-	branch = amd-master
+	branch = master
 [submodule "rocminfo"]
 	path = core/rocminfo
 	url = https://github.com/ROCm/rocminfo.git
@@ -132,3 +132,14 @@
 	path = math-libs/support/mxDataGenerator
 	url = https://github.com/ROCm/mxDataGenerator.git
 	branch = main
+[submodule "composable_kernel"]
+	path = ml-libs/composable_kernel
+	url = https://github.com/ROCm/composable_kernel.git
+	branch = develop
+[submodule "rocRoller"]
+	path = math-libs/BLAS/rocRoller
+	url = https://github.com/ROCm/rocRoller.git
+	branch = main
+[submodule "rocprof-trace-decoder"]
+	path = profiler/rocprof-trace-decoder/binaries
+	url = https://github.com/ROCm/rocprof-trace-decoder.git

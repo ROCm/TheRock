@@ -23,6 +23,7 @@ import html
 import io
 import sys
 import textwrap
+from urllib.parse import quote
 
 
 def parse_arguments():
@@ -71,9 +72,9 @@ def add_releases(objects: list, base_url: str, subdir: str, file: io.TextIOWrapp
     )
 
     for obj in objects:
-        url = html.escape(f"{base_url}/{obj}")
+        encoded_url = f"{base_url}/{quote(obj)}"  # URL-encode the object key
         name = html.escape(obj)
-        file.write(f"    <a href={url}>{name}</a><br>\n")
+        file.write(f'    <a href="{encoded_url}">{name}</a><br>\n')
 
     file.write(
         "    <br><hr>\n"

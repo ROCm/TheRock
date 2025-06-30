@@ -43,9 +43,6 @@ on:
       - labeled
       - opened
       - synchronize
-  # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
-  schedule:
-    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
 
 permissions:
   contents: read

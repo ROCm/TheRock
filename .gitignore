@@ -13,8 +13,10 @@ sources/
 .vscode/
 *.venv
 __pycache__
+/.ccache
 
 # Output directories.
 /build/
 /install/
 /output-*/
+/out/

@@ -20,8 +20,9 @@ jobs:
       - name: Generating package target matrix
         id: configure
         env:
-          PYTORCH_DEV_DOCKER: "true"
           AMDGPU_FAMILIES: ${{ inputs.families }}
+          PYTORCH_DEV_DOCKER: "true"
+          THEROCK_PACKAGE_PLATFORM: "linux"
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
   build-and-push-image:
@@ -58,7 +59,7 @@ jobs:
           python3 ./build_tools/fetch_sources.py --jobs 10
 
       - name: Log in to the Container registry
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -80,7 +81,7 @@ jobs:
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
       - name: Build and push Docker image
         id: build_push
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
           file: dockerfiles/pytorch-dev/pytorch_dev_ubuntu_24.04.Dockerfile

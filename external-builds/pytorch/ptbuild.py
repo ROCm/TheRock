@@ -191,7 +191,13 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
         return
     patch_files.sort(key=lambda p: p.name)
     exec(
-        ["git", "am", "--whitespace=nowarn", "--committer-date-is-author-date"]
+        [
+            "git",
+            "am",
+            "--whitespace=nowarn",
+            "--committer-date-is-author-date",
+            "--no-gpg-sign",
+        ]
         + patch_files,
         cwd=repo_path,
     )
@@ -236,7 +242,7 @@ def do_checkout(args: argparse.Namespace):
         fetch_args.extend(["-j", str(args.jobs)])
     exec(["git", "fetch"] + fetch_args + ["origin", args.pytorch_ref], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
-    exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "-m", '""'], cwd=repo_dir)
+    exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
     exec(
         ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
         cwd=repo_dir,
@@ -247,7 +253,7 @@ def do_checkout(args: argparse.Namespace):
             "submodule",
             "foreach",
             "--recursive",
-            f'git tag -f {TAG_UPSTREAM_DIFFBASE} -m ""',
+            f"git tag -f {TAG_UPSTREAM_DIFFBASE} --no-sign",
         ],
         cwd=repo_dir,
         stdout_devnull=True,
@@ -289,8 +295,11 @@ def do_hipify(args: argparse.Namespace):
             continue
         print(f"HIPIFY made changes to {module_path}: Committing")
         exec(["git", "add", "-A"], cwd=module_path)
-        exec(["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE], cwd=module_path)
-        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "-m", '""'], cwd=module_path)
+        exec(
+            ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
+            cwd=module_path,
+        )
+        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
 
 def do_save_patches(args: argparse.Namespace):

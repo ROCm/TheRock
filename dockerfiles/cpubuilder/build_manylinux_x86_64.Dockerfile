@@ -9,15 +9,17 @@
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
-FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:9042a22d33af2223ff7a3599f236aff1e4ffd07e1ed1ac93a58877638317515f
+FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b26f122d7f2d45f3eea69ffd2877ab017
 
-######## Python setup #######
+######## Python and CMake setup #######
 # These images come with multiple python versions. We pin one for
 # default use.
-ENV PATH="/opt/python/cp312-cp312/bin:${PATH}"
+# Prepend therock-tools to PATH
+ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 
 ######## Pip Packages ########
-RUN pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
+RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.42.0 && \
+pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
 ######## Repo ########
 RUN curl https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo && chmod a+x /usr/local/bin/repo
@@ -51,14 +53,38 @@ COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
 
 ######## Yum Packages #######
-# TODO: Figure out why gcc-toolset-12-libatomic-devel doesn't install with the
-# rest of the dev toolset.
+# We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest
+# manylinux containers use gcc-toolset-14 or later, which is not yet compatible
+# with the LLVM that ROCm builds. This can be upgraded when clang-21 is used.
 RUN yum install -y epel-release && \
-    yum install -y gcc-toolset-12-libatomic-devel && \
-    yum install -y patchelf && \
-    yum install -y vim-common git-lfs && \
+    yum remove -y gcc-toolset* && \
+    yum install -y \
+      gcc-toolset-12-binutils \
+      gcc-toolset-12-gcc \
+      gcc-toolset-12-gcc-c++ \
+      gcc-toolset-12-gcc-gfortran \
+      gcc-toolset-12-libatomic-devel \
+      gcc-toolset-12-libstdc++-devel \
+      patchelf \
+      vim-common \
+      git-lfs && \
     yum clean all && \
     rm -rf /var/cache/yum
+
+######## Enable GCC Toolset and verify ########
+# This is a subset of what is typically sourced in the gcc-toolset enable
+# script.
+# -- Predefine variables to avoid Dockerfile linting warnings --
+# Docker requires environment variables to be defined before reuse.
+ENV LIBRARY_PATH=""
+ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
+ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
+
+######## Enable GCC Toolset and verify ########
+RUN which gcc && gcc --version && \
+    which g++ && g++ --version && \
+    which clang++ || true
 
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version

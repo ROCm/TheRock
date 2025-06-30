@@ -141,6 +141,7 @@ def main(argv):
             "rocSPARSE",
             "rocThrust",
             "MIOpen",
+            "composable_kernel",
         ],
     )
     parser.add_argument(

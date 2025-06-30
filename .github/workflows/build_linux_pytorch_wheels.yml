@@ -6,13 +6,16 @@ on:
       AMDGPU_FAMILIES:
         required: true
         type: string
-      PYTORCH_TARGET_ARCH:
-        required: true
-        type: string
       python_version:
         required: true
         type: string
-      find_links:
+      s3_bucket:
+        required: true
+        type: string
+      s3_subdir:
+        required: true
+        type: string
+      s3_cloudfront:
         required: true
         type: string
   workflow_dispatch:
@@ -20,13 +23,16 @@ on:
       AMDGPU_FAMILIES:
         required: true
         type: string
-      PYTORCH_TARGET_ARCH:
-        required: true
-        type: string
       python_version:
         required: true
         type: string
-      find_links:
+      s3_bucket:
+        required: true
+        type: string
+      s3_subdir:
+        required: true
+        type: string
+      s3_cloudfront:
         required: true
         type: string
 
@@ -39,10 +45,11 @@ jobs:
     name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64:main
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
+      S3_BUCKET_PY: ${{ inputs.s3_bucket }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -52,9 +59,17 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
+      - name: Add selected Python version to PATH
+        run: |
+          python_dir="/opt/python/${{ inputs.python_version }}"
+          if ! [ -x "${python_dir}/bin/python" ]; then
+            echo "ERROR: Could not find python: ${python_dir}"
+            exit 1
+          fi
+          echo "${python_dir}/bin" >> "$GITHUB_PATH"
+
       - name: Checkout PyTorch Source Repos
         run: |
-          echo "Checking out PyTorch repositories..."
           ./external-builds/pytorch/pytorch_torch_repo.py checkout
           ./external-builds/pytorch/pytorch_audio_repo.py checkout
           ./external-builds/pytorch/pytorch_vision_repo.py checkout
@@ -64,19 +79,18 @@ jobs:
 
       - name: Build PyTorch Wheels
         run: |
-          echo "Building PyTorch wheels for ${{ inputs.PYTORCH_TARGET_ARCH }}"
+          echo "Building PyTorch wheels for ${{ inputs.AMDGPU_FAMILIES }}"
           ./external-builds/pytorch/build_prod_wheels.py \
             --pip-cache-dir /tmp/pipcache \
-            --find-links "${{ inputs.find_links }}" \
+            --index-url "https://${{ inputs.s3_cloudfront }}/${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES }}/" \
             build \
             --install-rocm \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --pytorch-rocm-arch ${{ inputs.PYTORCH_TARGET_ARCH }} \
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-nightly-releases
@@ -88,6 +102,11 @@ jobs:
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          # These wheels share the same S3 directory as rocm-sdk to simplify --find-links usage
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://therock-nightly-python/${{ inputs.AMDGPU_FAMILIES }}/ \
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES }}/ \
             --recursive --exclude "*" --include "*.whl"
+
+      - name: (Re-)Generate Python package release index
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES  }}

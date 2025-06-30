@@ -1,16 +1,24 @@
 import os
 import json
 from configure_ci import set_github_output
-from amdgpu_family_matrix import amdgpu_family_info_matrix
+from amdgpu_family_matrix import (
+    amdgpu_family_info_matrix_presubmit,
+    amdgpu_family_info_matrix_postsubmit,
+)
 import string
 
 # This file helps generate a package target matrix for portable_linux_package_matrix.yml and publish_pytorch_dev_docker.yml
 
 
-def main(args):
-    pytorch_dev_docker = args.get("PYTORCH_DEV_DOCKER") == "true"
+def determine_package_targets(args):
     amdgpu_families = args.get("AMDGPU_FAMILIES")
-    family_matrix = amdgpu_family_info_matrix
+    pytorch_dev_docker = args.get("PYTORCH_DEV_DOCKER") == "true"
+    package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
+
+    matrix = amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+    family_matrix = (
+        amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+    )
     package_targets = []
     # If the workflow does specify AMD GPU family, package those. Otherwise, then package all families
     if amdgpu_families:
@@ -23,23 +31,39 @@ def main(args):
         ]
 
     for key in family_matrix:
+        info_for_key = matrix.get(key)
+
+        # In case an invalid target is requested and returns null, we continue to the next target
+        if not info_for_key:
+            continue
+
+        platform_for_key = info_for_key.get(package_platform)
+
+        if not platform_for_key:
+            # Some AMDGPU families are only supported on certain platforms.
+            continue
+
         if pytorch_dev_docker:
-            # If there is not a target specified for the family
-            if not "pytorch-target" in amdgpu_family_info_matrix.get(key).get("linux"):
+            if not "pytorch-target" in platform_for_key:
+                # Some AMDGPU families may not have an associated PyTorch targets.
                 continue
-            family = (
-                amdgpu_family_info_matrix.get(key).get("linux").get("pytorch-target")
-            )
+            family = platform_for_key.get("pytorch-target")
         else:
-            family = amdgpu_family_info_matrix.get(key).get("linux").get("family")
+            family = platform_for_key.get("family")
 
         package_targets.append({"amdgpu_family": family})
 
+    return package_targets
+
+
+def main(args):
+    package_targets = determine_package_targets(args)
     set_github_output({"package_targets": json.dumps(package_targets)})
 
 
 if __name__ == "__main__":
     args = {}
-    args["PYTORCH_DEV_DOCKER"] = os.getenv("PYTORCH_DEV_DOCKER")
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
+    args["PYTORCH_DEV_DOCKER"] = os.getenv("PYTORCH_DEV_DOCKER")
+    args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
     main(args)
