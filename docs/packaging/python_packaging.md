@@ -120,6 +120,7 @@ Generate a `_rocm_init.py` file like this (using any suitable scripting):
 echo "
 import rocm_sdk
 rocm_sdk.initialize_process(library_shortnames=[
+  'amd_comgr',
   'amdhip64',
   'roctx64',
   'hiprtc',
