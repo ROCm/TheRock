@@ -102,23 +102,6 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Determine job status for workflow run
-        if: '!cancelled()'
-        id: job-status-step
-        env:
-          RUN_ID: ${{ github.run_id }}
-          ATTEMPT: ${{ github.attempt }}
-        run: python build_tools/github_actions/fetch_job_status.py
-
-      - name: Create job status JSON file for S3 upload
-        if: '!cancelled()'
-        run: |
-          mkdir job_status_dir
-          mkdir job_status_dir/logs
-          echo ${{ steps.job-status-step.outputs.job_summary }}
-          echo ${{ steps.job-status-step.outputs.job_summary }} >> job_status_dir/logs/job_status.json
-          cat job_status_dir/logs/job_status.json
-
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
@@ -238,32 +221,6 @@ jobs:
             --run-id ${{ github.run_id }} \
             --jobs_output_dir=job_status_dir \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
-
-      # - name: Install PostgreSQL client
-      #   run: sudo apt-get install postgresql-client -y
-
-
-      # - name: Create Redshift database and table
-      #   run: |
-      #     PGPASSWORD=$REDSHIFT_PASSWORD psql \
-      #       -h $REDSHIFT_HOST -p $REDSHIFT_PORT \
-      #       -U $REDSHIFT_USER -d $REDSHIFT_DB \
-      #       -c "CREATE DATABASE workflow_db;"
-
-      #     PGPASSWORD=$REDSHIFT_PASSWORD psql \
-      #       -h $REDSHIFT_HOST -p $REDSHIFT_PORT \
-      #       -U $REDSHIFT_USER -d awsuser \
-      #       -c "CREATE TABLE workflow_run_details (id int, build_id: INT, run_url: varchar(80), workflow_name: varchar(30), project: varchar(30), started_at: date);"
-
-      # - name: Load JSON into Redshift
-      #   run: |
-      #     PGPASSWORD=$REDSHIFT_PASSWORD psql \
-      #       -h $REDSHIFT_HOST -p $REDSHIFT_PORT \
-      #       -U $REDSHIFT_USER -d my_new_db \
-      #       -c "COPY users FROM 's3://$BUCKET/${{env.AMDGPU_FAMILIES}}/logs/job_status.json'
-      #           IAM_ROLE '$IAM_ROLE_ARN'
-      #           JSON 'auto'
-      #           REGION 'us-east-2';"
             
       - name: Add Links to Job Summary
         if: always()
