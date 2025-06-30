@@ -63,7 +63,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
-      ROCM_VERSION: ${{ inputs.rocm_version || '>1.0' }}
+      # ROCM_VERSION: ${{ inputs.rocm_version || '>1.0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
