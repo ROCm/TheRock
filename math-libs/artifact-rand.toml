@@ -6,7 +6,8 @@
 [components.test."math-libs/rocRAND/stage"]
 include = [
   "bin/test_*",
-  "bin/rocrand/CTestTestfile.cmake",
+  "bin/rocrand/*",
+  "bin/*CTestTestfile.cmake",
 ]
 
 # hipRAND
@@ -17,5 +18,6 @@ include = [
 [components.test."math-libs/hipRAND/stage"]
 include = [
   "bin/test_*",
-  "bin/hiprand/CTestTestfile.cmake",
+  "bin/hiprand/*",
+  "bin/*CTestTestfile.cmake",
 ]
