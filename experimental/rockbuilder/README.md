@@ -138,6 +138,24 @@ python rockbuilder.py --project pytorch_audio --output-dir test
 python rockbuilder.py --checkout --project pytorch_audio
 ```
 
+Source code would be checked out to default location:
+
+```bash
+src_projects/pytorch_audio
+```
+
+## Checkout pytorch_audio sources to custom directory
+
+```bash
+python rockbuilder.py --checkout --project pytorch_audio --src-dir src_prj/py_audio
+```
+
+Source code would be checked out to custom location:
+
+```bash
+src_prj/py_audio
+```
+
 ## Checkout all projects (without build and install)
 
 ```bash

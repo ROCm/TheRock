@@ -37,7 +37,7 @@ def printout_build_env_info():
     time.sleep(1)
 
 
-def get_build_arguments(rock_builder_home_dir):
+def get_build_arguments(rock_builder_home_dir, default_src_dir: Path):
     # Create an ArgumentParser object
     parser = argparse.ArgumentParser(description="ROCK Project Builders")
 
@@ -100,6 +100,12 @@ def get_build_arguments(rock_builder_home_dir):
         default=False,
     )
     parser.add_argument(
+        "--src-dir",
+        type=Path,
+        help="Directory where to checkout project source code",
+        default=default_src_dir,
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         help="Directory to copy built wheels to",
@@ -142,6 +148,7 @@ def get_build_arguments(rock_builder_home_dir):
         args.hipify = True
 
     # add output dir to environment variables
+    os.environ["ROCK_BUILDER_SRC_DIR"] = args.src_dir.as_posix()
     os.environ["ROCK_BUILDER_PACKAGE_OUTPUT_DIR"] = args.output_dir.as_posix()
 
     return args
@@ -420,11 +427,12 @@ def do_therock(prj_builder):
 is_posix = not any(platform.win32_ver())
 
 rock_builder_home_dir = get_rocm_builder_root_dir()
+default_src_dir = rock_builder_home_dir / "src_projects"
+
 os.environ["ROCK_BUILDER_HOME_DIR"] = rock_builder_home_dir.as_posix()
-os.environ["ROCK_BUILDER_SRC_DIR"] = (rock_builder_home_dir / "src_projects").as_posix()
 os.environ["ROCK_BUILDER_BUILD_DIR"] = (rock_builder_home_dir / "builddir").as_posix()
 
-args = get_build_arguments(rock_builder_home_dir)
+args = get_build_arguments(rock_builder_home_dir, default_src_dir)
 printout_build_arguments(args)
 verify_build_env__python(args)
 verify_build_env(args, rock_builder_home_dir)
@@ -447,16 +455,29 @@ time.sleep(1)
 if args.project == "all":
     for ii, prj_item in enumerate(project_list):
         print(f"[{ii}]: {prj_item}")
-        prj_builder = project_manager.get_rock_project_builder(project_list[ii])
+        # when issuing a command for all projects, we assume that the src_dir
+        # is the base source directory. In this case we add the project name to source directory path
+        prj_builder = project_manager.get_rock_project_builder(
+            args.src_dir / project_list[ii], project_list[ii]
+        )
         if prj_builder is None:
-            print("Error, failed to init project builder")
             sys.exit(1)
         else:
             do_therock(prj_builder)
 else:
-    prj_builder = project_manager.get_rock_project_builder(args.project)
+    # when issuing a command for a single projects and the src_dir paremeter points to default directory
+    # then the parameter has propably not been specified and we we will add the project name to default src dir path.
+    # If the --src-dir parameter is specified for a single project, we assume that path is full
+    if args.src_dir == default_src_dir:
+        prj_builder = project_manager.get_rock_project_builder(
+            args.src_dir / args.project, args.project
+        )
+    else:
+        prj_builder = project_manager.get_rock_project_builder(
+            args.src_dir, args.project
+        )
     if prj_builder is None:
-        print("Error, failed to init project builder")
+        print("Error, failed to get the project builder")
         sys.exit(1)
     else:
         do_therock(prj_builder)
