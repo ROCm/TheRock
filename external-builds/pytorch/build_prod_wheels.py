@@ -29,14 +29,14 @@ python pytorch_torch_audio_repo.py checkout
 python pytorch_torch_vision_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
+# TODO(#910): Support torchvision and torchaudio on Windows
 python pytorch_torch_repo.py checkout --repo C:/b/pytorch
-python pytorch_torch_audio_repo.py checkout --repo C:/b/pytorch_audio
-python pytorch_torch_vision_repo.py checkout --repo C:/b/pytorch_vision
 ```
 
 Note that as of 2025-05-28, some small patches are needed to PyTorch's `__init__.py`
 to enable library resolution from `rocm` wheels. We will aim to land this at head
-in the PyTorch 2.8 timeframe.
+in the PyTorch 2.8 timeframe and then rebase build support from the 2.7.0 ref
+to 2.8.
 
 2. Install rocm wheels:
 
@@ -50,12 +50,18 @@ a dependency. Such an arrangement is a head-on-head build (i.e. torch head on to
 of ROCm head). Other arrangements are possible by passing pinned versions, official
 repositories, etc.
 
-You can also install in the same invocation as build by passing `--install-rocm` to the
-build sub-command (useful for docker invocations).
+You can also install in the same invocation as build by passing `--install-rocm`
+to the build sub-command (useful for docker invocations).
 
 ```
+# For therock-nightly-python
 build_prod_wheels.py
     --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    install-rocm
+
+# For therock-dev-python (unstable but useful for testing outside of prod)
+build_prod_wheels.py
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
     install-rocm
 ```
 
@@ -66,18 +72,14 @@ Typical usage to build with default architecture from rocm-sdk targets:
 ```
 # On Linux, using default paths for each repository:
 python build_prod_wheels.py build \
-    --pytorch-rocm-arch=gfx1100 \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
+# TODO(#910): Support torchvision and torchaudio on Windows
 python build_prod_wheels.py build \
-    --pytorch-rocm-arch=gfx1100 \
     --output-dir %HOME%/tmp/pyout \
-    --pytorch-dir C:/b/pytorch \
-    --pytorch-audio-dir C:/b/pytorch_audio \
-    --pytorch-vision-dir C:/b/pytorch_vision \
+    --pytorch-dir C:/b/pytorch
 ```
-
 
 ## Building Linux portable wheels
 
@@ -99,8 +101,7 @@ versions):
     build \
         --install-rocm \
         --clean \
-        --output-dir /therock/output/cp312/wheels \
-        --pytorch-rocm-arch gfx1100
+        --output-dir /therock/output/cp312/wheels
 ```
 
 TODO: Need to add an option to post-process wheels, set the manylinux tag, and
@@ -463,30 +464,34 @@ def do_build_pytorch_vision(
 
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
-    p.add_argument("--index-url", help="Base URL of the Python Package Index.")
-    p.add_argument("--pip-cache-dir", type=Path, help="Pip cache dir")
-    # Note that we default to >1.0 because at the time of writing, we had
-    # 0.1.0 release placeholder packages out on pypi and we don't want them
-    # taking priority.
-    p.add_argument(
-        "--rocm-sdk-version",
-        default=">1.0",
-        help="rocm-sdk version to match (with comparison prefix)",
-    )
-    p.add_argument(
-        "--pre",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="Include pre-release packages (default True)",
-    )
+
+    def add_common(p: argparse.ArgumentParser):
+        p.add_argument("--index-url", help="Base URL of the Python Package Index.")
+        p.add_argument("--pip-cache-dir", type=Path, help="Pip cache dir")
+        # Note that we default to >1.0 because at the time of writing, we had
+        # 0.1.0 release placeholder packages out on pypi and we don't want them
+        # taking priority.
+        p.add_argument(
+            "--rocm-sdk-version",
+            default=">1.0",
+            help="rocm-sdk version to match (with comparison prefix)",
+        )
+        p.add_argument(
+            "--pre",
+            default=True,
+            action=argparse.BooleanOptionalAction,
+            help="Include pre-release packages (default True)",
+        )
 
     sub_p = p.add_subparsers(required=True)
     install_rocm_p = sub_p.add_parser(
         "install-rocm", help="Install rocm-sdk wheels to the current venv"
     )
+    add_common(install_rocm_p)
     install_rocm_p.set_defaults(func=do_install_rocm)
 
     build_p = sub_p.add_parser("build", help="Build pytorch wheels")
+    add_common(build_p)
 
     build_p.add_argument(
         "--install-rocm",

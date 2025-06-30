@@ -27,24 +27,22 @@ patches locally until they can be upstreamed. See the
 
 ## Build instructions
 
+See the comments in [`build_prod_wheels.py`](./build_prod_wheels.py) for
+detailed instructions. That information is summarized here.
+
 ### Prerequisites and setup
 
-You will need either a source build or binary distribution of the dist packages.
+You will need a supported Python version (3.11+) on a system which we build the
+`rocm[libraries,devel]` packages for. See the
+[`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
+and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
+for more background on these `rocm` packages.
 
-- For binary distributions, see [RELEASES.md](../../RELEASES.md). Both tarballs
-  and Python packages should include the necessary files.
+> [!WARNING]
+> Windows support for these packages is _very_ new so some instructions
+> may not work yet. Stay tuned!
 
-  - Note: Windows ROCm Python packages are not yet available.
-
-- For source builds:
-
-  1. Follow the [building from source](../../README.md#building-from-source)
-     instructions.
-  1. Build the `therock-dist` target:
-     ```bash
-     cmake --build build --target therock-dist
-     ```
-  1. Use the `build/dist/rocm` directory.
+### Quickstart
 
 It is highly recommended to use a virtual environment unless working within a
 throw-away container or CI environment.
@@ -63,93 +61,132 @@ throw-away container or CI environment.
   .venv\Scripts\activate.bat
   ```
 
-### Build PyTorch, PyTorch vision and PyTorch audio on Linux
+Now checkout repositories:
 
-> [!WARNING]
-> This is being migrated to `build_prod_wheels.py`, using `rocm` (sdk) wheels.
-
-```bash
-./checkout_and_build_all.sh
-```
-
-### Build PyTorch on Windows (or the old way on Linux)
-
-> [!WARNING]
-> This is being migrated to `build_prod_wheels.py`, using `rocm` (sdk) wheels.
-
-#### Step 1: Preparing sources
-
-```bash
-# Checks out the most recent stable release branch of PyTorch, hipifies and
-# applies patches.
-python pytorch_torch_repo.py checkout
-```
-
-#### Step 2: Install Deps
-
-Python deps:
-
-```bash
-pip install -r pytorch/requirements.txt
-pip install mkl-static mkl-include
-```
-
-#### Step 3: Setup and Build
-
-On Linux:
-
-```bash
-export CMAKE_PREFIX_PATH="$(realpath ../../build/dist/rocm)"
-(cd src && USE_KINETO=OFF python setup.py develop)
-```
-
-On Windows:
-
-```bash
-bash build_pytorch_windows.sh gfx1100
-```
-
-## Running/testing PyTorch
-
-### Windows DLL setup
-
-> [!IMPORTANT]
-> This will no longer be necessary after `rocm` wheels are available.
-
-On Windows, PyTorch needs to be able to find DLL files from the `dist/rocm`
-directory. This can be achieved by either
-
-- Extending your `PATH` to include that directory:
+- On Linux, use default paths (nested under this folder):
 
   ```bash
-  set PATH=..\..\build\dist\rocm\bin;%PATH%
+  python pytorch_torch_repo.py checkout
+  python pytorch_torch_audio_repo.py checkout
+  python pytorch_torch_vision_repo.py checkout
   ```
 
-- Creating a "fat wheel" that bundles the files together (see the next section).
+- On Windows, use shorter paths to avoid command length limits:
+
+  ```bash
+  # TODO(#910): Support torchvision and torchaudio on Windows
+  python pytorch_torch_repo.py checkout --repo C:/b/pytorch
+  ```
+
+Now note the gfx target you want to build for and then...
+
+1. Install `rocm` packages
+1. Build PyTorch wheels
+1. Install the built PyTorch wheels
+
+...all in one command. See the
+[advanced build instructions](#advanced-build-instructions) for ways to
+mix/match build steps.
+
+- On Linux:
+
+  ```bash
+  python build_prod_wheels.py build \
+    --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    --output-dir $HOME/tmp/pyout
+  ```
+
+- On Windows:
+
+  ```bash
+  # TODO(#827): switch from therock-dev-python index to therock-nightly-python
+  python build_prod_wheels.py build \
+    --install-rocm --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
+    --pytorch-dir C:/b/pytorch \
+    --output-dir %HOME%/tmp/pyout
+  ```
+
+## Advanced build instructions
+
+### Other ways to install the rocm packages
+
+The `rocm[libraries,devel]` packages can be installed in multiple ways:
+
+- (As above) during the `build_prod_wheels.py build` subcommand
+
+- Using the more tightly scoped `build_prod_wheels.py install-rocm` subcommand:
+
+  ```bash
+  build_prod_wheels.py
+      --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+      install-rocm
+  ```
+
+- Manually installing from a release index:
+
+  ```bash
+  python -m pip install \
+    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    rocm[libraries,devel]
+  ```
+
+- Building the rocm Python packages from artifacts fetched from a CI run:
+
+  ```bash
+  # From the repository root
+  mkdir $HOME/.therock/15914707463
+  mkdir $HOME/.therock/15914707463/artifacts
+  python ./build_tools/fetch_artifacts.py \
+    --run-id=15914707463 \
+    --target=gfx110X-dgpu \
+    --output-dir=$HOME/.therock/15914707463/artifacts \
+    --all
+
+  python ./build_tools/build_python_packages.py \
+    --artifact-dir=$HOME/.therock/15914707463/artifacts \
+    --dest-dir=$HOME/.therock/15914707463/packages
+  ```
+
+- Building the rocm Python packages from artifacts built from source:
+
+  ```bash
+  # From the repository root
+  cmake --build build --target therock-archives
+
+  python ./build_tools/build_python_packages.py \
+    --artifact-dir=build/artifacts \
+    --dest-dir=build/packages
+  ```
 
 ### Bundling PyTorch and ROCm together into a "fat wheel"
 
-> [!IMPORTANT]
-> This will no longer be necessary after `rocm` wheels are available.
-
 By default, Python wheels produced by the PyTorch build do not include ROCm
-binaries. Instead, they expect those binaries to be installed elsewhere on the
-system. A "fat wheel" bundles the ROCm binaries into the same wheel archive to
-produce a standalone install including both PyTorch and ROCm, with all necessary
-patches to shared library / DLL loading for out of the box operation.
+binaries. Instead, they expect those binaries to come from the
+`rocm[libraries,devel]` packages. A "fat wheel" bundles the ROCm binaries into
+the same wheel archive to produce a standalone install including both PyTorch
+and ROCm, with all necessary patches to shared library / DLL loading for out of
+the box operation.
 
 To produce such a fat wheel, see `windows_patch_fat_wheel.py` and a future
 equivalent script for Linux.
 
+## Running/testing PyTorch
+
 ### Running PyTorch smoketests
 
 We have some basic smoketests to check that the build succeeded and the
-environment setup is correct. See [smoketests](./smoke-tests/) for details, or
+environment setup is correct. See [smoke-tests](./smoke-tests/) for details, or
 just run:
 
 ```bash
-pytest -v smoketests
+pytest -v smoke-tests
 ```
+
+### Running full PyTorch tests
+
+See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation
+
+<!-- TODO(erman-gurses): update docs here -->
 
 ## Development instructions
 
