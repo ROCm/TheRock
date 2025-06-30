@@ -16,6 +16,7 @@ if(THEROCK_ENABLE_RAND)
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      therock-googletest
     RUNTIME_DEPS
       hip-clr
   )
@@ -44,6 +45,7 @@ if(THEROCK_ENABLE_RAND)
     BUILD_DEPS
       rocm-cmake
       rocRAND
+      therock-googletest
     RUNTIME_DEPS
       hip-clr
   )
