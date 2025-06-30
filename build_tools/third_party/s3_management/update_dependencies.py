@@ -90,9 +90,6 @@ def upload_missing_whls(
         # Skip win_arm64 packages
         if "-win_arm64" in pkg:
             continue
-        # Skip win_amd64 packages
-        if "-win_amd64" in pkg:
-            continue
         # Skip muslinux packages
         if "-musllinux" in pkg:
             continue
