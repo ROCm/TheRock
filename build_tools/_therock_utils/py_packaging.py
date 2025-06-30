@@ -3,10 +3,10 @@
 from typing import Callable, Sequence
 
 import importlib.util
-import magic
 import re
 import os
 from pathlib import Path
+import platform
 import shlex
 import subprocess
 import shutil
@@ -16,6 +16,12 @@ import tarfile
 from .artifacts import ArtifactCatalog, ArtifactName
 from .exe_stub_gen import generate_exe_link_stub
 
+is_windows = platform.system() == "Windows"
+
+if not is_windows:
+    # Used on Linux to check file types. Buggy/broken on Windows, but file
+    # types are generally known from file extensions there.
+    import magic
 
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 PYTHON_PACKAGING_DIR = BUILD_TOOLS_DIR / "packaging" / "python" / "templates"
@@ -480,6 +486,16 @@ def get_file_type(dir_entry: os.DirEntry[str] | Path) -> str:
     elif path.endswith(".hsaco") or path.endswith(".co"):
         # These read as shared libraries.
         return "hsaco"
+    elif path.endswith(".lib"):
+        return "ar"
+    elif path.endswith(".exe"):
+        return "exe"
+
+    if is_windows:
+        # Don't try to use 'magic' on Windows, since it is buggy/broken.
+        # Hopefully the file type was covered by an extension check above.
+        return "other"
+
     desc = magic.from_file(path)
     if MAGIC_EXECUTABLE_MATCH.search(desc):
         return "exe"
@@ -513,9 +529,10 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
         # and opinions about how to pass arguments to the backends. So we skip
         # the frontends for such a closed case as this.
         build_args = [sys.executable, "-m", "build", "-v", "--outdir", str(dist_dir)]
+        setuppy_path = child_path / "setup.py"
         build_args = [
             sys.executable,
-            str(child_path / "setup.py"),
+            str(setuppy_path.resolve()),
         ]
         if child_name in ["rocm"]:
             build_args.append("sdist")
@@ -528,7 +545,7 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
             [
                 "-v",
                 "--dist-dir",
-                str(dist_dir),
+                str(dist_dir.resolve()),
             ]
         )
 
