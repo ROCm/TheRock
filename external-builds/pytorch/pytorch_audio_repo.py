@@ -71,7 +71,7 @@ def main(cl_args: list[str]):
             help="Git repository patch path",
         )
 
-    p = argparse.ArgumentParser("ptbuild.py")
+    p = argparse.ArgumentParser("pytorch_audio_repo.py")
     default_repo_hashtag = "v2.7.0"
     sub_p = p.add_subparsers(required=True)
     checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
