@@ -5,21 +5,6 @@ if(NOT WIN32)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-# composable kernel is currently only tested and gfx908, gfx90a, gfx942 and
-# gfx950. For other GPU families, building MIOpen with CK enabled, the build is
-# failing with linker errors which need further investigation.
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950)
-  foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
-    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
-      message(WARNING
-        "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
-        "Disabling building composable kernel.")
-      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
-    endif()
-  endforeach()
-endif()
-
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   ##############################################################################
   # Composable_kernel
@@ -70,9 +55,24 @@ if(THEROCK_ENABLE_MIOPEN)
   # MIOpen
   ##############################################################################
 
+  # composable kernel is currently only tested and gfx908, gfx90a, gfx942 and
+  # gfx950. For other GPU families, building MIOpen with CK enabled, the build is
+  # failing with linker errors which need further investigation.
+  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    set(_ck_supported_gfx_targets gfx908 gfx90a gfx942)
+    foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
+      if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
+        message(WARNING
+          "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
+          "Disabling using composable kernel in MIOpen.")
+        set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
+      endif()
+    endforeach()
+  endif()
+
   # If composable kernel is enabled, add it as an MIOpen dep.
   set(optional_miopen_build_deps)
-  if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
@@ -101,7 +101,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_ENABLE_COMPOSABLE_KERNEL}"
+      "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
