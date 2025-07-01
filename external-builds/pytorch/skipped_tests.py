@@ -7,7 +7,6 @@ skip_tests = [
     "test_nvtx",
     "test_mempool_with_allocator",
     "test_cuda_tensor_pow_scalar_tensor_cuda",
-
     # Reference numerics (known timeouts or instabilities)
     "test_reference_numerics_extremal__refs_special_spherical_bessel_j0_cuda_float32",
     "test_reference_numerics_extremal__refs_special_spherical_bessel_j0_cuda_float64",
@@ -71,11 +70,9 @@ skip_tests = [
     "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int64",
     "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int8",
     "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
-
     # Known failures and infrastructure issues
     "test_rnn_check_device",
     "test_device_count_not_cached_pre_init",
-
     # Explicitly deselected
     "test_unused_output_device_cuda",
     "test_pinned_memory_empty_cache",
