@@ -58,7 +58,7 @@ jobs:
 
       - name: Runner Health Settings
         run: |
-          mkdir -p "${{ github.workspace }}/build/logs/"
+          mkdir -p "$(dirname $CCACHE_LOGFILE)"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
