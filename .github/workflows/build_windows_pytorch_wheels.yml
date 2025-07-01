@@ -30,10 +30,11 @@ on:
       amdgpu_family:
         required: true
         type: string
+        default: "gfx110X-dgpu"
       python_version:
         required: true
         type: string
-        default:
+        default: "3.12"
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
