@@ -3,7 +3,7 @@ build>=1.2.2
 meson>=1.7.0
 python-magic>=0.4.27; platform_system != "Windows"
 PyYAML==6.0.2
-setuptools==80.9.0
+setuptools>=80.9.0
 tomli==2.2.1; python_version <= '3.10'
 
 # hipBLASLt deps
