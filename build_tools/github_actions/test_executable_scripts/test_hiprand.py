@@ -18,7 +18,7 @@ cmd = [
     "--parallel",
     "8",
     "--timeout",
-    "900",
+    "60",
     "--repeat",
     "until-pass:3",
 ]
