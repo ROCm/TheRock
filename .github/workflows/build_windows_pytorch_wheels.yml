@@ -3,26 +3,58 @@ name: Build Windows PyTorch Wheels
 on:
   workflow_call:
     inputs:
-      AMDGPU_FAMILIES:
+      amdgpu_family:
         required: true
         type: string
       python_version:
         required: true
         type: string
-      s3_bucket:
+      release_type:
+        description: The type of release to build ("nightly", or "dev")
         required: true
+        type: string
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
+        required: true
+        type: string
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version to pip install
         type: string
   workflow_dispatch:
     inputs:
-      AMDGPU_FAMILIES:
+      amdgpu_family:
         required: true
         type: string
+        # default: "gfx110X-dgpu"
+        default: "gfx1151"
       python_version:
         required: true
         type: string
-      s3_bucket:
-        required: true
+        default: "3.12"
+      release_type:
+        description: The type of release to build ("nightly", or "dev")
         type: string
+        default: "dev"
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
+        type: string
+        default: "v2"
+      cloudfront_url:
+        description: CloudFront base URL pointing to Python index
+        type: string
+        # nightly
+        # default: "d2awnip2yjpvqn.cloudfront.net/v2"
+
+        # dev
+        default: "d25kgig7rdsyks.cloudfront.net/v2"
+      rocm_version:
+        description: ROCm version to pip install
+        type: string
+        default: 7.0.0.dev0+98ed4ad77f79822694ec01a36180ec3b95f4bd00
 
 permissions:
   id-token: write
@@ -33,10 +65,11 @@ jobs:
     name: Build Windows PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
+      CHECKOUT_ROOT: C:/src
       OUTPUT_DIR: ${{ github.workspace }}/output
-      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
-      S3_BUCKET: ${{ inputs.s3_bucket }}
-      S3_ENDPOINT: "s3.us-east-2.amazonaws.com"
+      PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
+      S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+      optional_build_prod_arguments: ""
     defaults:
       run:
         shell: bash
@@ -53,30 +86,107 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      # TODO(amd-justchen): share with build_windows_packages.yml. Include in VM image? Dockerfile?
+      - name: Install requirements
+        run: |
+          # ninja pinned due to a bug in the 1.13.0 release:
+          # https://github.com/ninja-build/ninja/issues/2616
+          choco install --no-progress -y ninja --version 1.12.1
+          choco install --no-progress -y awscli
+          echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+
+      - name: Determine optional arguments passed to `build_prod_wheels.py`
+        if: ${{ inputs.rocm_version }}
+        run: |
+          pip install packaging
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version ${{ inputs.rocm_version }}
+
+      - name: Install ROCm Wheels
+        shell: cmd
+        run: |
+          echo "Installing ROCm wheels for ${{ inputs.amdgpu_family }}"
+          python ./external-builds/pytorch/build_prod_wheels.py install-rocm --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" --rocm-sdk-version ==7.0.0.dev0+98ed4ad77f79822694ec01a36180ec3b95f4bd00
+          pip freeze
+
+          echo "pip show rocm"
+          pip show rocm
+
+          echo "pip show rocm-sdk-core"
+          pip show rocm-sdk-core
+
+          echo "pip show rocm-sdk-devel"
+          pip show rocm-sdk-devel
+
+          echo "pip show rocm-sdk-libraries-${{ inputs.amdgpu_family }}"
+          pip show rocm-sdk-libraries-${{ inputs.amdgpu_family }}
+
+      - name: Check python site-packages location
+        run: |
+          python -m site
+
+      - name: Check directory structure (tree)
+        shell: cmd
+        run: |
+          tree /f C:\home\runner\_work\_tool\Python\
+
+      - name: Check system32
+        shell: cmd
+        run: |
+          tree /f C:\Windows\system32
+
+      - name: Test ROCm Wheels
+        run: |
+          rocm-sdk test
+
+      - name: Check directory structure (ls)
+        if: always()
+        run: |
+          ls -la C:/home/runner/_work/_tool/Python/3.12.10/x64/Lib/site-packages/_rocm_sdk_devel/bin
+
+      # - name: Suspend for interactive debugging
+      #   if: ${{ !cancelled() }}
+      #   run: |
+      #     sleep 21600
+
       - name: Checkout PyTorch Source Repos
         run: |
-          python ./external-builds/pytorch/pytorch_torch_repo.py checkout
-      # TODO(scotttodd): include these
+          git config --global core.longpaths true
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo ${{ env.CHECKOUT_ROOT }}/torch
+          # TODO(#910): Support torchvision and torchaudio on Windows
           # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
 
-      # TODO(scotttodd): build wheels, put into a directory location for next step to use
+      # After other installs, so MSVC get priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      # TODO(scotttodd): add upload once working
+      - name: Build PyTorch Wheels
+        shell: cmd
+        run: |
+          echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
+          python ./external-builds/pytorch/build_prod_wheels.py build --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch --clean --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
 
-      # - name: Upload wheels to S3
-      #   if: ${{ github.repository_owner == 'ROCm' }}
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+
+      # TODO(#827, #910): enable this once we build torch audio and vision on Windows
+      # - name: Sanity Check Wheel
       #   run: |
-      #     aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/ \
-      #       --recursive --exclude "*" --include "*.whl"
+      #     python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
 
-      # - name: (Re-)Generate Python package release index
-      #   if: ${{ github.repository_owner == 'ROCm' }}
-      #   run: |
-      #     pip install boto3
-      #     python ./build_tools/packaging/python/generate_release_index.py \
-      #       --bucket=${{ env.S3_BUCKET }} \
-      #       --endpoint=${{ env.S3_ENDPOINT }} \
-      #       --subdir=${{ inputs.AMDGPU_FAMILIES }} \
-      #       --output=${{ github.workspace }}/index.html
-      #     aws s3 cp ${{ github.workspace }}/index.html s3://${{ env.S3_BUCKET }}/${{ inputs.AMDGPU_FAMILIES }}/
+      - name: Upload wheels to S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        shell: cmd
+        run: |
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ --recursive --exclude "*" --include "*.whl"
+
+      - name: (Re-)Generate Python package release index
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}

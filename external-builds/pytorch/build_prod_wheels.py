@@ -27,8 +27,8 @@ during the build step.
 # Note that triton must be checked out after pytorch as it depends on pins
 # in the former.
 python pytorch_torch_repo.py checkout
-python pytorch_torch_audio_repo.py checkout
-python pytorch_torch_vision_repo.py checkout
+python pytorch_audio_repo.py checkout
+python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
@@ -381,11 +381,12 @@ def do_build(args: argparse.Namespace):
             env.update(addl_triton_env)
 
     if is_windows:
+        llvm_dir = root_dir / "lib" / "llvm" / "bin"
         env.update(
             {
-                "HIP_CLANG_PATH": str((root_dir / "lib" / "llvm" / "bin").as_posix()),
-                "CC": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
-                "CXX": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+                "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
+                "CC": str((llvm_dir / "clang-cl.exe").resolve()),
+                "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
     else:
