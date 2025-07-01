@@ -171,7 +171,7 @@ def get_installed_package_version(dist_package_name: str) -> str:
     ).splitlines()
     if not lines:
         raise ValueError(f"Did not find installed package '{dist_package_name}'")
-    prefix = "Versionaaa: "
+    prefix = "Version: "
     for line in lines:
         if line.startswith(prefix):
             return line[len(prefix) :]
