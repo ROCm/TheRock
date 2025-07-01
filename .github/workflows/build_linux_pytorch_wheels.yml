@@ -95,10 +95,10 @@ jobs:
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
           ./external-builds/pytorch/build_prod_wheels.py \
-            --pip-cache-dir /tmp/pipcache \
-            --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             build \
             --install-rocm \
+            --pip-cache-dir /tmp/pipcache \
+            --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             # TODO(marbre): Enable ones dependencies in rocm package are fixed \

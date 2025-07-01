@@ -59,13 +59,13 @@ to the build sub-command (useful for docker invocations).
 ```
 # For therock-nightly-python
 build_prod_wheels.py
-    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
-    install-rocm
+    install-rocm \
+    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
-    install-rocm
+    install-rocm \
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -99,10 +99,10 @@ versions):
     /usr/bin/env CCACHE_DIR=/therock/output/ccache \
     /opt/python/cp312-cp312/bin/python \
     /therock/src/external-builds/pytorch/build_prod_wheels.py \
-    --pip-cache-dir /therock/output/pip_cache \
-    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     build \
         --install-rocm \
+        --pip-cache-dir /therock/output/pip_cache \
+        --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -169,12 +169,15 @@ def get_installed_package_version(dist_package_name: str) -> str:
     lines = capture(
         [sys.executable, "-m", "pip", "show", dist_package_name], cwd=Path.cwd()
     ).splitlines()
-    prefix = "Version: "
+    if not lines:
+        raise ValueError(f"Did not find installed package '{dist_package_name}'")
+    prefix = "Versionaaa: "
     for line in lines:
         if line.startswith(prefix):
             return line[len(prefix) :]
+    joined_lines = "\n".join(lines)
     raise ValueError(
-        f"Did not find installed package {dist_package_name} in {'\n'.join(lines)}"
+        f"Did not find Version for installed package '{dist_package_name}' in output:\n{joined_lines}"
     )
 
 
