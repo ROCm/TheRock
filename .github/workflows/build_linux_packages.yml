@@ -99,10 +99,9 @@ jobs:
         run: cmake --build build --target therock-dist
 
       - name: Build therock-archives
-        # run: cmake --build build --target therock-archives
-        run: echo Skipping for ccache testing...
+        run: cmake --build build --target therock-archives
 
-      - name: Test Packaging
+      - name: Test Packaging (Skipping...)
         if: ${{ github.event.repository.name == 'TheRock' }}
         # run: |
         #   ctest --test-dir build --output-on-failure
@@ -138,7 +137,7 @@ jobs:
             --build-dir=build \
             --amdgpu-family=${{ inputs.amdgpu_families }}
 
-      - name: Upload artifacts
+      - name: Upload artifacts (Skipping...)
         if: always()
         # run: |
         #   python build_tools/github_actions/upload_build_artifacts.py \
