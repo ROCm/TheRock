@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(realpath "$SCRIPT_DIR/../..")"
 PYTORCH_DIR="$ROOT_DIR/external-builds/pytorch/pytorch"
 VENV_DIR="$ROOT_DIR/venv"
-K_EXPR_SCRIPT="$SCRIPT_DIR/../skipped_tests.py"
+K_EXPR_SCRIPT="$SCRIPT_DIR/skipped_tests.py"
 
 # Ensure INDEX_URL is set
 if [[ -z "${INDEX_URL:-}" ]]; then
