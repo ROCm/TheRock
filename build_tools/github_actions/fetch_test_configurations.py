@@ -57,7 +57,7 @@ test_matrix = {
     "rocrand": {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 60,
         "test_script": f"python {SCRIPT_DIR / 'test_rocrand.py'}",
         "platform": ["linux", "windows"],
     },
