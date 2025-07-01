@@ -16,11 +16,6 @@ on:
         required: true
         type: string
         default: "d2awnip2yjpvqn.cloudfront.net/v2"
-      s3_subdir:
-        description: S3 subdirectory, not including the GPU-family
-        required: true
-        type: string
-        default: "v2"
       python_version:
         required: true
         type: string
@@ -35,9 +30,6 @@ on:
         required: true
         type: string
       cloudfront_url:
-        required: true
-        type: string
-      s3_subdir:
         required: true
         type: string
       python_version:
