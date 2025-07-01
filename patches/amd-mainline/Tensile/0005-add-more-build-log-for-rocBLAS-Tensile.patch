@@ -1,0 +1,25 @@
+From 34dd5d9fc9828be2df99af4ced858520b127393d Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 15 May 2025 08:43:25 -0700
+Subject: [PATCH 5/5] add more build log for rocBLAS/Tensile
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ Tensile/Common.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Tensile/Common.py b/Tensile/Common.py
+index 6f508e89..663e6c4a 100644
+--- a/Tensile/Common.py
++++ b/Tensile/Common.py
+@@ -2132,6 +2132,7 @@ def GetAsmCaps(isaVersion: IsaVersion, hipVersion: SemanticVersion, cachedAsmCap
+         exitFlag = True
+       if exitFlag:
+         printWarning("Cached asm caps differ from derived asm caps for {}".format(isaVersion))
++      print("Cached asm caps ok, isaVersion {}, ROCm: {}".format(isaVersion, globalParameters['HipClangVersion']))
+     return derivedAsmCaps
+   else:
+     printWarning("Assembler not present, asm caps loaded from cache are unverified")
+-- 
+2.43.0
+
