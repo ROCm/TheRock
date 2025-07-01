@@ -2,8 +2,10 @@
 This AMD GPU Family Matrix is the "source of truth" for GitHub workflows, indicating which families and test runners are available to use
 """
 
+# DEFAULT_LINUX_CONFIGURATIONS = ["gfx94x", "gfx110x"]
+# DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110x"]
 DEFAULT_LINUX_CONFIGURATIONS = ["gfx94x", "gfx110x"]
-DEFAULT_WINDOWS_CONFIGURATIONS = ["gfx110x"]
+DEFAULT_WINDOWS_CONFIGURATIONS = []
 
 amdgpu_family_info_matrix = {
     "gfx94x": {
