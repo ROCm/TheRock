@@ -47,6 +47,8 @@ jobs:
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
+      CCACHE_LOGFILE: ${{ github.workspace }}/build/logs/ccache.log
+      CCACHE_STATSLOG: ${{ github.workspace }}/build/logs/ccache_stats.log
       CCACHE_MAXSIZE: "5G"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
