@@ -58,7 +58,7 @@ jobs:
 
       - name: Runner Health Settings
         run: |
-          mkdir "${{ github.workspace }}/build/logs/"
+          mkdir -p "${{ github.workspace }}/build/logs/"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
@@ -95,16 +95,22 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist
-        run: cmake --build build --target therock-dist
+      - name: Build therock-dist (build RAND only for testing ccache...)
+        # run: cmake --build build --target therock-dist
+        run: |
+          cmake --build build --target therock-dist \
+          -DTHEROCK_ENABLE_ALL=OFF \
+          -DTHEROCK_ENABLE_RAND=ON
 
       - name: Build therock-archives
-        run: cmake --build build --target therock-archives
+        # run: cmake --build build --target therock-archives
+        run: echo Skipping for ccache testing...
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
-        run: |
-          ctest --test-dir build --output-on-failure
+        # run: |
+        #   ctest --test-dir build --output-on-failure
+        run: echo Skipping for ccache testing...
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -138,11 +144,12 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
-            --build-dir build
+        # run: |
+        #   python build_tools/github_actions/upload_build_artifacts.py \
+        #     --run-id ${{ github.run_id }} \
+        #     --amdgpu-family ${{ inputs.amdgpu_families }} \
+        #     --build-dir build
+        run: echo Skipping for ccache testing...
 
       - name: Upload Logs
         if: always()
