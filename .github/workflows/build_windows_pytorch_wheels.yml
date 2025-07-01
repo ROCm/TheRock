@@ -45,7 +45,7 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "d25kgig7rdsyks.cloudfront.net"
+        default: "d2awnip2yjpvqn.cloudfront.net/v2"
       # rocm_version:
       #   description: ROCm version to install (e.g. "==1.0", ">1.0")
       #   type: string
