@@ -60,6 +60,7 @@ jobs:
     name: Build Windows PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
+      CHECKOUT_ROOT: B:\src
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
@@ -96,7 +97,7 @@ jobs:
       - name: Checkout PyTorch Source Repos
         run: |
           git config --global core.longpaths true
-          python ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo ${{ github.workspace }}/torch
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo ${{ env.CHECKOUT_ROOT }}/torch
           # TODO(#910): Support torchvision and torchaudio on Windows
           # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
@@ -108,7 +109,7 @@ jobs:
             build \
             --install-rocm \
             --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
-            --pytorch-dir ${{ github.workspace }}/torch \
+            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             # TODO(marbre): Enable once dependencies in rocm package are fixed \
