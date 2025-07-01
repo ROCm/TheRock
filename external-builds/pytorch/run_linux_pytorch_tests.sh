@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(realpath "$SCRIPT_DIR/../..")"
 PYTORCH_DIR="$ROOT_DIR/external-builds/pytorch/pytorch"
 VENV_DIR="$ROOT_DIR/venv"
-K_EXPR_SCRIPT="$SCRIPT_DIR/skipped_tests.py"
+SKIP_FILE="$SCRIPT_DIR/skipped_tests.py"
 
 
 # Set environment variables
@@ -18,13 +18,8 @@ export PYTORCH_TESTING_DEVICE_ONLY_FOR="cuda"
 export PYTHONPATH="$PYTORCH_DIR/test:${PYTHONPATH:-}"
 
 # Generate -k skip expression
-# Generate -k skip expression
-if [ -f "$K_EXPR_SCRIPT" ]; then
-  K_EXPR="-k \"$(python "$K_EXPR_SCRIPT")\""
-else
-  echo "Warning: $K_EXPR_SCRIPT not found, running all tests" >&2
-  K_EXPR=""
-fi
+K_EXPR=$(python "$SKIP_FILE")
+echo "Excluding tests via -k: $K_EXPR"
 
 # TODO: Add back "test/test_ops.py" and test/inductor/test_torchinductor.py
 # when the AttributeError solved
