@@ -95,7 +95,7 @@ jobs:
       - name: Checkout PyTorch Source Repos
         run: |
           git config --global core.longpaths true
-          python ./external-builds/pytorch/pytorch_torch_repo.py checkout
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo ${{ github.workspace }}/torch
           # TODO(#910): Support torchvision and torchaudio on Windows
           # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
@@ -107,6 +107,7 @@ jobs:
             build \
             --install-rocm \
             --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
+            --pytorch-dir ${{ github.workspace }}/torch \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             # TODO(marbre): Enable once dependencies in rocm package are fixed \
