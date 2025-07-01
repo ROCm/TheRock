@@ -7,7 +7,7 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows, indica
 DEFAULT_LINUX_CONFIGURATIONS = ["gfx94x", "gfx110x"]
 DEFAULT_WINDOWS_CONFIGURATIONS = []
 
-amdgpu_family_info_matrix = {
+amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
