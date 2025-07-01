@@ -18,8 +18,13 @@ export PYTORCH_TESTING_DEVICE_ONLY_FOR="cuda"
 export PYTHONPATH="$PYTORCH_DIR/test:${PYTHONPATH:-}"
 
 # Generate -k skip expression
-K_EXPR=$(python "$K_EXPR_SCRIPT")
-echo "Excluding tests via -k: $K_EXPR"
+# Generate -k skip expression
+if [ -f "$K_EXPR_SCRIPT" ]; then
+  K_EXPR="-k \"$(python "$K_EXPR_SCRIPT")\""
+else
+  echo "Warning: $K_EXPR_SCRIPT not found, running all tests" >&2
+  K_EXPR=""
+fi
 
 # TODO: Add back "test/test_ops.py" and test/inductor/test_torchinductor.py
 # when the AttributeError solved
