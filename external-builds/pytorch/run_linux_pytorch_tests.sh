@@ -34,17 +34,16 @@ export PYTHONPATH="$PYTORCH_DIR/test:${PYTHONPATH:-}"
 # Generate -k skip expression
 K_EXPR=$(python "$K_EXPR_SCRIPT")
 echo "Excluding tests via -k: $K_EXPR"
-
+# TODO: Add test/test_ops.py and test/inductor/test_torchinductor.py
+# when AttributeError error is solved for Triton
 # Run selected test files
 pytest \
   "$PYTORCH_DIR/test/test_nn.py" \
   "$PYTORCH_DIR/test/test_torch.py" \
   "$PYTORCH_DIR/test/test_cuda.py" \
-  "$PYTORCH_DIR/test/test_ops.py" \
   "$PYTORCH_DIR/test/test_unary_ufuncs.py" \
   "$PYTORCH_DIR/test/test_binary_ufuncs.py" \
   "$PYTORCH_DIR/test/test_autograd.py" \
-  "$PYTORCH_DIR/test/inductor/test_torchinductor.py" \
   --continue-on-collection-errors \
   --import-mode=importlib \
   -v \

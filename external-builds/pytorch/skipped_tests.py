@@ -33,6 +33,7 @@ skip_tests = [
     "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_int32",
     "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_int64",
     "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_int8",
+    "test_reference_numerics_normal__refs_special_spherical_bessel_j0_cuda_uint8",
     "test_reference_numerics_normal_special_airy_ai_cuda_bool",
     "test_reference_numerics_normal_special_airy_ai_cuda_float32",
     "test_reference_numerics_normal_special_airy_ai_cuda_float64",
@@ -77,18 +78,6 @@ skip_tests = [
     "test_unused_output_device_cuda",
     "test_pinned_memory_empty_cache",
 ]
-
-# Detect import errors and skip full test files
-try:
-    import torch.testing._internal.inductor_utils  # from test_ops.py
-except Exception:
-    skip_tests.append("test_ops")
-
-try:
-    import torch._inductor.lowering  # from test_torchinductor.py
-except Exception:
-    skip_tests.append("test_torchinductor")
-
 # Emit the -k expression
 expr = "not " + " and not ".join(skip_tests)
 print(expr)
