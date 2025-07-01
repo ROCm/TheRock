@@ -24,9 +24,12 @@ during the build step.
 
 ```
 # On Linux, using default paths (nested under this folder):
+# Note that triton must be checked out after pytorch as it depends on pins
+# in the former.
 python pytorch_torch_repo.py checkout
 python pytorch_torch_audio_repo.py checkout
 python pytorch_torch_vision_repo.py checkout
+python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
 # TODO(#910): Support torchvision and torchaudio on Windows
@@ -110,6 +113,7 @@ inline system deps into the audio and vision wheels as needed.
 
 import argparse
 from datetime import date
+import json
 import os
 from pathlib import Path
 import platform
@@ -146,15 +150,9 @@ def capture(args: list[str | Path], cwd: Path) -> str:
 
 
 def get_rocm_sdk_version() -> str:
-    # Use `rocm-sdk version` command when available
-    freeze_lines = capture(
-        [sys.executable, "-m", "pip", "freeze"], cwd=Path.cwd()
-    ).splitlines()
-    for line in freeze_lines:
-        prefix = "rocm=="
-        if line.startswith(prefix):
-            return line[len(prefix) :]
-    raise ValueError(f"No rocm-sdk found in {' '.join(freeze_lines)}")
+    return capture(
+        [sys.executable, "-m", "rocm_sdk", "version"], cwd=Path.cwd()
+    ).strip()
 
 
 def get_rocm_sdk_targets() -> str:
@@ -165,6 +163,19 @@ def get_rocm_sdk_targets() -> str:
         return ""
     # Convert space-separated targets to comma-separated for PYTORCH_ROCM_ARCH
     return targets.replace(" ", ",")
+
+
+def get_installed_package_version(dist_package_name: str) -> str:
+    lines = capture(
+        [sys.executable, "-m", "pip", "show", dist_package_name], cwd=Path.cwd()
+    ).splitlines()
+    prefix = "Version: "
+    for line in lines:
+        if line.startswith(prefix):
+            return line[len(prefix) :]
+    raise ValueError(
+        f"Did not find installed package {dist_package_name} in {'\n'.join(lines)}"
+    )
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -182,6 +193,7 @@ def remove_dir_if_exists(dir: Path):
 
 
 def find_built_wheel(dist_dir: Path, dist_package: str) -> Path:
+    dist_package = dist_package.replace("-", "_")
     glob = f"{dist_package}-*.whl"
     all_wheels = list(dist_dir.glob(glob))
     if not all_wheels:
@@ -244,6 +256,7 @@ def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
 
+    triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
     pytorch_vision_dir: Path | None = args.pytorch_vision_dir
@@ -280,13 +293,22 @@ def do_build(args: argparse.Namespace):
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
-        "PYTORCH_EXTRA_INSTALL_REQUIREMENTS": f"rocm[libraries]=={rocm_sdk_version}",
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         # TODO: Figure out what is blocking GLOO and enable.
         "USE_GLOO": "OFF",
         # TODO: Fix source dep on rocprofiler and enable.
         "USE_KINETO": "OFF",
     }
+
+    # At checkout, we compute some additional env vars that influence the way that
+    # the wheel is named/versioned.
+    if triton_dir:
+        triton_env_file = triton_dir / "build_env.json"
+        if triton_env_file.exists():
+            with open(triton_env_file, "r") as f:
+                addl_triton_env = json.load(f)
+                print(f"-- Additional triton build env vars: {addl_triton_env}")
+            env.update(addl_triton_env)
 
     if is_windows:
         env.update(
@@ -305,29 +327,103 @@ def do_build(args: argparse.Namespace):
             }
         )
 
+    # Build triton.
+    triton_requirement = None
+    if triton_dir:
+        triton_requirement = do_build_triton(args, triton_dir, dict(env))
+    else:
+        print("--- Not building triton (no --triton-dir)")
+
+    # Build pytorch.
     if pytorch_dir:
-        do_build_pytorch(args, pytorch_dir, dict(env))
+        do_build_pytorch(
+            args, pytorch_dir, dict(env), triton_requirement=triton_requirement
+        )
     else:
         print("--- Not building pytorch (no --pytorch-dir)")
 
+    # Build pytorch audio.
     if pytorch_audio_dir:
         do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
     else:
         print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
 
+    # Build pytorch vision.
     if pytorch_vision_dir:
         do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
 
-def do_build_pytorch(args: argparse.Namespace, pytorch_dir: Path, env: dict[str, str]):
+def do_build_triton(
+    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+) -> str:
+    triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
+    print(f"+++ Uninstall {triton_wheel_name}")
+    exec(
+        [sys.executable, "-m", "pip", "uninstall", triton_wheel_name, "-y"],
+        cwd=tempfile.gettempdir(),
+    )
+    print("+++ Installing triton requirements:")
+    pip_install_args = []
+    if args.pip_cache_dir:
+        pip_install_args.extend(["--cache-dir", args.pip_cache_dir])
+    exec(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            triton_dir / "python" / "requirements.txt",
+        ]
+        + pip_install_args,
+        cwd=triton_dir,
+    )
+
+    print("+++ Building triton:")
+    triton_python_dir = triton_dir / "python"
+    remove_dir_if_exists(triton_python_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(triton_python_dir / "build")
+    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env)
+    built_wheel = find_built_wheel(triton_python_dir / "dist", triton_wheel_name)
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+    print("+++ Installing built triton:")
+    exec(
+        [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
+    )
+
+    installed_triton_version = get_installed_package_version(triton_wheel_name)
+    return f"{triton_wheel_name}=={installed_triton_version}"
+
+
+def do_build_pytorch(
+    args: argparse.Namespace,
+    pytorch_dir: Path,
+    env: dict[str, str],
+    *,
+    triton_requirement: str | None,
+):
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
+
+    # Determine which install requirements to add.
+    install_requirements = [
+        f"rocm[libraries]=={get_rocm_sdk_version()}",
+    ]
+    if triton_requirement:
+        install_requirements.append(triton_requirement)
+    env["PYTORCH_EXTRA_INSTALL_REQUIREMENTS"] = "|".join(install_requirements)
+    print(
+        f"--- PYTORCH_EXTRA_INSTALL_REQUIREMENTS = {env['PYTORCH_EXTRA_INSTALL_REQUIREMENTS']}"
+    )
 
     if is_windows:
         env.update(
@@ -521,6 +617,12 @@ def main(argv: list[str]):
         default=directory_if_exists(script_dir / "pytorch_vision"),
         type=Path,
         help="pytorch_vision source directory",
+    )
+    build_p.add_argument(
+        "--triton-dir",
+        default=directory_if_exists(script_dir / "triton"),
+        type=Path,
+        help="pinned triton directory",
     )
     build_p.add_argument(
         "--pytorch-rocm-arch",

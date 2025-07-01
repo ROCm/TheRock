@@ -192,7 +192,33 @@ def repo_hashtag_to_patches_dir_name(version_ref: str) -> str:
     return version_ref
 
 
-def do_checkout(args: argparse.Namespace):
+def do_hipify(args: argparse.Namespace):
+    repo_dir: Path = args.repo
+    print(f"Hipifying {repo_dir}")
+    build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
+    if os.path.exists(build_amd_path):
+        exec([sys.executable, build_amd_path], cwd=repo_dir)
+
+
+def commit_hipify(args: argparse.Namespace):
+    repo_dir: Path = args.repo
+    # Iterate over the base repository and all submodules. Because we process
+    # the root repo first, it will not add submodule changes.
+    all_paths = get_all_repositories(repo_dir)
+    for module_path in all_paths:
+        status = list_status(module_path)
+        if not status:
+            continue
+        print(f"HIPIFY made changes to {module_path}: Committing")
+        exec(["git", "add", "-A"], cwd=module_path)
+        exec(
+            ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
+            cwd=module_path,
+        )
+        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
+
+
+def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     repo_dir: Path = args.repo
     repo_patch_dir_base = args.patch_dir
     check_git_dir = repo_dir / ".git"
@@ -246,7 +272,8 @@ def do_checkout(args: argparse.Namespace):
 
     # Hipify.
     if args.hipify:
-        do_hipify(args)
+        custom_hipify(args)
+        commit_hipify(args)
 
     # Hipified patches.
     if args.patch:
@@ -256,28 +283,6 @@ def do_checkout(args: argparse.Namespace):
             args.repo_name,
             "hipified",
         )
-
-
-def do_hipify(args: argparse.Namespace):
-    repo_dir: Path = args.repo
-    print(f"Hipifying {repo_dir}")
-    build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
-    if os.path.exists(build_amd_path):
-        exec([sys.executable, build_amd_path], cwd=repo_dir)
-    # Iterate over the base repository and all submodules. Because we process
-    # the root repo first, it will not add submodule changes.
-    all_paths = get_all_repositories(repo_dir)
-    for module_path in all_paths:
-        status = list_status(module_path)
-        if not status:
-            continue
-        print(f"HIPIFY made changes to {module_path}: Committing")
-        exec(["git", "add", "-A"], cwd=module_path)
-        exec(
-            ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
-            cwd=module_path,
-        )
-        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
 
 def do_save_patches(args: argparse.Namespace):
