@@ -1,7 +1,7 @@
-From cd43be77cf5dc4c2cf46d2449c4dddc186da3880 Mon Sep 17 00:00:00 2001
+From 82dcd5008137dc4937ff11e23ba0e79e62f835dd Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 5 Jun 2025 17:51:14 -0700
-Subject: [PATCH 3/3] Unify ROCBLAS_TENSILE_LIBRARY_DIR across Windows and
+Subject: [PATCH 3/4] Unify ROCBLAS_TENSILE_LIBRARY_DIR across Windows and
  Linux.
 
 Splitting the structure leads to further complexity in all downstream projects and tooling.
@@ -27,5 +27,5 @@ index f4bdfb5f..e39c74cf 100644
    if( NOT ENABLE_ASAN_PACKAGING )
      if( BUILD_SHARED_LIBS )
 -- 
-2.45.1.windows.1
+2.47.1.windows.2
 

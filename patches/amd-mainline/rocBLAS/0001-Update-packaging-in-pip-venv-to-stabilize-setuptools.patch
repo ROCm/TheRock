@@ -1,7 +1,7 @@
-From c65e49d61ed401b9e685cc89ce6b9fed85cc1086 Mon Sep 17 00:00:00 2001
+From 5722884211fb7ad6a4502db9214b3ccc5691c00d Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 6 Mar 2025 15:16:19 -0800
-Subject: [PATCH 1/3] Update 'packaging' in pip venv to stabilize setuptools.
+Subject: [PATCH 1/4] Update 'packaging' in pip venv to stabilize setuptools.
 
 When using setuptools>=71.0.0 and packaging<22.0, setuptools may fail with `TypeError: canonicalize_version() got an unexpected keyword argument 'strip_trailing_zero'`.
 ---
@@ -29,5 +29,5 @@ index 951755ae..7c9c6cd1 100644
      execute_process(
        RESULT_VARIABLE rc
 -- 
-2.45.1.windows.1
+2.47.1.windows.2
 
