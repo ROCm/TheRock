@@ -196,7 +196,7 @@ def do_hipify(args: argparse.Namespace):
     repo_dir: Path = args.repo
     print(f"Hipifying {repo_dir}")
     build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
-    if os.path.exists(build_amd_path):
+    if build_amd_path.exists():
         exec([sys.executable, build_amd_path], cwd=repo_dir)
 
 
