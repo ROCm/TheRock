@@ -132,7 +132,7 @@ optional = true
 include = [
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
-  "share/hipsolver/test/**"
+  "share/rocsparse/test/**"
 ]
 optional = true
 
