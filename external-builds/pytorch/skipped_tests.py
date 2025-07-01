@@ -1,13 +1,19 @@
 skip_tests = [
-    # Individual test function names
+    # TestNN under test_nn.py
     "test_RNN_dropout_state",
+    "test_rnn_check_device",
+    # TestTorch under test_torch.py
     "test_print",
+    # TestCuda under test_cuda.py
     "test_hip_device_count",
     "test_host_memory_stats",
     "test_nvtx",
+    "test_device_count_not_cached_pre_init",
+    # TestMemPool under test_cuda.py
     "test_mempool_with_allocator",
+    # TestBinaryUfuncsCUDA under test_binary_ufuncs
     "test_cuda_tensor_pow_scalar_tensor_cuda",
-    # Reference numerics (known timeouts or instabilities)
+    # TestUnaryUfuncsCUDA under test_unary_ufuncs.py
     "test_reference_numerics_extremal__refs_special_spherical_bessel_j0_cuda_float32",
     "test_reference_numerics_extremal__refs_special_spherical_bessel_j0_cuda_float64",
     "test_reference_numerics_extremal_special_airy_ai_cuda_float32",
@@ -71,10 +77,7 @@ skip_tests = [
     "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int64",
     "test_reference_numerics_small_special_spherical_bessel_j0_cuda_int8",
     "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
-    # Known failures and infrastructure issues
-    "test_rnn_check_device",
-    "test_device_count_not_cached_pre_init",
-    # Explicitly deselected
+    # Explicitly deselected since givind segfault
     "test_unused_output_device_cuda",
     "test_pinned_memory_empty_cache",
 ]
