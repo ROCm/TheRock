@@ -78,6 +78,7 @@ jobs:
       - name: Run PyTorch tests
         env:
           VENV_DIR: ${{ github.workspace }}/venv
+          INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_families }}/
         working-directory: ${{ github.workspace }}
         run: |
           source "$VENV_DIR/bin/activate"
