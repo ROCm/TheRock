@@ -2,6 +2,19 @@ name: Release Windows PyTorch Wheels
 
 on:
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: The type of release to build ("nightly", or "dev")
+        type: string
+        default: "dev"
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
+        type: string
+        default: "v2"
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        type: string
+        default: "d25kgig7rdsyks.cloudfront.net/v2"
 
   # TODO(scotttodd): add schedule once working
   # schedule:
@@ -25,8 +38,8 @@ jobs:
 
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:
-      AMDGPU_FAMILIES: ${{ matrix.config.AMDGPU_FAMILIES }}
+      amdgpu_family: ${{ matrix.config.AMDGPU_FAMILIES }}
       python_version: ${{ matrix.python_version }}
-      # TODO: switch to nightly once ready (and allow 'dev' from workflow_dispatch)
-      # s3_bucket: therock-nightly-python
-      s3_bucket: therock-dev-python
+      release_type: ${{ inputs.release_type || 'nightly' }}
+      s3_subdir: ${{ inputs.s3_subdir || 'v2' }}
+      cloudfront_url: ${{ inputs.cloudfront_url  || 'd2awnip2yjpvqn.cloudfront.net/v2' }}

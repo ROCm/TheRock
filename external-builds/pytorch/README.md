@@ -67,8 +67,8 @@ Now checkout repositories:
 
   ```bash
   python pytorch_torch_repo.py checkout
-  python pytorch_torch_audio_repo.py checkout
-  python pytorch_torch_vision_repo.py checkout
+  python pytorch_audio_repo.py checkout
+  python pytorch_vision_repo.py checkout
   ```
 
 - On Windows, use shorter paths to avoid command length limits:
@@ -99,9 +99,8 @@ mix/match build steps.
 - On Windows:
 
   ```bash
-  # TODO(#827): switch from therock-dev-python index to therock-nightly-python
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
+    --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     --pytorch-dir C:/b/pytorch \
     --output-dir %HOME%/tmp/pyout
   ```
@@ -125,8 +124,14 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 - Manually installing from a release index:
 
   ```bash
+  # From therock-nightly-python
   python -m pip install \
     --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    rocm[libraries,devel]
+
+  # OR from therock-dev-python
+  python -m pip install \
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
     rocm[libraries,devel]
   ```
 

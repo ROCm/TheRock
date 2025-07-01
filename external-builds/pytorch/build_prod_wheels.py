@@ -27,8 +27,8 @@ during the build step.
 # Note that triton must be checked out after pytorch as it depends on pins
 # in the former.
 python pytorch_torch_repo.py checkout
-python pytorch_torch_audio_repo.py checkout
-python pytorch_torch_vision_repo.py checkout
+python pytorch_audio_repo.py checkout
+python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:

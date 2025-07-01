@@ -101,7 +101,7 @@ jobs:
             --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            # TODO(marbre): Enable ones dependencies in rocm package are fixed \
+            # TODO(marbre): Enable once dependencies in rocm package are fixed \
             # --rocm-sdk-version "${{ env.ROCM_VERSION }}" \
 
       - name: Configure AWS Credentials
