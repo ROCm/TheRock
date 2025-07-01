@@ -1,7 +1,7 @@
-From 088ceab296d005e98c19ebb28097c67bdca67554 Mon Sep 17 00:00:00 2001
+From dc92f2da9db028a045b6659481ad5a5d829b086f Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
-Date: Thu, 29 May 2025 18:13:49 -0700
-Subject: [PATCH 2/2] Rollup of build changes needed for compat with TheRock.
+Date: Mon, 23 Jun 2025 21:38:53 +0000
+Subject: [PATCH] Rollup of build changes needed for compat with TheRock.
 
 * When built for a non-default ROCM location, the HIP headers can't be found by a few targets.
 * Uses pkg_check for DRM libraries like ROCR-Runtime does (which avoids accidental fallback to system versions).
@@ -12,7 +12,7 @@ Subject: [PATCH 2/2] Rollup of build changes needed for compat with TheRock.
  3 files changed, 47 insertions(+), 31 deletions(-)
 
 diff --git a/cmake/rocprofiler_config_interfaces.cmake b/cmake/rocprofiler_config_interfaces.cmake
-index 9c18a0c..d8178a2 100644
+index 4d67246..8354e80 100644
 --- a/cmake/rocprofiler_config_interfaces.cmake
 +++ b/cmake/rocprofiler_config_interfaces.cmake
 @@ -131,7 +131,13 @@ if(hip_VERSION VERSION_LESS "6.2")
@@ -113,16 +113,19 @@ index f1ab957..b152ebd 100644
                                                        ${containers_headers})
 +target_link_libraries(rocprofiler-sdk-common-library PRIVATE rocprofiler-sdk-hip-nolink)
 diff --git a/source/lib/output/CMakeLists.txt b/source/lib/output/CMakeLists.txt
-index eba97b3..26b7039 100644
+index 2a3505a..cf72cf9 100644
 --- a/source/lib/output/CMakeLists.txt
 +++ b/source/lib/output/CMakeLists.txt
-@@ -67,4 +67,5 @@ target_link_libraries(
+@@ -70,7 +70,8 @@ target_link_libraries(
              rocprofiler-sdk::rocprofiler-sdk-amd-comgr
              rocprofiler-sdk::rocprofiler-sdk-dw
              rocprofiler-sdk::rocprofiler-sdk-elf
 -            rocprofiler-sdk::rocprofiler-sdk-sqlite3)
 +            rocprofiler-sdk::rocprofiler-sdk-sqlite3
 +            rocprofiler-sdk-hip-nolink)
+ 
+ target_compile_definitions(rocprofiler-sdk-output-library
+                            PRIVATE PROJECT_BINARY_DIR="${PROJECT_BINARY_DIR}")
 -- 
 2.43.0
 
