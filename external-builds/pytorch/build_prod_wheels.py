@@ -316,9 +316,9 @@ def do_build(args: argparse.Namespace):
     if is_windows:
         env.update(
             {
-                "HIP_CLANG_PATH": str((root_dir / "lib" / "llvm" / "bin").as_posix()),
-                "CC": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
-                "CXX": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+                "HIP_CLANG_PATH": str((root_dir / "lib" / "llvm" / "bin")),
+                "CC": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl")),
+                "CXX": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl")),
             }
         )
     else:
