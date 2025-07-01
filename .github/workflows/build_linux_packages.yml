@@ -52,7 +52,6 @@ jobs:
       CCACHE_MAXSIZE: "5G"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
-      extra_cmake_options: "-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON DBUILD_TESTING=OFF"
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -91,7 +90,7 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
