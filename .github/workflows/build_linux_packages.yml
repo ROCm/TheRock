@@ -34,7 +34,7 @@ permissions:
 jobs:
   build_linux_packages:
     name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
-    runs-on: azure-linux-scale-rocm
+    runs-on: azure-linux-scale-rocm-pvc
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
