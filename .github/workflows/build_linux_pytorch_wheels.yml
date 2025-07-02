@@ -21,9 +21,9 @@ on:
         description: CloudFront URL pointing to Python index
         required: true
         type: string
-      # rocm_version:
-      #   description: ROCm version to install
-      #   type: string
+      rocm_version:
+        description: ROCm version to install
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -45,9 +45,9 @@ on:
         description: CloudFront base URL pointing to Python index
         type: string
         default: "d25kgig7rdsyks.cloudfront.net"
-      # rocm_version:
-      #   description: ROCm version to install (e.g. "==1.0", ">1.0")
-      #   type: string
+      rocm_version:
+        description: ROCm version to install
+        type: string
 
 permissions:
   id-token: write
@@ -63,7 +63,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
-      # ROCM_VERSION: ${{ inputs.rocm_version || '>1.0' }}
+      optional_arguments: ""
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -91,6 +91,13 @@ jobs:
       - name: Create pip cache directory
         run: mkdir -p /tmp/pipcache
 
+      - name: Determine optional arguments
+        if: ${{ inputs.rocm_version }}
+        run: |
+          sdk_version="--rocm-sdk-version \"==${{ inputs.rocm_version }}"\"
+          version_suffix="--version-suffix \"${{ inputs.rocm_version }}"\"
+          echo optional_arguments="${sdk_version} ${version_suffix}" >> $GITHUB_ENV
+
       - name: Build PyTorch Wheels
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
@@ -101,8 +108,7 @@ jobs:
             --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            # TODO(marbre): Enable ones dependencies in rocm package are fixed \
-            # --rocm-sdk-version "${{ env.ROCM_VERSION }}" \
+            ${{ env.optional_arguments }}
 
       - name: Configure AWS Credentials
         if: always()
