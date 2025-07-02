@@ -317,7 +317,7 @@ def do_build(args: argparse.Namespace):
         llvm_dir = root_dir / "lib" / "llvm" / "bin"
         env.update(
             {
-                "HIP_CLANG_PATH": str(llvm_dir.resolve()),
+                "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
                 "CC": str((llvm_dir / "clang-cl.exe").resolve()),
                 "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
