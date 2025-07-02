@@ -128,6 +128,37 @@ script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
 
+# List of library preloads for Linux to generate into _rocm_init.py
+LINUX_LIBRARY_PRELOADS = [
+    "amd_comgr",
+    "amdhip64",
+    "rocprofiler-sdk-roctx",  # Linux only for the moment.
+    "roctx64",  # Linux only for the moment.
+    "hiprtc",
+    "hipblas",
+    "hipfft",
+    "hiprand",
+    "hipsparse",
+    "hipsolver",
+    "rccl",  # Linux only for the moment.
+    "hipblaslt",
+    "miopen",
+]
+
+# List of library preloads for Linux to generate into _rocm_init.py
+WINDOWS_LIBRARY_PRELOADS = [
+    "amd_comgr",
+    "amdhip64",
+    "hiprtc",
+    "hipblas",
+    "hipfft",
+    "hiprand",
+    "hipsparse",
+    "hipsolver",
+    "hipblaslt",
+    "miopen",
+]
+
 
 def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
@@ -193,49 +224,19 @@ def get_rocm_path(path_name: str) -> Path:
 def get_rocm_init_contents(args: argparse.Namespace):
     """Gets the contents of the _rocm_init.py file to add to the build."""
     sdk_version = get_rocm_sdk_version()
-    if is_windows:
-        return textwrap.dedent(
-            f"""
+    library_preloads = (
+        WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
+    )
+    library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
+    return textwrap.dedent(
+        f"""
         def initialize():
             import rocm_sdk
-            rocm_sdk.initialize_process(preload_shortnames=[
-                'amd_comgr',
-                'amdhip64',
-                'hiprtc',
-                'hipblas',
-                'hipfft',
-                'hiprand',
-                'hipsparse',
-                'hipsolver',
-                'hipblaslt',
-                'miopen',
-                ],
+            rocm_sdk.initialize_process(
+                preload_shortnames=[{library_preloads_formatted}],
                 check_version='{sdk_version}')
         """
-        )
-    else:
-        return textwrap.dedent(
-            f"""
-        def initialize():
-            import rocm_sdk
-            rocm_sdk.initialize_process(preload_shortnames=[
-                'amd_comgr',
-                'amdhip64',
-                'rocprofiler-sdk-roctx',
-                'roctx64',
-                'hiprtc',
-                'hipblas',
-                'hipfft',
-                'hiprand',
-                'hipsparse',
-                'hipsolver',
-                'rccl',
-                'hipblaslt',
-                'miopen',
-                ],
-                check_version='{sdk_version}')
-        """
-        )
+    )
 
 
 def remove_dir_if_exists(dir: Path):
@@ -426,13 +427,23 @@ def do_build(args: argparse.Namespace):
         print("--- Not building pytorch (no --pytorch-dir)")
 
     # Build pytorch audio.
-    if pytorch_audio_dir:
+    if args.build_pytorch_audio or (
+        args.build_pytorch_audio is None and pytorch_audio_dir
+    ):
+        assert (
+            pytorch_audio_dir
+        ), "Must specify --pytorch-audio-dir if --build-pytorch-audio"
         do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
     else:
         print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
 
     # Build pytorch vision.
-    if pytorch_vision_dir:
+    if args.build_pytorch_vision or (
+        args.build_pytorch_vision is None and pytorch_vision_dir
+    ):
+        assert (
+            pytorch_vision_dir
+        ), "Must specify --pytorch-vision-dir if --build-pytorch-vision"
         do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
@@ -734,6 +745,18 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of triton (requires --triton-dir)",
+    )
+    build_p.add_argument(
+        "--build-pytorch-audio",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch audio (requires --pytorch-audio-dir)",
+    )
+    build_p.add_argument(
+        "--build-pytorch-vision",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch vision (requires --pytorch-vision-dir)",
     )
 
     today = date.today()
