@@ -102,22 +102,6 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Configure AWS Credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
-
-      - name: Upload job status Logs
-        if: always()
-        run: |
-          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=build \
-            --run-id ${{ github.run_id }} \
-            --jobs_output_dir=job_status_dir \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
-
       - name: Configure Projects
         run: |
           # Generate a new build id.

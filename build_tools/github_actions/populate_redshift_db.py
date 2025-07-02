@@ -57,7 +57,8 @@ conn = psycopg2.connect(
     password=args.redshift_password,
     connect_timeout=60
 )
-
+print("Redshift password :{}".format(args.redshift_password))
+print(conn)
 cur = conn.cursor()
 
 cur.execute("Select * FROM workflow_run_details LIMIT 0")
