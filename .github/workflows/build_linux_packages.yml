@@ -88,10 +88,14 @@ jobs:
 
       - name: Fetch sources
         run: |
+          echo "---sanity check ccache/pvc---"
+          du /home/runner/pvc -h -d 1
           ./build_tools/fetch_sources.py --jobs 12
 
       - name: Install python deps
         run: |
+          echo "---sanity check ccache/pvc---"
+          du /home/runner/pvc -h -d 1
           pip install -r requirements.txt
 
       - name: Configure Projects
@@ -101,6 +105,8 @@ jobs:
           extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
           BUILD_DIR: build
         run: |
+          echo "---sanity check ccache/pvc---"
+          du /home/runner/pvc -h -d 1
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist (build RAND only for testing ccache...)
@@ -118,6 +124,8 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
+          echo "---sanity check ccache/pvc---"
+          du /home/runner/pvc -h -d 1
           echo "Full SDK du:"
           echo "------------"
           du -h -d 1 build/dist/rocm
