@@ -1,0 +1,35 @@
+From 39d988cf5c234ec6a1b5514e4b7fce29b335d3f7 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Sat, 2 Aug 2025 00:24:58 -0700
+Subject: [PATCH 1/3] add amd gpus
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ aiter/utility/dtypes.py | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/aiter/utility/dtypes.py b/aiter/utility/dtypes.py
+index e1f14b19..dfdc3776 100644
+--- a/aiter/utility/dtypes.py
++++ b/aiter/utility/dtypes.py
+@@ -5,8 +5,17 @@ from ..jit.utils.chip_info import get_gfx
+ import argparse
+ 
+ defaultDtypes = {
++    "gfx90a": {"fp8": torch.float8_e4m3fn},
+     "gfx942": {"fp8": torch.float8_e4m3fnuz},
+     "gfx950": {"fp8": torch.float8_e4m3fn},
++    "gfx1100": {"fp8": torch.float8_e4m3fn},
++    "gfx1101": {"fp8": torch.float8_e4m3fn},
++    "gfx1102": {"fp8": torch.float8_e4m3fn},
++    "gfx1103": {"fp8": torch.float8_e4m3fn},
++    "gfx1150": {"fp8": torch.float8_e4m3fn},
++    "gfx1151": {"fp8": torch.float8_e4m3fn},
++    "gfx1200": {"fp8": torch.float8_e4m3fn},
++    "gfx1201": {"fp8": torch.float8_e4m3fn},
+ }
+ 
+ _8bit_fallback = torch.uint8
+-- 
+2.34.1
+

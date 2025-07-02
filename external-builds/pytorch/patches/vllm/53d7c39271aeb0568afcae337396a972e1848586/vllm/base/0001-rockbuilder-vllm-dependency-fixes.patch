@@ -1,0 +1,49 @@
+From 05dd436a8df9ba863d96055743a5e401647d7bd6 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 7 Jul 2025 01:33:44 +0000
+Subject: [PATCH 1/4] rockbuilder vllm dependency fixes
+
+- remove torch version and download urls
+  because that caused the therock version of
+  rocm sdk to be replaced with the one
+  version in rocm 6.2.4 repository
+- remove triton version requirements to
+  3.2 to allow building a never triton version
+  (pytorch 2.7.0 will by default build
+   triton 3.3.0 in ci scripts)
+- remove amdsmi version requirement
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ requirements/rocm-build.txt | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/requirements/rocm-build.txt b/requirements/rocm-build.txt
+index 9420154..81f80f4 100644
+--- a/requirements/rocm-build.txt
++++ b/requirements/rocm-build.txt
+@@ -1,16 +1,15 @@
+ # Common dependencies
+ -r common.txt
+ 
+---extra-index-url https://download.pytorch.org/whl/rocm6.2.4
+-torch==2.7.0
+-torchvision==0.22.0
+-torchaudio==2.7.0
++torch
++torchvision
++torchaudio
+ 
+-triton==3.2
++triton
+ cmake>=3.26.1,<4
+ packaging>=24.2
+ setuptools>=77.0.3,<80.0.0
+ setuptools-scm>=8
+ wheel
+ jinja2>=3.1.6
+-amdsmi==6.2.4
++amdsmi
+-- 
+2.34.1
+

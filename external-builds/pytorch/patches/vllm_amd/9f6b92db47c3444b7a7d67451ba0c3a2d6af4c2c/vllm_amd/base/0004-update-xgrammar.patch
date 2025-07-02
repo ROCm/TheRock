@@ -1,0 +1,26 @@
+From ba17774a9f2847b62a17b2db1d05437701d79b12 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Fri, 22 Aug 2025 03:31:59 -0700
+Subject: [PATCH 4/4] update xgrammar
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ requirements/common.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/requirements/common.txt b/requirements/common.txt
+index 80f90e600..9a7c7a62b 100644
+--- a/requirements/common.txt
++++ b/requirements/common.txt
+@@ -22,7 +22,7 @@ lm-format-enforcer >= 0.10.11, < 0.11
+ llguidance >= 0.7.11, < 0.8.0; platform_machine == "x86_64" or platform_machine == "arm64" or platform_machine == "aarch64"
+ outlines == 0.1.11
+ lark == 1.2.2
+-xgrammar == 0.1.19; platform_machine == "x86_64" or platform_machine == "aarch64"
++xgrammar == 0.1.21; platform_machine == "x86_64" or platform_machine == "aarch64"
+ typing_extensions >= 4.10
+ filelock >= 3.16.1 # need to contain https://github.com/tox-dev/filelock/pull/317
+ partial-json-parser # used for parsing partial JSON outputs
+-- 
+2.34.1
+

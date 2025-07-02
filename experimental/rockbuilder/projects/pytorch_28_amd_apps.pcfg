@@ -1,0 +1,7 @@
+[projects]
+project_list=
+    deps_common
+    triton_34_amd
+    pytorch_28_amd
+    pytorch_vision_23
+    pytorch_audio_28

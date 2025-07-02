@@ -1,0 +1,34 @@
+From eb0fb1338dad09330eac015efc42e7bce2cbaef6 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 5 Jun 2025 03:38:56 -0700
+Subject: [PATCH 3/3] gfx1150 hack
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ sgl-kernel/setup_rocm.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sgl-kernel/setup_rocm.py b/sgl-kernel/setup_rocm.py
+index 0c42dbe8..f74c6e94 100644
+--- a/sgl-kernel/setup_rocm.py
++++ b/sgl-kernel/setup_rocm.py
+@@ -58,7 +58,7 @@ if is_dos:
+         "-Xcompiler",
+         "-std=c++17",
+         "-D__HIP_PLATFORM_AMD__=1",
+-        "--amdgpu-target=gfx942",
++        "--amdgpu-target=gfx1150",
+         "-DENABLE_BF16",
+         "-DENABLE_FP8",
+     ]
+@@ -71,7 +71,7 @@ else:
+         "-fPIC",
+         "-std=c++17",
+         "-D__HIP_PLATFORM_AMD__=1",
+-        "--amdgpu-target=gfx942",
++        "--amdgpu-target=gfx1150",
+         "-DENABLE_BF16",
+         "-DENABLE_FP8",
+     ]
+--
+2.43.0

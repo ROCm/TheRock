@@ -1,0 +1,26 @@
+From d73207709d0ef3e7c1cb190af038ec1e866a14bb Mon Sep 17 00:00:00 2001
+From: Haohui Mai <ricetons@gmail.com>
+Date: Mon, 7 Jul 2025 02:09:58 -0700
+Subject: [PATCH 5/5] Fail gracefully when AITER is unavailable gfx90a GPUs
+ (#7187)
+
+---
+ python/sglang/srt/layers/quantization/fp8.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/python/sglang/srt/layers/quantization/fp8.py b/python/sglang/srt/layers/quantization/fp8.py
+index bc325aa..4fb706e 100644
+--- a/python/sglang/srt/layers/quantization/fp8.py
++++ b/python/sglang/srt/layers/quantization/fp8.py
+@@ -86,7 +86,7 @@ _is_fp8_fnuz = is_fp8_fnuz()
+ _use_hip_int4 = get_bool_env_var("SGLANG_INT4_WEIGHT")
+ _use_aiter = get_bool_env_var("SGLANG_USE_AITER") and _is_hip
+ 
+-if _is_hip:
++if _is_hip and (_use_aiter or _use_hip_int4):
+     from aiter import ActivationType, QuantType
+     from aiter.fused_moe import fused_moe
+     from aiter.fused_moe_bf16_asm import asm_moe, ck_moe_2stages
+-- 
+2.43.0
+

@@ -1,0 +1,39 @@
+From 472320227a0919828cb31115b341c4350d0093f4 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Fri, 1 Aug 2025 20:41:42 -0700
+Subject: [PATCH 3/4] more dependency fixes
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ pyproject.toml              | 1 -
+ requirements/rocm-build.txt | 2 --
+ 2 files changed, 3 deletions(-)
+
+diff --git a/pyproject.toml b/pyproject.toml
+index dfad5d2..25c368e 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -6,7 +6,6 @@ requires = [
+     "packaging>=24.2",
+     "setuptools>=77.0.3,<80.0.0",
+     "setuptools-scm>=8.0",
+-    "torch == 2.7.1",
+     "wheel",
+     "jinja2",
+ ]
+diff --git a/requirements/rocm-build.txt b/requirements/rocm-build.txt
+index 81f80f4..68f65b3 100644
+--- a/requirements/rocm-build.txt
++++ b/requirements/rocm-build.txt
+@@ -2,8 +2,6 @@
+ -r common.txt
+ 
+ torch
+-torchvision
+-torchaudio
+ 
+ triton
+ cmake>=3.26.1,<4
+-- 
+2.34.1
+
