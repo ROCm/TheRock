@@ -199,8 +199,12 @@ To create patches
 
 ### PyTorch Nightly
 
-This checks out the `nightly` branches from `github.com/pytorch`, tracking
-the latest pytorch.org nightly release.
+This checks out the `nightly` branches from https://github.com/pytorch,
+tracking the latest pytorch.org nightly release:
+
+- https://github.com/pytorch/pytorch/tree/nightly
+- https://github.com/pytorch/audio/tree/nightly
+- https://github.com/pytorch/vision/tree/nightly
 
 ```
 python pytorch_torch_repo.py checkout --repo-hashtag nightly
