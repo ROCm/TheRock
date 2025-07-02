@@ -1,0 +1,26 @@
+From 70f24287eed8be08374f47bb7b82ebbd83a5867e Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Wed, 2 Jul 2025 13:43:32 -0700
+Subject: [PATCH 17/17] [ROCm] Plumb HIP_VERBOSE_BUILD CMake option through
+ setup.py.
+
+This option is defined in FindHIP.cmake. Allow users of setup.py to set the HIP_VERBOSE_BUILD environment variable to have the matching CMake option set there.
+---
+ tools/setup_helpers/cmake.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/setup_helpers/cmake.py b/tools/setup_helpers/cmake.py
+index ad0d0fb014..5282f79141 100644
+--- a/tools/setup_helpers/cmake.py
++++ b/tools/setup_helpers/cmake.py
+@@ -210,6 +210,7 @@ class CMake:
+                     "CUDNN_INCLUDE_DIR",
+                     "CUDNN_ROOT",
+                     "EXPERIMENTAL_SINGLE_THREAD_POOL",
++                    "HIP_VERBOSE_BUILD",
+                     "INSTALL_TEST",
+                     "JAVA_HOME",
+                     "INTEL_MKL_DIR",
+-- 
+2.47.1.windows.2
+
