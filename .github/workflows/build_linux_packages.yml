@@ -58,7 +58,18 @@ jobs:
 
       - name: Runner Health Settings
         run: |
+          echo "---ccache debugging/pvc tests---"
           mkdir -p "$(dirname $CCACHE_LOGFILE)"
+          mkdir -p /mnt/pvc/$AMDGPU_FAMILIES
+          du /mnt/pvc -h -d 1
+          echo "$CACHE_DIR before link:"
+          ls $CACHE_DIR -al
+
+          ln -s /mnt/pvc/$AMDGPU_FAMILIES $CACHE_DIR
+          echo "$CACHE_DIR after link:"
+          ls $CACHE_DIR -al
+
+          echo "---"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
