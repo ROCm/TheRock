@@ -1,0 +1,71 @@
+From 7335e9339c6e378b0aa03649aaf0a315d5d53b68 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Sat, 2 Aug 2025 10:10:23 -0700
+Subject: [PATCH 3/3] location fixes
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ csrc/cpp_itfs/utils.py | 35 +++++++++++++++++++++++++----------
+ 1 file changed, 25 insertions(+), 10 deletions(-)
+
+diff --git a/csrc/cpp_itfs/utils.py b/csrc/cpp_itfs/utils.py
+index 99876ac4..ebe834c0 100644
+--- a/csrc/cpp_itfs/utils.py
++++ b/csrc/cpp_itfs/utils.py
+@@ -11,18 +11,26 @@ import hashlib
+ from aiter.jit.utils.file_baton import FileBaton
+ import logging
+ import time
+-
++import sys
+ 
+ logger = logging.getLogger("aiter")
+ this_dir = os.path.dirname(os.path.abspath(__file__))
+-AITER_CORE_DIR = os.path.abspath(f"{this_dir}/../../")
+-DEFAULT_GPU_ARCH = (
+-    subprocess.run(
++AITER_CORE_DIR = os.path.abspath(f"{this_dir}/../../aiter_meta")
++print("this_dir: " + this_dir)
++print("AITER_CORE_DIR: " + AITER_CORE_DIR)
++#sys.exit(1)
++proc_info = None
++if 'ROCM_HOME' in os.environ:
++    rocm_home = os.environ["ROCM_HOME"]
++    proc_info = subprocess.run(
++        rocm_home + "/llvm/bin/amdgpu-arch", shell=True, capture_output=True, text=True
++    )
++else:
++    proc_info = subprocess.run(
+         "/opt/rocm/llvm/bin/amdgpu-arch", shell=True, capture_output=True, text=True
+     )
+-    .stdout.strip()
+-    .split("\n")[0]
+-)
++DEFAULT_GPU_ARCH = proc_info.stdout.strip().split("\n")[0]
++
+ GPU_ARCH = os.environ.get("GPU_ARCHS", DEFAULT_GPU_ARCH)
+ AITER_REBUILD = int(os.environ.get("AITER_REBUILD", 0))
+ 
+@@ -85,9 +93,16 @@ def mp_lock(
+ 
+ 
+ def get_hip_version():
+-    version = subprocess.run(
+-        "/opt/rocm/bin/hipconfig --version", shell=True, capture_output=True, text=True
+-    )
++    version = ""
++    if 'ROCM_HOME' in os.environ:
++        rocm_home = os.environ["ROCM_HOME"]
++        version = subprocess.run(
++            rocm_home + "/bin/hipconfig --version", shell=True, capture_output=True, text=True
++        )
++    else:
++        version = subprocess.run(
++            "/opt/rocm/bin/hipconfig --version", shell=True, capture_output=True, text=True
++        )
+     return parse(version.stdout.split()[-1].rstrip("-").replace("-", "+"))
+ 
+ 
+-- 
+2.34.1
+

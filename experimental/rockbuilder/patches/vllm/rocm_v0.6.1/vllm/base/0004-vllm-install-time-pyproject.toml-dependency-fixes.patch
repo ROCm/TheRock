@@ -1,0 +1,42 @@
+From bfdff9a6c6b22228771b80c64a92589c147a8429 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Fri, 22 Aug 2025 00:44:29 -0700
+Subject: [PATCH 4/4] vllm install time pyproject.toml dependency fixes
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ CMakeLists.txt | 4 ++--
+ pyproject.toml | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f1a9e5f55..bef942a9f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -45,8 +45,8 @@ set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1031;gfx1
+ # requirements.txt files and should be kept consistent.  The ROCm torch
+ # versions are derived from docker/Dockerfile.rocm
+ #
+-set(TORCH_SUPPORTED_VERSION_CUDA "2.7.0")
+-set(TORCH_SUPPORTED_VERSION_ROCM "2.7.0")
++set(TORCH_SUPPORTED_VERSION_CUDA "2.7.1")
++set(TORCH_SUPPORTED_VERSION_ROCM "2.7.1")
+ 
+ #
+ # Try to find python package with an executable that exactly matches
+diff --git a/pyproject.toml b/pyproject.toml
+index 0b803a26b..beb31f1c5 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -6,7 +6,7 @@ requires = [
+     "packaging>=24.2",
+     "setuptools>=77.0.3,<80.0.0",
+     "setuptools-scm>=8.0",
+-    "torch == 2.7.0",
++    "torch == 2.7.1",
+     "wheel",
+     "jinja2",
+ ]
+-- 
+2.34.1
+

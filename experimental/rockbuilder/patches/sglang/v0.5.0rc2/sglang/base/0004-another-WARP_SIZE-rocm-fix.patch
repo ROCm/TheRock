@@ -1,0 +1,35 @@
+From d826ba647703d0b7938c81ce26ac7deb98c439bb Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 25 Aug 2025 17:24:18 -0700
+Subject: [PATCH 4/4] another WARP_SIZE rocm fix
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ sgl-kernel/csrc/moe/moe_align_kernel.cu | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/sgl-kernel/csrc/moe/moe_align_kernel.cu b/sgl-kernel/csrc/moe/moe_align_kernel.cu
+index 19d0cc7..76e2a26 100644
+--- a/sgl-kernel/csrc/moe/moe_align_kernel.cu
++++ b/sgl-kernel/csrc/moe/moe_align_kernel.cu
+@@ -21,7 +21,16 @@ limitations under the License.
+ 
+ #include "utils.h"
+ 
+-#define WARP_SIZE 32
++#ifndef USE_ROCM
++  #define WARP_SIZE 32
++#else
++  #if defined(__HIPCC__) && \
++      (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__))
++    #define WARP_SIZE 64
++  #else
++    #define WARP_SIZE 32
++  #endif
++#endif
+ 
+ #define VEC_SIZE 4
+ using Vec = int4;
+-- 
+2.34.1
+

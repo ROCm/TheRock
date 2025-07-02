@@ -1,0 +1,40 @@
+From 83dcaff105f06ca42e3e255214ac83f64f2edb01 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 5 Jun 2025 02:58:23 -0700
+Subject: [PATCH 2/4] add more amd gpus
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ CMakeLists.txt         | 2 +-
+ csrc/rocm/attention.cu | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ea56b84..733920b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -33,7 +33,7 @@ install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
+ set(PYTHON_SUPPORTED_VERSIONS "3.9" "3.10" "3.11" "3.12")
+ 
+ # Supported AMD GPU architectures.
+-set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201")
++set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1031;gfx1032;gfx1034;gfx1035;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201")
+ 
+ #
+ # Supported/expected torch versions for CUDA/ROCm.
+diff --git a/csrc/rocm/attention.cu b/csrc/rocm/attention.cu
+index 65cb1c1..be260d2 100644
+--- a/csrc/rocm/attention.cu
++++ b/csrc/rocm/attention.cu
+@@ -30,7 +30,7 @@
+   #define __HIP__GFX9__
+ #endif
+ 
+-#if defined(__HIPCC__) && (defined(__gfx1100__) || defined(__gfx1101__))
++#if defined(__HIPCC__) && (defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1103__) || defined(__gfx1103__) || defined(__gfx1150__) || defined(__gfx1151__))
+   #define __HIP__GFX11__
+ #endif
+ 
+-- 
+2.34.1
+

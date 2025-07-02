@@ -1,0 +1,91 @@
+From dd48d8f6ac4dfc97f9ed6a4a6277d9fb1833e9b9 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Fri, 22 Aug 2025 03:50:22 -0700
+Subject: [PATCH 1/4] install time dependency updates
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ python/pyproject.toml     | 16 +++++++++-------
+ sgl-kernel/pyproject.toml | 13 +++----------
+ 2 files changed, 12 insertions(+), 17 deletions(-)
+
+diff --git a/python/pyproject.toml b/python/pyproject.toml
+index 14273da..cf9594a 100644
+--- a/python/pyproject.toml
++++ b/python/pyproject.toml
+@@ -15,6 +15,8 @@ classifiers = [
+ ]
+ dependencies = ["aiohttp", "requests", "tqdm", "numpy", "IPython", "setproctitle"]
+ 
++# transformers patch is for vllm versions < 0.10.0, see: https://github.com/vllm-project/vllm-ascend/issues/2046
++# xgrammar 0.1.22 is not compatible with vllm 0.6.x warning fix
+ [project.optional-dependencies]
+ runtime_common = [
+     "blobfile==3.0.0",
+@@ -50,17 +52,17 @@ runtime_common = [
+     "timm==1.0.16",
+     "tiktoken",
+     "torchao==0.9.0",
+-    "transformers==4.55.2",
++    "transformers>=4.51.1,<4.54.0",
+     "uvicorn",
+     "uvloop",
+-    "xgrammar==0.1.22",
++    "xgrammar==0.1.21",
+ ]
+ 
+ srt = [
+     "sglang[runtime_common]",
+-    "sgl-kernel==0.3.5",
+-    "torch==2.8.0",
+-    "torchaudio==2.8.0",
++    "sgl-kernel",
++    "torch",
++    "torchaudio",
+     "torchvision",
+     "cuda-python",
+     "flashinfer_python==0.2.11.post3",
+@@ -69,8 +71,8 @@ srt = [
+ blackwell = [
+     "sglang[runtime_common]",
+     "sgl-kernel",
+-    "torch==2.8.0",
+-    "torchaudio==2.8.0",
++    "torch",
++    "torchaudio",
+     "torchvision",
+     "cuda-python",
+     "flashinfer_python==0.2.11.post3",
+diff --git a/sgl-kernel/pyproject.toml b/sgl-kernel/pyproject.toml
+index 8ef73a4..7a3a256 100644
+--- a/sgl-kernel/pyproject.toml
++++ b/sgl-kernel/pyproject.toml
+@@ -1,10 +1,11 @@
+ [build-system]
+ requires = [
++  "setuptools>=75.0",
+   "scikit-build-core>=0.10",
+-  "torch>=2.8.0",
++  "torch",
+   "wheel",
+ ]
+-build-backend = "scikit_build_core.build"
++build-backend = "setuptools.build_meta"
+ 
+ [project]
+ name = "sgl-kernel"
+@@ -29,11 +30,3 @@ exclude = [
+   "dist*",
+   "tests*",
+ ]
+-
+-[tool.scikit-build]
+-cmake.build-type = "Release"
+-minimum-version = "build-system.requires"
+-
+-wheel.py-api = "cp310"
+-wheel.license-files = []
+-wheel.packages = ["python/sgl_kernel"]
+-- 
+2.34.1
+

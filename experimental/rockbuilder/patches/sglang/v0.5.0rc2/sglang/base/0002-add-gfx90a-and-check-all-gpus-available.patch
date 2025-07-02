@@ -1,0 +1,72 @@
+From 4cf6543490adba7a6a0b92133261ed1f21cbd8e1 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 25 Aug 2025 08:06:05 +0000
+Subject: [PATCH 2/4] add gfx90a and check all gpus available
+
+- add gfx90a to list of supported gpus
+- fix the logic which earlier only checked via pytorch
+  api the first gpu and exited on error if that GPU
+  was not in the list of supported gpus.
+  Instead of that loop over the list of all
+  available gpus and then select from that list
+  the first one that can be accepted.
+  (fixes for example and build error in cases where the
+   system has both the gfx1100 and gfx90a installed
+   but only the gfx90a is accepted/supported by the sglang)
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ sgl-kernel/setup_rocm.py | 29 ++++++++++++++++++++---------
+ 1 file changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/sgl-kernel/setup_rocm.py b/sgl-kernel/setup_rocm.py
+index a919d8f..34ed304 100644
+--- a/sgl-kernel/setup_rocm.py
++++ b/sgl-kernel/setup_rocm.py
+@@ -55,23 +55,34 @@ libraries = ["hiprtc", "amdhip64", "c10", "torch", "torch_python"]
+ extra_link_args = ["-Wl,-rpath,$ORIGIN/../../torch/lib", f"-L/usr/lib/{arch}-linux-gnu"]
+ 
+ default_target = "gfx942"
+-amdgpu_target = os.environ.get("AMDGPU_TARGET", default_target)
+-
+-if torch.cuda.is_available():
++amdgpu_targets = os.environ.get("AMDGPU_TARGET", default_target)
++print("amggpu_targets_list: " + amdgpu_targets)
++#sys.exit(1)
++if (not amdgpu_targets) and torch.cuda.is_available():
+     try:
+-        amdgpu_target = torch.cuda.get_device_properties(0).gcnArchName.split(":")[0]
++        gpu_cnt = torch.cuda.device_count()
++        for ii in range(gpu_cnt):
++            amdgpu_target = torch.cuda.get_device_properties(ii).gcnArchName.split(":")[0]
++            if amdgpu_targets:
++                amdgpu_targets = amdgpu_targets + ";" + amdgpu_target
++            else:
++                amdgpu_targets = amdgpu_target
++        print("amggpu_targets2: " + amdgpu_targets)
+     except Exception as e:
+         print(f"Warning: Failed to detect GPU properties: {e}")
+-else:
+-    print(f"Warning: torch.cuda not available. Using default target: {amdgpu_target}")
+ 
+-if amdgpu_target not in ["gfx942", "gfx950"]:
++amdgpu_target = None
++amdgpu_targets = amdgpu_targets.split(";")
++for ii, amdgpu_target_candidate in enumerate(amdgpu_targets):
++    if amdgpu_target_candidate in ["gfx90a", "gfx942", "gfx950"]:
++        amdgpu_target = amdgpu_target_candidate
++        break
++if not amdgpu_target:
+     print(
+         f"Warning: Unsupported GPU architecture detected '{amdgpu_target}'. Expected 'gfx942' or 'gfx950'."
+     )
+     sys.exit(1)
+-
+-
++print("amdgpu_target: " + amdgpu_target)
+ hipcc_flags = [
+     "-DNDEBUG",
+     f"-DOPERATOR_NAMESPACE={operator_namespace}",
+-- 
+2.34.1
+

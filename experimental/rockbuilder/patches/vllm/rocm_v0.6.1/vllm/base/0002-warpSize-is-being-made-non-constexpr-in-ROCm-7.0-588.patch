@@ -1,0 +1,88 @@
+From 3927f1a8498d5424330abef89fc4af1be13ae7ed Mon Sep 17 00:00:00 2001
+From: Gregory Shtrasberg <156009573+gshtras@users.noreply.github.com>
+Date: Tue, 1 Jul 2025 15:11:27 -0400
+Subject: [PATCH 2/4] warpSize is being made non constexpr in ROCm 7.0 (#588)
+
+Signed-off-by: Gregory Shtrasberg <Gregory.Shtrasberg@amd.com>
+---
+ csrc/attention/attention_kernels.cuh | 6 +++---
+ csrc/attention/paged_attention_v1.cu | 6 +++---
+ csrc/attention/paged_attention_v2.cu | 6 +++---
+ csrc/cuda_compat.h                   | 6 +++---
+ 4 files changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/csrc/attention/attention_kernels.cuh b/csrc/attention/attention_kernels.cuh
+index 79a546554..bee156469 100644
+--- a/csrc/attention/attention_kernels.cuh
++++ b/csrc/attention/attention_kernels.cuh
+@@ -33,10 +33,10 @@ typedef __hip_bfloat16 __nv_bfloat16;
+   #include "../quantization/fp8/nvidia/quant_utils.cuh"
+ #endif
+ 
+-#ifndef USE_ROCM
+-  #define WARP_SIZE 32
++#if defined(USE_ROCM) && defined(__GFX9__)
++  #define WARP_SIZE 64
+ #else
+-  #define WARP_SIZE warpSize
++  #define WARP_SIZE 32
+ #endif
+ 
+ #define MAX(a, b) ((a) > (b) ? (a) : (b))
+diff --git a/csrc/attention/paged_attention_v1.cu b/csrc/attention/paged_attention_v1.cu
+index 9b3a5c4b1..8b1664d75 100644
+--- a/csrc/attention/paged_attention_v1.cu
++++ b/csrc/attention/paged_attention_v1.cu
+@@ -19,10 +19,10 @@
+ 
+ #include "attention_kernels.cuh"
+ 
+-#ifndef USE_ROCM
+-  #define WARP_SIZE 32
++#if defined(USE_ROCM) && defined(__GFX9__)
++  #define WARP_SIZE 64
+ #else
+-  #define WARP_SIZE warpSize
++  #define WARP_SIZE 32
+ #endif
+ 
+ #define MAX(a, b) ((a) > (b) ? (a) : (b))
+diff --git a/csrc/attention/paged_attention_v2.cu b/csrc/attention/paged_attention_v2.cu
+index 9935359e0..68e4d5150 100644
+--- a/csrc/attention/paged_attention_v2.cu
++++ b/csrc/attention/paged_attention_v2.cu
+@@ -19,10 +19,10 @@
+ 
+ #include "attention_kernels.cuh"
+ 
+-#ifndef USE_ROCM
+-  #define WARP_SIZE 32
++#if defined(USE_ROCM) && defined(__GFX9__)
++  #define WARP_SIZE 64
+ #else
+-  #define WARP_SIZE warpSize
++  #define WARP_SIZE 32
+ #endif
+ 
+ #define MAX(a, b) ((a) > (b) ? (a) : (b))
+diff --git a/csrc/cuda_compat.h b/csrc/cuda_compat.h
+index 82e55613d..affa051c7 100644
+--- a/csrc/cuda_compat.h
++++ b/csrc/cuda_compat.h
+@@ -4,10 +4,10 @@
+   #include <hip/hip_runtime.h>
+ #endif
+ 
+-#ifndef USE_ROCM
+-  #define WARP_SIZE 32
++#if defined(USE_ROCM) && defined(__GFX9__)
++  #define WARP_SIZE 64
+ #else
+-  #define WARP_SIZE warpSize
++  #define WARP_SIZE 32
+ #endif
+ 
+ #ifndef USE_ROCM
+-- 
+2.34.1
+

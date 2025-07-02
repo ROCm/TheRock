@@ -1,0 +1,75 @@
+From 2b214f462891e9fea11f6844c098b1681a62f0ee Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Fri, 22 Aug 2025 00:36:27 -0700
+Subject: [PATCH 3/4] vllm buildtime dependency fixes
+
+- remove torch version and download urls
+  because that caused the therock version of
+  rocm sdk to be replaced with the one
+  version in rocm 6.2.4 repository
+- remove triton version requirements to
+  3.2 to allow building a never triton version
+  (pytorch 2.7.0 will by default build
+   triton 3.3.0 in ci scripts)
+- remove amdsmi version requirement
+- xgrammar == 0.1.21 to get rid from the 0.1.22 is not
+  compatible error
+- transformers < 4.54.0 to fix the aimv2
+  registration conflictict issue
+  https://github.com/vllm-project/vllm-ascend/issues/2046
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ requirements/common.txt     |  3 ++-
+ requirements/rocm-build.txt | 10 +++++-----
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/requirements/common.txt b/requirements/common.txt
+index 80f90e600..15e8a66a6 100644
+--- a/requirements/common.txt
++++ b/requirements/common.txt
+@@ -7,6 +7,7 @@ tqdm
+ blake3
+ py-cpuinfo
+ transformers >= 4.51.1
++transformers >=4.51.1, < 4.54.0  # aimv2 registration conflictict, https://github.com/vllm-project/vllm-ascend/issues/2046
+ huggingface-hub[hf_xet] >= 0.30.0  # Required for Xet downloads.
+ tokenizers >= 0.21.1  # Required for fast incremental detokenization.
+ protobuf # Required by LlamaTokenizer.
+@@ -22,7 +23,7 @@ lm-format-enforcer >= 0.10.11, < 0.11
+ llguidance >= 0.7.11, < 0.8.0; platform_machine == "x86_64" or platform_machine == "arm64" or platform_machine == "aarch64"
+ outlines == 0.1.11
+ lark == 1.2.2
+-xgrammar == 0.1.19; platform_machine == "x86_64" or platform_machine == "aarch64"
++xgrammar == 0.1.21; platform_machine == "x86_64" or platform_machine == "aarch64"
+ typing_extensions >= 4.10
+ filelock >= 3.16.1 # need to contain https://github.com/tox-dev/filelock/pull/317
+ partial-json-parser # used for parsing partial JSON outputs
+diff --git a/requirements/rocm-build.txt b/requirements/rocm-build.txt
+index 981b90632..f98f5352a 100644
+--- a/requirements/rocm-build.txt
++++ b/requirements/rocm-build.txt
+@@ -2,15 +2,15 @@
+ -r common.txt
+ 
+ --extra-index-url https://download.pytorch.org/whl/rocm6.2.4
+-torch==2.7.0
+-torchvision==0.22.0
+-torchaudio==2.7.0
++torch
++torchvision
++torchaudio
+ 
+-triton==3.2
++triton
+ cmake>=3.26,<4
+ packaging>=24.2
+ setuptools>=77.0.3,<80.0.0
+ setuptools-scm>=8
+ wheel
+ jinja2>=3.1.6
+-amdsmi==6.2.4
++amdsmi
+-- 
+2.34.1
+

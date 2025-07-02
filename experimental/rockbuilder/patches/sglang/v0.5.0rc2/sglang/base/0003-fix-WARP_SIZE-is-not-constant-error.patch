@@ -1,0 +1,40 @@
+From 620da7b744245204c724c3153037da9d59d1a5ba Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 25 Aug 2025 16:44:29 -0700
+Subject: [PATCH 3/4] fix WARP_SIZE is not constant error
+
+sglang/sgl-kernel/include/utils_hip.h:391:41: error: array size is not a constant expression
+  391 |   static __shared__ float warpLevelMaxs[WARP_SIZE];
+      |                                         ^~~~~~~~~
+sglang/sgl-kernel/include/utils_hip.h:316:19: note: expanded from macro 'WARP_SIZE'
+  316 | #define WARP_SIZE warpSize  // 64
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ sgl-kernel/include/utils.h | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/sgl-kernel/include/utils.h b/sgl-kernel/include/utils.h
+index d7d0d5d..f894ad3 100644
+--- a/sgl-kernel/include/utils.h
++++ b/sgl-kernel/include/utils.h
+@@ -310,9 +310,14 @@ inline bool getEnvEnablePDL() {
+ #define CEILDIV(x, y) (((x) + (y) - 1) / (y))
+ 
+ #ifndef USE_ROCM
+-#define WARP_SIZE 32
++  #define WARP_SIZE 32
+ #else
+-#define WARP_SIZE warpSize  // 64
++  #if defined(__HIPCC__) && \
++      (defined(__gfx90a__) || defined(__gfx942__) || defined(__gfx950__))
++    #define WARP_SIZE 64
++  #else
++    #define WARP_SIZE 32
++  #endif
+ #endif
+ 
+ #if defined(__HIP_PLATFORM_AMD__)
+-- 
+2.34.1
+

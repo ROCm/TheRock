@@ -1,0 +1,61 @@
+From 0df4b71a6fe1bbba0f54ae3a4a3b8a06f9654dc5 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Fri, 1 Aug 2025 21:05:52 -0700
+Subject: [PATCH 4/4] add python 3.13
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ CMakeLists.txt        | 2 +-
+ pyproject.toml        | 3 ++-
+ requirements/rocm.txt | 2 +-
+ 3 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 733920b..a1a6d79 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -30,7 +30,7 @@ install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
+ # Supported python versions.  These versions will be searched in order, the
+ # first match will be selected.  These should be kept in sync with setup.py.
+ #
+-set(PYTHON_SUPPORTED_VERSIONS "3.9" "3.10" "3.11" "3.12")
++set(PYTHON_SUPPORTED_VERSIONS "3.9" "3.10" "3.11" "3.12", "3.13")
+ 
+ # Supported AMD GPU architectures.
+ set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1031;gfx1032;gfx1034;gfx1035;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201")
+diff --git a/pyproject.toml b/pyproject.toml
+index 25c368e..3abe674 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -23,13 +23,14 @@ classifiers = [
+     "Programming Language :: Python :: 3.10",
+     "Programming Language :: Python :: 3.11",
+     "Programming Language :: Python :: 3.12",
++    "Programming Language :: Python :: 3.13",
+     "Intended Audience :: Developers",
+     "Intended Audience :: Information Technology",
+     "Intended Audience :: Science/Research",
+     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+     "Topic :: Scientific/Engineering :: Information Analysis",
+ ]
+-requires-python = ">=3.9,<3.13"
++requires-python = ">=3.9,<3.14"
+ dynamic = [ "version", "dependencies", "optional-dependencies"]
+ 
+ [project.urls]
+diff --git a/requirements/rocm.txt b/requirements/rocm.txt
+index 7038c90..a8680fd 100644
+--- a/requirements/rocm.txt
++++ b/requirements/rocm.txt
+@@ -8,7 +8,7 @@ numba == 0.61.2; python_version > '3.9'
+ boto3
+ botocore
+ datasets
+-ray>=2.10.0,<2.45.0
++ray>=2.10.0,<2.46.0
+ peft
+ pytest-asyncio
+ tensorizer==2.10.1
+-- 
+2.34.1
+

@@ -1,0 +1,41 @@
+From 54a64ae6aba873778da48a602bd218d819eff9a1 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 8 Jul 2025 19:15:30 +0000
+Subject: [PATCH 2/3] try to create lock file dir if it does not exist
+
+- lock file directory does not exist
+  on python env after aiter has been installed from
+  pip wheel and this causes error when trying to create
+  a lock-file when running sglang test
+  test_srt_endpoint.py
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ aiter/jit/utils/file_baton.py | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/aiter/jit/utils/file_baton.py b/aiter/jit/utils/file_baton.py
+index 40ed604c..e57e145e 100644
+--- a/aiter/jit/utils/file_baton.py
++++ b/aiter/jit/utils/file_baton.py
+@@ -24,6 +24,17 @@ class FileBaton:
+         self.lock_file_path = lock_file_path
+         self.wait_seconds = wait_seconds
+         self.fd = None
++        try:
++            # check the existence of directory (may be created on after installed as a wheel)
++            dir_name = os.path.dirname(self.lock_file_path)
++            if not os.path.isdir(dir_name):
++                os.makedirs(dir_name)
++        except PermissionError:
++            print(f"Permission denied: Cannot create lock directory: {directory_path}")
++        except OSError as e:
++            print(f"An OS error occurred while creating lock directory: {directory_path}, {e}")
++        except Exception as e:
++            print(f"An unexpected error occurred while creating lock directory: {directory_path}, {e}")
+ 
+     def try_acquire(self):
+         """
+-- 
+2.34.1
+

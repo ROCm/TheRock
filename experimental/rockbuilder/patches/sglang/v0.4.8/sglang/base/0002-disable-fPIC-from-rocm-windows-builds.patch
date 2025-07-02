@@ -1,0 +1,62 @@
+From ca4914145826c61bb3f977630de4424b0e3815c7 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 7 Jul 2025 02:01:56 +0000
+Subject: [PATCH 2/5] disable fPIC from rocm windows builds
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ sgl-kernel/setup_rocm.py | 38 ++++++++++++++++++++++++++------------
+ 1 file changed, 26 insertions(+), 12 deletions(-)
+
+diff --git a/sgl-kernel/setup_rocm.py b/sgl-kernel/setup_rocm.py
+index 4ab8635..0f15641 100644
+--- a/sgl-kernel/setup_rocm.py
++++ b/sgl-kernel/setup_rocm.py
+@@ -68,18 +68,32 @@ if amdgpu_target not in ["gfx942", "gfx950"]:
+     )
+     sys.exit(1)
+ 
+-hipcc_flags = [
+-    "-DNDEBUG",
+-    f"-DOPERATOR_NAMESPACE={operator_namespace}",
+-    "-O3",
+-    "-Xcompiler",
+-    "-fPIC",
+-    "-std=c++17",
+-    "-D__HIP_PLATFORM_AMD__=1",
+-    f"--amdgpu-target={amdgpu_target}",
+-    "-DENABLE_BF16",
+-    "-DENABLE_FP8",
+-]
++is_windows = any(platform.win32_ver())
++if is_windows:
++    hipcc_flags = [
++        "-DNDEBUG",
++        f"-DOPERATOR_NAMESPACE={operator_namespace}",
++        "-O3",
++        "-Xcompiler",
++        "-std=c++17",
++        "-D__HIP_PLATFORM_AMD__=1",
++        f"--amdgpu-target={amdgpu_target}",
++        "-DENABLE_BF16",
++        "-DENABLE_FP8",
++    ]
++else:
++    hipcc_flags = [
++        "-DNDEBUG",
++        f"-DOPERATOR_NAMESPACE={operator_namespace}",
++        "-O3",
++        "-Xcompiler",
++        "-fPIC",
++        "-std=c++17",
++        "-D__HIP_PLATFORM_AMD__=1",
++        f"--amdgpu-target={amdgpu_target}",
++        "-DENABLE_BF16",
++        "-DENABLE_FP8",
++    ]
+ 
+ ext_modules = [
+     CUDAExtension(
+-- 
+2.43.0
+
