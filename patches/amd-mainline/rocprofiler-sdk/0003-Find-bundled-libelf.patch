@@ -1,0 +1,35 @@
+From 501046a670dab5ef0630f7f86146cef9d743f4aa Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Wed, 2 Jul 2025 22:55:02 +0000
+Subject: [PATCH 3/3] Find bundled libelf
+
+---
+ cmake/rocprofiler_config_interfaces.cmake | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/cmake/rocprofiler_config_interfaces.cmake b/cmake/rocprofiler_config_interfaces.cmake
+index d8178a2e..e40dd308 100644
+--- a/cmake/rocprofiler_config_interfaces.cmake
++++ b/cmake/rocprofiler_config_interfaces.cmake
+@@ -204,8 +204,8 @@ target_link_libraries(rocprofiler-sdk-ptl INTERFACE PTL::ptl-static)
+ #
+ # ----------------------------------------------------------------------------------------#
+ 
+-find_package(libelf REQUIRED)
+-target_link_libraries(rocprofiler-sdk-elf INTERFACE libelf::libelf)
++find_package(LibElf REQUIRED)
++target_link_libraries(rocprofiler-sdk-elf INTERFACE elf::elf)
+ 
+ # ----------------------------------------------------------------------------------------#
+ #
+@@ -260,6 +260,7 @@ rocprofiler_config_nolink_target(rocprofiler-sdk-hsakmt-nolink hsakmt::hsakmt)
+ 
+ # TODO: Work with rocprof team to determine when xf86drm is needed and transition
+ # to using pkg_check (like ROCR) vs loose find_library and find_path.
++find_package(PkgConfig)
+ pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
+ pkg_check_modules(DRM_AMDGPU REQUIRED IMPORTED_TARGET libdrm_amdgpu)
+ target_include_directories(rocprofiler-sdk-drm SYSTEM INTERFACE ${DRM_INCLUDE_DIRS}
+-- 
+2.43.0
+
