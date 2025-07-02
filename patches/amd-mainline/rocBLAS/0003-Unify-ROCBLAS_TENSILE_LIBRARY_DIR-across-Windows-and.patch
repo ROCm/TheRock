@@ -1,4 +1,4 @@
-From 82dcd5008137dc4937ff11e23ba0e79e62f835dd Mon Sep 17 00:00:00 2001
+From 5a0aab1001b9fd4c17e0acb59e0c0c24e4cd35ed Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 5 Jun 2025 17:51:14 -0700
 Subject: [PATCH 3/4] Unify ROCBLAS_TENSILE_LIBRARY_DIR across Windows and
@@ -7,7 +7,8 @@ Subject: [PATCH 3/4] Unify ROCBLAS_TENSILE_LIBRARY_DIR across Windows and
 Splitting the structure leads to further complexity in all downstream projects and tooling.
 ---
  library/src/CMakeLists.txt | 6 +-----
- 1 file changed, 1 insertion(+), 5 deletions(-)
+ next-cmake/CMakeLists.txt  | 6 +-----
+ 2 files changed, 2 insertions(+), 10 deletions(-)
 
 diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
 index f4bdfb5f..e39c74cf 100644
@@ -26,6 +27,23 @@ index f4bdfb5f..e39c74cf 100644
    # For ASAN package, Tensile library files(which are not shared libraries) are not required
    if( NOT ENABLE_ASAN_PACKAGING )
      if( BUILD_SHARED_LIBS )
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index 7437d97c..2ee3f0cc 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -55,11 +55,7 @@ if(ROCBLAS_ENABLE_CLIENT)
+ endif()
+ 
+ if(ROCBLAS_ENABLE_TENSILE)
+-  if(WIN32)
+-    set(ROCBLAS_TENSILE_INSTALL_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}rocblas/bin" CACHE PATH "Path to install tree tensile library")
+-  else()
+-    set(ROCBLAS_TENSILE_INSTALL_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}${CMAKE_INSTALL_LIBDIR}/rocblas/library" CACHE PATH "Path to tensile library")
+-  endif()
++  set(ROCBLAS_TENSILE_INSTALL_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}${CMAKE_INSTALL_LIBDIR}/rocblas/library" CACHE PATH "Path to tensile library")
+   set(ROCBLAS_TENSILE_SUBDIR_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../Tensile" CACHE STRING "Path to Tensile subdirectory")
+ endif()
+ set(ROCBLAS_CONFIG_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}" CACHE PATH "Path placed into ldconfig file")
 -- 
 2.47.1.windows.2
 

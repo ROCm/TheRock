@@ -1,4 +1,4 @@
-From 5722884211fb7ad6a4502db9214b3ccc5691c00d Mon Sep 17 00:00:00 2001
+From 41c074ce5d8588bcab5790f6c50037208e5df2d9 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 6 Mar 2025 15:16:19 -0800
 Subject: [PATCH 1/4] Update 'packaging' in pip venv to stabilize setuptools.
