@@ -195,7 +195,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/populate_redshift_db.py \
             --api_op '${{ steps.job-status-step.outputs.job_summary }}' --redshift_cluster_endpoint ${{ env.REDSHIFT_HOST }} \
-            --redshift_username ${{ env.REDSHIFT_USER }} --dbname ${{ env.REDSHIFT_DBNAME  }} --redshift_password ${{ env.REDSHIFT_PASSWD }} --build_id ${{ github.run_number }}
+            --redshift_username ${{ env.REDSHIFT_USER }} --dbname ${{ env.REDSHIFT_DBNAME  }} --redshift_password "${{ env.REDSHIFT_PASSWD }}"" --build_id ${{ github.run_number }}
 
       - name: Upload Logs
         if: always()
