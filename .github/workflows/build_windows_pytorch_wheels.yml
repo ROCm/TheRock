@@ -89,10 +89,6 @@ jobs:
           choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
-      # After other installs, so MSVC get priority in the PATH.
-      - name: Configure MSVC
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-
       - name: Checkout PyTorch Source Repos
         run: |
           git config --global core.longpaths true
@@ -100,6 +96,10 @@ jobs:
           # TODO(#910): Support torchvision and torchaudio on Windows
           # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
+
+      # After other installs, so MSVC get priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Build PyTorch Wheels
         shell: cmd
