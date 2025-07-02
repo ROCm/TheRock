@@ -444,6 +444,9 @@ def do_build_pytorch(
                 #     static_assert(has_same_arg_types<func1_t>::value, "func1_t has the same argument types");
                 # We may want to fix that and other issues to then enable building tests.
                 "BUILD_TEST": "0",
+                # Debugging (do these even get plumbed through to the pytorch build?)
+                "CMAKE_EXECUTE_PROCESS_COMMAND_ECHO": "STDOUT",
+                "HIP_VERBOSE_BUILD": "1",
             }
         )
 
