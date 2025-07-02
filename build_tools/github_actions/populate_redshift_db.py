@@ -49,8 +49,6 @@ input_dict = json.loads(args.api_op)
 
 print(args.api_op)
 
-print("Redshift password :{}".format(args.redshift_password))
-
 conn = psycopg2.connect(
     host=args.redshift_cluster_endpoint,
     port=args.redshift_port,
@@ -60,7 +58,6 @@ conn = psycopg2.connect(
     connect_timeout=60
 )
 
-print(conn)
 cur = conn.cursor()
 
 cur.execute("Select * FROM workflow_run_details LIMIT 0")
