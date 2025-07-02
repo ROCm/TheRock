@@ -60,9 +60,9 @@ jobs:
         run: |
           echo "---ccache debugging/pvc tests---"
           mkdir -p "$(dirname $CCACHE_LOGFILE)"
-          mkdir -p /mnt/pvc/$AMDGPU_FAMILIES
+          mkdir -p /home/runner/$AMDGPU_FAMILIES
           du /mnt/pvc -h -d 1
-          ln -s /mnt/pvc/$AMDGPU_FAMILIES $CACHE_DIR
+          ln -s /home/runner/$AMDGPU_FAMILIES $CACHE_DIR
           echo "$CACHE_DIR after link:"
           ls $CACHE_DIR -al
 
