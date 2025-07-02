@@ -38,8 +38,11 @@ def pin_ck():
     with open(requirements_file_path) as requirements_file:
         requirements = requirements_file.read().splitlines()
 
+    # The requirements file pins several dependencies. And entry for CK looks like:
+    # 'ROCm/composable_kernel@778ac24376813d18e63c9f77a2dd51cf87eb4a80 -DCMAKE_BUILD_TYPE=Release'
+    # After filtering, the string is split to isolate the CK commit.
     ck_requirement = list(
-        filter(lambda x: "ROCm/composable_kernel" in x, requirements)
+        filter(lambda x: "rocm/composable_kernel" in x.lower(), requirements)
     )[0]
     ck_commit = ck_requirement.split("@")[-1].split()[0]
 
