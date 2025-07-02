@@ -122,7 +122,7 @@ def get_build_arguments(
     for ii, prj_item in enumerate(project_list):
         parser.add_argument(
             "--" + prj_item + "-version",
-            help=prj_item + " version used for the oprations",
+            help=prj_item + " version used for the operations",
             default=None,
         )
 
