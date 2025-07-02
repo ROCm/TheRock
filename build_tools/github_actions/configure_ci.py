@@ -46,11 +46,10 @@ import sys
 from typing import Iterable, List, Mapping, Optional
 import string
 from amdgpu_family_matrix import (
-    amdgpu_family_info_matrix,
-    DEFAULT_LINUX_CONFIGURATIONS,
-    DEFAULT_WINDOWS_CONFIGURATIONS,
+    amdgpu_family_info_matrix_presubmit,
+    amdgpu_family_info_matrix_postsubmit,
+    amdgpu_family_matrix_xfail,
 )
-from amdgpu_family_matrix_xfail import amdgpu_family_matrix_xfail
 
 # --------------------------------------------------------------------------- #
 # General utilities
@@ -239,14 +238,14 @@ def matrix_generator(
 ):
     """Parses and generates build matrix with build requirements"""
     targets = []
-    matrix = amdgpu_family_info_matrix
+    matrix = amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
 
     # For the specific event trigger, parse linux and windows target information
     # if the trigger is a workflow_dispatch, parse through the inputs and retrieve the list
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
         # For workflow dispatch, user can select an "expect_failure" family or regular family
-        matrix = amdgpu_family_info_matrix | amdgpu_family_matrix_xfail
+        matrix = matrix | amdgpu_family_matrix_xfail
 
         input_gpu_targets = families.get("amdgpu_families")
 
@@ -268,24 +267,20 @@ def matrix_generator(
                 potential_targets.append(target)
         targets.extend(discover_targets(potential_targets, matrix))
 
-        # Add the linux and windows default labels to the potential target lists
-        if platform == "linux":
-            for target in DEFAULT_LINUX_CONFIGURATIONS:
-                targets.append(target)
-        else:
-            for target in DEFAULT_WINDOWS_CONFIGURATIONS:
-                targets.append(target)
+        # Add the presubmit targets
+        for target in amdgpu_family_info_matrix_presubmit:
+            targets.append(target)
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
         # Add all options except for families that allow failures
-        for key in amdgpu_family_info_matrix:
+        for key in matrix:
             targets.append(key)
 
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
         # For schedule runs, we will run build and tests for only expect_failure families
-        matrix = amdgpu_family_matrix_xfail
+        matrix = matrix | amdgpu_family_matrix_xfail
 
         # Add all options that allow failures
         for key in amdgpu_family_matrix_xfail:

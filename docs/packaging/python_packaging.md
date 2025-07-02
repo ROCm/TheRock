@@ -77,7 +77,7 @@ variables. Examples (exact settings needed will vary by project being built):
 
 ```bash
 -DCMAKE_PREFIX_PATH=$(rocm-sdk path --cmake)
--DROCM_HOM=$(rocm-sdk path --root)
+-DROCM_HOME=$(rocm-sdk path --root)
 export PATH="$(rocm-sdk path --bin):$PATH"
 ```
 
@@ -120,6 +120,7 @@ Generate a `_rocm_init.py` file like this (using any suitable scripting):
 echo "
 import rocm_sdk
 rocm_sdk.initialize_process(library_shortnames=[
+  'amd_comgr',
   'amdhip64',
   'roctx64',
   'hiprtc',

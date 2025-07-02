@@ -2,9 +2,6 @@
 
 """Fetches artifacts from S3.
 
-NOTE: This script currently only retrieves the requested artifacts,
-but those artifacts may not have all required dependencies.
-
 The install_rocm_from_artifacts.py script builds on top of this script to both
 download artifacts then unpack them into a usable install directory.
 
@@ -12,6 +9,14 @@ Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   mkdir -p ~/.therock/artifacts_15685736080
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
+
+Or, to fetch _all_ artifacts and not just a subset (this is safest for packaging
+workflows where dependencies may not be accurately modeled, at the cost of
+additional disk space):
+  mkdir -p ~/.therock/artifacts_15685736080
+  python build_tools/fetch_artifacts.py \
+    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
+    --all
 """
 
 import argparse
@@ -30,6 +35,7 @@ THEROCK_DIR = Path(__file__).resolve().parent.parent
 # Importing build_artifact_upload.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from upload_build_artifacts import retrieve_bucket_info
+from _therock_utils.artifacts import ArtifactName
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
@@ -110,6 +116,11 @@ class ArtifactDownloadRequest:
     output_path: Path
 
 
+def get_bucket_url(run_id: str):
+    external_repo, bucket = retrieve_bucket_info()
+    return f"https://{bucket}.s3.us-east-2.amazonaws.com/{external_repo}{run_id}-{PLATFORM}"
+
+
 def collect_artifacts_download_requests(
     artifact_names: list[str],
     run_id: str,
@@ -118,8 +129,8 @@ def collect_artifacts_download_requests(
     existing_artifacts: set[str],
 ) -> list[ArtifactDownloadRequest]:
     """Collects S3 artifact URLs to execute later in parallel."""
-    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
-    BUCKET_URL = f"https://{BUCKET}.s3.us-east-2.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
+    bucket_url = get_bucket_url(run_id)
+
     artifacts_to_retrieve = []
     for artifact_name in artifact_names:
         file_name = f"{artifact_name}_{variant}.tar.xz"
@@ -127,7 +138,7 @@ def collect_artifacts_download_requests(
         if file_name in existing_artifacts:
             artifacts_to_retrieve.append(
                 ArtifactDownloadRequest(
-                    artifact_url=f"{BUCKET_URL}/{file_name}",
+                    artifact_url=f"{bucket_url}/{file_name}",
                     output_path=output_dir / file_name,
                 )
             )
@@ -157,7 +168,37 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
             future.result(timeout=60)
 
 
-def retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts):
+def retrieve_all_artifacts(
+    run_id: str,
+    target: str,
+    output_dir: Path,
+    s3_artifacts: set[str],
+):
+    """Retrieves all available artifacts."""
+
+    bucket_url = get_bucket_url(run_id)
+    artifacts_to_retrieve = []
+    for artifact in sorted(list(s3_artifacts)):
+        an = ArtifactName.from_filename(artifact)
+        if an.target_family != "generic" and target != an.target_family:
+            continue
+
+        artifacts_to_retrieve.append(
+            ArtifactDownloadRequest(
+                artifact_url=f"{bucket_url}/{artifact}",
+                output_path=output_dir / artifact,
+            )
+        )
+
+    download_artifacts(artifacts_to_retrieve)
+
+
+def retrieve_base_artifacts(
+    args: argparse.Namespace,
+    run_id: str,
+    output_dir: Path,
+    s3_artifacts: set[str],
+):
     """Retrieves TheRock base artifacts using urllib."""
     base_artifacts = [
         "core-runtime_run",
@@ -180,11 +221,17 @@ def retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts):
     download_artifacts(artifacts_to_retrieve)
 
 
-def retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts):
+def retrieve_enabled_artifacts(
+    args: argparse.Namespace,
+    target: str,
+    run_id: str,
+    output_dir: Path,
+    s3_artifacts: set[str],
+):
     """Retrieves TheRock artifacts using urllib, based on the enabled arguments.
 
-    If no artifacts have been collected, we assume that we want to install all artifacts
-    If `args.tests` have been enabled, we also collect test artifacts
+    If no artifacts have been collected, we assume that we want to install the default subset.
+    If `args.tests` have been enabled, we also collect test artifacts.
     """
     artifact_paths = []
     all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
@@ -250,15 +297,19 @@ def run(args):
     target = args.target
     output_dir = args.output_dir
     if not output_dir.is_dir():
-        print(f"Output dir '{output_dir}' does not exist. Exiting...")
+        log(f"Output dir '{output_dir}' does not exist. Exiting...")
         return
     s3_artifacts = retrieve_s3_artifacts(run_id, target)
     if not s3_artifacts:
-        print(f"S3 artifacts for {run_id} does not exist. Exiting...")
+        log(f"S3 artifacts for {run_id} does not exist. Exiting...")
         return
-    retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
-    if not args.base_only:
-        retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
+
+    if args.all:
+        retrieve_all_artifacts(run_id, target, output_dir, s3_artifacts)
+    else:
+        retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
+        if not args.base_only:
+            retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
 
     if args.extract:
         _extract_archives_into_subdirectories(output_dir)
@@ -296,59 +347,71 @@ def main(argv):
 
     artifacts_group = parser.add_argument_group("artifacts_group")
     artifacts_group.add_argument(
+        "--all",
+        default=False,
+        help="Include all artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+    artifacts_group.add_argument(
         "--blas",
         default=False,
         help="Include 'blas' artifacts",
         action=argparse.BooleanOptionalAction,
     )
-
     artifacts_group.add_argument(
         "--fft",
         default=False,
         help="Include 'fft' artifacts",
         action=argparse.BooleanOptionalAction,
     )
-
     artifacts_group.add_argument(
         "--miopen",
         default=False,
         help="Include 'miopen' artifacts",
         action=argparse.BooleanOptionalAction,
     )
-
     artifacts_group.add_argument(
         "--prim",
         default=False,
         help="Include 'prim' artifacts",
         action=argparse.BooleanOptionalAction,
     )
-
     artifacts_group.add_argument(
         "--rand",
         default=False,
         help="Include 'rand' artifacts",
         action=argparse.BooleanOptionalAction,
     )
-
     artifacts_group.add_argument(
         "--rccl",
         default=False,
         help="Include 'rccl' artifacts",
         action=argparse.BooleanOptionalAction,
     )
-
     artifacts_group.add_argument(
         "--tests",
         default=False,
         help="Include all test artifacts for enabled libraries",
         action=argparse.BooleanOptionalAction,
     )
-
     artifacts_group.add_argument(
         "--base-only", help="Include only base artifacts", action="store_true"
     )
 
     args = parser.parse_args(argv)
+
+    if args.all and (
+        args.blas
+        or args.fft
+        or args.miopen
+        or args.prim
+        or args.rand
+        or args.rccl
+        or args.tests
+        or args.base_only
+    ):
+        parser.error("--all cannot be set together with artifact group options")
+
     run(args)
 
 

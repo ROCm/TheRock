@@ -22,13 +22,13 @@ class RockProjectRepo:
         self,
         wheel_install_dir,
         project_name,
-        project_root_dir,
-        project_src_dir,
-        project_build_dir,
-        project_exec_dir,
+        project_root_dir: Path,
+        project_src_dir: Path,
+        project_build_dir: Path,
+        project_exec_dir: Path,
         project_repo_url,
         project_version_hashtag,
-        project_patch_dir_root,
+        project_patch_dir_root: Path,
     ):
         self.wheel_install_dir = wheel_install_dir
         self.project_name = project_name

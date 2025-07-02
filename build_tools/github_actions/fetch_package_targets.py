@@ -1,7 +1,10 @@
 import os
 import json
 from configure_ci import set_github_output
-from amdgpu_family_matrix import amdgpu_family_info_matrix
+from amdgpu_family_matrix import (
+    amdgpu_family_info_matrix_presubmit,
+    amdgpu_family_info_matrix_postsubmit,
+)
 import string
 
 # This file helps generate a package target matrix for portable_linux_package_matrix.yml and publish_pytorch_dev_docker.yml
@@ -12,7 +15,10 @@ def determine_package_targets(args):
     pytorch_dev_docker = args.get("PYTORCH_DEV_DOCKER") == "true"
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
 
-    family_matrix = amdgpu_family_info_matrix
+    matrix = amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+    family_matrix = (
+        amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+    )
     package_targets = []
     # If the workflow does specify AMD GPU family, package those. Otherwise, then package all families
     if amdgpu_families:
@@ -25,7 +31,11 @@ def determine_package_targets(args):
         ]
 
     for key in family_matrix:
-        info_for_key = amdgpu_family_info_matrix.get(key)
+        info_for_key = matrix.get(key)
+
+        # In case an invalid target is requested and returns null, we continue to the next target
+        if not info_for_key:
+            continue
 
         platform_for_key = info_for_key.get(package_platform)
 

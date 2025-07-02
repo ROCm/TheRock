@@ -5,10 +5,6 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
-from amdgpu_family_matrix import (
-    DEFAULT_LINUX_CONFIGURATIONS,
-    DEFAULT_WINDOWS_CONFIGURATIONS,
-)
 
 
 class ConfigureCITest(unittest.TestCase):
@@ -148,9 +144,7 @@ class ConfigureCITest(unittest.TestCase):
             families={},
             platform="linux",
         )
-        self.assertGreaterEqual(
-            len(linux_target_output), len(DEFAULT_LINUX_CONFIGURATIONS)
-        )
+        self.assertGreaterEqual(len(linux_target_output), 1)
         self.assert_target_output_is_valid(linux_target_output)
 
     def test_empty_windows_pull_request_matrix_generator(self):
@@ -164,9 +158,7 @@ class ConfigureCITest(unittest.TestCase):
             families={},
             platform="windows",
         )
-        self.assertGreaterEqual(
-            len(windows_target_output), len(DEFAULT_WINDOWS_CONFIGURATIONS)
-        )
+        self.assertGreaterEqual(len(windows_target_output), 1)
         self.assert_target_output_is_valid(windows_target_output)
 
     def test_main_linux_branch_push_matrix_generator(self):
@@ -181,9 +173,7 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
-        self.assertGreaterEqual(
-            len(linux_target_output), len(DEFAULT_LINUX_CONFIGURATIONS)
-        )
+        self.assertGreaterEqual(len(linux_target_output), 1)
         self.assert_target_output_is_valid(linux_target_output)
 
     def test_main_windows_branch_push_matrix_generator(self):
@@ -198,9 +188,7 @@ class ConfigureCITest(unittest.TestCase):
             platform="windows",
         )
         self.assertGreaterEqual(len(windows_target_output), 1)
-        self.assertGreaterEqual(
-            len(windows_target_output), len(DEFAULT_WINDOWS_CONFIGURATIONS)
-        )
+        self.assertGreaterEqual(len(windows_target_output), 1)
         self.assert_target_output_is_valid(windows_target_output)
 
     def test_linux_branch_push_matrix_generator(self):

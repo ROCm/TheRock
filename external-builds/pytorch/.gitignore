@@ -3,3 +3,4 @@ src/
 /pytorch
 /pytorch_vision
 /pytorch_audio
+/triton
