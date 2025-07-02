@@ -53,9 +53,10 @@ jobs:
       REDSHIFT_PORT: 5439
       REDSHIFT_DBNAME: "workflow_database"
       REDSHIFT_USER: "awsuser"
-      REDSHIFT_PASSWD: ${{ secrets.redshift\!therockcluster-1-awsuser }}
+      REDSHIFT_PASSWD: ${{ secrets.REDSHIFT_THEROCKCLUSTER_1_AWSUSER }}
 
     steps:
+
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
