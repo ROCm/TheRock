@@ -47,7 +47,10 @@ def do_checkout(args: argparse.Namespace):
         else:
             # Derive the commit pin base on ci commit.
             args.repo_hashtag = get_triton_pin(torch_dir)
-            build_env["TRITON_WHEEL_VERSION_SUFFIX"] = f"+git{args.repo_hashtag[:8]}"
+            # Latest triton calculates its own git hash and TRITON_WHEEL_VERSION_SUFFIX
+            # goes after the "+". Older versions must supply their own "+". We just
+            # leave it out entirely to avoid version errors.
+            build_env["TRITON_WHEEL_VERSION_SUFFIX"] = ""
             print(f"Triton CI commit pin: {args.repo_hashtag}")
 
     def _do_hipify(args: argparse.Namespace):

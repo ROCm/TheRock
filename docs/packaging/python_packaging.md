@@ -112,28 +112,32 @@ try:
     from . import _rocm_init
 except ModuleNotFoundError:
     pass
+else:
+    _rocm_init.initialize()
+    del _rocm_init
 ```
 
 Generate a `_rocm_init.py` file like this (using any suitable scripting):
 
 ```bash
 echo "
-import rocm_sdk
-rocm_sdk.initialize_process(library_shortnames=[
-  'amd_comgr',
-  'amdhip64',
-  'roctx64',
-  'hiprtc',
-  'hipblas',
-  'hipfft',
-  'hiprand',
-  'hipsparse',
-  'hipsolver',
-  'rccl',
-  'hipblaslt',
-  'miopen',
-],
-check_version='$(rocm-sdk version)')
+def initialize():
+  import rocm_sdk
+  rocm_sdk.initialize_process(library_shortnames=[
+    'amd_comgr',
+    'amdhip64',
+    'roctx64',
+    'hiprtc',
+    'hipblas',
+    'hipfft',
+    'hiprand',
+    'hipsparse',
+    'hipsolver',
+    'rccl',
+    'hipblaslt',
+    'miopen',
+  ],
+  check_version='$(rocm-sdk version)')
 " > torch/_rocm_init.py
 ```
 

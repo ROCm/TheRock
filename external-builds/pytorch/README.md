@@ -67,8 +67,8 @@ Now checkout repositories:
 
   ```bash
   python pytorch_torch_repo.py checkout
-  python pytorch_torch_audio_repo.py checkout
-  python pytorch_torch_vision_repo.py checkout
+  python pytorch_audio_repo.py checkout
+  python pytorch_vision_repo.py checkout
   ```
 
 - On Windows, use shorter paths to avoid command length limits:
@@ -194,3 +194,18 @@ To create patches
 
 1. Commit your change(s) within the relevant source folder(s)
 1. Run the `save-patches` subcommand of the relevant source management script(s)
+
+## Alternate Branches / Patch Sets
+
+### PyTorch Nightly
+
+This checks out the `nightly` branches from `github.com/pytorch`, tracking
+the latest pytorch.org nightly release.
+
+```
+python pytorch_torch_repo.py checkout --repo-hashtag nightly
+python pytorch_audio_repo.py checkout --repo-hashtag nightly
+python pytorch_vision_repo.py checkout --repo-hashtag nightly
+# Note that triton will be checked out at the PyTorch pin.
+python pytorch_triton_repo.py checkout
+```

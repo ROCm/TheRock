@@ -58,12 +58,12 @@ to the build sub-command (useful for docker invocations).
 
 ```
 # For therock-nightly-python
-build_prod_wheels.py
+build_prod_wheels.py \
     install-rocm \
     --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
-build_prod_wheels.py
+build_prod_wheels.py \
     install-rocm \
     --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
 ```
@@ -122,6 +122,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import textwrap
 
 script_dir = Path(__file__).resolve().parent
 
@@ -187,6 +188,54 @@ def get_rocm_path(path_name: str) -> Path:
             [sys.executable, "-m", "rocm_sdk", "path", f"--{path_name}"], cwd=Path.cwd()
         ).strip()
     )
+
+
+def get_rocm_init_contents(args: argparse.Namespace):
+    """Gets the contents of the _rocm_init.py file to add to the build."""
+    sdk_version = get_rocm_sdk_version()
+    if is_windows:
+        return textwrap.dedent(
+            f"""
+        def initialize():
+            import rocm_sdk
+            rocm_sdk.initialize_process(library_shortnames=[
+                'amd_comgr',
+                'amdhip64',
+                'hiprtc',
+                'hipblas',
+                'hipfft',
+                'hiprand',
+                'hipsparse',
+                'hipsolver',
+                'hipblaslt',
+                'miopen',
+                ],
+                check_version='{sdk_version}')
+        """
+        )
+    else:
+        return textwrap.dedent(
+            f"""
+        def initialize():
+            import rocm_sdk
+            rocm_sdk.initialize_process(library_shortnames=[
+                'amd_comgr',
+                'amdhip64',
+                'rocprofiler-sdk-roctx',
+                'roctx64',
+                'hiprtc',
+                'hipblas',
+                'hipfft',
+                'hiprand',
+                'hipsparse',
+                'hipsolver',
+                'rccl',
+                'hipblaslt',
+                'miopen',
+                ],
+                check_version='{sdk_version}')
+        """
+        )
 
 
 def remove_dir_if_exists(dir: Path):
@@ -255,6 +304,15 @@ def do_install_rocm(args: argparse.Namespace):
     print(f"Installed version: {get_rocm_sdk_version()}")
 
 
+def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: str):
+    current = env.get(flagname, "")
+    append = ""
+    for compiler_flag in compiler_flags:
+        append += f" {compiler_flag}"
+    env[flagname] = f"{current}{append}"
+    print(f"-- Appended {flagname}+={append}")
+
+
 def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
@@ -296,6 +354,7 @@ def do_build(args: argparse.Namespace):
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
+        "ROCM_PATH": str(root_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         # TODO: Figure out what is blocking GLOO and enable.
         "USE_GLOO": "OFF",
@@ -330,9 +389,30 @@ def do_build(args: argparse.Namespace):
             }
         )
 
+    # Workaround missing devicelib bitcode
+    # TODO: When "ROCM_PATH" and/or "ROCM_HOME" is set in the environment, the
+    # clang frontend ignores its default heuristics and (depending on version)
+    # finds the wrong path to the device library. This is bad/annoying. But
+    # the PyTorch build shouldn't even need these to be set. Unfortunately, it
+    # has been hardcoded for a long time. So we use a clang env var to force
+    # a specific device lib path to workaround the hack to get pytorch to build.
+    # This may or may not only affect the Python wheels with their own quirks
+    # on directory layout.
+    # Obviously, this should be completely burned with fire once the root causes
+    # are eliminted.
+    hip_device_lib_path = get_rocm_path("root") / "llvm" / "amdgcn" / "bitcode"
+    if not hip_device_lib_path.exists():
+        print(
+            "WARNING: Default location of device libs not found. Relying on "
+            "clang heuristics which are known to be buggy in this configuration"
+        )
+    else:
+        env["HIP_DEVICE_LIB_PATH"] = hip_device_lib_path
+
     # Build triton.
     triton_requirement = None
-    if triton_dir:
+    if args.build_triton or (args.build_triton is None and triton_dir):
+        assert triton_dir, "Must specify --triton-dir if --build-triton"
         triton_requirement = do_build_triton(args, triton_dir, dict(env))
     else:
         print("--- Not building triton (no --triton-dir)")
@@ -414,6 +494,7 @@ def do_build_pytorch(
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+    env["USE_ROCM"] = "ON"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -428,10 +509,13 @@ def do_build_pytorch(
         f"--- PYTORCH_EXTRA_INSTALL_REQUIREMENTS = {env['PYTORCH_EXTRA_INSTALL_REQUIREMENTS']}"
     )
 
+    # Add the _rocm_init.py file.
+    (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
+
+    # Workaround missing features on windows.
     if is_windows:
         env.update(
             {
-                "USE_ROCM": "ON",
                 "USE_FLASH_ATTENTION": "0",
                 "USE_MEM_EFF_ATTENTION": "0",
                 "DISTUTILS_USE_SDK": "1",
@@ -445,6 +529,17 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
+
+    if not is_windows:
+        # Prepend the ROCm sysdeps dir so that we use bundled libraries.
+        # While a decent thing to be doing, this is presently required because:
+        # TODO: include/rocm_smi/kfd_ioctl.h is included without its advertised
+        # transitive includes. This triggers a compilation error for a missing
+        # libdrm/drm.h.
+        sysdeps_dir = get_rocm_path("root") / "lib" / "rocm_sysdeps"
+        assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
+        add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
+        add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
 
     print("+++ Uninstalling pytorch:")
     exec(
@@ -634,6 +729,13 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--pytorch-build-number", default="1", help="Build number to append to version"
     )
+    build_p.add_argument(
+        "--build-triton",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of triton (requires --triton-dir)",
+    )
+
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
