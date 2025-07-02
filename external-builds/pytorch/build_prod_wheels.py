@@ -198,7 +198,7 @@ def get_rocm_init_contents(args: argparse.Namespace):
             f"""
         def initialize():
             import rocm_sdk
-            rocm_sdk.initialize_process(library_shortnames=[
+            rocm_sdk.initialize_process(preload_shortnames=[
                 'amd_comgr',
                 'amdhip64',
                 'hiprtc',
@@ -218,7 +218,7 @@ def get_rocm_init_contents(args: argparse.Namespace):
             f"""
         def initialize():
             import rocm_sdk
-            rocm_sdk.initialize_process(library_shortnames=[
+            rocm_sdk.initialize_process(preload_shortnames=[
                 'amd_comgr',
                 'amdhip64',
                 'rocprofiler-sdk-roctx',
