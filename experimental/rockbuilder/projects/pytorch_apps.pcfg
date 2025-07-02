@@ -1,13 +1,8 @@
 [projects]
 project_list=
     pytorch_deps
-    amdsmi
+    triton
     pytorch
     pytorch_vision
     pytorch_audio
     torch_migraphx
-    triton
-    vllm
-    aiter
-    sglang
-    comfyui

@@ -1,0 +1,60 @@
+From caeab8c2760b1d1a2046bc866a7704e4151b4a3e Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 7 Jul 2025 01:52:44 +0000
+Subject: [PATCH 1/5] rocm pyproject.toml dependency updates
+
+- python/pyproject.toml: added dependencies
+- sgl-kernel/pyproject.toml:
+  cp sgl-kernel/pyproject_rocm.toml pyproject.toml
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ python/pyproject.toml     |  2 +-
+ sgl-kernel/pyproject.toml | 11 ++---------
+ 2 files changed, 3 insertions(+), 10 deletions(-)
+
+diff --git a/python/pyproject.toml b/python/pyproject.toml
+index e6c5a6c..18c13e6 100644
+--- a/python/pyproject.toml
++++ b/python/pyproject.toml
+@@ -75,7 +75,7 @@ blackwell = [
+ srt_hip = [
+     "sglang[runtime_common]",
+     "torch",
+-    "vllm==0.6.7.dev2",
++    "vllm",
+ ]
+ 
+ # xpu is not enabled in public vllm and torch whl,
+diff --git a/sgl-kernel/pyproject.toml b/sgl-kernel/pyproject.toml
+index dced72a..9f1c90f 100644
+--- a/sgl-kernel/pyproject.toml
++++ b/sgl-kernel/pyproject.toml
+@@ -1,10 +1,11 @@
+ [build-system]
+ requires = [
++  "setuptools>=75.0",
+   "scikit-build-core>=0.10",
+   "torch>=2.7.1",
+   "wheel",
+ ]
+-build-backend = "scikit_build_core.build"
++build-backend = "setuptools.build_meta"
+ 
+ [project]
+ name = "sgl-kernel"
+@@ -29,11 +30,3 @@ exclude = [
+   "dist*",
+   "tests*",
+ ]
+-
+-[tool.scikit-build]
+-cmake.build-type = "Release"
+-minimum-version = "build-system.requires"
+-
+-wheel.py-api = "cp39"
+-wheel.license-files = []
+-wheel.packages = ["python/sgl_kernel"]
+-- 
+2.43.0
+
