@@ -48,7 +48,7 @@ def get_build_arguments(
         "--project",
         type=str,
         help="select target for the action. Can be either one project or all projects in core_apps.pcfg.",
-        default="all",
+        default=None,
     )
     parser.add_argument(
         "--init",
@@ -475,7 +475,8 @@ for ii, prj_item in enumerate(project_list):
 # let user to see env variables for a while before build start
 time.sleep(1)
 
-if args.project == "all":
+if not args.project:
+    # process all projects specified in the core_project.pcfg
     if args.src_dir:
         print(
             '\nError, "--src-dir" parameter requires also to specify the project with the "--project"-parameter'
@@ -502,6 +503,7 @@ if args.project == "all":
         else:
             do_therock(prj_builder)
 else:
+    # process only a single project specified with the "--project" parameter
     # argparser --> Keyword for parameter "--my-project-version=xyz" = "my_project_version"
     prj_version_keyword = args.project + "_version"
     prj_version_keyword = prj_version_keyword.replace("-", "_")
