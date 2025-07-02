@@ -1,7 +1,7 @@
-From 027cb4a11e2b6c47606308b01e8180507496701d Mon Sep 17 00:00:00 2001
+From 1972f3dc63db4d05282224c4cc51c9cedebc1ea6 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Tue, 6 May 2025 15:07:26 +0530
-Subject: [PATCH] Fix FindHIP.cmake search for hipconfig.
+Subject: [PATCH 1/2] Fix FindHIP.cmake search for hipconfig.
 
 ---
  cmake/FindHIP.cmake | 11 ++---------

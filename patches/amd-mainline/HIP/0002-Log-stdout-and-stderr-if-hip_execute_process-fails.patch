@@ -1,0 +1,105 @@
+From 0754e047c7ebc7de90e5d9a1a00e3546a1f9e34a Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Wed, 2 Jul 2025 13:21:06 -0700
+Subject: [PATCH 2/2] Log stdout and stderr if hip_execute_process fails.
+
+---
+ cmake/FindHIP/run_hipcc.cmake | 42 +++++++++++++++++------------------
+ 1 file changed, 20 insertions(+), 22 deletions(-)
+
+diff --git a/cmake/FindHIP/run_hipcc.cmake b/cmake/FindHIP/run_hipcc.cmake
+index aeb943c1..14dcf84c 100644
+--- a/cmake/FindHIP/run_hipcc.cmake
++++ b/cmake/FindHIP/run_hipcc.cmake
+@@ -83,10 +83,12 @@ endif()
+ set(__CC_INCLUDES ${HIP_HIPCC_INCLUDE_ARGS})
+ 
+ # hip_execute_process - Executes a command with optional command echo and status message.
+-#   status     - Status message to print if verbose is true
+-#   command    - COMMAND argument from the usual execute_process argument structure
+-#   ARGN       - Remaining arguments are the command with arguments
+-#   HIP_result - Return value from running the command
++#   status         - Status message to print if verbose is true
++#   command        - COMMAND argument from the usual execute_process argument structure
++#   ARGN           - Remaining arguments are the command with arguments
++#   HIP_result     - Return value from running the command
++#   HIP_output     - Standard output (stdout) pipe contents from running the command
++#   HIP_error      - Standard error (stderr) pipe contents from running the command
+ macro(hip_execute_process status command)
+     set(_command ${command})
+     if(NOT "x${_command}" STREQUAL "xCOMMAND")
+@@ -110,7 +112,15 @@ macro(hip_execute_process status command)
+         execute_process(COMMAND ${CMAKE_COMMAND} -E echo ${hip_execute_process_string})
+     endif()
+     # Run the command
+-    execute_process(COMMAND ${ARGN} RESULT_VARIABLE HIP_result)
++    execute_process(COMMAND ${ARGN} RESULT_VARIABLE HIP_result OUTPUT_VARIABLE HIP_output ERROR_VARIABLE HIP_error)
++endmacro()
++
++macro(hip_check_execute_process_result)
++    if(HIP_result)
++        message(FATAL_ERROR "Error generating ${generated_file}. "
++            "stdout:\n${HIP_output}"
++            "stderr:\n${HIP_error}")
++    endif()
+ endmacro()
+ 
+ # Delete the target file
+@@ -129,10 +139,7 @@ hip_execute_process(
+     ${__CC_FLAGS}
+     ${__CC_INCLUDES}
+     )
+-
+-if(HIP_result)
+-    message(FATAL_ERROR "Error generating ${generated_file}")
+-endif()
++hip_check_execute_process_result()
+ 
+ # Generate the cmake readable dependency file to a temp file
+ hip_execute_process(
+@@ -143,30 +150,21 @@ hip_execute_process(
+     -D "verbose=${verbose}"
+     -P "${HIP_run_make2cmake}"
+     )
+-
+-if(HIP_result)
+-    message(FATAL_ERROR "Error generating ${generated_file}")
+-endif()
++hip_check_execute_process_result()
+ 
+ # Copy the file if it is different
+ hip_execute_process(
+     "Copy if different ${cmake_dependency_file}.tmp to ${cmake_dependency_file}"
+     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${cmake_dependency_file}.tmp" "${cmake_dependency_file}"
+     )
+-
+-if(HIP_result)
+-    message(FATAL_ERROR "Error generating ${generated_file}")
+-endif()
++hip_check_execute_process_result()
+ 
+ # Delete the temporary file
+ hip_execute_process(
+     "Removing ${cmake_dependency_file}.tmp and ${cmake_dependency_file}.pre"
+     COMMAND "${CMAKE_COMMAND}" -E remove "${cmake_dependency_file}.tmp" "${cmake_dependency_file}.pre"
+     )
+-
+-if(HIP_result)
+-    message(FATAL_ERROR "Error generating ${generated_file}")
+-endif()
++hip_check_execute_process_result()
+ 
+ # Generate the output file
+ hip_execute_process(
+@@ -185,7 +183,7 @@ if(HIP_result)
+         "Removing ${generated_file}"
+         COMMAND "${CMAKE_COMMAND}" -E remove "${generated_file}"
+         )
+-    message(FATAL_ERROR "Error generating file ${generated_file}")
++    hip_check_execute_process_result()
+ else()
+     if(verbose)
+         message("Generated ${generated_file} successfully.")
+-- 
+2.47.1.windows.2
+
