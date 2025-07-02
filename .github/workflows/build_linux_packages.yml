@@ -53,7 +53,7 @@ jobs:
       REDSHIFT_PORT: 5439
       REDSHIFT_DBNAME: "workflow_database"
       REDSHIFT_USER: "awsuser"
-      REDSHIFT_PASSWD: "vYj*%2$1t$*dVAH1"
+      REDSHIFT_PASSWD: ${{ secrets.redshift\!therockcluster-1-awsuser }}
 
     steps:
       - name: "Checking out repository"
@@ -195,7 +195,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/populate_redshift_db.py \
             --api_op '${{ steps.job-status-step.outputs.job_summary }}' --redshift_cluster_endpoint ${{ env.REDSHIFT_HOST }} \
-            --redshift_username ${{ env.REDSHIFT_USER }} --dbname ${{ env.REDSHIFT_DBNAME  }} --redshift_password "${{ env.REDSHIFT_PASSWD }}"" --build_id ${{ github.run_number }}
+            --redshift_username ${{ env.REDSHIFT_USER }} --dbname ${{ env.REDSHIFT_DBNAME  }} --redshift_password ${{ env.REDSHIFT_PASSWD }} --build_id ${{ github.run_number }}
 
       - name: Upload Logs
         if: always()
