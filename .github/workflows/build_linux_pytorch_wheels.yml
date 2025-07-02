@@ -95,7 +95,8 @@ jobs:
         if: ${{ inputs.rocm_version }}
         run: |
           sdk_version="--rocm-sdk-version \"==${{ inputs.rocm_version }}"\"
-          version_suffix="--version-suffix \"${{ inputs.rocm_version }}"\"
+          rocm_suffix=`echo ${{ inputs.rocm_version }} | sed 's/+/-/'`
+          version_suffix="--version-suffix \"+rocm${rocm_suffix}"\"
           echo optional_arguments="${sdk_version} ${version_suffix}" >> $GITHUB_ENV
 
       - name: Build PyTorch Wheels
