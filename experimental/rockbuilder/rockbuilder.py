@@ -463,7 +463,7 @@ project_list = project_manager.get_external_project_list()
 # print(project_list)
 
 args = get_build_arguments(rock_builder_home_dir, default_src_base_dir, project_list)
-# store the arguments to dictionary to make it easier to get "project_name"_version parameters
+# store the arguments to dictionary to make it easier to get "project_name"-version parameters
 args_dict = args.__dict__
 printout_build_arguments(args)
 verify_build_env__python(args)
@@ -485,7 +485,10 @@ if args.project == "all":
         sys.exit(1)
     for ii, prj_item in enumerate(project_list):
         print(f"[{ii}]: {prj_item}")
-        version_override = args_dict[project_list[ii] + "_version"]
+        # argparser --> Keyword for parameter "--my-project-version=xyz" = "my_project_version"
+        prj_version_keyword = project_list[ii] + "_version"
+        prj_version_keyword = prj_version_keyword.replace("-", "_")
+        version_override = args_dict[prj_version_keyword]
         # when issuing a command for all projects, we assume that the src_base_dir
         # is the base source directory under each project specific directory is checked out.
         prj_builder = project_manager.get_rock_project_builder(
@@ -499,13 +502,17 @@ if args.project == "all":
         else:
             do_therock(prj_builder)
 else:
-    # If the --src-dir parameter is specified for a single project, we assume that path is full
-    version_override = args_dict[args.project + "_version"]
+    # argparser --> Keyword for parameter "--my-project-version=xyz" = "my_project_version"
+    prj_version_keyword = args.project + "_version"
+    prj_version_keyword = prj_version_keyword.replace("-", "_")
+    version_override = args_dict[prj_version_keyword]
     if args.src_dir:
+        # source checkout dir = "--src-dir"
         prj_builder = project_manager.get_rock_project_builder(
             args.src_dir, args.project, args.output_dir, version_override
         )
     else:
+        # source checkout dir = "--src-base-dir" / project_name
         prj_builder = project_manager.get_rock_project_builder(
             args.src_base_dir / args.project,
             args.project,
