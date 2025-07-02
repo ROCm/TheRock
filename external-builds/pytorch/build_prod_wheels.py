@@ -314,17 +314,12 @@ def do_build(args: argparse.Namespace):
             env.update(addl_triton_env)
 
     if is_windows:
-        # We'd prefer to use root_dir (_rocm_sdk_devel) directly instead of its
-        # sibling, but some (CI) machines seem to have trouble following the
-        # symlink there.
-        # TODO(scotttodd): check for symlink support on CI runners, fix wheels
-        #                  to be more usable without symlinks
-        llvm_dir = root_dir.parent / "_rocm_sdk_core" / "lib" / "llvm" / "bin"
+        llvm_dir = root_dir / "lib" / "llvm" / "bin"
         env.update(
             {
-                "HIP_CLANG_PATH": str(llvm_dir),
-                "CC": str((llvm_dir / "clang-cl")),
-                "CXX": str((llvm_dir / "clang-cl")),
+                "HIP_CLANG_PATH": str(llvm_dir.resolve()),
+                "CC": str((llvm_dir / "clang-cl.exe").resolve()),
+                "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
     else:
