@@ -357,8 +357,8 @@ def do_build(args: argparse.Namespace):
         "ROCM_HOME": str(root_dir),
         "ROCM_PATH": str(root_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # TODO: Figure out what is blocking GLOO and enable.
-        "USE_GLOO": "OFF",
+        # GLOO enabled
+        "USE_GLOO": "ON",
         # TODO: Fix source dep on rocprofiler and enable.
         "USE_KINETO": "OFF",
     }
