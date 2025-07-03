@@ -45,10 +45,10 @@ jobs:
     strategy:
       fail-fast: true
     env:
-      CACHE_DIR: ${{ github.workspace }}/pvc/${{ inputs.amdgpu_families }}/.container-cache
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
+      # CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
       CCACHE_LOGFILE: ${{ github.workspace }}/build/logs/ccache.log
       CCACHE_STATSLOG: ${{ github.workspace }}/build/logs/ccache_stats.log
       CCACHE_MAXSIZE: "5G"
@@ -62,18 +62,16 @@ jobs:
         run: |
           echo "---ccache debugging/pvc tests---"
           mkdir -p "$(dirname $CCACHE_LOGFILE)"
-          #mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES
-          echo "pvc dir before setup_ccache.py"
-          du /home/runner/pvc -h -d 1
-          #ln -s /home/runner/pvc/$AMDGPU_FAMILIES $CACHE_DIR
-          #echo "$CACHE_DIR after link:"
-          #ls $CACHE_DIR -al
+          mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES
+          du/home/runner/pvc -h -d 1
+          ln -s /home/runner/pvc/$AMDGPU_FAMILIES $CACHE_DIR
+          echo "$CACHE_DIR after link:"
+          ls $CACHE_DIR -al
+
           echo "---"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
-          echo "pvc dir before setup_ccache.py"
-          du /home/runner/pvc -h -d 1
           df -h
           echo "ccache version: $(ccache --version)"
           echo "ccache config:"
@@ -92,14 +90,10 @@ jobs:
 
       - name: Fetch sources
         run: |
-          echo "---sanity check ccache/pvc---"
-          du /home/runner/pvc -h -d 1
           ./build_tools/fetch_sources.py --jobs 12
 
       - name: Install python deps
         run: |
-          echo "---sanity check ccache/pvc---"
-          du /home/runner/pvc -h -d 1
           pip install -r requirements.txt
 
       - name: Configure Projects
@@ -109,8 +103,6 @@ jobs:
           extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
           BUILD_DIR: build
         run: |
-          echo "---sanity check ccache/pvc---"
-          du /home/runner/pvc -h -d 1
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-dist (build RAND only for testing ccache...)
@@ -128,8 +120,6 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
-          echo "---sanity check ccache/pvc---"
-          du /home/runner/pvc -h -d 1
           echo "Full SDK du:"
           echo "------------"
           du -h -d 1 build/dist/rocm
