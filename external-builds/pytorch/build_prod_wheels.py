@@ -357,11 +357,13 @@ def do_build(args: argparse.Namespace):
         "ROCM_HOME": str(root_dir),
         "ROCM_PATH": str(root_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # GLOO enabled
-        "USE_GLOO": "ON",
         # TODO: Fix source dep on rocprofiler and enable.
         "USE_KINETO": "OFF",
     }
+
+    # GLOO enabled for only Linux
+    if not is_windows:
+        env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
