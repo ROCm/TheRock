@@ -1,23 +1,15 @@
 # This CI workflow is triggered by:
-#   - push to main branch
-#   - pull request
-#   - workflow dispatch
+#   - scheduled run
 #
-# For pull requests, we run default builds and tests for:
-#   - Linux: gfx94X gfx110X
-#   - Windows: gfx110X
-# If you want to trigger jobs for additional targets, please add a defined label (ex: gfx120X-linux) to the pull request
-#
-# For push to main branch, all AMD families will built and tested from `amdgpu_family_matrix.py`.
-#
-# Note: If a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
+# In the scheduled run, we run all targets from amdgpu_family_matrix.py and amdgpu_family_matrix_xfail.py
+# As some of these builds are xfail, we allow errors to occur with `continue-on-error`, where the job will fail but the workflow is green
 
-name: CI
+name: CI Nightly
 
 on:
-  push:
-    branches:
-      - main
+  # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
+  schedule:
+    - cron: "0 2 * * *" # Runs nightly at 2 AM UTC
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
@@ -38,11 +30,6 @@ on:
         type: string
         description: "If provided, the tests will run on this artifact ID"
         default: ""
-  pull_request:
-    types:
-      - labeled
-      - opened
-      - synchronize
 
 permissions:
   contents: read
@@ -86,7 +73,7 @@ jobs:
     name: Windows
     needs: setup
     if: >-
-      ${{ false &&
+      ${{
         needs.setup.outputs.windows_amdgpu_families != '[]' &&
         needs.setup.outputs.enable_build_jobs == 'true'
       }}

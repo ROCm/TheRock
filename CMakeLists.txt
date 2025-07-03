@@ -258,6 +258,7 @@ if(NOT WIN32)
     DESCRIPTION "Enables build of composable kernel, including minimal kernel library"
     REQUIRES COMPILER HIP_RUNTIME RAND
   )
+  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL "Enables composable kernel in MIOpen" ON ${THEROCK_ENABLE_COMPOSABLE_KERNEL} OFF)
 endif()
 
 # ML-Libs Features.

@@ -3,38 +3,51 @@ name: Build Linux PyTorch Wheels
 on:
   workflow_call:
     inputs:
-      AMDGPU_FAMILIES:
+      amdgpu_family:
         required: true
         type: string
       python_version:
         required: true
         type: string
-      s3_bucket:
+      release_type:
+        description: The type of release to build ("nightly", or "dev")
         required: true
         type: string
       s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
         required: true
         type: string
-      s3_cloudfront:
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
         required: true
         type: string
+      # rocm_version:
+      #   description: ROCm version to install
+      #   type: string
   workflow_dispatch:
     inputs:
-      AMDGPU_FAMILIES:
+      amdgpu_family:
         required: true
         type: string
       python_version:
         required: true
         type: string
-      s3_bucket:
-        required: true
+        default:
+      release_type:
+        description: The type of release to build ("nightly", or "dev")
         type: string
+        default: "dev"
       s3_subdir:
-        required: true
+        description: S3 subdirectory, not including the GPU-family
         type: string
-      s3_cloudfront:
-        required: true
+        default: "v2"
+      cloudfront_url:
+        description: CloudFront base URL pointing to Python index
         type: string
+        default: "d25kgig7rdsyks.cloudfront.net"
+      # rocm_version:
+      #   description: ROCm version to install (e.g. "==1.0", ">1.0")
+      #   type: string
 
 permissions:
   id-token: write
@@ -42,14 +55,15 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build Linux PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
+    name: Build Linux PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:044b113562629f4bd2ec5d2e64b32eee11562d48fb1a75d7493daec9dd8d8292
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
-      S3_BUCKET_PY: ${{ inputs.s3_bucket }}
+      S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+      # ROCM_VERSION: ${{ inputs.rocm_version || '>1.0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -79,21 +93,23 @@ jobs:
 
       - name: Build PyTorch Wheels
         run: |
-          echo "Building PyTorch wheels for ${{ inputs.AMDGPU_FAMILIES }}"
+          echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
           ./external-builds/pytorch/build_prod_wheels.py \
-            --pip-cache-dir /tmp/pipcache \
-            --index-url "https://${{ inputs.s3_cloudfront }}/${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES }}/" \
             build \
             --install-rocm \
+            --pip-cache-dir /tmp/pipcache \
+            --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
+            # TODO(marbre): Enable ones dependencies in rocm package are fixed \
+            # --rocm-sdk-version "${{ env.ROCM_VERSION }}" \
 
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-nightly-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
       - name: Sanity Check Wheel
         run: |
@@ -102,11 +118,11 @@ jobs:
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES }}/ \
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.AMDGPU_FAMILIES  }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}

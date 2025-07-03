@@ -1,4 +1,4 @@
-# composable_kernel
+# composable-kernel
 [components.dbg."ml-libs/composable_kernel/stage"]
 [components.dev."ml-libs/composable_kernel/stage"]
 [components.doc."ml-libs/composable_kernel/stage"]

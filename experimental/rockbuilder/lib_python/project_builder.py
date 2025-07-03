@@ -22,7 +22,14 @@ class RockProjectBuilder(configparser.ConfigParser):
             ret = None
         return ret
 
-    def __init__(self, rock_builder_root_dir, project_name, package_output_dir):
+    def __init__(
+        self,
+        rock_builder_root_dir,
+        project_src_dir: Path,
+        project_name,
+        package_output_dir,
+        version_override,
+    ):
         super(RockProjectBuilder, self).__init__(allow_no_value=True)
 
         self.is_posix = not any(platform.win32_ver())
@@ -39,8 +46,25 @@ class RockProjectBuilder(configparser.ConfigParser):
                 "Could not find the configuration file: "
                 + self.cfg_file_path.as_posix()
             )
-        self.repo_url = self.get("project_info", "repo_url")
-        self.project_version = self.get("project_info", "version")
+        # repo_url and version are not mandatory
+        # (project could want to run pip install command for example)
+        if self.has_option("project_info", "repo_url"):
+            self.repo_url = self.get("project_info", "repo_url")
+        else:
+            self.repo_url = None
+        # If the project's version_override parameter has been set, then use that version
+        # instead of using the version specified in the project.cfg file
+        env_version_name = "--" + project_name + "-version"
+        if version_override:
+            self.project_version = version_override
+            print("Overriding project version with the value given as a parameter")
+            print("    " + env_version_name + ": " + self.project_version)
+        else:
+            # check the version from the project.cfg file
+            if self.has_option("project_info", "version"):
+                self.project_version = self.get("project_info", "version")
+            else:
+                self.project_version = None
 
         # environment setup can have common and os-specific sections that needs to be appended together
         if self.is_posix:
@@ -92,9 +116,7 @@ class RockProjectBuilder(configparser.ConfigParser):
         self.post_install_cmd = self._get_project_info_config_value("post_install_cmd")
 
         self.project_root_dir_path = Path(rock_builder_root_dir)
-        self.project_src_dir_path = (
-            Path(rock_builder_root_dir) / "src_projects" / self.project_name
-        )
+        self.project_src_dir_path = project_src_dir
         self.project_build_dir_path = (
             Path(rock_builder_root_dir) / "builddir" / self.project_name
         )
@@ -126,7 +148,8 @@ class RockProjectBuilder(configparser.ConfigParser):
         print("Project build phase " + phase + ": -----")
         print("    Project_name: " + self.project_name)
         print("    Config_path: " + self.cfg_file_path.as_posix())
-        print("    Version:     " + self.project_version)
+        if self.project_version:
+            print("    Version:     " + self.project_version)
         print("    Source_dir:  " + self.project_src_dir_path.as_posix())
         print("    Patch_dir:   " + self.project_patch_dir_root.as_posix())
         print("    Build_dir:   " + self.project_build_dir_path.as_posix())
@@ -170,14 +193,16 @@ class RockProjectBuilder(configparser.ConfigParser):
             self.printout_error_and_terminate("clean")
 
     def checkout(self):
-        res = self.project_repo.do_checkout()
-        if not res:
-            self.printout_error_and_terminate("checkout")
+        if self.repo_url:
+            res = self.project_repo.do_checkout()
+            if not res:
+                self.printout_error_and_terminate("checkout")
 
     def hipify(self):
-        res = self.project_repo.do_hipify(self.hipify_cmd)
-        if not res:
-            self.printout_error_and_terminate("hipify")
+        if self.repo_url:
+            res = self.project_repo.do_hipify(self.hipify_cmd)
+            if not res:
+                self.printout_error_and_terminate("hipify")
 
     def pre_config(self):
         res = self.project_repo.do_pre_config(self.pre_config_cmd)
@@ -225,11 +250,10 @@ class RockProjectBuilder(configparser.ConfigParser):
 
 
 class RockExternalProjectListManager(configparser.ConfigParser):
-    def __init__(self, rock_builder_root_dir, package_output_dir):
+    def __init__(self, rock_builder_root_dir: Path):
         # default application list to builds
         self.cfg_file_path = Path(rock_builder_root_dir) / "projects" / "core_apps.pcfg"
         self.rock_builder_root_dir = rock_builder_root_dir
-        self.package_output_dir = package_output_dir
         super(RockExternalProjectListManager, self).__init__(allow_no_value=True)
         if self.cfg_file_path.exists():
             self.read(self.cfg_file_path)
@@ -239,11 +263,21 @@ class RockExternalProjectListManager(configparser.ConfigParser):
         # convert to list of project string names
         return list(filter(None, (x.strip() for x in value.splitlines())))
 
-    def get_rock_project_builder(self, project_name):
+    def get_rock_project_builder(
+        self,
+        project_src_dir: Path,
+        project_name,
+        package_output_dir: Path,
+        version_override,
+    ):
         ret = None
         try:
             ret = RockProjectBuilder(
-                self.rock_builder_root_dir, project_name, self.package_output_dir
+                self.rock_builder_root_dir,
+                project_src_dir,
+                project_name,
+                package_output_dir,
+                version_override,
             )
         except ValueError as e:
             print(str(e))
