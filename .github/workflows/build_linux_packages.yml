@@ -48,7 +48,7 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      # CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
+      CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
       CCACHE_LOGFILE: ${{ github.workspace }}/build/logs/ccache.log
       CCACHE_STATSLOG: ${{ github.workspace }}/build/logs/ccache_stats.log
       CCACHE_MAXSIZE: "5G"
@@ -65,9 +65,8 @@ jobs:
           mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES
           du /home/runner/pvc -h -d 1
           #ln -s /home/runner/pvc/$AMDGPU_FAMILIES $CACHE_DIR
-          echo "$CACHE_DIR after link:"
-          ls $CACHE_DIR -al
-
+          #echo "$CACHE_DIR after link:"
+          #ls $CACHE_DIR -al
           echo "---"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
