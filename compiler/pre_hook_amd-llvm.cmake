@@ -1,6 +1,11 @@
 # Get access to LLVM_VERSION_MAJOR
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
+# Build the device-libs as part of the core compiler so that clang works by
+# default (as opposed to other components that are *users* of the compiler).
+set(LLVM_EXTERNAL_AMDDEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
+set(LLVM_EXTERNAL_PROJECTS "AMDDeviceLibs" CACHE STRING "Enable extra projects" FORCE)
+
 # Build LLVM and the comgr dependency.
 # Note that in LLVM "BUILD_SHARED_LIBS" enables an unsupported development mode.
 # The flag you want for a shared library build is LLVM_BUILD_LLVM_DYLIB.
@@ -14,29 +19,30 @@ if(WIN32)
   #     Should they be supported? What depends on them?
   set(LLVM_ENABLE_LIBCXX OFF)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp" CACHE STRING "Enabled runtimes" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
   # Settinng "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
   # source otherwise. Defaults to `ON`.
   set(LIBOMP_COPY_EXPORTS OFF)
+  set(LIBOMPTARGET_EXTERNAL_PROJECT_ROCM_DEVICE_LIBS_PATH "${LLVM_EXTERNAL_AMDDEVICE_LIBS_SOURCE_DIR}" CACHE STRING "Enable devicelibs for offload" FORCE)
+  set(OPENMP_ENABLE_LIBOMPTARGET ON)
+  set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
+  set(LIBOMPTARGET_ENABLE_DEBUG ON)
+  set(LIBOMP_INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib:$ORIGIN/../../lib:$ORIGIN/../../../lib" CACHE STRING "Set offload rpath" FORCE)
 endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
-set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
 set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
-
-# Build the device-libs as part of the core compiler so that clang works by
-# default (as opposed to other components that are *users* of the compiler).
-set(LLVM_EXTERNAL_AMDDEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
-set(LLVM_EXTERNAL_PROJECTS "amddevice-libs" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.
@@ -47,9 +53,9 @@ set(LLVM_EXTERNAL_PROJECTS "amddevice-libs" CACHE STRING "Enable extra projects"
 # options to manage this transition but they require knowing the clange resource
 # dir. In order to avoid drift, we just fixate that too. This can all be
 # removed in a future version.
-# set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
+set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
+set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
+set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
 
 # Setup the install rpath (let CMake handle build RPATH per usual):
 # * Executables and libraries can always search their adjacent lib directory
