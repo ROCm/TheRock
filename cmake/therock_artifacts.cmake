@@ -15,6 +15,10 @@ function(therock_provide_artifact slice_name)
     "COMPONENTS;SUBPROJECT_DEPS"
   )
 
+  if(${slice_name} MATCHES "_")
+    message(FATAL_ERROR "Artifact slice name '${slice_name}' is not allowed to contain an underscore")
+  endif()
+
   # Normalize arguments.
   set(_target_name "therock-artifact-${slice_name}")
   set(_archive_target_name "therock-archive-${slice_name}")
