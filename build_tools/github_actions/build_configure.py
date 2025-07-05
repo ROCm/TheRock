@@ -69,11 +69,6 @@ def build_configure():
                 "Environment variable VCToolsInstallDir is not set. Please see https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#important-tool-settings about Windows tool configurations. Exiting."
             )
 
-        if os.path.isdir(f"{github_workspace}/amdgpu-windows-interop"):
-            cmd.append(
-                f"-DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR={github_workspace}/amdgpu-windows-interop"
-            )
-
     # Splitting cmake options into an array (ex: "-flag X" -> ["-flag", "X"]) for subprocess.run
     cmake_options_arr = extra_cmake_options.split()
     cmd += cmake_options_arr

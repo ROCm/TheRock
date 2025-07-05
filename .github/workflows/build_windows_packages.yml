@@ -112,13 +112,6 @@ jobs:
         run: |
           python ./build_tools/fetch_sources.py --jobs 96
 
-      - name: Checkout closed source AMDGPU/ROCm interop library folder
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: nod-ai/amdgpu-windows-interop
-          path: amdgpu-windows-interop
-          lfs: true
-
       - name: Configure Projects
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}

@@ -181,11 +181,6 @@ If you prefer to install tools manually, you will need:
 ### Clone and fetch sources
 
 ```bash
-# Clone interop library from https://github.com/nod-ai/amdgpu-windows-interop
-# for CLR (the "HIP runtime") on Windows. The path used can also be configured
-# using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable.
-git clone https://github.com/nod-ai/amdgpu-windows-interop.git
-
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
@@ -328,11 +323,10 @@ An incremental rollout is planned:
 1. The interop folder must be manually copied into place in the source tree.
    This will allow AMD developers to iterate on integration into TheRock while
    we work on making this folder or more source files available.
-1. *(We are here today)* The interop folder will be available publicly
+1. The interop folder will be available publicly
    (currently at https://github.com/nod-ai/amdgpu-windows-interop).
-1. The interop folder will be included automatically from either a git
-   repository or cloud storage (like the existing third party dep mirrors in
-   [`third-party/`](../../third-party/)).
+1. *(We are here today)* The interop folder will be included automatically from
+   a git repository using git LFS.
 1. A more permanent open source strategy for building the CLR (the HIP runtime)
    from source on Windows will eventually be available.
 

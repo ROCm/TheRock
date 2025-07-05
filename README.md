@@ -78,11 +78,6 @@ python ./build_tools/fetch_sources.py
 ```bash
 # Install dependencies following the Windows support guide
 
-# Clone interop library from https://github.com/nod-ai/amdgpu-windows-interop
-# for CLR (the "HIP runtime") on Windows. The path used can also be configured
-# using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable.
-git clone https://github.com/nod-ai/amdgpu-windows-interop.git
-
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock

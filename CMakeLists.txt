@@ -73,8 +73,6 @@ endif()
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 
-set(THEROCK_AMDGPU_WINDOWS_INTEROP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../amdgpu-windows-interop" CACHE PATH "Directory containing the Windows AMDGPU/ROCm driver interop support files")
-
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "${THEROCK_SOURCE_DIR}/install" CACHE PATH "" FORCE)
