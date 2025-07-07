@@ -83,6 +83,14 @@ test_matrix = {
         "test_script": f"python {SCRIPT_DIR / 'test_hiprand.py'}",
         "platform": ["linux", "windows"],
     },
+    # MIOpen tests
+    "miopen": {
+        "job_name": "miopen",
+        "fetch_artifact_args": "--miopen --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {SCRIPT_DIR / 'test_miopen.py'}",
+        "platform": ["linux", "windows"],
+    },
 }
 
 
