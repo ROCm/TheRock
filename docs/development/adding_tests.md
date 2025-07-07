@@ -4,7 +4,10 @@
 
 After TheRock builds its artifacts, we test those artifacts through [`test_packages.yml`](../../.github/workflows/test_packages.yml). The testing flow works as:
 
-`test_sanity_check`--> `configure_test_matrix` --> `test_components`
+```mermaid
+graph LR
+    test_sanity_check --> configure_test_matrix --> test_components
+```
 
 where we:
 
@@ -20,7 +23,7 @@ These tests are run per pull request, main branch commit, `workflow_dispatch` an
 
 ### What kind of tests are suitable for TheRock
 
-Since `TheRock` is the open source build system for `HIP` and `ROCm`, tests that prove `HIP` and `ROCm` functionality are the tests we are looking for! Particuarly, any tests that prove component functionality or overall `ROCm`/`HIP` functionality
+Since TheRock is the open source build system for HIP and ROCm, we are interested in tests for individual subprojects as well as tests that exercise multiple subprojects, especially for build and runtime dependencies. We also perform higher level testing of overall user-facing behavior and downstream frameworks like PyTorch.
 
 ## Adding tests
 
