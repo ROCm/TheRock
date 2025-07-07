@@ -1,0 +1,27 @@
+From 45b93c7f3bee12e0f9bfba2bc47ee3819a81dedf Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Mon, 7 Jul 2025 12:42:03 -0700
+Subject: [PATCH 5/5] Search sibling lib/ dir for Tensile on Windows.
+
+---
+ library/src/tensile_host.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/library/src/tensile_host.cpp b/library/src/tensile_host.cpp
+index 89526e05..0538a4a1 100644
+--- a/library/src/tensile_host.cpp
++++ b/library/src/tensile_host.cpp
+@@ -728,6 +728,10 @@ namespace
+                         // For ASAN packaging, library file directory will be lib/asan
+                         // so need to prefix ../ to set search base_path to lib/rocblas/library
+                         base_path += "/../rocblas/library";
++                    else if (TestPath(base_path + "/../lib/rocblas/library"))
++                        // On Linux, the shared library is in rocm/lib/.
++                        // On Windows, the shared library is in rocm/bin/, so check the sibling dir.
++                        base_path += "/../lib/rocblas/library";
+                     else if(TestPath(base_path + "/../Tensile/library"))
+                         // The build tree can lay out its library directory in this way when Tensile
+                         // is added as a subdirectory, but the install tree will never use this form
+-- 
+2.47.1.windows.2
+

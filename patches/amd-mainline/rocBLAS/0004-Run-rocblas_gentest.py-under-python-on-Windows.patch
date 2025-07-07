@@ -1,7 +1,7 @@
-From e9abafad84af3865d19e3c6cf37efbb163a9f680 Mon Sep 17 00:00:00 2001
+From a7245256ba4901d387e932dd1f7830da712baa56 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Tue, 1 Jul 2025 14:34:35 -0700
-Subject: [PATCH 4/4] Run rocblas_gentest.py under `python` on Windows.
+Subject: [PATCH 4/5] Run rocblas_gentest.py under `python` on Windows.
 
 ---
  clients/common/rocblas_parse_data.cpp | 11 ++++++++---
