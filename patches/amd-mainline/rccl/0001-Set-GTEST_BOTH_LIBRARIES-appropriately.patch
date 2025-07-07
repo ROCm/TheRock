@@ -1,7 +1,7 @@
-From 81306e6c907f515d2d87beb8bc01c1d9242f16a4 Mon Sep 17 00:00:00 2001
+From 9be53958658b6871a5af0c11c785cd98c5e49ed0 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Mon, 28 Apr 2025 14:46:44 +0000
-Subject: [PATCH] Set `GTEST_BOTH_LIBRARIES` appropriately
+Subject: [PATCH 1/2] Set `GTEST_BOTH_LIBRARIES` appropriately
 
 If `find_package()` succeeds to find GTest and `INSTALL_DEPENDENCIES`
 is set to OFF, `GTEST_BOTH_LIBRARIES` is not set and thus
@@ -11,7 +11,7 @@ is set to OFF, `GTEST_BOTH_LIBRARIES` is not set and thus
  1 file changed, 2 insertions(+)
 
 diff --git a/cmake/Dependencies.cmake b/cmake/Dependencies.cmake
-index bf2b2a6c..ea1a11a6 100644
+index d7095b38..0d54c20d 100644
 --- a/cmake/Dependencies.cmake
 +++ b/cmake/Dependencies.cmake
 @@ -68,6 +68,8 @@ if(NOT GTest_FOUND AND BUILD_TESTS OR INSTALL_DEPENDENCIES)
