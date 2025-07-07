@@ -22,26 +22,28 @@ import os
 import sys
 
 
-def derive_versions(args):
-    version = parse(args.rocm_version)
+def derive_versions(rocm_version: str, verbose_output: bool) -> str:
+    version = parse(rocm_version)
     rocm_sdk_version = f"=={version}"
     version_suffix = f"+rocm{str(version).replace('+','-')}"
     optional_build_prod_arguments = (
         f"--rocm-sdk-version {rocm_sdk_version} --version-suffix {version_suffix}"
     )
 
-    if args.verbose:
+    if verbose_output:
         print(f"ROCm version: {version}")
         print(f"`--rocm-sdk-version`\t: {rocm_sdk_version}")
         print(f"`--version-suffix`\t: {version_suffix}")
         print()
-    print(f"{optional_build_prod_arguments}")
 
-    if args.write_env_file:
-        env_file = os.getenv("GITHUB_ENV")
+    return optional_build_prod_arguments
 
-        with open(env_file, "a") as f:
-            f.write(f"optional_build_prod_arguments={optional_build_prod_arguments}")
+
+def write_env_file(optional_build_prod_arguments: str):
+    env_file = os.getenv("GITHUB_ENV")
+
+    with open(env_file, "a") as f:
+        f.write(f"optional_build_prod_arguments={optional_build_prod_arguments}")
 
 
 def main(argv: list[str]):
@@ -66,7 +68,11 @@ def main(argv: list[str]):
     )
     args = p.parse_args(argv)
 
-    derive_versions(args)
+    optional_build_prod_arguments = derive_versions(args.rocm_version, args.verbose)
+    print(f"{optional_build_prod_arguments}")
+
+    if args.write_env_file:
+        write_env_file(optional_build_prod_arguments)
 
 
 if __name__ == "__main__":
