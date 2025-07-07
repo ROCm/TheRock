@@ -49,9 +49,24 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 15,
         "test_script": f"python {SCRIPT_DIR / 'test_rocthrust.py'}",
         "platform": ["linux"],
+    },
+    # RAND tests
+    "rocrand": {
+        "job_name": "rocrand",
+        "fetch_artifact_args": "--rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {SCRIPT_DIR / 'test_rocrand.py'}",
+        "platform": ["linux", "windows"],
+    },
+    "hiprand": {
+        "job_name": "hiprand",
+        "fetch_artifact_args": "--rand --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {SCRIPT_DIR / 'test_hiprand.py'}",
+        "platform": ["linux", "windows"],
     },
 }
 
