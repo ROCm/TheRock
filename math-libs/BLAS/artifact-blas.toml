@@ -132,7 +132,12 @@ optional = true
 include = [
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
-  "share/rocsparse/test/**"
+  "share/rocsparse/test/**",
+]
+optional = true
+[components.test."math-libs/BLAS/rocSPARSE/build"]
+include = [
+  "clients/matrices/**"
 ]
 optional = true
 
@@ -149,5 +154,10 @@ optional = true
 include = [
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
+]
+optional = true
+[components.test."math-libs/BLAS/hipSPARSE/build"]
+include = [
+  "clients/matrices/**"
 ]
 optional = true
