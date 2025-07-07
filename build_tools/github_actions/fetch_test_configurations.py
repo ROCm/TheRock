@@ -49,7 +49,7 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 15,
         "test_script": f"python {SCRIPT_DIR / 'test_rocthrust.py'}",
         "platform": ["linux"],
     },
