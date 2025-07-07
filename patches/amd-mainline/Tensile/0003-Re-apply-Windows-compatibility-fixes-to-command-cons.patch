@@ -1,7 +1,7 @@
-From f90b28f1d1a25a1a92d82d403e42d9fb3e5d27ab Mon Sep 17 00:00:00 2001
+From 8406d435fb5f3d1aa7e4ae169abe999c391f3916 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 5 Jun 2025 12:12:40 -0700
-Subject: [PATCH 3/3] Re-apply Windows compatibility fixes to command
+Subject: [PATCH 3/4] Re-apply Windows compatibility fixes to command
  construction.
 
 ---
@@ -68,5 +68,5 @@ index 7fe89bf4..f905935f 100644
  
  endfunction()
 -- 
-2.47.1.windows.2
+2.43.0
 
