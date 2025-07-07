@@ -15,8 +15,11 @@ function(therock_provide_artifact slice_name)
     "COMPONENTS;SUBPROJECT_DEPS"
   )
 
-  if(${slice_name} MATCHES "_")
-    message(FATAL_ERROR "Artifact slice name '${slice_name}' is not allowed to contain an underscore")
+  if(NOT ${slice_name} MATCHES "^[A-Za-z][A-Za-z0-9-]*$")
+    message(FATAL_ERROR
+      "Artifact slice name '${slice_name}' must start with a letter "
+      "and may only contain alphanumeric characters and dashes"
+    )
   endif()
 
   # Normalize arguments.
