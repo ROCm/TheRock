@@ -51,6 +51,7 @@ include = [
 [components.doc."math-libs/BLAS/hipBLASLt/stage"]
 [components.lib."math-libs/BLAS/hipBLASLt/stage"]
 include = [
+  "bin/hipblaslt/library/**",
   "lib/hipblaslt/library/**",
 ]
 [components.test."math-libs/BLAS/hipBLASLt/stage"]
