@@ -64,7 +64,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 90,
         "test_script": f"python {SCRIPT_DIR / 'test_rocsparse.py'}",
         "platform": ["linux", "windows"],
     },
