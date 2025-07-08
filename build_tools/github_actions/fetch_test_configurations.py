@@ -66,6 +66,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
         "test_script": f"python {SCRIPT_DIR / 'test_rocsparse.py'}",
+        "platform": ["linux", "windows"],
     },
     # RAND tests
     "rocrand": {
