@@ -15,7 +15,7 @@ cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",
     "--gtest_filter=*pre_checkin*",
     "--matrices-dir",
-    f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
+    f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
