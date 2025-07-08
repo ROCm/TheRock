@@ -483,9 +483,10 @@ def do_build_triton(
     )
 
     print("+++ Building triton:")
+    # In early ~2.9, setup.py moved from the python/ dir to the root. Check both.
     triton_python_dir = find_dir_containing(
-        "setup.py", triton_dir / "python", triton_dir  # Pre ~2.9
-    )  # Post ~2.9
+        "setup.py", triton_dir / "python", triton_dir
+    )
     remove_dir_if_exists(triton_python_dir / "dist")
     if args.clean:
         remove_dir_if_exists(triton_python_dir / "build")
