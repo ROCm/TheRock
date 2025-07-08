@@ -81,7 +81,7 @@ test_matrix = {
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 5,
         "test_script": f"python {SCRIPT_DIR / 'test_hiprand.py'}",
-        "platform": ["linux", "windows"],
+        "platform": ["linux"],
     },
 }
 

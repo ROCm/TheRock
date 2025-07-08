@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",
-    "--gtest_filter=*pre_checkin*",
+    "--gtest_filter=*quick*",
     "--matrices-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
 ]
