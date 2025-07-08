@@ -21,11 +21,11 @@ import sys
 
 logging.basicConfig(level=logging.INFO)
         
-def populate_redshift_db(log, api_output, build_id, redshift_cluster_endpoint, dbname, redshift_username, redshift_password, redshift_port):
+def populate_redshift_db(log, api_output_dict, build_id, redshift_cluster_endpoint, dbname, redshift_username, redshift_password, redshift_port):
 
-        log.info(f"Github API output from Workflow {api_output}")
+        log.info(f"Github API output from Workflow (truncated): {str(api_output_dict)[:500]}...")
 
-        input_dict = json.loads(api_output)
+        input_dict = api_output_dict
 
         log.info("Starting Redshift metadata retrieval...")
 
@@ -33,7 +33,7 @@ def populate_redshift_db(log, api_output, build_id, redshift_cluster_endpoint, d
             log.info("Connecting to Redshift cluster...")
             conn = redshift_connector.connect( 
                 host=redshift_cluster_endpoint,
-                port=redshift_port,
+                port=int(redshift_port),
                 database=dbname,
                 user=redshift_username,
                 password=redshift_password
@@ -65,14 +65,6 @@ def populate_redshift_db(log, api_output, build_id, redshift_cluster_endpoint, d
 
         # Iterate over each job in the input dictionary
         for i in range(len(input_dict['jobs'])):
-            """
-            Extract the project name from the GitHub Actions run URL.
-
-            The project name is located at the 6th segment (index 5) of the URL path.
-            Example:
-                For the URL "https://api.github.com/repos/ROCm/TheRock/actions/runs/16121346338",
-                the extracted project name will be "TheRock".
-            """
             job = input_dict['jobs'][i]
             project = job['run_url'].split("/")[5]
 
@@ -89,14 +81,12 @@ def populate_redshift_db(log, api_output, build_id, redshift_cluster_endpoint, d
                 f"started_at='{workflow_started_at}', run_url='{run_url}'"
             )
 
-            # Insert workflow run details into the database
             cur.execute("""
                 INSERT INTO workflow_run_details 
                     ("build_id", "id", "head_branch", "workflow_name", "project", "started_at", "run_url") 
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (build_id, workflow_id, head_branch, workflow_name, project, workflow_started_at, run_url))
 
-            # Iterate over each step in the current job
             for j in range(len(job['steps'])):
                 step = job['steps'][j]
 
@@ -114,7 +104,6 @@ def populate_redshift_db(log, api_output, build_id, redshift_cluster_endpoint, d
                     f"started_at='{step_started_at}', completed_at='{step_completed_at}'"
                 )
 
-                # Insert step status details into the database
                 cur.execute("""
                     INSERT INTO step_status 
                         ("workflow_run_details_id", "id", "name", "status", "conclusion", "started_at", "completed_at") 
@@ -130,46 +119,37 @@ def populate_redshift_db(log, api_output, build_id, redshift_cluster_endpoint, d
 def main():
         parser = argparse.ArgumentParser(description="Populate DB in redshift cluster")
         parser.add_argument(
-                "--api-output",
+                "--api-output-file",
                 type=str,
-                help="github API output to populate the tables in DB",
+                required=True,
+                help="Path to file containing GitHub API output to populate the tables in DB",
             )
-        parser.add_argument(
-                "--build-id",
-                type=int,
-                help="build_id to populate the tables in DB",
-            )
-        parser.add_argument(
-                "--redshift-cluster-endpoint",
-                type=str,
-                help="redshift cluster endpoint to access cluster",
-            )
-        parser.add_argument(
-                "--dbname",
-                type=str,
-                help="database name to populate the tables in DB",
-            )
-        parser.add_argument(
-                "--redshift-username",
-                type=str,
-                help="username to access redshift cluster",
-            )
+        parser.add_argument("--build-id", type=int, required=True)
+        parser.add_argument("--redshift-cluster-endpoint", type=str, required=True)
+        parser.add_argument("--dbname", type=str, required=True)
+        parser.add_argument("--redshift-username", type=str, required=True)
+        parser.add_argument("--redshift-password", type=str, required=True)
+        parser.add_argument("--redshift-port", type=int, default=5439)
 
-        parser.add_argument(
-                "--redshift-password",
-                type=str,
-                help="password to access redshift cluster",
-            )
-        parser.add_argument(
-                "--redshift-port",
-                type=int, default=5439,
-                help="port to access redshift cluster",
-                )
         args = parser.parse_args()
 
-        build_id = args.build_id
+        try:
+            with open(args.api_output_file, 'r') as f:
+                api_output_dict = json.load(f)
+        except Exception as e:
+            logging.error(f"Failed to read API output file: {e}")
+            sys.exit(1)
 
-        populate_redshift_db(logging, args.api_output, build_id, args.redshift_cluster_endpoint, args.dbname, args.redshift_username, args.redshift_password, args.redshift_port)
+        populate_redshift_db(
+            logging,
+            api_output_dict,
+            args.build_id,
+            args.redshift_cluster_endpoint,
+            args.dbname,
+            args.redshift_username,
+            args.redshift_password,
+            args.redshift_port
+        )
 
 
 if __name__ == "__main__":

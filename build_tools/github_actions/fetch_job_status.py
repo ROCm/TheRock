@@ -1,5 +1,5 @@
 """
-This script determines the job status for different jobs run
+This script determines the job status for different job runs
 as part of GitHub workflow based on RUN_ID and ATTEMPT
 
 Required environment variables:
@@ -19,14 +19,8 @@ RUN_ID = os.getenv("RUN_ID")
 ATTEMPT = os.getenv("ATTEMPT")
 
 # Check for missing values
-missing_vars = []
-if not RUN_ID:
-    missing_vars.append("RUN_ID")
-if not ATTEMPT:
-    missing_vars.append("ATTEMPT")
-
-if missing_vars:
-    raise ValueError(f"Missing required environment variable(s): {', '.join(missing_vars)}. "
+if not RUN_ID or not ATTEMPT:
+    raise ValueError(f"Missing required environment variable RUN_ID or ATTEMPT. "
                      f"Ensure these are exported or set in the CI environment.")
 
 def run():
@@ -59,7 +53,7 @@ def run():
                 f"Received unexpected status code: {response.status}. Please verify the URL or check GitHub API status {response.status}."
             )
         job_data = json.loads(response.read().decode("utf-8"))
-        # Check if API output shows number of jobs run in the workflow to be atleast 1
+        # Check if API output shows number of job runs in the workflow to be atleast 1
         if len(job_data["jobs"]) > 0:
             set_github_output({"job_summary": json.dumps(job_data)})
 
