@@ -12,9 +12,10 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
 cmd = [
-    f"ROCSPARSE_CLIENTS_MATRICES_DIR={OUTPUT_ARTIFACTS_DIR}/clients/matrices",
     f"{THEROCK_BIN_DIR}/rocsparse-test",
     "--gtest_filter=*pre_checkin*",
+    "--matrices-dir",
+    f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(

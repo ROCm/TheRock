@@ -12,8 +12,9 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
 cmd = [
-    f"HIPSPARSE_CLIENTS_MATRICES_DIR={OUTPUT_ARTIFACTS_DIR}/clients/matrices",
     f"{THEROCK_BIN_DIR}/hipsparse-test",
+    "--matrices-dir",
+    f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
