@@ -53,6 +53,21 @@ test_matrix = {
         "test_script": f"python {SCRIPT_DIR / 'test_rocthrust.py'}",
         "platform": ["linux"],
     },
+    # SPARSE tests
+    "hipsparse": {
+        "job_name": "hipsparse",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {SCRIPT_DIR / 'test_hipsparse.py'}",
+        "platform": ["linux", "windows"],
+    },
+    "rocsparse": {
+        "job_name": "rocsparse",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {SCRIPT_DIR / 'test_rocsparse.py'}",
+        "platform": ["linux", "windows"],
+    },
 }
 
 
