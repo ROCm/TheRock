@@ -1,5 +1,5 @@
 """
-This script determines the job status for different jobs run
+This script determines the job status for different job runs
 as part of GitHub workflow based on RUN_ID and ATTEMPT
 
 Required environment variables:
@@ -11,15 +11,25 @@ from configure_ci import set_github_output
 import json
 import os
 from urllib.request import urlopen, Request
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 RUN_ID = os.getenv("RUN_ID")
 ATTEMPT = os.getenv("ATTEMPT")
 
-def run():
-    github_workflow_jobs_url = (
-        f"https://api.github.com/repos/RoCm/TheRock/actions/runs/{RUN_ID}/attempts/{ATTEMPT}/jobs"
+if not RUN_ID or not ATTEMPT:
+    raise ValueError(
+        f"Missing required environment variable RUN_ID or ATTEMPT. "
+        f"Ensure these are exported or set in the CI environment."
     )
-    print(github_workflow_jobs_url)
+
+
+def run():
+    github_workflow_jobs_url = f"https://api.github.com/repos/ROCm/TheRock/actions/runs/{RUN_ID}/attempts/{ATTEMPT}/jobs"
+
+    logging.info(f"Constructed GitHub workflow jobs URL: {github_workflow_jobs_url}")
+
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -33,13 +43,14 @@ def run():
     with urlopen(request) as response:
         if response.status == 403:
             raise Exception(
-                f"Error when retrieving GitHub response. This is most likely a rate limiting issue, so please try again"
+                f"Access denied (403 Forbidden) while retrieving workflow jobs from GitHub. "
+                f"Check if your token has the necessary permissions (e.g., `repo`, `workflow`)."
             )
         elif response.status != 200:
             raise Exception(
-                f"Error when retrieving GitHub response assets for {RUN_ID} tag with status code {response.status}. Exiting..."
+                f"Failed to retrieve GitHub workflow job data for run ID '{RUN_ID}' and attempt '{ATTEMPT}'. "
+                f"Received unexpected status code: {response.status}. Please verify the URL or check GitHub API status {response.status}."
             )
-
         job_data = json.loads(response.read().decode("utf-8"))
         # Check if API output shows number of jobs run in the workflow to be atleast 1
         if len(job_data["jobs"]) > 0:
