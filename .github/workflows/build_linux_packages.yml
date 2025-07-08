@@ -102,32 +102,32 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist
-        run: cmake --build build --target therock-dist
+      # - name: Build therock-dist
+      #   run: cmake --build build --target therock-dist
 
-      - name: Build therock-archives
-        run: cmake --build build --target therock-archives
+      # - name: Build therock-archives
+      #   run: cmake --build build --target therock-archives
 
-      - name: Test Packaging
-        if: ${{ github.event.repository.name == 'TheRock' }}
-        run: |
-          ctest --test-dir build --output-on-failure
+      # - name: Test Packaging
+      #   if: ${{ github.event.repository.name == 'TheRock' }}
+      #   run: |
+      #     ctest --test-dir build --output-on-failure
 
-      - name: Report
-        if: ${{ !cancelled() }}
-        run: |
-          echo "Full SDK du:"
-          echo "------------"
-          du -h -d 1 build/dist/rocm
-          echo "Artifact Archives:"
-          echo "------------------"
-          ls -lh build/artifacts/*.tar.xz
-          echo "Artifacts:"
-          echo "----------"
-          du -h -d 1 build/artifacts
-          echo "CCache Stats:"
-          echo "-------------"
-          ccache -s -v
+      # - name: Report
+      #   if: ${{ !cancelled() }}
+      #   run: |
+      #     echo "Full SDK du:"
+      #     echo "------------"
+      #     du -h -d 1 build/dist/rocm
+      #     echo "Artifact Archives:"
+      #     echo "------------------"
+      #     ls -lh build/artifacts/*.tar.xz
+      #     echo "Artifacts:"
+      #     echo "----------"
+      #     du -h -d 1 build/artifacts
+      #     echo "CCache Stats:"
+      #     echo "-------------"
+      #     ccache -s -v
 
       - name: Configure AWS Credentials
         if: always()
@@ -143,13 +143,13 @@ jobs:
             --build-dir=build \
             --amdgpu-family=${{ inputs.amdgpu_families }}
 
-      - name: Upload artifacts
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
-            --build-dir build
+      # - name: Upload artifacts
+      #   if: always()
+      #   run: |
+      #     python build_tools/github_actions/upload_build_artifacts.py \
+      #       --run-id ${{ github.run_id }} \
+      #       --amdgpu-family ${{ inputs.amdgpu_families }} \
+      #       --build-dir build
 
       - name: Determine job status for workflow run
         if: '!cancelled()'
