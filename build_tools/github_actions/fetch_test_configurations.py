@@ -59,7 +59,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {SCRIPT_DIR / 'test_hipsparse.py'}",
-        "platform": ["linux", "windows"],
+        "platform": ["linux"],
     },
     "rocsparse": {
         "job_name": "rocsparse",
@@ -81,7 +81,7 @@ test_matrix = {
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 5,
         "test_script": f"python {SCRIPT_DIR / 'test_hiprand.py'}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
     },
 }
 
