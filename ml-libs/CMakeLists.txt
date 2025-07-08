@@ -142,6 +142,7 @@ if(THEROCK_ENABLE_MIOPEN)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       MIOpen
   )
