@@ -49,11 +49,6 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
-      REDSHIFT_HOST: "therockcluster-1.cgwwfykpw9ix.us-east-2.redshift.amazonaws.com"
-      REDSHIFT_PORT: 5439
-      REDSHIFT_DBNAME: "workflow_database"
-      REDSHIFT_USER: "awsuser"
-      REDSHIFT_PASSWD: ${{ secrets.REDSHIFT_THEROCKCLUSTER_1_AWSUSER }}
 
     steps:
       - name: Checkout Repository
@@ -164,19 +159,22 @@ jobs:
           ATTEMPT: ${{ github.run_attempt }}
         run: python build_tools/github_actions/fetch_job_status.py
 
-      - name: Install psycopg2
+      - name: Install redshift_connector
         if: always()
         run: |
-          echo 'Install psycopg2'
-          pip install psycopg2-binary
+          pip install redshift_connector
 
-      - name: Populate tables in redshift
+      - name: Upload job results to Redshift
         if: always()
         run: |
-          echo "Job Status details ${{ steps.job-status-step.outputs.job_summary }}"
           python3 build_tools/github_actions/populate_redshift_db.py \
-            --api_op '${{ steps.job-status-step.outputs.job_summary }}' --redshift_cluster_endpoint ${{ env.REDSHIFT_HOST }} \
-            --redshift_username ${{ env.REDSHIFT_USER }} --dbname ${{ env.REDSHIFT_DBNAME  }} --redshift_password ${{ env.REDSHIFT_PASSWD }} --build_id ${{ github.run_number }}
+            --api-output '${{ steps.job-status-step.outputs.job_summary }}' \
+            --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
+            --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
+            --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
+            --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
+            --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
+            --build-id ${{ github.run_number }}
 
       - name: Upload Logs
         if: always()
