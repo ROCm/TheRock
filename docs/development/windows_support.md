@@ -113,12 +113,11 @@ These instructions mostly mirror the instructions in the root
   [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/)
   and [Cmder](https://cmder.app/).
 
-#### Install tools
+#### Install tools with package manager
 
-> [!TIP]
-> These tools are available via package managers like
-> [chocolatey](https://chocolatey.org/):
->
+The [choco package manager](https://chocolatey.org/install) from Chocolatey provides an easy method to install TheRock build requirements.
+Below is the commands that will install the tools required by TheRock build.
+
 > ```bash
 > choco install visualstudio2022buildtools -y --params "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > choco install git.install -y --params "'/GitAndUnixToolsOnPath'"
@@ -129,8 +128,19 @@ These instructions mostly mirror the instructions in the root
 > choco install strawberryperl -y
 > ```
 
-If you prefer to install tools manually, you will need:
+Choco will install for now by default the Python version 3.13. If you want to use older python version
+like 3.11 that is not maintained by the choco, you will need to use choco to uninstall the python version provided by the choco and then
+use some other method to install older python version. For example:
 
+
+> ```bash
+>choco uninstall python
+>winget install --id Python.Python.3.11 -e
+> ```
+
+#### Install tools manually
+
+You can optionally install the tools manually one by one. For that you will need
 - The MSVC compiler from https://visualstudio.microsoft.com/downloads/
   (Using either "Visual Studio" or "Build Tools for Visual Studio"),
   including these components:
@@ -183,7 +193,9 @@ If you prefer to install tools manually, you will need:
 ```bash
 # Clone interop library from https://github.com/nod-ai/amdgpu-windows-interop
 # for CLR (the "HIP runtime") on Windows. The path used can also be configured
-# using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable.
+# using the `THEROCK_AMDGPU_WINDOWS_INTEROP_DIR` CMake variable. By default it points to ..\
+# from TheRock root directory.
+
 git clone https://github.com/nod-ai/amdgpu-windows-interop.git
 
 # Clone the repository
@@ -212,6 +224,10 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 #  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
 #  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
 #  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded \
+
+To use the amdgpu-windows-interop library from a non-default location, you can set:
+#   -DTHEROCK_AMDGPU_WINDOWS_INTEROP_DIR=<windows-path-to>/amdgpu-windows-interop \
+
 ```
 
 > [!TIP]
