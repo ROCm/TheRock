@@ -1,6 +1,9 @@
 import os
 from configure_ci import set_github_output
-from amdgpu_family_matrix import amdgpu_family_info_matrix
+from amdgpu_family_matrix import (
+    amdgpu_family_info_matrix_presubmit,
+    amdgpu_family_info_matrix_postsubmit,
+)
 
 # This file helps configure which target to run
 
@@ -10,6 +13,9 @@ from amdgpu_family_matrix import amdgpu_family_info_matrix
 
 def main(args):
     target = args.get("target").lower()
+    amdgpu_family_info_matrix = (
+        amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+    )
     for key in amdgpu_family_info_matrix.keys():
         # If the amdgpu_family matrix key is inside the target (ex: gfx94X in gfx94X-dcgpu)
         if key in target:

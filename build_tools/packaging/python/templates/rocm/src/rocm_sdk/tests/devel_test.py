@@ -4,6 +4,7 @@
 
 import importlib
 from pathlib import Path
+import platform
 import subprocess
 import sys
 import unittest
@@ -77,6 +78,9 @@ class ROCmDevelTest(unittest.TestCase):
         bin_path = path / "bin"
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
 
+    @unittest.skipIf(
+        platform.system() == "Windows", "root LLVM symlink only exists on Linux"
+    )
     def testRootLLVMSymlinkExists(self):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.

@@ -3,9 +3,19 @@
 [components.dev."math-libs/rocRAND/stage"]
 [components.doc."math-libs/rocRAND/stage"]
 [components.lib."math-libs/rocRAND/stage"]
+[components.test."math-libs/rocRAND/stage"]
+include = [
+  "bin/test_*",
+  "bin/rocRAND/CTestTestfile.cmake"
+]
 
 # hipRAND
 [components.dbg."math-libs/hipRAND/stage"]
 [components.dev."math-libs/hipRAND/stage"]
 [components.doc."math-libs/hipRAND/stage"]
 [components.lib."math-libs/hipRAND/stage"]
+[components.test."math-libs/hipRAND/stage"]
+include = [
+  "bin/test_*",
+  "bin/hipRAND/CTestTestfile.cmake"
+]

@@ -16,17 +16,18 @@ class LibraryEntry:
     """Defines a public library that can be located by name within the overall
     distribution."""
 
-    def __init__(self, shortname: str, package_name: str, soname: str):
+    def __init__(self, shortname: str, package_name: str, soname: str, dllname: str):
         self.shortname = shortname
         self.package = ALL_PACKAGES[package_name]
         self.posix_relpath = "lib"
         self.windows_relpath = "bin"
         self.soname = soname
+        self.dllname = dllname
         assert shortname not in ALL_LIBRARIES
         ALL_LIBRARIES[shortname] = self
 
     def __repr__(self):
-        return f"{self.shortname}(soname={self.soname}, package={self.package})"
+        return f"{self.shortname}(soname={self.soname}, dllname={self.dllname}, package={self.package})"
 
 
 class PackageEntry:
@@ -87,7 +88,7 @@ class PackageEntry:
         return importlib.util.find_spec(self.get_py_package_name(target_family))
 
     def has_py_package(self, target_family: str | None = None) -> bool:
-        return self.get_py_package(self.get_py_package_name(target_family)) is not None
+        return self.get_py_package(target_family) is not None
 
     def __repr__(self):
         return self.dist_package_template
@@ -157,20 +158,23 @@ PackageEntry(
     required=False,
 )
 
-# Public libraries.
-LibraryEntry("amdhip64", "core", "libamdhip64.so.6")
-LibraryEntry("hiprtc", "core", "libhiprtc.so.6")
-LibraryEntry("roctx64", "core", "libroctx64.so.4")
-LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so.1")
+# TODO(#703): Use patterns for version suffixes and platform differences.
 
-LibraryEntry("hipblas", "libraries", "libhipblas.so.3")
-LibraryEntry("hipfft", "libraries", "libhipfft.so.0")
-LibraryEntry("hiprand", "libraries", "libhiprand.so.1")
-LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4")
-LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1")
-LibraryEntry("rccl", "libraries", "librccl.so.1")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1")
-LibraryEntry("miopen", "libraries", "libMIOpen.so.1")
+# Public libraries.
+LibraryEntry("amdhip64", "core", "libamdhip64.so.6", "amdhip64_6.dll")
+LibraryEntry("hiprtc", "core", "libhiprtc.so.6", "hiprtc0605.dll")
+LibraryEntry("roctx64", "core", "libroctx64.so.4", "")
+LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so.1", "")
+
+LibraryEntry("amd_comgr", "core", "libamd_comgr.so.3", "amd_comgr0605.dll")
+LibraryEntry("hipblas", "libraries", "libhipblas.so.3", "libhipblas.dll")
+LibraryEntry("hipfft", "libraries", "libhipfft.so.0", "hipfft.dll")
+LibraryEntry("hiprand", "libraries", "libhiprand.so.1", "hiprand.dll")
+LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4", "hipsparse.dll")
+LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1", "hipsolver.dll")
+LibraryEntry("rccl", "libraries", "librccl.so.1", "")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "hipblaslt.dll")
+LibraryEntry("miopen", "libraries", "libMIOpen.so.1", "MIOpen.dll")
 
 # Overall ROCM package version.
 __version__ = "DEFAULT"

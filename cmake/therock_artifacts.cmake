@@ -15,6 +15,13 @@ function(therock_provide_artifact slice_name)
     "COMPONENTS;SUBPROJECT_DEPS"
   )
 
+  if(NOT ${slice_name} MATCHES "^[A-Za-z][A-Za-z0-9-]*$")
+    message(FATAL_ERROR
+      "Artifact slice name '${slice_name}' must start with a letter "
+      "and may only contain alphanumeric characters and dashes"
+    )
+  endif()
+
   # Normalize arguments.
   set(_target_name "therock-artifact-${slice_name}")
   set(_archive_target_name "therock-archive-${slice_name}")

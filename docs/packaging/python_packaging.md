@@ -47,14 +47,14 @@ built-in tests (via `rocm-sdk test`) verify these conditions.
 ### Example
 
 ```bash
-./build_tools/linux_python_package.py \
+./build_tools/build_python_packages.py \
     --artifact-dir ./output-linux-portable/build/artifacts \
     --dest-dir $HOME/tmp/packages
 ```
 
 Note that this does do some dynamic compilation of files and it performs
-patching via patchelf. It is recommended to run this in the same portable
-Linux container as was used to build the SDK (so as to avoid the possibility
+patching via patchelf. On Linux, it is recommended to run this in the same
+portable container as was used to build the SDK (so as to avoid the possibility
 of accidentally referencing too-new glibc symbols).
 
 ## Using Packages from Frameworks
@@ -77,7 +77,7 @@ variables. Examples (exact settings needed will vary by project being built):
 
 ```bash
 -DCMAKE_PREFIX_PATH=$(rocm-sdk path --cmake)
--DROCM_HOM=$(rocm-sdk path --root)
+-DROCM_HOME=$(rocm-sdk path --root)
 export PATH="$(rocm-sdk path --bin):$PATH"
 ```
 
@@ -112,27 +112,32 @@ try:
     from . import _rocm_init
 except ModuleNotFoundError:
     pass
+else:
+    _rocm_init.initialize()
+    del _rocm_init
 ```
 
 Generate a `_rocm_init.py` file like this (using any suitable scripting):
 
 ```bash
 echo "
-import rocm_sdk
-rocm_sdk.initialize_process(library_shortnames=[
-  'amdhip64',
-  'roctx64',
-  'hiprtc',
-  'hipblas',
-  'hipfft',
-  'hiprand',
-  'hipsparse',
-  'hipsolver',
-  'rccl',
-  'hipblaslt',
-  'miopen',
-],
-check_version='$(rocm-sdk version)')
+def initialize():
+  import rocm_sdk
+  rocm_sdk.initialize_process(preload_shortnames=[
+    'amd_comgr',
+    'amdhip64',
+    'roctx64',
+    'hiprtc',
+    'hipblas',
+    'hipfft',
+    'hiprand',
+    'hipsparse',
+    'hipsolver',
+    'rccl',
+    'hipblaslt',
+    'miopen',
+  ],
+  check_version='$(rocm-sdk version)')
 " > torch/_rocm_init.py
 ```
 
