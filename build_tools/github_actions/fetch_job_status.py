@@ -26,16 +26,16 @@ if not ATTEMPT:
     missing_vars.append("ATTEMPT")
 
 if missing_vars:
-    raise ValueError(f"Missing required environment variable(s): {', '.join(missing_vars)}. "
-                     f"Ensure these are exported or set in the CI environment.")
-
-def run():
-    github_workflow_jobs_url = (
-        f"https://api.github.com/repos/ROCm/TheRock/actions/runs/{RUN_ID}/attempts/{ATTEMPT}/jobs"
+    raise ValueError(
+        f"Missing required environment variable(s): {', '.join(missing_vars)}. "
+        f"Ensure these are exported or set in the CI environment."
     )
 
-    logging.info(f"Constructed GitHub workflow jobs URL: {github_workflow_jobs_url}")
 
+def run():
+    github_workflow_jobs_url = f"https://api.github.com/repos/ROCm/TheRock/actions/runs/{RUN_ID}/attempts/{ATTEMPT}/jobs"
+
+    logging.info(f"Constructed GitHub workflow jobs URL: {github_workflow_jobs_url}")
 
     headers = {
         "Accept": "application/vnd.github+json",
