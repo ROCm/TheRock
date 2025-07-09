@@ -29,12 +29,10 @@ on:
       amdgpu_family:
         required: true
         type: string
-        # default: "gfx110X-dgpu"
-        default: "gfx1151"
       python_version:
         required: true
         type: string
-        default: "3.12"
+        default:
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -46,15 +44,10 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        # nightly
-        # default: "d2awnip2yjpvqn.cloudfront.net/v2"
-
-        # dev
         default: "d25kgig7rdsyks.cloudfront.net/v2"
       rocm_version:
         description: ROCm version to pip install
         type: string
-        default: 7.0.0.dev0+98ed4ad77f79822694ec01a36180ec3b95f4bd00
 
 permissions:
   id-token: write
@@ -62,7 +55,7 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build Windows PyTorch Wheels | ${{ inputs.AMDGPU_FAMILIES }} | Python ${{ inputs.python_version }}
+    name: Build Windows PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
       CHECKOUT_ROOT: C:/src
@@ -95,59 +88,9 @@ jobs:
           choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
-      - name: Determine optional arguments passed to `build_prod_wheels.py`
-        if: ${{ inputs.rocm_version }}
-        run: |
-          pip install packaging
-          python build_tools/github_actions/determine_version.py \
-            --rocm-version ${{ inputs.rocm_version }}
-
-      - name: Install ROCm Wheels
-        shell: cmd
-        run: |
-          echo "Installing ROCm wheels for ${{ inputs.amdgpu_family }}"
-          python ./external-builds/pytorch/build_prod_wheels.py install-rocm --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" --rocm-sdk-version ==7.0.0.dev0+98ed4ad77f79822694ec01a36180ec3b95f4bd00
-          pip freeze
-
-          echo "pip show rocm"
-          pip show rocm
-
-          echo "pip show rocm-sdk-core"
-          pip show rocm-sdk-core
-
-          echo "pip show rocm-sdk-devel"
-          pip show rocm-sdk-devel
-
-          echo "pip show rocm-sdk-libraries-${{ inputs.amdgpu_family }}"
-          pip show rocm-sdk-libraries-${{ inputs.amdgpu_family }}
-
-      - name: Check python site-packages location
-        run: |
-          python -m site
-
-      - name: Check directory structure (tree)
-        shell: cmd
-        run: |
-          tree /f C:\home\runner\_work\_tool\Python\
-
-      - name: Check system32
-        shell: cmd
-        run: |
-          tree /f C:\Windows\system32
-
-      - name: Test ROCm Wheels
-        run: |
-          rocm-sdk test
-
-      - name: Check directory structure (ls)
-        if: always()
-        run: |
-          ls -la C:/home/runner/_work/_tool/Python/3.12.10/x64/Lib/site-packages/_rocm_sdk_devel/bin
-
-      # - name: Suspend for interactive debugging
-      #   if: ${{ !cancelled() }}
-      #   run: |
-      #     sleep 21600
+      # After other installs, so MSVC get priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Checkout PyTorch Source Repos
         run: |
@@ -157,9 +100,12 @@ jobs:
           # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
 
-      # After other installs, so MSVC get priority in the PATH.
-      - name: Configure MSVC
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      - name: Determine optional arguments passed to `build_prod_wheels.py`
+        if: ${{ inputs.rocm_version }}
+        run: |
+          pip install packaging
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version ${{ inputs.rocm_version }}
 
       - name: Build PyTorch Wheels
         shell: cmd
