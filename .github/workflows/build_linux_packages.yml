@@ -100,7 +100,8 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
+          # extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
