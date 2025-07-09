@@ -54,36 +54,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      # - name: Runner Health Settings
-      #   run: |
-      #     ./build_tools/setup_ccache.py \
-      #       --dir "$(dirname $CCACHE_CONFIGPATH)" \
-      #       --local-path "$CACHE_DIR/ccache"
-      #     df -h
-      #     echo "ccache version: $(ccache --version)"
-      #     echo "ccache config:"
-      #     echo "---"
-      #     cat "$CCACHE_CONFIGPATH"
-      #     echo "---"
-      #     ccache -z
-      #     ccache -s -v
-      #     echo cmake --version
-      #     echo "Installed Python versions:"
-      #     ls -d /opt/python
-      #     echo "python: $(which python), python3: $(which python3)"
-      #     echo "Git version: $(git --version)"
-      #     git config --global --add safe.directory $PWD
-      #     git config fetch.parallel 10
+      - name: Runner Health Settings
+        run: |
+          ./build_tools/setup_ccache.py \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+          df -h
+          echo "ccache version: $(ccache --version)"
+          echo "ccache config:"
+          echo "---"
+          cat "$CCACHE_CONFIGPATH"
+          echo "---"
+          ccache -z
+          ccache -s -v
+          echo cmake --version
+          echo "Installed Python versions:"
+          ls -d /opt/python
+          echo "python: $(which python), python3: $(which python3)"
+          echo "Git version: $(git --version)"
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
 
-      # TODO: We shouldn't be using a cache on actual release branches, but it
-      # really helps for iteration time.
-      # - name: Enable cache
-      #   uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-      #   with:
-      #     path: ${{ env.CACHE_DIR }}
-      #     key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
-      #     restore-keys: |
-      #       linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-
+      TODO: We shouldn't be using a cache on actual release branches, but it
+      really helps for iteration time.
+      - name: Enable cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
+          restore-keys: |
+            linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-
 
       # - name: Fetch sources
       #   run: |
@@ -167,15 +167,14 @@ jobs:
       - name: Upload job results to Redshift
         if: always()
         run: |
-          echo '${{ steps.job-status-step.outputs.job_summary }}' > job_summary.json
           python3 build_tools/github_actions/populate_redshift_db.py \
-            --api-output-file job_summary.json \
+            --api-output '${{ steps.job-status-step.outputs.job_summary }}' \
             --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
             --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
             --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
             --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
             --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
-            --build-id "${{ github.run_number }}"
+            --build-id ${{ github.run_number }}
 
       - name: Upload Logs
         if: always()
