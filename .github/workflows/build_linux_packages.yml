@@ -75,8 +75,8 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      TODO: We shouldn't be using a cache on actual release branches, but it
-      really helps for iteration time.
+      # TODO: We shouldn't be using a cache on actual release branches, but it
+      # really helps for iteration time.
       - name: Enable cache
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
