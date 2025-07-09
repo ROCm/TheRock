@@ -145,4 +145,4 @@
 	url = https://github.com/ROCm/rocprof-trace-decoder.git
 [submodule "amdgpu-windows-interop"]
 	path = core/amdgpu-windows-interop
-	url = https://github.com/nod-ai/amdgpu-windows-interop.git
+	url = https://github.com/ROCm/amdgpu-windows-interop.git
