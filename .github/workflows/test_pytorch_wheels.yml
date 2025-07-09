@@ -20,6 +20,9 @@ on:
         required: true
         type: string
         default: "3.12"
+      torch_version:
+        required: true
+        type: string
 
   workflow_call:
     inputs:
@@ -35,6 +38,9 @@ on:
       python_version:
         required: true
         type: string
+      torch_version:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -43,6 +49,10 @@ jobs:
   test_wheels:
     name: Test PyTorch Wheels | ${{ inputs.amdgpu_families }}
     runs-on: ${{ inputs.test_runs_on }}
+    env:
+      VENV_DIR: ${{ github.workspace }}/venv
+      INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_families }}/
+      TORCH_VERSION: ${{ inputs.torch_version }}
 
     steps:
       - name: Checkout
@@ -54,9 +64,6 @@ jobs:
           python-version: ${{ inputs.python_version }}
 
       - name: Set up virtual environment and install dependencies
-        env:
-          VENV_DIR: ${{ github.workspace }}/venv
-          INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_families }}/
         working-directory: ${{ github.workspace }}
         run: |
           bash external-builds/pytorch/setup_venv.sh "$VENV_DIR"
@@ -68,9 +75,6 @@ jobs:
           python external-builds/pytorch/pytorch_torch_repo.py checkout --no-hipify --no-patch
 
       - name: Run PyTorch tests
-        env:
-          VENV_DIR: ${{ github.workspace }}/venv
-          INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_families }}/
         working-directory: ${{ github.workspace }}
         run: |
           source "$VENV_DIR/bin/activate"
