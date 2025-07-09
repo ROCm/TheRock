@@ -4,8 +4,15 @@ if(THEROCK_ENABLE_RAND)
   ##############################################################################
   set(_rand_subproject_names)
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_rocrand_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocrand")
+  else()
+    set(_rocrand_source_dir "rocRAND")
+  endif()
+
   therock_cmake_subproject_declare(rocRAND
-    EXTERNAL_SOURCE_DIR "rocRAND"
+    EXTERNAL_SOURCE_DIR "${_rocrand_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -32,8 +39,15 @@ if(THEROCK_ENABLE_RAND)
   # hipRAND
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_hiprand_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand")
+  else()
+    set(_hiprand_source_dir "hipRAND")
+  endif()
+  
   therock_cmake_subproject_declare(hipRAND
-    EXTERNAL_SOURCE_DIR "hipRAND"
+    EXTERNAL_SOURCE_DIR "${_hiprand_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
