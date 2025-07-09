@@ -44,7 +44,7 @@ if(THEROCK_ENABLE_RAND)
   else()
     set(_hiprand_source_dir "hipRAND")
   endif()
-  
+
   therock_cmake_subproject_declare(hipRAND
     EXTERNAL_SOURCE_DIR "${_hiprand_source_dir}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipRAND"
