@@ -143,13 +143,13 @@ jobs:
             --build-dir=build \
             --amdgpu-family=${{ inputs.amdgpu_families }}
 
-      - name: Upload artifacts
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
-            --build-dir build
+      # - name: Upload artifacts
+      #   if: always()
+      #   run: |
+      #     python build_tools/github_actions/upload_build_artifacts.py \
+      #       --run-id ${{ github.run_id }} \
+      #       --amdgpu-family ${{ inputs.amdgpu_families }} \
+      #       --build-dir build
 
       - name: Determine job status for workflow run
         if: '!cancelled()'
