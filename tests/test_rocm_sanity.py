@@ -20,7 +20,7 @@ def is_windows():
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd, check=True, shell=is_windows())
-    logger.info(process)
+    logger.info(process.stderr)
     return process
 
 
