@@ -22,8 +22,9 @@ def run_command(command, cwd=None):
     try:
         process = subprocess.run(command,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, check=True, shell=is_windows())
     except subprocess.CalledProcessError as exc:
-        logging.info(process.stderr)
         logging.info("Status : FAIL", exc.returncode, exc.output)
+        logging.info(exc.stderr)
+        logging.info(exc.stdout)
     return process
 
 
