@@ -408,14 +408,7 @@ def do_build(args: argparse.Namespace):
     # on directory layout.
     # Obviously, this should be completely burned with fire once the root causes
     # are eliminted.
-    if is_windows:
-        # Windows is missing the top level "llvm" symlink (and symlinks are
-        # poorly supported on Windows anyways).
-        hip_device_lib_path = (
-            get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
-        )
-    else:
-        hip_device_lib_path = get_rocm_path("root") / "llvm" / "amdgcn" / "bitcode"
+    hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
     if not hip_device_lib_path.exists():
         print(
             "WARNING: Default location of device libs not found. Relying on "
