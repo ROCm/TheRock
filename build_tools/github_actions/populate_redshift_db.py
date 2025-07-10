@@ -57,7 +57,7 @@ def populate_redshift_db(
                 )
 
                 try:
-                    cursor.autocommit = True
+                    conn.autocommit = True
 
                     log.info("Retrieving column metadata for 'workflow_run_details'...")
                     cursor.execute("SELECT * FROM workflow_run_details LIMIT 0")
@@ -104,6 +104,7 @@ def populate_redshift_db(
                     )
 
                     # Insert workflow run details into the database
+
                     cursor.execute(
                         """
                             INSERT INTO workflow_run_details
