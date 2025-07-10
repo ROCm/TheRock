@@ -6,23 +6,7 @@ set -euxo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(realpath "$SCRIPT_DIR/../..")"
 PYTORCH_DIR="$ROOT_DIR/external-builds/pytorch/pytorch"
-VENV_DIR="$ROOT_DIR/venv"
 K_EXPR_SCRIPT="$SCRIPT_DIR/skipped_tests.py"
-
-# Ensure INDEX_URL is set
-if [[ -z "${INDEX_URL:-}" ]]; then
-  echo "ERROR: INDEX_URL environment variable must be set"
-  exit 1
-fi
-
-# Create and activate virtual environment
-python -m venv "$VENV_DIR"
-source "$VENV_DIR/bin/activate"
-
-# Install requirements and PyTorch wheel
-pip install --upgrade pip
-pip install -r "$SCRIPT_DIR/requirements-test.txt"
-pip install --index-url "$INDEX_URL" torch --no-cache-dir --force-reinstall
 
 # Set up test environment
 export PYTORCH_PRINT_REPRO_ON_FAILURE=0

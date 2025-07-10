@@ -10,11 +10,12 @@ VENV_DIR="${1:-$(realpath "$(dirname "${BASH_SOURCE[0]}")/../..")/venv}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REQUIREMENTS_FILE="${SCRIPT_DIR}/requirements-test.txt"
 
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
 
 # Install dependencies
-"$VENV_DIR/bin/pip" install --upgrade pip
-"$VENV_DIR/bin/pip" install -r "$REQUIREMENTS_FILE"
+pip install --upgrade pip
+pip install -r "$REQUIREMENTS_FILE"
 # Install torch, overwriting any previously installed versions.
-"$VENV_DIR/bin/pip" install --index-url "$INDEX_URL" torch --no-cache-dir --force-reinstall
+pip install --index-url "${INDEX_URL?}" torch==${TORCH_VERSION?} --no-cache-dir --force-reinstall

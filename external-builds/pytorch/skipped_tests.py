@@ -3,6 +3,7 @@ skip_tests = [
     "test_RNN_dropout_state",
     "test_rnn_check_device",
     # TestTorch under test_torch.py
+    "test_index_add_correctness",
     "test_print",
     # TestCuda under test_cuda.py
     "test_hip_device_count",

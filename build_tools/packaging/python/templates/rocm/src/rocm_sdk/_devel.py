@@ -37,6 +37,10 @@ import tarfile
 from . import _dist_info as di
 
 
+def _is_windows():
+    return platform.system() == "Windows"
+
+
 def get_devel_root() -> Path:
     try:
         import rocm_sdk_devel
@@ -159,6 +163,16 @@ def _lock_and_expand(
                             #   hash (empty)
                             #   size (empty)
                             record_file.write(f"{ti.name},,\n")
+                        if _is_windows() and ti.issym():
+                            # Convert symlinks into hardlinks on Windows.
+                            # This saves disk space while improving compatibility
+                            # on systems without as robust symlink support.
+                            # As needed, we could also generate tarfiles with
+                            # copies instead of symlinks, at the cost of disk space.
+                            symlink_target = dest_path.readlink()
+                            hardlink_target = dest_path.parent / symlink_target
+                            dest_path.unlink()
+                            dest_path.hardlink_to(hardlink_target)
                     elif ti.isdir():
                         # We don't generally have directory entries, but handle
                         # them if we do.
@@ -168,10 +182,6 @@ def _lock_and_expand(
             tarfile_path.unlink()
         finally:
             file_lock.unlock()
-
-
-def _is_windows():
-    return platform.system() == "Windows"
 
 
 class FileLock:
