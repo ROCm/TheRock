@@ -3,7 +3,7 @@ name: Test PyTorch Wheels
 on:
   workflow_dispatch:
     inputs:
-      amdgpu_families:
+      amdgpu_family:
         required: true
         type: string
         default: "gfx94X-dcgpu"
@@ -26,7 +26,7 @@ on:
 
   workflow_call:
     inputs:
-      amdgpu_families:
+      amdgpu_family:
         required: true
         type: string
       test_runs_on:
@@ -47,11 +47,11 @@ permissions:
 
 jobs:
   test_wheels:
-    name: Test PyTorch Wheels | ${{ inputs.amdgpu_families }}
+    name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     env:
       VENV_DIR: ${{ github.workspace }}/venv
-      INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_families }}/
+      INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/
       TORCH_VERSION: ${{ inputs.torch_version }}
 
     steps:

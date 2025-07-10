@@ -64,6 +64,8 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
+    outputs:
+      torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -99,6 +101,7 @@ jobs:
             --rocm-version ${{ inputs.rocm_version }}
 
       - name: Build PyTorch Wheels
+        id: build-pytorch-wheels
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
           ./external-builds/pytorch/build_prod_wheels.py \
@@ -108,6 +111,7 @@ jobs:
             --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
+          echo "torch_version=`cd ${{ env.PACKAGE_DIST_DIR }}; python -c 'import glob; print(glob.glob("torch-*.whl")[0].split("-")[1])'`" >> $GITHUB_OUTPUT
 
       - name: Configure AWS Credentials
         if: always()
@@ -131,3 +135,30 @@ jobs:
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+
+  generate_target_to_run:
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family }}
+        run: python ./build_tools/github_actions/configure_target_run.py
+
+
+  test_pytorch_wheels:
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    needs: [build_pytorch_wheels, generate_target_to_run]
+
+    uses: ./.github/workflows/test_pytorch_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+      cloudfront_url: ${{ inputs.cloudfront_url }}
+      python_version: ${{ inputs.python_version }}
+      torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
