@@ -60,11 +60,13 @@ jobs:
     env:
       CHECKOUT_ROOT: C:/src
       OUTPUT_DIR: ${{ github.workspace }}/output
+      # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
     defaults:
       run:
+        # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
         shell: bash
     steps:
       - name: Checkout
@@ -95,7 +97,8 @@ jobs:
       - name: Checkout PyTorch Source Repos
         run: |
           git config --global core.longpaths true
-          python ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo ${{ env.CHECKOUT_ROOT }}/torch
+          python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --repo ${{ env.CHECKOUT_ROOT }}/torch
           # TODO(#910): Support torchvision and torchaudio on Windows
           # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
@@ -108,10 +111,19 @@ jobs:
             --rocm-version ${{ inputs.rocm_version }}
 
       - name: Build PyTorch Wheels
+        # Using 'cmd' here is load bearing! There are configuration issues when
+        # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
         shell: cmd
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
-          python ./external-builds/pytorch/build_prod_wheels.py build --install-rocm --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch --clean --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
+          python ./external-builds/pytorch/build_prod_wheels.py ^
+            build ^
+            --install-rocm ^
+            --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
+            --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
+            --clean ^
+            --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
+            ${{ env.optional_build_prod_arguments }}
 
       - name: Configure AWS Credentials
         if: always()
@@ -122,14 +134,18 @@ jobs:
 
       # TODO(#827, #910): enable this once we build torch audio and vision on Windows
       # - name: Sanity Check Wheel
+      #   shell: cmd
       #   run: |
-      #     python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
+      #     python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
+        # Using 'cmd' here since PACKAGE_DIST_DIR uses \ in paths instead of /
         shell: cmd
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ --recursive --exclude "*" --include "*.whl"
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ ^
+            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ ^
+            --recursive --exclude "*" --include "*.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
