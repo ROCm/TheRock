@@ -28,7 +28,7 @@ amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
             "test-runs-on": "linux-mi355-1gpu-ossci-rocm",  # removed due to failing sanity check, label is "linux-mi355-1gpu-ossci-rocm"
-            "family": "gfx950-dcgpu",
+            "family": "gfx95X-dcgpu",
             "pytorch-target": "gfx950",
         }
     },
