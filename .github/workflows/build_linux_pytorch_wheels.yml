@@ -75,9 +75,14 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
+      - name: Select Python version
+        run: |
+          python build_tools/github_actions/python_to_cp_version.py \
+            --python-version ${{ inputs.python_version }}
+
       - name: Add selected Python version to PATH
         run: |
-          python_dir="/opt/python/${{ inputs.python_version }}"
+          python_dir="/opt/python/${{ env.cp_version }}"
           if ! [ -x "${python_dir}/bin/python" ]; then
             echo "ERROR: Could not find python: ${python_dir}"
             exit 1
@@ -137,6 +142,7 @@ jobs:
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
 
   generate_target_to_run:
+    name: Generate target_to_run
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
