@@ -19,8 +19,11 @@ def is_windows():
 
 
 def run_command(command, cwd=None):
-    process = subprocess.run(command,stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=True, shell=is_windows())
-    logger.info(process.stderr)
+    try:
+        process = subprocess.run(command,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, check=True, shell=is_windows())
+    except subprocess.CalledProcessError as exc:
+        logging.info(process.stderr)
+        logging.info("Status : FAIL", exc.returncode, exc.output)
     return process
 
 
