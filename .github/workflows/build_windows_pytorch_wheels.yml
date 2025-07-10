@@ -111,7 +111,7 @@ jobs:
         shell: cmd
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
-          python ./external-builds/pytorch/build_prod_wheels.py build --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch --clean --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
+          python ./external-builds/pytorch/build_prod_wheels.py build --install-rocm --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch --clean --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
 
       - name: Configure AWS Credentials
         if: always()
