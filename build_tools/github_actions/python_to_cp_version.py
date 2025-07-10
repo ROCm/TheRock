@@ -26,10 +26,10 @@ def is_version(version) -> bool:
 
 def transform_python_version(python_version: str) -> str:
     if not is_version(python_version):
-        raise Exception("Invalid version")
+        raise ValueError(f"Version '{python_version}' did not match accepted regex")
 
-    tmp = python_version.replace(".", "")
-    cp_version = f"cp{tmp}-cp{tmp}"
+    version_without_dot = python_version.replace(".", "")
+    cp_version = f"cp{version_without_dot}-cp{version_without_dot}"
     return cp_version
 
 
@@ -46,7 +46,7 @@ def main(argv: list[str]):
         "--python-version",
         required=True,
         type=str,
-        help="Python version to be transformed",
+        help="Python version to be transformed (e.g. 3.12)",
     )
     p.add_argument(
         "--write-env-file",

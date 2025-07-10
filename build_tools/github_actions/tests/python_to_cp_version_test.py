@@ -33,7 +33,7 @@ class PythonToCpVersionTest(unittest.TestCase):
     def test_invalid_version(self):
         python_version = "0"
         self.assertRaises(
-            Exception, python_to_cp_version.transform_python_version, python_version
+            ValueError, python_to_cp_version.transform_python_version, python_version
         )
 
 

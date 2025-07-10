@@ -49,6 +49,7 @@ permissions:
 
 jobs:
   build:
+    name: PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
     strategy:
       fail-fast: false
       matrix:
