@@ -12,7 +12,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-rx7900-gpu-rocm",
             "family": "gfx110X-dgpu",
             "pytorch-target": "gfx1100",
         },
