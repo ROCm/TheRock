@@ -76,6 +76,12 @@ if(THEROCK_ENABLE_MIOPEN)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
+  # Only build miopen_gtest binary if we are not on windows.
+  set(miopen_test_discrete ON)
+  if(NOT WIN32)
+    set(miopen_test_discrete OFF)
+  endif()
+
   if(MSVC)
     # HACK, see https://github.com/ROCm/TheRock/issues/525.
     # Take the most recent few MSVC versions from
