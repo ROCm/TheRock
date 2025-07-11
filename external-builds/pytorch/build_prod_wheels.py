@@ -359,13 +359,20 @@ def do_build(args: argparse.Namespace):
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
 
+    rocprofiler_path = root_dir / "lib" / "librocprofiler64.so"
+    use_kineto = "ON" if rocprofiler_path.exists() else "OFF"
+    if use_kineto == "ON":
+        print(f"[INFO] Enabling Kineto: found {rocprofiler_path}")
+    else:
+        print(f"[WARN] Kineto disabled: {rocprofiler_path} not found")
+
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
         "ROCM_PATH": str(root_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         # TODO: Fix source dep on rocprofiler and enable.
-        "USE_KINETO": "OFF",
+        "USE_KINETO": use_kineto,
     }
 
     # GLOO enabled for only Linux
