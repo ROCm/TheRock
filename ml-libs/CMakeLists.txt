@@ -76,10 +76,12 @@ if(THEROCK_ENABLE_MIOPEN)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
-  # Only build miopen_gtest binary if we are not on windows.
-  set(miopen_test_discrete ON)
-  if(NOT WIN32)
-    set(miopen_test_discrete OFF)
+  # Only build miopen_gtest binary if we are using composable kernel since
+  # there are compile errors when building without it.  (We build the gtest binary
+  # if test discrete is off.)
+  set(miopen_test_discrete OFF)
+  if(NOT THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    set(miopen_test_discrete ON)
   endif()
 
   if(MSVC)
@@ -110,7 +112,7 @@ if(THEROCK_ENABLE_MIOPEN)
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
-      -DMIOPEN_TEST_DISCRETE=OFF
+      -DMIOPEN_TEST_DISCRETE=${miopen_test_discrete}
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
