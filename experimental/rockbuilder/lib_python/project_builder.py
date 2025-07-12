@@ -250,18 +250,31 @@ class RockProjectBuilder(configparser.ConfigParser):
 
 
 class RockExternalProjectListManager(configparser.ConfigParser):
-    def __init__(self, rock_builder_root_dir: Path):
+    def __init__(self, rock_builder_root_dir: Path, project_list_name, project_name):
         # default application list to builds
-        self.cfg_file_path = Path(rock_builder_root_dir) / "projects" / "core_apps.pcfg"
         self.rock_builder_root_dir = rock_builder_root_dir
         super(RockExternalProjectListManager, self).__init__(allow_no_value=True)
-        if self.cfg_file_path.exists():
-            self.read(self.cfg_file_path)
+        if project_list_name:
+            project_list_name = Path(project_list_name)
+        if not project_list_name and not project_name:
+            project_list_name = rock_builder_root_dir / "projects" / "core_apps.pcfg"
+        if project_list_name:
+            if project_list_name.exists():
+                self.read(project_list_name)
+                value = self.get("projects", "project_list")
+                # convert to list of project string names
+                self.prj_list = list(
+                    filter(None, (x.strip() for x in value.splitlines()))
+                )
+            else:
+                self.prj_list = []
+        elif project_name:
+            self.prj_list = [project_name]
+        else:
+            self.prj_list = []
 
     def get_external_project_list(self):
-        value = self.get("projects", "project_list")
-        # convert to list of project string names
-        return list(filter(None, (x.strip() for x in value.splitlines())))
+        return self.prj_list
 
     def get_rock_project_builder(
         self,

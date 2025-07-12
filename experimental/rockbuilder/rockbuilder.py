@@ -38,7 +38,31 @@ def printout_build_env_info():
     time.sleep(1)
 
 
-def get_build_arguments(
+def get_project_list_manager(rock_builder_home_dir: Path):
+    parser = argparse.ArgumentParser(description="Project and Project List Parser")
+
+    # Add arguments
+    parser.add_argument(
+        "--project_list",
+        type=str,
+        help="select project list for the actions.",
+        default=None,
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        help="select target for the action. Must be one project from projects-directory.",
+        default=None,
+    )
+    args = parser.parse_args()
+    ret = project_builder.RockExternalProjectListManager(
+        rock_builder_home_dir, args.project_list, args.project
+    )
+    return ret
+
+
+# create user parameter parser
+def create_build_argument_parser(
     rock_builder_home_dir, default_src_base_dir: Path, project_list
 ):
     # Create an ArgumentParser object
@@ -46,9 +70,15 @@ def get_build_arguments(
 
     # Add arguments
     parser.add_argument(
+        "--project_list",
+        type=str,
+        help="select project list for the actions.",
+        default=None,
+    )
+    parser.add_argument(
         "--project",
         type=str,
-        help="select target for the action. Can be either one project or all projects in core_apps.pcfg.",
+        help="select target for the action. Must be one project from projects-directory.",
         default=None,
     )
     parser.add_argument(
@@ -126,8 +156,11 @@ def get_build_arguments(
             help=prj_item + " version used for the operations",
             default=None,
         )
+    return parser
 
-    # Parse the arguments
+
+def parse_build_arguments(parser):
+    # parse command line parameters
     args = parser.parse_args()
     if (
         ("--checkout" in sys.argv)
@@ -465,14 +498,14 @@ default_src_base_dir = rock_builder_home_dir / "src_projects"
 os.environ["ROCK_BUILDER_HOME_DIR"] = rock_builder_home_dir.as_posix()
 os.environ["ROCK_BUILDER_BUILD_DIR"] = rock_builder_build_dir.as_posix()
 
-project_manager = project_builder.RockExternalProjectListManager(rock_builder_home_dir)
-# allow_no_value param says that no value keys are ok
-sections = project_manager.sections()
-# print(sections)
+project_manager = get_project_list_manager(rock_builder_home_dir)
 project_list = project_manager.get_external_project_list()
-# print(project_list)
+print(project_list)
 
-args = get_build_arguments(rock_builder_home_dir, default_src_base_dir, project_list)
+arg_parser = create_build_argument_parser(
+    rock_builder_home_dir, default_src_base_dir, project_list
+)
+args = parse_build_arguments(arg_parser)
 # store the arguments to dictionary to make it easier to get "project_name"-version parameters
 args_dict = args.__dict__
 printout_build_arguments(args)
