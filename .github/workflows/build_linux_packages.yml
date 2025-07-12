@@ -49,6 +49,7 @@ jobs:
       CCACHE_MAXSIZE: "700M"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -149,6 +150,31 @@ jobs:
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }} \
             --build-dir build
+
+      - name: Determine job status for workflow run
+        if: '!cancelled()'
+        id: job-status-step
+        env:
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: python build_tools/github_actions/fetch_job_status.py
+
+      - name: Install redshift_connector
+        if: always()
+        run: |
+          pip install redshift_connector
+
+      - name: Upload job results to Redshift
+        if: always()
+        run: |
+          python3 build_tools/github_actions/populate_redshift_db.py \
+            --api-output '${{ steps.job-status-step.outputs.job_summary }}' \
+            --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
+            --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
+            --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
+            --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
+            --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
+            --build-id ${{ github.run_number }}
 
       - name: Upload Logs
         if: always()
