@@ -174,7 +174,7 @@ jobs:
             --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
             --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
             --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
-            --build-id ${{ github.run_number }}
+            --run-id ${{ github.run_number }}
 
       - name: Upload Logs
         if: always()
