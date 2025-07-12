@@ -1,0 +1,9 @@
+[projects]
+project_list=
+    sglang_deps
+    amdsmi
+    triton
+    vllm
+    aiter
+    sglang
+    comfyui
