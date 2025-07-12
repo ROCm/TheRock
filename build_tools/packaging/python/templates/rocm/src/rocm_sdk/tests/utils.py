@@ -5,6 +5,10 @@ import platform
 import shlex
 import subprocess
 import sys
+import sysconfig
+
+is_windows = platform.system() == "Windows"
+exe_suffix = ".exe" if is_windows else ""
 
 
 def exec(args: list[str | Path], cwd: Path | None = None, capture: bool = False):
@@ -32,9 +36,22 @@ def assert_is_physical_package(mod):
 
 def get_module_shared_libraries(mod) -> list[Path]:
     path = Path(mod.__file__).parent
-    if platform.system() == "Windows":
+    if is_windows:
         so_paths = list(path.glob("**/*.dll"))
     else:
         so_paths = list(path.glob("**/*.so.*")) + list(path.glob("**/*.so"))
 
     return so_paths
+
+
+def find_console_script(script_name: str) -> Path | None:
+    scripts_paths = [sysconfig.get_path("scripts")]
+    if is_windows:
+        scripts_paths.append(sysconfig.get_path("scripts", "nt_user"))
+    else:
+        scripts_paths.append(sysconfig.get_path("scripts", "posix_user"))
+    for scripts_path in scripts_paths:
+        script_path = (Path(scripts_path) / script_name).with_suffix(exe_suffix)
+        if script_path.exists():
+            return script_path
+    return None

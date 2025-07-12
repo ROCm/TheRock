@@ -77,14 +77,13 @@ class ROCmLibrariesTest(unittest.TestCase):
                 )
 
     def testConsoleScripts(self):
-        scripts_path = Path(sysconfig.get_path("scripts"))
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
-            script_path = scripts_path / script_name
-            if not required and not script_path.exists():
+            script_path = utils.find_console_script(script_name)
+            if not required and script_path is None:
                 continue
             with self.subTest(msg=f"Check console-script {script_name}"):
-                self.assertTrue(
-                    script_path.exists(),
+                self.assertIsNotNone(
+                    script_path,
                     msg=f"Console script {script_path} does not exist",
                 )
                 output_text = subprocess.check_output(

@@ -41,8 +41,6 @@ CONSOLE_SCRIPT_TESTS = [
     ("hipconfig", [], "HIP version:", True),
 ] + (LINUX_CONSOLE_SCRIPT_TESTS if not is_windows else [])
 
-exe_suffix = ".exe" if is_windows else ""
-
 
 class ROCmCoreTest(unittest.TestCase):
     def testInstallationLayout(self):
@@ -93,14 +91,13 @@ class ROCmCoreTest(unittest.TestCase):
                 )
 
     def testConsoleScripts(self):
-        scripts_path = Path(sysconfig.get_path("scripts"))
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
-            script_path = (scripts_path / script_name).with_suffix(exe_suffix)
-            if not required and not script_path.exists():
+            script_path = utils.find_console_script(script_name)
+            if not required and script_path is None:
                 continue
             with self.subTest(msg=f"Check console-script {script_name}"):
-                self.assertTrue(
-                    script_path.exists(),
+                self.assertIsNotNone(
+                    script_path,
                     msg=f"Console script {script_path} does not exist",
                 )
                 output_text = subprocess.check_output(
