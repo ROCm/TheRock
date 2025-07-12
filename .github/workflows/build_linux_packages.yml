@@ -34,19 +34,24 @@ permissions:
 jobs:
   build_linux_packages:
     name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
-    runs-on: azure-linux-scale-rocm
+    runs-on: azure-linux-scale-rocm-pvc
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
+      volumes:
+        - /home/runner/pvc:/home/runner/pvc
     strategy:
       fail-fast: true
     env:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      CCACHE_MAXSIZE: "700M"
+      # CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
+      CCACHE_LOGFILE: ${{ github.workspace }}/build/logs/ccache.log
+      CCACHE_STATSLOG: ${{ github.workspace }}/build/logs/ccache_stats.log
+      CCACHE_MAXSIZE: "5G"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
     steps:
@@ -55,6 +60,15 @@ jobs:
 
       - name: Runner Health Settings
         run: |
+          echo "---ccache debugging/pvc tests---"
+          echo "CCACHE_SECONDARY_STORAGE: $CCACHE_SECONDARY_STORAGE"
+          mkdir -p "$(dirname $CCACHE_LOGFILE)"
+          mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES-0
+          du /home/runner/pvc -h -d 1
+          ln -s /home/runner/pvc/$AMDGPU_FAMILIES-0 $CACHE_DIR
+          #echo "$CACHE_DIR after link:"
+          ls $CACHE_DIR -al
+          echo "---"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
@@ -74,16 +88,6 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      # TODO: We shouldn't be using a cache on actual release branches, but it
-      # really helps for iteration time.
-      - name: Enable cache
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
-          restore-keys: |
-            linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-
-
       - name: Fetch sources
         run: |
           ./build_tools/fetch_sources.py --jobs 12
@@ -96,21 +100,23 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
+          # extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist
+      - name: Build therock-dist (build RAND only for testing ccache...)
         run: cmake --build build --target therock-dist
 
       - name: Build therock-archives
         run: cmake --build build --target therock-archives
 
-      - name: Test Packaging
+      - name: Test Packaging (Skipping...)
         if: ${{ github.event.repository.name == 'TheRock' }}
-        run: |
-          ctest --test-dir build --output-on-failure
+        # run: |
+        #   ctest --test-dir build --output-on-failure
+        run: echo Skipping for ccache testing...
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -142,13 +148,14 @@ jobs:
             --build-dir=build \
             --amdgpu-family=${{ inputs.amdgpu_families }}
 
-      - name: Upload artifacts
+      - name: Upload artifacts (Skipping...)
         if: always()
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
-            --build-dir build
+        # run: |
+        #   python build_tools/github_actions/upload_build_artifacts.py \
+        #     --run-id ${{ github.run_id }} \
+        #     --amdgpu-family ${{ inputs.amdgpu_families }} \
+        #     --build-dir build
+        run: echo Skipping for ccache testing...
 
       - name: Upload Logs
         if: always()
@@ -165,10 +172,3 @@ jobs:
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }} \
             --build-dir build
-
-      - name: Save cache
-        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        if: always()
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
