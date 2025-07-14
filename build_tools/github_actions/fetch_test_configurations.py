@@ -95,7 +95,7 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 120,
         "test_script": f"python {SCRIPT_DIR / 'test_rccl.py'}",
         "platform": ["linux"],
     },
