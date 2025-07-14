@@ -3,10 +3,10 @@
 from typing import Callable, Sequence
 
 import importlib.util
-import magic
 import re
 import os
 from pathlib import Path
+import platform
 import shlex
 import subprocess
 import shutil
@@ -16,6 +16,12 @@ import tarfile
 from .artifacts import ArtifactCatalog, ArtifactName
 from .exe_stub_gen import generate_exe_link_stub
 
+is_windows = platform.system() == "Windows"
+
+if not is_windows:
+    # Used on Linux to check file types. Buggy/broken on Windows, but file
+    # types are generally known from file extensions there.
+    import magic
 
 BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
 PYTHON_PACKAGING_DIR = BUILD_TOOLS_DIR / "packaging" / "python" / "templates"
@@ -321,6 +327,7 @@ class PopulatedDistPackage:
         file_type = get_file_type(dest_path)
         if file_type == "exe" or file_type == "so":
             self._extend_rpath(dest_path)
+            self._normalize_rpath(dest_path)
 
     def _extend_rpath(self, file_path: Path):
         for dep_project, rpath in self.rpath_deps:
@@ -339,6 +346,38 @@ class PopulatedDistPackage:
                 str(file_path),
             ]
             subprocess.check_call(patchelf_cl)
+
+    def _normalize_rpath(self, file_path: Path):
+        existing_rpath = (
+            subprocess.check_output(
+                [
+                    "patchelf",
+                    "--print-rpath",
+                    str(file_path),
+                ]
+            )
+            .decode()
+            .strip()
+        )
+        if not existing_rpath:
+            return
+
+        # Possibly in the future, do manual normalization of the RPATH.
+        norm_rpath = existing_rpath
+
+        log(f"  NORMALIZE_RPATH: {file_path}: {norm_rpath}")
+        subprocess.check_call(
+            [
+                "patchelf",
+                "--set-rpath",
+                norm_rpath,
+                # Forces the use of RPATH vs RUNPATH, which is more appropriate
+                # for hermetic libraries like these since it does not allow
+                # LD_LIBRARY_PATH to interfere.
+                "--force-rpath",
+                str(file_path),
+            ]
+        )
 
     def populate_devel_files(
         self,
@@ -454,6 +493,9 @@ class PopulatedDistPackage:
             dest_path.unlink()
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_entry.path, dest_path)
+        file_type = get_file_type(dest_path)
+        if file_type == "exe" or file_type == "so":
+            self._normalize_rpath(dest_path)
 
 
 MAGIC_AR_MATCH = re.compile("ar archive")
@@ -480,6 +522,16 @@ def get_file_type(dir_entry: os.DirEntry[str] | Path) -> str:
     elif path.endswith(".hsaco") or path.endswith(".co"):
         # These read as shared libraries.
         return "hsaco"
+    elif path.endswith(".lib"):
+        return "ar"
+    elif path.endswith(".exe"):
+        return "exe"
+
+    if is_windows:
+        # Don't try to use 'magic' on Windows, since it is buggy/broken.
+        # Hopefully the file type was covered by an extension check above.
+        return "other"
+
     desc = magic.from_file(path)
     if MAGIC_EXECUTABLE_MATCH.search(desc):
         return "exe"
@@ -513,9 +565,10 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
         # and opinions about how to pass arguments to the backends. So we skip
         # the frontends for such a closed case as this.
         build_args = [sys.executable, "-m", "build", "-v", "--outdir", str(dist_dir)]
+        setuppy_path = child_path / "setup.py"
         build_args = [
             sys.executable,
-            str(child_path / "setup.py"),
+            str(setuppy_path.resolve()),
         ]
         if child_name in ["rocm"]:
             build_args.append("sdist")
@@ -528,7 +581,7 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
             [
                 "-v",
                 "--dist-dir",
-                str(dist_dir),
+                str(dist_dir.resolve()),
             ]
         )
 

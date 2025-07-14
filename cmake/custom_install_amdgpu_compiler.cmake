@@ -11,7 +11,7 @@ set(SO_SUFFIX ".so")
 
 # Assemble file lists.
 # Note that this presumes we did not link against libLLVM.so. If we do (we
-# should for this slice of the compielr), then we also need to include it
+# should for this slice of the compiler), then we also need to include it
 # from the lib directory.
 file(
   GLOB_RECURSE LLVM_FILES

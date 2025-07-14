@@ -50,8 +50,9 @@ def determine_package_targets(args):
             family = platform_for_key.get("pytorch-target")
         else:
             family = platform_for_key.get("family")
+        test_machine = platform_for_key.get("test-runs-on")
 
-        package_targets.append({"amdgpu_family": family})
+        package_targets.append({"amdgpu_family": family, "test_machine": test_machine})
 
     return package_targets
 

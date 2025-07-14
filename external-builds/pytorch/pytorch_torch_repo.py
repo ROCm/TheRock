@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Checks out and builds PyTorch against a built from source ROCM SDK.
+"""Checks out PyTorch.
 
 There is nothing that this script does which you couldn't do by hand, but because of
 the following, getting PyTorch sources ready to build with ToT TheRock built SDKs
@@ -14,7 +14,6 @@ consists of multiple steps:
 Primary usage:
 
     ./pytorch_torch_repo.py checkout
-    ./pytorch_torch_repo.py develop
 
 The checkout process combines the following activities:
 
@@ -37,10 +36,7 @@ in, CI runs for that revision will incorporate them the same as anyone
 interactively using this tool.
 """
 import argparse
-from pathlib import Path, PurePosixPath
-import shlex
-import shutil
-import subprocess
+from pathlib import Path
 import sys
 
 import repo_management
@@ -87,7 +83,7 @@ def main(cl_args: list[str]):
         help="Git repository ref/tag to checkout",
     )
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
-    checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
+    checkout_p.add_argument("--jobs", default=10, type=int, help="Number of fetch jobs")
     checkout_p.add_argument(
         "--hipify",
         action=argparse.BooleanOptionalAction,

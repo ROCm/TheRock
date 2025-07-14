@@ -3,22 +3,42 @@ name: Test PyTorch Wheels
 on:
   workflow_dispatch:
     inputs:
-      amdgpu_families:
+      amdgpu_family:
+        required: true
+        type: string
+        default: "gfx94X-dcgpu"
+      test_runs_on:
+        required: true
+        type: string
+        default: "linux-mi300-1gpu-ossci-rocm"
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+        default: "d2awnip2yjpvqn.cloudfront.net/v2"
+      python_version:
+        required: true
+        type: string
+        default: "3.12"
+      torch_version:
+        required: true
+        type: string
+
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      test_runs_on:
+        required: true
+        type: string
+      cloudfront_url:
         required: true
         type: string
       python_version:
         required: true
         type: string
-      s3_bucket:
-        required: true
-        type: string
-      s3_subdir:
-        required: true
-        type: string
-      s3_cloudfront:
-        required: true
-        type: string
-      test_runs_on:
+      torch_version:
         required: true
         type: string
 
@@ -27,11 +47,35 @@ permissions:
 
 jobs:
   test_wheels:
-    name: Test PyTorch Wheels | ${{ inputs.amdgpu_families }}
+    name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
-
     env:
-      PACKAGE_DIST_DIR: /tmp/wheels
+      VENV_DIR: ${{ github.workspace }}/venv
+      INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/
+      TORCH_VERSION: ${{ inputs.torch_version }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Set up virtual environment and install dependencies
+        working-directory: ${{ github.workspace }}
+        run: |
+          bash external-builds/pytorch/setup_venv.sh "$VENV_DIR"
+          source "$VENV_DIR/bin/activate"
+
+      - name: Checkout PyTorch repository
+        working-directory: ${{ github.workspace }}
+        run: |
+          python external-builds/pytorch/pytorch_torch_repo.py checkout --no-hipify --no-patch
+
+      - name: Run PyTorch tests
+        working-directory: ${{ github.workspace }}
+        run: |
+          source "$VENV_DIR/bin/activate"
+          bash external-builds/pytorch/run_linux_pytorch_tests.sh

@@ -27,7 +27,7 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
             "pytorch-target": "gfx950",
         }

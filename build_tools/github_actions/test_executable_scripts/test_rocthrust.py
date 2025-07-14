@@ -20,7 +20,7 @@ cmd = [
     "--exclude-regex",
     "^copy.hip$|scan.hip",
     "--timeout",
-    "60",
+    "300",
     "--repeat",
     "until-pass:3",
 ]

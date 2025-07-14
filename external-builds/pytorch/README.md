@@ -67,8 +67,8 @@ Now checkout repositories:
 
   ```bash
   python pytorch_torch_repo.py checkout
-  python pytorch_torch_audio_repo.py checkout
-  python pytorch_torch_vision_repo.py checkout
+  python pytorch_audio_repo.py checkout
+  python pytorch_vision_repo.py checkout
   ```
 
 - On Windows, use shorter paths to avoid command length limits:
@@ -99,9 +99,8 @@ mix/match build steps.
 - On Windows:
 
   ```bash
-  # TODO(#827): switch from therock-dev-python index to therock-nightly-python
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
+    --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     --pytorch-dir C:/b/pytorch \
     --output-dir %HOME%/tmp/pyout
   ```
@@ -125,8 +124,14 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 - Manually installing from a release index:
 
   ```bash
+  # From therock-nightly-python
   python -m pip install \
     --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    rocm[libraries,devel]
+
+  # OR from therock-dev-python
+  python -m pip install \
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
     rocm[libraries,devel]
   ```
 
@@ -194,3 +199,22 @@ To create patches
 
 1. Commit your change(s) within the relevant source folder(s)
 1. Run the `save-patches` subcommand of the relevant source management script(s)
+
+## Alternate Branches / Patch Sets
+
+### PyTorch Nightly
+
+This checks out the `nightly` branches from https://github.com/pytorch,
+tracking the latest pytorch.org nightly release:
+
+- https://github.com/pytorch/pytorch/tree/nightly
+- https://github.com/pytorch/audio/tree/nightly
+- https://github.com/pytorch/vision/tree/nightly
+
+```
+python pytorch_torch_repo.py checkout --repo-hashtag nightly
+python pytorch_audio_repo.py checkout --repo-hashtag nightly
+python pytorch_vision_repo.py checkout --repo-hashtag nightly
+# Note that triton will be checked out at the PyTorch pin.
+python pytorch_triton_repo.py checkout
+```

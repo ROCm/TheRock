@@ -29,7 +29,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {SCRIPT_DIR / 'test_hipblaslt.py'}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
     },
     # PRIM tests
     "rocprim": {
@@ -49,8 +49,46 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 15,
         "test_script": f"python {SCRIPT_DIR / 'test_rocthrust.py'}",
+        "platform": ["linux"],
+    },
+    # SPARSE tests
+    "hipsparse": {
+        "job_name": "hipsparse",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {SCRIPT_DIR / 'test_hipsparse.py'}",
+        "platform": ["linux"],
+    },
+    "rocsparse": {
+        "job_name": "rocsparse",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {SCRIPT_DIR / 'test_rocsparse.py'}",
+        "platform": ["linux", "windows"],
+    },
+    # RAND tests
+    "rocrand": {
+        "job_name": "rocrand",
+        "fetch_artifact_args": "--rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {SCRIPT_DIR / 'test_rocrand.py'}",
+        "platform": ["linux", "windows"],
+    },
+    "hiprand": {
+        "job_name": "hiprand",
+        "fetch_artifact_args": "--rand --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {SCRIPT_DIR / 'test_hiprand.py'}",
+        "platform": ["linux", "windows"],
+    },
+    # MIOpen tests
+    "miopen": {
+        "job_name": "miopen",
+        "fetch_artifact_args": "--blas --miopen --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {SCRIPT_DIR / 'test_miopen.py'}",
         "platform": ["linux"],
     },
 }
