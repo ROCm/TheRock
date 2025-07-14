@@ -89,11 +89,11 @@ def _retrieve_s3_release_assets(
     """
     # TODO: add logic for latest
 
+    asset_name = f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
     # URL encoding the asset_name, in cases of "+" symbols
-    asset_name = urllib.parse.quote_plus(
-        f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
+    s3_release_url = urllib.parse.quote_plus(
+        f"https://{release_bucket}.s3.amazonaws.com/{asset_name}"
     )
-    s3_release_url = f"https://{release_bucket}.s3.amazonaws.com/{asset_name}"
     destination = output_dir / asset_name
 
     headers = {"Accept": "application/octet-stream"}
