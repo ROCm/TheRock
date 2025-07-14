@@ -88,7 +88,6 @@ jobs:
         id: configure
         env:
           AMDGPU_FAMILIES: ${{ inputs.families }}
-          PYTORCH_DEV_DOCKER: "false"
           THEROCK_PACKAGE_PLATFORM: "windows"
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
