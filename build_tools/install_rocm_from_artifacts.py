@@ -33,7 +33,6 @@ from fetch_artifacts import (
     retrieve_enabled_artifacts,
     retrieve_s3_artifacts,
 )
-import json
 import os
 from pathlib import Path
 import platform
@@ -45,6 +44,7 @@ import tarfile
 from _therock_utils.artifacts import ArtifactPopulator
 import urllib.parse
 from urllib.request import urlopen, Request
+import xml.etree.ElementTree as ET
 
 
 PLATFORM = platform.system().lower()
@@ -87,8 +87,6 @@ def _retrieve_s3_release_assets(
     """
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
     """
-    # TODO: add logic for latest
-
     asset_name = f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
     # URL encoding the asset_name, in cases of "+" symbols
     encoded_asset_name = urllib.parse.quote(asset_name)
@@ -116,8 +114,6 @@ def _retrieve_s3_release_assets(
 
     # After downloading the asset, untar-ing the file
     _untar_files(output_dir, destination)
-
-    return None
 
 
 def retrieve_artifacts_by_run_id(args):
@@ -154,33 +150,28 @@ def retrieve_artifacts_by_release(args):
     """
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    # In the case that the user passes in latest, we will get the latest nightly-tarball
-    if args.release == "latest":
-        release_bucket = "therock-nightly-tarball"
-    # Otherwise, determine if version is nightly-tarball or dev-tarball
-    else:
-        # Searching for nightly-tarball or dev-tarball format
-        nightly_regex_expression = (
-            "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+    # Determine if version is nightly-tarball or dev-tarball
+    nightly_regex_expression = (
+        "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+    )
+    dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
+    nightly_release = re.search(nightly_regex_expression, args.release) != None
+    dev_release = re.search(dev_regex_expression, args.release) != None
+    if not nightly_release and not dev_release:
+        log("This script requires a nightly-tarball or dev-tarball version.")
+        log("Please retrieve the correct release version from:")
+        log(
+            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball example: 6.4.0rc20250416)"
         )
-        dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
-        nightly_release = re.search(nightly_regex_expression, args.release) != None
-        dev_release = re.search(dev_regex_expression, args.release) != None
-        if not nightly_release and not dev_release:
-            log("This script requires a nightly-tarball or dev-tarball version.")
-            log("Please retrieve the correct release version from:")
-            log(
-                "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball example: 6.4.0rc20250416)"
-            )
-            log(
-                "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
-            )
-            log("Exiting...")
-            return
+        log(
+            "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+        )
+        log("Exiting...")
+        return
 
-        release_bucket = (
-            "therock-nightly-tarball" if nightly_release else "therock-dev-tarball"
-        )
+    release_bucket = (
+        "therock-nightly-tarball" if nightly_release else "therock-dev-tarball"
+    )
     release_version = args.release
 
     log(f"Retrieving artifacts from release bucket {release_bucket}")
