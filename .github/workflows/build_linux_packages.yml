@@ -105,7 +105,6 @@ jobs:
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
-          cp ${{ github.workspace }}/.container-cache/ccache/compiler_check_cache ${{ github.workspace }}/build/logs/
 
       - name: Build therock-dist (build RAND only for testing ccache...)
         run: cmake --build build --target therock-dist
@@ -161,6 +160,7 @@ jobs:
       - name: Upload Logs
         if: always()
         run: |
+          cp ${{ github.workspace }}/.container-cache/ccache/compiler_check_cache ${{ github.workspace }}/build/logs/
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
