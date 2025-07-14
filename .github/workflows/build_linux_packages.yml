@@ -63,9 +63,9 @@ jobs:
           echo "---ccache debugging/pvc tests---"
           echo "CCACHE_SECONDARY_STORAGE: $CCACHE_SECONDARY_STORAGE"
           mkdir -p "$(dirname $CCACHE_LOGFILE)"
-          mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES-0
+          mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES-core
           du /home/runner/pvc -h -d 1
-          ln -s /home/runner/pvc/$AMDGPU_FAMILIES-0 $CACHE_DIR
+          ln -s /home/runner/pvc/$AMDGPU_FAMILIES-core $CACHE_DIR
           #echo "$CACHE_DIR after link:"
           ls $CACHE_DIR -al
           echo "---"
@@ -100,11 +100,12 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          # extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_RAND=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_CORE=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
+          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
+          cp ${{ github.workspace }}/.container-cache/ccache/compiler_check_cache ${{ github.workspace }}/build/logs/
 
       - name: Build therock-dist (build RAND only for testing ccache...)
         run: cmake --build build --target therock-dist
