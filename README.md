@@ -12,8 +12,15 @@ TheRock includes:
 - A CMake super-project for HIP and ROCm source builds
 - Support for building PyTorch with ROCm from source
   - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
+
+## Installing from releases
+
+> [!IMPORTANT]
+> See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
+> ROCm and PyTorch packages.
 
 ### Nightly release status
 
@@ -29,11 +36,6 @@ Docker images:
 | Image title            | Status                                                                                                                                                                                                                                         |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PyTorch ROCm Dev Image | [![Publish PyTorch Dev Dockers](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/publish_pytorch_dev_docker.yml?query=branch%3Amain) |
-
-## Installing from releases
-
-See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-ROCm and PyTorch packages.
 
 ## Building from source
 
