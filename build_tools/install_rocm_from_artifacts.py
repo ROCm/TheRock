@@ -91,7 +91,7 @@ def _retrieve_s3_release_assets(
 
     asset_name = f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
     # URL encoding the asset_name, in cases of "+" symbols
-    encoded_asset_name = urllib.parse.quote_plus(asset_name)
+    encoded_asset_name = urllib.parse.quote(asset_name)
     s3_release_url = f"https://{release_bucket}.s3.amazonaws.com/{encoded_asset_name}"
     destination = output_dir / asset_name
 
