@@ -47,6 +47,7 @@ from urllib.request import urlopen, Request
 
 PLATFORM = platform.system().lower()
 
+
 def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
@@ -78,30 +79,30 @@ def _create_output_directory(args):
     log(f"Created directory {output_dir_path}")
 
 
-def _retrieve_s3_release_assets(release_url, amdgpu_family, release_version, output_dir):
+def _retrieve_s3_release_assets(
+    release_bucket, amdgpu_family, release_version, output_dir
+):
     """
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
     """
     # TODO: add logic for latest
-    
-    s3_release_url = (
-        f"https://{release_url}.s3.amazonaws.com/therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
-    )
+
     asset_name = f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
+    s3_release_url = f"https://{release_bucket}.s3.amazonaws.com/{asset_name}"
     destination = output_dir / asset_name
 
     headers = {"Accept": "application/octet-stream"}
-    
+
     request = Request(s3_release_url, headers=headers)
     with urlopen(request) as response, open(destination, "wb") as file:
         if response.status == 404:
             log(
-                f"S3 release assets for release URL '{release_url}' and release version '{release_version}' not found."
+                f"S3 release assets for release bucket '{release_bucket}' and release version '{release_version}' not found."
             )
             return
         elif response.status != 200:
             log(
-                f"Error when retrieving S3 release assets for release URL '{release_url}' and release version '{release_version}' with status code {response.status}. Exiting..."
+                f"Error when retrieving S3 release assets for release bucket '{release_bucket}' and release version '{release_version}' with status code {response.status}. Exiting..."
             )
             return
 
@@ -151,7 +152,7 @@ def retrieve_artifacts_by_release(args):
     amdgpu_family = args.amdgpu_family
     # In the case that the user passes in latest, we will get the latest nightly-tarball
     if args.release == "latest":
-        release_url = "therock-nightly-tarball"
+        release_bucket = "therock-nightly-tarball"
     # Otherwise, determine if version is nightly-tarball or dev-tarball
     else:
         # Searching for nightly-tarball or dev-tarball format
@@ -173,12 +174,16 @@ def retrieve_artifacts_by_release(args):
             log("Exiting...")
             return
 
-        release_url = "therock-nightly-tarball" if nightly_release else "therock-dev-tarball"
+        release_bucket = (
+            "therock-nightly-tarball" if nightly_release else "therock-dev-tarball"
+        )
     release_version = args.release
 
-    log(f"Retrieving artifacts for release URL {release_url}")
-    _retrieve_s3_release_assets(release_url, amdgpu_family, release_version, output_dir)
-    log(f"Retrieving artifacts for run URL {release_url}")
+    log(f"Retrieving artifacts for release bucket {release_bucket}")
+    _retrieve_s3_release_assets(
+        release_bucket, amdgpu_family, release_version, output_dir
+    )
+    log(f"Retrieving artifacts for run release_bucket {release_bucket}")
 
 
 def retrieve_artifacts_by_input_dir(args):

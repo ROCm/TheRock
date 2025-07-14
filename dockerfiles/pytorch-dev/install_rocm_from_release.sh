@@ -5,7 +5,7 @@ set -xeuo pipefail
 # install_rocm_from_release.sh
 #
 # Download and install ROCm tarballs for specified AMDGPU targets from
-# TheRock's nightly GitHub releases (or a forked repository).
+# TheRock's nightly releases (or a forked repository).
 #
 # Usage:
 #   INSTALL_PREFIX=/pathToInstall RELEASE_VERSION=6.4.0rc20250424 ./install_rocm_from_release.sh "gfx942 gfx1100"
@@ -13,11 +13,10 @@ set -xeuo pipefail
 # Environment Variables (optional):
 #   RELEASE_VERSION       - Full version string like 6.4.0rc20250424 (required if no version.json)
 #   ROCM_VERSION          - Base ROCm version like 6.4.0 (optional, auto-extracted from RELEASE_VERSION)
-#   RELEASE_TAG           - GitHub release tag to pull from (default: nightly-tarball)
+#   RELEASE_TAG           - S3 release bucket to pull from (default: nightly-tarball)
 #   ROCM_VERSION_DATE     - Build date (default: 1 days ago)
 #   INSTALL_PREFIX        - Installation path (default: /therock/build/dist/rocm)
 #   OUTPUT_ARTIFACTS_DIR  - Directory to store downloaded tarballs (default: /rocm-tarballs)
-#   GITHUB_REPO           - GitHub repository name (default: ROCm/TheRock)
 #
 # Requirements:
 #   curl (auto-installed if missing)
@@ -25,11 +24,10 @@ set -xeuo pipefail
 #   bash
 #
 # Notes:
-#   - Setting GITHUB_REPO allows installing from forks or custom repositories.
 #   - RELEASE_VERSION controls tarball naming. ROCM_VERSION is used for internal environment setup.
 #
 # Example:
-#   GITHUB_REPO="myorg/myrock" RELEASE_VERSION=6.4.0rc20250425 ./install_rocm_from_release.sh gfx942
+#    RELEASE_VERSION=6.4.0rc20250425 ./install_rocm_from_release.sh gfx942
 #
 # -----------------------------------------------------------------------------
 
@@ -49,13 +47,12 @@ for tool in curl jq; do
 done
 
 # Configuration
-RELEASE_TAG="${RELEASE_TAG:-nightly-tarball}"
+RELEASE_TAG="${RELEASE_TAG:nightly-tarball}"
 ROCM_VERSION_DATE="${ROCM_VERSION_DATE:-$(date -d '1 days ago' +'%Y%m%d')}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-/therock/build/dist/rocm}"
 OUTPUT_ARTIFACTS_DIR="${OUTPUT_ARTIFACTS_DIR:-/rocm-tarballs}"
 
-GITHUB_REPO="${GITHUB_REPO:-ROCm/TheRock}"
-GITHUB_RELEASE_BASE_URL="https://github.com/${GITHUB_REPO}/releases/download"
+RELEASE_BASE_URL="https://therock-${RELEASE_TAG}.s3.amazonaws.com"
 
 # Determine current working directory
 WORKING_DIR="$(pwd)"
@@ -116,7 +113,7 @@ for target in $AMDGPU_TARGETS; do
 
   # Primary attempt
   TARBALL_NAME="therock-dist-linux-${target}-${RELEASE_VERSION}.tar.gz"
-  TARBALL_URL="${GITHUB_RELEASE_BASE_URL}/${RELEASE_TAG}/${TARBALL_NAME}"
+  TARBALL_URL="${RELEASE_BASE_URL}/${TARBALL_NAME}"
   TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
   echo "[INFO] Trying primary tarball: $TARBALL_URL"
@@ -130,7 +127,7 @@ for target in $AMDGPU_TARGETS; do
     fi
 
     TARBALL_NAME="therock-dist-linux-${fallback}-${RELEASE_VERSION}.tar.gz"
-    TARBALL_URL="${GITHUB_RELEASE_BASE_URL}/${RELEASE_TAG}/${TARBALL_NAME}"
+    TARBALL_URL="${RELEASE_BASE_URL}/${TARBALL_NAME}"
     TARBALL_PATH="${TARGET_DIR}/${TARBALL_NAME}"
 
     echo "[INFO] Trying fallback tarball: $TARBALL_URL"
