@@ -183,11 +183,10 @@ def retrieve_artifacts_by_release(args):
         )
     release_version = args.release
 
-    log(f"Retrieving artifacts for release bucket {release_bucket}")
+    log(f"Retrieving artifacts from release bucket {release_bucket}")
     _retrieve_s3_release_assets(
         release_bucket, amdgpu_family, release_version, output_dir
     )
-    log(f"Retrieving artifacts for run release_bucket {release_bucket}")
 
 
 def retrieve_artifacts_by_input_dir(args):
