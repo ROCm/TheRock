@@ -1,4 +1,4 @@
-name: Release Linux PyTorch Wheels
+name: Release portable Linux PyTorch Wheels
 
 on:
   workflow_call:
@@ -55,7 +55,7 @@ jobs:
       matrix:
         python_version: ["3.11", "3.12", 3.13]
 
-    uses: ./.github/workflows/build_linux_pytorch_wheels.yml
+    uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       python_version: ${{ matrix.python_version }}
