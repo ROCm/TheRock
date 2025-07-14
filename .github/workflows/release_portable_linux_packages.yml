@@ -165,23 +165,6 @@ jobs:
           echo "------------"
           du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
 
-      - name: Upload Tarball to GitHub
-        uses: ncipollo/release-action@bcfe5470707e8832e12347755757cec0eb3c22af # v1.18.0
-        with:
-          artifacts: "${{ env.DIST_ARCHIVE }}"
-          tag: "${{ env.RELEASE_TYPE }}-tarball"
-          name: "${{ env.RELEASE_TYPE }}-tarball"
-          body: "Automatic ${{ env.RELEASE_TYPE }} tarball of TheRock."
-          removeArtifacts: false
-          allowUpdates: true
-          replacesArtifacts: true
-          makeLatest: false
-          # Keep existing name/body/status.
-          omitNameDuringUpdate: true
-          omitBodyDuringUpdate: true
-          omitDraftDuringUpdate: true
-          omitPrereleaseDuringUpdate: true
-
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1

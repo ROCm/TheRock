@@ -232,21 +232,20 @@ wrapper Python wheels or utility scripts.
 
 ### Installing release tarballs
 
-Release tarballs are automatically uploaded to both
-[GitHub releases](https://github.com/ROCm/TheRock/releases) and AWS S3 buckets.
+Release tarballs are automatically uploaded to AWS S3 buckets.
 The S3 buckets do not yet have index pages.
 
-| Release page                                                                      | S3 bucket                                                                    | Description                                       |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
-| [`nightly-tarball`](https://github.com/ROCm/TheRock/releases/tag/nightly-tarball) | [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/) | Nightly builds from the `main` branch             |
-| [`dev-tarball`](https://github.com/ROCm/TheRock/releases/tag/dev-tarball)         | [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/)         | ⚠️ Development builds from project maintainers ⚠️ |
+| S3 bucket                                                                    | Description                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/) | Nightly builds from the `main` branch             |
+| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/)         | ⚠️ Development builds from project maintainers ⚠️ |
 
 After downloading, simply extract the release tarball into place:
 
 ```bash
 mkdir therock-tarball && cd therock-tarball
 # For example...
-wget https://github.com/ROCm/TheRock/releases/download/nightly-tarball/therock-dist-linux-gfx110X-dgpu-6.5.0rc20250610.tar.gz
+wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-dgpu-6.5.0rc20250610.tar.gz
 
 mkdir install
 tar -xf *.tar.gz -C install
