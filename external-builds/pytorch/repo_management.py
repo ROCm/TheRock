@@ -309,7 +309,7 @@ def do_save_patches(args: argparse.Namespace):
         save_repo_patches(args.repo / relative_sm_path, patches_dir / relative_sm_path)
 
 
-# Reads the ROCm maintained "releated_commits" file from the given pytorch dir.
+# Reads the ROCm maintained "related_commits" file from the given pytorch dir.
 # If present, selects the given os and project, returning origin, hashtag and
 # "rocm-custom" patchset. Otherwise, returns the given defaults.
 def read_pytorch_rocm_pins(

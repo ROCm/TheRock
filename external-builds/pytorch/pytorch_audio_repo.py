@@ -133,7 +133,7 @@ def main(cl_args: list[str]):
 
     args = p.parse_args(cl_args)
     if args.require_related_commit and not HAS_RELATED_COMMIT:
-        raise ValueError("Could not find torchaudio in pytorch/related-commits")
+        raise ValueError("Could not find torchaudio in pytorch/related_commits")
     args.func(args)
 
 
