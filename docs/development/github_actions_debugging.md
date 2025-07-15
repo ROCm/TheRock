@@ -17,11 +17,16 @@ by inspecting files, running commands, etc.
    - https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest
    - https://kubernetes.io/docs/tasks/tools/#kubectl
 
-1. Authenticate with Azure, selecting the `AMD-MSDN Dev/Test` subscription:
+1. Authenticate with Azure and get aks credentials:
 
    ```
    az login
+   az account set --subscription <subscription_id>
+   az aks get-credentials --resource-group <resource_group_name> --name <aks_name>
    ```
+
+   (Ask around if you are unsure of which subscription, resource group, and
+   name to use)
 
 1. Optionally edit the workflow file you want to debug to include a pause so you
    won't be kicked off while still debugging:
