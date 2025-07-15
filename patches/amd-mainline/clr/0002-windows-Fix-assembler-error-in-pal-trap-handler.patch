@@ -1,7 +1,7 @@
-From 7f04a22c8b20e319056f6e28a0cc905a9a547c53 Mon Sep 17 00:00:00 2001
+From 31675d06062328c8aa273994785a1e662f6edfdb Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Sat, 10 May 2025 15:56:02 -0700
-Subject: [PATCH 2/3] Fix assembler error in pal trap handler.
+Subject: [PATCH 2/2] [windows] Fix assembler error in pal trap handler.
 
 This has been showing up in real use as an error printed to the console complaining that the ".not_s_trap" label cannot be found on device initialization.
 
@@ -15,7 +15,7 @@ Tested by running hipblaslt tests on Windows/gfx1151 in TheRock and verifying th
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/rocclr/device/pal/palblitcl.cpp b/rocclr/device/pal/palblitcl.cpp
-index 6616a7fed..9072073df 100644
+index 67b8fd020..d059e81d4 100644
 --- a/rocclr/device/pal/palblitcl.cpp
 +++ b/rocclr/device/pal/palblitcl.cpp
 @@ -120,7 +120,7 @@ const char* TrapHandlerCode = RUNTIME_KERNEL(
@@ -28,5 +28,5 @@ index 6616a7fed..9072073df 100644
  \n  // Check if the it was an host trap.
  \n  s_bitcmp1_b32                         ttmp1, SQ_WAVE_PC_HI_HT_SHIFT
 -- 
-2.47.1.windows.2
+2.49.0.windows.1
 
