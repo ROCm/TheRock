@@ -250,7 +250,7 @@ outputs.
 
 #### Building ROCm Python wheels
 
-To build Python wheels you will need an "artifacts" directory, either from a
+To build Python wheels, you will need an "artifacts" directory, either from a
 source build of `therock-archives` (see above) or by running the
 [`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
 artifacts from a CI run.
