@@ -65,6 +65,8 @@ class TestROCmSanity:
             [
                 f"{THEROCK_BIN_DIR}/hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),
+                "-Xlinker",
+                f"-rpath={THEROCK_BIN_DIR}/../lib/",
                 "-o",
                 hipcc_check_executable_file,
             ],

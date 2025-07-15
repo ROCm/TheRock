@@ -84,7 +84,6 @@ jobs:
         id: configure
         env:
           AMDGPU_FAMILIES: ${{ inputs.families }}
-          PYTORCH_DEV_DOCKER: "false"
           THEROCK_PACKAGE_PLATFORM: "linux"
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
@@ -205,7 +204,7 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
-          workflow: release_linux_pytorch_wheels.yml
+          workflow: release_portable_linux_pytorch_wheels.yml
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "release_type": "${{ env.RELEASE_TYPE }}",

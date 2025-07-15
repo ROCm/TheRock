@@ -79,7 +79,15 @@ def main(cl_args: list[str]):
             "--repo-name",
             type=Path,
             default=THIS_MAIN_REPO_NAME,
-            help="Git repository patch path",
+            help="Subdirectory name in which to checkout repo",
+        )
+        command_parser.add_argument(
+            "--repo-hashtag",
+            help="Git repository ref/tag to checkout",
+        )
+        command_parser.add_argument(
+            "--patchset",
+            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
         )
 
     p = argparse.ArgumentParser("pytorch_triton_repo.py")
@@ -126,11 +134,6 @@ def main(cl_args: list[str]):
         "save-patches", help="Save local commits as patch files for later application"
     )
     add_common(save_patches_p)
-    save_patches_p.add_argument(
-        "--repo-hashtag",
-        required=True,
-        help="Git repository ref/tag to checkout",
-    )
     save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)

@@ -1,4 +1,4 @@
-name: Build Linux PyTorch Wheels
+name: Build Portable Linux PyTorch Wheels
 
 on:
   workflow_call:
@@ -155,7 +155,6 @@ jobs:
         env:
           TARGET: ${{ inputs.amdgpu_family }}
         run: python ./build_tools/github_actions/configure_target_run.py
-
 
   test_pytorch_wheels:
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}

@@ -1,4 +1,4 @@
-name: Linux Build and Test
+name: CI - Linux
 
 on:
   workflow_call:

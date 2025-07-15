@@ -48,6 +48,20 @@ THIS_MAIN_REPO_NAME = "pytorch_vision"
 THIS_DIR = Path(__file__).resolve().parent
 THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
+(
+    DEFAULT_ORIGIN,
+    DEFAULT_HASHTAG,
+    DEFAULT_PATCHSET,
+    HAS_RELATED_COMMIT,
+) = repo_management.read_pytorch_rocm_pins(
+    THIS_DIR / "pytorch",
+    os="centos",
+    project="torchvision",
+    default_origin="https://github.com/pytorch/vision.git",
+    default_hashtag="v0.22.0",
+    default_patchset=None,
+)
+
 
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
@@ -67,23 +81,32 @@ def main(cl_args: list[str]):
             "--repo-name",
             type=Path,
             default=THIS_MAIN_REPO_NAME,
-            help="Git repository patch path",
+            help="Subdirectory name in which to checkout repo",
+        )
+        command_parser.add_argument(
+            "--repo-hashtag",
+            default=DEFAULT_HASHTAG,
+            help="Git repository ref/tag to checkout",
+        )
+        command_parser.add_argument(
+            "--patchset",
+            default=DEFAULT_PATCHSET,
+            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
+        )
+        command_parser.add_argument(
+            "--require-related-commit",
+            action="store_true",
+            help="Require that a related commit was found",
         )
 
-    p = argparse.ArgumentParser("ptbuild.py")
-    default_repo_hashtag = "v0.22.0"
+    p = argparse.ArgumentParser("pytorch_vision_repo.py")
     sub_p = p.add_subparsers(required=True)
     checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
     add_common(checkout_p)
     checkout_p.add_argument(
         "--gitrepo-origin",
-        default="https://github.com/pytorch/vision.git",
+        default=DEFAULT_ORIGIN,
         help="git repository url",
-    )
-    checkout_p.add_argument(
-        "--repo-hashtag",
-        default=default_repo_hashtag,
-        help="Git repository ref/tag to checkout",
     )
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
     checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
@@ -109,14 +132,11 @@ def main(cl_args: list[str]):
         "save-patches", help="Save local commits as patch files for later application"
     )
     add_common(save_patches_p)
-    save_patches_p.add_argument(
-        "--repo-hashtag",
-        default=default_repo_hashtag,
-        help="Git repository ref/tag to checkout",
-    )
     save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
+    if args.require_related_commit and not HAS_RELATED_COMMIT:
+        raise ValueError("Could not find torchvision in pytorch/related_commits")
     args.func(args)
 
 

@@ -324,10 +324,12 @@ class PopulatedDistPackage:
         else:
             self.params.files.mark_populated(self, relpath, dest_path)
 
-        file_type = get_file_type(dest_path)
-        if file_type == "exe" or file_type == "so":
-            self._extend_rpath(dest_path)
-            self._normalize_rpath(dest_path)
+        if not is_windows:
+            # Update RPATHs on Linux.
+            file_type = get_file_type(dest_path)
+            if file_type == "exe" or file_type == "so":
+                self._extend_rpath(dest_path)
+                self._normalize_rpath(dest_path)
 
     def _extend_rpath(self, file_path: Path):
         for dep_project, rpath in self.rpath_deps:
@@ -493,9 +495,12 @@ class PopulatedDistPackage:
             dest_path.unlink()
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_entry.path, dest_path)
-        file_type = get_file_type(dest_path)
-        if file_type == "exe" or file_type == "so":
-            self._normalize_rpath(dest_path)
+
+        if not is_windows:
+            # Update RPATHs on Linux.
+            file_type = get_file_type(dest_path)
+            if file_type == "exe" or file_type == "so":
+                self._normalize_rpath(dest_path)
 
 
 MAGIC_AR_MATCH = re.compile("ar archive")

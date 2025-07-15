@@ -38,9 +38,8 @@ class ArtifactName:
     def from_path(path: Path) -> Optional["ArtifactName"]:
         filename = path.name
         if path.is_dir():
-            # Matches {name}_{component}_{target_family} with an optional
-            # extra suffix that we ignore.
-            m = re.match(r"^([^_]+)_([^_]+)_([^_]+)(_.+)?$", filename)
+            # Matches {name}_{component}_{target_family}.
+            m = re.match(r"^([^_]+)_([^_]+)_([^_]+)$", filename)
             if not m:
                 return None
             return ArtifactName(m.group(1), m.group(2), m.group(3))
@@ -49,9 +48,8 @@ class ArtifactName:
 
     @staticmethod
     def from_filename(filename: str) -> Optional["ArtifactName"]:
-        # Matches {name}_{component}_{target_family} with an optional
-        # extra suffix that we ignore and an archive extension.
-        m = re.match(r"^([^_]+)_([^_]+)_([^_]+)(_.+)?\.tar.xz$", filename)
+        # Matches {name}_{component}_{target_family} and an archive extension.
+        m = re.match(r"^([^_]+)_([^_]+)_([^_]+)\.tar.xz$", filename)
         if not m:
             return None
         return ArtifactName(m.group(1), m.group(2), m.group(3))
