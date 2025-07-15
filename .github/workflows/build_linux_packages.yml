@@ -160,7 +160,7 @@ jobs:
       - name: Upload Logs
         if: always()
         run: |
-          cp ${{ github.workspace }}/.ccache/compiler_check_cache ${{ github.workspace }}/build/logs/
+          cp /__w/TheRock/Therock/.ccache/compiler_check_cache ${{ github.workspace }}/build/logs/
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
