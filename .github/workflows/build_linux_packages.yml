@@ -164,7 +164,7 @@ jobs:
             --build-dir=build \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }}
-          find / -iname "compiler_check* 2>/dev/null
+          find /__w/TheRock/ -iname "compiler_check*" 2>/dev/null
 
       - name: Add Links to Job Summary
         if: always()
