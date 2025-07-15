@@ -160,11 +160,11 @@ jobs:
       - name: Upload Logs
         if: always()
         run: |
-          cp /__w/TheRock/Therock/.ccache/compiler_check_cache ${{ github.workspace }}/build/logs/
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }}
+          find / -iname "compiler_check* 2>/dev/null
 
       - name: Add Links to Job Summary
         if: always()
