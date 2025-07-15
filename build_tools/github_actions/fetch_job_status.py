@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO)
 RUN_ID = os.getenv("RUN_ID")
 ATTEMPT = os.getenv("ATTEMPT")
 
+# Check for missing values
 if not RUN_ID or not ATTEMPT:
     raise ValueError(
         f"Missing required environment variable RUN_ID or ATTEMPT. "
@@ -51,11 +52,13 @@ def run():
                 f"Failed to retrieve GitHub workflow job data for run ID '{RUN_ID}' and attempt '{ATTEMPT}'. "
                 f"Received unexpected status code: {response.status}. Please verify the URL or check GitHub API status {response.status}."
             )
+
         job_data = json.loads(response.read().decode("utf-8"))
         # Check if API output shows number of jobs run in the workflow to be atleast 1
-        if len(job_data["jobs"]) > 0:
-            set_github_output({"job_summary": json.dumps(job_data)})
-
+        if not job_data.get("jobs"):
+            raise Exception("No jobs found in the GitHub workflow run.")
+        # Output the job summary JSON string directly to stdout
+        print(json.dumps(job_data))
 
 if __name__ == "__main__":
     run()

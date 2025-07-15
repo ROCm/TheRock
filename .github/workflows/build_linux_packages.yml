@@ -150,32 +150,7 @@ jobs:
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }} \
             --build-dir build
-
-      - name: Determine job status for workflow run
-        if: '!cancelled()'
-        id: job-status-step
-        env:
-          RUN_ID: ${{ github.run_id }}
-          ATTEMPT: ${{ github.run_attempt }}
-        run: python build_tools/github_actions/fetch_job_status.py
-
-      - name: Install redshift_connector
-        if: always()
-        run: |
-          pip install redshift_connector
-
-      - name: Upload job results to Redshift
-        if: always()
-        run: |
-          python3 build_tools/github_actions/populate_redshift_db.py \
-            --api-output '${{ steps.job-status-step.outputs.job_summary }}' \
-            --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
-            --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
-            --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
-            --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
-            --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
-            --run-id ${{ github.run_number }}
-
+            
       - name: Upload Logs
         if: always()
         run: |
@@ -198,3 +173,21 @@ jobs:
         with:
           path: ${{ env.CACHE_DIR }}
           key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
+
+      - name: Upload job metrics to Redshift database
+        if: always()
+        env:
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          # Fetch job summary and store it
+          JOB_SUMMARY=$(python3 build_tools/github_actions/fetch_job_status.py)
+          # Populate Redshit Database tables 
+          python3 build_tools/github_actions/populate_redshift_db.py \
+            --api-output "$JOB_SUMMARY" \
+            --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
+            --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
+            --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
+            --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
+            --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
+            --run-id ${{ github.run_number }}
