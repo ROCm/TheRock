@@ -248,12 +248,20 @@ in `build/dist/rocm/` and artifacts in `build/artifacts`. See the
 [Build Artifacts guide](./artifacts.md) for more information about the build
 outputs.
 
+#### Building ROCm Python wheels
+
+To build Python wheels you will need an "artifacts" directory, either from a
+source build of `therock-archives` (see above) or by running the
+[`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
+artifacts from a CI run.
+
+Once you have an artifacts directory, you can run the
+[`build_python_packages.py`](../../build_tools/build_python_packages.py) script.
+
 #### Building PyTorch
 
-Once you have `build/artifacts`, or you run the
-[`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
-artifacts from a CI run, you can follow the instructions to build PyTorch from
-source over at
+PyTorch builds require Python wheels, either by building from source (see above)
+or by downloading from one of TheRock's release indices. See the instructions at
 [external-builds/pytorch](../../external-builds/pytorch/README.md).
 
 ### Run tests
