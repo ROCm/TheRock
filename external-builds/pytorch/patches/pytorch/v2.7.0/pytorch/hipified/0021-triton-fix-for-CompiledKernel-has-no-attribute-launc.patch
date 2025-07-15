@@ -1,0 +1,45 @@
+From 5fbca310ffd84e057f247cabf32f972555bc1cd5 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 15 Jul 2025 20:31:22 +0000
+Subject: [PATCH 21/21] triton fix for 'CompiledKernel' has no attribute
+ launch_enter_hook
+
+- occurs when running sglang test
+  cd sglang/test/srt
+  python test_srt_endpoint.py
+- tested with pytorch 2.7.0 and
+  triton 00d5ca7b62d4b337221b07e56cdcd90b6e9d0ab4
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ torch/_inductor/runtime/triton_heuristics.py | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/torch/_inductor/runtime/triton_heuristics.py b/torch/_inductor/runtime/triton_heuristics.py
+index 54690fe49a2..171a7298e2f 100644
+--- a/torch/_inductor/runtime/triton_heuristics.py
++++ b/torch/_inductor/runtime/triton_heuristics.py
+@@ -1210,10 +1210,17 @@ class TritonCompileResult:
+             # `launch_enter_hook` is installed.  So if we don't have that hook installed,
+             # we want to burn None in to the launch args with zero overhead.
+             # See https://github.com/pytorch/pytorch/issues/123597
+-            if binary.__class__.launch_enter_hook:
+-                launch_metadata = f"bin.launch_metadata((grid_0, grid_1, grid_2), stream, {', '.join(call_args)})"
++            if knobs is None:
++                if binary.__class__.launch_enter_hook:
++                    launch_metadata = f"bin.launch_metadata((grid_0, grid_1, grid_2), stream, {', '.join(call_args)})"
++                else:
++                    launch_metadata = "None"
+             else:
+-                launch_metadata = "None"
++                if knobs.runtime.launch_enter_hook:
++                    launch_metadata = f"bin.launch_metadata((grid_0, grid_1, grid_2), stream, {', '.join(call_args)})"
++                else:
++                    launch_metadata = "None"
++
+             runner_args = [
+                 "grid_0",
+                 "grid_1",
+-- 
+2.43.0
+

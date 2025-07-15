@@ -1,0 +1,124 @@
+From 84180f03bfc923e8b32cdc2899023e19cc6090d0 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 15 Jul 2025 17:18:45 +0000
+Subject: [PATCH 20/20] backport f8cc4c0af802269fbe16a418386a94b3b6547c74
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ torch/_inductor/async_compile.py         |  7 ++-----
+ torch/_inductor/codecache.py             |  6 +++---
+ torch/_inductor/runtime/triton_compat.py | 12 ++++++++++++
+ torch/utils/_triton.py                   |  8 +++-----
+ 4 files changed, 20 insertions(+), 13 deletions(-)
+
+diff --git a/torch/_inductor/async_compile.py b/torch/_inductor/async_compile.py
+index 293151a907d..8eca9f25d01 100644
+--- a/torch/_inductor/async_compile.py
++++ b/torch/_inductor/async_compile.py
+@@ -69,13 +69,10 @@ def pre_fork_setup():
+ 
+     # Computing the triton key can be slow. If we call it before fork,
+     # it will be cached for the forked subprocesses.
+-    try:
+-        from triton.compiler.compiler import triton_key
++    from torch._inductor.runtime.triton_compat import HAS_TRITON, triton_key
+ 
++    if HAS_TRITON:
+         triton_key()
+-    except ImportError:
+-        # Triton might not be installed or might be an old version.
+-        pass
+ 
+ 
+ def caching_device_properties():
+diff --git a/torch/_inductor/codecache.py b/torch/_inductor/codecache.py
+index dc9f5c25365..9f9b809be4b 100644
+--- a/torch/_inductor/codecache.py
++++ b/torch/_inductor/codecache.py
+@@ -162,13 +162,13 @@ class CacheBase:
+     @staticmethod
+     @functools.lru_cache(None)
+     def get_system() -> dict[str, Any]:
+-        try:
+-            from triton.compiler.compiler import triton_key
++        from torch._inductor.runtime.triton_compat import HAS_TRITON, triton_key
+ 
++        if HAS_TRITON:
+             # Use triton_key instead of triton.__version__ as the version
+             # is not updated with each code change
+             triton_version = triton_key()
+-        except ModuleNotFoundError:
++        else:
+             triton_version = None
+ 
+         try:
+diff --git a/torch/_inductor/runtime/triton_compat.py b/torch/_inductor/runtime/triton_compat.py
+index becf853c5e0..be530f6b217 100644
+--- a/torch/_inductor/runtime/triton_compat.py
++++ b/torch/_inductor/runtime/triton_compat.py
+@@ -74,9 +74,17 @@ if triton is not None:
+     except ImportError:
+         knobs = None
+ 
++    try:
++        from triton.runtime.cache import triton_key  # type: ignore[attr-defined]
++    except ImportError:
++        from triton.compiler.compiler import (
++            triton_key,  # type: ignore[attr-defined,no-redef]
++        )
++
+     builtins_use_semantic_kwarg = (
+         "_semantic" in inspect.signature(triton.language.core.view).parameters
+     )
++    HAS_TRITON = True
+ else:
+ 
+     def _raise_error(*args: Any, **kwargs: Any) -> Any:
+@@ -112,6 +120,9 @@ else:
+         tensor = Any
+         dtype = Any
+ 
++    triton_key = _raise_error
++    HAS_TRITON = False
++
+ 
+ def cc_warp_size(cc: Union[str, int]) -> int:
+     if torch.version.hip:
+@@ -147,4 +158,5 @@ __all__ = [
+     "triton",
+     "cc_warp_size",
+     "knobs",
++    "triton_key",
+ ]
+diff --git a/torch/utils/_triton.py b/torch/utils/_triton.py
+index 1609a3fe77c..0696fadb51f 100644
+--- a/torch/utils/_triton.py
++++ b/torch/utils/_triton.py
+@@ -6,13 +6,11 @@ import hashlib
+ @functools.lru_cache(None)
+ def has_triton_package() -> bool:
+     try:
+-        from triton.compiler.compiler import triton_key
++        import triton  # noqa: F401
+ 
+-        return triton_key is not None
++        return True
+     except ImportError:
+         return False
+-    except RuntimeError:
+-        return False
+ 
+ 
+ @functools.lru_cache(None)
+@@ -106,7 +104,7 @@ def triton_backend():
+ 
+ @functools.lru_cache(None)
+ def triton_hash_with_backend():
+-    from triton.compiler.compiler import triton_key
++    from torch._inductor.runtime.triton_compat import triton_key
+ 
+     backend = triton_backend()
+     key = f"{triton_key()}-{backend.hash()}"
+-- 
+2.43.0
+

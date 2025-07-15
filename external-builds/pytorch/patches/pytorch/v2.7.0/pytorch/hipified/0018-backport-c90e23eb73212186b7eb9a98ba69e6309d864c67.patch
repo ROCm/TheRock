@@ -1,0 +1,76 @@
+From 2e31775703fe37666f7d9b21484564f1e901ae6f Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 15 Jul 2025 17:10:29 +0000
+Subject: [PATCH 18/20] backport c90e23eb73212186b7eb9a98ba69e6309d864c67
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ torch/_inductor/runtime/triton_compat.py     |  6 ++++++
+ torch/_inductor/runtime/triton_heuristics.py | 12 ++++++++++--
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/torch/_inductor/runtime/triton_compat.py b/torch/_inductor/runtime/triton_compat.py
+index 7e2d46e9134..faf0b183ae3 100644
+--- a/torch/_inductor/runtime/triton_compat.py
++++ b/torch/_inductor/runtime/triton_compat.py
+@@ -68,6 +68,10 @@ if triton is not None:
+         def _log2(x: Any) -> Any:
+             raise NotImplementedError
+ 
++    try:
++        from triton import knobs
++    except ImportError:
++        knobs = None
+ else:
+ 
+     def _raise_error(*args: Any, **kwargs: Any) -> Any:
+@@ -87,6 +91,7 @@ else:
+     _log2 = _raise_error
+     libdevice = None
+     math = None
++    knobs = None
+ 
+     class triton:  # type: ignore[no-redef]
+         @staticmethod
+@@ -135,4 +140,5 @@ __all__ = [
+     "math",
+     "triton",
+     "cc_warp_size",
++    "knobs",
+ ]
+diff --git a/torch/_inductor/runtime/triton_heuristics.py b/torch/_inductor/runtime/triton_heuristics.py
+index 5bdb21939f1..54690fe49a2 100644
+--- a/torch/_inductor/runtime/triton_heuristics.py
++++ b/torch/_inductor/runtime/triton_heuristics.py
+@@ -62,6 +62,7 @@ from .triton_compat import (
+     Config,
+     GPUTarget,
+     KernelInterface,
++    knobs,
+     OutOfResources,
+     PTXASError,
+     triton,
+@@ -1147,11 +1148,18 @@ class TritonCompileResult:
+             binary.shared if hasattr(binary, "shared") else binary.metadata.shared
+         )
+ 
++        if knobs is None:
++            launch_enter = binary.__class__.launch_enter_hook
++            launch_exit = binary.__class__.launch_exit_hook
++        else:
++            launch_enter = knobs.runtime.launch_enter_hook
++            launch_exit = knobs.runtime.launch_exit_hook
++
+         scope = {
+             "grid_meta": cfg.kwargs,
+             "bin": binary,
+-            "launch_enter_hook": binary.__class__.launch_enter_hook,
+-            "launch_exit_hook": binary.__class__.launch_exit_hook,
++            "launch_enter_hook": launch_enter,
++            "launch_exit_hook": launch_exit,
+             "metadata": (
+                 binary.packed_metadata
+                 if hasattr(binary, "packed_metadata")
+-- 
+2.43.0
+

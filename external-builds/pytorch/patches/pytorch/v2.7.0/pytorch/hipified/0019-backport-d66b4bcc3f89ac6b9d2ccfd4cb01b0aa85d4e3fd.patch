@@ -1,0 +1,98 @@
+From ca1e74523e4f700230fbf87493f699ddb00d58f9 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 15 Jul 2025 17:14:22 +0000
+Subject: [PATCH 19/20] backport d66b4bcc3f89ac6b9d2ccfd4cb01b0aa85d4e3fd
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ torch/_inductor/runtime/triton_compat.py  |  6 +++++
+ torch/_inductor/runtime/triton_helpers.py | 28 +++++++++++++++++++----
+ 2 files changed, 29 insertions(+), 5 deletions(-)
+
+diff --git a/torch/_inductor/runtime/triton_compat.py b/torch/_inductor/runtime/triton_compat.py
+index faf0b183ae3..becf853c5e0 100644
+--- a/torch/_inductor/runtime/triton_compat.py
++++ b/torch/_inductor/runtime/triton_compat.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import inspect
+ from typing import Any, Union
+ 
+ import torch
+@@ -72,6 +73,10 @@ if triton is not None:
+         from triton import knobs
+     except ImportError:
+         knobs = None
++
++    builtins_use_semantic_kwarg = (
++        "_semantic" in inspect.signature(triton.language.core.view).parameters
++    )
+ else:
+ 
+     def _raise_error(*args: Any, **kwargs: Any) -> Any:
+@@ -92,6 +97,7 @@ else:
+     libdevice = None
+     math = None
+     knobs = None
++    builtins_use_semantic_kwarg = False
+ 
+     class triton:  # type: ignore[no-redef]
+         @staticmethod
+diff --git a/torch/_inductor/runtime/triton_helpers.py b/torch/_inductor/runtime/triton_helpers.py
+index 6c997285bee..e802f64e3e1 100644
+--- a/torch/_inductor/runtime/triton_helpers.py
++++ b/torch/_inductor/runtime/triton_helpers.py
+@@ -2,9 +2,17 @@
+ # mypy: allow-untyped-defs
+ import math as pymath
+ import warnings
+-from typing import Any, TypeVar
++from functools import wraps
++from typing import Any, Callable, TypeVar
+ 
+-from .triton_compat import _log2, libdevice, math, tl, triton  # noqa: F401
++from .triton_compat import (  # noqa: F401
++    _log2,
++    builtins_use_semantic_kwarg,
++    libdevice,
++    math,
++    tl,
++    triton,
++)
+ 
+ 
+ _T = TypeVar("_T")
+@@ -681,7 +689,7 @@ def x_grid_barrier(sem):
+     tl.debug_barrier()
+ 
+ 
+-def triton_builtin(f: _T) -> _T:
++def triton_builtin(f: Callable[..., _T]) -> Callable[..., _T]:
+     """
+     Decorator to mark a function as a Triton built-in function.  These functions
+     are evaluated at compile time.
+@@ -692,8 +700,18 @@ def triton_builtin(f: _T) -> _T:
+     Returns:
+         function: The same function, marked as a Triton built-in.
+     """
+-    f.__triton_builtin__ = True  # type: ignore[attr-defined]
+-    return f
++    if builtins_use_semantic_kwarg:
++        # support Triton before and after https://github.com/triton-lang/triton/pull/7054
++        @wraps(f)
++        def wrapper(*args, **kwargs):
++            kwargs["_builder"] = kwargs["_semantic"]
++            del kwargs["_semantic"]
++            return f(*args, **kwargs)
++    else:
++        wrapper = f  # type: ignore[assignment]
++
++    wrapper.__triton_builtin__ = True  # type: ignore[attr-defined]
++    return wrapper
+ 
+ 
+ @triton_builtin
+-- 
+2.43.0
+
