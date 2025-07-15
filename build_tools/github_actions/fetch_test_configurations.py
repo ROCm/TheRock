@@ -90,18 +90,26 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {SCRIPT_DIR / 'test_miopen.py'}",
         "platform": ["linux"],
+        "exclude_family": ["gfx950-dcgpu"],
     },
 }
 
 
 def run():
     platform = os.getenv("PLATFORM")
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     project_to_test = os.getenv("project_to_test", "*")
 
     logging.info(f"Selecting projects: {project_to_test}")
 
     output_matrix = []
     for key in test_matrix:
+        # Check if amdgpu family is excluded for this test
+        if (
+            "exclude_family" in test_matrix[key]
+            and amdgpu_families in test_matrix[key]["exclude_family"]
+        ):
+            continue
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
         if platform in test_matrix[key]["platform"] and (
             key in project_to_test or project_to_test == "*"
