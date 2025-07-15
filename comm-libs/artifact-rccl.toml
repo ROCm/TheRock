@@ -9,8 +9,8 @@ include = [
 [components.test."comm-libs/rccl/stage"]
 include = [
   "bin/rccl-UnitTests",
-  "common/**",
-  "bin/common/**"
+  "bin/librccl*.co",
+  "**/librccl*.co",
 ]
 
 # rccl-tests
