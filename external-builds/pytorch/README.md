@@ -221,7 +221,7 @@ python pytorch_triton_repo.py checkout
 
 ### ROCm PyTorch Release Branches
 
-Because upstream PyTorch freezes at release but AMD needs to keep updating 
+Because upstream PyTorch freezes at release but AMD needs to keep updating
 stable versions for a longer period of time, backport branches are maintained.
 In order to check out and build one of these, use the following instructions:
 
@@ -238,8 +238,8 @@ Change origins and tags as appropriate.
 
 ### v2.7.x
 
-NOTE: Presently broken at runtime on a HIP major version incompatibility in the 
-pre-built aotriton (#1025). Must build with 
+NOTE: Presently broken at runtime on a HIP major version incompatibility in the
+pre-built aotriton (#1025). Must build with
 `USE_FLASH_ATTENTION=0 USE_MEM_EFF_ATTENTION=0` until fixed.
 
 ```
