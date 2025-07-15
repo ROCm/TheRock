@@ -236,21 +236,24 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 
 ```bash
 cmake --build build --target therock-dist
+cmake --build build --target therock-archives
 ```
 
 This will start building using MSVC. Once the amd-llvm subproject is built,
 subprojects like the ROCm math libraries will be compiled using `clang.exe` and
 other tools from the amd-llvm toolchain.
 
-When the build completes, you should have a build of ROCm / the HIP SDK
-in `build/dist/rocm/`. See the [Build Artifacts guide](./artifacts.md) for more
-information about the build outputs.
+When the builds complete, you should have a build of ROCm / the HIP SDK
+in `build/dist/rocm/` and artifacts in `build/artifacts`. See the
+[Build Artifacts guide](./artifacts.md) for more information about the build
+outputs.
 
 #### Building PyTorch
 
-Once you have `build/dist/rocm`, or you have
-[installed a release tarball](../../RELEASES.md#installing-from-tarballs), you
-can follow the instructions to build PyTorch from source over at
+Once you have `build/artifacts`, or you run the
+[`fetch_artifacts.py`](../../build_tools/fetch_artifacts.py) script to download
+artifacts from a CI run, you can follow the instructions to build PyTorch from
+source over at
 [external-builds/pytorch](../../external-builds/pytorch/README.md).
 
 ### Run tests

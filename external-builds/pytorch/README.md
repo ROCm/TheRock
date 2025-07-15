@@ -18,12 +18,12 @@ patches locally until they can be upstreamed. See the
 
 ## Feature support status
 
-| Feature                  | Linux support | Windows support |
-| ------------------------ | ------------- | --------------- |
-| PyTorch                  | ✅ Supported  | ✅ Supported    |
-| torchvision              | ✅ Supported  | ⚪ Unknown      |
-| torchaudio               | ✅ Supported  | ⚪ Unknown      |
-| Flash attention (Triton) | ✅ Supported  | 🟡 In progress  |
+| Feature                  | Linux support | Windows support                                                       |
+| ------------------------ | ------------- | --------------------------------------------------------------------- |
+| PyTorch                  | ✅ Supported  | ✅ Supported                                                          |
+| torchvision              | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
+| torchaudio               | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
+| Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
 
 ## Build instructions
 
