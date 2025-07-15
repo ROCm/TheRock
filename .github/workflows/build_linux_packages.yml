@@ -150,7 +150,7 @@ jobs:
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }} \
             --build-dir build
-            
+
       - name: Upload Logs
         if: always()
         run: |
@@ -182,7 +182,7 @@ jobs:
         run: |
           # Fetch job summary and store it
           JOB_SUMMARY=$(python3 build_tools/github_actions/fetch_job_status.py)
-          # Populate Redshit Database tables 
+          # Populate Redshit Database tables
           python3 build_tools/github_actions/populate_redshift_db.py \
             --api-output "$JOB_SUMMARY" \
             --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
