@@ -4,7 +4,7 @@
 This script helps CI workflows, developers and testing suites easily install TheRock to their environment using artifacts.
 It installs TheRock to an output directory from one of these sources:
 - GitHub CI workflow run
-- GitHub release tag
+- Release tag
 - An existing installation of TheRock
 
 Usage:
@@ -15,9 +15,9 @@ python build_tools/install_rocm_from_artifacts.py [--output-dir OUTPUT_DIR] [--a
 Examples:
 - Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 14474448215 (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the default output directory `therock-build`:
     - `python build_tools/install_rocm_from_artifacts.py --run-id 14474448215 --amdgpu-family gfx94X-dcgpu --tests`
-- Downloads and unpacks the version `6.4.0rc20250416` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
+- Downloads and unpacks the version `6.4.0rc20250416` gfx110X artifacts from release tag `nightly-tarball` to the specified output directory `build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250416 --amdgpu-family gfx110X-dgpu --output-dir build`
-- Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
+- Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9` gfx120X artifacts from release tag `dev-tarball` to the default output directory `therock-build`:
     - `python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 --amdgpu-family gfx120X-all`
 
 You can select your AMD GPU family from this file https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81
@@ -33,7 +33,6 @@ from fetch_artifacts import (
     retrieve_enabled_artifacts,
     retrieve_s3_artifacts,
 )
-import json
 import os
 from pathlib import Path
 import platform
@@ -43,7 +42,12 @@ import subprocess
 import sys
 import tarfile
 from _therock_utils.artifacts import ArtifactPopulator
+import urllib.parse
 from urllib.request import urlopen, Request
+import xml.etree.ElementTree as ET
+
+
+PLATFORM = platform.system().lower()
 
 
 def log(*args, **kwargs):
@@ -77,77 +81,36 @@ def _create_output_directory(args):
     log(f"Created directory {output_dir_path}")
 
 
-def _get_github_release_assets(release_tag, amdgpu_family, release_version):
+def _retrieve_s3_release_assets(
+    release_bucket, amdgpu_family, release_version, output_dir
+):
     """
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
     """
-    github_release_url = (
-        f"https://api.github.com/repos/ROCm/TheRock/releases/tags/{release_tag}"
-    )
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    # If GITHUB_TOKEN environment variable is available, include it in the API request to avoid a lower rate limit
-    gh_token = os.getenv("GITHUB_TOKEN", "")
-    if gh_token:
-        headers["Authentication"] = f"Bearer {gh_token}"
+    asset_name = f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
+    # URL encoding the asset_name, in cases of "+" symbols
+    encoded_asset_name = urllib.parse.quote(asset_name)
+    s3_release_url = f"https://{release_bucket}.s3.amazonaws.com/{encoded_asset_name}"
+    destination = output_dir / asset_name
 
-    request = Request(github_release_url, headers=headers)
-    with urlopen(request) as response:
-        if response.status == 403:
+    headers = {"Accept": "application/octet-stream"}
+
+    request = Request(s3_release_url, headers=headers)
+    with urlopen(request) as response, open(destination, "wb") as file:
+        if response.status == 404:
             log(
-                f"Error when retrieving GitHub release assets for release tag '{release_tag}'. This is most likely a rate limiting issue, so please try again"
+                f"S3 release assets for release bucket '{release_bucket}' and release version '{release_version}' not found."
             )
             return
         elif response.status != 200:
             log(
-                f"Error when retrieving GitHub release assets for release tag '{release_tag}' with status code {response.status}. Exiting..."
+                f"Error when retrieving S3 release assets for release bucket '{release_bucket}' and release version '{release_version}' with status code {response.status}. Exiting..."
             )
             return
 
-        release_data = json.loads(response.read().decode("utf-8"))
-
-    # We retrieve the most recent release asset that matches the amdgpu_family
-    # In the cases of "nightly-tarball" or "dev-tarball", this will retrieve the the specified version or latest
-    asset_data = sorted(
-        release_data["assets"], key=lambda item: item["updated_at"], reverse=True
-    )
-
-    # For nightly-tarball
-    if release_tag == "nightly-tarball" and release_version != "latest":
-        for asset in asset_data:
-            if amdgpu_family in asset["name"] and release_version in asset["name"]:
-                return asset
-    # For dev-tarball
-    elif release_tag == "dev-tarball":
-        for asset in asset_data:
-            if amdgpu_family in asset["name"] and release_version in asset["name"]:
-                return asset
-    # Otherwise, return the latest and amdgpu-matched asset available from the tag nightly-tarball
-    elif release_tag == "nightly-tarball" and release_version == "latest":
-        for asset in asset_data:
-            if amdgpu_family in asset["name"]:
-                return asset
-
-    return None
-
-
-def _download_github_release_asset(asset_data, output_dir):
-    """
-    With the GitHub asset data, this function downloads the asset to the output_dir
-    """
-    asset_name = asset_data["name"]
-    asset_url = asset_data["url"]
-    destination = output_dir / asset_name
-    headers = {"Accept": "application/octet-stream"}
-    # Making the API call to retrieve the asset
-    request = Request(asset_url, headers=headers)
-
-    with urlopen(request) as response_obj, open(destination, "wb") as file:
         # Downloading the asset to destination
         log(f"Downloading tar file to {str(destination)}")
-        shutil.copyfileobj(response_obj, file)
+        shutil.copyfileobj(response, file)
 
     # After downloading the asset, untar-ing the file
     _untar_files(output_dir, destination)
@@ -187,40 +150,34 @@ def retrieve_artifacts_by_release(args):
     """
     output_dir = args.output_dir
     amdgpu_family = args.amdgpu_family
-    # In the case that the user passes in latest, we will get the latest nightly-tarball
-    if args.release == "latest":
-        release_tag = "nightly-tarball"
-    # Otherwise, determine if version is nightly-tarball or dev-tarball
-    else:
-        # Searching for nightly-tarball or dev-tarball format
-        nightly_regex_expression = (
-            "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+    # Determine if version is nightly-tarball or dev-tarball
+    nightly_regex_expression = (
+        "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+    )
+    dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
+    nightly_release = re.search(nightly_regex_expression, args.release) != None
+    dev_release = re.search(dev_regex_expression, args.release) != None
+    if not nightly_release and not dev_release:
+        log("This script requires a nightly-tarball or dev-tarball version.")
+        log("Please retrieve the correct release version from:")
+        log(
+            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball example: 6.4.0rc20250416)"
         )
-        dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
-        nightly_release = re.search(nightly_regex_expression, args.release) != None
-        dev_release = re.search(dev_regex_expression, args.release) != None
-        if not nightly_release and not dev_release:
-            log("This script requires a nightly-tarball or dev-tarball version.")
-            log("Please retrieve the correct release version from:")
-            log(
-                "\t - https://github.com/ROCm/TheRock/releases/tag/nightly-tarball (nightly-tarball example: 6.4.0rc20250416)"
-            )
-            log(
-                "\t - https://github.com/ROCm/TheRock/releases/tag/dev-tarball (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
-            )
-            log("Exiting...")
-            return
+        log(
+            "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+        )
+        log("Exiting...")
+        return
 
-        release_tag = "nightly-tarball" if nightly_release else "dev-tarball"
+    release_bucket = (
+        "therock-nightly-tarball" if nightly_release else "therock-dev-tarball"
+    )
     release_version = args.release
 
-    log(f"Retrieving artifacts for release tag {release_tag}")
-    asset_data = _get_github_release_assets(release_tag, amdgpu_family, release_version)
-    if not asset_data:
-        log(f"GitHub release asset for '{release_tag}' not found. Exiting...")
-        return
-    _download_github_release_asset(asset_data, output_dir)
-    log(f"Retrieving artifacts for run ID {release_tag}")
+    log(f"Retrieving artifacts from release bucket {release_bucket}")
+    _retrieve_s3_release_assets(
+        release_bucket, amdgpu_family, release_version, output_dir
+    )
 
 
 def retrieve_artifacts_by_input_dir(args):
@@ -285,7 +242,7 @@ def main(argv):
     group.add_argument(
         "--release",
         type=str,
-        help="Github release version of TheRock to install, from the nightly-tarball (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
+        help="Release version of TheRock to install, from the nightly-tarball (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")

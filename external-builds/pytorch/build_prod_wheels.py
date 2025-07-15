@@ -27,8 +27,8 @@ during the build step.
 # Note that triton must be checked out after pytorch as it depends on pins
 # in the former.
 python pytorch_torch_repo.py checkout
-python pytorch_torch_audio_repo.py checkout
-python pytorch_torch_vision_repo.py checkout
+python pytorch_audio_repo.py checkout
+python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
@@ -58,12 +58,12 @@ to the build sub-command (useful for docker invocations).
 
 ```
 # For therock-nightly-python
-build_prod_wheels.py
+build_prod_wheels.py \
     install-rocm \
     --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
-build_prod_wheels.py
+build_prod_wheels.py \
     install-rocm \
     --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
 ```
@@ -122,10 +122,42 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import textwrap
 
 script_dir = Path(__file__).resolve().parent
 
 is_windows = platform.system() == "Windows"
+
+# List of library preloads for Linux to generate into _rocm_init.py
+LINUX_LIBRARY_PRELOADS = [
+    "amd_comgr",
+    "amdhip64",
+    "rocprofiler-sdk-roctx",  # Linux only for the moment.
+    "roctx64",  # Linux only for the moment.
+    "hiprtc",
+    "hipblas",
+    "hipfft",
+    "hiprand",
+    "hipsparse",
+    "hipsolver",
+    "rccl",  # Linux only for the moment.
+    "hipblaslt",
+    "miopen",
+]
+
+# List of library preloads for Windows to generate into _rocm_init.py
+WINDOWS_LIBRARY_PRELOADS = [
+    "amd_comgr",
+    "amdhip64",
+    "hiprtc",
+    "hipblas",
+    "hipfft",
+    "hiprand",
+    "hipsparse",
+    "hipsolver",
+    "hipblaslt",
+    "miopen",
+]
 
 
 def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
@@ -186,6 +218,24 @@ def get_rocm_path(path_name: str) -> Path:
         capture(
             [sys.executable, "-m", "rocm_sdk", "path", f"--{path_name}"], cwd=Path.cwd()
         ).strip()
+    )
+
+
+def get_rocm_init_contents(args: argparse.Namespace):
+    """Gets the contents of the _rocm_init.py file to add to the build."""
+    sdk_version = get_rocm_sdk_version()
+    library_preloads = (
+        WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
+    )
+    library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
+    return textwrap.dedent(
+        f"""
+        def initialize():
+            import rocm_sdk
+            rocm_sdk.initialize_process(
+                preload_shortnames=[{library_preloads_formatted}],
+                check_version='{sdk_version}')
+        """
     )
 
 
@@ -255,6 +305,22 @@ def do_install_rocm(args: argparse.Namespace):
     print(f"Installed version: {get_rocm_sdk_version()}")
 
 
+def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: str):
+    current = env.get(flagname, "")
+    append = ""
+    for compiler_flag in compiler_flags:
+        append += f" {compiler_flag}"
+    env[flagname] = f"{current}{append}"
+    print(f"-- Appended {flagname}+={append}")
+
+
+def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
+    for path in possible_paths:
+        if (path / file_name).exists():
+            return path
+    raise ValueError(f"No directory contains {file_name}: {possible_paths}")
+
+
 def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
@@ -296,12 +362,15 @@ def do_build(args: argparse.Namespace):
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
+        "ROCM_PATH": str(root_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # TODO: Figure out what is blocking GLOO and enable.
-        "USE_GLOO": "OFF",
         # TODO: Fix source dep on rocprofiler and enable.
         "USE_KINETO": "OFF",
     }
+
+    # GLOO enabled for only Linux
+    if not is_windows:
+        env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
@@ -314,11 +383,12 @@ def do_build(args: argparse.Namespace):
             env.update(addl_triton_env)
 
     if is_windows:
+        llvm_dir = root_dir / "lib" / "llvm" / "bin"
         env.update(
             {
-                "HIP_CLANG_PATH": str((root_dir / "lib" / "llvm" / "bin").as_posix()),
-                "CC": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
-                "CXX": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+                "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
+                "CC": str((llvm_dir / "clang-cl.exe").resolve()),
+                "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
     else:
@@ -330,9 +400,30 @@ def do_build(args: argparse.Namespace):
             }
         )
 
+    # Workaround missing devicelib bitcode
+    # TODO: When "ROCM_PATH" and/or "ROCM_HOME" is set in the environment, the
+    # clang frontend ignores its default heuristics and (depending on version)
+    # finds the wrong path to the device library. This is bad/annoying. But
+    # the PyTorch build shouldn't even need these to be set. Unfortunately, it
+    # has been hardcoded for a long time. So we use a clang env var to force
+    # a specific device lib path to workaround the hack to get pytorch to build.
+    # This may or may not only affect the Python wheels with their own quirks
+    # on directory layout.
+    # Obviously, this should be completely burned with fire once the root causes
+    # are eliminted.
+    hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
+    if not hip_device_lib_path.exists():
+        print(
+            "WARNING: Default location of device libs not found. Relying on "
+            "clang heuristics which are known to be buggy in this configuration"
+        )
+    else:
+        env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+
     # Build triton.
     triton_requirement = None
-    if triton_dir:
+    if args.build_triton or (args.build_triton is None and triton_dir):
+        assert triton_dir, "Must specify --triton-dir if --build-triton"
         triton_requirement = do_build_triton(args, triton_dir, dict(env))
     else:
         print("--- Not building triton (no --triton-dir)")
@@ -346,13 +437,23 @@ def do_build(args: argparse.Namespace):
         print("--- Not building pytorch (no --pytorch-dir)")
 
     # Build pytorch audio.
-    if pytorch_audio_dir:
+    if args.build_pytorch_audio or (
+        args.build_pytorch_audio is None and pytorch_audio_dir
+    ):
+        assert (
+            pytorch_audio_dir
+        ), "Must specify --pytorch-audio-dir if --build-pytorch-audio"
         do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
     else:
         print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
 
     # Build pytorch vision.
-    if pytorch_vision_dir:
+    if args.build_pytorch_vision or (
+        args.build_pytorch_vision is None and pytorch_vision_dir
+    ):
+        assert (
+            pytorch_vision_dir
+        ), "Must specify --pytorch-vision-dir if --build-pytorch-vision"
         do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
@@ -385,7 +486,10 @@ def do_build_triton(
     )
 
     print("+++ Building triton:")
-    triton_python_dir = triton_dir / "python"
+    # In early ~2.9, setup.py moved from the python/ dir to the root. Check both.
+    triton_python_dir = find_dir_containing(
+        "setup.py", triton_dir / "python", triton_dir
+    )
     remove_dir_if_exists(triton_python_dir / "dist")
     if args.clean:
         remove_dir_if_exists(triton_python_dir / "build")
@@ -414,6 +518,7 @@ def do_build_pytorch(
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+    env["USE_ROCM"] = "ON"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -428,10 +533,13 @@ def do_build_pytorch(
         f"--- PYTORCH_EXTRA_INSTALL_REQUIREMENTS = {env['PYTORCH_EXTRA_INSTALL_REQUIREMENTS']}"
     )
 
+    # Add the _rocm_init.py file.
+    (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
+
+    # Workaround missing features on windows.
     if is_windows:
         env.update(
             {
-                "USE_ROCM": "ON",
                 "USE_FLASH_ATTENTION": "0",
                 "USE_MEM_EFF_ATTENTION": "0",
                 "DISTUTILS_USE_SDK": "1",
@@ -445,6 +553,17 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
+
+    if not is_windows:
+        # Prepend the ROCm sysdeps dir so that we use bundled libraries.
+        # While a decent thing to be doing, this is presently required because:
+        # TODO: include/rocm_smi/kfd_ioctl.h is included without its advertised
+        # transitive includes. This triggers a compilation error for a missing
+        # libdrm/drm.h.
+        sysdeps_dir = get_rocm_path("root") / "lib" / "rocm_sysdeps"
+        assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
+        add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
+        add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
 
     print("+++ Uninstalling pytorch:")
     exec(
@@ -634,6 +753,25 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--pytorch-build-number", default="1", help="Build number to append to version"
     )
+    build_p.add_argument(
+        "--build-triton",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of triton (requires --triton-dir)",
+    )
+    build_p.add_argument(
+        "--build-pytorch-audio",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch audio (requires --pytorch-audio-dir)",
+    )
+    build_p.add_argument(
+        "--build-pytorch-vision",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch vision (requires --pytorch-vision-dir)",
+    )
+
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(

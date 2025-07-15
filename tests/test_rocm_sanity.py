@@ -20,6 +20,8 @@ def is_windows():
 
 def run_command(command, cwd=None):
     process = subprocess.run(command, capture_output=True, cwd=cwd, shell=is_windows())
+    if process.returncode != 0:
+        raise Exception(str(process.stderr))
     return process
 
 
@@ -61,7 +63,7 @@ class TestROCmSanity:
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
         run_command(
             [
-                "hipcc",
+                f"{THEROCK_BIN_DIR}/hipcc",
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-o",
                 hipcc_check_executable_file,
@@ -73,9 +75,7 @@ class TestROCmSanity:
         platform_executable_prefix = "./" if not is_windows() else ""
         hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
         process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
-        # TODO(geomin12): Fix Windows 3221225477 error code when running exe.
-        if not is_windows():
-            check.equal(process.returncode, 0)
+        check.equal(process.returncode, 0)
         check.greater(
             os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable_file)), 0
         )

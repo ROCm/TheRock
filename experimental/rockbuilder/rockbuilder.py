@@ -37,7 +37,9 @@ def printout_build_env_info():
     time.sleep(1)
 
 
-def get_build_arguments(rock_builder_home_dir, default_src_base_dir: Path):
+def get_build_arguments(
+    rock_builder_home_dir, default_src_base_dir: Path, project_list
+):
     # Create an ArgumentParser object
     parser = argparse.ArgumentParser(description="ROCK Project Builders")
 
@@ -46,7 +48,7 @@ def get_build_arguments(rock_builder_home_dir, default_src_base_dir: Path):
         "--project",
         type=str,
         help="select target for the action. Can be either one project or all projects in core_apps.pcfg.",
-        default="all",
+        default=None,
     )
     parser.add_argument(
         "--init",
@@ -117,6 +119,12 @@ def get_build_arguments(rock_builder_home_dir, default_src_base_dir: Path):
         help="Directory to copy built wheels to",
         default=rock_builder_home_dir / "packages" / "wheels",
     )
+    for ii, prj_item in enumerate(project_list):
+        parser.add_argument(
+            "--" + prj_item + "-version",
+            help=prj_item + " version used for the operations",
+            default=None,
+        )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -447,19 +455,19 @@ default_src_base_dir = rock_builder_home_dir / "src_projects"
 os.environ["ROCK_BUILDER_HOME_DIR"] = rock_builder_home_dir.as_posix()
 os.environ["ROCK_BUILDER_BUILD_DIR"] = (rock_builder_home_dir / "builddir").as_posix()
 
-args = get_build_arguments(rock_builder_home_dir, default_src_base_dir)
-printout_build_arguments(args)
-verify_build_env__python(args)
-verify_build_env(args, rock_builder_home_dir)
-
-project_manager = project_builder.RockExternalProjectListManager(
-    rock_builder_home_dir, args.output_dir
-)
+project_manager = project_builder.RockExternalProjectListManager(rock_builder_home_dir)
 # allow_no_value param says that no value keys are ok
 sections = project_manager.sections()
 # print(sections)
 project_list = project_manager.get_external_project_list()
 # print(project_list)
+
+args = get_build_arguments(rock_builder_home_dir, default_src_base_dir, project_list)
+# store the arguments to dictionary to make it easier to get "project_name"-version parameters
+args_dict = args.__dict__
+printout_build_arguments(args)
+verify_build_env__python(args)
+verify_build_env(args, rock_builder_home_dir)
 
 for ii, prj_item in enumerate(project_list):
     print(f"    Project [{ii}]: {prj_item}")
@@ -467,7 +475,8 @@ for ii, prj_item in enumerate(project_list):
 # let user to see env variables for a while before build start
 time.sleep(1)
 
-if args.project == "all":
+if not args.project:
+    # process all projects specified in the core_project.pcfg
     if args.src_dir:
         print(
             '\nError, "--src-dir" parameter requires also to specify the project with the "--project"-parameter'
@@ -477,24 +486,40 @@ if args.project == "all":
         sys.exit(1)
     for ii, prj_item in enumerate(project_list):
         print(f"[{ii}]: {prj_item}")
+        # argparser --> Keyword for parameter "--my-project-version=xyz" = "my_project_version"
+        prj_version_keyword = project_list[ii] + "_version"
+        prj_version_keyword = prj_version_keyword.replace("-", "_")
+        version_override = args_dict[prj_version_keyword]
         # when issuing a command for all projects, we assume that the src_base_dir
         # is the base source directory under each project specific directory is checked out.
         prj_builder = project_manager.get_rock_project_builder(
-            args.src_base_dir / project_list[ii], project_list[ii]
+            args.src_base_dir / project_list[ii],
+            project_list[ii],
+            args.output_dir,
+            version_override,
         )
         if prj_builder is None:
             sys.exit(1)
         else:
             do_therock(prj_builder)
 else:
-    # If the --src-dir parameter is specified for a single project, we assume that path is full
+    # process only a single project specified with the "--project" parameter
+    # argparser --> Keyword for parameter "--my-project-version=xyz" = "my_project_version"
+    prj_version_keyword = args.project + "_version"
+    prj_version_keyword = prj_version_keyword.replace("-", "_")
+    version_override = args_dict[prj_version_keyword]
     if args.src_dir:
+        # source checkout dir = "--src-dir"
         prj_builder = project_manager.get_rock_project_builder(
-            args.src_dir, args.project
+            args.src_dir, args.project, args.output_dir, version_override
         )
     else:
+        # source checkout dir = "--src-base-dir" / project_name
         prj_builder = project_manager.get_rock_project_builder(
-            args.src_base_dir / args.project, args.project
+            args.src_base_dir / args.project,
+            args.project,
+            args.output_dir,
+            version_override,
         )
     if prj_builder is None:
         print("Error, failed to get the project builder")

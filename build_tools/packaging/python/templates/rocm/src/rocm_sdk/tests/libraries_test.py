@@ -55,23 +55,35 @@ class ROCmLibrariesTest(unittest.TestCase):
 
         for so_path in so_paths:
             with self.subTest(msg="Check shared library loads", so_path=so_path):
+
+                # For Windows compatibility, we first preload libraries (DLLs)
+                # that are not co-located. Specifically this is for
+                # the "libraries" like hipfft, rocblas, etc. which are siblings
+                # in '_rocm_sdk_libraries_gfx####/bin' while the "compiler" is
+                # in '_rocm_sdk_core/bin'
+                # TODO(#996): track deps in libraries then have the preloader
+                #   recursively get deps instead of hardcoding like this
+                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc');"
+
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
-                command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                command = (
+                    preload_command
+                    + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                )
                 subprocess.check_call(
                     [sys.executable, "-P", "-c", command, str(so_path)]
                 )
 
     def testConsoleScripts(self):
-        scripts_path = Path(sysconfig.get_path("scripts"))
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
-            script_path = scripts_path / script_name
-            if not required and not script_path.exists():
+            script_path = utils.find_console_script(script_name)
+            if not required and script_path is None:
                 continue
             with self.subTest(msg=f"Check console-script {script_name}"):
-                self.assertTrue(
-                    script_path.exists(),
+                self.assertIsNotNone(
+                    script_path,
                     msg=f"Console script {script_path} does not exist",
                 )
                 output_text = subprocess.check_output(

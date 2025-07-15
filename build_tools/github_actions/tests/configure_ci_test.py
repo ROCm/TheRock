@@ -11,7 +11,6 @@ class ConfigureCITest(unittest.TestCase):
     def assert_target_output_is_valid(self, target_output):
         self.assertTrue(all("test-runs-on" in entry for entry in target_output))
         self.assertTrue(all("family" in entry for entry in target_output))
-        self.assertTrue(all("pytorch-target" in entry for entry in target_output))
 
     def test_run_ci_if_source_file_edited(self):
         paths = ["source_file.h"]
@@ -45,12 +44,12 @@ class ConfigureCITest(unittest.TestCase):
         self.assertTrue(run_ci)
 
     def test_dont_run_ci_if_unrelated_workflow_file_edited(self):
-        paths = [".github/workflows/publish_pytorch_dev_docker.yml"]
+        paths = [".github/workflows/pre-commit.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertFalse(run_ci)
 
     def test_run_ci_if_source_file_and_unrelated_workflow_file_edited(self):
-        paths = ["source_file.h", ".github/workflows/publish_pytorch_dev_docker.yml"]
+        paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
 

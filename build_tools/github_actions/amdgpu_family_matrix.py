@@ -7,19 +7,16 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
-            "pytorch-target": "gfx942",
         }
     },
     "gfx110x": {
         "linux": {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
-            "pytorch-target": "gfx1100",
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
-            "pytorch-target": "gfx1100",
         },
     },
 }
@@ -27,29 +24,28 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
-            "pytorch-target": "gfx950",
         }
     },
     "gfx115x": {
-        "linux": {"test-runs-on": "", "family": "gfx1151", "pytorch-target": "gfx1151"},
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx1151",
+        },
         "windows": {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
             "family": "gfx1151",
-            "pytorch-target": "gfx1151",
         },
     },
     "gfx120x": {
         "linux": {
             "test-runs-on": "",  # removed due to machine issues, label is "linux-rx9070-gpu-rocm"
             "family": "gfx120X-all",
-            "pytorch-target": "gfx1201",
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx120X-all",
-            "pytorch-target": "gfx1201",
         },
     },
 }
@@ -59,7 +55,6 @@ amdgpu_family_matrix_xfail = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
-            "pytorch-target": "gfx90a",
             "expect_failure": True,
         }
     },
@@ -67,7 +62,6 @@ amdgpu_family_matrix_xfail = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "pytorch-target": "gfx1010",
             "expect_failure": True,
         }
     },
@@ -75,7 +69,6 @@ amdgpu_family_matrix_xfail = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
-            "pytorch-target": "gfx1030",
             "expect_failure": True,
         }
     },

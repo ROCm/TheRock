@@ -1,4 +1,4 @@
-name: Windows Build and Test
+name: CI - Windows
 
 on:
   workflow_call:
