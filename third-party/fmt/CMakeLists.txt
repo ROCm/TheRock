@@ -14,6 +14,7 @@ therock_cmake_subproject_declare(therock-fmt
   CMAKE_ARGS
     -DFMT_DOC=OFF
     -DFMT_TEST=OFF
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 )
 therock_cmake_subproject_provide_package(
   therock-fmt fmt lib/cmake/fmt)

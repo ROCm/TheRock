@@ -279,6 +279,11 @@ if(THEROCK_ENABLE_SOLVER)
   # rocSOLVER
   ##############################################################################
 
+  set(rocSOLVER_optional_deps)
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND rocSOLVER_optional_deps therock-host-blas)
+  endif()
+
   therock_cmake_subproject_declare(rocSOLVER
       EXTERNAL_SOURCE_DIR "rocSOLVER"
       BACKGROUND_BUILD
@@ -286,19 +291,21 @@ if(THEROCK_ENABLE_SOLVER)
         -DHIP_PLATFORM=amd
         -DROCM_PATH=
         -DROCM_DIR=
-        # Requires LAPACK
-        -DBUILD_CLIENTS_BENCHMARKS=OFF
-        -DBUILD_CLIENTS_TESTS=OFF
+        -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
+        -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        -DROCSOLVER_FIND_PACKAGE_LAPACK_CONFIG=OFF
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
         rocm-cmake
-        rocBLAS
         rocPRIM
         therock-fmt
         therock-googletest
       RUNTIME_DEPS
         hip-clr
+        rocBLAS
+        ${rocSOLVER_optional_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocSOLVER
       SUBDIRS
