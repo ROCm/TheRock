@@ -34,21 +34,19 @@ permissions:
 jobs:
   build_linux_packages:
     name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
-    runs-on: azure-linux-scale-rocm-pvc
+    runs-on: azure-linux-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
-      volumes:
-        - /home/runner/pvc:/home/runner/pvc
     strategy:
       fail-fast: true
     env:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      # CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
+      CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
       CCACHE_LOGFILE: ${{ github.workspace }}/build/logs/ccache.log
       CCACHE_STATSLOG: ${{ github.workspace }}/build/logs/ccache_stats.log
       CCACHE_MAXSIZE: "5G"
@@ -57,18 +55,12 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
+        
+      # TODO: We shouldn't be using a cache on actual release branches, but it
+      # really helps for iteration time.
       - name: Runner Health Settings
         run: |
-          echo "---ccache debugging/pvc tests---"
           echo "CCACHE_SECONDARY_STORAGE: $CCACHE_SECONDARY_STORAGE"
-          mkdir -p "$(dirname $CCACHE_LOGFILE)"
-          mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES-core-6
-          du /home/runner/pvc -h -d 1
-          ln -s /home/runner/pvc/$AMDGPU_FAMILIES-core-6 $CACHE_DIR
-          #echo "$CACHE_DIR after link:"
-          ls $CACHE_DIR -al
-          echo "---"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
@@ -100,23 +92,21 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ join('-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_CORE=ON -DBUILD_TESTING=OFF ',inputs.extra_cmake_options) }}
-          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist (build RAND only for testing ccache...)
+      - name: Build therock-dist
         run: cmake --build build --target therock-dist
 
       - name: Build therock-archives
         run: cmake --build build --target therock-archives
 
-      - name: Test Packaging (Skipping...)
+      - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
-        # run: |
-        #   ctest --test-dir build --output-on-failure
-        run: echo Skipping for ccache testing...
+        run: |
+          ctest --test-dir build --output-on-failure
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -149,14 +139,13 @@ jobs:
             --build-dir=build \
             --amdgpu-family=${{ inputs.amdgpu_families }}
 
-      - name: Upload artifacts (Skipping...)
+      - name: Upload artifacts
         if: always()
-        # run: |
-        #   python build_tools/github_actions/upload_build_artifacts.py \
-        #     --run-id ${{ github.run_id }} \
-        #     --amdgpu-family ${{ inputs.amdgpu_families }} \
-        #     --build-dir build
-        run: echo Skipping for ccache testing...
+        run: |
+          python build_tools/github_actions/upload_build_artifacts.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --build-dir build
 
       - name: Upload Logs
         if: always()

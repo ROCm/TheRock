@@ -86,7 +86,7 @@ jobs:
     name: Windows
     needs: setup
     if: >-
-      ${{ false &&
+      ${{
         needs.setup.outputs.windows_amdgpu_families != '[]' &&
         needs.setup.outputs.enable_build_jobs == 'true'
       }}
