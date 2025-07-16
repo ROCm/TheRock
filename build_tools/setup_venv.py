@@ -44,8 +44,8 @@ THIS_DIR = Path(__file__).resolve().parent
 is_windows = platform.system() == "Windows"
 
 INDEX_URLS_MAP = {
-    "nightly": "https://d2awnip2yjpvqn.cloudfront.net/v2/",
-    "dev": "https://d25kgig7rdsyks.cloudfront.net/v2/",
+    "nightly": "https://d2awnip2yjpvqn.cloudfront.net/v2",
+    "dev": "https://d25kgig7rdsyks.cloudfront.net/v2",
 }
 
 
@@ -103,7 +103,7 @@ def install_packages(args: argparse.Namespace):
         index_url = INDEX_URLS_MAP[args.index_name]
     else:
         index_url = args.index_url
-    index_url = index_url + args.index_subdir
+    index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
 
     command = [
         str(python_exe),
