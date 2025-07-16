@@ -62,6 +62,7 @@ jobs:
       - name: Runner Health Settings
         run: |
           echo "CCACHE_SECONDARY_STORAGE: $CCACHE_SECONDARY_STORAGE"
+          mkdir -p "$(dirname $CCACHE_LOGFILE)"
           ./build_tools/setup_ccache.py \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
