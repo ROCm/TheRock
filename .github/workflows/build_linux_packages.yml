@@ -175,14 +175,14 @@ jobs:
           key: linux-build-packages-manylinux-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
 
       - name: Upload job metrics to Redshift database
-        if: always()
+        if: github.repository == 'ROCm/TheRock' && always()
         env:
           RUN_ID: ${{ github.run_id }}
           ATTEMPT: ${{ github.run_attempt }}
         run: |
           # Fetch job summary and store it
           JOB_SUMMARY=$(python3 build_tools/github_actions/fetch_job_status.py)
-          # Populate Redshit Database tables
+          # Populate Redshift Database tables
           python3 build_tools/github_actions/populate_redshift_db.py \
             --api-output "$JOB_SUMMARY" \
             --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
