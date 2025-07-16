@@ -63,9 +63,9 @@ jobs:
           echo "---ccache debugging/pvc tests---"
           echo "CCACHE_SECONDARY_STORAGE: $CCACHE_SECONDARY_STORAGE"
           mkdir -p "$(dirname $CCACHE_LOGFILE)"
-          mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES-core-4
+          mkdir -p /home/runner/pvc/$AMDGPU_FAMILIES-core-5
           du /home/runner/pvc -h -d 1
-          ln -s /home/runner/pvc/$AMDGPU_FAMILIES-core-4 $CACHE_DIR
+          ln -s /home/runner/pvc/$AMDGPU_FAMILIES-core-5 $CACHE_DIR
           #echo "$CACHE_DIR after link:"
           ls $CACHE_DIR -al
           echo "---"
@@ -160,7 +160,7 @@ jobs:
       - name: Upload Logs
         if: always()
         run: |
-          cp -r /__w/TheRock/TheRock/.ccache/compiler_check_cache /__w/TheRock/TheRock/build/logs/
+          tail -v -n +1 .ccache/compiler_check_cache/* build/logs/
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
