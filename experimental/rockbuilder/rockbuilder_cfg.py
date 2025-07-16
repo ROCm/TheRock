@@ -108,7 +108,8 @@ class BaseSelectionList:
         self.item_selection_listeners.append(new_listener)
 
     def set_item_list(self, new_item_list):
-        self.item_list = new_item_list
+        self.item_list.clear()
+        self.item_list.extend(new_item_list)
 
     def get_item_cnt(self):
         return len(self.item_list)
@@ -194,23 +195,8 @@ class BaseSelectionList:
 
 class GpuSelectionList(BaseSelectionList):
     def __init__(self, stdscr):
-        key_name_gpus = "gpus"
-
         super().__init__(
             stdscr, "build_targets", f"Select target GPUs for the build", True
-        )
-        self.item_list.append(
-            SelectionItem("gfx110X-dgpu", key_name_gpus, "gfx110X-dgpu", False)
-        )
-        self.item_list.append(SelectionItem("gfx1151", key_name_gpus, "gfx1151", False))
-        self.item_list.append(
-            SelectionItem("gfx120X-all", key_name_gpus, "gfx120X-all", True)
-        )
-        self.item_list.append(
-            SelectionItem("gfx94X-dcgpu", key_name_gpus, "gfx94X-dcgpu", False)
-        )
-        self.item_list.append(
-            SelectionItem("gfx950-dcgpu", key_name_gpus, "gfx950-dcgpu", False)
         )
 
     # Override the default selection logic because selection logic depends from the SDK selected
@@ -355,11 +341,42 @@ class SelectionListManager:
 
 class UiManager:
     def __init__(self, stdscr):
+        key_name_gpus = "gpus"
         self.stdscr = stdscr
         # init curses based display to show text based ui
         self.stdscr.clear()
+
+        self.gpu_pip_wheel_list = []
+        self.gpu_pip_wheel_list.append(
+            SelectionItem("gfx110X-dgpu", key_name_gpus, "gfx110X-dgpu", False)
+        )
+        self.gpu_pip_wheel_list.append(SelectionItem("gfx1151", key_name_gpus, "gfx1151", False))
+        self.gpu_pip_wheel_list.append(
+            SelectionItem("gfx120X-all", key_name_gpus, "gfx120X-all", True)
+        )
+        self.gpu_pip_wheel_list.append(
+            SelectionItem("gfx94X-dcgpu", key_name_gpus, "gfx94X-dcgpu", False)
+        )
+        self.gpu_pip_wheel_list.append(
+            SelectionItem("gfx950-dcgpu", key_name_gpus, "gfx950-dcgpu", False)
+        )
+
+        self.gpu_build_target_list = []
+        self.gpu_build_target_list.append(SelectionItem("gfx90a", key_name_gpus, "gfx90a", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx942", key_name_gpus, "gfx942", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx950", key_name_gpus, "gfx950", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1100", key_name_gpus, "gfx1100", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1101", key_name_gpus, "gfx1101", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1102", key_name_gpus, "gfx1102", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1103", key_name_gpus, "gfx1103", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1150", key_name_gpus, "gfx1150", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1151", key_name_gpus, "gfx1151", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1200", key_name_gpus, "gfx1200", False))
+        self.gpu_build_target_list.append(SelectionItem("gfx1201", key_name_gpus, "gfx1201", False))
+
         self.sdk_list = SDKSelectionList(stdscr)
         self.gpu_list = GpuSelectionList(stdscr)
+        self.gpu_list.set_item_list(self.gpu_build_target_list)
 
     def show(self):
         self.sdk_list.add_item_selection_listener(self)
@@ -368,11 +385,10 @@ class UiManager:
         list_mngr.add_selection_list(self.sdk_list)
         list_mngr.add_selection_list(self.gpu_list)
 
-        total_item_cnt = list_mngr.get_total_selection_list_item_cnt()
         indx_cursor = 0
         while True:
             list_mngr.show(indx_cursor)
-
+            total_item_cnt = list_mngr.get_total_selection_list_item_cnt()
             last_row_indx = list_mngr.get_last_row_indx()
             self.stdscr.addstr(
                 last_row_indx,
@@ -397,8 +413,12 @@ class UiManager:
     def handle_item_selected(self, sender, item, selected):
         key = item.get_key()
         if key == const__str_rocm_sdk_whl_server_url:
+            self.stdscr.clear()
+            self.gpu_list.set_item_list(self.gpu_pip_wheel_list)
             self.gpu_list.set_multi_selection(False)
         else:
+            self.stdscr.clear()
+            self.gpu_list.set_item_list(self.gpu_build_target_list)
             self.gpu_list.set_multi_selection(True)
 
 
