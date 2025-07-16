@@ -54,7 +54,7 @@ def upload_logs_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
         return
 
     # Upload .log files
-    log_files = list(log_dir.glob("*"))
+    log_files = list(log_dir.glob("*.log"))
     if not log_files:
         log("[WARN] No .log files found. Skipping log upload.")
     else:

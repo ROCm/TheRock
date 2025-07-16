@@ -133,6 +133,7 @@ jobs:
           echo "CCache Stats:"
           echo "-------------"
           ccache -s -v
+          tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
 
       - name: Configure AWS Credentials
         if: always()
@@ -160,7 +161,6 @@ jobs:
       - name: Upload Logs
         if: always()
         run: |
-          tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
           python3 build_tools/github_actions/upload_build_logs_to_s3.py \
             --build-dir=build \
             --run-id ${{ github.run_id }} \
