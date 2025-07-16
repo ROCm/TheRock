@@ -1,8 +1,8 @@
-From 455f219101bbb23503cd390c7aedce8566b6ba21 Mon Sep 17 00:00:00 2001
+From d82715939800da1f713b5a1bc9e7cffcfa33f92c Mon Sep 17 00:00:00 2001
 From: ikalinic <ilija.kalinic@amd.com>
 Date: Wed, 19 Mar 2025 07:30:50 +0000
-Subject: [PATCH 01/02] Disable hipSPARSE and CK declarations and remove references
- for Windows (#149195)
+Subject: [PATCH 1/2] Disable hipSPARSE and CK declarations and remove
+ references for Windows (#149195)
 
 This PR removes references to `hipSPARSE` and `ck` functions and disables declarations which are not supported on Windows.
 
@@ -178,6 +178,5 @@ index 6075e7b9c9d..637b48c797f 100644
 +
  } // namespace at::cuda::blas
 -- 
---
 2.47.1.windows.2
 

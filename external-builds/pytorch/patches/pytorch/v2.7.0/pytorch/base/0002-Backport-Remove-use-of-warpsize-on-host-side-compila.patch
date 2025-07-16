@@ -1,20 +1,20 @@
-From 55d67353e58c8c63683f9f1228a4b58f0c3ef824 Mon Sep 17 00:00:00 2001
+From 79733204924519c15d04d9b8f43f4a42c64f50cd Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Wed, 16 Jul 2025 12:09:14 -0700
-Subject: [PATCH 02/02] [ROCm] Backport "Remove use of warpsize on host-side
+Subject: [PATCH 2/2] Backport "Remove use of warpsize on host-side
  compilation".
 
 https://github.com/pytorch/pytorch/commit/04bd7e6850e8efec77994963ffee87549555b9c3
 ---
- aten/src/ATen/native/cuda/Embedding.cu        |  2 +-
- .../src/ATen/native/cuda/MultinomialKernel.cu |  2 +-
- aten/src/ATen/native/cuda/SoftMax.cu          | 19 ++++++++++---------
- aten/src/ATen/native/cuda/TensorModeKernel.cu |  2 +-
- aten/src/ATen/native/cuda/block_reduce.cuh    | 12 +++++++++++-
- c10/macros/Macros.h                           | 16 +++++++++++++++-
- .../distributed/c10d/CUDASymmetricMemory.cu   |  6 +++---
- .../c10d/CUDASymmetricMemoryOps.cu            |  2 +-
- 8 files changed, 43 insertions(+), 18 deletions(-)
+ aten/src/ATen/native/cuda/Embedding.cu           |  2 +-
+ aten/src/ATen/native/cuda/MultinomialKernel.cu   |  2 +-
+ aten/src/ATen/native/cuda/SoftMax.cu             | 15 ++++++++-------
+ aten/src/ATen/native/cuda/TensorModeKernel.cu    |  2 +-
+ aten/src/ATen/native/cuda/block_reduce.cuh       | 12 +++++++++++-
+ c10/macros/Macros.h                              | 16 +++++++++++++++-
+ .../csrc/distributed/c10d/CUDASymmetricMemory.cu |  6 +++---
+ .../distributed/c10d/CUDASymmetricMemoryOps.cu   |  2 +-
+ 8 files changed, 41 insertions(+), 16 deletions(-)
 
 diff --git a/aten/src/ATen/native/cuda/Embedding.cu b/aten/src/ATen/native/cuda/Embedding.cu
 index 5d19b95b32f..4b1e420d5da 100644
@@ -43,7 +43,7 @@ index 65770e40a8b..8132e7df57b 100644
    int warp_size = at::cuda::warp_size();
    dim3 grid(rows < numSM * 4 ? rows : numSM * 4);
 diff --git a/aten/src/ATen/native/cuda/SoftMax.cu b/aten/src/ATen/native/cuda/SoftMax.cu
-index 2062a14cdba..bd45e8c0a08 100644
+index 2062a14cdba..2946b19853c 100644
 --- a/aten/src/ATen/native/cuda/SoftMax.cu
 +++ b/aten/src/ATen/native/cuda/SoftMax.cu
 @@ -177,15 +177,16 @@ inline dim3 SoftMaxForward_getBlockSize(uint64_t dim_size) {
