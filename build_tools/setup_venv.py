@@ -49,9 +49,14 @@ INDEX_URLS_MAP = {
 }
 
 
+def log(*args, **kwargs):
+    print(*args, **kwargs)
+    sys.stdout.flush()
+
+
 def exec(args: list[str | Path], cwd: Path = Path.cwd()):
     args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
@@ -66,7 +71,7 @@ def find_venv_python(venv_path: Path) -> Path | None:
 def create_venv(venv_dir: Path):
     cwd = Path.cwd()
 
-    print(f"Creating venv at '{venv_dir}'")
+    log(f"Creating venv at '{venv_dir}'")
 
     # Log some other variations of the path too.
     try:
@@ -74,28 +79,26 @@ def create_venv(venv_dir: Path):
     except ValueError:
         venv_dir_relative = venv_dir
     venv_dir_resolved = venv_dir.resolve()
-    print(f"  Relative dir: '{venv_dir_relative}'")
-    print(f"  Resolved dir: '{venv_dir_resolved}'")
-    print("")
+    log(f"  Relative dir: '{venv_dir_relative}'")
+    log(f"  Resolved dir: '{venv_dir_resolved}'")
+    log("")
 
     # Create with 'python -m venv' as needed.
     python_exe = find_venv_python(venv_dir)
     if python_exe:
-        print(
-            f"  Found existing python executable at '{python_exe}', skipping creation"
-        )
-        print("  Run again with --clean to clear the existing directory instead")
+        log(f"  Found existing python executable at '{python_exe}', skipping creation")
+        log("  Run again with --clean to clear the existing directory instead")
     else:
         exec([sys.executable, "-m", "venv", str(venv_dir)])
 
 
 def upgrade_pip(python_exe: Path):
-    print("")
+    log("")
     exec([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
 
 
 def install_packages(args: argparse.Namespace):
-    print("")
+    log("")
 
     python_exe = find_venv_python(args.venv_dir)
 
@@ -122,7 +125,7 @@ def run(args: argparse.Namespace):
     venv_dir = args.venv_dir
 
     if args.clean and venv_dir.exists():
-        print(f"Clearing existing venv_dir '{venv_dir}'")
+        log(f"Clearing existing venv_dir '{venv_dir}'")
         shutil.rmtree(venv_dir)
 
     create_venv(venv_dir)
@@ -133,12 +136,12 @@ def run(args: argparse.Namespace):
         install_packages(args)
 
     # Done with setup, log some useful information then exit.
-    print("")
-    print(f"Setup complete at '{venv_dir}'! Activate the venv with:")
+    log("")
+    log(f"Setup complete at '{venv_dir}'! Activate the venv with:")
     if is_windows:
-        print(f"  {venv_dir}\\Scripts\\activate.bat")
+        log(f"  {venv_dir}\\Scripts\\activate.bat")
     else:
-        print(f"  source {venv_dir}/bin/activate")
+        log(f"  source {venv_dir}/bin/activate")
 
 
 def main(argv: list[str]):
