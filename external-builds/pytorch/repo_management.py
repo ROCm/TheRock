@@ -289,7 +289,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         commit_hipify(args)
 
     # Hipified patches.
-    if args.patch and patches_dir_name:
+    if args.hipify and args.patch and patches_dir_name:
         apply_all_patches(
             repo_dir,
             repo_patch_dir_base / patches_dir_name,
