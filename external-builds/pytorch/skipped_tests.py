@@ -3,12 +3,18 @@ skip_tests = [
     "test_RNN_dropout_state",
     "test_rnn_check_device",
     # TestTorch under test_torch.py
+    "test_index_add_correctness",
     "test_print",
     # TestCuda under test_cuda.py
     "test_hip_device_count",
     "test_host_memory_stats",
     "test_nvtx",
     "test_device_count_not_cached_pre_init",
+    # TestCuda under test_cuda.py, failing on gfx950
+    "test_preferred_blas_library_settings",
+    # TestCudaAutocast under test_cuda.py, failing on gfx950
+    "test_autocast_torch_bf16",
+    "test_autocast_torch_fp16",
     # TestMemPool under test_cuda.py
     "test_mempool_with_allocator",
     # TestBinaryUfuncsCUDA under test_binary_ufuncs

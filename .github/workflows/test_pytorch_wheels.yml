@@ -3,7 +3,7 @@ name: Test PyTorch Wheels
 on:
   workflow_dispatch:
     inputs:
-      amdgpu_families:
+      amdgpu_family:
         required: true
         type: string
         default: "gfx94X-dcgpu"
@@ -20,10 +20,13 @@ on:
         required: true
         type: string
         default: "3.12"
+      torch_version:
+        required: true
+        type: string
 
   workflow_call:
     inputs:
-      amdgpu_families:
+      amdgpu_family:
         required: true
         type: string
       test_runs_on:
@@ -35,28 +38,32 @@ on:
       python_version:
         required: true
         type: string
+      torch_version:
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   test_wheels:
-    name: Test PyTorch Wheels | ${{ inputs.amdgpu_families }}
+    name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    env:
+      VENV_DIR: ${{ github.workspace }}/venv
+      INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/
+      TORCH_VERSION: ${{ inputs.torch_version }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ inputs.python_version }}
 
       - name: Set up virtual environment and install dependencies
-        env:
-          VENV_DIR: ${{ github.workspace }}/venv
-          INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_families }}/
         working-directory: ${{ github.workspace }}
         run: |
           bash external-builds/pytorch/setup_venv.sh "$VENV_DIR"
@@ -68,9 +75,6 @@ jobs:
           python external-builds/pytorch/pytorch_torch_repo.py checkout --no-hipify --no-patch
 
       - name: Run PyTorch tests
-        env:
-          VENV_DIR: ${{ github.workspace }}/venv
-          INDEX_URL: https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_families }}/
         working-directory: ${{ github.workspace }}
         run: |
           source "$VENV_DIR/bin/activate"

@@ -25,9 +25,9 @@ class ArtifactNameTest(unittest.TestCase):
             self.temp_context.cleanup()
 
     def testFromPath(self):
-        p1 = Path(self.temp_dir / "dir" / "name_component_generic_EXTRA")
+        p1 = Path(self.temp_dir / "dir" / "name_component_generic")
         p1.mkdir(parents=True, exist_ok=True)
-        p2 = Path(self.temp_dir / "other" / "name_component_generic_EXTRA.tar.xz")
+        p2 = Path(self.temp_dir / "other" / "name_component_generic.tar.xz")
         p2.parent.mkdir(parents=True, exist_ok=True)
         p2.touch()
 
@@ -46,9 +46,16 @@ class ArtifactNameTest(unittest.TestCase):
         self.assertEqual(an1.component, "component")
         self.assertEqual(an1.target_family, "generic")
 
-        f2 = "invalid_name.zip"
-        an2 = ArtifactName.from_filename(f2)
-        self.assertIsNone(an2)
+        f_invalid1 = "invalid_name.zip"
+        an_invalid1 = ArtifactName.from_filename(f_invalid1)
+        self.assertIsNone(an_invalid1)
+
+        # Component names containing one underscore could be misinterpretted
+        # as [name]_[component]_[target family]_suffix with each group shifted
+        # over one. See https://github.com/ROCm/TheRock/issues/935.
+        f_invalid2 = "underscore_name_component_generic.tar.xz"
+        an_invalid2 = ArtifactName.from_filename(f_invalid2)
+        self.assertIsNone(an_invalid2)
 
 
 if __name__ == "__main__":

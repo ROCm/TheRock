@@ -1,4 +1,4 @@
-name: Linux Build and Test
+name: CI - Linux
 
 on:
   workflow_call:
@@ -22,6 +22,7 @@ jobs:
     name: Build
     if: ${{ inputs.linux_use_prebuilt_artifacts == 'false' }}
     uses: ./.github/workflows/build_linux_packages.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       expect_failure: ${{ inputs.expect_failure }}

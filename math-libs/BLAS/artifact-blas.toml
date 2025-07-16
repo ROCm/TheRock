@@ -51,6 +51,7 @@ include = [
 [components.doc."math-libs/BLAS/hipBLASLt/stage"]
 [components.lib."math-libs/BLAS/hipBLASLt/stage"]
 include = [
+  "bin/hipblaslt/library/**",
   "lib/hipblaslt/library/**",
 ]
 [components.test."math-libs/BLAS/hipBLASLt/stage"]
@@ -132,6 +133,12 @@ optional = true
 include = [
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
+  "share/rocsparse/test/**",
+]
+optional = true
+[components.test."math-libs/BLAS/rocSPARSE/build"]
+include = [
+  "clients/matrices/**"
 ]
 optional = true
 
@@ -148,5 +155,10 @@ optional = true
 include = [
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
+]
+optional = true
+[components.test."math-libs/BLAS/hipSPARSE/build"]
+include = [
+  "clients/matrices/**"
 ]
 optional = true

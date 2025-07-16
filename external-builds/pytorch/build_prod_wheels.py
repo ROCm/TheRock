@@ -27,8 +27,8 @@ during the build step.
 # Note that triton must be checked out after pytorch as it depends on pins
 # in the former.
 python pytorch_torch_repo.py checkout
-python pytorch_torch_audio_repo.py checkout
-python pytorch_torch_vision_repo.py checkout
+python pytorch_audio_repo.py checkout
+python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
@@ -314,6 +314,13 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     print(f"-- Appended {flagname}+={append}")
 
 
+def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
+    for path in possible_paths:
+        if (path / file_name).exists():
+            return path
+    raise ValueError(f"No directory contains {file_name}: {possible_paths}")
+
+
 def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
@@ -357,11 +364,13 @@ def do_build(args: argparse.Namespace):
         "ROCM_HOME": str(root_dir),
         "ROCM_PATH": str(root_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # TODO: Figure out what is blocking GLOO and enable.
-        "USE_GLOO": "OFF",
         # TODO: Fix source dep on rocprofiler and enable.
         "USE_KINETO": "OFF",
     }
+
+    # GLOO enabled for only Linux
+    if not is_windows:
+        env["USE_GLOO"] = "ON"
 
     # At checkout, we compute some additional env vars that influence the way that
     # the wheel is named/versioned.
@@ -374,11 +383,12 @@ def do_build(args: argparse.Namespace):
             env.update(addl_triton_env)
 
     if is_windows:
+        llvm_dir = root_dir / "lib" / "llvm" / "bin"
         env.update(
             {
-                "HIP_CLANG_PATH": str((root_dir / "lib" / "llvm" / "bin").as_posix()),
-                "CC": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
-                "CXX": str((root_dir / "lib" / "llvm" / "bin" / "clang-cl").as_posix()),
+                "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
+                "CC": str((llvm_dir / "clang-cl.exe").resolve()),
+                "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
             }
         )
     else:
@@ -401,14 +411,14 @@ def do_build(args: argparse.Namespace):
     # on directory layout.
     # Obviously, this should be completely burned with fire once the root causes
     # are eliminted.
-    hip_device_lib_path = get_rocm_path("root") / "llvm" / "amdgcn" / "bitcode"
+    hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
     if not hip_device_lib_path.exists():
         print(
             "WARNING: Default location of device libs not found. Relying on "
             "clang heuristics which are known to be buggy in this configuration"
         )
     else:
-        env["HIP_DEVICE_LIB_PATH"] = hip_device_lib_path
+        env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
 
     # Build triton.
     triton_requirement = None
@@ -476,7 +486,10 @@ def do_build_triton(
     )
 
     print("+++ Building triton:")
-    triton_python_dir = triton_dir / "python"
+    # In early ~2.9, setup.py moved from the python/ dir to the root. Check both.
+    triton_python_dir = find_dir_containing(
+        "setup.py", triton_dir / "python", triton_dir
+    )
     remove_dir_if_exists(triton_python_dir / "dist")
     if args.clean:
         remove_dir_if_exists(triton_python_dir / "build")

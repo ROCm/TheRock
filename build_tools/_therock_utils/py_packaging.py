@@ -324,9 +324,12 @@ class PopulatedDistPackage:
         else:
             self.params.files.mark_populated(self, relpath, dest_path)
 
-        file_type = get_file_type(dest_path)
-        if file_type == "exe" or file_type == "so":
-            self._extend_rpath(dest_path)
+        if not is_windows:
+            # Update RPATHs on Linux.
+            file_type = get_file_type(dest_path)
+            if file_type == "exe" or file_type == "so":
+                self._extend_rpath(dest_path)
+                self._normalize_rpath(dest_path)
 
     def _extend_rpath(self, file_path: Path):
         for dep_project, rpath in self.rpath_deps:
@@ -345,6 +348,38 @@ class PopulatedDistPackage:
                 str(file_path),
             ]
             subprocess.check_call(patchelf_cl)
+
+    def _normalize_rpath(self, file_path: Path):
+        existing_rpath = (
+            subprocess.check_output(
+                [
+                    "patchelf",
+                    "--print-rpath",
+                    str(file_path),
+                ]
+            )
+            .decode()
+            .strip()
+        )
+        if not existing_rpath:
+            return
+
+        # Possibly in the future, do manual normalization of the RPATH.
+        norm_rpath = existing_rpath
+
+        log(f"  NORMALIZE_RPATH: {file_path}: {norm_rpath}")
+        subprocess.check_call(
+            [
+                "patchelf",
+                "--set-rpath",
+                norm_rpath,
+                # Forces the use of RPATH vs RUNPATH, which is more appropriate
+                # for hermetic libraries like these since it does not allow
+                # LD_LIBRARY_PATH to interfere.
+                "--force-rpath",
+                str(file_path),
+            ]
+        )
 
     def populate_devel_files(
         self,
@@ -460,6 +495,12 @@ class PopulatedDistPackage:
             dest_path.unlink()
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_entry.path, dest_path)
+
+        if not is_windows:
+            # Update RPATHs on Linux.
+            file_type = get_file_type(dest_path)
+            if file_type == "exe" or file_type == "so":
+                self._normalize_rpath(dest_path)
 
 
 MAGIC_AR_MATCH = re.compile("ar archive")

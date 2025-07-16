@@ -4,8 +4,8 @@ on:
   # Trigger from another workflow (typically to build dev packages and then test them)
   workflow_call:
     inputs:
-      build_type:
-        description: The type of build version to produce ("rc", or "dev")
+      release_type:
+        description: The type of build version to produce ("nightly", or "dev")
         type: string
         default: "dev"
       package_suffix:
@@ -17,10 +17,10 @@ on:
   # Trigger manually (typically to test the workflow or manually build a release [candidate])
   workflow_dispatch:
     inputs:
-      build_type:
-        description: The type of build version to produce ("rc", or "dev")
+      release_type:
+        description: The type of build version to produce ("nightly", or "dev")
         type: string
-        default: "rc"
+        default: "dev"
       package_suffix:
         type: string
       s3_subdir:
@@ -42,10 +42,14 @@ jobs:
   setup_metadata:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
+    env:
+      S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
+      release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.release_information.outputs.version }}
-      release_type: ${{ steps.release_information.outputs.type }}
+      release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
+      cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -56,31 +60,30 @@ jobs:
 
       # Compute version suffix based on inputs (default to 'rc')
       - name: Set variables for nightly release
-        if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
+        if: ${{ env.release_type == 'nightly' }}
         run: |
           version_suffix="$(printf 'rc%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "release_type=nightly" >> $GITHUB_ENV
+          echo "cloudfront_base_url=d2awnip2yjpvqn.cloudfront.net" >> $GITHUB_ENV
 
       - name: Set variables for development release
-        if: ${{ inputs.build_type == 'dev' }}
+        if: ${{ env.release_type == 'dev' }}
         run: |
           version_suffix=".dev0+${{ github.sha }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "release_type=dev" >> $GITHUB_ENV
+          echo "cloudfront_base_url=d25kgig7rdsyks.cloudfront.net" >> $GITHUB_ENV
 
       - name: Generate release information
         id: release_information
         run: |
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
-          echo "type=${release_type}" >> $GITHUB_OUTPUT
+          echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
         env:
           AMDGPU_FAMILIES: ${{ inputs.families }}
-          PYTORCH_DEV_DOCKER: "false"
           THEROCK_PACKAGE_PLATFORM: "linux"
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
@@ -161,23 +164,6 @@ jobs:
           echo "------------"
           du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
 
-      - name: Upload Tarball to GitHub
-        uses: ncipollo/release-action@bcfe5470707e8832e12347755757cec0eb3c22af # v1.18.0
-        with:
-          artifacts: "${{ env.DIST_ARCHIVE }}"
-          tag: "${{ env.RELEASE_TYPE }}-tarball"
-          name: "${{ env.RELEASE_TYPE }}-tarball"
-          body: "Automatic ${{ env.RELEASE_TYPE }} tarball of TheRock."
-          removeArtifacts: false
-          allowUpdates: true
-          replacesArtifacts: true
-          makeLatest: false
-          # Keep existing name/body/status.
-          omitNameDuringUpdate: true
-          omitBodyDuringUpdate: true
-          omitDraftDuringUpdate: true
-          omitPrereleaseDuringUpdate: true
-
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
@@ -208,11 +194,24 @@ jobs:
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
 
       - name: Trigger testing nightly tarball
-        if: ${{ inputs.build_type == 'rc' || inputs.build_type == '' }}
+        if: ${{ env.RELEASE_TYPE == 'nightly' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
           workflow: test_release_packages.yml
           inputs: '{ "version": "${{ needs.setup_metadata.outputs.version }}", "tag": "nightly-tarball", "file_name": "${{ env.FILE_NAME }}", "target": "${{ matrix.target_bundle.amdgpu_family }}" }'
+
+      - name: Trigger building PyTorch wheels
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
+        with:
+          workflow: release_portable_linux_pytorch_wheels.yml
+          inputs: |
+            { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
+              "release_type": "${{ env.RELEASE_TYPE }}",
+              "s3_subdir": "${{ env.S3_SUBDIR }}",
+              "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
+              "rocm_version": "${{ needs.setup_metadata.outputs.version }}"
+            }
 
       - name: Save cache
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3

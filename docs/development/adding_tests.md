@@ -1,10 +1,13 @@
 # Adding tests to TheRock
 
-### Test Flow
+## Test Flow
 
 After TheRock builds its artifacts, we test those artifacts through [`test_packages.yml`](../../.github/workflows/test_packages.yml). The testing flow works as:
 
-`test_sanity_check` -> `configure_test_matrix` -> `test_components`
+```mermaid
+graph LR
+    test_sanity_check --> configure_test_matrix --> test_components
+```
 
 where we:
 
@@ -12,7 +15,17 @@ where we:
 1. The `configure_test_matrix` step runs [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py), where we generate a test matrix for which tests to run.
 1. After we generate the matrix, `test_components` executes those tests in parallel.
 
-### Adding tests
+### How these tests are executed
+
+These tests are retrieved from [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py), where we generate a matrix of tests to run for various AMD GPU families from [`amdgpu_family_matrix.py`](../../build_tools/github_actions/amdgpu_family_matrix.py) on both Linux and Windows test machines.
+
+These tests are run per pull request, main branch commit, `workflow_dispatch` and nightly runs.
+
+### What kind of tests are suitable for TheRock
+
+Since TheRock is the open source build system for HIP and ROCm, we are interested in tests for individual subprojects as well as tests that exercise multiple subprojects, especially for build and runtime dependencies. We also perform higher level testing of overall user-facing behavior and downstream frameworks like PyTorch.
+
+## Adding tests
 
 To add tests, add your executable logic to `github_actions/test_executable_scripts` with a Python file (in order to be compatible with Linux and Windows). Below is an example for [`hipblaslt.py`](../../build_tools/github_actions/test_executable_scripts/test_hipblaslt.py):
 
@@ -28,7 +41,7 @@ subprocess.run(
 
 After creating your script, please refer below to create your test entry in [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py)
 
-### Fields for the test matrix
+## Fields for the test matrix
 
 Add an entry in [`test_matrix`](../../build_tools/github_actions/fetch_test_configurations.py), then your test will be enabled in the test workflow
 

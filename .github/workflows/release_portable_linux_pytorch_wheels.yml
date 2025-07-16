@@ -1,4 +1,4 @@
-name: Release Windows PyTorch Wheels
+name: Release portable Linux PyTorch Wheels
 
 on:
   workflow_call:
@@ -42,18 +42,20 @@ on:
         description: ROCm version to pip install
         type: string
 
+
 permissions:
   id-token: write
   contents: read
 
 jobs:
   build:
+    name: PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
+        python_version: ["3.11", "3.12", 3.13]
 
-    uses: ./.github/workflows/build_windows_pytorch_wheels.yml
+    uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       python_version: ${{ matrix.python_version }}
