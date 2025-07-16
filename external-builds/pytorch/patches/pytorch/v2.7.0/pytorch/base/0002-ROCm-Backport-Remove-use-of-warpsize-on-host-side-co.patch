@@ -67,24 +67,6 @@ index 2062a14cdba..bd45e8c0a08 100644
    }
  
    return dim3(block_size);
-@@ -409,7 +410,7 @@ blockReduce(AccumT* smem, AccumT val,
-     if (lane < blockDim.x / C10_WARP_SIZE) {
- #pragma unroll
-       for (int i = 0; i < C10_WARP_SIZE; ++i) {
--        warpVal = r(warpVal, smem[lane * C10_WARP_SIZE + i]);
-+        warpVal = r(warpVal, smem[lane * at::cuda::warp_size() + i]);
-       }
- #if !defined(USE_ROCM)
-       __syncwarp(mask);
-@@ -424,7 +425,7 @@ blockReduce(AccumT* smem, AccumT val,
-   AccumT blockVal = defaultVal;
- 
-   if (threadIdx.x == 0) {
--    for (int i = 0; i < blockDim.x / C10_WARP_SIZE; ++i) {
-+    for (int i = 0; i < blockDim.x / at::cuda::warp_size(); ++i) {
-       blockVal = r(blockVal, smem[i]);
-     }
-     smem[0] = blockVal;
 @@ -978,7 +979,7 @@ Tensor host_softmax(const Tensor & input_, const int64_t dim_, const bool half_t
            } else {
              constexpr int ILP = sizeof(float4) / sizeof(scalar_t);
