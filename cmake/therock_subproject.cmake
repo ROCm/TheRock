@@ -29,7 +29,7 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   THEROCK_INSTALL_RPATH_LIBRARY_DIR
 
   # Debug info handling.
-  THEROCK_SPLIT_DEBUG_INFO  
+  THEROCK_SPLIT_DEBUG_INFO
 )
 
 # Whenever a new package is advertised by the super-project, it is added here.
