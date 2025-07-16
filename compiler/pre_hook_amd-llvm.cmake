@@ -133,3 +133,13 @@ block()
   endif()
   therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
 endblock()
+
+
+function(_therock_debug_targets)
+  get_target_property(_build_rpath LLVM BUILD_RPATH)
+  get_target_property(_build_rpath_use_origin LLVM BUILD_RPATH_USE_ORIGIN)
+  get_target_property(_skip_build_rpath LLVM SKIP_BUILD_RPATH)
+  message(STATUS "LLVM PROPERTIES: BUILD_RPATH=${_build_rpath} BUILD_RPATH_USE_ORIGIN=${_build_rpath_use_origin} SKIP_BUILD_RPATH=${_skip_build_rpath}")
+endfunction()
+
+cmake_language(DEFER CALL _therock_debug_targets)
