@@ -44,7 +44,7 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "d25kgig7rdsyks.cloudfront.net/v2"
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
       rocm_version:
         description: ROCm version to pip install
         type: string
@@ -119,7 +119,7 @@ jobs:
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
-            --index-url "https://${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
+            --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
