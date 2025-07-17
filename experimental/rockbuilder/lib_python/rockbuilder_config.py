@@ -164,22 +164,22 @@ class RockBuilderConfig(configparser.ConfigParser):
         rocm_sdk_uninstall_cmd = (
             sys.executable
             + " -m pip cache remove rocm_sdk --cache-dir "
-            + self.rcb_root_dir.as_posix()
+            + (self.rcb_root_dir / "pip").as_posix()
         )
         install_deps_cmd = (
             sys.executable
             + " -m pip install setuptools --cache-dir "
-            + self.rcb_root_dir.as_posix()
+            + (self.rcb_root_dir / "pip").as_posix()
         )
         rocm_sdk_install_cmd_base = (
             sys.executable
-            + " -m pip install rocm[libraries,devel] --force-reinstall --cache-dir "
-            + self.rcb_root_dir.as_posix()
+            + " -m pip install rocm[libraries,devel] torch torchaudio torchvision --force-reinstall --cache-dir "
+            + (self.rcb_root_dir / "pip").as_posix()
         )
         rocm_sdk_pytorch_install_cmd_base = (
             sys.executable
             + " -m pip install torch torchaudio torchvision --force-reinstall --cache-dir "
-            + self.rcb_root_dir.as_posix()
+            + (self.rcb_root_dir / "pip").as_posix()
         )
 
         # check the selected target GPUs
@@ -240,11 +240,13 @@ class RockBuilderConfig(configparser.ConfigParser):
                 full_rocm_sdk_install_cmd = (
                     rocm_sdk_install_cmd_base + " --index-url " + full_rock_sdk_whl_url
                 )
+                """
                 full_rocm_sdk_pytorch_install_cmd = (
                     rocm_sdk_pytorch_install_cmd_base
                     + " --index-url "
                     + full_rock_sdk_whl_url
                 )
+                """
                 break
             if full_rocm_sdk_install_cmd:
                 print("rocm_sdk install cmd: " + full_rocm_sdk_install_cmd)
@@ -272,14 +274,19 @@ class RockBuilderConfig(configparser.ConfigParser):
                     self._exec_subprocess_cmd(
                         rocm_sdk_uninstall_cmd, self.rcb_root_dir.as_posix()
                     )
-                    # install rocm sdk
+                    # install rocm sdk and pytorch
                     self._exec_subprocess_cmd(
                         full_rocm_sdk_install_cmd, self.rcb_root_dir.as_posix()
                     )
-                    # install pytorch
+                    """
+                    # install pytorch separately is bad idea now
+                    # -->
+                    # this could lead to install where the rocm-sdk-devel version
+                    #    is different version than other packages. --> causing broken sdk
                     self._exec_subprocess_cmd(
                         full_rocm_sdk_pytorch_install_cmd, self.rcb_root_dir.as_posix()
                     )
+                    """
                 res = self._write_pip_install_stamp(
                     fname_pip_done, sys.prefix, self.cfg_last_mod_time_sec
                 )
