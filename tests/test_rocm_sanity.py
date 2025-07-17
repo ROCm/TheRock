@@ -58,7 +58,7 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    @pytest.mark.xfail(amdgpu_families == "gfx950-dcgpu")
+    @pytest.mark.xfail(amdgpu_families == "gfx950-dcgpu", reason="gfx950 hipcc executable hangs")
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         platform_executable_suffix = ".exe" if is_windows() else ""
