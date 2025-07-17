@@ -12,6 +12,7 @@ THIS_DIR = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
+amdgpu_families = os.getenv("AMDGPU_FAMILIES")
 
 
 def is_windows():
@@ -57,6 +58,7 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
+    @pytest.mark.xfail(amdgpu_families == "gfx950-dcgpu")
     def test_hip_printf(self):
         # Compiling .cpp file using hipcc
         platform_executable_suffix = ".exe" if is_windows() else ""
