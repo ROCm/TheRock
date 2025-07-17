@@ -5,11 +5,12 @@ Required environment variables:
   - PLATFORM
 """
 
-from configure_ci import set_github_output
 import json
 import logging
 import os
 from pathlib import Path
+
+from github_actions_utils import *
 
 logging.basicConfig(level=logging.INFO)
 
@@ -118,7 +119,7 @@ def run():
             logging.info(f"Including job {job_name}")
             output_matrix.append(test_matrix[key])
 
-    set_github_output({"components": json.dumps(output_matrix)})
+    gha_set_output({"components": json.dumps(output_matrix)})
 
 
 if __name__ == "__main__":

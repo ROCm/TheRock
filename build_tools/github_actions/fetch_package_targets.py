@@ -1,11 +1,12 @@
 import os
 import json
-from configure_ci import set_github_output
 from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
     amdgpu_family_info_matrix_postsubmit,
 )
 import string
+
+from github_actions_utils import *
 
 # This file helps generate a package target matrix for workflows.
 
@@ -52,7 +53,7 @@ def determine_package_targets(args):
 
 def main(args):
     package_targets = determine_package_targets(args)
-    set_github_output({"package_targets": json.dumps(package_targets)})
+    gha_set_output({"package_targets": json.dumps(package_targets)})
 
 
 if __name__ == "__main__":

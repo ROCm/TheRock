@@ -1,9 +1,10 @@
 import os
-from configure_ci import set_github_output
 from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
     amdgpu_family_info_matrix_postsubmit,
 )
+
+from github_actions_utils import *
 
 # This file helps configure which target to run
 
@@ -24,7 +25,7 @@ def main(args):
             )
             # if there is a test machine available for this target
             if test_runs_on_machine:
-                set_github_output({"test-runs-on": test_runs_on_machine})
+                gha_set_output({"test-runs-on": test_runs_on_machine})
 
 
 if __name__ == "__main__":
