@@ -12,7 +12,6 @@ THIS_DIR = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
-amdgpu_families = os.getenv("AMDGPU_FAMILIES")
 
 
 def is_windows():
