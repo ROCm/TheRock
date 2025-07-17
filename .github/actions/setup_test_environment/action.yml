@@ -13,8 +13,6 @@ inputs:
     type: string
   FETCH_ARTIFACT_ARGS:
     type: string
-  PLATFORM:
-    type: string
 
 runs:
   using: "composite"
@@ -31,17 +29,17 @@ runs:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
         python3 -m venv ${VENV_DIR}
-        if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+        if [ "${{ runner.os }}" != "Windows" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
         pip install -r requirements-test.txt
         pip freeze
 
     - name: Install the AWS tool
-      if: ${{ inputs.PLATFORM == 'linux'}}
+      if: runner.os == 'Linux'
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
 
     - name: Install the AWS tool
-      if: ${{ inputs.PLATFORM == 'windows'}}
+      if: runner.os == 'Windows'
       shell: bash
       run: |
         choco install --no-progress -y awscli
