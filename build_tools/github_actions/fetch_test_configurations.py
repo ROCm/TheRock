@@ -2,7 +2,7 @@
 This script determines what test configurations to run
 
 Required environment variables:
-  - PLATFORM
+  - RUNNER_OS (https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#detecting-the-operating-system)
 """
 
 from configure_ci import set_github_output
@@ -103,7 +103,7 @@ test_matrix = {
 
 
 def run():
-    platform = os.getenv("PLATFORM")
+    platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
 
     logging.info(f"Selecting projects: {project_to_test}")
