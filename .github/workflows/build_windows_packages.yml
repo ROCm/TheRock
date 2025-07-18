@@ -153,8 +153,8 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
-      - name: Configure AWS Credentials
-        if: always()
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
         with:
           aws-region: us-east-2
