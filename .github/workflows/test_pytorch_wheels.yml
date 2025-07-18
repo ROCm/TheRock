@@ -69,16 +69,18 @@ jobs:
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout --no-hipify --no-patch
 
-      - name: Set up virtual environment and install requirements
+      - name: Set up virtual environment
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages torch==${TORCH_VERSION} \
             --index-url ${{ inputs.cloudfront_url }} \
-            --index-subdir ${{ inputs.amdgpu_family }}
-          source "${VENV_DIR}/bin/activate"
+            --index-subdir ${{ inputs.amdgpu_family }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Install test requirements
+        run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
 
       - name: Run PyTorch tests
         run: |
-          source "${VENV_DIR}/bin/activate"
           bash external-builds/pytorch/run_linux_pytorch_tests.sh
