@@ -51,7 +51,6 @@ if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
     EXTERNAL_SOURCE_DIR "rocRoller"
     BACKGROUND_BUILD
-    CMAKE_LISTS_RELPATH "next-cmake"
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCROLLER_ENABLE_YAML_CPP=ON

@@ -5,6 +5,7 @@ python-magic>=0.4.27; platform_system != "Windows"
 PyYAML==6.0.2
 setuptools>=80.9.0
 tomli==2.2.1; python_version <= '3.10'
+pytest-cmake==0.13.0
 
 # hipBLASLt deps
 joblib>=1.4.2

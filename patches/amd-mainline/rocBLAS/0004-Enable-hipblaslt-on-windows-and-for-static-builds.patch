@@ -1,0 +1,86 @@
+From 7d08bcad6882e7a17af5b8b2335e32c6b426b8fa Mon Sep 17 00:00:00 2001
+From: David Dixon <david.dixon@amd.com>
+Date: Fri, 18 Jul 2025 14:44:31 +0000
+Subject: [PATCH 4/4] Enable hipblaslt on windows and for static builds
+
+---
+ CMakeLists.txt                |  5 ++---
+ clients/common/CMakeLists.txt | 12 ++++--------
+ library/src/CMakeLists.txt    |  6 ------
+ 3 files changed, 6 insertions(+), 17 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index cbd021a4..589eac2b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -146,17 +146,16 @@ set( GPU_TARGETS "${target_list}" CACHE STRING "List of GPUs (gfx targets) to su
+ set( AMDGPU_TARGETS "${GPU_TARGETS}" CACHE STRING "List of GPUs (gfx targets) to support" FORCE ) # for old hip cmake files backward compatibility
+ 
+ option( BUILD_WITH_HIPBLASLT "Build with HipBLASLt" ON )
+-set( hipblaslt_path "/opt/rocm" CACHE PATH "Use local HipBLASLt directory" )
+ set( HIPBLASLT_VERSION 1.0.0 CACHE STRING "The version of HipBLASLt to be used" )
+ 
+-if( WIN32 OR NOT BUILD_WITH_TENSILE OR NOT BUILD_SHARED_LIBS )
++if( NOT BUILD_WITH_TENSILE )
+   set( BUILD_WITH_HIPBLASLT OFF )
+ endif()
+ 
+ if( NOT SKIP_LIBRARY )
+   if(BUILD_WITH_HIPBLASLT)
+     # don't wait until after Tensile to find hipblaslt if enabled
+-    find_package( hipblaslt ${HIPBLASLT_VERSION} REQUIRED CONFIG PATHS ${hipblaslt_path} ${ROCM_PATH})
++    find_package( hipblaslt ${HIPBLASLT_VERSION} REQUIRED CONFIG )
+     message(STATUS "FOUND hipBLASLt, INCLUDE_DIR: ${HIPBLASLT_INCLUDE_DIR}")
+   endif()
+ endif()
+diff --git a/clients/common/CMakeLists.txt b/clients/common/CMakeLists.txt
+index 2d32fe7f..8c2445ed 100644
+--- a/clients/common/CMakeLists.txt
++++ b/clients/common/CMakeLists.txt
+@@ -54,13 +54,6 @@ function( rocblas_client_library_settings lib_target_ )
+     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/common>
+   )
+ 
+-  if(BUILD_WITH_HIPBLASLT)
+-    target_include_directories( ${lib_target_}
+-      SYSTEM BEFORE PRIVATE
+-        $<BUILD_INTERFACE:${HIPBLASLT_INCLUDE_DIR}>
+-    )
+-  endif()
+-
+   target_compile_definitions( ${lib_target_} PRIVATE ROCM_USE_FLOAT16 ROCBLAS_INTERNAL_API ROCBLAS_NO_DEPRECATED_WARNINGS )
+   target_compile_definitions( ${lib_target_} PRIVATE ${TENSILE_DEFINES} ${HIPBLASLT_DEFINES} GOOGLE_TEST )
+   # GOOGLE_TEST left off for reuse of this function by by gemm tuner
+@@ -168,7 +161,10 @@ target_compile_definitions( rocblas_clients_common PRIVATE ROCBLAS_REFERENCE_LIB
+ 
+ 
+ # target is not linked as OBJECT library but we want any interface flags from dependencies
+-target_link_libraries( rocblas_clients_common PUBLIC roc::rocblas hip::host hip::device $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} PRIVATE roc::hipblaslt )
++target_link_libraries( rocblas_clients_common roc::rocblas hip::host hip::device $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} )
++if(BUILD_WITH_HIPBLASLT)
++    target_link_libraries( rocblas_clients_common roc::hipblaslt )
++endif()
+ target_link_libraries( rocblas_clients_testing_common roc::rocblas hip::host hip::device ${BLAS_LIBRARY} $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} )
+ 
+ 
+diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
+index f4bdfb5f..e972869a 100644
+--- a/library/src/CMakeLists.txt
++++ b/library/src/CMakeLists.txt
+@@ -690,13 +690,7 @@ if( BUILD_WITH_TENSILE )
+   endif()
+ 
+   if(BUILD_WITH_HIPBLASLT)
+-    target_include_directories( rocblas
+-      SYSTEM BEFORE PRIVATE
+-        $<BUILD_INTERFACE:${HIPBLASLT_INCLUDE_DIR}>
+-    )
+-    if( BUILD_SHARED_LIBS )
+       target_link_libraries( rocblas PRIVATE roc::hipblaslt )
+-    endif()
+   endif()
+ 
+   if( NOT BUILD_SHARED_LIBS )
+-- 
+2.25.1
+
