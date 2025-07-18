@@ -90,7 +90,7 @@ class TestMatrixOperations:
 
 
 class TestConvolutions:
-    def teardown(self):
+    def teardown_method(self):
         # TODO(#999): fix tests stalling on exit without this
         torch.cuda.synchronize()
 
