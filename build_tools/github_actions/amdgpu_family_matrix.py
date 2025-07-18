@@ -24,7 +24,7 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            "test-runs-on": "",  # Disabling due to issues (https://github.com/ROCm/TheRock/issues/1049), label: linux-mi355-1gpu-ossci-rocm
             "family": "gfx950-dcgpu",
         }
     },

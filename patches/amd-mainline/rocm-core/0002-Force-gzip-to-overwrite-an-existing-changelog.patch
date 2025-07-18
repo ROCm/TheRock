@@ -25,8 +25,8 @@ index 42c075b..0a4244b 100644
        find_program ( DEB_GZIP_EXEC gzip )
        if(EXISTS "${CMAKE_BINARY_DIR}/DEBIAN/changelog.Debian" )
          execute_process(
--          COMMAND ${DEB_GZIP_EXEC} -9 "${CMAKE_BINARY_DIR}/DEBIAN/changelog.Debian"
-+          COMMAND ${DEB_GZIP_EXEC} -f -9 "${CMAKE_BINARY_DIR}/DEBIAN/changelog.Debian"
+-          COMMAND ${DEB_GZIP_EXEC} -n -9 "${CMAKE_BINARY_DIR}/DEBIAN/changelog.Debian"
++          COMMAND ${DEB_GZIP_EXEC} -f -n -9 "${CMAKE_BINARY_DIR}/DEBIAN/changelog.Debian"
            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/DEBIAN"
            RESULT_VARIABLE result
            OUTPUT_VARIABLE output

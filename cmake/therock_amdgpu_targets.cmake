@@ -42,7 +42,10 @@ function(therock_add_amdgpu_target gfx_target product_name)
 endfunction()
 
 # gfx90X family
-therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X-all gfx90X-dgpu gfx90X-dcgpu)
+therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X-all gfx90X-dgpu gfx90X-dcgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
 therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
 therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
 
@@ -53,20 +56,44 @@ therock_add_amdgpu_target(gfx942 "MI300A/MI300X CDNA" FAMILY dcgpu-all gfx94X-al
 therock_add_amdgpu_target(gfx950 "" FAMILY dcgpu-all gfx950-all gfx950-dcgpu)
 
 # gfx101X family
-therock_add_amdgpu_target(gfx1010 "AMD RX 5700" FAMILY dgpu-all gfx101X-all gfx101X-dgpu)
-therock_add_amdgpu_target(gfx1011 "AMD Radeon Pro V520" FAMILY dgpu-all gfx101X-all gfx101X-dgpu)
-therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx101X-dgpu)
+therock_add_amdgpu_target(gfx1010 "AMD RX 5700" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
+therock_add_amdgpu_target(gfx1011 "AMD Radeon Pro V520" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
+therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
 
 # gfx103X family
-therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu)
-therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx103X-dgpu)
-therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" igpu-all FAMILY gfx103X-all gfx103X-igpu)
-therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu)
+therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
+therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
+therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" igpu-all FAMILY gfx103X-all gfx103X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
+therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
 
 # gfx110X family
 therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
 therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
-therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu)
+therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+)
 therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu)
 
 # gfx115X family
