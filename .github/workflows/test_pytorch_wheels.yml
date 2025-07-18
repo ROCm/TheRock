@@ -80,7 +80,17 @@ jobs:
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          pip freeze
+
+      - name: Run rocm-sdk sanity tests
+        run: |
+          rocm-sdk test
+
+      - name: Run PyTorch smoketests
+        run: |
+          pytest -v external-builds/pytorch/smoke-tests
 
       - name: Run PyTorch tests
+        if: "contains(inputs.test_runs_on, 'linux')"
         run: |
           bash external-builds/pytorch/run_linux_pytorch_tests.sh
