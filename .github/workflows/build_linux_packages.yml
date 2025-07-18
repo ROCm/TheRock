@@ -94,7 +94,9 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          # for testing
+          extra_cmake_options: "-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_COMPILER=ON"
+          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py
@@ -144,7 +146,7 @@ jobs:
       - name: Upload artifacts
         if: always()
         env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
+          IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
