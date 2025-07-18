@@ -49,6 +49,9 @@ jobs:
   test_wheels:
     name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    defaults:
+      run:
+        shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       TORCH_VERSION: ${{ inputs.torch_version }}
