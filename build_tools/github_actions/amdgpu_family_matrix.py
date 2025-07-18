@@ -30,7 +30,7 @@ amdgpu_family_info_matrix_postsubmit = {
     },
     "gfx115x": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-strix-halo-gpu-rocm",
             "family": "gfx1151",
         },
         "windows": {
