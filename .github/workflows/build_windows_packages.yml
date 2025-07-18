@@ -169,6 +169,8 @@ jobs:
 
       - name: Upload artifacts
         if: always()
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
