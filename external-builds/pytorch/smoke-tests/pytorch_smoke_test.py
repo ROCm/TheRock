@@ -90,6 +90,10 @@ class TestMatrixOperations:
 
 
 class TestConvolutions:
+    def teardown(self):
+        # TODO(#999): fix tests stalling on exit without this
+        torch.cuda.synchronize()
+
     def test_conv_transpose2d(self):
         inputs = torch.randn(1, 4, 5, 5, device="cuda")
         weights = torch.randn(4, 8, 3, 3, device="cuda")
@@ -100,11 +104,6 @@ class TestConvolutions:
 
         # TODO: check conv output values (and don't use randn)
         assert result.device.type == "cuda"
-
-        # TODO(#999): fix tests stalling if the result is not used. Missing a flush() somewhere?
-        #             this occurs with just "torch.randn" on its own too
-        result_cpu = result.cpu()
-        assert result_cpu.device.type == "cpu"
 
     # Lifted from
     # https://github.com/pytorch/pytorch/blob/main/test/nn/test_convolution.py
@@ -118,8 +117,3 @@ class TestConvolutions:
         weight = weight.to(memory_format=torch.channels_last)
         o = torch.conv2d(input, weight, None, (2, 1), (1, 1), (1, 1), 1)
         assert o.is_contiguous(memory_format=torch.channels_last)
-
-        # TODO(#999): fix tests stalling if the result is not used. Missing a flush() somewhere?
-        #             this occurs with just "torch.randn" on its own too
-        o_cpu = o.cpu()
-        assert o_cpu.device.type == "cpu"
