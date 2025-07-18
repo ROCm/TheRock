@@ -43,7 +43,7 @@ import json
 import os
 import subprocess
 import sys
-from typing import Iterable, List, Mapping, Optional
+from typing import Iterable, List, Optional
 import string
 from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
@@ -51,36 +51,7 @@ from amdgpu_family_matrix import (
     amdgpu_family_matrix_xfail,
 )
 
-# --------------------------------------------------------------------------- #
-# General utilities
-# --------------------------------------------------------------------------- #
-
-
-def set_github_output(d: Mapping[str, str]):
-    """Sets GITHUB_OUTPUT values.
-    See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
-    """
-    print(f"Setting github output:\n{d}")
-    step_output_file = os.environ.get("GITHUB_OUTPUT", "")
-    if not step_output_file:
-        print("Warning: GITHUB_OUTPUT env var not set, can't set github outputs")
-        return
-    with open(step_output_file, "a") as f:
-        f.writelines(f"{k}={v}" + "\n" for k, v in d.items())
-
-
-def write_job_summary(summary: str):
-    """Appends a string to the GitHub Actions job summary.
-    See https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary
-    """
-    print(f"Writing job summary:\n{summary}")
-    step_summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "")
-    if not step_summary_file:
-        print("Warning: GITHUB_STEP_SUMMARY env var not set, can't write job summary")
-        return
-    with open(step_summary_file, "a") as f:
-        # Use double newlines to split sections in markdown.
-        f.write(summary + "\n\n")
+from github_actions_utils import *
 
 
 # --------------------------------------------------------------------------- #
@@ -351,7 +322,7 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
-    write_job_summary(
+    gha_append_step_summary(
         f"""## Workflow configure results
 
 * `linux_amdgpu_families`: {str([item.get("family") for item in linux_target_output])}
@@ -367,7 +338,7 @@ def main(base_args, linux_families, windows_families):
         "windows_amdgpu_families": json.dumps(windows_target_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
     }
-    set_github_output(output)
+    gha_set_output(output)
 
 
 if __name__ == "__main__":

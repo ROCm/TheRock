@@ -15,9 +15,10 @@ Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 """
 
 import argparse
-import os
 import re
 import sys
+
+from github_actions_utils import *
 
 
 def is_version(version) -> bool:
@@ -31,13 +32,6 @@ def transform_python_version(python_version: str) -> str:
     version_without_dot = python_version.replace(".", "")
     cp_version = f"cp{version_without_dot}-cp{version_without_dot}"
     return cp_version
-
-
-def write_env_file(cp_version: str):
-    env_file = os.getenv("GITHUB_ENV")
-
-    with open(env_file, "a") as f:
-        f.write(f"cp_version={cp_version}")
 
 
 def main(argv: list[str]):
@@ -60,7 +54,7 @@ def main(argv: list[str]):
     print(cp_version)
 
     if args.write_env_file:
-        write_env_file(cp_version)
+        gha_set_env({"cp_version": cp_version})
 
 
 if __name__ == "__main__":

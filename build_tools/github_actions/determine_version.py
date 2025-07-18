@@ -18,8 +18,9 @@ Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 from packaging.version import Version, parse
 
 import argparse
-import os
 import sys
+
+from github_actions_utils import *
 
 
 def derive_versions(rocm_version: str, verbose_output: bool) -> str:
@@ -37,13 +38,6 @@ def derive_versions(rocm_version: str, verbose_output: bool) -> str:
         print()
 
     return optional_build_prod_arguments
-
-
-def write_env_file(optional_build_prod_arguments: str):
-    env_file = os.getenv("GITHUB_ENV")
-
-    with open(env_file, "a") as f:
-        f.write(f"optional_build_prod_arguments={optional_build_prod_arguments}")
 
 
 def main(argv: list[str]):
@@ -72,7 +66,7 @@ def main(argv: list[str]):
     print(f"{optional_build_prod_arguments}")
 
     if args.write_env_file:
-        write_env_file(optional_build_prod_arguments)
+        gha_set_env({"optional_build_prod_arguments": optional_build_prod_arguments})
 
 
 if __name__ == "__main__":
