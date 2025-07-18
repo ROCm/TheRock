@@ -127,8 +127,8 @@ jobs:
           ccache -s -v
           tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
 
-      - name: Configure AWS Credentials
-        if: always()
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
         with:
           aws-region: us-east-2
@@ -143,6 +143,8 @@ jobs:
 
       - name: Upload artifacts
         if: always()
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
