@@ -19,6 +19,7 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   THEROCK_SOURCE_DIR
   THEROCK_BINARY_DIR
   THEROCK_BUILD_TESTING
+  THEROCK_USE_SAFE_DEPENDENCY_PROVIDER
   ROCM_SYMLINK_LIBS
 
   # RPATH handling.
@@ -339,6 +340,10 @@ function(therock_cmake_subproject_declare target_name)
   set(_stamp_dir "${ARG_BINARY_DIR}/${ARG_DIR_PREFIX}stamp")
   make_directory("${_stamp_dir}")
 
+  # Prefix directory.
+  set(_prefix_dir "${ARG_BINARY_DIR}/${ARG_DIR_PREFIX}prefix")
+  make_directory("${_prefix_dir}")
+
   # Collect LINK_DIRS and PROGRAM_DIRS from explicit args and RUNTIME_DEPS.
   _therock_cmake_subproject_collect_runtime_deps(
       _private_include_dirs _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
@@ -435,6 +440,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_STAGE_DIR "${_stage_dir}"
     THEROCK_INSTALL_DESTINATION "${ARG_INSTALL_DESTINATION}"
     THEROCK_STAMP_DIR "${_stamp_dir}"
+    THEROCK_PREFIX_DIR "${_prefix_dir}"
     THEROCK_CMAKE_SOURCE_DIR "${_cmake_source_dir}"
     THEROCK_CMAKE_PROJECT_INIT_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_init.cmake"
     THEROCK_CMAKE_PROJECT_TOOLCHAIN_FILE "${ARG_BINARY_DIR}/${ARG_BUILD_DIR}_toolchain.cmake"
@@ -536,6 +542,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_stage_dir "${target_name}" THEROCK_STAGE_DIR)
   get_target_property(_sources "${target_name}" SOURCES)
   get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
+  get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
   # RPATH properties: just mirror these to same named variables because we just
   # mirror them syntactically into the subprojet..
@@ -640,6 +647,7 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "${_deps_contents}")
   string(APPEND _init_contents "set(THEROCK_IGNORE_PACKAGES \"@_ignore_packages@\")\n")
   string(APPEND _init_contents "list(PREPEND CMAKE_MODULE_PATH \"${THEROCK_SOURCE_DIR}/cmake/finders\")\n")
+  string(APPEND _init_contents "list(PREPEND CMAKE_PREFIX_PATH \"@_prefix_dir@\")\n")
   get_property(_all_provided_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   string(APPEND _init_contents "set(THEROCK_STRICT_PROVIDED_PACKAGES \"@_all_provided_packages@\")\n")
 
@@ -1042,6 +1050,20 @@ function(_therock_cmake_subproject_setup_deps out_contents out_provided dep_dir_
         endif()
         string(APPEND _contents "set(THEROCK_PACKAGE_DIR_${_package_name} \"${_find_package_path}\")\n")
         string(APPEND _contents "list(APPEND THEROCK_PROVIDED_PACKAGES ${_package_name})\n")
+
+        # Now write a trampoline package config file into the prefix so that normal
+        # prefix based find_package() will resolve properly.
+        string(TOLOWER "${_package_name}" _package_name_lower)
+        set(_config_file "${_prefix_dir}/${_package_name}Config.cmake")
+        configure_file(
+          "${THEROCK_SOURCE_DIR}/cmake/templates/find_config.tmpl.cmake"
+          "${_config_file}" @ONLY
+        )
+        set(_version_file "${_prefix_dir}/${_package_name}ConfigVersion.cmake")
+        configure_file(
+          "${THEROCK_SOURCE_DIR}/cmake/templates/find_config_version.tmpl.cmake"
+          "${_version_file}" @ONLY
+        )
       endforeach()
     endif()
   endforeach()
