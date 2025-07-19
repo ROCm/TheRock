@@ -162,6 +162,13 @@ elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_tensile_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile")
+else()
+    set(_tensile_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/Tensile")
+endif()
+
+
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "rocBLAS"
   BACKGROUND_BUILD
@@ -172,7 +179,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
-    "-DTensile_TEST_LOCAL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/Tensile"
+    "-DTensile_TEST_LOCAL_PATH=${_tensile_source_dir}"
     # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
     # doing a strict check of exact version.
     -DTENSILE_VERSION=
