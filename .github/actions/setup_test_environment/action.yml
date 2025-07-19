@@ -34,8 +34,9 @@ runs:
           --activate-in-future-github-actions-steps
 
     - name: Install test requirements
+      shell: bash
       run: |
-        pip install -r requirements-test.txt
+       pip install -r requirements-test.txt
         pip freeze
 
     - name: Install the AWS tool
