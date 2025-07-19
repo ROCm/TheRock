@@ -1,6 +1,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import locale
 from pathlib import Path
 import platform
 import subprocess
@@ -100,10 +101,11 @@ class ROCmCoreTest(unittest.TestCase):
                     script_path,
                     msg=f"Console script {script_path} does not exist",
                 )
+                encoding = locale.getpreferredencoding()
                 output_text = subprocess.check_output(
                     [script_path] + cl,
                     stderr=subprocess.STDOUT,
-                ).decode()
+                ).decode(encoding)
                 if expected_text not in output_text:
                     self.fail(
                         f"Expected '{expected_text}' in console-script {script_name} outuput:\n"
