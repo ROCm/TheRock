@@ -30,8 +30,12 @@ runs:
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
-        python3 -m venv ${VENV_DIR}
-        if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+        python build_tools/setup_venv.py ${VENV_DIR} \
+          --activate-in-future-github-actions-steps
+
+    - name: Install test requirements
+      shell: bash
+      run: |
         pip install -r requirements-test.txt
         pip freeze
 
@@ -50,7 +54,6 @@ runs:
     - name: Download and Unpack Artifacts
       shell: bash
       env:
-        VENV_DIR: ${{ inputs.VENV_DIR }}
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
         AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
