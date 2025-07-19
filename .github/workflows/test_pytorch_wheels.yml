@@ -49,6 +49,9 @@ jobs:
   test_wheels:
     name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    defaults:
+      run:
+        shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       TORCH_VERSION: ${{ inputs.torch_version }}
@@ -65,7 +68,10 @@ jobs:
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
+      # TODO(scotttodd): Windows will need to checkout to a shorter path.
+      #                  When Windows runs full tests, fix that and re-enable.
       - name: Checkout PyTorch repository
+        if: "contains(inputs.test_runs_on, 'linux')"
         run: |
           python external-builds/pytorch/pytorch_torch_repo.py checkout --no-hipify --no-patch
 
@@ -80,7 +86,17 @@ jobs:
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          pip freeze
+
+      - name: Run rocm-sdk sanity tests
+        run: |
+          rocm-sdk test
+
+      - name: Run PyTorch smoketests
+        run: |
+          pytest -v external-builds/pytorch/smoke-tests
 
       - name: Run PyTorch tests
+        if: "contains(inputs.test_runs_on, 'linux')"
         run: |
           bash external-builds/pytorch/run_linux_pytorch_tests.sh
