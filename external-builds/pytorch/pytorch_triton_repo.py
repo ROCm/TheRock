@@ -105,10 +105,6 @@ def main(cl_args: list[str]):
         help="git repository url",
     )
     checkout_p.add_argument(
-        "--repo-hashtag",
-        help="Git repository ref/tag to checkout",
-    )
-    checkout_p.add_argument(
         "--release",
         default=False,
         action=argparse.BooleanOptionalAction,
