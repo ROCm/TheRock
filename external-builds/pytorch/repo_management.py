@@ -267,9 +267,9 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     exec(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     if args.patch and patches_dir_name:
-        # base patches for main repository
-        # submodule patches will be applied later
-        # this should allow us to even have patches to modify which submodule version is checked out
+        # Apply base patches to main repository. Patches to
+        # submodules will be applied later. This enables patches
+        # to modify submodule version to be checked out.
         apply_main_repository_patches(
             repo_dir,
             repo_patch_dir_base / patches_dir_name,
