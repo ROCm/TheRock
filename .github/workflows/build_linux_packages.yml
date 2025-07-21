@@ -40,9 +40,8 @@ jobs:
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
-      env:
-        AWS_ACCESS_KEY_ID: ::add-mask::${{ env.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ::add-mask::${{ env.AWS_SECRET_ACCESS_KEY }}
+      volumes:
+        - /etc/secret-volume
     strategy:
       fail-fast: true
     env:
@@ -55,6 +54,7 @@ jobs:
       CCACHE_MAXSIZE: "5G"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+      IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
       - name: Checkout Repository
@@ -148,8 +148,6 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        env:
-          IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \

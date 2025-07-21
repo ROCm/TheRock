@@ -43,6 +43,7 @@ jobs:
       CCACHE_MAXSIZE: "4000M"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -171,8 +172,6 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        env:
-          IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/github_actions/upload_build_artifacts.py \
             --run-id ${{ github.run_id }} \
