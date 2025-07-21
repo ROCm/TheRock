@@ -21,8 +21,8 @@ patches locally until they can be upstreamed. See the
 | Feature                  | Linux support | Windows support                                                       |
 | ------------------------ | ------------- | --------------------------------------------------------------------- |
 | PyTorch                  | ✅ Supported  | ✅ Supported                                                          |
+| torchaudio               | ✅ Supported  | ✅                                                                    |
 | torchvision              | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
-| torchaudio               | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
 | Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
 
 ## Build instructions
@@ -76,6 +76,7 @@ Now checkout repositories:
   ```bash
   # TODO(#910): Support torchvision and torchaudio on Windows
   python pytorch_torch_repo.py checkout --repo C:/b/pytorch
+  python pytorch_audio_repo.py checkout --repo C:/b/audio
   ```
 
 Now note the gfx target you want to build for and then...
@@ -102,6 +103,7 @@ mix/match build steps.
   python build_prod_wheels.py build \
     --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     --pytorch-dir C:/b/pytorch \
+    --pytorch-audio-dir C:/b/audio \
     --output-dir %HOME%/tmp/pyout
   ```
 

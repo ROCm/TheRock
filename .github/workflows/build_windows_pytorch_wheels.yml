@@ -99,8 +99,9 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/torch
-          # TODO(#910): Support torchvision and torchaudio on Windows
-          # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
+          python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --repo ${{ env.CHECKOUT_ROOT }}/audio
+          # TODO(#910): Support torchvision on Windows
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
@@ -121,6 +122,7 @@ jobs:
             --install-rocm ^
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
+            --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             ${{ env.optional_build_prod_arguments }}
