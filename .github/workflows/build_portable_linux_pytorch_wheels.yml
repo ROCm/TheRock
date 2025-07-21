@@ -154,6 +154,7 @@ jobs:
         id: configure
         env:
           TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
