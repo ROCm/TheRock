@@ -25,12 +25,6 @@ is_windows = platform.system() == "Windows"
 
 LINUX_CONSOLE_SCRIPT_TESTS = [
     # These currently only have unprefixed names (e.g. 'clang') on Windows.
-    ("amdclang", ["--help"], "clang LLVM compiler", True),
-    ("amdclang++", ["--help"], "clang LLVM compiler", True),
-    ("amdclang-cpp", ["--help"], "clang LLVM compiler", True),
-    ("amdclang-cl", ["-help"], "clang LLVM compiler", True),
-    ("amdflang", ["--help"], "clang LLVM compiler", True),
-    ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
     # These tools are only available on Linux.
     ("rocm_agent_enumerator", [], "", True),
     ("rocminfo", [], "", True),
@@ -38,6 +32,12 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
 ]
 
 CONSOLE_SCRIPT_TESTS = [
+    ("amdclang", ["--help"], "clang LLVM compiler", True),
+    ("amdclang++", ["--help"], "clang LLVM compiler", True),
+    ("amdclang-cpp", ["--help"], "clang LLVM compiler", True),
+    ("amdclang-cl", ["-help"], "clang LLVM compiler", True),
+    ("amdflang", ["--help"], "clang LLVM compiler", True),
+    ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
 ] + (LINUX_CONSOLE_SCRIPT_TESTS if not is_windows else [])
