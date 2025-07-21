@@ -313,7 +313,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         custom_hipify(args)
         commit_hipify(args)
 
-    # apply hipified patches for main repository and submodules
+    # Apply hipified patches to main repository and submodules.
     if args.hipify and args.patch and patches_dir_name:
         apply_all_patches(
             repo_dir,
