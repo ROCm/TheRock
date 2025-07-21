@@ -110,8 +110,10 @@ jobs:
             windows-build-packages-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
+        # testing
         run: |
-          python ./build_tools/fetch_sources.py --jobs 96
+          python ./build_tools/fetch_sources.py --jobs 96 \
+              --no-include-math-libs --no-include-ml-frameworks
 
       - name: Configure Projects
         env:

@@ -38,10 +38,6 @@ jobs:
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
-    container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
-      volumes:
-        - /home/runner/.aws:${{github.workspace}}/.aws
     strategy:
       fail-fast: true
     env:
@@ -86,8 +82,10 @@ jobs:
           git config fetch.parallel 10
 
       - name: Fetch sources
+       # testing
         run: |
-          ./build_tools/fetch_sources.py --jobs 12
+          ./build_tools/fetch_sources.py --jobs 12 \
+            --no-include-math-libs --no-include-ml-frameworks
 
       - name: Install python deps
         run: |
