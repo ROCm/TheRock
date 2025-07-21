@@ -300,7 +300,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     git_config_ignore_submodules(repo_dir)
 
     if args.patch and patches_dir_name:
-        # apply base patches for submodules
+        # Apply base patches to submodules.
         apply_submodule_patches(
             repo_dir,
             repo_patch_dir_base / patches_dir_name,
