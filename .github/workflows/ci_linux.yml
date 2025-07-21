@@ -51,4 +51,3 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      platform: "linux"
