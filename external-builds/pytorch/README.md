@@ -21,7 +21,7 @@ patches locally until they can be upstreamed. See the
 | Feature                  | Linux support | Windows support                                                       |
 | ------------------------ | ------------- | --------------------------------------------------------------------- |
 | PyTorch                  | ✅ Supported  | ✅ Supported                                                          |
-| torchaudio               | ✅ Supported  | ✅                                                                    |
+| torchaudio               | ✅ Supported  | ✅ Supported                                                          |
 | torchvision              | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
 | Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
 
