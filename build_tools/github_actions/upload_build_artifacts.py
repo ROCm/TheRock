@@ -34,7 +34,9 @@ def retrieve_bucket_info() -> tuple[str, str]:
     is_forked_pr = os.getenv("IS_FORKED_PR", False)
     owner, repo_name = github_repository.split("/")
     external_repo = (
-        "" if repo_name == "TheRock" and owner == "ROCm" and not is_forked_pr else f"{owner}-{repo_name}/"
+        ""
+        if repo_name == "TheRock" and owner == "ROCm" and not is_forked_pr
+        else f"{owner}-{repo_name}/"
     )
     bucket = (
         "therock-artifacts"
