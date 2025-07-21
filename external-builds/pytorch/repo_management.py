@@ -174,7 +174,7 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
 def apply_main_repository_patches(
     root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
 ):
-    # Apply patches to main repository
+    # Apply patches to main repository.
     apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
 
 
