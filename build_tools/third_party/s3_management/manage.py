@@ -42,7 +42,7 @@ PREFIXES = [
     "v2/gfx120X-all",
     "v2-staging/gfx120X-all",
     "v2/gfx94X-dcgpu",
-    "v2-staging/gfx94X-dcgpu"
+    "v2-staging/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
     "v2-staging/gfx950-dcgpu"
 ]
