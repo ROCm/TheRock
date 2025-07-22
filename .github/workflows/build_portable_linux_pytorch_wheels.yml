@@ -167,7 +167,7 @@ jobs:
             build \
             --install-rocm \
             --pip-cache-dir /tmp/pipcache \
-            --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
+            --index-url "${{ inputs.cloudfront_staging_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
@@ -242,8 +242,9 @@ jobs:
 
       - name: Copy wheels from staging sub-dir to release dir S3
         run: |
-          aws s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-          s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
+          aws s3 cp \
+            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: (Re-)Generate Python package release index
