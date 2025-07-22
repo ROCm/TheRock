@@ -95,6 +95,21 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
     },
+    # FFT tests
+    "rocfft": {
+        "job_name": "rocfft",
+        "fetch_artifact_args": "--fft --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {SCRIPT_DIR / 'test_rocfft.py'}",
+        "platform": ["linux", "windows"],
+    },
+    "hipfft": {
+        "job_name": "hipfft",
+        "fetch_artifact_args": "--fft --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {SCRIPT_DIR / 'test_hipfft.py'}",
+        "platform": ["linux", "windows"],
+    },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",

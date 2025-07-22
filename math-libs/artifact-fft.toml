@@ -3,9 +3,17 @@
 [components.dev."math-libs/rocFFT/stage"]
 [components.doc."math-libs/rocFFT/stage"]
 [components.lib."math-libs/rocFFT/stage"]
+[components.test."math-libs/rocFFT/stage"]
+include = [
+  "bin/rocfft-test*",
+]
 
 # hipFFT
 [components.dbg."math-libs/hipFFT/stage"]
 [components.dev."math-libs/hipFFT/stage"]
 [components.doc."math-libs/hipFFT/stage"]
 [components.lib."math-libs/hipFFT/stage"]
+[components.test."math-libs/hipFFT/stage"]
+include = [
+  "bin/hipfft-test*",
+]
