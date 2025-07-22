@@ -136,6 +136,16 @@ def apply_patches(args, projects):
         )
 
         # Generate the .smrev patch state file.
+        # This file consists of two lines: The git origin and a summary of the
+        # state of the source tree that was checked out. This can be consumed
+        # by individual build steps in lieu of heuristics for asking git. If
+        # the tree is in a patched state, the commit hashes of HEAD may be
+        # different from checkout-to-checkout, but the .smrev file will have
+        # stable contents so long as the submodule pin and contents of the
+        # hashes are the same.
+        # Note that this does not track the dirty state of the tree. If full
+        # fidelity hashes of the tree state are needed for development/dirty
+        # trees, then another mechanism must be used.
         patches_hash = hashlib.sha1()
         for patch_file in patch_files:
             patch_contents = Path(patch_file).read_bytes()
