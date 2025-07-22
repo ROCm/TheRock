@@ -169,13 +169,13 @@ jobs:
 
       - name: Upload wheels to Staging S3
         run: |
-          aws s3 cp s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/staging/ \
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/staging/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: (Re-)Generate Python package release index
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/staging
+          python ./build_tools/third_party/s3_management/manage.py staging/${{ inputs.amdgpu_family }}
 
   generate_target_to_run:
     name: Generate target_to_run
@@ -192,7 +192,7 @@ jobs:
           TARGET: ${{ inputs.amdgpu_family }}
           PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
-        
+
   test_pytorch_wheels:
     name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
@@ -228,7 +228,7 @@ jobs:
 
       - name: Copy wheels from staging sub-dir to release dir S3
         run: |
-          aws s3 cp s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/staging/ \
+          aws s3 cp s3://${{ env.S3_BUCKET_PY }}/staging/${{ inputs.amdgpu_family }}/ \
           s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
