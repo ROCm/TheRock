@@ -101,8 +101,8 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
-      # github workflows does not have if/else so we define two jobs with different if clauses
-      # if branch to checkout nightly
+      # Github workflows do not have if/else and therefore we define two jobs with different if clauses.
+      # First the if branch to checkout nightly version of code for the build.
       - name: Checkout PyTorch Source Repos from nightly branch
         # checkout default version from upstream pytorch repo
         if: ${{ inputs.pytorch_version == 'nightly' }}
@@ -112,7 +112,7 @@ jobs:
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
-      # else branch to checkout release version
+      # Then the else branch to checkout release version of source code.
       - name: Checkout PyTorch Source Repos from stable branch
         # else checkout stable version from amd maintained repo
         if: ${{ inputs.pytorch_version != 'nightly' }}
