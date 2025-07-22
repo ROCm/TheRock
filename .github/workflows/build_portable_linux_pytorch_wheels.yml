@@ -192,10 +192,7 @@ jobs:
           TARGET: ${{ inputs.amdgpu_family }}
           PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
-
-      - name: Debug test-runs-on
-        run: echo "Test runs on: ${{ steps.configure.outputs.test-runs-on }}"
-
+        
   test_pytorch_wheels:
     name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
