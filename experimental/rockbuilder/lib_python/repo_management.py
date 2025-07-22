@@ -373,23 +373,33 @@ class RockProjectRepo:
             cwd=repo_path,
         )
 
-    def apply_all_patches(
-        self,
-        root_repo_path: Path,
-        patches_path: Path,
-        repo_name: str,
-        patchset_name: str,
+
+    def apply_main_repository_patches(
+        self, root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
+    ):
+        # Apply patches to main repository.
+        self.apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
+
+
+    def apply_submodule_patches(
+        self, root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
     ):
         relative_sm_paths = self.list_submodules(root_repo_path, relative=True)
-        # Apply base patches.
-        self.apply_repo_patches(
-            root_repo_path, patches_path / repo_name / patchset_name
-        )
         for relative_sm_path in relative_sm_paths:
             self.apply_repo_patches(
                 root_repo_path / relative_sm_path,
                 patches_path / relative_sm_path / patchset_name,
             )
+
+
+    def apply_all_patches(
+        self, root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
+    ):
+        self.apply_main_repository_patches(
+            root_repo_path, patches_path, repo_name, patchset_name
+        )
+        self.apply_submodule_patches(root_repo_path, patches_path, repo_name, patchset_name)
+
 
     # repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
     def repo_hashtag_to_patches_dir_name(self, version_ref: str) -> str:
@@ -522,6 +532,19 @@ class RockProjectRepo:
                 cwd=self.project_src_dir,
             )
             self.exec(["git", "checkout", "FETCH_HEAD"], cwd=self.project_src_dir)
+
+        if apply_patches_enabled:
+            # Apply base patches to main repository. Patches to
+            # submodules will be applied later. This enables patches
+            # to modify submodule version to be checked out.
+            self.apply_main_repository_patches(
+                self.project_src_dir,
+                self.project_patch_dir_root
+                / self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag),
+                self.project_name,
+                "base",
+            )
+
         # add our own git tag to help with the create patches command
         self.exec(
             ["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"],
@@ -549,9 +572,9 @@ class RockProjectRepo:
 
         self.git_config_ignore_submodules(self.project_src_dir)
 
-        # apply base patches
         if apply_patches_enabled:
-            self.apply_all_patches(
+            # Apply base patches to submodules.
+            self.apply_submodule_patches(
                 self.project_src_dir,
                 self.project_patch_dir_root
                 / self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag),
