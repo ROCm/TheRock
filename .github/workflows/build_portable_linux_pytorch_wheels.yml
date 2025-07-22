@@ -167,6 +167,16 @@ jobs:
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
 
+      - name: Upload wheels to Staging S3
+        run: |
+          aws s3 cp s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/staging/ \
+            --recursive --exclude "*" --include "*.whl"
+
+      - name: (Re-)Generate Python package release index
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/staging
+
   generate_target_to_run:
     name: Generate target_to_run
     runs-on: ubuntu-24.04
@@ -182,6 +192,9 @@ jobs:
           TARGET: ${{ inputs.amdgpu_family }}
           PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
+
+      - name: Debug test-runs-on
+        run: echo "Test runs on: ${{ steps.configure.outputs.test-runs-on }}"
 
   test_pytorch_wheels:
     name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
@@ -215,10 +228,11 @@ jobs:
       - name: Sanity Check Wheel
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
-          
-      - name: Upload wheels to S3
+
+      - name: Copy wheels from staging sub-dir to release dir S3
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
+          aws s3 cp s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/staging/ \
+          s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: (Re-)Generate Python package release index
