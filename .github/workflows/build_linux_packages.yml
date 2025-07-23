@@ -44,6 +44,7 @@ jobs:
     strategy:
       fail-fast: true
     env:
+      AWS_SHARED_CREDENTIALS_FILE: /github/home/.aws/credentials
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
@@ -65,13 +66,14 @@ jobs:
       - name: Verify AWS credentials
         run: |
           echo "Container user: $(whoami)"
+          echo "Looking for credentials at $AWS_SHARED_CREDENTIALS_FILE"
           echo "HOME: $HOME"
-          # echo ~
-          # ls ~/
-          # echo "ls $HOME"
-          # ls -l $HOME
-          # echo "ls gihtub home"
-          # ls -l $HOME/.aws
+          echo "~ $HOME!"
+          ls ~/
+          echo "ls $HOME"
+          ls -l $HOME
+          echo "ls gihtub home"
+          ls -l $HOME/.aws
           aws sts get-caller-identity
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
