@@ -64,6 +64,7 @@ jobs:
       - name: Verify AWS credentials
         run: |
           echo $AWS_PROFILE
+          ls -l /root/.aws
           echo "Whoami: $(whoami)"
           echo "HOME: $HOME"
           echo "Credentials file: $AWS_SHARED_CREDENTIALS_FILE"
