@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: true
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /geomin12/test/ok/credential
+      AWS_SHARED_CREDENTIALS_FILE: /runner/shared-data/credentials
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
@@ -62,6 +62,7 @@ jobs:
 
       - name: Verify AWS credentials
         run: |
+          id
           echo $AWS_PROFILE
           echo "Whoami: $(whoami)"
           echo "HOME: $HOME"
