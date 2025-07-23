@@ -71,8 +71,6 @@ jobs:
           echo "AWS CLI version: $(aws --version)"
           echo "Running sts call..."
           aws sts get-caller-identity
-        env:
-         AWS_SHARED_CREDENTIALS_FILE: /github/home/.aws/credentials
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
