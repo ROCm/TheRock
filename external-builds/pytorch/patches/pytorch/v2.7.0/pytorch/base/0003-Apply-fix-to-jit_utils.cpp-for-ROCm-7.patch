@@ -1,0 +1,26 @@
+From 9651b2559c4384b8a590196f03ef76508419a1d7 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Wed, 23 Jul 2025 08:46:39 -0700
+Subject: [PATCH 3/3] Apply fix to jit_utils.cpp for ROCm 7.
+
+See https://github.com/ROCm/pytorch/commit/28806f842c9c019866019e44026c984c63779082.
+---
+ aten/src/ATen/native/cuda/jit_utils.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/aten/src/ATen/native/cuda/jit_utils.cpp b/aten/src/ATen/native/cuda/jit_utils.cpp
+index 0d49ec9c187..deac503827b 100644
+--- a/aten/src/ATen/native/cuda/jit_utils.cpp
++++ b/aten/src/ATen/native/cuda/jit_utils.cpp
+@@ -45,7 +45,7 @@ namespace at::cuda::jit {
+ // Copied from aten/src/ATen/cuda/llvm_basic.cpp, then modified as above.
+ // If not compiling for ROCm, return the original get_traits_string().
+ std::string get_traits_string_but_hiprtc_safe() {
+-#ifdef USE_ROCM
++#if defined(USE_ROCM) && ROCM_VERSION < 70000
+     return R"ESCAPE(
+ namespace std {
+ 
+-- 
+2.45.1.windows.1
+
