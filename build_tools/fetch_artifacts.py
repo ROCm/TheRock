@@ -155,14 +155,15 @@ def download_artifact(artifact_download_request: ArtifactDownloadRequest):
     ) as out_file:
         copyfileobj(in_stream, out_file)
     log(f"++ Download complete for {output_path}")
-    raise Exception("hi")
 
 
 def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]):
     """Downloads artifacts in parallel using a thread pool executor."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(download_artifact, artifact_download_request) : artifact_download_request
+            executor.submit(
+                download_artifact, artifact_download_request
+            ): artifact_download_request
             for artifact_download_request in artifact_download_requests
         }
         retries = {}
@@ -176,14 +177,15 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
             else:
                 future.result(timeout=60)
 
-        # Check the status of the retried requests    
+        # Check the status of the retried requests
         for future in concurrent.futures.as_completed(retries):
             if future.exception():
                 data = retries[future]
                 log(f"++ Retry failed on downloading for {str(data)}.")
             else:
                 future.result(timeout=60)
-                
+
+
 def retrieve_all_artifacts(
     run_id: str,
     target: str,
