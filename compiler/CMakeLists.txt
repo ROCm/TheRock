@@ -74,6 +74,7 @@ if(THEROCK_ENABLE_COMPILER)
     RUNTIME_DEPS
       ${THEROCK_BUNDLED_ZLIB}
       ${THEROCK_BUNDLED_ZSTD}
+      ${THEROCK_BUNDLED_NUMACTL}
     # The entire LLVM install tree is placed inside of the overall ROCM lib/llvm
     # directory.
     INSTALL_DESTINATION "lib/llvm"
