@@ -61,8 +61,11 @@ jobs:
 
       - name: Verify AWS credentials
         run: |
-          aws sts get-caller-identity
+          ls ~/
           ls /root/.aws
+          ls /root
+          find / | grep .aws/credentials
+          aws sts get-caller-identity
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
