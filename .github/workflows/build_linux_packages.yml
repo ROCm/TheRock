@@ -65,16 +65,16 @@ jobs:
 
       - name: Verify AWS credentials
         run: |
-          echo "Container user: $(whoami)"
-          echo "Looking for credentials at $AWS_SHARED_CREDENTIALS_FILE"
+          echo $AWS_PROFILE
+          echo "Whoami: $(whoami)"
           echo "HOME: $HOME"
-          echo "~ $HOME!"
-          ls ~/
-          echo "ls $HOME"
-          ls -l $HOME
-          echo "ls gihtub home"
-          ls -l $HOME/.aws
+          echo "Credentials file: $AWS_SHARED_CREDENTIALS_FILE"
+          ls -l $AWS_SHARED_CREDENTIALS_FILE
+          echo "AWS CLI version: $(aws --version)"
+          echo "Running sts call..."
           aws sts get-caller-identity
+        env:
+         AWS_SHARED_CREDENTIALS_FILE: /github/home/.aws/credentials
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
