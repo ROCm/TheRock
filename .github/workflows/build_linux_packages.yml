@@ -70,6 +70,7 @@ jobs:
           echo "HOME: $HOME"
           echo "Credentials file: $AWS_SHARED_CREDENTIALS_FILE"
           ls -l $AWS_SHARED_CREDENTIALS_FILE
+          file $AWS_SHARED_CREDENTIALS_FILE
           echo "AWS CLI version: $(aws --version)"
           echo "Running sts call..."
           aws sts get-caller-identity
