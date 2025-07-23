@@ -59,12 +59,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      - name: Check container user
+        run: id
+
       - name: Verify AWS credentials
         run: |
+          echo "Container user: $(whoami)"
+          echo "HOME: $HOME"
+          echo ~
           ls ~/
+          echo "ls /root/.aws"
           ls /root/.aws
+          echo "ls /root"
           ls /root
+          echo "find"
           find / | grep .aws/credentials
+          ls -la /root/.aws
           aws sts get-caller-identity
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
