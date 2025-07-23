@@ -66,15 +66,12 @@ jobs:
         run: |
           echo "Container user: $(whoami)"
           echo "HOME: $HOME"
-          echo ~
-          ls ~/
-          echo "ls $HOME"
-          ls /root/.aws
-          echo "ls /root"
-          ls /root
-          echo "find"
-          find / | grep .aws/credentials
-          ls -la /root/.aws
+          # echo ~
+          # ls ~/
+          # echo "ls $HOME"
+          # ls -l $HOME
+          # echo "ls gihtub home"
+          # ls -l $HOME/.aws
           aws sts get-caller-identity
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
