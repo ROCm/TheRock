@@ -38,9 +38,9 @@ jobs:
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
-    # container:
-    #   image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
-    #   options: -v /geomin12/test/ok/credentials:/geomin12/woo/aws-credentials
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
+      options: -v /runner/shared-data/credentials:/runner/shared-data/credentials
     strategy:
       fail-fast: true
     env:
@@ -68,7 +68,6 @@ jobs:
           echo "HOME: $HOME"
           echo "Credentials file: $AWS_SHARED_CREDENTIALS_FILE"
           ls -l $AWS_SHARED_CREDENTIALS_FILE
-          file $AWS_SHARED_CREDENTIALS_FILE
           echo "AWS CLI version: $(aws --version)"
           echo "Running sts call..."
           aws sts get-caller-identity
