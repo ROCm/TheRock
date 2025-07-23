@@ -38,13 +38,13 @@ jobs:
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
-    container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
-      options: -v /geomin12/test/ok/credentials
+    # container:
+    #   image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
+    #   options: -v /geomin12/test/ok/credentials:/geomin12/woo/aws-credentials
     strategy:
       fail-fast: true
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /geomin12/test/ok/credentials
+      AWS_SHARED_CREDENTIALS_FILE: /geomin12/test/ok/credential
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
