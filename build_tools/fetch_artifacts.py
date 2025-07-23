@@ -169,7 +169,7 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
         retries = {}
         for future in concurrent.futures.as_completed(futures):
             if future.exception():
-                # Store the retry request
+                # Store the retry request for later status check
                 data = futures[future]
                 log(f"++ Failure on downloading for {str(data)}. Retrying...")
                 future = executor.submit(download_artifact, data)
@@ -181,7 +181,7 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
         for future in concurrent.futures.as_completed(retries):
             if future.exception():
                 data = retries[future]
-                log(f"++ Retry failed on downloading for {str(data)}.")
+                raise Exception(f"Download retry failed for {str(data)}.")
             else:
                 future.result(timeout=60)
 
