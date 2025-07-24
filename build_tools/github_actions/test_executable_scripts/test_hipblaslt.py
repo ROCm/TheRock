@@ -24,7 +24,7 @@ if AMDGPU_FAMILIES in tests_to_exclude and PLATFORM in tests_to_exclude.get(
     AMDGPU_FAMILIES, {}
 ):
     exclusion_list = ":".join(tests_to_exclude[AMDGPU_FAMILIES][PLATFORM])
-    cmd.apppend(f"--gtest_filter=-{exclusion_list}")
+    cmd.append(f"--gtest_filter=-{exclusion_list}")
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
