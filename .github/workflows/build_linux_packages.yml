@@ -68,7 +68,6 @@ jobs:
         run: |
           id
           echo "ls tmp"
-          ls -l /home/runner
           ls -l /tmp
           cat /tmp/run.sh
           echo $AWS_PROFILE
