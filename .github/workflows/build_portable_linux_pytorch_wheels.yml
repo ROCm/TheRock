@@ -204,20 +204,24 @@ jobs:
 
       - name: Copy only tested PyTorch wheels from staging to release S3
         run: |
-          #torch_version="${{ needs.build_pytorch_wheels.outputs.torch_version }}"
           torch_version="2.7.0a0+rocm7.0.0.dev0.515115ea2cb85a0b71b5507ce56a627d14c7ae73"
+          #torch_version="${{ needs.build_pytorch_wheels.outputs.torch_version }}"
           echo "Torch version: $torch_version"
 
+          # Extract the ROCm suffix from the torch version (everything after '+')
+          rocm_suffix=$(echo "$torch_version" | cut -d '+' -f 2)
+          echo "ROCm suffix: $rocm_suffix"
+
           for package in torch torchaudio torchvision; do
-            echo "Copying matching files for $package..."
+            echo "Copying matching files for $package with +$rocm_suffix..."
             aws s3 cp \
               s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
               s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
               --recursive \
               --exclude "*" \
-              --include "${package}-${torch_version}-*.whl"
+              --include "${package}-*+${rocm_suffix}-*.whl"
           done
-
+          
       - name: (Re-)Generate Python package release index
         run: |
           pip install boto3 packaging
