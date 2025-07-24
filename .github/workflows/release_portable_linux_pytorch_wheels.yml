@@ -56,7 +56,7 @@ jobs:
         python_version: ["3.11", "3.12", 3.13]
         pytorch_version: ["release/2.7"]
         include:
-          - release/2.7
+          - pytorch_version: release/2.7
             pytorch_patchset: "rocm_2.7"
 
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
