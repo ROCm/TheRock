@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: true
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /tmp/credentials
+      AWS_SHARED_CREDENTIALS_FILE: /credentials
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
@@ -76,8 +76,8 @@ jobs:
         # file $AWS_SHARED_CREDENTIALS_FILE
         run: |
           id
-          echo "ls tmp"
-          ls -l /tmp
+          echo "ls -l /"
+          ls -l /
           echo $AWS_PROFILE
           echo "Whoami: $(whoami)"
           echo "HOME: $HOME"
