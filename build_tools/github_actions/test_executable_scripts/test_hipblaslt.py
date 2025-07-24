@@ -17,7 +17,9 @@ cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test", "--gtest_filter=*pre_checkin*"]
 
 tests_to_exclude = {
     # Related issue: https://github.com/ROCm/TheRock/issues/1114
-    "gfx1151": {"windows": ["_/aux_test.conversion/pre_checkin_aux_auxiliary_func_f16_r"]}
+    "gfx1151": {
+        "windows": ["_/aux_test.conversion/pre_checkin_aux_auxiliary_func_f16_r"]
+    }
 }
 
 if AMDGPU_FAMILIES in tests_to_exclude and PLATFORM in tests_to_exclude.get(
