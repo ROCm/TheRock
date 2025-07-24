@@ -1,0 +1,153 @@
+From 81ceb04bff3ed5812195e4bad3c366f9498e1ee4 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 24 Jul 2025 14:42:11 -0700
+Subject: [PATCH] Backport: Enable MI355X PyTorch CI testing
+
+Original patch from saienduri <saimanas.enduri@amd.com>
+
+This PR consists of all the changes required to enable PyTorch ROCm CI on MI355X nodes.
+
+- Rework aotriton cmake configuration to rely on `HIP_VERSION` instead of `ROCM_VERSION` as aotriton depnds on hip. Hip loosely track the rocm major version, but the two are not actually synchronized as observed in the ROCm 7 alpha build.
+- Bump composable-kernel submodule to [df6023e305f389bbf7249b0c4414e649f3ad6598](https://github.com/ROCm/composable_kernel/tree/df6023e305f389bbf7249b0c4414e649f3ad6598) for mi350 compatibility.
+- Extend the change docker permissions step to the MI355x runners as well. This step is included to apply the required permission change to the test folder for a successful upload of artifacts in k8s docker.
+- Create new rocm-mi355 workflow to trigger core PyTorch tests on a nightly basis at 2:30 am PST.
+- Successfully tested running the test suites listed in rocm-mi355.yml on MI355 runners by temporarily hacking rocm-mi300.yml: https://hud.pytorch.org/pytorch/pytorch/commit/ca7d5fae112558ee3dde7ec3ce32e94b13f877fd#rocm-mi300
+
+fixes: https://github.com/ROCm/TheRock/issues/1119
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ .github/workflows/_rocm-test.yml        |  4 +-
+ .github/workflows/rocm-mi355.yml        | 68 +++++++++++++++++++++++++
+ .github/workflows/upload-test-stats.yml |  2 +-
+ cmake/External/aotriton.cmake           |  4 +-
+ 4 files changed, 73 insertions(+), 5 deletions(-)
+ create mode 100644 .github/workflows/rocm-mi355.yml
+
+diff --git a/.github/workflows/_rocm-test.yml b/.github/workflows/_rocm-test.yml
+index babcc4c9ba..2a6ea9f2c4 100644
+--- a/.github/workflows/_rocm-test.yml
++++ b/.github/workflows/_rocm-test.yml
+@@ -251,8 +251,8 @@ jobs:
+           # copy test results back to the mounted workspace, needed sudo, resulting permissions were correct
+           docker exec -t "${{ env.CONTAINER_NAME }}" sh -c "cd ../pytorch && sudo cp -R test/test-reports ../workspace/test"
+ 
+-      - name: Change permissions (only needed for MI300 runners for now)
+-        if: ${{ always() && steps.test.conclusion && contains(matrix.runner, 'mi300') }}
++      - name: Change permissions (only needed for MI300 and MI355 kubernetes runners for now)
++        if: ${{ always() && steps.test.conclusion && (contains(matrix.runner, 'mi300') || contains(matrix.runner, 'mi355')) }}
+         run: |
+           docker exec -t "${{ env.CONTAINER_NAME }}" sh -c "sudo chown -R 1001:1001 test"
+ 
+diff --git a/.github/workflows/rocm-mi355.yml b/.github/workflows/rocm-mi355.yml
+new file mode 100644
+index 0000000000..7d9c016e13
+--- /dev/null
++++ b/.github/workflows/rocm-mi355.yml
+@@ -0,0 +1,68 @@
++name: rocm-mi355
++
++on:
++  workflow_dispatch:
++  schedule:
++    - cron: 30 9 * * *  # about 2:30am PDT
++
++concurrency:
++  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}-${{ github.ref_type == 'branch' && github.sha }}-${{ github.event_name == 'workflow_dispatch' }}-${{ github.event_name == 'schedule' }}
++  cancel-in-progress: true
++
++permissions: read-all
++
++jobs:
++  target-determination:
++    if: github.repository_owner == 'pytorch'
++    name: before-test
++    uses: ./.github/workflows/target_determination.yml
++    permissions:
++      id-token: write
++      contents: read
++
++  get-label-type:
++    name: get-label-type
++    uses: pytorch/pytorch/.github/workflows/_runner-determinator.yml@main
++    if: ${{ (github.event_name != 'schedule' || github.repository == 'pytorch/pytorch') && github.repository_owner == 'pytorch' }}
++    with:
++      triggering_actor: ${{ github.triggering_actor }}
++      issue_owner: ${{ github.event.pull_request.user.login || github.event.issue.user.login }}
++      curr_branch: ${{ github.head_ref || github.ref_name }}
++      curr_ref_type: ${{ github.ref_type }}
++
++  linux-noble-rocm-py3_12-build:
++    if: ${{ (github.event_name != 'schedule' || github.repository == 'pytorch/pytorch') && github.repository_owner == 'pytorch' }}
++    name: linux-noble-rocm-py3.12-mi355
++    uses: ./.github/workflows/_linux-build.yml
++    needs: get-label-type
++    with:
++      runner_prefix: "${{ needs.get-label-type.outputs.label-type }}"
++      build-environment: linux-noble-rocm-py3.12-mi355
++      docker-image-name: ci-image:pytorch-linux-noble-rocm-alpha-py3
++      sync-tag: rocm-build
++      test-matrix: |
++        { include: [
++          { config: "default", shard: 1, num_shards: 6, runner: "linux.rocm.gpu.mi355.2" },
++          { config: "default", shard: 2, num_shards: 6, runner: "linux.rocm.gpu.mi355.2" },
++          { config: "default", shard: 3, num_shards: 6, runner: "linux.rocm.gpu.mi355.2" },
++          { config: "default", shard: 4, num_shards: 6, runner: "linux.rocm.gpu.mi355.2" },
++          { config: "default", shard: 5, num_shards: 6, runner: "linux.rocm.gpu.mi355.2" },
++          { config: "default", shard: 6, num_shards: 6, runner: "linux.rocm.gpu.mi355.2" },
++        ]}
++    secrets: inherit
++
++  linux-noble-rocm-py3_12-test:
++    permissions:
++      id-token: write
++      contents: read
++    name: linux-noble-rocm-py3.12-mi355
++    uses: ./.github/workflows/_rocm-test.yml
++    needs:
++      - linux-noble-rocm-py3_12-build
++      - target-determination
++    with:
++      build-environment: linux-noble-rocm-py3.12-mi355
++      docker-image: ${{ needs.linux-noble-rocm-py3_12-build.outputs.docker-image }}
++      test-matrix: ${{ needs.linux-noble-rocm-py3_12-build.outputs.test-matrix }}
++      tests-to-include: "test_nn test_torch test_cuda test_ops test_unary_ufuncs test_binary_ufuncs test_autograd inductor/test_torchinductor"
++    secrets: inherit
+diff --git a/.github/workflows/upload-test-stats.yml b/.github/workflows/upload-test-stats.yml
+index c7c2acbb9c..a29df2de36 100644
+--- a/.github/workflows/upload-test-stats.yml
++++ b/.github/workflows/upload-test-stats.yml
+@@ -2,7 +2,7 @@ name: Upload test stats
+ 
+ on:
+   workflow_run:
+-    workflows: [pull, trunk, periodic, inductor, unstable, slow, unstable-periodic, inductor-periodic, rocm, rocm-mi300, inductor-micro-benchmark, inductor-micro-benchmark-x86, inductor-cu124, inductor-rocm, inductor-rocm-mi300, mac-mps]
++    workflows: [pull, trunk, periodic, inductor, unstable, slow, unstable-periodic, inductor-periodic, rocm, rocm-mi300, rocm-mi355, inductor-micro-benchmark, inductor-micro-benchmark-x86, inductor-cu124, inductor-rocm, inductor-rocm-mi300, mac-mps]
+     types:
+       - completed
+ 
+diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
+index 72078292d8..501333461b 100644
+--- a/cmake/External/aotriton.cmake
++++ b/cmake/External/aotriton.cmake
+@@ -49,7 +49,7 @@ if(NOT __AOTRITON_INCLUDED)
+       "08d84f96f4c984179f80f517c0431c7511ee26bb0ce9bd05a827573ddd78cc79"  # rocm6.2
+       "9094d59717e7e6eace9126ca100dd0e86510f07fc6c3a349569fc4e2d9056604"  # rocm6.3
+       "41190202c2736d5ff75b13a3abc0fb52ebfbb67226cf85dc3de7699c7000db44"  # rocm6.4
+-      "c85da64d21510190277794455ef8bd3f2d543a6f2462140d3da27e1df0ab8f82"  # rocm6.5 with gfx950
++      "7e29c325d5bd33ba896ddb106f5d4fc7d715274dca7fe937f724fffa82017838"  # rocm6.5 with gfx950
+       "9061bff8a1f7b857399467260b54714d659fd812a41eeee049f0a3e9c8b9aeeb"  # rocm7.0
+       )
+   set(__AOTRITON_Z "gz")
+@@ -89,7 +89,7 @@ if(NOT __AOTRITON_INCLUDED)
+     add_dependencies(__caffe2_aotriton aotriton_external)
+     message(STATUS "Using AOTriton compiled from source directory ${__AOTRITON_EXTERN_PREFIX}")
+   else()
+-    set(__AOTRITON_SYSTEM_ROCM "${ROCM_VERSION_DEV_MAJOR}.${ROCM_VERSION_DEV_MINOR}")
++    set(__AOTRITON_SYSTEM_ROCM "${HIP_VERSION_MAJOR}.${HIP_VERSION_MINOR}")
+     list(GET __AOTRITON_ROCM_LIST 0 __AOTRITON_ROCM_DEFAULT_STR)
+     # Initialize __AOTRITON_ROCM to lowest version, in case all builds > system's ROCM
+     string(SUBSTRING ${__AOTRITON_ROCM_DEFAULT_STR} 4 -1 __AOTRITON_ROCM)
+-- 
+2.43.0
+
