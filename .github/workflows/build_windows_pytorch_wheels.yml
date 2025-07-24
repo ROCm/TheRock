@@ -94,13 +94,15 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      - name: Checkout PyTorch Source Repos
+      - name: Checkout PyTorch source repos (main branch)
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --repo ${{ env.CHECKOUT_ROOT }}/torch
+            --repo ${{ env.CHECKOUT_ROOT }}/torch \
+            --repo-hashtag main
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --repo ${{ env.CHECKOUT_ROOT }}/audio
+            --repo ${{ env.CHECKOUT_ROOT }}/audio \
+            --repo-hashtag main
           # TODO(#910): Support torchvision on Windows
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
 

@@ -63,7 +63,7 @@ throw-away container or CI environment.
 
 Now checkout repositories:
 
-- On Linux, use default paths (nested under this folder):
+- On Linux, use default paths (nested under this folder) and default branches:
 
   ```bash
   python pytorch_torch_repo.py checkout
@@ -71,12 +71,12 @@ Now checkout repositories:
   python pytorch_vision_repo.py checkout
   ```
 
-- On Windows, use shorter paths to avoid command length limits:
+- On Windows, use shorter paths to avoid command length limits and `main` branches:
 
   ```bash
-  # TODO(#910): Support torchvision and torchaudio on Windows
-  python pytorch_torch_repo.py checkout --repo C:/b/pytorch
-  python pytorch_audio_repo.py checkout --repo C:/b/audio
+  python pytorch_torch_repo.py checkout --repo C:/b/pytorch --repo-hashtag main
+  python pytorch_audio_repo.py checkout --repo C:/b/audio --repo-hashtag main
+  # TODO(#910): Support torchvision on Windows
   ```
 
 Now note the gfx target you want to build for and then...

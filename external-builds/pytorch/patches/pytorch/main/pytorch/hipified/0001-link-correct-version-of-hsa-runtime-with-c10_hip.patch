@@ -1,0 +1,40 @@
+From 9ce11c15264d2609dc956e50d846d3575fa067ef Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 29 Apr 2025 01:28:14 -0700
+Subject: [PATCH 1/4] link correct version of hsa-runtime with c10_hip
+
+link the version of hsa-runtime64 that is searched
+by LoadHIP.cmake instead of relying to it to be linked
+as an amdhip64 dependency without specifying the location.
+
+This fixes an error where the wrong version of library could
+be tried to be linked causing unresolved symbol errors.
+
+fixes: https://github.com/ROCm/TheRock/issues/474
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+Co-authored-by: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+---
+ c10/hip/CMakeLists.txt | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/c10/hip/CMakeLists.txt b/c10/hip/CMakeLists.txt
+index ef24471dba8..d82b52592b6 100644
+--- a/c10/hip/CMakeLists.txt
++++ b/c10/hip/CMakeLists.txt
+@@ -49,7 +49,11 @@ if(NOT BUILD_LIBTORCHLESS)
+   endif()
+ 
+   # ---[ Dependency of c10_hip
+-  target_link_libraries(c10_hip PUBLIC ${C10_LIB} hip::amdhip64)
++  if(NOT WIN32)
++    target_link_libraries(c10_hip PUBLIC ${C10_LIB} hip::amdhip64 hsa-runtime64::hsa-runtime64)
++  else()
++    target_link_libraries(c10_hip PUBLIC ${C10_LIB} hip::amdhip64)
++  endif()
+ 
+   target_include_directories(
+       c10_hip PUBLIC
+-- 
+2.47.1.windows.2
+
