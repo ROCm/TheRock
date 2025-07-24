@@ -29,7 +29,7 @@ on:
         required: true
         type: string
       pytorch_patchset:
-        description: Patch directory name from where to apply patchses if it exist.
+        description: Patch directory name from where to apply existing patches.
         required: true
         type: string
   workflow_dispatch:
@@ -61,7 +61,7 @@ on:
         required: true
         type: string
       pytorch_patchset:
-        description: Patch directory name from where to apply patchses if it exist.
+        description: Patch directory name from where to apply existing patches.
         required: true
         type: string
 
