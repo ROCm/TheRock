@@ -64,6 +64,8 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
+    outputs:
+      torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
@@ -112,6 +114,7 @@ jobs:
             --rocm-version ${{ inputs.rocm_version }}
 
       - name: Build PyTorch Wheels
+        id: build-pytorch-wheels
         # Using 'cmd' here is load bearing! There are configuration issues when
         # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
         shell: cmd
@@ -126,6 +129,7 @@ jobs:
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             ${{ env.optional_build_prod_arguments }}
+          python ./build_tools/github_actions/write_torch_version.py
 
       - name: Configure AWS Credentials
         if: always()
