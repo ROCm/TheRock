@@ -26,7 +26,7 @@ on:
         required: true
         type: string
       cloudfront_staging_url:
-        description: CloudFront URL pointing to Python index
+        description: CloudFront Staging URL pointing to Python index
         required: true
         type: string
       rocm_version:
@@ -72,7 +72,7 @@ on:
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
       cloudfront_staging_url:
-        description: CloudFront base URL pointing to Python index
+        description: CloudFront Staging base URL pointing to Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
       rocm_version:
