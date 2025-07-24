@@ -95,9 +95,9 @@ jobs:
       - name: Select Python version
         id: select-python
         run: |
-          python build_tools/github_actions/python_to_cp_version.py \
-            --python-version ${{ inputs.python_version }}
-          echo "cp_version=${{ env.cp_version }}" >> "$GITHUB_OUTPUT"
+          cp_version=$(python build_tools/github_actions/python_to_cp_version.py \
+            --python-version ${{ inputs.python_version }})
+          echo "cp_version=$cp_version" >> "$GITHUB_OUTPUT"
 
       # - name: Add selected Python version to PATH
       #   run: |
@@ -210,7 +210,8 @@ jobs:
 
       - name: Copy only tested PyTorch wheels from staging to release S3
         run: |
-          torch_version="${{ needs.build_pytorch_wheels.outputs.torch_version }}"
+          torch_version="2.7.0a0+rocm7.0.0.dev0.515115ea2cb85a0b71b5507ce56a627d14c7ae73"
+          #torch_version="${{ needs.build_pytorch_wheels.outputs.torch_version }}"
           cp_version="${CP_VERSION}"
           echo "Torch version: $torch_version"
           # Extract the ROCm suffix from the torch version (everything after '+')
