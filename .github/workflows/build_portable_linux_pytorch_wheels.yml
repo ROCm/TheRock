@@ -25,9 +25,11 @@ on:
         description: ROCm version to pip install
         type: string
       pytorch_version:
+        description: Pytorch version to checkout. ("nightly", or "release/2.7")
         required: true
         type: string
       pytorch_patchset:
+        description: Patch directory name from where to apply patchses if it exist.
         required: true
         type: string
   workflow_dispatch:
@@ -55,9 +57,11 @@ on:
         description: ROCm version to pip install
         type: string
       pytorch_version:
+        description: Pytorch version to checkout. ("nightly", or "release/2.7")
         required: true
         type: string
       pytorch_patchset:
+        description: Patch directory name from where to apply patchses if it exist.
         required: true
         type: string
 
@@ -104,7 +108,7 @@ jobs:
       # Github workflows do not have if/else and therefore we define two jobs with different if clauses.
       # First the if branch to checkout nightly version of code for the build.
       - name: Checkout PyTorch Source Repos from nightly branch
-        # checkout default version from upstream pytorch repo
+        # Checkout default upstream PyTorch/PyTorch branch.
         if: ${{ inputs.pytorch_version == 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
@@ -112,9 +116,8 @@ jobs:
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
-      # Then the else branch to checkout release version of source code.
+      # Then the else branch to checkout release version of source code instead.
       - name: Checkout PyTorch Source Repos from stable branch
-        # else checkout stable version from amd maintained repo
         if: ${{ inputs.pytorch_version != 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --patchset ${{ inputs.pytorch_patchset }}
