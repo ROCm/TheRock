@@ -82,6 +82,7 @@ jobs:
   #     optional_build_prod_arguments: ""
   #   outputs:
   #     torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
+  #     cp_version: ${{ steps.select-python.outputs.cp_version }}
   #   steps:
   #     - name: Checkout
   #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -92,9 +93,11 @@ jobs:
   #         git config --global user.email "therockbot@amd.com"
 
   #     - name: Select Python version
+  #       id: select-python
   #       run: |
   #         python build_tools/github_actions/python_to_cp_version.py \
   #           --python-version ${{ inputs.python_version }}
+  #         echo "cp_version=$cp_version" >> "$GITHUB_OUTPUT"
 
   #     - name: Add selected Python version to PATH
   #       run: |
@@ -187,6 +190,7 @@ jobs:
     name: Upload PyTorch Wheels to S3
     # needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
     # if: success() && github.repository_owner == 'ROCm'
+    #torch_cp_version="${{ needs.build_pytorch_wheels.outputs.cp_version }}"
     runs-on: ubuntu-24.04
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -206,6 +210,7 @@ jobs:
         run: |
           torch_version="2.7.0a0+rocm7.0.0.dev0.515115ea2cb85a0b71b5507ce56a627d14c7ae73"
           #torch_version="${{ needs.build_pytorch_wheels.outputs.torch_version }}"
+          cp_version = "cp312-cp312"
           echo "Torch version: $torch_version"
 
           # Extract the ROCm suffix from the torch version (everything after '+')
@@ -219,9 +224,9 @@ jobs:
               s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
               --recursive \
               --exclude "*" \
-              --include "${package}-*+${rocm_suffix}-*.whl"
+              --include "${package}-*+${rocm_suffix}-${torch_cp_version}*.whl"
           done
-          
+
       - name: (Re-)Generate Python package release index
         run: |
           pip install boto3 packaging
