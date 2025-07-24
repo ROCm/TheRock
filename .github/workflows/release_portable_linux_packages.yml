@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
-      S3_STAGING_SUBDIR: ${{ inputs.s3_subdir || 'v2-staging' }}
+      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.release_information.outputs.version }}
@@ -118,6 +118,7 @@ jobs:
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
+      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
 
     steps:
       - name: "Checking out repository"
