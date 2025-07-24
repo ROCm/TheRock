@@ -26,7 +26,7 @@ on:
         required: true
         type: string
       cloudfront_staging_url:
-        description: CloudFront Staging URL pointing to Python index
+        description: CloudFront base URL pointing to staging Python index
         required: true
         type: string
       rocm_version:
@@ -58,7 +58,7 @@ on:
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
       cloudfront_staging_url:
-        description: CloudFront Staging base URL pointing to Python index
+        description: CloudFront base URL pointing to staging Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
       rocm_version:
@@ -145,7 +145,7 @@ jobs:
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
 
-      - name: Upload wheels to Staging S3
+      - name: Upload wheels to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
@@ -202,12 +202,26 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
-      - name: Copy wheels from staging sub-dir to release dir S3
+      - name: Copy only tested PyTorch wheels from staging to release S3
         run: |
-          aws s3 cp \
-            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*" --include "*.whl"
+          torch_version="${{ needs.build_pytorch_wheels.outputs.torch_version }}"
+
+          # URL encode the "+" to "%2B" for matching filenames in S3
+          torch_version_encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''${torch_version}'''))")
+
+          echo "Encoded torch version: $torch_version_encoded"
+
+          for package in torch torchaudio torchvision; do
+            filename_prefix="$package-$torch_version_encoded"
+
+            echo "Copying matching files for $filename_prefix..."
+            aws s3 cp \
+              s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
+              s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
+              --recursive \
+              --exclude "*" \
+              --include "${filename_prefix}-*.whl"
+          done
 
       - name: (Re-)Generate Python package release index
         run: |
