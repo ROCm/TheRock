@@ -142,7 +142,7 @@ Using the CLR submodule as an example:
    python ./build_tools/fetch_sources.py \
      --remote \
      --no-apply-patches \
-     --projects clr \
+     --system-projects clr \
      --no-include-math-libs \
      --no-include-ml-frameworks
    ```
