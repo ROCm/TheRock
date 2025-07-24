@@ -32,19 +32,31 @@ permissions:
   contents: read
 
 jobs:
+  prepare:
+    runs-on: azure-linux-scale-rocm
+    steps:
+      - name: Copy credentials to workspace
+        run: |
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+          ls -l /runner/shared-data/credentials
+          cp /runner/shared-data/credentials $GITHUB_WORKSPACE/credentials
+          ls -l "$GITHUB_WORKSPACE"
+
   build_linux_packages:
     name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
+    needs: prepare
     runs-on: azure-linux-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
-      options: -v /runner/shared-data/credentials:/credentials
+      options: -v ${{ github.workspace }}/credentials:/credentials
     strategy:
       fail-fast: true
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /credentials
+      AWS_SHARED_CREDENTIALS_FILE: /tmp/credentials
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
@@ -64,8 +76,8 @@ jobs:
         # file $AWS_SHARED_CREDENTIALS_FILE
         run: |
           id
-          echo "ls -l /"
-          ls -l /
+          echo "ls tmp"
+          ls -l /tmp
           echo $AWS_PROFILE
           echo "Whoami: $(whoami)"
           echo "HOME: $HOME"
