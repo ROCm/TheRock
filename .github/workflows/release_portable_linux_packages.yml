@@ -14,6 +14,10 @@ on:
         description: "Subdirectory to push the Python packages"
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging Subdirectory to push the Python packages"
+        type: string
+        default: "v2-staging"
   # Trigger manually (typically to test the workflow or manually build a release [candidate])
   workflow_dispatch:
     inputs:
@@ -27,6 +31,10 @@ on:
         description: "Subdirectory to push the Python packages"
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging Subdirectory to push the Python packages"
+        type: string
+        default: "v2-staging"
       families:
         description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
         type: string
@@ -44,6 +52,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
+      S3_STAGING_SUBDIR: ${{ inputs.s3_subdir || 'v2-staging' }}
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.release_information.outputs.version }}
@@ -170,12 +179,23 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
-
+      
+      ## TODO: Restrict uploading to the non-staging S3 directory until ROCm sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}
           aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
+          --recursive --no-follow-symlinks \
+          --exclude "*" \
+          --include "*.whl" \
+          --include "*.tar.gz"
+
+      - name: Upload Releases to Staging S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}
+          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
           --recursive --no-follow-symlinks \
           --exclude "*" \
           --include "*.whl" \
@@ -192,6 +212,12 @@ jobs:
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
+
+      - name: (Re-)Generate Python package release index for Staging
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
 
       - name: Trigger testing nightly tarball
         if: ${{ env.RELEASE_TYPE == 'nightly' }}
