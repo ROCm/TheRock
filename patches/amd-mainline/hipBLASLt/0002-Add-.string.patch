@@ -1,7 +1,7 @@
-From 61b2e9b395b319e7f1baa47a07da2af2a0dce5e3 Mon Sep 17 00:00:00 2001
+From 0a47456f01d54146a7352f229e6be7da23379f97 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Fri, 18 Jul 2025 03:12:09 +0000
-Subject: [PATCH 3/3] Add .string()
+Subject: [PATCH 2/3] Add .string()
 
 ---
  library/src/amd_detail/rocblaslt/src/tensile_host.cpp | 2 +-
@@ -21,5 +21,5 @@ index a1bf4a31..645abf31 100644
                          std::cerr << "\nrocblaslt error: Could not initialize Tensile library "
                                       "mapping"
 -- 
-2.25.1
+2.47.1.windows.2
 

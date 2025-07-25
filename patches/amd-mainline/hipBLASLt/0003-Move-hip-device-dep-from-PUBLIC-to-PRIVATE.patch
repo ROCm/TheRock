@@ -1,0 +1,24 @@
+From a3289425a8fe22464eedfeaced5e7bedc1b998d1 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Fri, 25 Jul 2025 15:25:44 -0700
+Subject: [PATCH 3/3] Move hip::device dep from PUBLIC to PRIVATE.
+
+---
+ next-cmake/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index a19f886a..bcdf06b7 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -270,6 +270,7 @@ if(TENSILELITE_ENABLE_HOST OR HIPBLASLT_ENABLE_HOST)
+     target_link_libraries(tensilelite-host
+         PUBLIC
+             rocisa::rocisa-cpp
++        PRIVATE
+             hip::device
+     )
+ 
+-- 
+2.47.1.windows.2
+
