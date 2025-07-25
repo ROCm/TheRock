@@ -14,15 +14,11 @@ def main(argv: list[str]):
     torch_version = glob.glob("torch-*.whl", root_dir=package_dist_dir)[0].split("-")[1]
     gha_set_output({"torch_version": torch_version})
 
-    torchaudio_version = glob.glob("torchaudio-*.whl", root_dir=package_dist_dir)[
-        0
-    ].split("-")[1]
+    torchaudio_version = glob.glob("torchaudio-*.whl", root_dir=package_dist_dir)[0].split("-")[1]
     gha_set_output({"torchaudio_version": torchaudio_version})
 
-    torchvideo_version = glob.glob("torchvideo-*.whl", root_dir=package_dist_dir)[
-        0
-    ].split("-")[1]
-    gha_set_output({"torchaudio_version": torchvideo_version})
+    torchvision_version = glob.glob("torchvideo-*.whl", root_dir=package_dist_dir)[0].split("-")[1]
+    gha_set_output({"torchvision_version": torchvision_version})
 
 
 if __name__ == "__main__":
