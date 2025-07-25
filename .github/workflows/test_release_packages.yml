@@ -11,31 +11,16 @@ on:
         type: string
       target:
         type: string
+      test_runs_on:
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  generate_target_to_run:
-    runs-on: ubuntu-24.04
-    outputs:
-      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
-    steps:
-      - name: Checking out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - name: Generating target to run
-        id: configure
-        env:
-          TARGET: ${{ inputs.target }}
-        run: python ./build_tools/github_actions/configure_target_run.py
-
-
   test_release_packages:
-    # If there is a test machine available
-    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
-    runs-on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-    needs: generate_target_to_run
+    if: ${{ inputs.test_runs_on != '' }}
+    runs-on: ${{ inputs.test_runs_on }}
     permissions:
       contents: write
     env:
