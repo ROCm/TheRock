@@ -119,7 +119,7 @@ def main(argv: list[str]):
     torchvision_version_tmp = glob.glob("torchvision-*.whl", root_dir=package_dist_dir)
     if torchvision_version_tmp:
         torchvision_version = torchvision_version_tmp[0].split("-")[1]
-        gha_set_output({"torchaudio_version": torchaudio_version})
+        gha_set_output({"torchvision_version": torchvision_version})
 
 >>>>>>> c41c84b (Commenting out checkut of triton repo)
 
