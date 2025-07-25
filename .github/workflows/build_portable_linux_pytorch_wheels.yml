@@ -121,7 +121,7 @@ jobs:
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }}
-          
+
       - name: Add cp_version to output
         id: output-cp-version
         run:
