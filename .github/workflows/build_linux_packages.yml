@@ -32,16 +32,28 @@ permissions:
   contents: read
 
 jobs:
+  prepare:
+    name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
+    runs-on: azure-linux-scale-rocm
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /tmp/credentials.ini
+    steps:
+      - name: Verify AWS credentials
+        run: |
+          id
+          ls -l /tmp
+
   build_linux_packages:
     name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
     runs-on: azure-linux-scale-rocm
+    needs: prepare
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
       volumes:
-        - /tmp/credentials.ini:/github/home/credentials.ini
+        - /tmp:/geomin12fun
     strategy:
       fail-fast: true
     env:
@@ -61,15 +73,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: install aws
-        run: |
-          ./dockerfiles/cpubuilder/install_awscli.sh
-
       - name: Verify AWS credentials
         run: |
           id
           echo "ls $HOMe"
-          ls -l $HOME
+          ls -l /geomin12fun
           ls -l /tmp
           echo $AWS_PROFILE
           echo "Whoami: $(whoami)"
