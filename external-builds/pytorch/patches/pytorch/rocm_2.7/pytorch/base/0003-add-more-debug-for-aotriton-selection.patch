@@ -1,0 +1,25 @@
+From 4d4bb7aa78d0400e12dc5d6efdbd567771277b0e Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 24 Jul 2025 17:31:36 -0700
+Subject: [PATCH 3/3] add more debug for aotriton selection
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ cmake/External/aotriton.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
+index 71bb1080404..77ce478a0c8 100644
+--- a/cmake/External/aotriton.cmake
++++ b/cmake/External/aotriton.cmake
+@@ -90,6 +90,7 @@ if(NOT __AOTRITON_INCLUDED)
+     message(STATUS "Using AOTriton compiled from source directory ${__AOTRITON_EXTERN_PREFIX}")
+   else()
+     set(__AOTRITON_SYSTEM_ROCM "${HIP_VERSION_MAJOR}.${HIP_VERSION_MINOR}")
++    message(STATUS "__AOTRITON_SYSTEM_ROCM: ${__AOTRITON_SYSTEM_ROCM}")
+     list(GET __AOTRITON_ROCM_LIST 0 __AOTRITON_ROCM_DEFAULT_STR)
+     # Initialize __AOTRITON_ROCM to lowest version, in case all builds > system's ROCM
+     string(SUBSTRING ${__AOTRITON_ROCM_DEFAULT_STR} 4 -1 __AOTRITON_ROCM)
+-- 
+2.43.0
+

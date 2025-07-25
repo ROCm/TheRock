@@ -1,7 +1,7 @@
 From 349f5eb72062c18f001f0272cb296ae3121c9910 Mon Sep 17 00:00:00 2001
 From: Mika Laitio <mika.laitio@amd.com>
 Date: Thu, 24 Jul 2025 16:43:08 -0700
-Subject: [PATCH 2/2] revert aotriton 6.5 hashcode change from previous patch
+Subject: [PATCH 2/3] revert aotriton 6.5 hashcode change from previous patch
 
 Signed-off-by: Mika Laitio <mika.laitio@amd.com>
 ---
