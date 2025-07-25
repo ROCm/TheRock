@@ -118,6 +118,7 @@ jobs:
 
       - name: Select Python version
         id: select-python
+        shell: bash
         run: |
           cp_version=$(python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }})
