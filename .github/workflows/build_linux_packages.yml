@@ -90,6 +90,9 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Install additional fftw packages
+        run: yum install fftw-devel -y
+
       - name: Configure Projects
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}

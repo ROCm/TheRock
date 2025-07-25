@@ -1,0 +1,25 @@
+From 4b967f2fc8a19438146b4717f18f90a408a50e3d Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Thu, 24 Jul 2025 14:38:50 -0700
+Subject: [PATCH] Updating gtest to 1.16.0
+
+---
+ clients/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 739ef03..e2e3afd 100644
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -88,7 +88,7 @@ if( BUILD_CLIENTS_SAMPLES )
+ endif( )
+ 
+ if( BUILD_CLIENTS_TESTS )
+-  find_package( GTest 1.11.0 )
++  find_package( GTest 1.16.0 )
+   include( ExternalProject )
+   if( NOT GTEST_FOUND )
+     set( GTEST_INCLUDE_DIRS
+-- 
+2.47.1.windows.2
+

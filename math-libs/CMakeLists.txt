@@ -221,13 +221,17 @@ if(THEROCK_ENABLE_FFT)
       -DBUILD_SHARED_LIBS=ON
       -DUSE_HIPRAND=ON
       -DROCFFT_KERNEL_CACHE_ENABLE=${_fft_kernel_cache_enable}
+      -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      therock-boost
+      therock-googletest
     RUNTIME_DEPS
       hip-clr
       hipRAND
+      rocRAND
   )
   therock_cmake_subproject_glob_c_sources(rocFFT
     SUBDIRS
@@ -249,10 +253,13 @@ if(THEROCK_ENABLE_FFT)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_SHARED_LIBS=ON
+      -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      therock-boost
+      therock-googletest
     RUNTIME_DEPS
       hip-clr
       rocFFT
@@ -277,6 +284,7 @@ if(THEROCK_ENABLE_FFT)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS ${_fft_subproject_names}
   )
 endif(THEROCK_ENABLE_FFT)
