@@ -35,7 +35,7 @@ def find_libraries(*shortnames: str) -> list[Path]:
         except KeyError:
             raise ModuleNotFoundError(f"Unknown rocm library '{shortname}'")
 
-        if is_windows and not lib_entry.dllname:
+        if is_windows and not lib_entry.dll_pattern:
             # Library is missing on Windows, skip it.
             # TODO(#827): Require callers to filter and error here instead?
             continue
@@ -51,13 +51,22 @@ def find_libraries(*shortnames: str) -> list[Path]:
             missing_extras.add(package.logical_name)
         py_root = Path(py_module.__file__).parent  # Chop __init__.py
         if is_windows:
-            path = py_root / lib_entry.windows_relpath / lib_entry.dllname
+            relpath = py_root / lib_entry.windows_relpath
+            entry_pattern = lib_entry.dll_pattern
         else:
-            path = py_root / lib_entry.posix_relpath / lib_entry.soname
-        if not path.exists():
+            relpath = py_root / lib_entry.posix_relpath
+            entry_pattern = lib_entry.so_pattern
+        matching_paths = sorted(relpath.glob(entry_pattern))
+        if len(matching_paths) == 0:
             raise FileNotFoundError(
-                f"Could not find rocm library '{shortname}' at path {path}"
+                f"Could not find rocm library '{shortname}' at path '{relpath},' no match for pattern '{entry_pattern}'"
             )
+        elif len(matching_paths) != 1:
+            raise FileNotFoundError(
+                f"Ambiguous detection for rocm library '{shortname}' at path '{relpath},' multiple matches for '{entry_pattern}': {matching_paths}"
+            )
+
+        path = matching_paths[0]
         paths.append(path)
 
     if missing_extras:
