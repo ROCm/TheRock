@@ -11,10 +11,10 @@ import argparse
 import os
 import glob
 import platform
-
 from github_actions_utils import *
 
 
+<<<<<<< HEAD
 def _log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
@@ -107,7 +107,6 @@ def main(argv: list[str]):
     all_versions = get_all_wheel_versions(args.dist_dir)
     _log("")
     gha_set_output(all_versions)
-
 
 if __name__ == "__main__":
     main(sys.argv[1:])

@@ -236,6 +236,8 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       CP_VERSION: ${{ needs.build_pytorch_wheels.outputs.cp_version }}
       TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
+      TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
+      TORCHVIDEO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvideo_version }}"
 
     steps:
       - name: Checkout
@@ -248,22 +250,17 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
-      - name: Copy only tested PyTorch wheels from staging to release S3
+      - name: Copy tested PyTorch wheels from staging to release S3
         run: |
-          echo "Torch version: $TORCH_VERSION"
-          # Extract the ROCm suffix from the torch version (everything after '+')
-          rocm_suffix=$(echo "$TORCH_VERSION" | cut -d '+' -f 2)
-          echo "ROCm suffix: $rocm_suffix"
-
-          for package in torch torchaudio torchvision; do
-            echo "Copying matching files for $package with +$rocm_suffix..."
-            aws s3 cp \
-              s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-              s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
-              --recursive \
-              --exclude "*" \
-              --include "${package}-*+${rocm_suffix}-${CP_VERSION}-linux_x86_64.whl"
-          done
+          echo "Copying exact tested wheels to release S3 bucket..."
+          aws s3 cp \
+            s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
+            --recursive \
+            --exclude "*" \
+            --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "torchvideo-${TORCHVIDEO_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         run: |
