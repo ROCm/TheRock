@@ -1,0 +1,25 @@
+From f7f16003acd47c0d7b8873816c1225c090649dfd Mon Sep 17 00:00:00 2001
+From: David Dixon <david.dixon@amd.com>
+Date: Fri, 18 Jul 2025 03:14:47 +0000
+Subject: [PATCH 3/3] Add hipblaslt as dependency on clients common
+
+---
+ clients/common/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/clients/common/CMakeLists.txt b/clients/common/CMakeLists.txt
+index 9f097d06..2d32fe7f 100644
+--- a/clients/common/CMakeLists.txt
++++ b/clients/common/CMakeLists.txt
+@@ -168,7 +168,7 @@ target_compile_definitions( rocblas_clients_common PRIVATE ROCBLAS_REFERENCE_LIB
+ 
+ 
+ # target is not linked as OBJECT library but we want any interface flags from dependencies
+-target_link_libraries( rocblas_clients_common roc::rocblas hip::host hip::device $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} )
++target_link_libraries( rocblas_clients_common PUBLIC roc::rocblas hip::host hip::device $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} PRIVATE roc::hipblaslt )
+ target_link_libraries( rocblas_clients_testing_common roc::rocblas hip::host hip::device ${BLAS_LIBRARY} $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} )
+ 
+ 
+-- 
+2.25.1
+

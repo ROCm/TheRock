@@ -109,3 +109,24 @@ jobs:
   # build_python_packages:
   #   name: Build Python Packages
   #   uses: ./.github/workflows/build_python_packages.yml
+
+  ci_summary:
+    name: CI Summary
+    if: always()
+    needs:
+      - setup
+      - linux_build_and_test
+      - windows_build_and_test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Output failed jobs
+        run: |
+          echo '${{ toJson(needs) }}'
+          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
+            | jq --raw-output \
+            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
+          )"
+          if [[ "${FAILED_JOBS}" != "" ]]; then
+            echo "The following jobs failed: ${FAILED_JOBS}"
+            exit 1
+          fi

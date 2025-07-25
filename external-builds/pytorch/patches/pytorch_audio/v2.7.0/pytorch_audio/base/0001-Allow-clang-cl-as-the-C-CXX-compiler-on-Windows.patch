@@ -1,0 +1,25 @@
+From e3cee0316a69a5792b7339d18d634ccea3039966 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Mon, 21 Jul 2025 13:57:40 -0700
+Subject: [PATCH] Allow clang-cl as the C/CXX compiler on Windows.
+
+---
+ tools/setup_helpers/extension.py | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/tools/setup_helpers/extension.py b/tools/setup_helpers/extension.py
+index 2415bbae..8520b43f 100644
+--- a/tools/setup_helpers/extension.py
++++ b/tools/setup_helpers/extension.py
+@@ -162,8 +162,6 @@ class CMakeBuild(build_ext):
+ 
+             python_version = sys.version_info
+             cmake_args += [
+-                "-DCMAKE_C_COMPILER=cl",
+-                "-DCMAKE_CXX_COMPILER=cl",
+                 f"-DPYTHON_VERSION={python_version.major}.{python_version.minor}",
+             ]
+ 
+-- 
+2.47.1.windows.2
+

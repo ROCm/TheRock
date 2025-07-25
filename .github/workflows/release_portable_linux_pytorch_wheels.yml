@@ -54,6 +54,10 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", 3.13]
+        pytorch_version: ["release/2.7"]
+        include:
+          - pytorch_version: release/2.7
+            pytorch_patchset: "rocm_2.7"
 
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
     with:
@@ -63,3 +67,5 @@ jobs:
       s3_subdir: ${{ inputs.s3_subdir }}
       cloudfront_url: ${{ inputs.cloudfront_url }}
       rocm_version: ${{ inputs.rocm_version }}
+      pytorch_version: ${{ matrix.pytorch_version }}
+      pytorch_patchset: ${{ matrix.pytorch_patchset }}

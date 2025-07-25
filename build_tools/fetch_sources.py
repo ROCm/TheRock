@@ -4,6 +4,7 @@
 # the CI uses to get to a clean state.
 
 import argparse
+import hashlib
 from pathlib import Path
 import platform
 import shlex
@@ -71,8 +72,22 @@ def run(args):
     )
 
     populate_ancillary_sources(args)
+
+    # Remove any stale .smrev files.
+    remove_smrev_files(args, projects)
+
     if args.apply_patches:
         apply_patches(args, projects)
+
+
+def remove_smrev_files(args, projects):
+    for project in projects:
+        submodule_path = get_submodule_path(project)
+        project_dir = THEROCK_DIR / submodule_path
+        project_revision_file = project_dir.with_name(f".{project_dir.name}.smrev")
+        if project_revision_file.exists():
+            print(f"Remove stale project revision file: {project_revision_file}")
+            project_revision_file.unlink()
 
 
 def apply_patches(args, projects):
@@ -90,7 +105,11 @@ def apply_patches(args, projects):
             )
             continue
         submodule_path = get_submodule_path(patch_project_dir.name)
+        submodule_url = get_submodule_url(patch_project_dir.name)
+        submodule_revision = get_submodule_revision(submodule_path)
         project_dir = THEROCK_DIR / submodule_path
+        project_revision_file = project_dir.with_name(f".{project_dir.name}.smrev")
+
         if not project_dir.exists():
             log(f"WARNING: Source directory {project_dir} does not exist. Skipping.")
             continue
@@ -116,6 +135,26 @@ def apply_patches(args, projects):
             cwd=THEROCK_DIR,
         )
 
+        # Generate the .smrev patch state file.
+        # This file consists of two lines: The git origin and a summary of the
+        # state of the source tree that was checked out. This can be consumed
+        # by individual build steps in lieu of heuristics for asking git. If
+        # the tree is in a patched state, the commit hashes of HEAD may be
+        # different from checkout-to-checkout, but the .smrev file will have
+        # stable contents so long as the submodule pin and contents of the
+        # hashes are the same.
+        # Note that this does not track the dirty state of the tree. If full
+        # fidelity hashes of the tree state are needed for development/dirty
+        # trees, then another mechanism must be used.
+        patches_hash = hashlib.sha1()
+        for patch_file in patch_files:
+            patch_contents = Path(patch_file).read_bytes()
+            patches_hash.update(patch_contents)
+        patches_digest = patches_hash.digest().hex()
+        project_revision_file.write_text(
+            f"{submodule_url}\n{submodule_revision}+PATCHED:{patches_digest}\n"
+        )
+
 
 # Gets the the relative path to a submodule given its name.
 # Raises an exception on failure.
@@ -136,6 +175,40 @@ def get_submodule_path(name: str) -> str:
         .strip()
     )
     return relpath
+
+
+# Gets the the relative path to a submodule given its name.
+# Raises an exception on failure.
+def get_submodule_url(name: str) -> str:
+    relpath = (
+        subprocess.check_output(
+            [
+                "git",
+                "config",
+                "--file",
+                ".gitmodules",
+                "--get",
+                f"submodule.{name}.url",
+            ],
+            cwd=str(THEROCK_DIR),
+        )
+        .decode()
+        .strip()
+    )
+    return relpath
+
+
+def get_submodule_revision(submodule_path: str) -> str:
+    # Generates a line like:
+    #   160000 5e2093d23f7d34c372a788a6f2b7df8bc1c97947 0       compiler/amd-llvm
+    ls_line = (
+        subprocess.check_output(
+            ["git", "ls-files", "--stage", submodule_path], cwd=str(THEROCK_DIR)
+        )
+        .decode()
+        .strip()
+    )
+    return ls_line.split()[1]
 
 
 def populate_ancillary_sources(args):
