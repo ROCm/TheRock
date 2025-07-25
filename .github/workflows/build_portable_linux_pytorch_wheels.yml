@@ -121,7 +121,7 @@ jobs:
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }}
-
+          
       - name: Add cp_version to output
         id: output-cp-version
         run:
@@ -151,9 +151,12 @@ jobs:
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ inputs.pytorch_version != 'nightly' }}
         run: |
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --patchset ${{ inputs.pytorch_patchset }}
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout
+          # ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --patchset ${{ inputs.pytorch_patchset }}
+          # ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
+          # ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
       #    ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
       - name: Create pip cache directory
