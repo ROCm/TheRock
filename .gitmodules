@@ -114,6 +114,7 @@
 	path = ml-libs/MIOpen
 	url = https://github.com/ROCm/MIOpen.git
 	branch = develop
+	active = true
 [submodule "Tensile"]
 	path = math-libs/BLAS/Tensile
 	url = https://github.com/ROCm/Tensile.git
