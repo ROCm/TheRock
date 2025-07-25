@@ -14,7 +14,6 @@ import platform
 from github_actions_utils import *
 
 
-<<<<<<< HEAD
 def _log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
@@ -100,10 +99,8 @@ def main(argv: list[str]):
         help="Path where wheels are located",
     )
     args = p.parse_args(argv)
-
     if not args.dist_dir.exists():
         raise FileNotFoundError(f"Dist dir '{args.dist_dir}' does not exist")
-
     all_versions = get_all_wheel_versions(args.dist_dir)
     _log("")
     gha_set_output(all_versions)
