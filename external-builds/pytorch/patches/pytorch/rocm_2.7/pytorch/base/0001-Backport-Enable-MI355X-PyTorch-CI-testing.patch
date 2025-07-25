@@ -1,7 +1,7 @@
 From 81ceb04bff3ed5812195e4bad3c366f9498e1ee4 Mon Sep 17 00:00:00 2001
 From: Mika Laitio <mika.laitio@amd.com>
 Date: Thu, 24 Jul 2025 14:42:11 -0700
-Subject: [PATCH] Backport: Enable MI355X PyTorch CI testing
+Subject: [PATCH 1/2] Backport: Enable MI355X PyTorch CI testing
 
 Original patch from saienduri <saimanas.enduri@amd.com>
 
@@ -25,7 +25,7 @@ Signed-off-by: Mika Laitio <mika.laitio@amd.com>
  create mode 100644 .github/workflows/rocm-mi355.yml
 
 diff --git a/.github/workflows/_rocm-test.yml b/.github/workflows/_rocm-test.yml
-index babcc4c9ba..2a6ea9f2c4 100644
+index babcc4c9bac..2a6ea9f2c46 100644
 --- a/.github/workflows/_rocm-test.yml
 +++ b/.github/workflows/_rocm-test.yml
 @@ -251,8 +251,8 @@ jobs:
@@ -41,7 +41,7 @@ index babcc4c9ba..2a6ea9f2c4 100644
  
 diff --git a/.github/workflows/rocm-mi355.yml b/.github/workflows/rocm-mi355.yml
 new file mode 100644
-index 0000000000..7d9c016e13
+index 00000000000..7d9c016e130
 --- /dev/null
 +++ b/.github/workflows/rocm-mi355.yml
 @@ -0,0 +1,68 @@
@@ -114,7 +114,7 @@ index 0000000000..7d9c016e13
 +      tests-to-include: "test_nn test_torch test_cuda test_ops test_unary_ufuncs test_binary_ufuncs test_autograd inductor/test_torchinductor"
 +    secrets: inherit
 diff --git a/.github/workflows/upload-test-stats.yml b/.github/workflows/upload-test-stats.yml
-index c7c2acbb9c..a29df2de36 100644
+index c7c2acbb9c4..a29df2de368 100644
 --- a/.github/workflows/upload-test-stats.yml
 +++ b/.github/workflows/upload-test-stats.yml
 @@ -2,7 +2,7 @@ name: Upload test stats
@@ -127,7 +127,7 @@ index c7c2acbb9c..a29df2de36 100644
        - completed
  
 diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
-index 72078292d8..501333461b 100644
+index 72078292d83..501333461b2 100644
 --- a/cmake/External/aotriton.cmake
 +++ b/cmake/External/aotriton.cmake
 @@ -49,7 +49,7 @@ if(NOT __AOTRITON_INCLUDED)
