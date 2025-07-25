@@ -85,7 +85,7 @@ jobs:
         run: |
           id
           echo "ls $HOMe"
-          ls -l /geomin12fun
+          ls -l /home/runner
           ls -l /tmp
           echo $AWS_PROFILE
           echo "Whoami: $(whoami)"
