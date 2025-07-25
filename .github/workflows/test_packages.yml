@@ -91,7 +91,14 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
 
       - name: Install additional packages
-        if: ${{ inputs.platform == 'linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt') }}
+        if: >- 
+          ${{ 
+            inputs.platform == 'linux' && (
+              matrix.components.job_name == 'rocblas' || 
+              matrix.components.job_name == 'hipblaslt' || 
+              matrix.components.job_name == 'hipsolver'
+            ) 
+          }}
         run: sudo apt install libgfortran5 -y
 
       - name: Test
