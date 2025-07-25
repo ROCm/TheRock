@@ -80,7 +80,7 @@ if(THEROCK_ENABLE_MIOPEN)
   # there are compile errors when building without it.  (We build the gtest binary
   # if test discrete is off.)
   set(miopen_test_discrete OFF)
-  
+
   if(MSVC)
     # HACK, see https://github.com/ROCm/TheRock/issues/525.
     # Take the most recent few MSVC versions from
