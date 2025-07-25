@@ -113,5 +113,5 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
-          python ./TheRock/build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
 
