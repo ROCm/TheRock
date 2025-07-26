@@ -146,7 +146,7 @@ jobs:
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
-          python ./build_tools/github_actions/write_torch_version.py
+          python ./build_tools/github_actions/write_torch_versions.py
 
       - name: Configure AWS Credentials
         if: always()
