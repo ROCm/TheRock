@@ -7,6 +7,7 @@ Currently,
 * Linux expects torch, torchaudio, torchvision, and triton
 """
 
+import argparse
 import os
 import glob
 import platform
@@ -90,15 +91,23 @@ def get_all_wheel_versions(
     return all_versions
 
 
-def main():
-    package_dist_dir = Path(os.getenv("PACKAGE_DIST_DIR"))
-    if not package_dist_dir:
-        raise ValueError("PACKAGE_DIST_DIR environment variable not set to a path")
+def main(argv: list[str]):
+    p = argparse.ArgumentParser(prog="write_torch_versions.py")
+    p.add_argument(
+        "--dist-dir",
+        type=Path,
+        default=Path(os.getenv("PACKAGE_DIST_DIR")),
+        help="Path where wheels are located",
+    )
+    args = p.parse_args(argv)
 
-    all_versions = get_all_wheel_versions(package_dist_dir)
+    if not args.dist_dir.exists():
+        raise FileNotFoundError(f"Dist dir '{args.dist_dir}' does not exist")
+
+    all_versions = get_all_wheel_versions(args.dist_dir)
     _log("")
     gha_set_output(all_versions)
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
