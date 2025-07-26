@@ -1,7 +1,10 @@
 # Build PyTorch with ROCm support
 
-This directory provides tooling for building PyTorch compatible with TheRock's
-ROCm dist packages.
+This directory provides tooling for building PyTorch with ROCm Python wheels.
+
+> [!TIP]
+> If you want to install our prebuilt PyTorch packages instead of building them
+> from source, see [RELEASES.md](/RELEASES.md) instead.
 
 There is nothing special about these build procedures except that they are meant
 to run as part of the ROCm CI and development flow and thus leave less room for
