@@ -470,8 +470,13 @@ def do_build_triton(
     # The below only works for the latter and a better fix is needed.
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
-    # If TRITON_WHEEL_VERSION_SUFFIX contains a "+", replace the one
-    # in `args.version_suffix` with a "-".
+    # Append the version suffix passed via `arg.version_suffix` to
+    # TRITON_WHEEL_VERSION_SUFFIX. If the latter was set before,
+    # replace any "+" in `args.version_suffix` with a "-" as multiple
+    # "+" characters result in an invalid version.
+    # If TRITON_WHEEL_VERSION_SUFFIX is not set, the version for a build
+    # based on ROCm 7.0.0rc20250728 will be `3.3.1+rocm7.0.0rc20250728`
+    # insteaf of `3.3.1`.
     if re.search(r"\+", version_suffix):
         version_suffix += str(args.version_suffix).replace("+", "-")
     else:
