@@ -10,7 +10,7 @@ on:
       test_runs_on:
         required: true
         type: string
-        default: "linux-mi300-1gpu-ossci-rocm"
+        default: "linux-mi325-1gpu-ossci-rocm"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         required: true

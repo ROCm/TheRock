@@ -117,14 +117,14 @@ def populate_redshift_db(
 
                     Example:
                     Given input_dict['jobs'][6]['name'] as:
-                    'Linux (linux-mi300-1gpu-ossci-rocm, gfx94X-dcgpu, gfx942) / Build / Build Linux Packages (xfail false)'
+                    'Linux (linux-mi325-1gpu-ossci-rocm, gfx94X-dcgpu, gfx942) / Build / Build Linux Packages (xfail false)'
 
                     This will extract:
                     ['gfx94X-dcgpu', 'gfx942']
                     """
                     platform_str = input_dict["jobs"][i]["name"]
                     if "gfx" in platform_str:
-                        # Extract first group to filter out GPUs from platform_str Linux (linux-mi300-1gpu-ossci-rocm, gfx94X-dcgpu, gfx942) / Build / Build Linux Packages (xfail false) into list [gfx94X-dcgpu, gfx942]
+                        # Extract first group to filter out GPUs from platform_str Linux (linux-mi325-1gpu-ossci-rocm, gfx94X-dcgpu, gfx942) / Build / Build Linux Packages (xfail false) into list [gfx94X-dcgpu, gfx942]
                         match = re.search(r"\(([^)]*)\)", platform_str)
                         inside = match.group(1) if match else ""
                         # Split by comma and filter for entries starting with 'gfx'
