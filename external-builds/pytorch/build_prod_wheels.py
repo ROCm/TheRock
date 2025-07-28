@@ -336,6 +336,26 @@ def do_build(args: argparse.Namespace):
     bin_dir = get_rocm_path("bin")
     root_dir = get_rocm_path("root")
 
+    roctracer_dir = script_dir / "profiler" / "roctracer"
+    roctracer_build_sh = roctracer_dir / "build.sh"
+    if roctracer_build_sh.exists():
+        print("+++ Building roctracer native library...")
+
+        rocm_env = dict(os.environ)
+        rocm_env.update({
+            "ROCM_PATH": str(root_dir),
+            "PREFIX_PATH": str(root_dir),
+            "PACKAGE_ROOT": str(root_dir),
+            "HIP_PLATFORM": "amd",
+            "HIP_DEVICE_LIB_PATH": str(root_dir / "lib" / "llvm" / "amdgcn" / "bitcode"),
+            "CFLAGS": "-fPIC",
+            "CXXFLAGS": "-fPIC",
+        })
+
+        exec(["bash", str(roctracer_build_sh)], cwd=roctracer_dir, env=rocm_env)
+    else:
+        print(f"--- Skipping roctracer build: {roctracer_build_sh} does not exist")
+
     print(f"rocm version {rocm_sdk_version}:")
     print(f"  PYTHON VERSION: {sys.version}")
     print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
@@ -360,14 +380,27 @@ def do_build(args: argparse.Namespace):
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
 
+    rocprofiler_path = root_dir / "lib" / "libamdhip64.so"
+    roctracer_path = root_dir / "lib" / "libroctracer64.so"
+
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(root_dir),
         "ROCM_PATH": str(root_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # TODO: Fix source dep on rocprofiler and enable.
-        "USE_KINETO": "OFF",
+        "USE_KINETO": os.environ.get("USE_KINETO", "ON"),
     }
+
+    # Only set Kineto-related CMake args if USE_KINETO is ON
+    if env["USE_KINETO"] == "ON":
+        env["PYTORCH_CMAKE_ARGS"] = (
+            f"-DKINETO_HIP_LIBRARY={rocprofiler_path}"
+            f"-DROCTRACER_LIBRARY={roctracer_path}"
+        )
+    else:
+        env["PYTORCH_CMAKE_ARGS"] = ""
+
+    print(f"  PYTORCH_CMAKE_ARGS = {env['PYTORCH_CMAKE_ARGS']}")
 
     # GLOO enabled for only Linux
     if not is_windows:
@@ -397,7 +430,7 @@ def do_build(args: argparse.Namespace):
             {
                 # Workaround GCC12 compiler flags.
                 "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-                "CPPFLAGS": "  -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
             }
         )
 
@@ -582,8 +615,11 @@ def do_build_pytorch(
         # transitive includes. This triggers a compilation error for a missing
         # libdrm/drm.h.
         sysdeps_dir = get_rocm_path("root") / "lib" / "rocm_sysdeps"
+        roctracer_dir = script_dir / "profiler" / "roctracer"
+        roctracer_inc_dir = roctracer_dir / "inc"
         assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
         add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
+        add_env_compiler_flags(env, "CXXFLAGS", f"-I{roctracer_inc_dir}")
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
 
     print("+++ Uninstalling pytorch:")
@@ -753,7 +789,7 @@ def main(argv: list[str]):
         "--pytorch-audio-dir",
         default=directory_if_exists(script_dir / "pytorch_audio"),
         type=Path,
-        help="pytorch_audo source directory",
+        help="pytorch_audio source directory",
     )
     build_p.add_argument(
         "--pytorch-vision-dir",

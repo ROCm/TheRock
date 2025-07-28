@@ -107,6 +107,12 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
+      - name: Install system dependencies (rpm-build)
+        run: |
+          if ! rpm --version &>/dev/null; then
+            yum install -y rpm-build
+          fi
+
       # Github workflows do not have if/else and therefore we define two jobs with different if clauses.
       # First the if branch to checkout nightly version of code for the build.
       - name: Checkout PyTorch Source Repos from nightly branch
