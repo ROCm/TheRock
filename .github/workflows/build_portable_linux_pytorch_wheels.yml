@@ -200,3 +200,4 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+      pytorch_version: ${{ inputs.pytorch_version }}
