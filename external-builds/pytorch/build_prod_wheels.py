@@ -342,15 +342,19 @@ def do_build(args: argparse.Namespace):
         print("+++ Building roctracer native library...")
 
         rocm_env = dict(os.environ)
-        rocm_env.update({
-            "ROCM_PATH": str(root_dir),
-            "PREFIX_PATH": str(root_dir),
-            "PACKAGE_ROOT": str(root_dir),
-            "HIP_PLATFORM": "amd",
-            "HIP_DEVICE_LIB_PATH": str(root_dir / "lib" / "llvm" / "amdgcn" / "bitcode"),
-            "CFLAGS": "-fPIC",
-            "CXXFLAGS": "-fPIC",
-        })
+        rocm_env.update(
+            {
+                "ROCM_PATH": str(root_dir),
+                "PREFIX_PATH": str(root_dir),
+                "PACKAGE_ROOT": str(root_dir),
+                "HIP_PLATFORM": "amd",
+                "HIP_DEVICE_LIB_PATH": str(
+                    root_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
+                ),
+                "CFLAGS": "-fPIC",
+                "CXXFLAGS": "-fPIC",
+            }
+        )
 
         exec(["bash", str(roctracer_build_sh)], cwd=roctracer_dir, env=rocm_env)
     else:
