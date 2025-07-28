@@ -25,7 +25,6 @@ on:
         type: string
       pytorch_version:
         description: PyTorch version to checkout. ("nightly", or "release/2.7")
-        required: true
         type: string
         default: "release/2.7"
 
@@ -48,7 +47,6 @@ on:
         type: string
       pytorch_version:
         description: PyTorch version to checkout. ("nightly", or "release/2.7")
-        required: true
         type: string
         default: "release/2.7"
 
