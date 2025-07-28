@@ -1,7 +1,7 @@
-From b9f2cdb57e6f43c4a0d86b5fd0494cb288c40d04 Mon Sep 17 00:00:00 2001
+From 1588921730be122c750a0226fd0bc62bf705ceec Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 24 Jul 2025 12:45:53 -0700
-Subject: [PATCH 4/4] Revert copying hipblaslt and rocblas dirs on Windows.
+Subject: [PATCH 3/4] Revert copying hipblaslt and rocblas dirs on Windows.
 
 Since https://github.com/pytorch/pytorch/commit/30387ab2e485384ab2e67084a1e2c5569190ba92, ROCm is bootstrapped using the 'rocm' Python module which contains these files, so they do not need to be bundled into torch/lib.
 ---
