@@ -28,6 +28,7 @@ import platform
 from shutil import copyfileobj
 import sys
 import tarfile
+import time
 import urllib.request
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
@@ -147,43 +148,39 @@ def collect_artifacts_download_requests(
 
 
 def download_artifact(artifact_download_request: ArtifactDownloadRequest):
-    artifact_url = artifact_download_request.artifact_url
-    output_path = artifact_download_request.output_path
-    log(f"++ Downloading from {artifact_url} to {output_path}")
-    with urllib.request.urlopen(artifact_url) as in_stream, open(
-        output_path, "wb"
-    ) as out_file:
-        copyfileobj(in_stream, out_file)
-    log(f"++ Download complete for {output_path}")
+    MAX_RETRIES = 3
+    BASE_DELAY = 3  # seconds
+    for attempt in range(MAX_RETRIES):
+        try:
+            artifact_url = artifact_download_request.artifact_url
+            output_path = artifact_download_request.output_path
+            log(f"++ Downloading from {artifact_url} to {output_path}")
+            with urllib.request.urlopen(artifact_url) as in_stream, open(
+                output_path, "wb"
+            ) as out_file:
+                copyfileobj(in_stream, out_file)
+            log(f"++ Download complete for {output_path}")
+        except Exception as e:
+            log(f"++ Error downloading from {artifact_url}: {e}")
+            if attempt < MAX_RETRIES - 1:
+                delay = BASE_DELAY * (2**attempt)
+                print(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                log(
+                    f"++ Failed downloading from {artifact_url} after {MAX_RETRIES} retries"
+                )
 
 
 def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]):
     """Downloads artifacts in parallel using a thread pool executor."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(
-                download_artifact, artifact_download_request
-            ): artifact_download_request
+        futures = [
+            executor.submit(download_artifact, artifact_download_request)
             for artifact_download_request in artifact_download_requests
-        }
-        retries = {}
+        ]
         for future in concurrent.futures.as_completed(futures):
-            if future.exception():
-                # Store the retry request for later status check
-                data = futures[future]
-                log(f"++ Failure on downloading for {str(data)}. Retrying...")
-                future = executor.submit(download_artifact, data)
-                retries[future] = data
-            else:
-                future.result(timeout=60)
-
-        # Check the status of the retried requests
-        for future in concurrent.futures.as_completed(retries):
-            if future.exception():
-                data = retries[future]
-                raise Exception(f"Download retry failed for {str(data)}.")
-            else:
-                future.result(timeout=60)
+            future.result(timeout=60)
 
 
 def retrieve_all_artifacts(
