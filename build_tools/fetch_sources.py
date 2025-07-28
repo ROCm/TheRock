@@ -33,7 +33,11 @@ def exec(args: list[str | Path], cwd: Path):
 
 
 def get_enabled_projects(args) -> list[str]:
-    projects = list(args.projects)
+    projects = []
+    if args.include_system_projects:
+        projects.extend(args.system_projects)
+    if args.include_compilers:
+        projects.extend(args.compiler_projects)
     if args.include_math_libs:
         projects.extend(args.math_lib_projects)
     if args.include_ml_frameworks:
@@ -279,6 +283,18 @@ def main(argv):
         default=None,
     )
     parser.add_argument(
+        "--include-system-projects",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include systems projects",
+    )
+    parser.add_argument(
+        "--include-compilers",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include compilers",
+    )
+    parser.add_argument(
         "--include-math-libs",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -291,7 +307,7 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
-        "--projects",
+        "--system-projects",
         nargs="+",
         type=str,
         default=[
@@ -299,8 +315,6 @@ def main(argv):
             "clr",
             "half",
             "HIP",
-            "HIPIFY",
-            "llvm-project",
             "rccl",
             "rccl-tests",
             "rocm_smi_lib",
@@ -324,6 +338,15 @@ def main(argv):
             if is_windows()
             else []
         ),
+    )
+    parser.add_argument(
+        "--compiler-projects",
+        nargs="+",
+        type=str,
+        default=[
+            "HIPIFY",
+            "llvm-project",
+        ],
     )
     parser.add_argument(
         "--math-lib-projects",
