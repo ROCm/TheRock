@@ -336,6 +336,12 @@ def do_build(args: argparse.Namespace):
     bin_dir = get_rocm_path("bin")
     root_dir = get_rocm_path("root")
 
+    # Build roctracer and ensure Kineto support for PyTorch:
+    #
+    # - Kineto profiling in PyTorch requires two generated headers from the
+    #   roctracer build: hip_ostream_ops.h and hsa_ostream_ops.h.
+    # - This section builds roctracer (if present), then copies those generated
+    #   headers from the build directory into the include directory.
     roctracer_dir = script_dir / "profiler" / "roctracer"
     roctracer_build_sh = roctracer_dir / "build.sh"
     if roctracer_build_sh.exists():
@@ -357,6 +363,17 @@ def do_build(args: argparse.Namespace):
         )
 
         exec(["bash", str(roctracer_build_sh)], cwd=roctracer_dir, env=rocm_env)
+        roctracer_build_dir = roctracer_dir / "build" / "src"
+        roctracer_inc_dir = roctracer_dir / "inc"
+        for header in ["hip_ostream_ops.h", "hsa_ostream_ops.h"]:
+            src = roctracer_build_dir / header
+            dst = roctracer_inc_dir / header
+            if src.exists():
+                print(f"Copying {src} -> {dst}")
+                shutil.copy2(src, dst)
+            else:
+                print(f"[ERROR] Failed to find {src} for Kineto support")
+                sys.exit(1)
     else:
         print(f"--- Skipping roctracer build: {roctracer_build_sh} does not exist")
 
@@ -572,6 +589,7 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
+    root_dir = get_rocm_path("root")
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
@@ -619,11 +637,12 @@ def do_build_pytorch(
         # transitive includes. This triggers a compilation error for a missing
         # libdrm/drm.h.
         sysdeps_dir = get_rocm_path("root") / "lib" / "rocm_sysdeps"
-        roctracer_dir = script_dir / "profiler" / "roctracer"
-        roctracer_inc_dir = roctracer_dir / "inc"
         assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
         add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
-        add_env_compiler_flags(env, "CXXFLAGS", f"-I{roctracer_inc_dir}")
+        # Add correct include path for roctracer.h (for Kineto)
+        rocm_include = root_dir / "include"
+        roctracer_subdir = rocm_include / "roctracer"
+        add_env_compiler_flags(env, "CXXFLAGS", f"-I{roctracer_subdir}")
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
 
     print("+++ Uninstalling pytorch:")
