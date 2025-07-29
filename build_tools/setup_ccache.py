@@ -33,21 +33,20 @@ CACHE_SRV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout
 
 # See https://ccache.dev/manual/4.6.1.html#_configuration
 CONFIG_PRESETS_MAP = {
-    "local": {
-    },
+    "local": {},
     # Moving build_*_packages.yml CCACHE Env variables to here (linux for now)
     # For initial implementation, pre and post submit will be the same
     "github-oss-presubmit": {
         "secondary_storage": CACHE_SRV,
         "log_file": REPO_ROOT / "build/logs/ccache.log",
         "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
-        "max_size": "5G"
+        "max_size": "5G",
     },
     "github-oss-postsubmit": {
         "secondary_storage": CACHE_SRV,
         "log_file": REPO_ROOT / "build/logs/ccache.log",
         "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
-        "max_size": "5G"
+        "max_size": "5G",
     },
 
 }
@@ -61,7 +60,7 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     # and inserts all ccache env var configs along side below's local defaults
     config_preset: str = args.config_preset
     selected_config = CONFIG_PRESETS_MAP[config_preset]
-    for k,v in selected_config.items():
+    for k, v in selected_config.items():
         lines.append(f"{k} = {v}")
         # Ensure full dir path for logs exists, else ccache will fail and stop CI
         if k == "log_file" or k == "stats_log":
@@ -167,7 +166,7 @@ def main(argv: list[str]):
         "--config-preset",
         type=str,
         default="local",
-        choices=["local","github-oss-presubmit", "github-oss-postsubmit"],
+        choices=["local", "github-oss-presubmit", "github-oss-postsubmit"],
         help="Predefined set of configurations for ccache by enviroment.",
     )
 
