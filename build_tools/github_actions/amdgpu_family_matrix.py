@@ -5,7 +5,7 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows, indica
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi300-1gpu-ossci-rocm",
+            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
         }
     },

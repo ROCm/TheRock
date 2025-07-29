@@ -1,7 +1,7 @@
-From 86c8f73ac6cf4d1ca251ab4932555d1c2862d84a Mon Sep 17 00:00:00 2001
+From 3406c1b791c014907504ddacb5d26767d97ba0b3 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 24 Jul 2025 12:43:07 -0700
-Subject: [PATCH 3/4] Fix LoadHIP handling of environment variable paths on
+Subject: [PATCH 2/4] Fix LoadHIP handling of environment variable paths on
  Windows.
 
 ---

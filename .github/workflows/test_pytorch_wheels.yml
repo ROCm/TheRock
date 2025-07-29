@@ -10,7 +10,7 @@ on:
       test_runs_on:
         required: true
         type: string
-        default: "linux-mi300-1gpu-ossci-rocm"
+        default: "linux-mi325-1gpu-ossci-rocm"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         required: true
@@ -23,6 +23,10 @@ on:
       torch_version:
         required: true
         type: string
+      pytorch_version:
+        description: PyTorch version to checkout. ("nightly", or "release/2.7")
+        type: string
+        default: "release/2.7"
 
   workflow_call:
     inputs:
@@ -41,6 +45,10 @@ on:
       torch_version:
         required: true
         type: string
+      pytorch_version:
+        description: PyTorch version to checkout. ("nightly", or "release/2.7")
+        type: string
+        default: "release/2.7"
 
 permissions:
   contents: read
@@ -70,10 +78,16 @@ jobs:
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
       # TODO(scotttodd): Windows will need to checkout to a shorter path.
       #                  When Windows runs full tests, fix that and re-enable.
-      - name: Checkout PyTorch repository
-        if: "contains(inputs.test_runs_on, 'linux')"
+      - name: Checkout PyTorch Source Repos from nightly branch
+        # Checkout default upstream PyTorch/PyTorch branch.
+        if: ${{ (inputs.pytorch_version == 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
         run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout --no-hipify --no-patch
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly --no-hipify --no-patch
+
+      - name: Checkout PyTorch Source Repos from stable branch
+        if: ${{ (inputs.pytorch_version != 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
+        run: |
+          python external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --no-hipify --no-patch
 
       - name: Set up virtual environment
         run: |

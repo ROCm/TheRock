@@ -1,0 +1,25 @@
+From d9bf370882c311123cbda011c18d5f000c9b1ecc Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
+Date: Sun, 4 May 2025 22:24:50 +0530
+Subject: [PATCH 4/4] Patch ifdef for `__builtin_clz` on Windows.
+
+---
+ functorch/csrc/dim/arena.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/functorch/csrc/dim/arena.h b/functorch/csrc/dim/arena.h
+index aaaf7e772a3..4bc627575de 100644
+--- a/functorch/csrc/dim/arena.h
++++ b/functorch/csrc/dim/arena.h
+@@ -8,7 +8,7 @@
+ #include <ATen/ATen.h>
+ #include "minpybind.h"
+ 
+-#ifdef _WIN32
++#if defined(_WIN32) && !(defined(__clang__) && defined(_MSC_VER))
+ #include <intrin.h>
+ // https://stackoverflow.com/questions/355967/how-to-use-msvc-intrinsics-to-get-the-equivalent-of-this-gcc-code
+ inline unsigned int __builtin_clz(unsigned int x) {
+-- 
+2.47.1.windows.2
+
