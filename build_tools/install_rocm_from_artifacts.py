@@ -28,6 +28,7 @@ Note: the script will overwrite the output directory argument. If no argument is
 """
 
 import argparse
+import boto3
 from fetch_artifacts import (
     retrieve_base_artifacts,
     retrieve_enabled_artifacts,
@@ -42,12 +43,9 @@ import subprocess
 import sys
 import tarfile
 from _therock_utils.artifacts import ArtifactPopulator
-import urllib.parse
-from urllib.request import urlopen, Request
-import xml.etree.ElementTree as ET
-
 
 PLATFORM = platform.system().lower()
+s3_client = boto3.client("s3", verify=False)
 
 
 def log(*args, **kwargs):
@@ -88,29 +86,10 @@ def _retrieve_s3_release_assets(
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
     """
     asset_name = f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
-    # URL encoding the asset_name, in cases of "+" symbols
-    encoded_asset_name = urllib.parse.quote(asset_name)
-    s3_release_url = f"https://{release_bucket}.s3.amazonaws.com/{encoded_asset_name}"
     destination = output_dir / asset_name
 
-    headers = {"Accept": "application/octet-stream"}
-
-    request = Request(s3_release_url, headers=headers)
-    with urlopen(request) as response, open(destination, "wb") as file:
-        if response.status == 404:
-            log(
-                f"S3 release assets for release bucket '{release_bucket}' and release version '{release_version}' not found."
-            )
-            return
-        elif response.status != 200:
-            log(
-                f"Error when retrieving S3 release assets for release bucket '{release_bucket}' and release version '{release_version}' with status code {response.status}. Exiting..."
-            )
-            return
-
-        # Downloading the asset to destination
-        log(f"Downloading tar file to {str(destination)}")
-        shutil.copyfileobj(response, file)
+    with open(destination, "wb") as f:
+        s3_client.download_fileobj(release_bucket, asset_name, f)
 
     # After downloading the asset, untar-ing the file
     _untar_files(output_dir, destination)
