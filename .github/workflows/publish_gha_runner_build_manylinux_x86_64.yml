@@ -2,7 +2,7 @@ name: Publish gha_runner_build_manylinux_x86_64.Dockerfile image
 on:
   workflow_dispatch:
   push:
-    branches: ['main', 'docker*']
+    branches: ['main', 'docker*', 'users/geomin12/publish-runner-image']
     paths:
     - "dockerfiles/cpubuilder/**"
     - .github/workflows/publish_gha_runner_build_manylinux_x86_64.yml

@@ -1,6 +1,8 @@
-# This dockerfile uses a multi-stage build, initially using GitHub's action runner image
-# then using the manylinux package.
-# In order for the GitHub Action runner to activate, we need to copy the /home/runner directory
+# This dockerfile uses a multi-stage build, where it is layered as:
+#       GitHub's actions-runner (base layer)
+#       therock_build_manylinux_x86_64 (next layer)
+#
+# This Dockerfile is used on `azure-linux-scale-rocm` runners in the Kubernetes ARC setup.
 
 FROM ghcr.io/actions/actions-runner:latest AS runner
 
