@@ -336,47 +336,6 @@ def do_build(args: argparse.Namespace):
     bin_dir = get_rocm_path("bin")
     root_dir = get_rocm_path("root")
 
-    # Build roctracer and ensure Kineto support for PyTorch:
-    #
-    # - Kineto profiling in PyTorch requires two generated headers from the
-    #   roctracer build: hip_ostream_ops.h and hsa_ostream_ops.h.
-    # - This section builds roctracer (if present), then copies those generated
-    #   headers from the build directory into the include directory.
-    roctracer_dir = script_dir / "profiler" / "roctracer"
-    roctracer_build_sh = roctracer_dir / "build.sh"
-    if roctracer_build_sh.exists():
-        print("+++ Building roctracer native library...")
-
-        rocm_env = dict(os.environ)
-        rocm_env.update(
-            {
-                "ROCM_PATH": str(root_dir),
-                "PREFIX_PATH": str(root_dir),
-                "PACKAGE_ROOT": str(root_dir),
-                "HIP_PLATFORM": "amd",
-                "HIP_DEVICE_LIB_PATH": str(
-                    root_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
-                ),
-                "CFLAGS": "-fPIC",
-                "CXXFLAGS": "-fPIC",
-            }
-        )
-
-        exec(["bash", str(roctracer_build_sh)], cwd=roctracer_dir, env=rocm_env)
-        roctracer_build_dir = roctracer_dir / "build" / "src"
-        roctracer_inc_dir = roctracer_dir / "inc"
-        for header in ["hip_ostream_ops.h", "hsa_ostream_ops.h"]:
-            src = roctracer_build_dir / header
-            dst = roctracer_inc_dir / header
-            if src.exists():
-                print(f"Copying {src} -> {dst}")
-                shutil.copy2(src, dst)
-            else:
-                print(f"[ERROR] Failed to find {src} for Kineto support")
-                sys.exit(1)
-    else:
-        print(f"--- Skipping roctracer build: {roctracer_build_sh} does not exist")
-
     print(f"rocm version {rocm_sdk_version}:")
     print(f"  PYTHON VERSION: {sys.version}")
     print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
