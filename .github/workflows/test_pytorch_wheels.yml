@@ -101,7 +101,7 @@ jobs:
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages torch==${TORCH_VERSION} \
-            --index-url ${{ inputs.cloudfront_url }} \
+            --index-url ${{ inputs.cloudfront_url }}/ \
             --index-subdir ${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
 
