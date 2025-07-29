@@ -360,7 +360,7 @@ def do_build(args: argparse.Namespace):
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
 
-    rocprofiler_path = root_dir / "lib" / "libamdhip64.so"
+    rocprofiler_path = root_dir / "lib" / "librocprofiler64.so"
     roctracer_path = root_dir / "lib" / "libroctracer64.so"
 
     env: dict[str, str] = {
