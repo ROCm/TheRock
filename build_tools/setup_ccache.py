@@ -48,7 +48,6 @@ CONFIG_PRESETS_MAP = {
         "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
         "max_size": "5G",
     },
-
 }
 
 
