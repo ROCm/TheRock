@@ -32,6 +32,31 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
+def enable_longpaths():
+    # Supporting git longpath
+    exec(
+        [
+            "git",
+            "config",
+            "--local",
+            "core.longpaths",
+            "true",
+            "--recurse-submodules"
+        ],
+        cwd=THEROCK_DIR,
+    )
+    exec(
+        [
+            "git",
+            "submodule",
+            "foreach",
+            "--recursive",
+            "'git config core.longpaths true'"
+        ],
+        cwd=THEROCK_DIR,
+    )
+
+
 def get_enabled_projects(args) -> list[str]:
     projects = []
     if args.include_system_projects:
@@ -57,6 +82,7 @@ def run(args):
     if args.remote:
         update_args += ["--remote"]
     if args.update_submodules:
+        enable_longpaths()
         exec(
             ["git", "submodule", "update", "--init"]
             + update_args
