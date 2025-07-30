@@ -184,7 +184,7 @@ If you prefer to install tools manually, you will need:
 
 If the build system is a non-English system. Make sure to switch to `utf-8`.
 
-```
+```cmd
 chcp 65001
 ```
 
