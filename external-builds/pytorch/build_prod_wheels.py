@@ -334,13 +334,13 @@ def do_build(args: argparse.Namespace):
     rocm_sdk_version = get_rocm_sdk_version()
     cmake_prefix = get_rocm_path("cmake")
     bin_dir = get_rocm_path("bin")
-    root_dir = get_rocm_path("root")
+    rocm_dir = get_rocm_path("root")
 
     print(f"rocm version {rocm_sdk_version}:")
     print(f"  PYTHON VERSION: {sys.version}")
     print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
     print(f"  BIN = {bin_dir}")
-    print(f"  ROCM_HOME = {root_dir}")
+    print(f"  ROCM_HOME = {rocm_dir}")
 
     system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
     print(f"  PATH = {system_path}")
@@ -360,27 +360,20 @@ def do_build(args: argparse.Namespace):
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
 
-    rocprofiler_path = root_dir / "lib" / "librocprofiler64.so"
-    roctracer_path = root_dir / "lib" / "libroctracer64.so"
-
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
-        "ROCM_HOME": str(root_dir),
-        "ROCM_PATH": str(root_dir),
+        "ROCM_HOME": str(rocm_dir),
+        "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        "USE_KINETO": os.environ.get("USE_KINETO", "ON"),
+        "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
 
     # Only set Kineto-related CMake args if USE_KINETO is ON
-    if env["USE_KINETO"] == "ON":
-        env["PYTORCH_CMAKE_ARGS"] = (
-            f"-DKINETO_HIP_LIBRARY={rocprofiler_path}"
-            f"-DROCTRACER_LIBRARY={roctracer_path}"
-        )
-    else:
-        env["PYTORCH_CMAKE_ARGS"] = ""
-
-    print(f"  PYTORCH_CMAKE_ARGS = {env['PYTORCH_CMAKE_ARGS']}")
+    if not is_windows:
+        roctracer_path = rocm_dir / "lib" / "libroctracer64.so"
+        if env["USE_KINETO"] == "ON":
+            env["PYTORCH_CMAKE_ARGS"] = f"-DROCTRACER_LIBRARY={roctracer_path}"
+            print(f"  PYTORCH_CMAKE_ARGS = {env['PYTORCH_CMAKE_ARGS']}")
 
     # GLOO enabled for only Linux
     if not is_windows:
@@ -397,7 +390,7 @@ def do_build(args: argparse.Namespace):
             env.update(addl_triton_env)
 
     if is_windows:
-        llvm_dir = root_dir / "lib" / "llvm" / "bin"
+        llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
         env.update(
             {
                 "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
@@ -548,7 +541,6 @@ def do_build_pytorch(
     *,
     triton_requirement: str | None,
 ):
-    root_dir = get_rocm_path("root")
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
@@ -595,13 +587,14 @@ def do_build_pytorch(
         # TODO: include/rocm_smi/kfd_ioctl.h is included without its advertised
         # transitive includes. This triggers a compilation error for a missing
         # libdrm/drm.h.
-        sysdeps_dir = get_rocm_path("root") / "lib" / "rocm_sysdeps"
+        rocm_dir = get_rocm_path("root")
+        sysdeps_dir = rocm_dir / "lib" / "rocm_sysdeps"
         assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
         add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
         # Add correct include path for roctracer.h (for Kineto)
-        rocm_include = root_dir / "include"
-        roctracer_subdir = rocm_include / "roctracer"
-        add_env_compiler_flags(env, "CXXFLAGS", f"-I{roctracer_subdir}")
+        add_env_compiler_flags(
+            env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
+        )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
 
     print("+++ Uninstalling pytorch:")
