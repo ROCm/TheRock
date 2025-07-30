@@ -180,7 +180,7 @@ If you prefer to install tools manually, you will need:
 > - You can also tell CMake to use MSVC's tools explicitly with
 >   `-DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe -DCMAKE_LINKER=link.exe`
 
-### Locale
+### Set the locale
 
 If the build system is a non-English system. Make sure to switch to ``utf-8``.
 
