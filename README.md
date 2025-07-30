@@ -72,6 +72,7 @@ python ./build_tools/fetch_sources.py
 > [installing tools](./docs/development/windows_support.md#install-tools).
 
 If the build system is a non-English system. Make sure to switch to `utf-8`.
+
 ```cmd
 chcp 65001
 ```
