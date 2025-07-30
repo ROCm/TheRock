@@ -182,7 +182,7 @@ If you prefer to install tools manually, you will need:
 
 ### Locale
 
-If the build system is non-English system. Make sure to switch to ``utf-8``.
+If the build system is a non-English system. Make sure to switch to ``utf-8``.
 
 ```
 chcp 65001
