@@ -106,7 +106,9 @@ jobs:
       optional_build_prod_arguments: ""
     outputs:
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
-      cp_version: ${{ steps.output-cp-version.cp_version }}
+      cp_version: ${{ steps.select-python.outputs.cp_version }}
+      torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
+      torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -121,11 +123,6 @@ jobs:
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }}
-
-      - name: Add cp_version to output
-        id: output-cp-version
-        run:
-          echo "cp_version=${{ env.cp_version }}" >> $GITHUB_OUTPUT
 
       - name: Add selected Python version to PATH
         run: |
