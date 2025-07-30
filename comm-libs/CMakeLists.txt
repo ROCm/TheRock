@@ -30,6 +30,7 @@ if(THEROCK_ENABLE_RCCL)
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      therock-fmt
       therock-googletest
     RUNTIME_DEPS
       hip-clr

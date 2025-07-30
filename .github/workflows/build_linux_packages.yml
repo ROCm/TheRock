@@ -46,10 +46,6 @@ jobs:
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      CCACHE_SECONDARY_STORAGE: http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50
-      CCACHE_LOGFILE: ${{ github.workspace }}/build/logs/ccache.log
-      CCACHE_STATSLOG: ${{ github.workspace }}/build/logs/ccache_stats.log
-      CCACHE_MAXSIZE: "5G"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
 
@@ -61,9 +57,8 @@ jobs:
       # really helps for iteration time.
       - name: Runner Health Settings
         run: |
-          echo "CCACHE_SECONDARY_STORAGE: $CCACHE_SECONDARY_STORAGE"
-          mkdir -p "$(dirname $CCACHE_LOGFILE)"
           ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
           df -h
