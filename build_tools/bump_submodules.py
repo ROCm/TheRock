@@ -1,4 +1,25 @@
 #!/usr/bin/env python
+"""Helper script to bump TheRock's submodules, doing the following:
+ * (Optional) Creates a new branch
+ * Updates submodules from remote using `fetch_sources.py`
+ * Creares a commit and tries to apply local patches
+ * (Optional) Pushed the new branch to origin
+
+The submodules to bump can be specified via `--components`.
+
+Examples:
+Bump submpdules in base, core and profiler
+```
+./build_tools/bump_submodules.py \
+    --components base core profiler
+```
+
+Bump comm-lib submodules and create a branch
+```
+./build_tools/bump_submodules.py \
+    --create-branch --branch-name shared/bump-comm-libs --components comm-libs
+```
+"""
 
 import argparse
 from pathlib import Path
@@ -56,7 +77,7 @@ def parse_components(components: list[str]) -> list[list]:
     arguments = []
     system_projects = []
 
-    # If `default` is passed, use the defaults set in `fetch_sources.py` by not passing additonal arguments
+    # If `default` is passed, use the defaults set in `fetch_sources.py` by not passing additonal arguments.
     if "default" in components:
         return [], []
 
@@ -81,7 +102,7 @@ def parse_components(components: list[str]) -> list[list]:
         ]
 
     if "core" in components:
-        # TODO: Add "amdgpu-windows-interop"
+        # amdgpu-windows-interop is Windows only and is updated manually.
         system_projects += [
             "HIP",
             "ROCR-Runtime",
