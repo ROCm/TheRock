@@ -38,12 +38,12 @@ runs:
         pip freeze
 
     - name: Install the AWS tool
-      if: runner.os == 'Linux'
+      if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
 
     - name: Install the AWS tool
-      if: runner.os == 'Windows'
+      if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: |
         choco install --no-progress -y awscli
