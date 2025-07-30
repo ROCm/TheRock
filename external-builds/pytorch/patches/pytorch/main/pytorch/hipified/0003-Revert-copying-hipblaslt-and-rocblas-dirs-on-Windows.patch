@@ -1,0 +1,41 @@
+From 1588921730be122c750a0226fd0bc62bf705ceec Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Thu, 24 Jul 2025 12:45:53 -0700
+Subject: [PATCH 3/4] Revert copying hipblaslt and rocblas dirs on Windows.
+
+Since https://github.com/pytorch/pytorch/commit/30387ab2e485384ab2e67084a1e2c5569190ba92, ROCm is bootstrapped using the 'rocm' Python module which contains these files, so they do not need to be bundled into torch/lib.
+---
+ setup.py | 17 -----------------
+ 1 file changed, 17 deletions(-)
+
+diff --git a/setup.py b/setup.py
+index b222e674c0c..d08c3775d82 100644
+--- a/setup.py
++++ b/setup.py
+@@ -847,23 +847,6 @@ class build_ext(setuptools.command.build_ext.build_ext):
+             target_dir.mkdir(parents=True, exist_ok=True)
+             self.copy_file(export_lib, target_lib)
+ 
+-            # In ROCm on Windows case copy rocblas and hipblaslt files into
+-            # torch/lib/rocblas/library and torch/lib/hipblaslt/library
+-            if str2bool(os.getenv("USE_ROCM")):
+-                rocm_dir_path = Path(os.environ["ROCM_DIR"])
+-                rocm_bin_path = rocm_dir_path / "bin"
+-                rocblas_dir = rocm_bin_path / "rocblas"
+-                target_rocblas_dir = target_dir / "rocblas"
+-                target_rocblas_dir.mkdir(parents=True, exist_ok=True)
+-                self.copy_tree(rocblas_dir, str(target_rocblas_dir))
+-
+-                hipblaslt_dir = rocm_bin_path / "hipblaslt"
+-                target_hipblaslt_dir = target_dir / "hipblaslt"
+-                target_hipblaslt_dir.mkdir(parents=True, exist_ok=True)
+-                self.copy_tree(hipblaslt_dir, str(target_hipblaslt_dir))
+-            else:
+-                report("The specified environment variable does not exist.")
+-
+     def build_extensions(self) -> None:
+         self.create_compile_commands()
+ 
+-- 
+2.47.1.windows.2
+

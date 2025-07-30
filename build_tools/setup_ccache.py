@@ -29,11 +29,45 @@ THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
 POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
 POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
+CACHE_SRV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+
+# See https://ccache.dev/manual/4.6.1.html#_configuration
+CONFIG_PRESETS_MAP = {
+    "local": {},
+    # Moving build_*_packages.yml CCACHE Env variables to here (linux for now)
+    # For initial implementation, pre and post submit will be the same
+    "github-oss-presubmit": {
+        "secondary_storage": CACHE_SRV,
+        "log_file": REPO_ROOT / "build/logs/ccache.log",
+        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "max_size": "5G",
+    },
+    "github-oss-postsubmit": {
+        "secondary_storage": CACHE_SRV,
+        "log_file": REPO_ROOT / "build/logs/ccache.log",
+        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "max_size": "5G",
+    },
+}
 
 
 def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     lines = []
 
+    # Initial implementation of presets will maintain current yml behavior
+    # which allows both "local" and "remote" cache (see `storage interaction`)
+    # and inserts all ccache env var configs along side below's local defaults
+    config_preset: str = args.config_preset
+    selected_config = CONFIG_PRESETS_MAP[config_preset]
+    for k, v in selected_config.items():
+        lines.append(f"{k} = {v}")
+        # Ensure full dir path for logs exists, else ccache will fail and stop CI
+        if k == "log_file" or k == "stats_log":
+            log_dir = v.parent.absolute()
+            if not log_dir.exists():
+                log_dir.mkdir(parents=True, exist_ok=True)
+
+    # (TODO:consider https://ccache.dev/manual/4.6.1.html#_storage_interaction)
     # Switch based on cache type.
     if False:
         # Placeholder for other cache type switches.
@@ -124,6 +158,15 @@ def main(argv: list[str]):
         "--local-path",
         type=Path,
         help="Use a non-default local ccache directory (defaults to 'local/' in --dir)",
+    )
+
+    preset_group = p.add_mutually_exclusive_group()
+    preset_group.add_argument(
+        "--config-preset",
+        type=str,
+        default="local",
+        choices=["local", "github-oss-presubmit", "github-oss-postsubmit"],
+        help="Predefined set of configurations for ccache by enviroment.",
     )
 
     args = p.parse_args(argv)

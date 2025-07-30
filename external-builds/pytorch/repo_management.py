@@ -171,17 +171,31 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
     )
 
 
-def apply_all_patches(
+def apply_main_repository_patches(
+    root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
+):
+    # Apply patches to main repository.
+    apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
+
+
+def apply_submodule_patches(
     root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
 ):
     relative_sm_paths = list_submodules(root_repo_path, relative=True)
-    # Apply base patches.
-    apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
     for relative_sm_path in relative_sm_paths:
         apply_repo_patches(
             root_repo_path / relative_sm_path,
             patches_path / relative_sm_path / patchset_name,
         )
+
+
+def apply_all_patches(
+    root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
+):
+    apply_main_repository_patches(
+        root_repo_path, patches_path, repo_name, patchset_name
+    )
+    apply_submodule_patches(root_repo_path, patches_path, repo_name, patchset_name)
 
 
 # repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
@@ -252,6 +266,17 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         fetch_args.extend(["-j", str(args.jobs)])
     exec(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
+    if args.patch and patches_dir_name:
+        # Apply base patches to main repository. Patches to
+        # submodules will be applied later. This enables patches
+        # to modify submodule version to be checked out.
+        apply_main_repository_patches(
+            repo_dir,
+            repo_patch_dir_base / patches_dir_name,
+            args.repo_name,
+            "base",
+        )
+
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
     try:
         exec(
@@ -274,9 +299,9 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     )
     git_config_ignore_submodules(repo_dir)
 
-    # Base patches.
     if args.patch and patches_dir_name:
-        apply_all_patches(
+        # Apply base patches to submodules.
+        apply_submodule_patches(
             repo_dir,
             repo_patch_dir_base / patches_dir_name,
             args.repo_name,
@@ -288,7 +313,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         custom_hipify(args)
         commit_hipify(args)
 
-    # Hipified patches.
+    # Apply hipified patches to main repository and submodules.
     if args.hipify and args.patch and patches_dir_name:
         apply_all_patches(
             repo_dir,

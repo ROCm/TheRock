@@ -139,7 +139,7 @@
 [submodule "rocRoller"]
 	path = math-libs/BLAS/rocRoller
 	url = https://github.com/ROCm/rocRoller.git
-	branch = main
+	branch = develop
 [submodule "rocprof-trace-decoder"]
 	path = profiler/rocprof-trace-decoder/binaries
 	url = https://github.com/ROCm/rocprof-trace-decoder.git

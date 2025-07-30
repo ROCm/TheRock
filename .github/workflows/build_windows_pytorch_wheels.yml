@@ -58,12 +58,14 @@ jobs:
     name: Build Windows PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
-      CHECKOUT_ROOT: C:/src
+      CHECKOUT_ROOT: B:/src
       OUTPUT_DIR: ${{ github.workspace }}/output
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
+    outputs:
+      torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
@@ -94,13 +96,16 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      - name: Checkout PyTorch Source Repos
+      - name: Checkout PyTorch source repos (main branch)
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --repo ${{ env.CHECKOUT_ROOT }}/torch
-          # TODO(#910): Support torchvision and torchaudio on Windows
-          # python ./external-builds/pytorch/pytorch_audio_repo.py checkout
+            --repo ${{ env.CHECKOUT_ROOT }}/torch \
+            --repo-hashtag main
+          python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+            --repo ${{ env.CHECKOUT_ROOT }}/audio \
+            --repo-hashtag main
+          # TODO(#910): Support torchvision on Windows
           # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
@@ -111,6 +116,7 @@ jobs:
             --rocm-version ${{ inputs.rocm_version }}
 
       - name: Build PyTorch Wheels
+        id: build-pytorch-wheels
         # Using 'cmd' here is load bearing! There are configuration issues when
         # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
         shell: cmd
@@ -121,9 +127,11 @@ jobs:
             --install-rocm ^
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
+            --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             ${{ env.optional_build_prod_arguments }}
+          python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Configure AWS Credentials
         if: always()
@@ -152,3 +160,30 @@ jobs:
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+
+  generate_target_to_run:
+    name: Generate target_to_run
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "windows"
+        run: python ./build_tools/github_actions/configure_target_run.py
+
+  test_pytorch_wheels:
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    needs: [build_pytorch_wheels, generate_target_to_run]
+    uses: ./.github/workflows/test_pytorch_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+      cloudfront_url: ${{ inputs.cloudfront_url }}
+      python_version: ${{ inputs.python_version }}
+      torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}

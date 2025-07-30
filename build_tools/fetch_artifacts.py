@@ -28,6 +28,7 @@ import platform
 from shutil import copyfileobj
 import sys
 import tarfile
+import time
 import urllib.request
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
@@ -147,14 +148,28 @@ def collect_artifacts_download_requests(
 
 
 def download_artifact(artifact_download_request: ArtifactDownloadRequest):
-    artifact_url = artifact_download_request.artifact_url
-    output_path = artifact_download_request.output_path
-    log(f"++ Downloading from {artifact_url} to {output_path}")
-    with urllib.request.urlopen(artifact_url) as in_stream, open(
-        output_path, "wb"
-    ) as out_file:
-        copyfileobj(in_stream, out_file)
-    log(f"++ Download complete for {output_path}")
+    MAX_RETRIES = 3
+    BASE_DELAY = 3  # seconds
+    for attempt in range(MAX_RETRIES):
+        try:
+            artifact_url = artifact_download_request.artifact_url
+            output_path = artifact_download_request.output_path
+            log(f"++ Downloading from {artifact_url} to {output_path}")
+            with urllib.request.urlopen(artifact_url) as in_stream, open(
+                output_path, "wb"
+            ) as out_file:
+                copyfileobj(in_stream, out_file)
+            log(f"++ Download complete for {output_path}")
+        except Exception as e:
+            log(f"++ Error downloading from {artifact_url}: {e}")
+            if attempt < MAX_RETRIES - 1:
+                delay = BASE_DELAY * (2**attempt)
+                print(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                log(
+                    f"++ Failed downloading from {artifact_url} after {MAX_RETRIES} retries"
+                )
 
 
 def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]):

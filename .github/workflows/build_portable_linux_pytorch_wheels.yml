@@ -24,6 +24,14 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      pytorch_version:
+        description: Pytorch version to checkout. ("nightly", or "release/2.7")
+        required: true
+        type: string
+      pytorch_patchset:
+        description: Patch directory name from where to apply existing patches.
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -32,7 +40,7 @@ on:
       python_version:
         required: true
         type: string
-        default:
+        default: "3.12"
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -48,6 +56,16 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      pytorch_version:
+        description: Pytorch version to checkout. ("nightly", or "release/2.7")
+        required: true
+        type: string
+        default: "release/2.7"
+      pytorch_patchset:
+        description: Patch directory name from where to apply existing patches.
+        required: true
+        type: string
+        default: "rocm_2.7"
 
 permissions:
   id-token: write
@@ -89,11 +107,25 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
-      - name: Checkout PyTorch Source Repos
+      # Github workflows do not have if/else and therefore we define two jobs with different if clauses.
+      # First the if branch to checkout nightly version of code for the build.
+      - name: Checkout PyTorch Source Repos from nightly branch
+        # Checkout default upstream PyTorch/PyTorch branch.
+        if: ${{ inputs.pytorch_version == 'nightly' }}
         run: |
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout
+
+      # Then the else branch to checkout release version of source code instead.
+      - name: Checkout PyTorch Source Repos from stable branch
+        if: ${{ inputs.pytorch_version != 'nightly' }}
+        run: |
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --patchset ${{ inputs.pytorch_patchset }}
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
       - name: Create pip cache directory
         run: mkdir -p /tmp/pipcache
@@ -116,7 +148,7 @@ jobs:
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
-          echo "torch_version=`cd ${{ env.PACKAGE_DIST_DIR }}; python -c 'import glob; print(glob.glob("torch-*.whl")[0].split("-")[1])'`" >> $GITHUB_OUTPUT
+          python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Configure AWS Credentials
         if: always()
@@ -154,6 +186,7 @@ jobs:
         id: configure
         env:
           TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
@@ -167,3 +200,4 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+      pytorch_version: ${{ inputs.pytorch_version }}

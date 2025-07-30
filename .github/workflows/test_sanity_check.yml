@@ -65,5 +65,4 @@ jobs:
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5
         run: |
-          if [ "${{ runner.os }}" != "Windows" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           pytest tests/ --log-cli-level=info --timeout=60

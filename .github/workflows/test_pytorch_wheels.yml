@@ -10,7 +10,7 @@ on:
       test_runs_on:
         required: true
         type: string
-        default: "linux-mi300-1gpu-ossci-rocm"
+        default: "linux-mi325-1gpu-ossci-rocm"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         required: true
@@ -23,6 +23,10 @@ on:
       torch_version:
         required: true
         type: string
+      pytorch_version:
+        description: PyTorch version to checkout. ("nightly", or "release/2.7")
+        type: string
+        default: "release/2.7"
 
   workflow_call:
     inputs:
@@ -41,6 +45,10 @@ on:
       torch_version:
         required: true
         type: string
+      pytorch_version:
+        description: PyTorch version to checkout. ("nightly", or "release/2.7")
+        type: string
+        default: "release/2.7"
 
 permissions:
   contents: read
@@ -49,6 +57,9 @@ jobs:
   test_wheels:
     name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    defaults:
+      run:
+        shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       TORCH_VERSION: ${{ inputs.torch_version }}
@@ -65,20 +76,41 @@ jobs:
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
-      - name: Checkout PyTorch repository
+      # TODO(scotttodd): Windows will need to checkout to a shorter path.
+      #                  When Windows runs full tests, fix that and re-enable.
+      - name: Checkout PyTorch Source Repos from nightly branch
+        # Checkout default upstream PyTorch/PyTorch branch.
+        if: ${{ (inputs.pytorch_version == 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
         run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout --no-hipify --no-patch
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly --no-hipify --no-patch
 
-      - name: Set up virtual environment and install requirements
+      - name: Checkout PyTorch Source Repos from stable branch
+        if: ${{ (inputs.pytorch_version != 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
+        run: |
+          python external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --no-hipify --no-patch
+
+      - name: Set up virtual environment
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages torch==${TORCH_VERSION} \
             --index-url ${{ inputs.cloudfront_url }} \
-            --index-subdir ${{ inputs.amdgpu_family }}
-          source "${VENV_DIR}/bin/activate"
+            --index-subdir ${{ inputs.amdgpu_family }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Install test requirements
+        run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          pip freeze
+
+      - name: Run rocm-sdk sanity tests
+        run: |
+          rocm-sdk test
+
+      - name: Run PyTorch smoketests
+        run: |
+          pytest -v external-builds/pytorch/smoke-tests
 
       - name: Run PyTorch tests
+        if: "contains(inputs.test_runs_on, 'linux')"
         run: |
-          source "${VENV_DIR}/bin/activate"
           bash external-builds/pytorch/run_linux_pytorch_tests.sh

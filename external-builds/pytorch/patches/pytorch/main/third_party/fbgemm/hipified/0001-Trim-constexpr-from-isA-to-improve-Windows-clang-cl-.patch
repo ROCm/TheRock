@@ -1,0 +1,82 @@
+From 904c875170b32651b6be44d7afb261d38056eec7 Mon Sep 17 00:00:00 2001
+From: Scott <scott.todd0@gmail.com>
+Date: Tue, 27 May 2025 13:46:50 -0700
+Subject: [PATCH] Trim constexpr from isA to improve Windows clang-cl support.
+ (#4119)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Summary:
+X-link: https://github.com/facebookresearch/FBGEMM/pull/1270
+
+See https://github.com/pytorch/FBGEMM/issues/1392, where this code was suggested (https://github.com/pytorch/FBGEMM/issues/1392#issuecomment-1314957950).
+* Without this change, I get build errors when compiling with clang-cl.
+* With this change, I can compile FBGEMM and get further along in a full PyTorch on Windows build: https://github.com/ROCm/TheRock/issues/598 using clang-cl (working around different errors with MSVC elsewhere in the stack).
+
+Full configure + build logs before/after this change: https://gist.github.com/ScottTodd/31083b69b4b6c5c58cf1579e3dbb3a49 . Generally speaking, `constexpr` support across compilers is fragile, particularly for more complex cases with composition of multiple functions, classes, etc.
+
+ ---
+
+I'm specifically using this clang-cl version, built from AMD's LLVM fork at https://github.com/ROCm/llvm-project by https://github.com/ROCm/TheRock:
+```
+λ D:\projects\TheRock\build\compiler\amd-llvm\dist\lib\llvm\bin\clang-cl.exe --version
+AMD clang version 19.0.0git (https://github.com/ROCm/llvm-project.git 2012c1d23e398aa7fca45ba722fdd97c39f34491)
+Target: x86_64-pc-windows-msvc
+Thread model: posix
+InstalledDir: D:\projects\TheRock\build\compiler\amd-llvm\dist\lib\llvm\bin
+```
+FWIW, when I try with an older version from MSVC, I get different errors:
+```
+λ clang-cl --version
+clang version 18.1.8
+Target: x86_64-pc-windows-msvc
+Thread model: posix
+InstalledDir: C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\Llvm\x64\bin
+```
+
+```
+[1/4] Building CXX object CMakeFiles\fbgemm_generic.dir\src\spmmUtils.cc.obj
+FAILED: CMakeFiles/fbgemm_generic.dir/src/spmmUtils.cc.obj
+C:\PROGRA~2\MICROS~2\2022\BUILDT~1\VC\Tools\Llvm\x64\bin\clang-cl.exe  /nologo -TP  -ID:\projects\FBGEMM\external\cpuinfo\include -ID:\projects\FBGEMM\external\asmjit\src -ID:\projects\FBGEMM\include -ID:\projects\FBGEMM /DWIN32 /D_WINDOWS /EHsc -Xclang -fopenmp /wd4244 /wd4267 /wd4305 /wd4309 /O2 /Ob2 /DNDEBUG -std:c++20 -MD /showIncludes /FoCMakeFiles\fbgemm_generic.dir\src\spmmUtils.cc.obj /FdCMakeFiles\fbgemm_generic.dir\ -c -- D:\projects\FBGEMM\src\spmmUtils.cc
+In file included from D:\projects\FBGEMM\src\spmmUtils.cc:10:
+In file included from D:\projects\FBGEMM\include\fbgemm/spmmUtils.h:10:
+In file included from C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.42.34433\include\chrono:25:
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.42.34433\include\format(3205,54): error: capturing a structured binding is not yet supported in OpenMP
+ 3205 |         return _STD _Widen_and_copy<_CharT>(_Buffer, _End, _STD move(_Out));
+      |                                                      ^
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.42.34433\include\format(3189,17): note: '_End' declared here
+ 3189 |     const auto [_End, _Ec] = _STD to_chars(_Buffer, _STD end(_Buffer), reinterpret_cast<uintptr_t>(_Value), 16);
+      |                 ^
+```
+(full logs for that: https://gist.github.com/ScottTodd/fc346a1a9f7a6fe1b23f64fa49cb83ff)
+
+Pull Request resolved: https://github.com/pytorch/FBGEMM/pull/4119
+
+Reviewed By: spcyppt
+
+Differential Revision: D75423987
+
+Pulled By: q10
+
+fbshipit-source-id: 7009448499fd246afca02e6884271efa30a667f9
+---
+ include/fbgemm/Fbgemm.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/fbgemm/Fbgemm.h b/include/fbgemm/Fbgemm.h
+index 1118d7f5..59c97b49 100644
+--- a/include/fbgemm/Fbgemm.h
++++ b/include/fbgemm/Fbgemm.h
+@@ -123,7 +123,7 @@ class PackMatrix {
+    * @return true if this is the first input matrix in GEMM (i.e., A in C = A *
+    *         B)
+    */
+-  static constexpr bool isA() {
++  static bool isA() {
+     return PT::isA();
+   }
+ 
+-- 
+2.47.1.windows.2
+

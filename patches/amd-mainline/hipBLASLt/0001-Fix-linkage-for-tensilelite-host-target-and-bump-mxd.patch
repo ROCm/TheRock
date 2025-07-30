@@ -1,0 +1,199 @@
+From b3f855ed781a134258054dd1ad5b755070b7c0d5 Mon Sep 17 00:00:00 2001
+From: David Dixon <david.dixon@amd.com>
+Date: Mon, 28 Jul 2025 13:02:51 +0000
+Subject: [PATCH 1/2] Fix linkage for tensilelite-host target and bump
+ mxdatagen
+
+- Updates linkage for tensilelite-host msgpack dependency because it is
+  a build and usage requirement.
+- Add tensilelite-host to rocroller host target
+
+Adopted from https://github.com/ROCm/rocm-libraries/pull/702.
+---
+ clients/CMakeLists.txt                        |  2 +-
+ clients/common/mxDataGen.cpp                  | 16 +++++++-------
+ clients/include/mxDataGen.hpp                 |  6 ++---
+ next-cmake/CMakeLists.txt                     | 22 ++++++++++---------
+ .../host-library/src/rocblaslt/CMakeLists.txt |  8 ++++++-
+ 5 files changed, 31 insertions(+), 23 deletions(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 05e6c989..b379bd02 100755
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -126,7 +126,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+       FetchContent_Declare(
+         mxDataGenerator
+         GIT_REPOSITORY https://github.com/ROCm/mxDataGenerator.git
+-        GIT_TAG 12c016dc694139317feb2e23c59028fde70beaf4
++        GIT_TAG 31407efa7938fd70ea9b28e08a4d53e398415f8b
+       )
+       FetchContent_MakeAvailable(mxDataGenerator)
+ 
+diff --git a/clients/common/mxDataGen.cpp b/clients/common/mxDataGen.cpp
+index f3f30ce8..87732a23 100644
+--- a/clients/common/mxDataGen.cpp
++++ b/clients/common/mxDataGen.cpp
+@@ -135,7 +135,7 @@ void packData(std::vector<uint8_t> const& dataBytes, uint8_t* packedData)
+ template <typename DT>
+ std::vector<float> getAlignedFloat(std::vector<uint8_t>&       dataBytes,
+                                    std::vector<uint8_t> const& scaleBytes,
+-                                   std::array<int, 2> const    sizes,
++                                   std::array<DGen::index_t, 2> const    sizes,
+                                    int                         elementsPerMXBlock,
+                                    bool                        isMatrixA)
+ {
+@@ -215,8 +215,8 @@ template <typename T, typename DT>
+ std::vector<float> generateData(T                           dgen,
+                                 void*                       data,
+                                 void*                       scale,
+-                                std::vector<int>            sizes,
+-                                std::vector<int>            strides,
++                                std::vector<DGen::index_t>  sizes,
++                                std::vector<DGen::index_t>  strides,
+                                 uint32_t                    seed,
+                                 DGen::DataGeneratorOptions& opt,
+                                 int                         elementsPerMXBlock,
+@@ -288,9 +288,9 @@ std::vector<float> generateData(T                           dgen,
+ std::vector<float> generateMXInput(hipDataType            dataType,
+                                    void*                  data,
+                                    void*                  scale,
+-                                   int                    rowSize,
+-                                   int                    colSize,
+-                                   int                    stride,
++                                   DGen::index_t          rowSize,
++                                   DGen::index_t          colSize,
++                                   DGen::index_t          stride,
+                                    bool                   isTranspose,
+                                    int const              scaleBlockRowSize,
+                                    int const              scaleBlockColSize,
+@@ -309,8 +309,8 @@ std::vector<float> generateMXInput(hipDataType            dataType,
+ 
+     const uint32_t seed = 1713573849;
+ 
+-    std::vector<int> sizes{rowSize, colSize};
+-    std::vector<int> strides;
++    std::vector<index_t> sizes = {rowSize, colSize};
++    std::vector<index_t> strides;
+ 
+     strides.push_back(1);
+     strides.push_back(stride);
+diff --git a/clients/include/mxDataGen.hpp b/clients/include/mxDataGen.hpp
+index 766c548d..6f50adde 100644
+--- a/clients/include/mxDataGen.hpp
++++ b/clients/include/mxDataGen.hpp
+@@ -33,9 +33,9 @@
+ std::vector<float> generateMXInput(hipDataType            dataType,
+                                    void*                  data,
+                                    void*                  scale,
+-                                   int                    row,
+-                                   int                    col,
+-                                   int                    stride,
++                                   uint64_t               row,
++                                   uint64_t               col,
++                                   uint64_t               stride,
+                                    bool                   isTranspose,
+                                    int const              scaleBlockRowSize,
+                                    int const              scaleBlockColSize,
+diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
+index d29bdbec..7a6b0efa 100644
+--- a/next-cmake/CMakeLists.txt
++++ b/next-cmake/CMakeLists.txt
+@@ -52,7 +52,7 @@ endif()
+ 
+ set(HIPBLASLT_ENABLE_DEVICE ON CACHE BOOL "Build hipBLASLt device libraries.")
+ set(HIPBLASLT_ENABLE_CLIENT ON CACHE BOOL "Build hipBLASLt client apps.")
+-cmake_dependent_option(HIPBLASLT_ENABLE_HOST "Build hipBLASLt host library." ON "HIPBLASLT_ENABLE_CLIENT" OFF)
++set(HIPBLASLT_ENABLE_HOST ON CACHE BOOL "Build hipBLASLt host library.")
+ set(TENSILELITE_ENABLE_CLIENT OFF CACHE BOOL "Build the tensilelite client.")
+ set(TENSILELITE_ENABLE_HOST ON CACHE BOOL "Build the tensilelite host library.")
+ set(HIPBLASLT_ENABLE_COVERAGE OFF CACHE BOOL "Build gcov support")
+@@ -73,7 +73,7 @@ if(HIPBLASLT_ENABLE_HOST OR TENSILELITE_ENABLE_HOST)
+     set(HIPBLASLT_ENABLE_MSGPACK ON CACHE BOOL "Use msgpack for parsing configuration files.")
+     set(HIPBLASLT_ENABLE_OPENMP ON CACHE BOOL "Use OpenMP to improve performance.")
+     set(HIPBLASLT_ENABLE_LLVM OFF CACHE BOOL "Use msgpack for parsing configuration files.")
+-    set(HIPBLASLT_ENABLE_ROCROLLER OFF CACHE BOOL "Use RocRoller library.")
++    set(HIPBLASLT_ENABLE_ROCROLLER ON CACHE BOOL "Use RocRoller library.")
+     set(HIPBLASLT_ENABLE_BLIS ON CACHE BOOL "Enable BLIS support.") # I don't know that we can build with this OFF
+     set(HIPBLASLT_ENABLE_LAZY_LOAD ON CACHE BOOL "Enable lazy loading of runtime code oject files to reduce ram usage.")
+     cmake_dependent_option(HIPBLASLT_ENABLE_MARKER "Use the marker library." ON "NOT WIN32" OFF)
+@@ -207,17 +207,19 @@ if(HIPBLASLT_ENABLE_DEVICE)
+ endif()
+ 
+ if(HIPBLASLT_ENABLE_ROCROLLER AND NOT TARGET roc::rocroller)
+-    find_package(rocroller REQUIRED)
++    find_package(rocroller QUIET)
+     option(YAML_CPP_INSTALL "" ON)
+     if(NOT rocroller_FOUND)
++        include(FetchContent)
+         set(ROCROLLER_ENABLE_FETCH ON)
+-        set(ROCROLLER_BUILD_TESTING OFF)
++        set(ROCROLLER_BUILD_TESTING ON)
+         set(ROCROLLER_ENABLE_CLIENT OFF)
++        set(ROCROLLER_ENABLE_GEMM_CLIENT_TESTS OFF)
+         FetchContent_Declare(
+             rocRoller
+             GIT_REPOSITORY https://github.com/ROCm/rocRoller.git
+-            GIT_TAG main
+-            SOURCE_SUBDIR next-cmake
++            GIT_TAG develop
++            SOURCE_SUBDIR
+         )
+         FetchContent_MakeAvailable(rocRoller)
+     endif()
+@@ -250,9 +252,9 @@ if(TENSILELITE_ENABLE_HOST OR HIPBLASLT_ENABLE_HOST)
+ 
+     if(HIPBLASLT_ENABLE_MSGPACK)
+         if(msgpack-cxx_FOUND)
+-            target_link_libraries(tensilelite-host PRIVATE msgpack-cxx)
++            target_link_libraries(tensilelite-host PUBLIC msgpack-cxx)
+         else()
+-            target_link_libraries(tensilelite-host PRIVATE msgpackc)
++            target_link_libraries(tensilelite-host PUBLIC msgpackc)
+         endif()
+         target_compile_definitions(tensilelite-host PRIVATE TENSILE_MSGPACK)
+     endif()
+@@ -265,7 +267,7 @@ if(TENSILELITE_ENABLE_HOST OR HIPBLASLT_ENABLE_HOST)
+             "${CMAKE_CURRENT_BINARY_DIR}/include"
+     )
+ 
+-    target_link_libraries(tensilelite-host 
++    target_link_libraries(tensilelite-host
+         PUBLIC
+             rocisa::rocisa-cpp
+         PRIVATE
+@@ -294,7 +296,7 @@ if(HIPBLASLT_ENABLE_HOST)
+             roc::${hipblas_target}
+         PRIVATE
+             hip::device
+-            tensilelite-host
++            tensilelite::tensilelite-host
+             ${CMAKE_DL_LIBS}
+             ${rocTracer}
+     )
+diff --git a/next-cmake/host-library/src/rocblaslt/CMakeLists.txt b/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
+index bd7d7869..c710c283 100644
+--- a/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
++++ b/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
+@@ -45,11 +45,17 @@ if(HIPBLASLT_ENABLE_ROCROLLER)
+     )
+     target_compile_features(hipblaslt-rocroller PRIVATE cxx_std_20)
+     set_target_properties(hipblaslt-rocroller PROPERTIES POSITION_INDEPENDENT_CODE ON)
+-    target_link_libraries(hipblaslt-rocroller PRIVATE hip::host roc::hipblas-common roc::rocroller)
++    target_link_libraries(hipblaslt-rocroller PRIVATE hip::host roc::hipblas-common roc::rocroller tensilelite::tensilelite-host)
+     target_compile_definitions(hipblaslt-rocroller PRIVATE HIPBLASLT_USE_ROCROLLER)
+     target_include_directories(hipblaslt-rocroller PRIVATE "${_CMAKE_CURRENT_SOURCE_DIR}/include")
+     target_include_directories(hipblaslt-rocroller PRIVATE "${_CMAKE_CURRENT_SOURCE_DIR}/../include")
+     target_include_directories(hipblaslt-rocroller PRIVATE "${_CMAKE_CURRENT_SOURCE_DIR}/../../../../include")
+     target_include_directories(hipblaslt-rocroller PRIVATE "${PROJECT_BINARY_DIR}/host-library/include")
+     target_link_libraries(hipblaslt PRIVATE hipblaslt-rocroller)
++    set_source_files_properties(
++        "${_CMAKE_CURRENT_SOURCE_DIR}/rocroller_host.cpp"
++          PROPERTIES
++              LANGUAGE CXX
++              COMPILE_OPTIONS "-x;c++"
++    )
+ endif()
+-- 
+2.43.0
+

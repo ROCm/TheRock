@@ -65,6 +65,8 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
+      PLATFORM: ${{ inputs.platform }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -87,5 +89,4 @@ jobs:
       - name: Test
         timeout-minutes: ${{ matrix.components.timeout_minutes }}
         run: |
-          if [ "${{ runner.os }}" != "Windows" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
           ${{ matrix.components.test_script }}

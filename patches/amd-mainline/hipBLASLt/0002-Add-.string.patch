@@ -1,0 +1,25 @@
+From 38540dba955b41180fb68f0ab3de182a885b8aca Mon Sep 17 00:00:00 2001
+From: David Dixon <david.dixon@amd.com>
+Date: Fri, 18 Jul 2025 03:12:09 +0000
+Subject: [PATCH 2/2] Add .string()
+
+---
+ library/src/amd_detail/rocblaslt/src/tensile_host.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+index 1826ea2f..08711fbb 100644
+--- a/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
++++ b/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
+@@ -2062,7 +2062,7 @@ namespace
+                     using MSL
+                         = TensileLite::MasterSolutionLibrary<TensileLite::ContractionProblemGemm>;
+                     m_library = std::dynamic_pointer_cast<MSL>(lib);
+-                    if(!m_library->initLibraryMapping(tensileLibPath))
++                    if(!m_library->initLibraryMapping(tensileLibPath.string()))
+                     {
+                         std::cerr << "\nrocblaslt error: Could not initialize Tensile library "
+                                      "mapping"
+-- 
+2.43.0
+

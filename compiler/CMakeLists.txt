@@ -11,6 +11,19 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
 
+  # If the compiler is not pristine (i.e. has patches), then there will be a
+  # ".amd-llvm.smrev" file present which must be used instead of the auto
+  # computed git revision. If present, this will have a stable hash of
+  # revision plus applied patches suitable for run to run compiler
+  # fingerprinting.
+  set(LLVM_SMREV_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.amd-llvm.smrev")
+  if(EXISTS "${LLVM_SMREV_FILE}")
+    file(STRINGS "${LLVM_SMREV_FILE}" LLVM_SMREV_LINES)
+    list(GET LLVM_SMREV_LINES 0 LLVM_SMREV_REPO)
+    list(GET LLVM_SMREV_LINES 1 LLVM_SMREV_REVISION)
+    message(STATUS "Using stable amd-llvm revision info: Repo='${LLVM_SMREV_REPO}', Revision='${LLVM_SMREV_REVISION}'")
+  endif()
+
   therock_cmake_subproject_declare(amd-llvm
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
@@ -21,6 +34,14 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_PROGRAM_DIRS
       lib/llvm/bin
     CMAKE_ARGS
+      # Version configuration
+      # Note that if LLVM_SMREV_REPO and LLVM_FORCE_VC_REVISION are empty,
+      # LLVM will compute the tip of tree revision, which is appropriate for
+      # pristine checkouts.
+      -DLLVM_APPEND_VC_REV=ON
+      "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
+      "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
+
       # LIBCXX
       -DLIBCXX_ENABLE_SHARED=OFF
       -DLIBCXX_ENABLE_STATIC=ON

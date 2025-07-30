@@ -2,6 +2,7 @@
 
 import importlib
 import os
+import platform
 import sys
 from pathlib import Path
 
@@ -13,9 +14,12 @@ PLATFORM_MODULE = importlib.import_module(PLATFORM_NAME)
 # NOTE: dependent on there being an __init__.py in the platform package.
 PLATFORM_PATH = Path(PLATFORM_MODULE.__file__).parent
 
+is_windows = platform.system() == "Windows"
+exe_suffix = ".exe" if is_windows else ""
+
 
 def _exec(relpath: str):
-    full_path = PLATFORM_PATH / relpath
+    full_path = PLATFORM_PATH / (relpath + exe_suffix)
     os.execv(full_path, [str(full_path)] + sys.argv[1:])
 
 

@@ -13,17 +13,12 @@ from pathlib import Path
 import platform
 import sys
 
+from github_actions_utils import *
+
 logging.basicConfig(level=logging.INFO)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
-
-
-def set_github_step_summary(summary: str):
-    logging.info(f"Appending to github summary: {summary}")
-    step_summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "")
-    with open(step_summary_file, "a") as f:
-        f.write(summary + "\n")
 
 
 def run(args: argparse.Namespace):
@@ -37,10 +32,10 @@ def run(args: argparse.Namespace):
     amdgpu_family = args.amdgpu_family
 
     log_url = f"{bucket_url}/logs/{amdgpu_family}/index.html"
-    set_github_step_summary(f"[Build Logs]({log_url})")
+    gha_append_step_summary(f"[Build Logs]({log_url})")
     if os.path.exists(build_dir / "artifacts" / "index.html"):
         artifact_url = f"{bucket_url}/index-{amdgpu_family}.html"
-        set_github_step_summary(f"[Artifacts]({artifact_url})")
+        gha_append_step_summary(f"[Artifacts]({artifact_url})")
     else:
         logging.info("No artifacts index found. Skipping artifact link.")
 

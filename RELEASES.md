@@ -189,22 +189,46 @@ framework.
 > This is under **active** development.
 
 Using the index pages listed above, you can install `torch` instead of
-`rocm[libraries,devel]`.
+`rocm[libraries,devel]`:
 
-For example, with gfx110X-dgpu:
+#### gfx94X-dcgpu
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
+  torch
+```
+
+#### gfx950-dcgpu
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
+  torch
+```
+
+#### gfx110X-dgpu
 
 ```bash
 python -m pip install \
   --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
   torch
+```
 
-pip freeze
-# ...
-# rocm==7.0.0rc20250615
-# rocm-sdk-core==7.0.0rc20250615
-# rocm-sdk-libraries-gfx110X-dgpu==7.0.0rc20250615
-# ...
-# torch==2.7.0a0+rocmsdk20250616
+#### gfx1151
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
+  torch
+```
+
+#### gfx120X-all
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
+  torch
 ```
 
 ### Using PyTorch Python packages
