@@ -106,7 +106,7 @@ jobs:
       optional_build_prod_arguments: ""
     outputs:
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
-      cp_version: ${{ steps.select-python.outputs.cp_version }}
+      cp_version: ${{ env.cp_version }}
       torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
     steps:
