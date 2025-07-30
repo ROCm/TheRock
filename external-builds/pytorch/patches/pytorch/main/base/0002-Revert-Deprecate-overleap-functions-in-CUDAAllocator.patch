@@ -1,0 +1,309 @@
+From cf7598b0517024fca5a330a0da2d99b8b3719ab0 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Wed, 30 Jul 2025 15:30:37 -0700
+Subject: [PATCH 2/3] Revert "Deprecate overleap functions in
+ CUDAAllocatorConfig, use AcceleratorAllocatorConfig instead (#156165)"
+
+This reverts commit 1fc010a9d8ea95bb74e54b31d17eba56ef16c27c.
+---
+ aten/src/ATen/cuda/CachingHostAllocator.cpp |  2 +-
+ c10/cuda/CUDAAllocatorConfig.h              | 19 ++-------
+ c10/cuda/CUDACachingAllocator.cpp           | 47 ++++++++++-----------
+ c10/xpu/XPUCachingAllocator.cpp             |  3 +-
+ torch/csrc/cuda/Module.cpp                  |  5 ++-
+ 5 files changed, 32 insertions(+), 44 deletions(-)
+
+diff --git a/aten/src/ATen/cuda/CachingHostAllocator.cpp b/aten/src/ATen/cuda/CachingHostAllocator.cpp
+index 39fd0e16fac..34aa15d0c06 100644
+--- a/aten/src/ATen/cuda/CachingHostAllocator.cpp
++++ b/aten/src/ATen/cuda/CachingHostAllocator.cpp
+@@ -162,7 +162,7 @@ struct CUDACachingHostAllocatorImpl
+   }
+ 
+   bool pinned_use_background_threads() override {
+-    return c10::CachingAllocator::AcceleratorAllocatorConfig::
++    return c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::
+         pinned_use_background_threads();
+   }
+ 
+diff --git a/c10/cuda/CUDAAllocatorConfig.h b/c10/cuda/CUDAAllocatorConfig.h
+index 8c4b613473c..382a50c08f6 100644
+--- a/c10/cuda/CUDAAllocatorConfig.h
++++ b/c10/cuda/CUDAAllocatorConfig.h
+@@ -3,7 +3,6 @@
+ #include <c10/core/AllocatorConfig.h>
+ #include <c10/cuda/CUDAException.h>
+ #include <c10/cuda/CUDAMacros.h>
+-#include <c10/util/Deprecated.h>
+ #include <c10/util/Exception.h>
+ #include <c10/util/env.h>
+ 
+@@ -18,13 +17,9 @@ enum class Expandable_Segments_Handle_Type : int {
+ // Environment config parser
+ class C10_CUDA_API CUDAAllocatorConfig {
+  public:
+-  C10_DEPRECATED_MESSAGE(
+-      "c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::max_split_size() is deprecated. Please use c10::CachingAllocator::AcceleratorAllocatorConfig::max_split_size() instead.")
+   static size_t max_split_size() {
+     return c10::CachingAllocator::AcceleratorAllocatorConfig::max_split_size();
+   }
+-  C10_DEPRECATED_MESSAGE(
+-      "c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::garbage_collection_threshold() is deprecated. Please use c10::CachingAllocator::AcceleratorAllocatorConfig::garbage_collection_threshold() instead.")
+   static double garbage_collection_threshold() {
+     return c10::CachingAllocator::AcceleratorAllocatorConfig::
+         garbage_collection_threshold();
+@@ -65,8 +60,6 @@ class C10_CUDA_API CUDAAllocatorConfig {
+     return instance().m_pinned_num_register_threads;
+   }
+ 
+-  C10_DEPRECATED_MESSAGE(
+-      "c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::pinned_use_background_threads() is deprecated. Please use c10::CachingAllocator::AcceleratorAllocatorConfig::pinned_use_background_threads() instead.")
+   static bool pinned_use_background_threads() {
+     return c10::CachingAllocator::AcceleratorAllocatorConfig::
+         pinned_use_background_threads();
+@@ -79,29 +72,25 @@ class C10_CUDA_API CUDAAllocatorConfig {
+     return 128;
+   }
+ 
+-  C10_DEPRECATED_MESSAGE(
+-      "c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::roundup_power2_divisions() is deprecated. Please use c10::CachingAllocator::AcceleratorAllocatorConfig::roundup_power2_divisions() instead.")
++  // This is used to round-up allocation size to nearest power of 2 divisions.
++  // More description below in function roundup_power2_next_division
++  // As an example, if we want 4 divisions between 2's power, this can be done
++  // using env variable: PYTORCH_CUDA_ALLOC_CONF=roundup_power2_divisions:4
+   static size_t roundup_power2_divisions(size_t size) {
+     return c10::CachingAllocator::AcceleratorAllocatorConfig::
+         roundup_power2_divisions(size);
+   }
+ 
+-  C10_DEPRECATED_MESSAGE(
+-      "c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::roundup_power2_divisions() is deprecated. Please use c10::CachingAllocator::AcceleratorAllocatorConfig::roundup_power2_divisions() instead.")
+   static std::vector<size_t> roundup_power2_divisions() {
+     return c10::CachingAllocator::AcceleratorAllocatorConfig::
+         roundup_power2_divisions();
+   }
+ 
+-  C10_DEPRECATED_MESSAGE(
+-      "c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::max_non_split_rounding_size() is deprecated. Please use c10::CachingAllocator::AcceleratorAllocatorConfig::max_non_split_rounding_size() instead.")
+   static size_t max_non_split_rounding_size() {
+     return c10::CachingAllocator::AcceleratorAllocatorConfig::
+         max_non_split_rounding_size();
+   }
+ 
+-  C10_DEPRECATED_MESSAGE(
+-      "c10::cuda::CUDACachingAllocator::CUDAAllocatorConfig::last_allocator_settings() is deprecated. Please use c10::CachingAllocator::AcceleratorAllocatorConfig::last_allocator_settings() instead.")
+   static std::string last_allocator_settings() {
+     return c10::CachingAllocator::getAllocatorSettings();
+   }
+diff --git a/c10/cuda/CUDACachingAllocator.cpp b/c10/cuda/CUDACachingAllocator.cpp
+index b0b1be8937a..1ee03914807 100644
+--- a/c10/cuda/CUDACachingAllocator.cpp
++++ b/c10/cuda/CUDACachingAllocator.cpp
+@@ -1225,7 +1225,7 @@ class DeviceCachingAllocator {
+   DeviceCachingAllocator()
+       : large_blocks(/*small=*/false), small_blocks(/*small=*/true) {
+     stats.max_split_size =
+-        static_cast<int64_t>(AcceleratorAllocatorConfig::max_split_size());
++        static_cast<int64_t>(CUDAAllocatorConfig::max_split_size());
+     context_recorder_.store(nullptr);
+   }
+ 
+@@ -1350,8 +1350,7 @@ class DeviceCachingAllocator {
+       // Do garbage collection if the flag is set.
+       if (C10_UNLIKELY(
+               set_fraction &&
+-              AcceleratorAllocatorConfig::garbage_collection_threshold() >
+-                  0.0)) {
++              CUDAAllocatorConfig::garbage_collection_threshold() > 0.0)) {
+         garbage_collect_cached_blocks(context);
+       }
+       // Attempt allocate
+@@ -1603,7 +1602,7 @@ class DeviceCachingAllocator {
+       stats.active_bytes[stat_type].increase(block->size);
+       stats.requested_bytes[stat_type].increase(block->requested_size);
+     });
+-    if (block->size >= AcceleratorAllocatorConfig::max_split_size())
++    if (block->size >= CUDAAllocatorConfig::max_split_size())
+       stats.oversize_allocations.increase(1);
+ 
+     auto allocated_bytes_gauge =
+@@ -1654,7 +1653,7 @@ class DeviceCachingAllocator {
+         block->pool->owner_MempoolId(),
+         context ? context : block->context_when_allocated);
+ 
+-    if (block->size >= AcceleratorAllocatorConfig::max_split_size())
++    if (block->size >= CUDAAllocatorConfig::max_split_size())
+       stats.oversize_allocations.decrease(1);
+ 
+     if (!block->stream_uses.empty()) {
+@@ -2203,8 +2202,7 @@ class DeviceCachingAllocator {
+     if (size < kMinBlockSize) {
+       return kMinBlockSize;
+     } else {
+-      auto divisions =
+-          AcceleratorAllocatorConfig::roundup_power2_divisions(size);
++      auto divisions = CUDAAllocatorConfig::roundup_power2_divisions(size);
+       if (divisions > 1 && size > (kMinBlockSize * divisions)) {
+         return roundup_power2_next_division(size, divisions);
+       } else {
+@@ -2694,7 +2692,7 @@ class DeviceCachingAllocator {
+     if (block->pool->is_small || CUDAAllocatorConfig::expandable_segments()) {
+       return remaining >= kMinBlockSize;
+     } else {
+-      return (size < AcceleratorAllocatorConfig::max_split_size()) &&
++      return (size < CUDAAllocatorConfig::max_split_size()) &&
+           (remaining > kSmallSize);
+     }
+   }
+@@ -2714,7 +2712,7 @@ class DeviceCachingAllocator {
+ 
+     if (C10_UNLIKELY(
+             set_fraction &&
+-            AcceleratorAllocatorConfig::garbage_collection_threshold() > 0.0)) {
++            CUDAAllocatorConfig::garbage_collection_threshold() > 0.0)) {
+       // Track block reuse interval only when garbage collection is enabled.
+       ++pool.get_free_blocks_call_count;
+     }
+@@ -2756,13 +2754,13 @@ class DeviceCachingAllocator {
+     }
+ 
+     // Do not return an oversized block for a large request
+-    if ((p.size() < AcceleratorAllocatorConfig::max_split_size()) &&
+-        ((*it)->size >= AcceleratorAllocatorConfig::max_split_size()))
++    if ((p.size() < CUDAAllocatorConfig::max_split_size()) &&
++        ((*it)->size >= CUDAAllocatorConfig::max_split_size()))
+       return false;
+     // Allow oversized block size to be rounded up but within a limit
+-    if ((p.size() >= AcceleratorAllocatorConfig::max_split_size()) &&
++    if ((p.size() >= CUDAAllocatorConfig::max_split_size()) &&
+         ((*it)->size >=
+-         p.size() + AcceleratorAllocatorConfig::max_non_split_rounding_size()))
++         p.size() + CUDAAllocatorConfig::max_non_split_rounding_size()))
+       return false;
+     p.block = *it;
+     pool.blocks.erase(it);
+@@ -2785,7 +2783,7 @@ class DeviceCachingAllocator {
+     // therefore should be of less overheads.
+ 
+     size_t gc_threshold = static_cast<size_t>(
+-        AcceleratorAllocatorConfig::garbage_collection_threshold() *
++        CUDAAllocatorConfig::garbage_collection_threshold() *
+         static_cast<double>(allowed_memory_maximum));
+     // No need to trigger GC yet
+     if (total_allocated_memory <= gc_threshold) {
+@@ -2933,7 +2931,7 @@ class DeviceCachingAllocator {
+       stats.segment[stat_type].increase(1);
+       stats.reserved_bytes[stat_type].increase(size);
+     });
+-    if (size >= AcceleratorAllocatorConfig::max_split_size())
++    if (size >= CUDAAllocatorConfig::max_split_size())
+       stats.oversize_segments.increase(1);
+     auto reserved_bytes_gauge =
+         STATIC_GAUGE(pytorch.CUDACachingAllocator.reserved_bytes);
+@@ -2962,7 +2960,7 @@ class DeviceCachingAllocator {
+   bool release_available_cached_blocks(
+       const AllocParams& p,
+       const std::shared_ptr<GatheredContext>& context) {
+-    if (AcceleratorAllocatorConfig::max_split_size() ==
++    if (CUDAAllocatorConfig::max_split_size() ==
+         std::numeric_limits<size_t>::max())
+       return false;
+     BlockPool& pool = *p.pool;
+@@ -2970,8 +2968,8 @@ class DeviceCachingAllocator {
+     // because of std::unique_ptr, block cannot be trivially copied
+     // Use constructor for search key.
+     Block key(p.search_key.device, p.search_key.stream, p.search_key.size);
+-    key.size = (key.size < AcceleratorAllocatorConfig::max_split_size())
+-        ? AcceleratorAllocatorConfig::max_split_size()
++    key.size = (key.size < CUDAAllocatorConfig::max_split_size())
++        ? CUDAAllocatorConfig::max_split_size()
+         : key.size;
+     auto it = pool.blocks.lower_bound(&key);
+     if (it == pool.blocks.end() || (*it)->stream != p.stream() ||
+@@ -2984,7 +2982,7 @@ class DeviceCachingAllocator {
+       --it; // Back up one item.  Now on the largest block for the correct
+             // stream
+       while ((totalReleased < key.size) &&
+-             ((*it)->size >= AcceleratorAllocatorConfig::max_split_size()) &&
++             ((*it)->size >= CUDAAllocatorConfig::max_split_size()) &&
+              ((*it)->stream == p.stream())) {
+         auto cur = it;
+         bool is_first = cur == pool.blocks.begin();
+@@ -3109,7 +3107,7 @@ class DeviceCachingAllocator {
+         stats.reserved_bytes[static_cast<int64_t>(StatType::AGGREGATE)]
+             .current);
+ 
+-    if (block->size >= AcceleratorAllocatorConfig::max_split_size())
++    if (block->size >= CUDAAllocatorConfig::max_split_size())
+       stats.oversize_segments.decrease(1);
+     pool->blocks.erase(block);
+     delete block;
+@@ -3736,8 +3734,8 @@ class NativeCachingAllocator : public CUDAAllocator {
+ 
+     auto& md = result.config_metadata;
+     md.garbage_collection_threshold =
+-        AcceleratorAllocatorConfig::garbage_collection_threshold();
+-    md.max_split_size = AcceleratorAllocatorConfig::max_split_size();
++        CUDAAllocatorConfig::garbage_collection_threshold();
++    md.max_split_size = CUDAAllocatorConfig::max_split_size();
+     md.pinned_num_register_threads =
+         CUDAAllocatorConfig::pinned_num_register_threads();
+     md.expandable_segments = CUDAAllocatorConfig::expandable_segments();
+@@ -3745,10 +3743,9 @@ class NativeCachingAllocator : public CUDAAllocator {
+         CUDAAllocatorConfig::release_lock_on_cudamalloc();
+     md.pinned_use_host_register =
+         CUDAAllocatorConfig::pinned_use_cuda_host_register();
+-    md.last_allocator_settings =
+-        AcceleratorAllocatorConfig::last_allocator_settings();
++    md.last_allocator_settings = CUDAAllocatorConfig::last_allocator_settings();
+     md.roundup_power2_divisions =
+-        AcceleratorAllocatorConfig::roundup_power2_divisions();
++        CUDAAllocatorConfig::roundup_power2_divisions();
+ 
+     return result;
+   }
+diff --git a/c10/xpu/XPUCachingAllocator.cpp b/c10/xpu/XPUCachingAllocator.cpp
+index afae32d92a4..543b48f0811 100644
+--- a/c10/xpu/XPUCachingAllocator.cpp
++++ b/c10/xpu/XPUCachingAllocator.cpp
+@@ -1,4 +1,3 @@
+-#include <c10/core/AllocatorConfig.h>
+ #include <c10/util/flat_hash_map.h>
+ #include <c10/util/irange.h>
+ #include <c10/xpu/XPUCachingAllocator.h>
+@@ -21,6 +20,8 @@ constexpr size_t kMinBlockSize = 512;
+ constexpr size_t kSmallSize = 1048576;
+ // "small" allocations are packed in 2 MiB blocks
+ constexpr size_t kSmallBuffer = 2097152;
++// "large" allocations may be packed in 20 MiB blocks
++constexpr size_t kLargeBuffer = 20971520;
+ // allocations between 1 and 10 MiB may use kLargeBuffer
+ constexpr size_t kMinLargeAlloc = 10485760;
+ // round up large allocations to 2 MiB
+diff --git a/torch/csrc/cuda/Module.cpp b/torch/csrc/cuda/Module.cpp
+index ead46337ff0..b44ce311ecd 100644
+--- a/torch/csrc/cuda/Module.cpp
++++ b/torch/csrc/cuda/Module.cpp
+@@ -20,8 +20,8 @@
+ #include <ATen/cuda/detail/CUDAHooks.h>
+ #include <ATen/cuda/jiterator.h>
+ #include <ATen/cuda/tunable/Tunable.h>
+-#include <c10/core/AllocatorConfig.h>
+ #include <c10/core/StorageImpl.h>
++#include <c10/cuda/CUDAAllocatorConfig.h>
+ #include <c10/cuda/CUDACachingAllocator.h>
+ #include <c10/cuda/CUDAFunctions.h>
+ #include <ATen/cuda/CUDAGraphsUtils.cuh>
+@@ -426,7 +426,8 @@ PyObject* THCPModule_cudaCachingAllocator_set_allocator_settings(
+     PyObject* _unused,
+     PyObject* env) {
+   HANDLE_TH_ERRORS
+-  c10::CachingAllocator::setAllocatorSettings(THPUtils_unpackString(env));
++  c10::cuda::CUDACachingAllocator::setAllocatorSettings(
++      THPUtils_unpackString(env));
+   Py_RETURN_NONE;
+   END_HANDLE_TH_ERRORS
+ }
+-- 
+2.47.1.windows.2
+
