@@ -14,8 +14,6 @@ COPY --from=runner /home/runner /home/runner
 
 RUN chown -R runner:runner /home/runner && chmod +x /home/runner/run.sh
 
-RUN chown -R runner:runner /home/runner && chmod +x /home/runner/run.sh
-
 # Set up runner environment
 USER runner
 WORKDIR /home/runner
@@ -23,3 +21,6 @@ WORKDIR /home/runner
 ENV RUNNER_HOME=/home/runner
 ENV PATH=$PATH:/home/runner/bin
 ENV RUNNER_WORKDIR=/home/runner/_work
+
+# Entrypoint for GitHub ARC
+CMD ["/home/runner/run.sh"]
