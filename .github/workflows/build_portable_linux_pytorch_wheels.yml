@@ -109,6 +109,7 @@ jobs:
       cp_version: ${{ env.cp_version }}
       torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
+      triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -119,7 +120,6 @@ jobs:
           git config --global user.email "therockbot@amd.com"
 
       - name: Select Python version
-        id: select-python
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }}
@@ -193,7 +193,7 @@ jobs:
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
-      - name: (Re-)Generate Python package release index
+      - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
@@ -239,6 +239,7 @@ jobs:
       TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
       TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
+      TRITON_VERSION: "${{ needs.build_pytorch_wheels.outputs.triton_version }}"
 
     steps:
       - name: Checkout
@@ -261,7 +262,8 @@ jobs:
             --exclude "*" \
             --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "pytorch_triton_rocm-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         run: |
