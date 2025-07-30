@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=runner /home/runner/ /home/runner/
+COPY --from=runner /home/runner /home/runner
 
 RUN chown -R runner:runner /home/runner && chmod +x /home/runner/run.sh
 
