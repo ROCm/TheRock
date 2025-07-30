@@ -372,7 +372,10 @@ def do_build(args: argparse.Namespace):
     if not is_windows:
         roctracer_path = rocm_dir / "lib" / "libroctracer64.so"
         if env["USE_KINETO"] == "ON":
-            env["PYTORCH_CMAKE_ARGS"] = env.get("PYTORCH_CMAKE_ARGS", "") + f" -DROCTRACER_LIBRARY={roctracer_path}"
+            env["PYTORCH_CMAKE_ARGS"] = (
+                env.get("PYTORCH_CMAKE_ARGS", "")
+                + f" -DROCTRACER_LIBRARY={roctracer_path}"
+            )
             print(f"  PYTORCH_CMAKE_ARGS = {env['PYTORCH_CMAKE_ARGS']}")
 
     # GLOO enabled for only Linux
