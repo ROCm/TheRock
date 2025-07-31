@@ -11,8 +11,15 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   ##############################################################################
   # TODO: Move this to math-libs
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_composablekernel_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel")
+  else()
+    set(_composablekernel_source_dir "composable_kernel")
+  endif()
+
   therock_cmake_subproject_declare(composable_kernel
-    EXTERNAL_SOURCE_DIR "composable_kernel"
+    EXTERNAL_SOURCE_DIR "${_composablekernel_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
