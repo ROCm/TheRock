@@ -61,7 +61,7 @@ jobs:
           aws s3 cp \
             s3://therock-nightly-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
             s3://therock-dev-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*"  --include "*${{ inputs.rocm_version }}*${{ env.cp_version }}*" --include "rocm*${{ inputs.rocm_version }}*"
+            --recursive --exclude "*"  --include "rocm*${{ inputs.rocm_version }}*"
 
       - name: (Re-)Generate Python package release index
         env:
