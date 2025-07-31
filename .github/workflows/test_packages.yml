@@ -57,9 +57,6 @@ jobs:
       fail-fast: false
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
-    defaults:
-      run:
-        shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
