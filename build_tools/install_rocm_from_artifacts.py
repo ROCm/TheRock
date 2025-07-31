@@ -29,6 +29,8 @@ Note: the script will overwrite the output directory argument. If no argument is
 
 import argparse
 import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
 from fetch_artifacts import (
     retrieve_base_artifacts,
     retrieve_enabled_artifacts,
@@ -45,7 +47,11 @@ import tarfile
 from _therock_utils.artifacts import ArtifactPopulator
 
 PLATFORM = platform.system().lower()
-s3_client = boto3.client("s3", verify=False)
+s3_client = boto3.client(
+    "s3",
+    verify=False,
+    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
+)
 
 
 def log(*args, **kwargs):

@@ -22,6 +22,7 @@ additional disk space):
 
 import argparse
 import boto3
+from botocore import UNSIGNED
 from botocore.config import Config
 import concurrent.futures
 from dataclasses import dataclass
@@ -34,6 +35,13 @@ import warnings
 from urllib3.exceptions import InsecureRequestWarning
 
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+
+s3_client = boto3.client(
+    "s3",
+    verify=False,
+    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
+)
+paginator = s3_client.get_paginator("list_objects_v2")
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
 
@@ -56,10 +64,6 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     s3_directory_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}/"
-    s3_client = boto3.client(
-        "s3", verify=False, config=Config(max_pool_connections=100)
-    )
-    paginator = s3_client.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(Bucket=BUCKET, Prefix=s3_directory_path)
     data = set()
     for page in page_iterator:
@@ -101,7 +105,6 @@ def collect_artifacts_download_requests(
     artifacts_to_retrieve = []
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     s3_key_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}"
-
     for artifact_name in artifact_names:
         file_name = f"{artifact_name}_{variant}.tar.xz"
         # If artifact does exist in s3 bucket
