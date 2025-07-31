@@ -37,10 +37,6 @@ warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
 
-config = Config(max_pool_connections=100)
-s3_client = boto3.client("s3", verify=False, config=config)
-paginator = s3_client.get_paginator("list_objects_v2")
-
 # Importing build_artifact_upload.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from upload_build_artifacts import retrieve_bucket_info
@@ -60,6 +56,10 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     s3_directory_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}/"
+    s3_client = boto3.client(
+        "s3", verify=False, config=Config(max_pool_connections=100)
+    )
+    paginator = s3_client.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(Bucket=BUCKET, Prefix=s3_directory_path)
     data = set()
     for page in page_iterator:
@@ -120,6 +120,9 @@ def collect_artifacts_download_requests(
 def download_artifact(artifact_download_request: ArtifactDownloadRequest):
     MAX_RETRIES = 3
     BASE_DELAY = 3  # seconds
+    s3_client = boto3.client(
+        "s3", verify=False, config=Config(max_pool_connections=100)
+    )
     for attempt in range(MAX_RETRIES):
         try:
             artifact_key = artifact_download_request.artifact_key
