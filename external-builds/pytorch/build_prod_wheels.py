@@ -635,6 +635,7 @@ def do_build_pytorch(
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_dir / "build")
+    print(f"lol  env: {env}")
     exec([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
@@ -694,6 +695,13 @@ def do_build_pytorch_vision(
             "TORCHVISION_USE_VIDEO_CODEC": "0",
         }
     )
+
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
 
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:
