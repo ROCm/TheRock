@@ -54,9 +54,16 @@ else()
   set(_enable_rocRoller "ON")
 endif()
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_rocroller_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller")
+else()
+  set(_rocroller_source_dir "rocRoller")
+endif()
+
 if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
-    EXTERNAL_SOURCE_DIR "rocRoller"
+    EXTERNAL_SOURCE_DIR "${_rocroller_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRoller"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
