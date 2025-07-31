@@ -21,6 +21,7 @@ additional disk space):
 
 import argparse
 import boto3
+from botocore.config import Config
 import concurrent.futures
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -29,9 +30,16 @@ import platform
 import sys
 import tarfile
 import time
+import warnings
+from urllib3.exceptions import InsecureRequestWarning
+
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
-s3_client = boto3.client("s3", verify=False)
+
+config = Config(max_pool_connections=100)
+s3_client = boto3.client("s3", verify=False, config=config)
+paginator = s3_client.get_paginator("list_objects_v2")
 
 # Importing build_artifact_upload.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
@@ -83,18 +91,19 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     s3_directory_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}/"
-    s3_response = s3_client.list_objects_v2(Bucket=BUCKET, Prefix=s3_directory_path)
+    page_iterator = paginator.paginate(Bucket=BUCKET, Prefix=s3_directory_path)
     data = set()
-    if "Contents" in s3_response:
-        for artifact in s3_response["Contents"]:
-            artifact_key = artifact["Key"]
-            if (
-                "sha256sum" not in artifact_key
-                and "tar.xz" in artifact_key
-                and (amdgpu_family in artifact_key or "generic" in artifact_key)
-            ):
-                data.add(artifact_key)
-
+    for page in page_iterator:
+        if "Contents" in page:
+            for artifact in page["Contents"]:
+                artifact_key = artifact["Key"]
+                if (
+                    "sha256sum" not in artifact_key
+                    and "tar.xz" in artifact_key
+                    and (amdgpu_family in artifact_key or "generic" in artifact_key)
+                ):
+                    _, file_name = artifact_key.split("/")
+                    data.add(file_name)
     return data
 
 
@@ -130,7 +139,7 @@ def collect_artifacts_download_requests(
         if file_name in existing_artifacts:
             artifacts_to_retrieve.append(
                 ArtifactDownloadRequest(
-                    artifact_name=f"{s3_key_path}/{file_name}",
+                    artifact_key=f"{s3_key_path}/{file_name}",
                     bucket=BUCKET,
                     output_path=output_dir / file_name,
                 )
