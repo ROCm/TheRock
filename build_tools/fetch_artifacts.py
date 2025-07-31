@@ -123,9 +123,6 @@ def collect_artifacts_download_requests(
 def download_artifact(artifact_download_request: ArtifactDownloadRequest):
     MAX_RETRIES = 3
     BASE_DELAY = 3  # seconds
-    s3_client = boto3.client(
-        "s3", verify=False, config=Config(max_pool_connections=100)
-    )
     for attempt in range(MAX_RETRIES):
         try:
             artifact_key = artifact_download_request.artifact_key
