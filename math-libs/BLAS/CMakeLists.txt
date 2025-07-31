@@ -229,8 +229,15 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
   set(_sparse_subproject_names)
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_rocsparse_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsparse")
+  else()
+    set(_rocsparse_source_dir "rocSPARSE")
+  endif()
+
   therock_cmake_subproject_declare(rocSPARSE
-    EXTERNAL_SOURCE_DIR "rocSPARSE"
+    EXTERNAL_SOURCE_DIR "${_rocsparse_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocSPARSE"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -265,8 +272,15 @@ if(THEROCK_ENABLE_SPARSE)
   # hipSPARSE
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_hipsparse_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparse")
+  else()
+    set(_hipsparse_source_dir "hipSPARSE")
+  endif()
+
   therock_cmake_subproject_declare(hipSPARSE
-    EXTERNAL_SOURCE_DIR "hipSPARSE"
+    EXTERNAL_SOURCE_DIR "${_hipsparse_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSPARSE"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
