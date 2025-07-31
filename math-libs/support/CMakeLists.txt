@@ -5,7 +5,7 @@
 if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
   set(_mxdatagenerator_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/mxdatagenerator")
 else()
-  set(_mxdatagenerator_source_dir "rocRoller")
+  set(_mxdatagenerator_source_dir "mxDataGenerator")
 endif()
 
 therock_cmake_subproject_declare(mxDataGenerator
