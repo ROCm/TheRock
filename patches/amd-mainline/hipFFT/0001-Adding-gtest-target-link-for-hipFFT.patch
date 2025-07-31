@@ -1,0 +1,48 @@
+From 1a010b70c856489724e3134323f8a7adc521621f Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Tue, 29 Jul 2025 11:53:18 -0700
+Subject: [PATCH 1/2] Adding gtest target link for hipFFT
+
+---
+ clients/CMakeLists.txt | 25 ++-----------------------
+ 1 file changed, 2 insertions(+), 23 deletions(-)
+
+diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
+index 739ef03..863df81 100644
+--- a/clients/CMakeLists.txt
++++ b/clients/CMakeLists.txt
+@@ -88,29 +88,8 @@ if( BUILD_CLIENTS_SAMPLES )
+ endif( )
+ 
+ if( BUILD_CLIENTS_TESTS )
+-  find_package( GTest 1.11.0 )
+-  include( ExternalProject )
+-  if( NOT GTEST_FOUND )
+-    set( GTEST_INCLUDE_DIRS
+-      ${CMAKE_CURRENT_BINARY_DIR}/src/gtest/googletest/include
+-      )
+-    set( GTEST_LIBRARIES
+-      ${CMAKE_CURRENT_BINARY_DIR}/src/gtest-build/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gtest${CMAKE_STATIC_LIBRARY_SUFFIX}
+-      ${CMAKE_CURRENT_BINARY_DIR}/src/gtest-build/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX}
+-      )
+-
+-    ExternalProject_Add( gtest
+-      URL https://github.com/google/googletest/archive/release-1.11.0.tar.gz
+-      URL_HASH SHA256=b4870bf121ff7795ba20d20bcdd8627b8e088f2d1dab299a031c1034eddc93d5
+-      PREFIX ${CMAKE_CURRENT_BINARY_DIR}
+-      CMAKE_ARGS -DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER} -DBUILD_SHARED_LIBS=OFF
+-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+-      INSTALL_COMMAND ""
+-      BUILD_BYPRODUCTS ${GTEST_LIBRARIES}
+-      )
+-    ExternalProject_Get_Property( gtest source_dir binary_dir )
+-  endif()
+-  add_subdirectory( tests )
++  find_package( GTest REQUIRED)
++  target_link_libraries( hipfft-test PRIVATE GTest::gtest)
+ endif( )
+ 
+ if( BUILD_CLIENTS_BENCH )
+-- 
+2.47.1.windows.2
+

@@ -1,0 +1,25 @@
+From b537d54ca96abe90619b846141ec3da05efebe55 Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Tue, 29 Jul 2025 11:55:53 -0700
+Subject: [PATCH 2/2] Removing version for fftw
+
+---
+ clients/tests/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/clients/tests/CMakeLists.txt b/clients/tests/CMakeLists.txt
+index 436a753..5a0e29f 100644
+--- a/clients/tests/CMakeLists.txt
++++ b/clients/tests/CMakeLists.txt
+@@ -47,7 +47,7 @@ find_package( Boost REQUIRED)
+ 
+ set( Boost_USE_STATIC_LIBS OFF )
+ 
+-find_package( FFTW 3.0 REQUIRED MODULE COMPONENTS FLOAT DOUBLE )
++find_package( FFTW REQUIRED MODULE COMPONENTS FLOAT DOUBLE )
+ 
+ set( THREADS_PREFER_PTHREAD_FLAG ON )
+ find_package( Threads REQUIRED )
+-- 
+2.47.1.windows.2
+
