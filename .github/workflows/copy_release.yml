@@ -20,6 +20,9 @@ on:
           - 3.11
           - 3.12
           - 3.13
+      include_torch:
+        type: boolean
+        default: false
       sourcesubdir:
         type: choice
         options:
@@ -56,12 +59,20 @@ jobs:
           python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }}
 
-      - name: Upload wheels to S3
+      - name: Copy ROCm packages between S3 buckets
         run: |
           aws s3 cp \
             s3://therock-nightly-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
             s3://therock-dev-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*"  --include "rocm*${{ inputs.rocm_version }}*"
+
+      - name: Copy torch wheels between S3 buckets
+        if: ${{ inputs.include_torch == 'true' }}
+        run: |
+          aws s3 cp \
+            s3://therock-nightly-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://therock-dev-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
+            --recursive --exclude "*"  --include "torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
 
       - name: (Re-)Generate Python package release index
         env:
