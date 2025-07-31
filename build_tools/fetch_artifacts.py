@@ -7,6 +7,7 @@ download artifacts then unpack them into a usable install directory.
 
 Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   mkdir -p ~/.therock/artifacts_15685736080
+  pip install boto3
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
 
@@ -24,7 +25,6 @@ import boto3
 from botocore.config import Config
 import concurrent.futures
 from dataclasses import dataclass
-from html.parser import HTMLParser
 from pathlib import Path
 import platform
 import sys
@@ -48,37 +48,6 @@ from _therock_utils.artifacts import ArtifactName
 
 GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
-
-
-class FetchArtifactException(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-class ArtifactNotFoundExeption(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-class IndexPageParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.files = []
-        self.is_file_data = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "span":
-            for attr_name, attr_value in attrs:
-                if attr_name == "class" and attr_value == "name":
-                    self.is_file_data = True
-                    break
-
-    def handle_data(self, data):
-        if self.is_file_data:
-            self.files.append(data)
-            self.is_file_data = False
 
 
 # TODO(geomin12): switch out logging library

@@ -16,17 +16,28 @@ part of Continuous Delivery (CD) nightly releases. See also the
 
 Table of contents:
 
-- [Installing releases using pip](#installing-releases-using-pip)
-  - [Installing ROCm Python packages](#installing-rocm-python-packages)
-  - [Using ROCm Python packages](#using-rocm-python-packages)
-  - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
-  - [Using PyTorch Python packages](#using-pytorch-python-packages)
-- [Installing from tarballs](#installing-from-tarballs)
-  - [Installing release tarballs](#installing-release-tarballs)
-  - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
-  - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
-  - [Using installed tarballs](#using-installed-tarballs)
-- [Using Dockerfiles](#using-dockerfiles)
+- [Releases](#releases)
+  - [Installing releases using pip](#installing-releases-using-pip)
+    - [Python packages release status](#python-packages-release-status)
+    - [Installing ROCm Python packages](#installing-rocm-python-packages)
+      - [gfx94X-dcgpu](#gfx94x-dcgpu)
+      - [gfx950-dcgpu](#gfx950-dcgpu)
+      - [gfx110X-dgpu](#gfx110x-dgpu)
+      - [gfx1151](#gfx1151)
+      - [gfx120X-all](#gfx120x-all)
+    - [Using ROCm Python packages](#using-rocm-python-packages)
+    - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
+      - [gfx94X-dcgpu](#gfx94x-dcgpu-1)
+      - [gfx950-dcgpu](#gfx950-dcgpu-1)
+      - [gfx110X-dgpu](#gfx110x-dgpu-1)
+      - [gfx1151](#gfx1151-1)
+      - [gfx120X-all](#gfx120x-all-1)
+    - [Using PyTorch Python packages](#using-pytorch-python-packages)
+  - [Installing from tarballs](#installing-from-tarballs)
+    - [Installing release tarballs](#installing-release-tarballs)
+    - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
+    - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
+    - [Using installed tarballs](#using-installed-tarballs)
 
 ## Installing releases using pip
 
@@ -337,7 +348,7 @@ them from the expanded artifacts down to a ROCm SDK "dist folder" using the
 
 <!-- TODO: move this above the manual `tar -xf` commands? -->
 
-This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally.
+This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally. Please run `pip install boto3` to get the necessary library.
 
 Examples:
 
