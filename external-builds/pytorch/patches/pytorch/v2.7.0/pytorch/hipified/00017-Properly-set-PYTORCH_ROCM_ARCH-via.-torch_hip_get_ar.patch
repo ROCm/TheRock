@@ -1,0 +1,30 @@
+From f1ac783a88c7306bd6b429f22ef02f997a54e4fb Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
+Date: Thu, 31 Jul 2025 21:04:54 +0900
+Subject: [PATCH] Properly set PYTORCH_ROCM_ARCH via. torch_hip_get_arch_list
+
+---
+ cmake/public/LoadHIP.cmake | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/cmake/public/LoadHIP.cmake b/cmake/public/LoadHIP.cmake
+index ef0cf26e64..bae5b2ff42 100644
+--- a/cmake/public/LoadHIP.cmake
++++ b/cmake/public/LoadHIP.cmake
+@@ -114,6 +114,13 @@ macro(pytorch_load_hip)
+ 
+     message(STATUS "Could not locate legacy FindHIP.cmake: You may need to set CMAKE_MODULE_PATH explicitly to its location")
+   endfunction()
++
++  torch_hip_get_arch_list(PYTORCH_ROCM_ARCH)
++  if(PYTORCH_ROCM_ARCH STREQUAL "")
++    message(FATAL_ERROR "No GPU arch specified for ROCm build. Please use PYTORCH_ROCM_ARCH environment variable to specify GPU archs to build for.")
++  endif()
++  message("Building PyTorch for GPU arch: ${PYTORCH_ROCM_ARCH}")
++
+   find_rocm_sdk_module_path()
+   find_package(HIP MODULE REQUIRED)
+ 
+-- 
+2.50.1.windows.1
+
