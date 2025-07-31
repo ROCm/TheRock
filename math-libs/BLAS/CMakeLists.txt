@@ -18,8 +18,15 @@ endif()
 ##############################################################################
 set(_blas_subproject_names)
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_hipblas_common_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas-common")
+else()
+  set(_hipblas_common_source_dir "hipBLAS-common")
+endif()
+
 therock_cmake_subproject_declare(hipBLAS-common
-EXTERNAL_SOURCE_DIR "hipBLAS-common"
+EXTERNAL_SOURCE_DIR "${_hipblas_common_source_dir}"
+BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLAS-common"
 BACKGROUND_BUILD
 COMPILER_TOOLCHAIN
   amd-hip
