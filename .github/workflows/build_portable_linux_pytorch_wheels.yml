@@ -232,14 +232,10 @@ jobs:
     name: Upload PyTorch Wheels to S3
     needs: [build_pytorch_wheels, generate_target_to_run]
     if: >
-      success() &&
       github.repository_owner == 'ROCm' &&
       (
         needs.generate_target_to_run.outputs.test_runs_on == '' ||
-        (
-          always() &&
-          needs.test_pytorch_wheels.result == 'success'
-        )
+        needs.test_pytorch_wheels.result == 'success'
       )
     runs-on: ubuntu-24.04
     env:
