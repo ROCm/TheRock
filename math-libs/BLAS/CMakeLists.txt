@@ -18,8 +18,15 @@ endif()
 ##############################################################################
 set(_blas_subproject_names)
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_hipblas_common_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas-common")
+else()
+  set(_hipblas_common_source_dir "hipBLAS-common")
+endif()
+
 therock_cmake_subproject_declare(hipBLAS-common
-EXTERNAL_SOURCE_DIR "hipBLAS-common"
+EXTERNAL_SOURCE_DIR "${_hipblas_common_source_dir}"
+BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLAS-common"
 BACKGROUND_BUILD
 COMPILER_TOOLCHAIN
   amd-hip
@@ -41,6 +48,12 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # rocRoller
 ##############################################################################
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_rocroller_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller")
+else()
+  set(_rocroller_source_dir "rocRoller")
+endif()
+
 if(WIN32)
   set(_enable_rocRoller "OFF")
 else()
@@ -49,7 +62,8 @@ endif()
 
 if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
-    EXTERNAL_SOURCE_DIR "rocRoller"
+    EXTERNAL_SOURCE_DIR "${_rocroller_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRoller"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -92,6 +106,12 @@ endif()
 # hipBLASLt
 ##############################################################################
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_hipblaslt_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt")
+else()
+  set(_hipblaslt_source_dir "hipBLASLt")
+endif()
+
 set(hipBLASLt_optional_deps)
 if(NOT WIN32)
   # hipBLASLt is hard-coded to not expect rocm-smi on Windows.
@@ -114,7 +134,8 @@ if(_enable_rocRoller)
 endif()
 
 therock_cmake_subproject_declare(hipBLASLt
-  EXTERNAL_SOURCE_DIR "hipBLASLt"
+  EXTERNAL_SOURCE_DIR "${_hipblaslt_source_dir}"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
   BACKGROUND_BUILD
   CMAKE_LISTS_RELPATH "next-cmake"
   CMAKE_ARGS
