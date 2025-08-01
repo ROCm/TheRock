@@ -6,6 +6,8 @@ on:
       amdgpu_family:
         required: true
         type: string
+      test_runs_on:
+        type: string
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -25,6 +27,8 @@ on:
     inputs:
       amdgpu_family:
         required: true
+        type: string
+      test_runs_on:
         type: string
       release_type:
         description: The type of release to build ("nightly", or "dev")
@@ -47,7 +51,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  release:
+    name: Release PyTorch | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +61,7 @@ jobs:
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_runs_on: ${{ inputs.test_runs_on }}
       python_version: ${{ matrix.python_version }}
       release_type: ${{ inputs.release_type }}
       s3_subdir: ${{ inputs.s3_subdir }}
