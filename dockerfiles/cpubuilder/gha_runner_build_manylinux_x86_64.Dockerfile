@@ -7,7 +7,7 @@
 FROM ubuntu:24.04
 
 RUN  apt update -y
-RUN  apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev wget -y
+RUN  apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev wget gpg -y
 
 RUN  apt install "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)" -y
 
