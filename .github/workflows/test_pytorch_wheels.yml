@@ -59,6 +59,10 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ghcr.io/rocm/pytorch_ubuntu_24_04_test_image:users-geomin12-pytorch-355-fix
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
     defaults:
       run:
         shell: bash
