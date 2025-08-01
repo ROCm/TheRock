@@ -43,6 +43,10 @@ PREFIXES = [
     "v2/gfx950-dcgpu",
 ]
 
+CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
+if CUSTOM_PREFIX:
+    PREFIXES.append(CUSTOM_PREFIX)
+
 # NOTE: This refers to the name on the wheels themselves and not the name of
 # package as specified by setuptools, for packages with "-" (hyphens) in their
 # names you need to convert them to "_" (underscores) in order for them to be

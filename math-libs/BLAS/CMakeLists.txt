@@ -18,8 +18,15 @@ endif()
 ##############################################################################
 set(_blas_subproject_names)
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_hipblas_common_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas-common")
+else()
+  set(_hipblas_common_source_dir "hipBLAS-common")
+endif()
+
 therock_cmake_subproject_declare(hipBLAS-common
-EXTERNAL_SOURCE_DIR "hipBLAS-common"
+EXTERNAL_SOURCE_DIR "${_hipblas_common_source_dir}"
+BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLAS-common"
 BACKGROUND_BUILD
 COMPILER_TOOLCHAIN
   amd-hip
@@ -41,6 +48,12 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # rocRoller
 ##############################################################################
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_rocroller_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller")
+else()
+  set(_rocroller_source_dir "rocRoller")
+endif()
+
 if(WIN32)
   set(_enable_rocRoller "OFF")
 else()
@@ -49,7 +62,8 @@ endif()
 
 if(_enable_rocRoller)
   therock_cmake_subproject_declare(rocRoller
-    EXTERNAL_SOURCE_DIR "rocRoller"
+    EXTERNAL_SOURCE_DIR "${_rocroller_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRoller"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -92,6 +106,12 @@ endif()
 # hipBLASLt
 ##############################################################################
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_hipblaslt_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt")
+else()
+  set(_hipblaslt_source_dir "hipBLASLt")
+endif()
+
 set(hipBLASLt_optional_deps)
 if(NOT WIN32)
   # hipBLASLt is hard-coded to not expect rocm-smi on Windows.
@@ -114,7 +134,8 @@ if(_enable_rocRoller)
 endif()
 
 therock_cmake_subproject_declare(hipBLASLt
-  EXTERNAL_SOURCE_DIR "hipBLASLt"
+  EXTERNAL_SOURCE_DIR "${_hipblaslt_source_dir}"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
   BACKGROUND_BUILD
   CMAKE_LISTS_RELPATH "next-cmake"
   CMAKE_ARGS
@@ -153,6 +174,14 @@ list(APPEND _blas_subproject_names hipBLASLt)
 # rocBLAS
 ##############################################################################
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_rocblas_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas")
+  set(_tensile_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile")
+else()
+  set(_rocblas_source_dir "rocBLAS")
+  set(_tensile_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/Tensile")
+endif()
+
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
@@ -162,7 +191,8 @@ elseif(THEROCK_BUILD_TESTING)
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
-  EXTERNAL_SOURCE_DIR "rocBLAS"
+  EXTERNAL_SOURCE_DIR "${_rocblas_source_dir}"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
   BACKGROUND_BUILD
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
@@ -171,7 +201,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
-    "-DTensile_TEST_LOCAL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/Tensile"
+    "-DTensile_TEST_LOCAL_PATH=${_tensile_source_dir}"
     # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
     # doing a strict check of exact version.
     -DTENSILE_VERSION=
@@ -208,8 +238,15 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
   set(_sparse_subproject_names)
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_rocsparse_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsparse")
+  else()
+    set(_rocsparse_source_dir "rocSPARSE")
+  endif()
+
   therock_cmake_subproject_declare(rocSPARSE
-    EXTERNAL_SOURCE_DIR "rocSPARSE"
+    EXTERNAL_SOURCE_DIR "${_rocsparse_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocSPARSE"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -244,8 +281,15 @@ if(THEROCK_ENABLE_SPARSE)
   # hipSPARSE
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_hipsparse_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparse")
+  else()
+    set(_hipsparse_source_dir "hipSPARSE")
+  endif()
+
   therock_cmake_subproject_declare(hipSPARSE
-    EXTERNAL_SOURCE_DIR "hipSPARSE"
+    EXTERNAL_SOURCE_DIR "${_hipsparse_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSPARSE"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -369,6 +413,12 @@ endif(THEROCK_ENABLE_SOLVER)
 # hipBLAS
 ##############################################################################
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  set(_hipblas_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas")
+else()
+  set(_hipblas_source_dir "hipBLAS")
+endif()
+
 set(hipBLAS_optional_deps)
 if(THEROCK_ENABLE_SOLVER)
   list(APPEND hipBLAS_optional_deps rocSOLVER)
@@ -378,7 +428,8 @@ if(THEROCK_BUILD_TESTING)
 endif()
 
 therock_cmake_subproject_declare(hipBLAS
-  EXTERNAL_SOURCE_DIR "hipBLAS"
+  EXTERNAL_SOURCE_DIR "${_hipblas_source_dir}"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLAS"
   BACKGROUND_BUILD
   CMAKE_ARGS
     -DHIP_PLATFORM=amd

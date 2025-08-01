@@ -180,6 +180,14 @@ If you prefer to install tools manually, you will need:
 > - You can also tell CMake to use MSVC's tools explicitly with
 >   `-DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe -DCMAKE_LINKER=link.exe`
 
+### Set the locale
+
+If the build system is a non-English system. Make sure to switch to `utf-8`.
+
+```cmd
+chcp 65001
+```
+
 ### Clone and fetch sources
 
 ```bash
@@ -322,29 +330,26 @@ These have been worked around by disabling ccache.
 
 ### Platform support lessons, tips, and gotchas
 
+#### Filesystem paths
+
 - Windows paths may have spaces in them, so properly quote paths
-
-- Windows paths may use `\` instead of `/`, which can be treated as an escape character in raw strings, so properly escape paths
-
+- Windows paths may use `\` instead of `/` as a component delimiter
+  - The `\` character is often an escape character in raw strings, so properly escape paths if passing them between systems
+  - In Python, [`pathlib`](https://docs.python.org/3/library/pathlib.html) has good support for performing transformations on paths like joining or splitting components in a cross-platform way, but some outgoing uses still need to use `.resolve()`, `.as_posix()`, and other functions to resolve symlinks, convert slashes, etc.
+  - In C++, [`<filesystem>`](https://en.cppreference.com/w/cpp/filesystem.html) has good support for performing transformations on paths like joining or splitting components in a cross-platform way. See https://github.com/ROCm/rocm-libraries/pull/948 for example.
+  - In CMake, take care when loading environment variables into strings and treating them as paths. Use https://cmake.org/cmake/help/latest/command/file.html#path-conversion and https://cmake.org/cmake/help/latest/command/cmake_path.html instead of working with strings directly, like so:
+    ```diff
+    -set(HIP_PATH $ENV{HIP_PATH})
+    +file(TO_CMAKE_PATH "$ENV{HIP_PATH}" HIP_PATH)`
+    ```
 - Windows paths (and commands) can have max length limitations, so avoid long file names
-
 - Windows paths do not allow some characters (https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)
 
+#### Other platform differences
+
 - Symlink support on Windows is not always available
-
 - Windows uses `[library].dll` files instead of `lib[library].so` files, which use different APIs for loading/linking (and have different versioning in the file names too). CMake can use https://cmake.org/cmake/help/latest/variable/CMAKE_SHARED_LIBRARY_PREFIX.html and https://cmake.org/cmake/help/latest/variable/CMAKE_SHARED_LIBRARY_SUFFIX.html
-
 - Windows uses the .exe extension for executables while Linux uses files with no suffix. CMake can use https://cmake.org/cmake/help/latest/variable/CMAKE_EXECUTABLE_SUFFIX.html
-
-- In CMake, take care when loading environment variables into strings and treating them as paths. Use https://cmake.org/cmake/help/latest/command/file.html#path-conversion and https://cmake.org/cmake/help/latest/command/cmake_path.html instead of working with strings directly, like so:
-
-  ```diff
-  -set(HIP_PATH $ENV{HIP_PATH})
-  +file(TO_CMAKE_PATH "$ENV{HIP_PATH}" HIP_PATH)`
-  ```
-
-- In Python, pathlib has good support for performing transformations on paths in a cross-platform way, but some outgoing uses still need to use `.resolve()`, `.as_posix()`, and other functions to resolve symlinks, convert slashes, etc.
-
 - GitHub actions can use bash.exe, cmd.exe, and powershell on Windows. Switching workflows to use Python scripts helps a bit, but some actions / steps / tools / scripts still expect paths in a certain format or with a certain escaping style, or expect certain tools to be available (e.g. `sed`, `grep`)
 
 ### Building CLR from partial sources
