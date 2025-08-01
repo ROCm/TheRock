@@ -1,0 +1,41 @@
+From 06a67a8948dac9d02f22b3e2591a43b60981cdb4 Mon Sep 17 00:00:00 2001
+From: Jithun Nair <37884920+jithunnair-amd@users.noreply.github.com>
+Date: Wed, 16 Jul 2025 15:24:20 +0000
+Subject: [PATCH] Fix sha256 for aotriton ROCm7.0 tarball (#158420)
+
+Fixes following issue of building PyTorch with ROCm7.0:
+```
+-- verifying file...
+       file='/var/lib/jenkins/pytorch/build/aotriton_external-prefix/src/aotriton-0.10b-manylinux_2_28_x86_64-rocm7.0-shared.tar.gz'
+-- SHA256 hash of
+    /var/lib/jenkins/pytorch/build/aotriton_external-prefix/src/aotriton-0.10b-manylinux_2_28_x86_64-rocm7.0-shared.tar.gz
+  does not match expected value
+    expected: '7e29c325d5bd33ba896ddb106f5d4fc7d715274dca7fe937f724fffa82017838'
+      actual: '1e9b3dddf0c7fc07131c6f0f5266129e83ce2331f459fa2be8c63f4ae91b0f5b'
+-- Hash mismatch, removing...
+CMake Error at aotriton_external-prefix/src/aotriton_external-stamp/download-aotriton_external.cmake:163 (message):
+  Each download failed!
+```
+
+Pull Request resolved: https://github.com/pytorch/pytorch/pull/158420
+Approved by: https://github.com/jeffdaily
+---
+ cmake/External/aotriton.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
+index 8004b0f400a..8b380d24f6c 100644
+--- a/cmake/External/aotriton.cmake
++++ b/cmake/External/aotriton.cmake
+@@ -24,7 +24,7 @@ if(NOT __AOTRITON_INCLUDED)
+   set(__AOTRITON_SHA256_LIST
+       "861cd9f7479eec943933c27cb86920247e5b5dd139bc7c1376c81808abb7d7fe"  # rocm6.3
+       "acea7d811a2d3bbe718b6e07fc2a9f739e49eecd60b4b6a36fcb3fe8edf85d78"  # rocm6.4
+-      "7e29c325d5bd33ba896ddb106f5d4fc7d715274dca7fe937f724fffa82017838"  # rocm7.0
++      "1e9b3dddf0c7fc07131c6f0f5266129e83ce2331f459fa2be8c63f4ae91b0f5b"  # rocm7.0
+       )
+   set(__AOTRITON_Z "gz")
+ 
+-- 
+2.43.0
+
