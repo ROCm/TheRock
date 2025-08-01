@@ -4,23 +4,18 @@
 #
 # This Dockerfile is used on `azure-linux-scale-rocm` runners in the Kubernetes ARC setup.
 
-FROM ghcr.io/actions/actions-runner:latest AS runner
+FROM ubuntu:24.04
 
-FROM ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
+RUN sudo apt update -y
+RUN sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev -y
 
-RUN groupadd -g 1001 runner && useradd -m -u 1001 -g runner runner
+RUN sudo apt install "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)" -y
 
-COPY --from=runner /home/runner /home/runner
+RUN sudo mkdir --parents --mode=0755 /etc/apt/keyrings \
+    && wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
+      gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
 
-RUN chown -R runner:runner /home/runner && chmod +x /home/runner/run.sh
-
-# Set up runner environment
-USER runner
-WORKDIR /home/runner
-
-ENV RUNNER_HOME=/home/runner
-ENV PATH=$PATH:/home/runner/bin
-ENV RUNNER_WORKDIR=/home/runner/_work
-
-# Entrypoint for GitHub ARC
-CMD ["/home/runner/run.sh"]
+RUN echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/amdgpu/30.10_alpha/ubuntu noble main" \
+  | sudo tee /etc/apt/sources.list.d/amdgpu.list
+RUN sudo apt update -y
+RUN sudo apt install amdgpu-dkms -y
