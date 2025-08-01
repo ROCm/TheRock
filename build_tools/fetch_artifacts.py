@@ -75,7 +75,7 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
                     and "tar.xz" in artifact_key
                     and (amdgpu_family in artifact_key or "generic" in artifact_key)
                 ):
-                    _, file_name = artifact_key.split("/")
+                    file_name = artifact_key.split("/")[-1]
                     data.add(file_name)
     return data
 

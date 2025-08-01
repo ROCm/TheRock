@@ -27,14 +27,16 @@ class ArtifactsIndexPageTest(unittest.TestCase):
             },
             {"Contents": [{"Key": "test/empty_3generic.tar.xz"}]},
             {"Contents": [{"Key": "test/empty_3test.tar.xz.sha256sum"}]},
+            {"Contents": [{"Key": "rocm-libraries/test/empty_4test.tar.xz"}]},
         ]
 
         result = retrieve_s3_artifacts("123", "test")
 
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), 4)
         self.assertTrue("empty_1test.tar.xz" in result)
         self.assertTrue("empty_2test.tar.xz" in result)
         self.assertTrue("empty_3generic.tar.xz" in result)
+        self.assertTrue("empty_4test.tar.xz" in result)
 
     @patch("fetch_artifacts.paginator")
     def testRetrieveS3ArtifactsNotFound(self, mock_paginator):
