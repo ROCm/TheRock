@@ -129,6 +129,11 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "executorch",
     "setuptools",
     "wheel",
+    # ---- JAX ----
+    "jax",
+    "jaxlib",
+    "jax_rocm7_plugin",
+    "jax_rocm7_pjrt",
 ]}
 
 # Should match torch-2.0.0.dev20221221+cu118-cp310-cp310-linux_x86_64.whl as:

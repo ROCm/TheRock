@@ -16,6 +16,13 @@ BUCKET = S3.Bucket("therock-nightly-python")
 VERSION = "v2"
 
 PACKAGES_PER_PROJECT = {
+    "jax": [
+        "dbus_python",
+        "flatbuffers",
+        "ml_dtypes",
+        "opt_einsum",
+        "tomli",
+    ],
     "torch": [
         "sympy",
         "mpmath",
