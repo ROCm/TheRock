@@ -101,8 +101,15 @@ if(THEROCK_ENABLE_MIOPEN)
     endif()
   endif()
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_miopen_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen")
+  else()
+    set(_miopen_source_dir "MIOpen")
+  endif()
+
   therock_cmake_subproject_declare(MIOpen
-    EXTERNAL_SOURCE_DIR "MIOpen"
+    EXTERNAL_SOURCE_DIR "${_miopen_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
