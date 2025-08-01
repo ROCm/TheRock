@@ -18,7 +18,6 @@ runs:
   using: "composite"
   steps:
     - name: "Setting up Python"
-      shell: bash
       uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
       with:
         python-version: 3.11

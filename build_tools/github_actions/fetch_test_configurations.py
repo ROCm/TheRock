@@ -14,7 +14,18 @@ from github_actions_utils import *
 
 logging.basicConfig(level=logging.INFO)
 
+# Note: these paths are relative to the repository root. We could make that
+# more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
+
+
+def _get_script_path(script_name: str) -> str:
+    platform_path = SCRIPT_DIR / script_name
+    # Convert to posix (using `/` instead of `\\`) so test workflows can use
+    # 'bash' as the shell on Linux and Windows.
+    posix_path = platform_path.as_posix()
+    return str(posix_path)
+
 
 test_matrix = {
     # BLAS tests
@@ -22,14 +33,14 @@ test_matrix = {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {SCRIPT_DIR / 'test_rocblas.py'}",
+        "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {SCRIPT_DIR / 'test_hipblaslt.py'}",
+        "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
     },
     # PRIM tests
@@ -37,21 +48,21 @@ test_matrix = {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {SCRIPT_DIR / 'test_rocprim.py'}",
+        "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
     },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {SCRIPT_DIR / 'test_hipcub.py'}",
+        "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
     },
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {SCRIPT_DIR / 'test_rocthrust.py'}",
+        "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux"],
     },
     # SPARSE tests
@@ -59,14 +70,14 @@ test_matrix = {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {SCRIPT_DIR / 'test_hipsparse.py'}",
+        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux"],
     },
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 120,
-        "test_script": f"python {SCRIPT_DIR / 'test_rocsparse.py'}",
+        "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
     },
     # RAND tests
@@ -74,14 +85,14 @@ test_matrix = {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {SCRIPT_DIR / 'test_rocrand.py'}",
+        "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
     },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {SCRIPT_DIR / 'test_hiprand.py'}",
+        "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
     },
     # MIOpen tests
@@ -89,7 +100,7 @@ test_matrix = {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --tests",
         "timeout_minutes": 5,
-        "test_script": f"python {SCRIPT_DIR / 'test_miopen.py'}",
+        "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
     },
     # RCCL tests
@@ -97,7 +108,7 @@ test_matrix = {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
         "timeout_minutes": 15,
-        "test_script": f"pytest {SCRIPT_DIR / 'test_rccl.py'} -v -s --log-cli-level=info",
+        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
     },
 }
