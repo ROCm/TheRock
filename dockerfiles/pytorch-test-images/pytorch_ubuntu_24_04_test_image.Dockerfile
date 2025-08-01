@@ -20,3 +20,7 @@ RUN echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.rad
 RUN apt update -y
 
 RUN apt install amdgpu-dkms -y
+
+RUN modprobe amdgpu
+
+RUN usermod -a -G render,video root
