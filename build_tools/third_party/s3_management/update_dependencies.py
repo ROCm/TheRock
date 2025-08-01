@@ -17,7 +17,7 @@ VERSION = "v2"
 
 PACKAGES_PER_PROJECT = {
     "jax": [
-        "dbus-python",
+        "dbus_python",
         "flatbuffers",
         "ml_dtypes",
         "opt_einsum",
