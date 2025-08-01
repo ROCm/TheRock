@@ -177,9 +177,12 @@ def capture(args: list[str | Path], cwd: Path) -> str:
     args = [str(arg) for arg in args]
     print(f"++ Capture [{cwd}]$ {shlex.join(args)}")
     try:
-        return subprocess.check_output(args, cwd=str(cwd)).decode().strip()
+        return subprocess.check_output(
+            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+        ).strip()
     except subprocess.CalledProcessError as e:
         print(f"Error capturing output: {e}")
+        print(f"Output from the failed command:\n{e.output}")
         return ""
 
 
@@ -651,7 +654,10 @@ def do_build_pytorch(
         [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
         cwd=tempfile.gettempdir(),
     )
-    print(f"Sanity check output:\n{sanity_check_output}")
+    if not sanity_check_output:
+        raise RuntimeError("torch package sanity check failed (see output above)")
+    else:
+        print(f"Sanity check output:\n{sanity_check_output}")
 
 
 def do_build_pytorch_audio(
