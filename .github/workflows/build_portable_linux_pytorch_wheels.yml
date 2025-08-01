@@ -231,12 +231,7 @@ jobs:
   upload_pytorch_wheels:
     name: Upload PyTorch Wheels to S3
     needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
-    if: >
-      github.repository_owner == 'ROCm' &&
-      (
-        needs.generate_target_to_run.outputs.test_runs_on == '' ||
-        needs.test_pytorch_wheels.result == 'success'
-      )
+    if: always()
     runs-on: ubuntu-24.04
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
@@ -257,7 +252,18 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
+      - name: Check test result gating
+        id: check-gate
+        run: |
+          if [[ "${{ needs.generate_target_to_run.outputs.test_runs_on }}" != "" && "${{ needs.test_pytorch_wheels.result }}" == "failure" ]]; then
+            echo "::warning::Tests failed. Skipping upload."
+            echo "upload=false" >> $GITHUB_OUTPUT
+          else
+            echo "upload=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Copy tested PyTorch wheels from staging to release S3
+        if: steps.check-gate.outputs.upload == 'true'
         run: |
           echo "Copying exact tested wheels to release S3 bucket..."
           aws s3 cp \
@@ -271,6 +277,7 @@ jobs:
             --include "pytorch_triton_rocm-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
+        if: steps.check-gate.outputs.upload == 'true'
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
