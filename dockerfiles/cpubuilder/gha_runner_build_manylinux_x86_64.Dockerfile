@@ -6,16 +6,16 @@
 
 FROM ubuntu:24.04
 
-RUN sudo apt update -y
-RUN sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev -y
+RUN  apt update -y
+RUN  apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev -y
 
-RUN sudo apt install "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)" -y
+RUN  apt install "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)" -y
 
-RUN sudo mkdir --parents --mode=0755 /etc/apt/keyrings \
+RUN  mkdir --parents --mode=0755 /etc/apt/keyrings \
     && wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
-      gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+      gpg --dearmor |  tee /etc/apt/keyrings/rocm.gpg > /dev/null
 
 RUN echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/amdgpu/30.10_alpha/ubuntu noble main" \
-  | sudo tee /etc/apt/sources.list.d/amdgpu.list
-RUN sudo apt update -y
-RUN sudo apt install amdgpu-dkms -y
+  |  tee /etc/apt/sources.list.d/amdgpu.list
+RUN  apt update -y
+RUN  apt install amdgpu-dkms -y
