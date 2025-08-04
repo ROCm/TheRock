@@ -43,19 +43,10 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def pin_tensile():
-    tag_file_path = THEROCK_DIR / "math-libs" / "BLAS" / "rocBLAS" / "tensile_tag.txt"
-    with open(tag_file_path) as tag_file:
-        tensile_tag = tag_file.read().splitlines()
-
-    exec(
-        ["git", "checkout", tensile_tag[0]],
-        cwd=THEROCK_DIR / "math-libs" / "BLAS" / "Tensile",
-    )
-
-
 def pin_ck():
-    requirements_file_path = THEROCK_DIR / "ml-libs" / "MIOpen" / "requirements.txt"
+    requirements_file_path = (
+        THEROCK_DIR / "rocm-libraries" / "projects" / "miopen" / "requirements.txt"
+    )
     with open(requirements_file_path) as requirements_file:
         requirements = requirements_file.read().splitlines()
 
@@ -118,15 +109,22 @@ def parse_components(components: list[str]) -> list[list]:
             "roctracer",
         ]
 
-    if "math-libs" in components:
+    if "rocm-libraries" in components:
+        arguments.append("--include-rocm-libraries")
         arguments.append("--include-math-libs")
-    else:
-        arguments.append("--no-include-math-libs")
-
-    if "ml-libs" in components:
         arguments.append("--include-ml-frameworks")
     else:
-        arguments.append("--no-include-ml-frameworks")
+        arguments.append("--no-include-rocm-libraries")
+
+        if "math-libs" in components:
+            arguments.append("--include-math-libs")
+        else:
+            arguments.append("--no-include-math-libs")
+
+        if "ml-libs" in components:
+            arguments.append("--include-ml-frameworks")
+        else:
+            arguments.append("--no-include-ml-frameworks")
 
     if "compiler" in components:
         arguments.append("--include-compilers")
@@ -165,9 +163,6 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         + projects_args,
         cwd=THEROCK_DIR,
     )
-
-    if args.pin_tensile:
-        pin_tensile()
 
     if args.pin_ck:
         pin_ck()
@@ -214,12 +209,6 @@ def main(argv):
         help="Create and push a branch",
     )
     parser.add_argument(
-        "--pin-tensile",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="Pin Tensile to version tagged in rocBLAS",
-    )
-    parser.add_argument(
         "--pin-ck",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -238,6 +227,7 @@ def main(argv):
                   core,
                   math-libs,
                   ml-libs,
+                  rocm-libraries,
                   profiler
              """,
     )
