@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.INFO)
 
 ###########################################
 
-positive_filter=[]
-negative_filter=[]
+positive_filter = []
+negative_filter = []
 
 # Fusion #
 positive_filter.append("*Fusion*")
@@ -30,7 +30,9 @@ positive_filter.append("*_bn_infer*_*")
 negative_filter.append("*_BN*Large*_*")
 negative_filter.append("*_BN*SerialRun*_*")
 
-gtest_final_filter_cmd = "--gtest_filter=" + ':'.join(positive_filter) + "-" + ':'.join(negative_filter)
+gtest_final_filter_cmd = (
+    "--gtest_filter=" + ':'.join(positive_filter) + "-" + ':'.join(negative_filter)
+)
 
 #############################################
 
