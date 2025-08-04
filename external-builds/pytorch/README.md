@@ -207,6 +207,41 @@ To create patches
 
 ## Alternate Branches / Patch Sets
 
+We support several PyTorch branches with associated patch sets on Linux and
+Windows. The intent is to support the latest upstream PyTorch code (i.e. `main`
+or `nightly`) as well as recently published release branches which users depend
+on.
+
+> [!TIP]
+> Each branch combination below can also use specific commits by selecting a
+> patchset. For example, this will fetch PyTorch at
+> [pytorch/pytorch@3e2aa4b](https://github.com/pytorch/pytorch/commit/3e2aa4b0e3e971a81f665a9a6d803683452c022d)
+> using the patches from
+> [`patches/pytorch/main/pytorch/`](./patches/pytorch/main/pytorch/):
+>
+> ```
+> python pytorch_torch_repo.py checkout \
+>   --repo-hashtag 3e2aa4b0e3e971a81f665a9a6d803683452c022d \
+>   --patchset main
+> ```
+
+### PyTorch main
+
+This checks out the `main` branches from https://github.com/pytorch, tracking
+the latest (potentially unstable) code:
+
+- https://github.com/pytorch/pytorch/tree/main
+- https://github.com/pytorch/audio/tree/main
+- https://github.com/pytorch/vision/tree/main
+
+```
+python pytorch_torch_repo.py checkout --repo-hashtag main
+python pytorch_audio_repo.py checkout --repo-hashtag main
+python pytorch_vision_repo.py checkout --repo-hashtag main
+# Note that triton will be checked out at the PyTorch pin.
+python pytorch_triton_repo.py checkout
+```
+
 ### PyTorch Nightly
 
 This checks out the `nightly` branches from https://github.com/pytorch,
