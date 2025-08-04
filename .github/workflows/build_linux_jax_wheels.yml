@@ -71,7 +71,7 @@ jobs:
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ matrix.jax_ref }}
 
       - name: Configure Git Identity
         run: |
@@ -80,7 +80,8 @@ jobs:
 
       - name: Build JAX Wheels
         run: |
-          pushd rocm-jax
+          ls -lah
+          pushd jax
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_versions }}" \
