@@ -219,7 +219,7 @@ on.
 > using the patches from
 > [`patches/pytorch/main/pytorch/`](./patches/pytorch/main/pytorch/):
 >
-> ```
+> ```bash
 > python pytorch_torch_repo.py checkout \
 >   --repo-hashtag 3e2aa4b0e3e971a81f665a9a6d803683452c022d \
 >   --patchset main
@@ -234,7 +234,7 @@ the latest (potentially unstable) code:
 - https://github.com/pytorch/audio/tree/main
 - https://github.com/pytorch/vision/tree/main
 
-```
+```bash
 python pytorch_torch_repo.py checkout --repo-hashtag main
 python pytorch_audio_repo.py checkout --repo-hashtag main
 python pytorch_vision_repo.py checkout --repo-hashtag main
@@ -251,7 +251,7 @@ tracking the latest pytorch.org nightly release:
 - https://github.com/pytorch/audio/tree/nightly
 - https://github.com/pytorch/vision/tree/nightly
 
-```
+```bash
 python pytorch_torch_repo.py checkout --repo-hashtag nightly
 python pytorch_audio_repo.py checkout --repo-hashtag nightly
 python pytorch_vision_repo.py checkout --repo-hashtag nightly
@@ -282,7 +282,7 @@ NOTE: Presently broken at runtime on a HIP major version incompatibility in the
 pre-built aotriton (#1025). Must build with
 `USE_FLASH_ATTENTION=0 USE_MEM_EFF_ATTENTION=0` until fixed.
 
-```
+```bash
 python pytorch_torch_repo.py checkout \
   --gitrepo-origin https://github.com/ROCm/pytorch.git \
   --repo-hashtag release/2.7 \
