@@ -1,18 +1,18 @@
-From afddd12890c02a436a471bf160eae4514ae2a5d0 Mon Sep 17 00:00:00 2001
+From 8fa19ea1bfee62c44d14dac3c63315fa46bf52b2 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Wed, 30 Apr 2025 12:03:23 -0700
-Subject: [PATCH 4/7] Replace ${python} with official ${Python3_EXECUTABLE}
+Subject: [PATCH 14/17] Replace ${python} with official ${Python3_EXECUTABLE}
  variable.
 
 ---
- clients/gtest/CMakeLists.txt | 2 +-
+ projects/hipblas/clients/gtest/CMakeLists.txt | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
-index 9434c4d..82d97da 100644
---- a/clients/gtest/CMakeLists.txt
-+++ b/clients/gtest/CMakeLists.txt
-@@ -234,7 +234,7 @@ if( BUILD_WITH_SOLVER )
+diff --git a/projects/hipblas/clients/gtest/CMakeLists.txt b/projects/hipblas/clients/gtest/CMakeLists.txt
+index 8341d7f42a..c6fc0a0157 100644
+--- a/projects/hipblas/clients/gtest/CMakeLists.txt
++++ b/projects/hipblas/clients/gtest/CMakeLists.txt
+@@ -239,7 +239,7 @@ if( BUILD_WITH_SOLVER )
  endif()
  
  add_custom_command( OUTPUT "${HIPBLAS_TEST_DATA}"
@@ -22,5 +22,5 @@ index 9434c4d..82d97da 100644
                      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" )
  
 -- 
-2.47.1.windows.2
+2.43.0
 

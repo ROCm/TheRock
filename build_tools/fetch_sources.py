@@ -361,34 +361,15 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
-            "hipBLAS-common",
-            "hipBLAS",
-            "hipBLASLt",
-            "hipCUB",
-            "hipFFT",
-            "hipRAND",
             "hipSOLVER",
-            "hipSPARSE",
-            "mxDataGenerator",
-            "Tensile",
-            "rocBLAS",
-            "rocFFT",
-            "rocPRIM",
-            "rocRAND",
-            "rocRoller",
             "rocSOLVER",
-            "rocSPARSE",
-            "rocThrust",
         ],
     )
     parser.add_argument(
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=[
-            "MIOpen",
-        ]
-        + (
+        default=(
             []
             if is_windows()
             else [

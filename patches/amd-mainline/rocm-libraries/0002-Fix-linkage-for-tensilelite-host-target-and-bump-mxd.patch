@@ -1,7 +1,7 @@
-From b3f855ed781a134258054dd1ad5b755070b7c0d5 Mon Sep 17 00:00:00 2001
+From f6e16aa208345c8004da839f5972ae792611a876 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Mon, 28 Jul 2025 13:02:51 +0000
-Subject: [PATCH 1/2] Fix linkage for tensilelite-host target and bump
+Subject: [PATCH 02/17] Fix linkage for tensilelite-host target and bump
  mxdatagen
 
 - Updates linkage for tensilelite-host msgpack dependency because it is
@@ -10,17 +10,17 @@ Subject: [PATCH 1/2] Fix linkage for tensilelite-host target and bump
 
 Adopted from https://github.com/ROCm/rocm-libraries/pull/702.
 ---
- clients/CMakeLists.txt                        |  2 +-
- clients/common/mxDataGen.cpp                  | 16 +++++++-------
- clients/include/mxDataGen.hpp                 |  6 ++---
- next-cmake/CMakeLists.txt                     | 22 ++++++++++---------
+ projects/hipblaslt/clients/CMakeLists.txt     |  2 +-
+ .../hipblaslt/clients/common/mxDataGen.cpp    | 16 +++++++-------
+ .../hipblaslt/clients/include/mxDataGen.hpp   |  6 ++---
+ projects/hipblaslt/next-cmake/CMakeLists.txt  | 22 ++++++++++---------
  .../host-library/src/rocblaslt/CMakeLists.txt |  8 ++++++-
  5 files changed, 31 insertions(+), 23 deletions(-)
 
-diff --git a/clients/CMakeLists.txt b/clients/CMakeLists.txt
-index 05e6c989..b379bd02 100755
---- a/clients/CMakeLists.txt
-+++ b/clients/CMakeLists.txt
+diff --git a/projects/hipblaslt/clients/CMakeLists.txt b/projects/hipblaslt/clients/CMakeLists.txt
+index 05e6c98901..b379bd02a3 100755
+--- a/projects/hipblaslt/clients/CMakeLists.txt
++++ b/projects/hipblaslt/clients/CMakeLists.txt
 @@ -126,7 +126,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
        FetchContent_Declare(
          mxDataGenerator
@@ -30,10 +30,10 @@ index 05e6c989..b379bd02 100755
        )
        FetchContent_MakeAvailable(mxDataGenerator)
  
-diff --git a/clients/common/mxDataGen.cpp b/clients/common/mxDataGen.cpp
-index f3f30ce8..87732a23 100644
---- a/clients/common/mxDataGen.cpp
-+++ b/clients/common/mxDataGen.cpp
+diff --git a/projects/hipblaslt/clients/common/mxDataGen.cpp b/projects/hipblaslt/clients/common/mxDataGen.cpp
+index f3f30ce829..87732a23ae 100644
+--- a/projects/hipblaslt/clients/common/mxDataGen.cpp
++++ b/projects/hipblaslt/clients/common/mxDataGen.cpp
 @@ -135,7 +135,7 @@ void packData(std::vector<uint8_t> const& dataBytes, uint8_t* packedData)
  template <typename DT>
  std::vector<float> getAlignedFloat(std::vector<uint8_t>&       dataBytes,
@@ -78,10 +78,10 @@ index f3f30ce8..87732a23 100644
  
      strides.push_back(1);
      strides.push_back(stride);
-diff --git a/clients/include/mxDataGen.hpp b/clients/include/mxDataGen.hpp
-index 766c548d..6f50adde 100644
---- a/clients/include/mxDataGen.hpp
-+++ b/clients/include/mxDataGen.hpp
+diff --git a/projects/hipblaslt/clients/include/mxDataGen.hpp b/projects/hipblaslt/clients/include/mxDataGen.hpp
+index 766c548d93..6f50adde61 100644
+--- a/projects/hipblaslt/clients/include/mxDataGen.hpp
++++ b/projects/hipblaslt/clients/include/mxDataGen.hpp
 @@ -33,9 +33,9 @@
  std::vector<float> generateMXInput(hipDataType            dataType,
                                     void*                  data,
@@ -95,10 +95,10 @@ index 766c548d..6f50adde 100644
                                     bool                   isTranspose,
                                     int const              scaleBlockRowSize,
                                     int const              scaleBlockColSize,
-diff --git a/next-cmake/CMakeLists.txt b/next-cmake/CMakeLists.txt
-index d29bdbec..7a6b0efa 100644
---- a/next-cmake/CMakeLists.txt
-+++ b/next-cmake/CMakeLists.txt
+diff --git a/projects/hipblaslt/next-cmake/CMakeLists.txt b/projects/hipblaslt/next-cmake/CMakeLists.txt
+index d29bdbec32..7a6b0efad8 100644
+--- a/projects/hipblaslt/next-cmake/CMakeLists.txt
++++ b/projects/hipblaslt/next-cmake/CMakeLists.txt
 @@ -52,7 +52,7 @@ endif()
  
  set(HIPBLASLT_ENABLE_DEVICE ON CACHE BOOL "Build hipBLASLt device libraries.")
@@ -171,10 +171,10 @@ index d29bdbec..7a6b0efa 100644
              ${CMAKE_DL_LIBS}
              ${rocTracer}
      )
-diff --git a/next-cmake/host-library/src/rocblaslt/CMakeLists.txt b/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
-index bd7d7869..c710c283 100644
---- a/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
-+++ b/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
+diff --git a/projects/hipblaslt/next-cmake/host-library/src/rocblaslt/CMakeLists.txt b/projects/hipblaslt/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
+index bd7d78695c..c710c28324 100644
+--- a/projects/hipblaslt/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
++++ b/projects/hipblaslt/next-cmake/host-library/src/rocblaslt/CMakeLists.txt
 @@ -45,11 +45,17 @@ if(HIPBLASLT_ENABLE_ROCROLLER)
      )
      target_compile_features(hipblaslt-rocroller PRIVATE cxx_std_20)
