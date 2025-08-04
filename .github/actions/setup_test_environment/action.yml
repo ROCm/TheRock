@@ -13,14 +13,11 @@ inputs:
     type: string
   FETCH_ARTIFACT_ARGS:
     type: string
-  PLATFORM:
-    type: string
 
 runs:
   using: "composite"
   steps:
     - name: "Setting up Python"
-      id: setup_python
       uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
       with:
         python-version: 3.11
@@ -40,12 +37,12 @@ runs:
         pip freeze
 
     - name: Install the AWS tool
-      if: ${{ inputs.PLATFORM == 'linux'}}
+      if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: ./dockerfiles/cpubuilder/install_awscli.sh
 
     - name: Install the AWS tool
-      if: ${{ inputs.PLATFORM == 'windows'}}
+      if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: |
         choco install --no-progress -y awscli
