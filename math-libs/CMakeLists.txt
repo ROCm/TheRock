@@ -210,8 +210,15 @@ if(THEROCK_ENABLE_FFT)
   ##############################################################################
   set(_fft_subproject_names)
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_rocfft_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocfft")
+  else()
+    set(_rocfft_source_dir "rocFFT")
+  endif()
+
   therock_cmake_subproject_declare(rocFFT
-    EXTERNAL_SOURCE_DIR "rocFFT"
+    EXTERNAL_SOURCE_DIR "${_rocfft_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -241,8 +248,15 @@ if(THEROCK_ENABLE_FFT)
   # hipFFT
   ##############################################################################
 
+  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_hipfft_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipfft")
+  else()
+    set(_hipfft_source_dir "hipFFT")
+  endif()
+
   therock_cmake_subproject_declare(hipFFT
-    EXTERNAL_SOURCE_DIR "hipFFT"
+    EXTERNAL_SOURCE_DIR "${_hipfft_source_dir}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
