@@ -42,8 +42,13 @@ and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
 for more background on these `rocm` packages.
 
 > [!WARNING]
-> Windows support for these packages is _very_ new so some instructions
-> may not work yet. Stay tuned!
+> On Windows, prefer to install Python for the current user only and to a path
+> **without spaces** like
+> `C:\Users\<username>\AppData\Local\Programs\Python\Python312`.
+>
+> Several developers have reported issues building torchvision when using
+> "Install Python for all users" with a default path like
+> `C:\Program Files\Python312` (note the space in "Program Files").
 
 ### Quickstart
 

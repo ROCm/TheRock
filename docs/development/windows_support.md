@@ -156,6 +156,11 @@ If you prefer to install tools manually, you will need:
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
+  > [!WARNING]
+  > Prefer to install Python for the current user only and to a path
+  > **without spaces** like
+  > `C:\Users\<username>\AppData\Local\Programs\Python\Python312`.
+
 - Strawberry Perl, which comes with gfortran: https://strawberryperl.com/
 
 #### Important tool settings
