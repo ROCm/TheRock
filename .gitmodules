@@ -146,3 +146,7 @@
 [submodule "amdgpu-windows-interop"]
 	path = core/amdgpu-windows-interop
 	url = https://github.com/ROCm/amdgpu-windows-interop.git
+[submodule "rocm-libraries"]
+	path = rocm-libraries
+	url = https://github.com/ROCm/rocm-libraries
+	branch = develop

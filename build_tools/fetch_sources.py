@@ -38,6 +38,8 @@ def get_enabled_projects(args) -> list[str]:
         projects.extend(args.system_projects)
     if args.include_compilers:
         projects.extend(args.compiler_projects)
+    if args.include_rocm_libraries:
+        projects.extend(["rocm-libraries"])
     if args.include_math_libs:
         projects.extend(args.math_lib_projects)
     if args.include_ml_frameworks:
@@ -293,6 +295,12 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include compilers",
+    )
+    parser.add_argument(
+        "--include-rocm-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include supported rocm-libraries projhects",
     )
     parser.add_argument(
         "--include-math-libs",

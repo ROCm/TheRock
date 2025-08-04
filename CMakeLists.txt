@@ -62,13 +62,10 @@ option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds in
 # Source can be consumed from the https://github.com/ROCm/rocm-libraries superrepo,
 # while the default is to consume the submodules defined in TheRock's `.gitmodules`.
 option(THEROCK_USE_ROCM_LIBRARIES "Use the `rocm-libraries` superrepo" OFF)
-if(THEROCK_USE_ROCM_LIBRARIES AND NOT THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
-  message(FATAL_ERROR "If THEROCK_USE_ROCM_LIBRARIES is set, THEROCK_ROCM_LIBRARIES_SOURCE_DIR is required!")
-endif()
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-libraries")
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-libraries superrepo")
 
-if(THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
-  cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
-endif()
+cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
