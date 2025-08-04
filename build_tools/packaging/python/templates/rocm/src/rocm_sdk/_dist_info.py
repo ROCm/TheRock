@@ -162,7 +162,7 @@ PackageEntry(
 
 # Public libraries.
 LibraryEntry("amdhip64", "core", "libamdhip64.so.7", "amdhip64_7.dll")
-LibraryEntry("roctracer64", "core", "libroctracer64.so.4", "roctracer64_4.dll")
+LibraryEntry("roctracer64", "core", "libroctracer64.so.4", "")
 LibraryEntry("hiprtc", "core", "libhiprtc.so.7", "hiprtc0700.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so.4", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so.1", "")
