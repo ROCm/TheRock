@@ -4,7 +4,7 @@ if(THEROCK_ENABLE_RAND)
   ##############################################################################
   set(_rand_subproject_names)
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_rocrand_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocrand")
   else()
     set(_rocrand_source_dir "rocRAND")
@@ -39,7 +39,7 @@ if(THEROCK_ENABLE_RAND)
   # hipRAND
   ##############################################################################
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_hiprand_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand")
   else()
     set(_hiprand_source_dir "hipRAND")
@@ -93,7 +93,7 @@ if(THEROCK_ENABLE_PRIM)
   # rocPRIM
   ##############################################################################
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_rocprim_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim")
   else()
     set(_rocprim_source_dir "rocPRIM")
@@ -123,7 +123,7 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_hipcub_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub")
   else()
     set(_hipcub_source_dir "hipCUB")
@@ -154,7 +154,7 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(hipCUB hipcub lib/cmake/hipcub)
   therock_cmake_subproject_activate(hipCUB)
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_rocthrust_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust")
   else()
     set(_rocthrust_source_dir "rocThrust")
@@ -210,7 +210,7 @@ if(THEROCK_ENABLE_FFT)
   ##############################################################################
   set(_fft_subproject_names)
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_rocfft_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocfft")
   else()
     set(_rocfft_source_dir "rocFFT")
@@ -248,7 +248,7 @@ if(THEROCK_ENABLE_FFT)
   # hipFFT
   ##############################################################################
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_hipfft_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipfft")
   else()
     set(_hipfft_source_dir "hipFFT")
