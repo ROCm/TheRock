@@ -46,7 +46,10 @@ on:
           - gfx950-dcgpu
         default: gfx94X-dcgpu
       test_runs_on:
-        description: The runner label to use for tests. Leave this empty to skip testing.
+        description: |
+          The runner label to use for tests. Leave this empty to skip testing.
+          See available options for each associated family at
+          https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/amdgpu_family_matrix.py
         type: string
         default: linux-mi325-1gpu-ossci-rocm
       python_version:

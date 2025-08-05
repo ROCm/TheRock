@@ -38,7 +38,10 @@ on:
           - gfx950-dcgpu
         default: gfx1151
       test_runs_on:
-        description: The runner label to use for tests. Leave this empty to skip testing.
+        description: |
+          The runner label to use for tests. Leave this empty to skip testing.
+          See available options for each associated family at
+          https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/amdgpu_family_matrix.py
         type: string
         default: windows-strix-halo-gpu-rocm
       python_version:
