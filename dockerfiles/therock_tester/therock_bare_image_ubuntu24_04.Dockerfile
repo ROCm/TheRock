@@ -1,4 +1,4 @@
-# This Docker image is used to for TheRock builds and tests, providing a clean container with no ROCm pre-installed
+# This Docker image is used for TheRock builds and tests, providing a clean ROCm-less container
 # Mirrored from https://github.com/saienduri/docker-images/blob/d28cece7d73f57f0191b0e5c195c75703149be65/ghascale-rocm.Dockerfile
 
 FROM ubuntu:24.04
