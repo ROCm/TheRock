@@ -1,15 +1,15 @@
-name: Publish ghascale_rocm image
+name: Publish therock_bare_image_ubuntu24_04 image
 on:
   workflow_dispatch:
   push:
     branches: ['main', 'docker*']
     paths:
-    - "dockerfiles/ghascale/**"
-    - .github/workflows/publish_ghascale_rocm.yml
+    - "dockerfiles/therock_tester/**"
+    - .github/workflows/publish_therock_bare_image_ubuntu24_04.yml
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ROCm/ghascale_rocm
+  IMAGE_NAME: ROCm/therock_bare_image_ubuntu24_04
 
 jobs:
   build-and-push-image:
@@ -38,8 +38,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
-          context: dockerfiles/ghascale
-          file: dockerfiles/ghascale/ghascale_rocm.Dockerfile
+          context: dockerfiles/therock_tester
+          file: dockerfiles/therock_tester/therock_bare_image_ubuntu24_04.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
