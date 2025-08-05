@@ -42,6 +42,8 @@ jobs:
         run: |
           id
           ls -l $AWS_SHARED_CREDENTIALS_FILE
+          chown -R 1001:1001 $AWS_SHARED_CREDENTIALS_FILE
+          ls -l $AWS_SHARED_CREDENTIALS_FILE
 
   build_linux_packages:
     name: Build Linux Packages (xfail ${{ inputs.expect_failure }})
@@ -50,12 +52,10 @@ jobs:
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
-    # container:
-    #   image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
-    #   volumes: 
-    #     - /runner/config/credentials.ini:/tmp
-    strategy:
-      fail-fast: true
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
+      volumes: 
+        - /runner/config/credentials.ini:/tmp
     env:
       AWS_SHARED_CREDENTIALS_FILE: /runner/config/credentials.ini
       CACHE_DIR: ${{ github.workspace }}/.container-cache
