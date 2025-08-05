@@ -27,6 +27,6 @@ RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.d
 
 RUN groupadd -g 109 render
 
-RUN apt update -y \
-    && apt install -y python3-setuptools python3-wheel \
-    && usermod -a -G render,video runner
+RUN apt-get update -y
+RUN apt-get install -y python3-setuptools python3-wheel
+RUN usermod -a -G render,video runner
