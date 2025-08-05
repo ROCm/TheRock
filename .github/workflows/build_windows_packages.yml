@@ -43,6 +43,7 @@ jobs:
       CCACHE_MAXSIZE: "4000M"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -109,14 +110,18 @@ jobs:
             windows-build-packages-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
+        # testing
         run: |
-          python ./build_tools/fetch_sources.py --jobs 96
+          python ./build_tools/fetch_sources.py --jobs 96 \
+              --no-include-math-libs --no-include-ml-frameworks
 
       - name: Configure Projects
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          # for testing
+          extra_cmake_options: "-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_HIPIFY=ON"
+          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
           # clear cache before build and after download
           ccache -z
@@ -153,8 +158,8 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
-      - name: Configure AWS Credentials
-        if: always()
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
         with:
           aws-region: us-east-2
