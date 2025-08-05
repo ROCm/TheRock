@@ -1,15 +1,15 @@
-name: Publish pytorch_ubuntu_24_04_test_image image
+name: Publish ghascale_rocm image
 on:
   workflow_dispatch:
   push:
-    branches: ['main', 'docker*', users/geomin12/pytorch-355-fix]
+    branches: ['main', 'docker*']
     paths:
-    - "dockerfiles/pytorch-test-images/**"
-    - .github/workflows/pytorch_ubuntu_24_04_test_image.yml
+    - "dockerfiles/ghascale/**"
+    - .github/workflows/publish_ghascale_rocm.yml
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ROCm/pytorch_ubuntu_24_04_test_image
+  IMAGE_NAME: ROCm/ghascale_rocm
 
 jobs:
   build-and-push-image:
@@ -38,8 +38,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
-          context: dockerfiles/pytorch-test-images
-          file: dockerfiles/pytorch-test-images/pytorch_ubuntu_24_04_test_image.Dockerfile
+          context: dockerfiles/ghascale
+          file: dockerfiles/ghascale/ghascale_rocm.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
