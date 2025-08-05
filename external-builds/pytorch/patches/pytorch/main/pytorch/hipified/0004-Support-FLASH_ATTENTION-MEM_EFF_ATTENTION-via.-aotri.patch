@@ -1,0 +1,326 @@
+From 11cab8cec30e2e495d46b7590ec66bc2bab9a533 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
+Date: Wed, 6 Aug 2025 01:55:25 +0900
+Subject: [PATCH 4/4] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
+ on windows
+
+---
+ CMakeLists.txt                                |  4 +-
+ .../native/transformers/hip/attention.hip     | 63 +++++++++++++
+ .../transformers/hip/flash_attn/flash_api.h   | 62 -------------
+ cmake/External/aotriton.cmake                 | 93 ++++++++++++++++++-
+ 4 files changed, 153 insertions(+), 69 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c2ddf096324..194e3601f36 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -870,7 +870,7 @@ cmake_dependent_option(
+   "Whether to build the flash_attention kernel for scaled dot product attention.\
+   Will be disabled if not supported by the platform"
+   ON
+-  "USE_CUDA OR USE_ROCM;NOT MSVC"
++  "USE_CUDA OR USE_ROCM"
+   OFF)
+ 
+ cmake_dependent_option(
+@@ -894,7 +894,7 @@ cmake_dependent_option(
+ # USE_FLASH_ATTENTION -> USE_ROCM -> Dependencies.cmake -> aotriton.cmake
+ #
+ if(USE_ROCM)
+-  if(UNIX AND (USE_FLASH_ATTENTION OR USE_MEM_EFF_ATTENTION))
++  if(USE_FLASH_ATTENTION OR USE_MEM_EFF_ATTENTION)
+     include(cmake/External/aotriton.cmake)
+   endif()
+ endif()
+diff --git a/aten/src/ATen/native/transformers/hip/attention.hip b/aten/src/ATen/native/transformers/hip/attention.hip
+index 6a42198f25e..c165375769b 100644
+--- a/aten/src/ATen/native/transformers/hip/attention.hip
++++ b/aten/src/ATen/native/transformers/hip/attention.hip
+@@ -97,6 +97,69 @@
+ #endif
+ #endif
+ 
++namespace FLASH_NAMESPACE {
++std::tuple<
++    at::Tensor,
++    at::Tensor,
++    at::Tensor,
++    at::Tensor,
++    at::Tensor,
++    at::Tensor,
++    at::Tensor,
++    at::Tensor>
++mha_fwd(
++    const at::Tensor& q, // batch_size x seqlen_q x num_heads x head_size
++    const at::Tensor& k, // batch_size x seqlen_k x num_heads_k x head_size
++    const at::Tensor& v, // batch_size x seqlen_k x num_heads_k x head_size
++    std::optional<at::Tensor>&
++        out_, // batch_size x seqlen_q x num_heads x head_size
++    std::optional<at::Tensor>&
++        alibi_slopes_, // num_heads or batch_size x num_heads
++    const float p_dropout,
++    const float softmax_scale,
++    bool is_causal,
++    std::optional<int64_t> window_size_left,
++    std::optional<int64_t> window_size_right,
++    const float softcap,
++    const bool return_softmax,
++    std::optional<at::Generator> gen_) {
++#if defined(USE_CK_FLASH_ATTENTION)
++  if (at::globalContext().getROCmFAPreferredBackend() ==
++      at::ROCmFABackend::Ck) {
++    const int non_null_window_left = window_size_left.value_or(-1);
++    const int non_null_window_right = window_size_right.value_or(-1);
++    std::optional<at::Tensor> dummy_attn_bias = std::nullopt;
++    return mha_fwd_ck(
++        q,
++        k,
++        v,
++        out_,
++        p_dropout,
++        softmax_scale,
++        is_causal,
++        non_null_window_left,
++        non_null_window_right,
++        return_softmax,
++        gen_,
++        dummy_attn_bias); // Not used in flash attention
++  }
++#endif
++  return mha_fwd_aot(
++      q,
++      k,
++      v,
++      out_,
++      alibi_slopes_,
++      p_dropout,
++      softmax_scale,
++      is_causal,
++      window_size_left,
++      window_size_right,
++      return_softmax,
++      gen_);
++}
++}
++
+ namespace at {
+ 
+ namespace cuda::philox {
+diff --git a/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h b/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
+index 17298aae948..9ff17f86204 100644
+--- a/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
++++ b/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
+@@ -269,68 +269,6 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> mha_varle
+     const at::Tensor philox_offset);
+ #endif
+ 
+-TORCH_API
+-inline std::tuple<
+-    at::Tensor,
+-    at::Tensor,
+-    at::Tensor,
+-    at::Tensor,
+-    at::Tensor,
+-    at::Tensor,
+-    at::Tensor,
+-    at::Tensor>
+-mha_fwd(
+-    const at::Tensor& q, // batch_size x seqlen_q x num_heads x head_size
+-    const at::Tensor& k, // batch_size x seqlen_k x num_heads_k x head_size
+-    const at::Tensor& v, // batch_size x seqlen_k x num_heads_k x head_size
+-    std::optional<at::Tensor>&
+-        out_, // batch_size x seqlen_q x num_heads x head_size
+-    std::optional<at::Tensor>&
+-        alibi_slopes_, // num_heads or batch_size x num_heads
+-    const float p_dropout,
+-    const float softmax_scale,
+-    bool is_causal,
+-    std::optional<int64_t> window_size_left,
+-    std::optional<int64_t> window_size_right,
+-    const float softcap,
+-    const bool return_softmax,
+-    std::optional<at::Generator> gen_) {
+-#if defined(USE_CK_FLASH_ATTENTION)
+-  if (at::globalContext().getROCmFAPreferredBackend() ==
+-      at::ROCmFABackend::Ck) {
+-    const int non_null_window_left = window_size_left.value_or(-1);
+-    const int non_null_window_right = window_size_right.value_or(-1);
+-    std::optional<at::Tensor> dummy_attn_bias = std::nullopt;
+-    return mha_fwd_ck(
+-        q,
+-        k,
+-        v,
+-        out_,
+-        p_dropout,
+-        softmax_scale,
+-        is_causal,
+-        non_null_window_left,
+-        non_null_window_right,
+-        return_softmax,
+-        gen_,
+-        dummy_attn_bias); // Not used in flash attention
+-  }
+-#endif
+-  return mha_fwd_aot(
+-      q,
+-      k,
+-      v,
+-      out_,
+-      alibi_slopes_,
+-      p_dropout,
+-      softmax_scale,
+-      is_causal,
+-      window_size_left,
+-      window_size_right,
+-      return_softmax,
+-      gen_);
+-}
+-
+ inline std::tuple<
+     at::Tensor,
+     at::Tensor,
+diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
+index 54564e42c90..6c8e61173db 100644
+--- a/cmake/External/aotriton.cmake
++++ b/cmake/External/aotriton.cmake
+@@ -22,7 +22,7 @@ if(NOT __AOTRITON_INCLUDED)
+       "rocm6.5"
+       "rocm7.0"
+       )
+-  set(__AOTRITON_CI_COMMIT "6fca155f4deeb8d9529326f7b69f350aeeb93477")
++  set(__AOTRITON_CI_COMMIT "39b5f49b1698a24f17cf27b0d46dc106b5e80421")
+   set(__AOTRITON_SHA256_LIST
+       "861cd9f7479eec943933c27cb86920247e5b5dd139bc7c1376c81808abb7d7fe"  # rocm6.3
+       "acea7d811a2d3bbe718b6e07fc2a9f739e49eecd60b4b6a36fcb3fe8edf85d78"  # rocm6.4
+@@ -30,6 +30,80 @@ if(NOT __AOTRITON_INCLUDED)
+       "1e9b3dddf0c7fc07131c6f0f5266129e83ce2331f459fa2be8c63f4ae91b0f5b"  # rocm7.0
+       )
+   set(__AOTRITON_Z "gz")
++  set(__AOTRITON_NOIMAGE_MODE OFF)
++  if(WIN32)
++    set(__AOTRITON_NOIMAGE_MODE ON)
++  endif()
++
++  # Windows-specific dependencies - build these first
++  if(WIN32)
++    # Build dlfcn-win32
++    set(__DLFCN_WIN32_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/dlfcn-win32")
++    set(__DLFCN_WIN32_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/dlfcn-win32-install")
++
++    ExternalProject_Add(dlfcn-win32_external
++      GIT_REPOSITORY https://github.com/dlfcn-win32/dlfcn-win32.git
++      GIT_TAG v1.4.2
++      PREFIX ${__DLFCN_WIN32_PREFIX}
++      INSTALL_DIR ${__DLFCN_WIN32_INSTALL_DIR}
++      CMAKE_ARGS
++        -DCMAKE_INSTALL_PREFIX=${__DLFCN_WIN32_INSTALL_DIR}
++        -DCMAKE_BUILD_TYPE=Release
++        -DCMAKE_C_COMPILER=cl
++        -DCMAKE_CXX_COMPILER=cl
++        -DBUILD_SHARED_LIBS=ON
++        -DBUILD_TESTS=OFF
++      BUILD_BYPRODUCTS
++        "${__DLFCN_WIN32_INSTALL_DIR}/lib/dl.lib"
++        "${__DLFCN_WIN32_INSTALL_DIR}/bin/dl.dll"
++    )
++    ExternalProject_Add_Step(dlfcn-win32_external copy_to_aotriton
++      COMMAND ${CMAKE_COMMAND} -E copy_if_different
++        "${__DLFCN_WIN32_INSTALL_DIR}/bin/dl.dll"
++        "${__AOTRITON_INSTALL_DIR}/lib/"
++      DEPENDEES install
++    )
++    set(dlfcn-win32_DIR "${__DLFCN_WIN32_INSTALL_DIR}/share/dlfcn-win32" CACHE PATH "Path to dlfcn-win32 CMake config" FORCE)
++
++    # Build xz/liblzma
++    set(__XZ_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/xz")
++    set(__XZ_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/xz-install")
++
++    ExternalProject_Add(xz_external
++      GIT_REPOSITORY https://github.com/tukaani-project/xz.git
++      GIT_TAG v5.8.1
++      PREFIX ${__XZ_PREFIX}
++      INSTALL_DIR ${__XZ_INSTALL_DIR}
++      CMAKE_ARGS
++        -DCMAKE_INSTALL_PREFIX=${__XZ_INSTALL_DIR}
++        -DCMAKE_BUILD_TYPE=Release
++        -DBUILD_SHARED_LIBS=ON
++        -DENABLE_NLS=OFF
++        -DXZ_TOOL_LZMAINFO=OFF
++        -DXZ_TOOL_XZ=OFF
++        -DXZ_TOOL_XZDEC=OFF
++        -DXZ_TOOL_LZMADEC=OFF
++      BUILD_BYPRODUCTS
++        "${__XZ_INSTALL_DIR}/lib/lzma.lib"
++        "${__XZ_INSTALL_DIR}/bin/liblzma.dll"
++    )
++    ExternalProject_Add_Step(xz_external copy_to_aotriton
++      COMMAND ${CMAKE_COMMAND} -E copy_if_different
++        "${__XZ_INSTALL_DIR}/bin/liblzma.dll"
++        "${__AOTRITON_INSTALL_DIR}/lib/"
++      DEPENDEES install
++    )
++    set(liblzma_DIR "${__XZ_INSTALL_DIR}/lib/cmake/liblzma" CACHE PATH "Path to xz/liblzma CMake config" FORCE)
++  endif()
++
++  # Set the default AOTRITON_LIB path
++  set(AOTRITON_LIB "${__AOTRITON_INSTALL_DIR}/lib/libaotriton_v2.so")
++
++  # Override with Windows-specific library paths if on Windows
++  if(WIN32)
++    set(AOTRITON_LIB "${__AOTRITON_INSTALL_DIR}/lib/aotriton_v2.lib")
++    set(AOTRITON_DLL "${__AOTRITON_INSTALL_DIR}/lib/aotriton_v2.dll")
++  endif()
+ 
+   # Note it is INSTALL"ED"
+   if(DEFINED ENV{AOTRITON_INSTALLED_PREFIX})
+@@ -41,7 +115,7 @@ if(NOT __AOTRITON_INCLUDED)
+     message(STATUS "Using Preinstalled AOTriton at ${__AOTRITON_INSTALL_DIR}")
+   elseif(DEFINED ENV{AOTRITON_INSTALL_FROM_SOURCE})
+     ExternalProject_Add(aotriton_external
+-      GIT_REPOSITORY https://github.com/ROCm/aotriton.git
++      GIT_REPOSITORY https://github.com/jammm/aotriton.git
+       GIT_TAG ${__AOTRITON_CI_COMMIT}
+       PREFIX ${__AOTRITON_EXTERN_PREFIX}
+       INSTALL_DIR ${__AOTRITON_INSTALL_DIR}
+@@ -50,9 +124,15 @@ if(NOT __AOTRITON_INCLUDED)
+       -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+       -DAOTRITON_NO_PYTHON=ON
+       -DAOTRITON_NO_SHARED=OFF
++      -DAOTRITON_NOIMAGE_MODE=${__AOTRITON_NOIMAGE_MODE}
++      -DHIP_PLATFORM=amd
++      $<$<BOOL:${WIN32}>:-Ddlfcn-win32_DIR=${dlfcn-win32_DIR}>
++      $<$<BOOL:${WIN32}>:-Dliblzma_DIR=${liblzma_DIR}>
+       # CONFIGURE_COMMAND ""
+       BUILD_COMMAND ""  # No build, install command will repeat the build process due to problems in the build system.
+-      BUILD_BYPRODUCTS "${__AOTRITON_INSTALL_DIR}/lib/libaotriton_v2.so"
++      BUILD_BYPRODUCTS
++      "${AOTRITON_LIB}"
++      "${AOTRITON_DLL}"
+       USES_TERMINAL_DOWNLOAD TRUE
+       USES_TERMINAL_CONFIGURE TRUE
+       USES_TERMINAL_BUILD TRUE
+@@ -60,6 +140,9 @@ if(NOT __AOTRITON_INCLUDED)
+       # INSTALL_COMMAND ${MAKE_COMMAND} install
+       )
+     add_dependencies(__caffe2_aotriton aotriton_external)
++    if(WIN32)
++      add_dependencies(aotriton_external dlfcn-win32_external xz_external)
++    endif()
+     message(STATUS "Using AOTriton compiled from source directory ${__AOTRITON_EXTERN_PREFIX}")
+   else()
+     set(__AOTRITON_SYSTEM_ROCM "${HIP_VERSION_MAJOR}.${HIP_VERSION_MINOR}")
+@@ -101,7 +184,7 @@ if(NOT __AOTRITON_INCLUDED)
+     message(STATUS "Using AOTriton from pre-compiled binary ${__AOTRITON_URL}.\
+     Set env variables AOTRITON_INSTALL_FROM_SOURCE=1 to build from source.")
+   endif()
+-  target_link_libraries(__caffe2_aotriton INTERFACE ${__AOTRITON_INSTALL_DIR}/lib/libaotriton_v2.so)
++  target_link_libraries(__caffe2_aotriton INTERFACE ${AOTRITON_LIB})
+   target_include_directories(__caffe2_aotriton INTERFACE ${__AOTRITON_INSTALL_DIR}/include)
+   set(AOTRITON_FOUND TRUE)
+-endif() # __AOTRITON_INCLUDED
++endif() # __AOTRITON_INCLUDED
+\ No newline at end of file
+-- 
+2.50.1.windows.1
+

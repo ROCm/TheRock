@@ -1,4 +1,4 @@
-From 603c31f1caea93e49d19ff27a4f6491bd9ec0835 Mon Sep 17 00:00:00 2001
+From ea4673b20fb76e0bb2f6a6bdea3f66c90f2a73b4 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 24 Jul 2025 10:38:01 -0700
 Subject: [PATCH 1/4] Enable USE_ROCM, disable USE_RCCL on Windows.
@@ -8,7 +8,7 @@ Subject: [PATCH 1/4] Enable USE_ROCM, disable USE_RCCL on Windows.
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 63a2f74404c..1c1bee117a6 100644
+index c6b662fd69c..c2ddf096324 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -239,7 +239,7 @@ option(USE_XPU "Use XPU" ON)
@@ -29,5 +29,5 @@ index 63a2f74404c..1c1bee117a6 100644
  cmake_dependent_option(USE_SYSTEM_NCCL "Use system-wide NCCL" OFF "USE_NCCL"
                         OFF)
 -- 
-2.47.1.windows.2
+2.50.1.windows.1
 
