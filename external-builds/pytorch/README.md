@@ -48,7 +48,8 @@ for more background on these `rocm` packages.
 >
 > Several developers have reported issues building torchvision when using
 > "Install Python for all users" with a default path like
-> `C:\Program Files\Python312` (note the space in "Program Files").
+> `C:\Program Files\Python312` (note the space in "Program Files"). See
+> https://github.com/pytorch/vision/issues/9165 for details.
 
 ### Quickstart
 
