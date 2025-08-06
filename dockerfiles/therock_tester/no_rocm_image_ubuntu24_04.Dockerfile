@@ -4,6 +4,15 @@ FROM ubuntu:24.04
 
 RUN apt update && apt install sudo -y
 
+# Create tester user with sudo privileges
+RUN useradd -ms /bin/bash tester && \
+    usermod -aG sudo tester
+# New added for disable sudo password
+RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Set as default user
+USER tester
+
 RUN sudo apt-get update -y \
     && sudo apt-get install -y software-properties-common \
     && sudo add-apt-repository -y ppa:git-core/ppa \
@@ -27,7 +36,9 @@ RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.d
 
 RUN sudo groupadd -g 109 render
 
+RUN sudo usermod -a -G render,video tester
+
 RUN sudo apt-get update -y && \
     sudo apt-get install -y python3-setuptools python3-wheel
 
-WORKDIR home/ubuntu/
+WORKDIR home/tester/
