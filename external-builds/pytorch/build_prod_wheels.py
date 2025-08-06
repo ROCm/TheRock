@@ -467,24 +467,18 @@ def do_build(args: argparse.Namespace):
 def do_build_triton(
     args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
 ) -> str:
-    # TODO: Latest upstream triton calculates its own git hash and
-    # TRITON_WHEEL_VERSION_SUFFIX goes after the "+". Older versions
-    # as well as `ROCm/triton`, which does not call
-    # `get_git_version_suffix()`, must supply their own "+".
-    # The below only works for the latter and a better fix is needed.
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
-    # Append the version suffix passed via `arg.version_suffix` to
-    # TRITON_WHEEL_VERSION_SUFFIX. If the latter was set before,
-    # replace any "+" in `args.version_suffix` with a "-" as multiple
-    # "+" characters result in an invalid version.
-    # If TRITON_WHEEL_VERSION_SUFFIX is not set, the version for a build
-    # based on ROCm 7.0.0rc20250728 will be `3.3.1+rocm7.0.0rc20250728`
-    # insteaf of `3.3.1`.
-    if re.search(r"\+", version_suffix):
-        version_suffix += str(args.version_suffix).replace("+", "-")
-    else:
-        version_suffix += str(args.version_suffix)
+    # If TRITON_WHEEL_VERSION_SUFFIX is not set, version format
+    # for the build that is based on ROCm to 7.0.0rc20250728
+    # will not be just a `3.3.1`.
+    # If we are doing a Pytorch release/2.7 related Triton build,
+    # then Triton version format will be:
+    #    3.3.1+rocm7.0.0rc20250728
+    # If we are doing a Pytorch nightly related Triton build,
+    # then Triton version format will be:
+    #    3.4.0+git12345678-rocm7.0.0rc20250728
+    version_suffix += str(args.version_suffix)
     env["TRITON_WHEEL_VERSION_SUFFIX"] = version_suffix
 
     triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
