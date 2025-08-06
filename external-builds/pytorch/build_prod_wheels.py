@@ -133,8 +133,8 @@ is_windows = platform.system() == "Windows"
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
-    "roctracer64",
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
+    "roctracer64",  # Linux only for the moment.
     "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
@@ -709,6 +709,13 @@ def do_build_pytorch_vision(
             "TORCHVISION_USE_VIDEO_CODEC": "0",
         }
     )
+
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
 
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:

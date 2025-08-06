@@ -160,6 +160,12 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
+      - name: Create Log archive
+        if: always()
+        run: |
+          python3 build_tools/create_log_archive.py \
+            --build-dir=${{ env.BUILD_DIR }}
+
       - name: Create Logs index Files
         if: always()
         run: |

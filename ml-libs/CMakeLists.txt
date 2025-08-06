@@ -93,7 +93,7 @@ if(THEROCK_ENABLE_MIOPEN)
     endif()
   endif()
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_miopen_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen")
   else()
     set(_miopen_source_dir "MIOpen")

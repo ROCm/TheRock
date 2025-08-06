@@ -105,8 +105,9 @@ jobs:
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/audio \
             --repo-hashtag main
-          # TODO(#910): Support torchvision on Windows
-          # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
+          python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --repo ${{ env.CHECKOUT_ROOT }}/vision \
+            --repo-hashtag main
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
@@ -128,6 +129,7 @@ jobs:
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
+            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             ${{ env.optional_build_prod_arguments }}
