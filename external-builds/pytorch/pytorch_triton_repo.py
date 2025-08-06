@@ -121,7 +121,7 @@ def main(cl_args: list[str]):
     checkout_p.add_argument(
         "--patch",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help="Apply patches for the repo-hashtag",
     )
     checkout_p.set_defaults(func=do_checkout)

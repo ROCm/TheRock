@@ -1,0 +1,34 @@
+From 469041f3aed2801ff7aff67f9bf8b12202241b63 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Wed, 6 Aug 2025 01:58:52 -0700
+Subject: [PATCH] ensure that version does not have 2 plus-characters
+
+2 plus characters in version will break the version parsing
+in setup.py
+
+  File "/home/milaitio/own/rock/src/sdk/therock_python312/.venv_sdk/lib/python3.12/site-packages/packaging/version.py", line 202, in __init__
+    raise InvalidVersion(f"Invalid version: {version!r}")
+packaging.version.InvalidVersion: Invalid version: '3.4.0+gitd04b0f4a+rocmsdk20250806'
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ setup.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/setup.py b/setup.py
+index be40c6eb..7d274060 100644
+--- a/setup.py
++++ b/setup.py
+@@ -772,7 +772,8 @@ def get_git_version_suffix():
+ 
+ 
+ # keep it separate for easy substitution
+-TRITON_VERSION = "3.4.0" + get_git_version_suffix() + os.environ.get("TRITON_WHEEL_VERSION_SUFFIX", "")
++tr_whl_version_suffix=os.environ.get("TRITON_WHEEL_VERSION_SUFFIX", "").replace("+", "-")
++TRITON_VERSION = "3.4.0" + get_git_version_suffix() + tr_whl_version_suffix
+ 
+ # Dynamically define supported Python versions and classifiers
+ MIN_PYTHON = (3, 9)
+-- 
+2.34.1
+
