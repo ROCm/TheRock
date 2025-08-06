@@ -1,15 +1,15 @@
-name: Publish therock_bare_image_ubuntu24_04 image
+name: Publish therock_no_rocm_image_ubuntu24_04 image
 on:
   workflow_dispatch:
   push:
     branches: ['main', 'docker*']
     paths:
     - "dockerfiles/therock_tester/**"
-    - .github/workflows/publish_therock_bare_image_ubuntu24_04.yml
+    - .github/workflows/publish_therock_no_rocm_image_ubuntu24_04.yml
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ROCm/therock_bare_image_ubuntu24_04
+  IMAGE_NAME: ROCm/therock_no_rocm_image_ubuntu24_04
 
 jobs:
   build-and-push-image:
@@ -39,7 +39,7 @@ jobs:
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: dockerfiles/therock_tester
-          file: dockerfiles/therock_tester/therock_bare_image_ubuntu24_04.Dockerfile
+          file: dockerfiles/therock_tester/therock_no_rocm_image_ubuntu24_04.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
