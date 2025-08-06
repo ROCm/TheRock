@@ -1074,6 +1074,7 @@ class Device:
             print(
                 f"""
         ===========    Build Environment Summary    ===========
+
     OS:         {self.OS_STATUS}
     CPU:        {self.CPU_STATUS}
     {self.GPU_STATUS}
@@ -1861,7 +1862,7 @@ class DeviceChecker:
                 _except = cstring(
                     f"""
     We can't found any available MSVC compiler on your Windows device.
-    MSVC{ml64.description}, The C/C++ compliler for native Windows environment.
+    MSVC {ml64.description}, The Assembler for native Windows development.
     Please re-configure your Visual Studio installed C/C++ correctly.
         Visual Studio Installer > C/C++ Development for Desktop:
         - MSVC v14X
@@ -1946,7 +1947,7 @@ class DeviceChecker:
             _stat = self.msg_stat("err", rc, f"Cannot found {rc.description}.")
             _except = cstring(
                 f"""
-    We cannot found rc.exe ({rc.description}) in your Windows SDK, or yuo have not Windows SDK installed.
+    We cannot found rc.exe ({rc.description}) in your Windows SDK, or you have no Windows SDK installed.
     Please re-configure your MSVC and Windows SDK installation via Visual Studio.
         Visual Studio Installer > C/C++ Development for Desktop:
             - MSVC v14X
