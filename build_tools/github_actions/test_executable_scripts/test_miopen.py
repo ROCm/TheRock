@@ -19,16 +19,16 @@ negative_filter = []
 positive_filter.append("*Fusion*")
 
 # Batch Normalization #
-positive_filter.append("*_BNBWD*_*")
-positive_filter.append("*_BNOCLBWD*_*")
-positive_filter.append("*_BNFWD*_*")
-positive_filter.append("*_BNOCLFWD*_*")
-positive_filter.append("*_BNInfer*_*")
-positive_filter.append("*_BNOCLInfer*_*")
-positive_filter.append("*_bn_infer*_*")
+positive_filter.append("*/GPU_BNBWD*_*")
+positive_filter.append("*/GPU_BNOCLBWD*_*")
+positive_filter.append("*/GPU_BNFWD*_*")
+positive_filter.append("*/GPU_BNOCLFWD*_*")
+positive_filter.append("*/GPU_BNInfer*_*")
+positive_filter.append("*/GPU_BNOCLInfer*_*")
+positive_filter.append("*/GPU_bn_infer*_*")
 
-negative_filter.append("*_BN*Large*_*")
-negative_filter.append("*_BN*SerialRun*_*")
+negative_filter.append("*/GPU_BN*Large*_*")
+negative_filter.append("*/GPU_BN*SerialRun*_*")
 
 gtest_final_filter_cmd = (
     "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
