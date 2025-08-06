@@ -613,8 +613,6 @@ def do_build_pytorch(
             "install",
             "-r",
             pytorch_dir / "requirements.txt",
-            # TODO: Remove cmake<4 pin once the world adapts (check at end of 2025).
-            "cmake<4",
         ]
         + pip_install_args,
         cwd=pytorch_dir,
