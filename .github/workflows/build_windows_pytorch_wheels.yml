@@ -6,8 +6,6 @@ on:
       amdgpu_family:
         required: true
         type: string
-      test_runs_on:
-        type: string
       python_version:
         required: true
         type: string
@@ -37,13 +35,6 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx1151
-      test_runs_on:
-        description: |
-          The runner label to use for tests. Leave this empty to skip testing.
-          See available options for each associated family at
-          https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/amdgpu_family_matrix.py
-        type: string
-        default: windows-strix-halo-gpu-rocm
       python_version:
         required: true
         type: string
@@ -178,14 +169,30 @@ jobs:
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
 
+  generate_target_to_run:
+    name: Generate target_to_run
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "windows"
+        run: python ./build_tools/github_actions/configure_target_run.py
+
   test_pytorch_wheels:
-    name: Test | ${{ inputs.amdgpu_family }} | ${{ inputs.test_runs_on }}
-    if: ${{ inputs.test_runs_on != '' }}
-    needs: [build_pytorch_wheels]
+    name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    needs: [build_pytorch_wheels, generate_target_to_run]
     uses: ./.github/workflows/test_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
-      test_runs_on: ${{ inputs.test_runs_on }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
       cloudfront_url: ${{ inputs.cloudfront_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}

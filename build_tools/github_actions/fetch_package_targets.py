@@ -1,5 +1,4 @@
-"""
-This file helps generate a package target matrix for workflows.
+"""This file helps generate a package target matrix for workflows.
 
 Environment variable inputs:
     * 'AMDGPU_FAMILIES': A comma separated list of AMD GPU families, e.g.

@@ -6,8 +6,6 @@ on:
       amdgpu_family:
         required: true
         type: string
-      test_runs_on:
-        type: string
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -34,13 +32,6 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx1151
-      test_runs_on:
-        description: |
-          The runner label to use for tests. Leave this empty to skip testing.
-          See available options for each associated family at
-          https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/amdgpu_family_matrix.py
-        type: string
-        default: windows-strix-halo-gpu-rocm
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -72,7 +63,6 @@ jobs:
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
-      test_runs_on: ${{ inputs.test_runs_on }}
       python_version: ${{ matrix.python_version }}
       release_type: ${{ inputs.release_type }}
       s3_subdir: ${{ inputs.s3_subdir }}

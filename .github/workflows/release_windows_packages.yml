@@ -274,7 +274,6 @@ jobs:
           workflow: release_windows_pytorch_wheels.yml
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
-              "test_runs_on": "${{ matrix.target_bundle.test_machine }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_SUBDIR }}",
               "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
