@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   generate_target_to_run:
+    name: Generate target_to_run
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
@@ -27,9 +28,9 @@ jobs:
       - name: Generating target to run
         id: configure
         env:
-          TARGET: ${{ inputs.target }}
+          TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "linux"
         run: python ./build_tools/github_actions/configure_target_run.py
-
 
   test_release_packages:
     # If there is a test machine available

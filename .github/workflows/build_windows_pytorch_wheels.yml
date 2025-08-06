@@ -27,12 +27,18 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx1151
       python_version:
         required: true
         type: string
-        default:
+        default: "3.12"
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -180,6 +186,7 @@ jobs:
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
+    name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_pytorch_wheels, generate_target_to_run]
     uses: ./.github/workflows/test_pytorch_wheels.yml
