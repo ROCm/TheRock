@@ -1,3 +1,50 @@
+"""This file helps generate a package target matrix for workflows.
+
+Environment variable inputs:
+    * 'AMDGPU_FAMILIES': A comma separated list of AMD GPU families, e.g.
+                    `gfx94X,gfx103x`, or empty for the default list
+    * 'THEROCK_PACKAGE_PLATFORM': "linux" or "windows"
+
+Outputs written to GITHUB_OUTPUT:
+    * 'package_targets': JSON list of the form
+        [
+            {
+                "amdgpu_family": "gfx94X-dcgpu",
+                "test_machine": "linux-mi300-1gpu-ossci-rocm"
+            },
+            {
+                "amdgpu_family": "gfx110X-dgpu",
+                "test_machine": ""
+            }
+        ]
+
+Example usage:
+
+```yml
+jobs:
+  setup_metadata:
+    runs-on: ubuntu-24.04
+    outputs:
+      package_targets: ${{ steps.configure.outputs.package_targets }}
+
+    steps:
+      - name: Generating package target matrix
+        id: configure
+        env:
+          AMDGPU_FAMILIES: ${{ inputs.families }}
+          THEROCK_PACKAGE_PLATFORM: "windows"
+        run: python ./build_tools/github_actions/fetch_package_targets.py
+
+  windows_packages:
+    name: ${{ matrix.target_bundle.amdgpu_family }}::Build Windows
+    runs-on: 'windows-2022'
+    needs: [setup_metadata]
+    strategy:
+      matrix:
+        target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
+```
+"""
+
 import os
 import json
 from amdgpu_family_matrix import (
@@ -7,8 +54,6 @@ from amdgpu_family_matrix import (
 import string
 
 from github_actions_utils import *
-
-# This file helps generate a package target matrix for workflows.
 
 
 def determine_package_targets(args):

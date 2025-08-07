@@ -25,7 +25,7 @@ patches locally until they can be upstreamed. See the
 | ------------------------ | ------------- | --------------------------------------------------------------------- |
 | PyTorch                  | ✅ Supported  | ✅ Supported                                                          |
 | torchaudio               | ✅ Supported  | ✅ Supported                                                          |
-| torchvision              | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
+| torchvision              | ✅ Supported  | ✅ Supported                                                          |
 | Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
 
 ## Build instructions
@@ -42,8 +42,14 @@ and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
 for more background on these `rocm` packages.
 
 > [!WARNING]
-> Windows support for these packages is _very_ new so some instructions
-> may not work yet. Stay tuned!
+> On Windows, prefer to install Python for the current user only and to a path
+> **without spaces** like
+> `C:\Users\<username>\AppData\Local\Programs\Python\Python312`.
+>
+> Several developers have reported issues building torchvision when using
+> "Install Python for all users" with a default path like
+> `C:\Program Files\Python312` (note the space in "Program Files"). See
+> https://github.com/pytorch/vision/issues/9165 for details.
 
 ### Quickstart
 
@@ -79,7 +85,7 @@ Now checkout repositories:
   ```bash
   python pytorch_torch_repo.py checkout --repo C:/b/pytorch --repo-hashtag main
   python pytorch_audio_repo.py checkout --repo C:/b/audio --repo-hashtag main
-  # TODO(#910): Support torchvision on Windows
+  python pytorch_vision_repo.py checkout --repo C:/b/vision --repo-hashtag main
   ```
 
 Now note the gfx target you want to build for and then...
@@ -107,6 +113,7 @@ mix/match build steps.
     --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     --pytorch-dir C:/b/pytorch \
     --pytorch-audio-dir C:/b/audio \
+    --pytorch-vision-dir C:/b/vision \
     --output-dir %HOME%/tmp/pyout
   ```
 
@@ -207,6 +214,41 @@ To create patches
 
 ## Alternate Branches / Patch Sets
 
+We support several PyTorch branches with associated patch sets on Linux and
+Windows. The intent is to support the latest upstream PyTorch code (i.e. `main`
+or `nightly`) as well as recently published release branches which users depend
+on.
+
+> [!TIP]
+> Each branch combination below can also use specific commits by selecting a
+> patchset. For example, this will fetch PyTorch at
+> [pytorch/pytorch@3e2aa4b](https://github.com/pytorch/pytorch/commit/3e2aa4b0e3e971a81f665a9a6d803683452c022d)
+> using the patches from
+> [`patches/pytorch/main/pytorch/`](./patches/pytorch/main/pytorch/):
+>
+> ```bash
+> python pytorch_torch_repo.py checkout \
+>   --repo-hashtag 3e2aa4b0e3e971a81f665a9a6d803683452c022d \
+>   --patchset main
+> ```
+
+### PyTorch main
+
+This checks out the `main` branches from https://github.com/pytorch, tracking
+the latest (potentially unstable) code:
+
+- https://github.com/pytorch/pytorch/tree/main
+- https://github.com/pytorch/audio/tree/main
+- https://github.com/pytorch/vision/tree/main
+
+```bash
+python pytorch_torch_repo.py checkout --repo-hashtag main
+python pytorch_audio_repo.py checkout --repo-hashtag main
+python pytorch_vision_repo.py checkout --repo-hashtag main
+# Note that triton will be checked out at the PyTorch pin.
+python pytorch_triton_repo.py checkout
+```
+
 ### PyTorch Nightly
 
 This checks out the `nightly` branches from https://github.com/pytorch,
@@ -216,7 +258,7 @@ tracking the latest pytorch.org nightly release:
 - https://github.com/pytorch/audio/tree/nightly
 - https://github.com/pytorch/vision/tree/nightly
 
-```
+```bash
 python pytorch_torch_repo.py checkout --repo-hashtag nightly
 python pytorch_audio_repo.py checkout --repo-hashtag nightly
 python pytorch_vision_repo.py checkout --repo-hashtag nightly
@@ -247,7 +289,7 @@ NOTE: Presently broken at runtime on a HIP major version incompatibility in the
 pre-built aotriton (#1025). Must build with
 `USE_FLASH_ATTENTION=0 USE_MEM_EFF_ATTENTION=0` until fixed.
 
-```
+```bash
 python pytorch_torch_repo.py checkout \
   --gitrepo-origin https://github.com/ROCm/pytorch.git \
   --repo-hashtag release/2.7 \

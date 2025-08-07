@@ -134,6 +134,7 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
+    "roctracer64",  # Linux only for the moment.
     "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
@@ -175,10 +176,14 @@ def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
 
 def capture(args: list[str | Path], cwd: Path) -> str:
     args = [str(arg) for arg in args]
+    print(f"++ Capture [{cwd}]$ {shlex.join(args)}")
     try:
-        return subprocess.check_output(args, cwd=str(cwd)).decode().strip()
+        return subprocess.check_output(
+            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+        ).strip()
     except subprocess.CalledProcessError as e:
         print(f"Error capturing output: {e}")
+        print(f"Output from the failed command:\n{e.output}")
         return ""
 
 
@@ -608,8 +613,6 @@ def do_build_pytorch(
             "install",
             "-r",
             pytorch_dir / "requirements.txt",
-            # TODO: Remove cmake<4 pin once the world adapts (check at end of 2025).
-            "cmake<4",
         ]
         + pip_install_args,
         cwd=pytorch_dir,
@@ -644,6 +647,16 @@ def do_build_pytorch(
     exec(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
+
+    print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
+    sanity_check_output = capture(
+        [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
+        cwd=tempfile.gettempdir(),
+    )
+    if not sanity_check_output:
+        raise RuntimeError("torch package sanity check failed (see output above)")
+    else:
+        print(f"Sanity check output:\n{sanity_check_output}")
 
 
 def do_build_pytorch_audio(
@@ -694,6 +707,13 @@ def do_build_pytorch_vision(
             "TORCHVISION_USE_VIDEO_CODEC": "0",
         }
     )
+
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
 
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:

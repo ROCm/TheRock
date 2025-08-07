@@ -24,8 +24,14 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx1151
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -47,7 +53,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  release:
+    name: Release PyTorch | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
     strategy:
       fail-fast: false
       matrix:

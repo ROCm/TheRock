@@ -1,7 +1,7 @@
-From 993fefc7d2295fd34219534c5971c50758526d96 Mon Sep 17 00:00:00 2001
+From d70e7d2166d478ead5d9bd3f6e4b1408190ea666 Mon Sep 17 00:00:00 2001
 From: Scott Tsai <scottt.tw@gmail.com>
 Date: Tue, 15 Apr 2025 09:30:13 +0800
-Subject: [PATCH 4/4] hipcc: fix default include path on Windows and adapt to
+Subject: [PATCH 2/5] hipcc: fix default include path on Windows and adapt to
  TheRock rocm layout
 
 getCppConfig in the orignial code did not add the content of
@@ -18,10 +18,10 @@ separators to make the output obviously correct.
  1 file changed, 22 insertions(+), 38 deletions(-)
 
 diff --git a/amd/hipcc/src/hipBin_amd.h b/amd/hipcc/src/hipBin_amd.h
-index 550e4b248128..f66852b8352d 100644
+index ecea39e071b4..c74b43ff598f 100644
 --- a/amd/hipcc/src/hipBin_amd.h
 +++ b/amd/hipcc/src/hipBin_amd.h
-@@ -202,16 +202,11 @@ void HipBinAmd::constructCompilerPath() {
+@@ -201,16 +201,11 @@ void HipBinAmd::constructCompilerPath() {
    const EnvVariables& envVariables = getEnvVariables();
    if (envVariables.hipClangPathEnv_.empty()) {
      fs::path hipClangPath;
@@ -43,7 +43,7 @@ index 550e4b248128..f66852b8352d 100644
      compilerPath = hipClangPath.string();
    } else {
      compilerPath = envVariables.hipClangPathEnv_;
-@@ -227,32 +222,17 @@ const string& HipBinAmd::getCompilerPath() const {
+@@ -226,32 +221,17 @@ const string& HipBinAmd::getCompilerPath() const {
  void HipBinAmd::printCompilerInfo() const {
    const string& hipClangPath = getCompilerPath();
    const string& hipPath = getHipPath();
@@ -87,7 +87,7 @@ index 550e4b248128..f66852b8352d 100644
  }
  
  string HipBinAmd::getCompilerVersion() {
-@@ -294,17 +274,19 @@ string HipBinAmd::getCppConfig() {
+@@ -293,17 +273,19 @@ string HipBinAmd::getCppConfig() {
    hipPathInclude = hipPath;
    hipPathInclude /= "include";
    if (isWindows()) {
@@ -108,7 +108,7 @@ index 550e4b248128..f66852b8352d 100644
    return cppConfig;
  }
  
-@@ -877,7 +859,9 @@ void HipBinAmd::executeHipCCCmd(vector<string> argv) {
+@@ -874,7 +856,9 @@ void HipBinAmd::executeHipCCCmd(vector<string> argv) {
  
    // to avoid using dk linker or MSVC linker
    if (isWindows()) {
@@ -120,5 +120,5 @@ index 550e4b248128..f66852b8352d 100644
  
    if (!compileOnly) {
 -- 
-2.49.0.windows.1
+2.47.1.windows.2
 

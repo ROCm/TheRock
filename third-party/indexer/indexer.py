@@ -19,7 +19,7 @@ DEFAULT_OUTPUT_FILE = "index.html"
 
 
 def process_dir(top_dir, opts):
-    glob_patt = opts.filter or "*"
+    glob_patt_list = opts.filter or "*"
 
     path_top_dir: Path
     path_top_dir = Path(top_dir)
@@ -270,11 +270,12 @@ def process_dir(top_dir, opts):
                          </tr>
                  """
     )
+    sorted_entries = []
+    for glob in glob_patt_list:
+        sorted_entries.extend(list(path_top_dir.glob(glob)))
 
     # sort dirs first
-    sorted_entries = sorted(
-        path_top_dir.glob(glob_patt), key=lambda p: (p.is_file(), p.name)
-    )
+    sorted_entries.sort(key=lambda p: (p.is_file(), p.name))
 
     entry: Path
     for entry in sorted_entries:
@@ -408,9 +409,13 @@ Email josh dot brunty at marshall dot edu for additional help. """
         "use current folder if not specified",
         default=os.getcwd(),
     )
-
+    # NOTE: preferably specify nargs at end, after path if unnamed arg
     parser.add_argument(
-        "--filter", "-f", help="only include files matching glob", required=False
+        "--filter",
+        "-f",
+        nargs="*",
+        help="only include files matching glob",
+        required=False,
     )
 
     parser.add_argument(

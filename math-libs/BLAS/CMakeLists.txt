@@ -18,7 +18,7 @@ endif()
 ##############################################################################
 set(_blas_subproject_names)
 
-if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+if(THEROCK_USE_ROCM_LIBRARIES)
   set(_hipblas_common_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas-common")
 else()
   set(_hipblas_common_source_dir "hipBLAS-common")
@@ -48,7 +48,7 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # rocRoller
 ##############################################################################
 
-if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+if(THEROCK_USE_ROCM_LIBRARIES)
   set(_rocroller_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/rocroller")
 else()
   set(_rocroller_source_dir "rocRoller")
@@ -106,7 +106,7 @@ endif()
 # hipBLASLt
 ##############################################################################
 
-if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+if(THEROCK_USE_ROCM_LIBRARIES)
   set(_hipblaslt_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt")
 else()
   set(_hipblaslt_source_dir "hipBLASLt")
@@ -174,7 +174,7 @@ list(APPEND _blas_subproject_names hipBLASLt)
 # rocBLAS
 ##############################################################################
 
-if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+if(THEROCK_USE_ROCM_LIBRARIES)
   set(_rocblas_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas")
   set(_tensile_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile")
 else()
@@ -238,7 +238,7 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
   set(_sparse_subproject_names)
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_rocsparse_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsparse")
   else()
     set(_rocsparse_source_dir "rocSPARSE")
@@ -281,7 +281,7 @@ if(THEROCK_ENABLE_SPARSE)
   # hipSPARSE
   ##############################################################################
 
-  if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+  if(THEROCK_USE_ROCM_LIBRARIES)
     set(_hipsparse_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparse")
   else()
     set(_hipsparse_source_dir "hipSPARSE")
@@ -413,7 +413,7 @@ endif(THEROCK_ENABLE_SOLVER)
 # hipBLAS
 ##############################################################################
 
-if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+if(THEROCK_USE_ROCM_LIBRARIES)
   set(_hipblas_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas")
 else()
   set(_hipblas_source_dir "hipBLAS")

@@ -5,6 +5,12 @@ add_test(
 )
 
 add_test(
+    NAME build_tools_github_actions_configure_target_run_test
+    COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/configure_target_run_test.py"
+)
+
+add_test(
     NAME build_tools_github_actions_determine_version_test
     COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/determine_version_test.py"

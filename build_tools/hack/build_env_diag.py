@@ -159,8 +159,6 @@ if WINDOWS:
 #     THEROCK_GIT_HEAD = THEROCK_GIT_HASH[:7]
 
 if WINDOWS:
-    from win32com import client
-
     OS_TYPE = platform.system()
     OS_BUILD_VER = platform.version()
     OS_MAIN_VER = platform.release()
@@ -176,23 +174,31 @@ if WINDOWS:
 
     DRAM_PHYSIC_TOTAL, DRAM_PHYSIC_AVAIL, DRAM_VIRTUAL_AVAIL = win32_dram_viewer()
 
-    GPU_COUNT = len(client.GetObject("winmgmts:").InstancesOf("Win32_VideoController"))
-
     GPU_STATUS_LIST = ""
-    for i in range(0, GPU_COUNT):
-        _GPU_REG_KEY = str(
-            r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
-            + f"\\000{i}\\"
-        )
-        GPU_CORE_NAME = get_regkey("HKLM", _GPU_REG_KEY, "DriverDesc")
+    try:
+        from win32com import client
 
-        if GPU_CORE_NAME != "Microsoft Basic Display Adapter":
-            GPU_VRAM = get_regkey(
-                "HKLM", _GPU_REG_KEY, "HardwareInformation.qwMemorySize"
+        GPU_COUNT = len(
+            client.GetObject("winmgmts:").InstancesOf("Win32_VideoController")
+        )
+
+        for i in range(0, GPU_COUNT):
+            _GPU_REG_KEY = str(
+                r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+                + f"\\000{i}\\"
             )
-            GPU_STATUS_LIST += f"\n    GPU {i}:\n\tGPU_NAME:    {GPU_CORE_NAME}\n\tGPU_VRAM:    {float(int(GPU_VRAM)/(1024**3)):.2f}(GB)"
-        else:
-            pass
+            GPU_CORE_NAME = get_regkey("HKLM", _GPU_REG_KEY, "DriverDesc")
+
+            if GPU_CORE_NAME != "Microsoft Basic Display Adapter":
+                GPU_VRAM = get_regkey(
+                    "HKLM", _GPU_REG_KEY, "HardwareInformation.qwMemorySize"
+                )
+                GPU_STATUS_LIST += f"\n    GPU {i}:\n\tGPU_NAME:    {GPU_CORE_NAME}\n\tGPU_VRAM:    {float(int(GPU_VRAM)/(1024**3)):.2f}(GB)"
+            else:
+                pass
+    except ImportError:
+        GPU_STATUS_LIST = "\n    Unable to detect GPUs without win32com package, fix with `pip install pywin32`"
+        pass
 
     repo_path = os.path.abspath(os.getcwd())
     repo_disk = os.path.splitdrive(repo_path)[0]

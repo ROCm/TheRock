@@ -27,12 +27,18 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx1151
       python_version:
         required: true
         type: string
-        default:
+        default: "3.12"
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -105,8 +111,9 @@ jobs:
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/audio \
             --repo-hashtag main
-          # TODO(#910): Support torchvision on Windows
-          # python ./external-builds/pytorch/pytorch_vision_repo.py checkout
+          python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+            --repo ${{ env.CHECKOUT_ROOT }}/vision \
+            --repo-hashtag main
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
@@ -128,6 +135,7 @@ jobs:
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
+            --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             ${{ env.optional_build_prod_arguments }}
@@ -135,7 +143,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
@@ -178,6 +186,7 @@ jobs:
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
+    name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_pytorch_wheels, generate_target_to_run]
     uses: ./.github/workflows/test_pytorch_wheels.yml
