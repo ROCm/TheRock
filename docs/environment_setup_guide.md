@@ -39,7 +39,7 @@ If having trouble building on a system, we will typically want to eliminate envi
 
 ### Manylinux x84-64
 
-Our open-source binaries are typically built within a [manylinux container](https://github.com/pypa/manylinux) (see [the docker file](../dockerfiles/cpubuilder/build_manylinux_x86_64.Dockerfile)). These images are versioned by the glibc version they target, and if dependencies are controlled carefully, binaries built on them should work on systems with the same or higher glibc version.
+Our open-source binaries are typically built within a [manylinux container](https://github.com/pypa/manylinux) (see [the docker file](../dockerfiles/build_manylinux_x86_64.Dockerfile)). These images are versioned by the glibc version they target, and if dependencies are controlled carefully, binaries built on them should work on systems with the same or higher glibc version.
 
 Present version: glibc 2.28
 Based on upstream: AlmaLinux 8 with gcc toolset 12

@@ -127,7 +127,7 @@ jobs:
             portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
       - name: Install the AWS tool
-        run: ./dockerfiles/cpubuilder/install_awscli.sh
+        run: ./dockerfiles/install_awscli.sh
 
       - name: Fetch sources
         run: |
