@@ -1,0 +1,13 @@
+[artifact]
+name = "core-hipinfo"
+description = "hipInfo system info tool for Windows (from hip-tests)."
+license = "MIT"
+homepage = "https://github.com/ROCm/hip-tests"
+maintainers = ["TheRock Maintainers therock-maintainers@amd.com"]
+version = "git"
+
+[component.run]
+description = "hipInfo system information utility"
+files = [
+    { basedir = "core/hip-tests/samples/1_Utils/hipInfo/build", pattern = "hipInfo.exe" }
+]
