@@ -1,6 +1,6 @@
 # This dockerfile builds automatically upon push to the main branch. It can be built
 # interactively for testing via:
-#   docker buildx build --file dockerfiles/cpubilder/build_manylinux_x86_64.Dockerfile dockerfiles/
+#   docker buildx build --file dockerfiles/build_manylinux_x86_64.Dockerfile dockerfiles/
 # This will print a SHA image id, which you can run with (or equiv):
 #   sudo docker run --rm -it --entrypoint /bin/bash <<IMAGE>>
 #
