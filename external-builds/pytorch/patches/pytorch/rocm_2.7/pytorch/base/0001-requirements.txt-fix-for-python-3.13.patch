@@ -1,0 +1,30 @@
+From 1c023b31ae379277d235563e08c1c6360ce97c42 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 7 Aug 2025 11:30:10 -0700
+Subject: [PATCH] requirements.txt fix for python 3.13
+
+- pytorch fails to use AMD gpus with
+  typing_extensions==4.10.0
+  When newer version is allowed, my build
+  installed typing_extensions==4.14.1
+  and things started working on python
+  3.13.5/ubuntu 22.04/MI300
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ requirements.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index 0ef85e1961..5fbbdd7063 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -20,4 +20,4 @@ requests==2.32.4
+ setuptools==75.8.2
+ sympy==1.13.3
+ types-dataclasses==0.6.6
+-typing-extensions==4.10.0
++typing-extensions>=4.10.0
+-- 
+2.34.1
+
