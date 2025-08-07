@@ -481,7 +481,7 @@ def do_build_triton(
     #    3.3.1+rocm7.0.0rc20250728
     # If we are doing a Pytorch nightly related Triton build,
     # then Triton version format will be:
-    #    3.4.0+git12345678.rocm7.0.0rc20250728
+    #    3.4.0+git12345678-rocm7.0.0rc20250728
     version_suffix += str(args.version_suffix).replace("+", "-")
     env["TRITON_WHEEL_VERSION_SUFFIX"] = version_suffix
 
