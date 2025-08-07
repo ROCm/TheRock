@@ -1,0 +1,39 @@
+From 87f2dbe4a26c492041f353d6c44f8b035ae14a6a Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Wed, 6 Aug 2025 16:18:44 -0700
+Subject: [PATCH] ensure that version suffix starts with plus-character
+
+Fixes a following error:
+  File "/home/milaitio/own/rock/src/sdk/therock_sdk_pytorch_rel/.venv_sdk/lib/python3.13/site-packages/packaging/version.py", line 202, in __init__
+    raise InvalidVersion(f"Invalid version: {version!r}")
+packaging.version.InvalidVersion: Invalid version: '3.3.1-rocmsdk20250806'
+Traceback (most recent call last):
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ python/setup.py | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/python/setup.py b/python/setup.py
+index 7ce061f7..00995cee 100644
+--- a/python/setup.py
++++ b/python/setup.py
+@@ -745,10 +745,14 @@ def get_git_version_suffix():
+     else:
+         return get_git_commit_hash()
+ 
++def change_first_char_if_matches(text_str, old_char, new_char):
++    if text_str and text_str[0] == old_char:
++        text_str = new_char + text_str[1:]
++    return text_str
+ 
+ setup(
+     name=os.environ.get("TRITON_WHEEL_NAME", "triton"),
+-    version="3.3.1" + os.environ.get("TRITON_WHEEL_VERSION_SUFFIX", ""),
++    version="3.3.1" + change_first_char_if_matches(os.environ.get("TRITON_WHEEL_VERSION_SUFFIX", ""), "-", "+"),
+     author="Philippe Tillet",
+     author_email="phil@openai.com",
+     description="A language and compiler for custom Deep Learning operations",
+-- 
+2.34.1
+
