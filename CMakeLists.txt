@@ -67,7 +67,11 @@ set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAU
 
 cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
 if(NOT THEROCK_USE_ROCM_LIBRARIES)
-  message(WARNING "Building from indvidual submodules is deprecated. THEROCK_USE_ROCM_LIBRARIES should be set to `ON`.")
+  message(FATAL_ERROR
+    "Building from indvidual submodules is deprecated. "
+    "Set THEROCK_USE_ROCM_LIBRARIES to `ON` and re-run `fetch_sources.py` "
+    "to clone and patch the rocm-libraries submodule."
+  )
 endif()
 
 # Overall build settings.
