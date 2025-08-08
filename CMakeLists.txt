@@ -59,8 +59,8 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
 # Source settings.
-# Source can be consumed from the https://github.com/ROCm/rocm-libraries superrepo,
-# while the default is to consume the submodules defined in TheRock's `.gitmodules`.
+# Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
+# specify an alternative source location.
 option(THEROCK_USE_ROCM_LIBRARIES "Use the `rocm-libraries` superrepo" ON)
 set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-libraries")
 set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-libraries superrepo")
@@ -73,6 +73,37 @@ if(NOT THEROCK_USE_ROCM_LIBRARIES)
     "to clone and patch the rocm-libraries submodule."
   )
 endif()
+
+# Use the rccl amd rccl-test repos tracked in TheRock's `.gitmodules` or
+# specify alternative source locations.
+option(THEROCK_USE_EXTERNAL_RCCL "Use external rccl source locations" OFF)
+set(THEROCK_RCCL_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/comm-libs/rccl")
+set(THEROCK_RCCL_TESTS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/comm-libs/rccl-tests")
+
+if(THEROCK_USE_EXTERNAL_RCCL)
+  if(NOT THEROCK_RCCL_SOURCE_DIR)
+    message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_RCCL is set, THEROCK_RCCL_SOURCE_DIR is required!")
+  endif()
+  if(NOT THEROCK_RCCL_TESTS_SOURCE_DIR)
+    message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_RCCL is set, THEROCK_RCCL_TESTS_SOURCE_DIR is required!")
+  endif()
+endif()
+
+set(THEROCK_RCCL_SOURCE_DIR "${THEROCK_RCCL_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rccl sources")
+set(THEROCK_RCCL_TESTS_SOURCE_DIR "${THEROCK_RCCL_TESTS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rccl-tests sources")
+cmake_path(ABSOLUTE_PATH THEROCK_RCCL_SOURCE_DIR NORMALIZE)
+cmake_path(ABSOLUTE_PATH THEROCK_RCCL_TESTS_SOURCE_DIR NORMALIZE)
+
+# Use the composable_kernel tracked in TheRock's `.gitmodules` or
+# specify an alternative source location.
+option(THEROCK_USE_EXTERNAL_CK "Use external CK source location" OFF)
+set(THEROCK_CK_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel")
+
+if(THEROCK_USE_EXTERNAL_CK AND NOT THEROCK_CK_SOURCE_DIR)
+  message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_CK is set, THEROCK_CK_SOURCE_DIR is required!")
+endif()
+set(THEROCK_CK_SOURCE_DIR "${THEROCK_CK_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to ck sources")
+cmake_path(ABSOLUTE_PATH THEROCK_CK_SOURCE_DIR NORMALIZE)
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
