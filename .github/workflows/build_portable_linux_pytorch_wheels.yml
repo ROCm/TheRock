@@ -32,6 +32,11 @@ on:
         description: Patch directory name from where to apply existing patches.
         required: true
         type: string
+      triton_version_suffix_allow_plus:
+        description: Defines whether to allow plus-character in TRITON_WHEEL_VERSION_SUFFIX.
+        required: true
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -72,6 +77,11 @@ on:
         required: true
         type: string
         default: "rocm_2.7"
+      triton_version_suffix_allow_plus:
+        description: Defines whether to allow plus-character in TRITON_WHEEL_VERSION_SUFFIX.
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -154,6 +164,7 @@ jobs:
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
+            --triton-version-suffix-allow-plus ${{ inputs.triton_version_suffix_allow_plus }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Configure AWS Credentials

@@ -429,7 +429,7 @@ def do_build(args: argparse.Namespace):
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):
         assert triton_dir, "Must specify --triton-dir if --build-triton"
-        triton_requirement = do_build_triton(args, triton_dir, dict(env))
+        triton_requirement = do_build_triton(args, triton_dir, args.triton_version_suffix_allow_plus, dict(env))
     else:
         print("--- Not building triton (no --triton-dir)")
 
@@ -465,24 +465,30 @@ def do_build(args: argparse.Namespace):
 
 
 def do_build_triton(
-    args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
+    args: argparse.Namespace, triton_dir: Path, version_suffix_allow_plus: bool, env: dict[str, str]
 ) -> str:
-    version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
-
     # Append the version suffix passed via `arg.version_suffix` to
-    # TRITON_WHEEL_VERSION_SUFFIX. If the latter was set before,
-    # replace any "+" in `args.version_suffix` with a "-" as multiple
-    # "+" characters result in an invalid version.
-    # If TRITON_WHEEL_VERSION_SUFFIX is not set, version format
-    # for the build that is based on ROCm to 7.0.0rc20250728
-    # will not be just a `3.3.1`.
+    # TRITON_WHEEL_VERSION_SUFFIX.
     # If we are doing a Pytorch release/2.7 related Triton build,
-    # then Triton version format will be:
+    # then triton version is checked out from the AMD maintained triton
+    # branch as well and Triton version format will be:
     #    3.3.1+rocm7.0.0rc20250728
-    # If we are doing a Pytorch nightly related Triton build,
-    # then Triton version format will be:
+    # If we are doing a triton build based on to upstream triton commit
+    # like nightly tag, then the Triton version format will be:
     #    3.4.0+git12345678-rocm7.0.0rc20250728
-    version_suffix += str(args.version_suffix).replace("+", "-")
+    if version_suffix_allow_plus:
+        # Triton builds requiring plus-character in version_suffix.
+        # (at least on ROCm triton 3.3 and 3.4 branches with
+        # patched version handling in setup.py)
+        version_suffix = str(args.version_suffix)
+    else:
+        # Triton builds based on to upstream triton commit which does not allow
+        # plus-character in version_suffix without breaking.
+        # Upstream version of setup.py will try to handle where the
+        # plus-character is put in version by checking whether the build is done
+        # from the release branch or from the development branch.
+        version_suffix = str(args.version_suffix).replace("+", "-")
+
     env["TRITON_WHEEL_VERSION_SUFFIX"] = version_suffix
 
     triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
@@ -821,6 +827,12 @@ def main(argv: list[str]):
         "--version-suffix",
         default=f"+rocmsdk{formatted_date}",
         help="PyTorch version suffix",
+    )
+    build_p.add_argument(
+        "--triton-version-suffix-allow-plus",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="For the Triton builds requiring plus-character in TRITON_WHEEL_VERSION_SUFFIX env variable.",
     )
     build_p.add_argument(
         "--clean",

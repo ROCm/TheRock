@@ -64,8 +64,10 @@ jobs:
         include:
           - pytorch_version: release/2.7
             pytorch_patchset: "rocm_2.7"
+            triton_version_suffix_allow_plus: true
           - pytorch_version: nightly
             pytorch_patchset: "nightly"
+            triton_version_suffix_allow_plus: false
 
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
     with:
@@ -77,3 +79,4 @@ jobs:
       rocm_version: ${{ inputs.rocm_version }}
       pytorch_version: ${{ matrix.pytorch_version }}
       pytorch_patchset: ${{ matrix.pytorch_patchset }}
+      triton_version_suffix_allow_plus: ${{ matrix.triton_version_suffix_allow_plus }}
