@@ -578,6 +578,8 @@ def do_build_pytorch(
                 # On Windows, aotriton is built with "NOIMAGE" mode, so it needs kernel images built from Linux.
                 # TODO: TheRock provides aotriton artifacts compiled for windows including aotriton images built from Linux.
                 # For now, manually copy in the aotriton.images folder from linux binaries into <pytorch_root>/lib/aotriton.images.
+                # NOTE: this will not work without the corresponding patch in the main branch.
+                # which is in ./patches/pytorch/main/pytorch/hipified/0004-Support-FLASH_ATTENTION-MEM_EFF_ATTENTION-via.-aotriton.patch
                 "AOTRITON_INSTALL_FROM_SOURCE": use_flash_attention,
                 "DISTUTILS_USE_SDK": "1",
                 # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'

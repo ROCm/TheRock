@@ -56,7 +56,9 @@ for more background on these `rocm` packages.
 > PyTorch builds aotriton locally but without the kernel images.
 > Make sure to copy the `aotriton.images` folder from an existing
 > aotriton linux build (`<aotriton_build_dir>/lib/aotriton.images`) and copy
-> that folder into your local pytorch lib directory: `<pytorch_dir>/torch/lib/`
+> that folder into your local pytorch lib directory: `<pytorch_dir>/torch/lib/`.
+> This is a temporary measure for manually producing aotriton builds.
+> NOTE: This will not work without the [corresponding patch](./patches/pytorch/main/pytorch/hipified/0004-Support-FLASH_ATTENTION-MEM_EFF_ATTENTION-via.-aotri.patch) for the main branch.
 >
 > On Windows, aotriton uses `dladdr`, which is implemented through
 > [dlfcn-win32](https://github.com/dlfcn-win32/dlfcn-win32), which unfortunately
