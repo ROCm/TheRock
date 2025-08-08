@@ -187,6 +187,8 @@ jobs:
 
       - name: Fetch sources
         run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 96
 
       - name: Checkout closed source AMDGPU/ROCm interop library folder
