@@ -53,7 +53,9 @@ for more background on these `rocm` packages.
 
 > [!WARNING]
 > On Windows, when building with "--enable-pytorch-flash-attention-windows",
-> PyTorch builds aotriton locally but without the kernel images.
+> Make sure to use [ninja 1.13.1](https://github.com/ninja-build/ninja/releases/tag/v1.13.1) or above.
+>
+> PyTorch builds aotriton locally, but without the kernel images.
 > Make sure to copy the `aotriton.images` folder from an existing
 > aotriton linux build (`<aotriton_build_dir>/lib/aotriton.images`) and copy
 > that folder into your local pytorch lib directory: `<pytorch_dir>/torch/lib/`.
