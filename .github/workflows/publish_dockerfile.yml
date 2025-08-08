@@ -2,24 +2,17 @@ name: Publish TheRock Docker image
 on:
   workflow_call:
     inputs:
-      DOCKERFILE_NAME:
+      DOCKER_FILE_NAME:
         type: string
-  workflow_dispatch:
-    inputs:
-      DOCKERFILE_NAME:
-        type: choice
-        description: "The Docker image to build and publish"
-        options:
-          - therock_build_manylinux_x86_64
-          - no_rocm_image_ubuntu24_04
-        default: therock_build_manylinux_x86_64
+      DOCKER_IMAGE_NAME:
+        type: string
 
 jobs:
   build-and-push-image:
     runs-on: ubuntu-24.04
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ROCm/${{ inputs.DOCKERFILE_NAME }}
+      IMAGE_NAME: ROCm/${{ inputs.DOCKER_IMAGE_NAME }}
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
@@ -48,7 +41,7 @@ jobs:
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         with:
           context: .
-          file: dockerfiles/${{ inputs.DOCKERFILE_NAME }}.Dockerfile
+          file: dockerfiles/${{ inputs.DOCKER_FILE_NAME }}.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

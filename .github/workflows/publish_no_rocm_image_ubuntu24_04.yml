@@ -15,4 +15,5 @@ jobs:
   publish_no_rocm_image_ubuntu24_04:
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
-        DOCKERFILE_NAME: no_rocm_image_ubuntu24_04
+        DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04
+        DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04
