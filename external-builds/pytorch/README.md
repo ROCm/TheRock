@@ -51,6 +51,22 @@ for more background on these `rocm` packages.
 > `C:\Program Files\Python312` (note the space in "Program Files"). See
 > https://github.com/pytorch/vision/issues/9165 for details.
 
+> [!WARNING]
+> On Windows, when building with "--enable-pytorch-flash-attention-windows",
+> PyTorch builds aotriton locally but without the kernel images.
+> Make sure to copy the `aotriton.images` folder from an existing
+> aotriton linux build (`<aotriton_build_dir>/lib/aotriton.images`) and copy
+> that folder into your local pytorch lib directory: `<pytorch_dir>/torch/lib/`
+>
+> On Windows, aotriton uses `dladdr`, which is implemented through
+> [dlfcn-win32](https://github.com/dlfcn-win32/dlfcn-win32), which unfortunately
+> uses `GetModuleFileNameA` (ANSI version) to get the base directory of
+> `libaotriton.so`. This means, if `libaotriton.so` is put under a path with
+> characters that cannot represented in current code page, the loading of GPU
+> kernels will fail.
+> See https://github.com/ROCm/aotriton/commit/e1be21d80b25f46139c2e3b4b0615e0279feccac
+> For possible fixes. A proper fix is planned and will eventually be added.
+
 ### Quickstart
 
 It is highly recommended to use a virtual environment unless working within a

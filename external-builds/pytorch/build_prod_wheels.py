@@ -566,7 +566,9 @@ def do_build_pytorch(
 
     # Workaround missing features on windows.
     if is_windows:
-        use_flash_attention = "1" if args.enable_pytorch_flash_attention_windows else "0"
+        use_flash_attention = (
+            "1" if args.enable_pytorch_flash_attention_windows else "0"
+        )
         env.update(
             {
                 "USE_FLASH_ATTENTION": use_flash_attention,
