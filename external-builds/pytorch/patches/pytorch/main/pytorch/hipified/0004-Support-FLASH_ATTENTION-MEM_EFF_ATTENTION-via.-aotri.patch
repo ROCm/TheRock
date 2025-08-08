@@ -1,4 +1,4 @@
-From 11cab8cec30e2e495d46b7590ec66bc2bab9a533 Mon Sep 17 00:00:00 2001
+From ee8c7e5279395c326c4be46f7e2aa889d761ae11 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
 Date: Wed, 6 Aug 2025 01:55:25 +0900
 Subject: [PATCH 4/4] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
@@ -8,8 +8,8 @@ Subject: [PATCH 4/4] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
  CMakeLists.txt                                |  4 +-
  .../native/transformers/hip/attention.hip     | 63 +++++++++++++
  .../transformers/hip/flash_attn/flash_api.h   | 62 -------------
- cmake/External/aotriton.cmake                 | 93 ++++++++++++++++++-
- 4 files changed, 153 insertions(+), 69 deletions(-)
+ cmake/External/aotriton.cmake                 | 91 ++++++++++++++++++-
+ 4 files changed, 152 insertions(+), 68 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index c2ddf096324..194e3601f36 100644
@@ -181,7 +181,7 @@ index 17298aae948..9ff17f86204 100644
      at::Tensor,
      at::Tensor,
 diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
-index 54564e42c90..6c8e61173db 100644
+index 54564e42c90..549c401bb08 100644
 --- a/cmake/External/aotriton.cmake
 +++ b/cmake/External/aotriton.cmake
 @@ -22,7 +22,7 @@ if(NOT __AOTRITON_INCLUDED)
@@ -189,7 +189,7 @@ index 54564e42c90..6c8e61173db 100644
        "rocm7.0"
        )
 -  set(__AOTRITON_CI_COMMIT "6fca155f4deeb8d9529326f7b69f350aeeb93477")
-+  set(__AOTRITON_CI_COMMIT "39b5f49b1698a24f17cf27b0d46dc106b5e80421")
++  set(__AOTRITON_CI_COMMIT "e1be21d80b25f46139c2e3b4b0615e0279feccac")
    set(__AOTRITON_SHA256_LIST
        "861cd9f7479eec943933c27cb86920247e5b5dd139bc7c1376c81808abb7d7fe"  # rocm6.3
        "acea7d811a2d3bbe718b6e07fc2a9f739e49eecd60b4b6a36fcb3fe8edf85d78"  # rocm6.4
@@ -274,15 +274,6 @@ index 54564e42c90..6c8e61173db 100644
  
    # Note it is INSTALL"ED"
    if(DEFINED ENV{AOTRITON_INSTALLED_PREFIX})
-@@ -41,7 +115,7 @@ if(NOT __AOTRITON_INCLUDED)
-     message(STATUS "Using Preinstalled AOTriton at ${__AOTRITON_INSTALL_DIR}")
-   elseif(DEFINED ENV{AOTRITON_INSTALL_FROM_SOURCE})
-     ExternalProject_Add(aotriton_external
--      GIT_REPOSITORY https://github.com/ROCm/aotriton.git
-+      GIT_REPOSITORY https://github.com/jammm/aotriton.git
-       GIT_TAG ${__AOTRITON_CI_COMMIT}
-       PREFIX ${__AOTRITON_EXTERN_PREFIX}
-       INSTALL_DIR ${__AOTRITON_INSTALL_DIR}
 @@ -50,9 +124,15 @@ if(NOT __AOTRITON_INCLUDED)
        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
        -DAOTRITON_NO_PYTHON=ON

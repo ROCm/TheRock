@@ -566,22 +566,17 @@ def do_build_pytorch(
 
     # Workaround missing features on windows.
     if is_windows:
+        use_flash_attention = "1" if args.enable_pytorch_flash_attention_windows else "0"
         env.update(
             {
-                "USE_FLASH_ATTENTION": "1"
-                if args.enable_pytorch_flash_attention_windows
-                else "0",
-                "USE_MEM_EFF_ATTENTION": "1"
-                if args.enable_pytorch_flash_attention_windows
-                else "0",
+                "USE_FLASH_ATTENTION": use_flash_attention,
+                "USE_MEM_EFF_ATTENTION": use_flash_attention,
                 # Currently, aotriton packages don't include windows binaries
                 # so we build them alongside pytorch using AOTRITON_INSTALL_FROM_SOURCE=1.
                 # On Windows, aotriton is built with "NOIMAGE" mode, so it needs kernel images built from Linux.
                 # TODO: TheRock provides aotriton artifacts compiled for windows including aotriton images built from Linux.
                 # For now, manually copy in the aotriton.images folder from linux binaries into <pytorch_root>/lib/aotriton.images.
-                "AOTRITON_INSTALL_FROM_SOURCE": "1"
-                if args.enable_pytorch_flash_attention_windows
-                else "0",
+                "AOTRITON_INSTALL_FROM_SOURCE": use_flash_attention,
                 "DISTUTILS_USE_SDK": "1",
                 # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
                 # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
