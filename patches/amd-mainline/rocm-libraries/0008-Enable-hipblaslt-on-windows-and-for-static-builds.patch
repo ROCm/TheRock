@@ -1,18 +1,18 @@
-From 7d08bcad6882e7a17af5b8b2335e32c6b426b8fa Mon Sep 17 00:00:00 2001
+From 80b7d127116b67c6fefc96081d3f3cca081a29f8 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Fri, 18 Jul 2025 14:44:31 +0000
-Subject: [PATCH 4/4] Enable hipblaslt on windows and for static builds
+Subject: [PATCH 08/17] Enable hipblaslt on windows and for static builds
 
 ---
- CMakeLists.txt                |  5 ++---
- clients/common/CMakeLists.txt | 12 ++++--------
- library/src/CMakeLists.txt    |  6 ------
+ projects/rocblas/CMakeLists.txt                |  5 ++---
+ projects/rocblas/clients/common/CMakeLists.txt | 12 ++++--------
+ projects/rocblas/library/src/CMakeLists.txt    |  6 ------
  3 files changed, 6 insertions(+), 17 deletions(-)
 
-diff --git a/CMakeLists.txt b/CMakeLists.txt
-index cbd021a4..589eac2b 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
+diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
+index cbd021a4a6..589eac2bdb 100644
+--- a/projects/rocblas/CMakeLists.txt
++++ b/projects/rocblas/CMakeLists.txt
 @@ -146,17 +146,16 @@ set( GPU_TARGETS "${target_list}" CACHE STRING "List of GPUs (gfx targets) to su
  set( AMDGPU_TARGETS "${GPU_TARGETS}" CACHE STRING "List of GPUs (gfx targets) to support" FORCE ) # for old hip cmake files backward compatibility
  
@@ -33,10 +33,10 @@ index cbd021a4..589eac2b 100644
      message(STATUS "FOUND hipBLASLt, INCLUDE_DIR: ${HIPBLASLT_INCLUDE_DIR}")
    endif()
  endif()
-diff --git a/clients/common/CMakeLists.txt b/clients/common/CMakeLists.txt
-index 2d32fe7f..8c2445ed 100644
---- a/clients/common/CMakeLists.txt
-+++ b/clients/common/CMakeLists.txt
+diff --git a/projects/rocblas/clients/common/CMakeLists.txt b/projects/rocblas/clients/common/CMakeLists.txt
+index 2d32fe7fef..8c2445ed77 100644
+--- a/projects/rocblas/clients/common/CMakeLists.txt
++++ b/projects/rocblas/clients/common/CMakeLists.txt
 @@ -54,13 +54,6 @@ function( rocblas_client_library_settings lib_target_ )
      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/common>
    )
@@ -63,10 +63,10 @@ index 2d32fe7f..8c2445ed 100644
  target_link_libraries( rocblas_clients_testing_common roc::rocblas hip::host hip::device ${BLAS_LIBRARY} $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} )
  
  
-diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
-index f4bdfb5f..e972869a 100644
---- a/library/src/CMakeLists.txt
-+++ b/library/src/CMakeLists.txt
+diff --git a/projects/rocblas/library/src/CMakeLists.txt b/projects/rocblas/library/src/CMakeLists.txt
+index f4bdfb5f97..e972869a9e 100644
+--- a/projects/rocblas/library/src/CMakeLists.txt
++++ b/projects/rocblas/library/src/CMakeLists.txt
 @@ -690,13 +690,7 @@ if( BUILD_WITH_TENSILE )
    endif()
  
@@ -82,5 +82,5 @@ index f4bdfb5f..e972869a 100644
  
    if( NOT BUILD_SHARED_LIBS )
 -- 
-2.25.1
+2.43.0
 

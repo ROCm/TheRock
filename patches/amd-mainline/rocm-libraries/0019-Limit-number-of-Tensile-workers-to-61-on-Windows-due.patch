@@ -1,17 +1,17 @@
-From 559f2f0d0866c2d01e0cc5bbe8374b80317ef47c Mon Sep 17 00:00:00 2001
+From 45af9b9798be9513c44310b8db7608bde6e4ea11 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 2 May 2025 15:27:13 -0700
-Subject: [PATCH 2/3] Limit number of Tensile workers to 61 on Windows due to
+Subject: [PATCH] Limit number of Tensile workers to 61 on Windows due to
  system limit.
 
 ---
- Tensile/Parallel.py | 5 ++++-
+ shared/tensile/Tensile/Parallel.py | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
 
-diff --git a/Tensile/Parallel.py b/Tensile/Parallel.py
-index a643c1ae..f483d264 100644
---- a/Tensile/Parallel.py
-+++ b/Tensile/Parallel.py
+diff --git a/shared/tensile/Tensile/Parallel.py b/shared/tensile/Tensile/Parallel.py
+index a643c1aea3..f483d26466 100644
+--- a/shared/tensile/Tensile/Parallel.py
++++ b/shared/tensile/Tensile/Parallel.py
 @@ -36,7 +36,10 @@ def CPUThreadCount(enable=True):
          return 1
      else:
@@ -25,5 +25,5 @@ index a643c1ae..f483d264 100644
              cpu_count = len(os.sched_getaffinity(0))
          cpuThreads = globalParameters["CpuThreads"]
 -- 
-2.47.1.windows.2
+2.43.0
 

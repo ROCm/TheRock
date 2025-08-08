@@ -1,19 +1,19 @@
-From 882098e924e6a1440faa34976c2ccec5526a7c97 Mon Sep 17 00:00:00 2001
+From 352a8172c9216efe2c54b13accf7501065683c5f Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Tue, 3 Jun 2025 13:07:11 +0000
-Subject: [PATCH 7/7] Remove Windows third_party_dlls copying code.
+Subject: [PATCH 17/17] Remove Windows third_party_dlls copying code.
 
 This code is built on shaky assumptions that don't hold inside TheRock.
 We'll need a better solution that works across projects.
 ---
- clients/gtest/CMakeLists.txt | 53 ++++++++++++++++++------------------
+ projects/hipblas/clients/gtest/CMakeLists.txt | 53 ++++++++++---------
  1 file changed, 27 insertions(+), 26 deletions(-)
 
-diff --git a/clients/gtest/CMakeLists.txt b/clients/gtest/CMakeLists.txt
-index ea326c1..69397e1 100644
---- a/clients/gtest/CMakeLists.txt
-+++ b/clients/gtest/CMakeLists.txt
-@@ -172,32 +172,33 @@ else( )
+diff --git a/projects/hipblas/clients/gtest/CMakeLists.txt b/projects/hipblas/clients/gtest/CMakeLists.txt
+index c6fc0a0157..3fc1a04209 100644
+--- a/projects/hipblas/clients/gtest/CMakeLists.txt
++++ b/projects/hipblas/clients/gtest/CMakeLists.txt
+@@ -173,32 +173,33 @@ else( )
    target_link_libraries( hipblas-test PRIVATE ${CUDA_LIBRARIES} )
  endif( )
  

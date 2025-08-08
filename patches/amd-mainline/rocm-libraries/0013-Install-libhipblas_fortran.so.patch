@@ -1,18 +1,18 @@
-From a45367b0cf6d1a91a37a67bed5ebae13ff7a0478 Mon Sep 17 00:00:00 2001
+From 7e26c6c64ba19d9a7d6dcb736aba374407df0673 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 1 Apr 2025 20:58:38 +0000
-Subject: [PATCH 3/7] Install `libhipblas_fortran.so`
+Subject: [PATCH 13/17] Install `libhipblas_fortran.so`
 
 This is required by the test and benchmark clients but was not part of
 the installation so far.
 ---
- library/src/CMakeLists.txt | 1 +
+ projects/hipblas/library/src/CMakeLists.txt | 1 +
  1 file changed, 1 insertion(+)
 
-diff --git a/library/src/CMakeLists.txt b/library/src/CMakeLists.txt
-index 3cb9b77..a1bad50 100755
---- a/library/src/CMakeLists.txt
-+++ b/library/src/CMakeLists.txt
+diff --git a/projects/hipblas/library/src/CMakeLists.txt b/projects/hipblas/library/src/CMakeLists.txt
+index 7318e3fd88..8846fec9d3 100755
+--- a/projects/hipblas/library/src/CMakeLists.txt
++++ b/projects/hipblas/library/src/CMakeLists.txt
 @@ -54,6 +54,7 @@ set (hipblas_f90_source
  # Create hipBLAS Fortran module
  if(NOT WIN32)
@@ -22,5 +22,5 @@ index 3cb9b77..a1bad50 100755
  
  if(BUILD_ADDRESS_SANITIZER)
 -- 
-2.47.1.windows.2
+2.43.0
 

@@ -1,7 +1,7 @@
-From 94fd8a3acd622b26960cbe3dcd188809abe1ba38 Mon Sep 17 00:00:00 2001
+From a5d4103d389ff3b392eb98fed3460048dcfaf608 Mon Sep 17 00:00:00 2001
 From: Wayne Franz <wayfranz@amd.com>
 Date: Fri, 1 Aug 2025 14:09:20 -0400
-Subject: [PATCH 2/2] Correct GTest print check for 128-bit ints on Windows
+Subject: [PATCH 10/17] Correct GTest print check for 128-bit ints on Windows
 
 Currently, on Windows, GTest cannot print 128-bit ints.
 We have a check in test_utils::protected_assert_eq that
@@ -26,13 +26,13 @@ to fix the check in test_utils::protected_assert_eq.
 
 Cherry-picked from: https://github.com/ROCm/rocm-libraries/pull/1029
 ---
- test/rocprim/test_utils_assertions.hpp | 7 -------
+ projects/rocprim/test/rocprim/test_utils_assertions.hpp | 7 -------
  1 file changed, 7 deletions(-)
 
-diff --git a/test/rocprim/test_utils_assertions.hpp b/test/rocprim/test_utils_assertions.hpp
-index 3bdb8c33..3d6a2d5c 100644
---- a/test/rocprim/test_utils_assertions.hpp
-+++ b/test/rocprim/test_utils_assertions.hpp
+diff --git a/projects/rocprim/test/rocprim/test_utils_assertions.hpp b/projects/rocprim/test/rocprim/test_utils_assertions.hpp
+index 3bdb8c33a2..3d6a2d5c7e 100644
+--- a/projects/rocprim/test/rocprim/test_utils_assertions.hpp
++++ b/projects/rocprim/test/rocprim/test_utils_assertions.hpp
 @@ -48,17 +48,10 @@
  
  namespace test_utils {
