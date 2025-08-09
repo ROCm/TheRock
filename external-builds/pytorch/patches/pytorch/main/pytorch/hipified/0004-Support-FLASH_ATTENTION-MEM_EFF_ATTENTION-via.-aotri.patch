@@ -1,21 +1,22 @@
-From ee8c7e5279395c326c4be46f7e2aa889d761ae11 Mon Sep 17 00:00:00 2001
+From ce89daada8bd6a1faaf4e8841ff58c64c30ff92e Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
-Date: Wed, 6 Aug 2025 01:55:25 +0900
+Date: Sun, 10 Aug 2025 00:16:27 +0900
 Subject: [PATCH 4/4] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
  on windows
 
 ---
  CMakeLists.txt                                |  4 +-
- .../native/transformers/hip/attention.hip     | 63 +++++++++++++
- .../transformers/hip/flash_attn/flash_api.h   | 62 -------------
- cmake/External/aotriton.cmake                 | 91 ++++++++++++++++++-
- 4 files changed, 152 insertions(+), 68 deletions(-)
+ aten/src/ATen/CMakeLists.txt                  |  4 -
+ .../native/transformers/hip/attention.hip     | 64 ++++++++++++
+ .../transformers/hip/flash_attn/flash_api.h   | 39 +-------
+ cmake/External/aotriton.cmake                 | 97 ++++++++++++++++++-
+ 5 files changed, 160 insertions(+), 48 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index c2ddf096324..194e3601f36 100644
+index 10ad7f71d2d..d90f3505898 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -870,7 +870,7 @@ cmake_dependent_option(
+@@ -872,7 +872,7 @@ cmake_dependent_option(
    "Whether to build the flash_attention kernel for scaled dot product attention.\
    Will be disabled if not supported by the platform"
    ON
@@ -24,7 +25,7 @@ index c2ddf096324..194e3601f36 100644
    OFF)
  
  cmake_dependent_option(
-@@ -894,7 +894,7 @@ cmake_dependent_option(
+@@ -896,7 +896,7 @@ cmake_dependent_option(
  # USE_FLASH_ATTENTION -> USE_ROCM -> Dependencies.cmake -> aotriton.cmake
  #
  if(USE_ROCM)
@@ -33,15 +34,31 @@ index c2ddf096324..194e3601f36 100644
      include(cmake/External/aotriton.cmake)
    endif()
  endif()
+diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
+index 5f4997357f8..e1939323fc9 100644
+--- a/aten/src/ATen/CMakeLists.txt
++++ b/aten/src/ATen/CMakeLists.txt
+@@ -470,10 +470,6 @@ if(USE_ROCM)
+     exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
+       ${native_hip_bgemm} ${native_hip_ck})
+   endif()
+-  if(WIN32) # Windows doesn't support Composable Kernels and Triton
+-    exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
+-      ${native_transformers_hip_hip} ${native_transformers_hip_cpp})
+-  endif()
+ 
+   # TODO: Codegen separate files for HIP and use those (s/cuda_generated_sources/hip_generated_sources)
+   list(APPEND all_hip_cpp
 diff --git a/aten/src/ATen/native/transformers/hip/attention.hip b/aten/src/ATen/native/transformers/hip/attention.hip
-index 6a42198f25e..c165375769b 100644
+index 93c523ff71e..53516a161be 100644
 --- a/aten/src/ATen/native/transformers/hip/attention.hip
 +++ b/aten/src/ATen/native/transformers/hip/attention.hip
-@@ -97,6 +97,69 @@
+@@ -97,6 +97,70 @@
  #endif
  #endif
  
-+namespace FLASH_NAMESPACE {
++namespace pytorch_flash
++{
 +std::tuple<
 +    at::Tensor,
 +    at::Tensor,
@@ -67,7 +84,7 @@ index 6a42198f25e..c165375769b 100644
 +    const float softcap,
 +    const bool return_softmax,
 +    std::optional<at::Generator> gen_) {
-+#if defined(USE_CK_FLASH_ATTENTION)
++#if defined(USE_ROCM_CK_SDPA)
 +  if (at::globalContext().getROCmFAPreferredBackend() ==
 +      at::ROCmFABackend::Ck) {
 +    const int non_null_window_left = window_size_left.value_or(-1);
@@ -108,40 +125,24 @@ index 6a42198f25e..c165375769b 100644
  
  namespace cuda::philox {
 diff --git a/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h b/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
-index 17298aae948..9ff17f86204 100644
+index f6f2240d4f0..71a19590659 100644
 --- a/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
 +++ b/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
-@@ -269,68 +269,6 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> mha_varle
-     const at::Tensor philox_offset);
+@@ -270,7 +270,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> mha_varle
  #endif
  
--TORCH_API
+ TORCH_API
 -inline std::tuple<
--    at::Tensor,
--    at::Tensor,
--    at::Tensor,
--    at::Tensor,
--    at::Tensor,
--    at::Tensor,
--    at::Tensor,
--    at::Tensor>
--mha_fwd(
--    const at::Tensor& q, // batch_size x seqlen_q x num_heads x head_size
--    const at::Tensor& k, // batch_size x seqlen_k x num_heads_k x head_size
--    const at::Tensor& v, // batch_size x seqlen_k x num_heads_k x head_size
--    std::optional<at::Tensor>&
--        out_, // batch_size x seqlen_q x num_heads x head_size
--    std::optional<at::Tensor>&
--        alibi_slopes_, // num_heads or batch_size x num_heads
--    const float p_dropout,
--    const float softmax_scale,
--    bool is_causal,
--    std::optional<int64_t> window_size_left,
--    std::optional<int64_t> window_size_right,
--    const float softcap,
--    const bool return_softmax,
++std::tuple<
+     at::Tensor,
+     at::Tensor,
+     at::Tensor,
+@@ -294,42 +294,7 @@ mha_fwd(
+     std::optional<int64_t> window_size_right,
+     const float softcap,
+     const bool return_softmax,
 -    std::optional<at::Generator> gen_) {
--#if defined(USE_CK_FLASH_ATTENTION)
+-#if defined(USE_ROCM_CK_SDPA)
 -  if (at::globalContext().getROCmFAPreferredBackend() ==
 -      at::ROCmFABackend::Ck) {
 -    const int non_null_window_left = window_size_left.value_or(-1);
@@ -176,12 +177,12 @@ index 17298aae948..9ff17f86204 100644
 -      return_softmax,
 -      gen_);
 -}
--
++    std::optional<at::Generator> gen_);
+ 
  inline std::tuple<
      at::Tensor,
-     at::Tensor,
 diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
-index 54564e42c90..549c401bb08 100644
+index 54564e42c90..50294075919 100644
 --- a/cmake/External/aotriton.cmake
 +++ b/cmake/External/aotriton.cmake
 @@ -22,7 +22,7 @@ if(NOT __AOTRITON_INCLUDED)
@@ -274,7 +275,22 @@ index 54564e42c90..549c401bb08 100644
  
    # Note it is INSTALL"ED"
    if(DEFINED ENV{AOTRITON_INSTALLED_PREFIX})
-@@ -50,9 +124,15 @@ if(NOT __AOTRITON_INCLUDED)
+@@ -40,19 +114,29 @@ if(NOT __AOTRITON_INCLUDED)
+     set(__AOTRITON_INSTALL_DIR "$ENV{AOTRITON_INSTALLED_PREFIX}")
+     message(STATUS "Using Preinstalled AOTriton at ${__AOTRITON_INSTALL_DIR}")
+   elseif(DEFINED ENV{AOTRITON_INSTALL_FROM_SOURCE})
++    set(__AOTRITON_TARGET_ARCH "${PYTORCH_ROCM_ARCH}")
++    if(WIN32)
++      string(REPLACE ";" "$<SEMICOLON>" __AOTRITON_TARGET_ARCH "${__AOTRITON_TARGET_ARCH}")
++    endif()
+     ExternalProject_Add(aotriton_external
+       GIT_REPOSITORY https://github.com/ROCm/aotriton.git
+       GIT_TAG ${__AOTRITON_CI_COMMIT}
+       PREFIX ${__AOTRITON_EXTERN_PREFIX}
+       INSTALL_DIR ${__AOTRITON_INSTALL_DIR}
+       CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${__AOTRITON_INSTALL_DIR}
+-      -DAOTRITON_TARGET_ARCH:STRING=${PYTORCH_ROCM_ARCH}
++      -DAOTRITON_TARGET_ARCH:STRING=${__AOTRITON_TARGET_ARCH}
        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
        -DAOTRITON_NO_PYTHON=ON
        -DAOTRITON_NO_SHARED=OFF
@@ -291,7 +307,7 @@ index 54564e42c90..549c401bb08 100644
        USES_TERMINAL_DOWNLOAD TRUE
        USES_TERMINAL_CONFIGURE TRUE
        USES_TERMINAL_BUILD TRUE
-@@ -60,6 +140,9 @@ if(NOT __AOTRITON_INCLUDED)
+@@ -60,6 +144,9 @@ if(NOT __AOTRITON_INCLUDED)
        # INSTALL_COMMAND ${MAKE_COMMAND} install
        )
      add_dependencies(__caffe2_aotriton aotriton_external)
@@ -301,7 +317,7 @@ index 54564e42c90..549c401bb08 100644
      message(STATUS "Using AOTriton compiled from source directory ${__AOTRITON_EXTERN_PREFIX}")
    else()
      set(__AOTRITON_SYSTEM_ROCM "${HIP_VERSION_MAJOR}.${HIP_VERSION_MINOR}")
-@@ -101,7 +184,7 @@ if(NOT __AOTRITON_INCLUDED)
+@@ -101,7 +188,7 @@ if(NOT __AOTRITON_INCLUDED)
      message(STATUS "Using AOTriton from pre-compiled binary ${__AOTRITON_URL}.\
      Set env variables AOTRITON_INSTALL_FROM_SOURCE=1 to build from source.")
    endif()
