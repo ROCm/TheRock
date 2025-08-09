@@ -48,6 +48,7 @@ jobs:
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
+      SOURCE_DATE_EPOCH: 1442707200
 
     steps:
       - name: Checkout Repository
