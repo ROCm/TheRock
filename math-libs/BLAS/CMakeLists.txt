@@ -190,6 +190,13 @@ elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
 
+if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES)
+    set(_tensile_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile")
+else()
+    set(_tensile_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/Tensile")
+endif()
+
+
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${_rocblas_source_dir}"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
