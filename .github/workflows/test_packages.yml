@@ -88,7 +88,7 @@ jobs:
           FETCH_ARTIFACT_ARGS: ${{ matrix.components.fetch_artifact_args }}
 
       - name: Install additional packages
-        if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt') }}
+        if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt' || matrix.components.job_name == 'hipsolver') }}
         run: sudo apt install libgfortran5 -y
 
       - name: Test
