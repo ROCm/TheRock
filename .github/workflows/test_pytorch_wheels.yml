@@ -57,6 +57,13 @@ jobs:
   test_wheels:
     name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04:main
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
     defaults:
       run:
         shell: bash

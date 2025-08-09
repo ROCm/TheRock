@@ -24,21 +24,14 @@ on:
       - ADHOCBUILD
 
 jobs:
-  test_sanity_check:
-    name: 'Test Sanity Check'
-    if: ${{ inputs.test_runs_on != '' }} # if there is a test machine available
-    uses: './.github/workflows/test_sanity_check.yml'
-    with:
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
-
   configure_test_matrix:
     name: "Configure test matrix"
-    needs: test_sanity_check
+    # if there is a test machine available
+    if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
     outputs:
       components: ${{ steps.configure.outputs.components }}
+      platform: ${{ steps.configure.outputs.platform }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -52,10 +45,27 @@ jobs:
         id: configure
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
+  test_sanity_check:
+    name: 'Test Sanity Check'
+    needs: configure_test_matrix
+    uses: './.github/workflows/test_sanity_check.yml'
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ needs.configure_test_matrix.outputs.platform }}
+
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
     runs-on: ${{ inputs.test_runs_on }}
-    needs: configure_test_matrix
+    container:
+      image: ${{ needs.configure_test_matrix.outputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04:main' || null }}
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
+    needs: [test_sanity_check, configure_test_matrix]
     # skip tests if no test matrix to run
     if: ${{ needs.configure_test_matrix.outputs.components != '[]' }}
     strategy:

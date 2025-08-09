@@ -11,6 +11,8 @@ on:
         default: ""
       test_runs_on:
         type: string
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -20,6 +22,8 @@ on:
         type: string
         default: ""
       test_runs_on:
+        type: string
+      platform:
         type: string
   push:
     branches:
@@ -32,8 +36,13 @@ jobs:
   test_sanity_check:
     name: "Sanity ROCM Test"
     runs-on: ${{ inputs.test_runs_on }}
-    strategy:
-      fail-fast: false
+    container:
+      image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04:main' || null }}
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
     defaults:
       run:
         shell: bash
