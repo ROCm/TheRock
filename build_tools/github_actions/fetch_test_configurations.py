@@ -99,7 +99,7 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
     },

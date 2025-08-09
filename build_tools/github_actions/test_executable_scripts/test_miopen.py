@@ -27,8 +27,27 @@ positive_filter.append("*/GPU_BNInfer*_*")
 positive_filter.append("*/GPU_BNOCLInfer*_*")
 positive_filter.append("*/GPU_bn_infer*_*")
 
-negative_filter.append("*/GPU_BN*Large*_*")
-negative_filter.append("*/GPU_BN*SerialRun*_*")
+# negative_filter.append("*/GPU_BN*Large*_*")
+# negative_filter.append("*/GPU_BN*SerialRun*_*")
+
+# CPU tests
+positive_filter.append("CPU_*")  # tests without a suite
+positive_filter.append("*/CPU_*")  # tests with a suite
+
+# Different
+positive_filter.append("*/GPU_Cat_*")
+positive_filter.append("*/GPU_ConvBiasActiv*")
+
+# Convolutions
+positive_filter.append("*/GPU_Conv*")
+positive_filter.append("*/GPU_conv*")
+
+# Solvers
+positive_filter.append("*/GPU_UnitTestConv*")
+
+negative_filter.append("*DBSync*")
+negative_filter.append("*DeepBench*")
+negative_filter.append("*MIOpenTestConv*")
 
 gtest_final_filter_cmd = (
     "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
