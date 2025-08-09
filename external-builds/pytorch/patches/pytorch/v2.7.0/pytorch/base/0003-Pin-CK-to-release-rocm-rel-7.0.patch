@@ -1,0 +1,19 @@
+From c72c782042eefa26b55e02d547a18d74a93ea091 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Mon, 21 Jul 2025 22:45:41 +0000
+Subject: [PATCH 3/3] Pin CK to `release/rocm-rel-7.0`
+
+---
+ third_party/composable_kernel | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/composable_kernel b/third_party/composable_kernel
+index 8086bbe3a7..778ac24376 160000
+--- a/third_party/composable_kernel
++++ b/third_party/composable_kernel
+@@ -1 +1 @@
+-Subproject commit 8086bbe3a78d931eb96fe12fdc014082e18d18d3
++Subproject commit 778ac24376813d18e63c9f77a2dd51cf87eb4a80
+-- 
+2.43.0
+
