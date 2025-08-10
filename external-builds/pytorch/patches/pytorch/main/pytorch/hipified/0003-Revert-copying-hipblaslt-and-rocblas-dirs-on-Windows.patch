@@ -1,4 +1,4 @@
-From 75858fe5248ba3122f5cebe356a20412bec0e74c Mon Sep 17 00:00:00 2001
+From 66fdf8b733f84ba2b50c3d4527377576bfe3c068 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 24 Jul 2025 12:45:53 -0700
 Subject: [PATCH 3/4] Revert copying hipblaslt and rocblas dirs on Windows.

@@ -1,4 +1,4 @@
-From 1bba6c66c42a3f30f621e0da2832787812c56b14 Mon Sep 17 00:00:00 2001
+From 14da974266cdb6a5434eea76988fe2479915f14a Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 24 Jul 2025 10:38:01 -0700
 Subject: [PATCH 1/4] Enable USE_ROCM, disable USE_RCCL on Windows.
