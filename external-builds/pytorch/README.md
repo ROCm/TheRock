@@ -70,6 +70,9 @@ for more background on these `rocm` packages.
 > kernels will fail.
 > See https://github.com/ROCm/aotriton/commit/e1be21d80b25f46139c2e3b4b0615e0279feccac
 > For possible fixes. A proper fix is planned and will eventually be added.
+>
+> NOTE: If you use ccache and face "invalid argument" errors during the aotriton build,
+> disable ccache and try again.
 
 ### Quickstart
 
