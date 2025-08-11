@@ -1,4 +1,4 @@
-From 3406c1b791c014907504ddacb5d26767d97ba0b3 Mon Sep 17 00:00:00 2001
+From aa8c5cbd45d8e499444acf33baabcb0cef8eb609 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 24 Jul 2025 12:43:07 -0700
 Subject: [PATCH 2/4] Fix LoadHIP handling of environment variable paths on
@@ -31,5 +31,5 @@ index 132f9670ff3..018bca837a5 100644
  
  # MIOpen isn't a part of HIP-SDK for Windows and hence, may have a different
 -- 
-2.47.1.windows.2
+2.50.1.windows.1
 

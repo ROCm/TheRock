@@ -1,4 +1,4 @@
-From 1588921730be122c750a0226fd0bc62bf705ceec Mon Sep 17 00:00:00 2001
+From 66fdf8b733f84ba2b50c3d4527377576bfe3c068 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 24 Jul 2025 12:45:53 -0700
 Subject: [PATCH 3/4] Revert copying hipblaslt and rocblas dirs on Windows.
@@ -9,10 +9,10 @@ Since https://github.com/pytorch/pytorch/commit/30387ab2e485384ab2e67084a1e2c556
  1 file changed, 17 deletions(-)
 
 diff --git a/setup.py b/setup.py
-index b222e674c0c..d08c3775d82 100644
+index ad00317da08..cd04f5313aa 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -847,23 +847,6 @@ class build_ext(setuptools.command.build_ext.build_ext):
+@@ -1226,23 +1226,6 @@ class build_ext(setuptools.command.build_ext.build_ext):
              target_dir.mkdir(parents=True, exist_ok=True)
              self.copy_file(export_lib, target_lib)
  
@@ -37,5 +37,5 @@ index b222e674c0c..d08c3775d82 100644
          self.create_compile_commands()
  
 -- 
-2.47.1.windows.2
+2.50.1.windows.1
 
