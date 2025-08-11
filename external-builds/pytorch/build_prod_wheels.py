@@ -832,7 +832,7 @@ def main(argv: list[str]):
     )
     build_p.add_argument(
         "--enable-pytorch-flash-attention-windows",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch flash attention on Windows (enabled by default for Linux)",
     )

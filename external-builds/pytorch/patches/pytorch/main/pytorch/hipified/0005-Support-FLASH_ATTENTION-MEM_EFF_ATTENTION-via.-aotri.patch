@@ -1,19 +1,18 @@
-From 906cc3f60305b08e9fb5f38d9d79235c9373ef71 Mon Sep 17 00:00:00 2001
+From 39a7c6a0645e24ee4be09f21376f4dab50be5667 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
 Date: Sun, 10 Aug 2025 00:16:27 +0900
-Subject: [PATCH 4/4] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
+Subject: [PATCH 5/5] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
  on windows
 
 ---
  CMakeLists.txt                                |   4 +-
- aten/src/ATen/CMakeLists.txt                  |   4 -
- .../native/transformers/hip/attention.hip     |  64 ++++++
+ .../native/transformers/hip/attention.hip     |  66 ++++++
  .../transformers/hip/flash_attn/flash_api.h   |  39 +---
  cmake/External/aotriton.cmake                 | 194 +++++++++++++++---
- 5 files changed, 233 insertions(+), 72 deletions(-)
+ 4 files changed, 235 insertions(+), 68 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 10ad7f71d2d..d90f3505898 100644
+index cc9476bb001..b5c50bcd60c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -872,7 +872,7 @@ cmake_dependent_option(
@@ -34,29 +33,15 @@ index 10ad7f71d2d..d90f3505898 100644
      include(cmake/External/aotriton.cmake)
    endif()
  endif()
-diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
-index 5f4997357f8..e1939323fc9 100644
---- a/aten/src/ATen/CMakeLists.txt
-+++ b/aten/src/ATen/CMakeLists.txt
-@@ -470,10 +470,6 @@ if(USE_ROCM)
-     exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
-       ${native_hip_bgemm} ${native_hip_ck})
-   endif()
--  if(WIN32) # Windows doesn't support Composable Kernels and Triton
--    exclude(ATen_HIP_SRCS "${ATen_HIP_SRCS}"
--      ${native_transformers_hip_hip} ${native_transformers_hip_cpp})
--  endif()
- 
-   # TODO: Codegen separate files for HIP and use those (s/cuda_generated_sources/hip_generated_sources)
-   list(APPEND all_hip_cpp
 diff --git a/aten/src/ATen/native/transformers/hip/attention.hip b/aten/src/ATen/native/transformers/hip/attention.hip
-index 93c523ff71e..53516a161be 100644
+index 93c523ff71e..c12ac43ce0d 100644
 --- a/aten/src/ATen/native/transformers/hip/attention.hip
 +++ b/aten/src/ATen/native/transformers/hip/attention.hip
-@@ -97,6 +97,70 @@
+@@ -97,6 +97,72 @@
  #endif
  #endif
  
++#if defined(USE_FLASH_ATTENTION) || defined(USE_MEM_EFF_ATTENTION)
 +namespace pytorch_flash
 +{
 +std::tuple<
@@ -120,6 +105,7 @@ index 93c523ff71e..53516a161be 100644
 +      gen_);
 +}
 +}
++#endif
 +
  namespace at {
  
@@ -428,5 +414,5 @@ index 54564e42c90..fa9beea8026 100644
 +endif() # __AOTRITON_INCLUDED
 \ No newline at end of file
 -- 
-2.50.1.windows.1
+2.45.1.windows.1
 
