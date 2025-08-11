@@ -21,99 +21,55 @@
 
 from __future__ import annotations
 from typing import Literal, Optional, Union, Tuple
-import os, re, platform, sys
+import os, re, platform, sys, shutil
 from pathlib import Path
 import time
 
 # Define Color string print.
-#   > cprint is for print()
-#   > cstring is for colored string.
-class cstring:
+
+
+def cstring(
+    msg: Union[str],
+    color: Union[
+        Optional[Literal["err", "warn", "hint", "Discord"]],
+        Tuple[int, int, int],
+    ]
+    | None = None,
+) -> str:
     """
-    ## Color String \n\n
-    Returns with ANSI escape code formated string, with colors by (R, G, B).\n
-    This display feature is supported on macOS/Linux Terminal, Windows Terminal, VSCode Terminal, and VSCode Jupyter Notebook. (etc?)
+    ## Color String
+    Returns with ANSI escape code formated string, with colors by (R, G, B).
+
+    This feature passed on Linux Terminal, Windows Terminal, VSCode Terminal, and VSCode Jupyter Notebook.
 
     ### Usage
     `<STR_VAR> = cstring(string, color)`
-    - msg: `str` or `cstring` type. `C5H8NO4Na` is Invalid type.
-    - color: A user specified `tuple` with each value Ranged from `0` ~ `255` `(R, G, B)`.\n\t
+    - msg: `str` type.
+    - color: A user specified `tuple` with each value Ranged from `0` ~ `255` `(R, G, B)`.\t
     ```
-    >>> your_text = cstring(msg="AMD RADEON", color=(255, 0, 0))
+    >>> your_text = cstring(msg="AMD RADEON RX 7800XT", color=(255, 0, 0))
     >>> your_text
     ```
     - If color's RGB not passed will be full white. Color also can be these keywords:
         - "err"
         - "warn"
         - "pass"
-        - "Windows"
-        - "Cygwin"
-        - "msys2"
-        - "ubuntu"
-        - "fedora"
-        - "Discord"
-        - `Any`: Any type will ignore it as default white (255 ,255, 255).
     """
 
-    def __init__(
-        self,
-        msg: Union[str, cstring],
-        color: Union[
-            Optional[
-                Literal[
-                    "err",
-                    "warn",
-                    "hint",
-                    "Windows",
-                    "Cygwin",
-                    "msys2",
-                    "ubuntu",
-                    "fedora",
-                    "Discord",
-                ]
-            ],
-            Tuple[int, int, int],
-        ]
-        | None = None,
-    ) -> str:
-        # super().__
+    if isinstance(color, tuple):
+        r, g, b = color
+    else:
+        match color:
+            case "err":
+                r, g, b = (255, 61, 61)
+            case "warn":
+                r, g, b = (255, 230, 66)
+            case "hint":
+                r, g, b = (150, 255, 255)
+            case _:
+                r, g, b = (255, 255, 255)
 
-        if isinstance(color, tuple):
-            self.r, self.g, self.b = color
-        else:
-            match color:
-                case "err":
-                    r, g, b = (255, 61, 61)
-                case "warn":
-                    r, g, b = (255, 230, 66)
-                case "hint":
-                    r, g, b = (150, 255, 255)
-                case "Windows":
-                    r, g, b = (0, 79, 225)
-                case "Cygwin":
-                    r, g, b = (0, 255, 0)
-                case "msys2":
-                    r, g, b = (126, 64, 158)
-                case "ubuntu":
-                    r, g, b = (221, 72, 20)
-                case "fedora":
-                    r, g, b = ...
-                case "Discord":
-                    r, g, b = (88, 101, 242)
-                case _:
-                    r, g, b = (255, 255, 255)
-            self.r, self.g, self.b = r, g, b
-
-        if type(msg) is cstring:
-            self.info = msg.info  # != C5H8NO4Na
-        else:
-            self.info = msg  # != C5H8NO4Na
-
-    def __str__(self):
-        return f"\033[38;2;{self.r};{self.g};{self.b}m{self.info}\033[0m"
-
-    def __repr__(self):
-        return self.__str__()
+    return f"\033[38;2;{r};{g};{b}m{msg}\033[0m"
 
 
 class Emoji:
@@ -127,13 +83,13 @@ class TheRock:
     """
     ## TheRock class
     AMD ROCm/TheRock project.
-    ### Methods
-    `head()`: `str`. Returns Repo cloned main's head.\n
-    `repo()`: `str`. Returns Repo's abs path.\n
-    `license()`: `None`. Displays TheRock repo's Public License.\n\n
-    ### Fake magic methods
-    `__logo__()`: Advanced Micro Devices Logo. Displays AMD Arrow Logo and current git HEAD.\n
-    ![image](https://upload.wikimedia.org/wikipedia/commons/6/6a/AMD_Logo.png)\n
+
+    - `head()`: `str`. Returns Repo cloned main's head.
+    - `repo()`: `str`. Returns Repo's abs path.
+
+    - `__logo__()`: Advanced Micro Devices Logo. Displays AMD Arrow Logo and current git HEAD.
+
+    ![image](https://upload.wikimedia.org/wikipedia/commons/6/6a/AMD_Logo.png)
     """
 
     @staticmethod
@@ -155,24 +111,17 @@ class TheRock:
         return finder
 
     @staticmethod
-    def license():
-        with open(Path(f"{TheRock.repo()}/LICENSE").resolve()) as f:
-            lic = f.read()
-        TheRock.__logo__()
-        print(cstring(lic, "hint"))
-
-    @staticmethod
     def __logo__():
 
         """
-        ![image](https://upload.wikimedia.org/wikipedia/commons/6/6a/AMD_Logo.png)\n
+        ![image](https://upload.wikimedia.org/wikipedia/commons/6/6a/AMD_Logo.png)
         # Advanced Micro Devices Inc.
         """
 
         _REPO_HEAD = TheRock.head()
 
         print(
-            f"""\n\n\n\n\n
+            f"""\n\n\n\n
     {cstring("   ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
     {cstring("     ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
     {cstring("       ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}\t  {cstring("AMD TheRock Project","err")}
@@ -186,115 +135,53 @@ class TheRock:
     """
         )
 
-    @staticmethod
-    def help():
-        TheRock.__logo__()
-        _repo_ = cstring("https://github.com/ROCm/TheRock", "err")
-        _discord_ = cstring("https://discord.com/invite/amd-dev", "Discord")
-        _warn_, _FAILED_ = cstring("Warning", "warn"), cstring("Failed", "warn")
-        _err_, _FATAL_ = cstring("Error", "err"), cstring("Fatal", "err")
-        print(
-            f"""
-        - Diagnosis: No arguments pass.
-            Direct run will detect your system's hardware/software info.
-            There will several messages, by using colored {_warn_}/{_err_} message, shows tests are {_FAILED_}/{_FATAL_}.
-            This script shouldn't throw a python running error -- report it if you hits error.
-                sh $ python3 ./diagnose.py
-                PS > python  ./diagnose.py
-            This diagnose script have POSIX/MS-DOS arg-parsing style compatability.
-                sh $ python3 ./diagnosis.py --ARGS -ARGS /ARGS
-                PS > python  ./diagnosis.py --ARGS -ARGS /ARGS
 
-        - Help: Display this command line usage.
-                sh $ python3 ./diagnosis.py --help -help -? /help /?
-                PS > python  ./diagnosis.py --help -help -? /help /?
-
-        - Issue: This diagnosis script could be somewhere buggy or broken.
-                Please report issue to GitHub repository here. {_repo_}
-                Or join AMD Developer Community Discord server here. {_discord_}
+class Find_Program:
     """
-        )
+    ## Find_Program
+    This class finds the specified program, finds its location and analyze its version number.
 
+    Find_Program object use attribute:
+    - `exe`: The program's PATH. Found program will display the first priority only.
+    - `version`: The program's complete version number.
+    - `MAJOR_VERSION`: The program's major version number. Exclude MSVC toolchain and Windows SDK.
+    - `MINOR_VERSION`: The program's minor version number. Exclude MSVC toolchain and Windows SDK.
+    - `PATCH_VERSION`: The program's patch version number. Exclude MSVC toolchain and Windows SDK, GCC binutils.
 
-class where:
-    """
-    ## Where
-    Find program that similar to Windows `where.exe`.
     ```
-     PowerShell: PS > where.exe python
-     CMD:           > where.exe python
-     Python REPL: >>> where("python")
-    ```
-    Let's make something elation.
-    ### init(executable:`str`)
-    Analyze a program with its lower name and find its PATH in system.
-    ```
-     python = where("Python")
-    ```
-    ### exe:
-    Returns where object founded program's PATH.
-    ```
-     >>> python = where("python")
-     >>> py_path = python.exe
-    ```
-    ### version:
-    Returns where object founded program's version number.
-    ```
-     >>> python = where("python")
-     >>> X, Y, Z = python.version
-     >>> XYZ = python.version
+     >>> python = Find_Program("python3")
+     >>> python_path = python.exe
+     >>> python_ver = python.version
      >>> X, Y, Z = python.MAJOR_VERSION, python.MINOR_VERSION, python.PATCH_VERSION
     ```
+
+    ### Python
+    If program name is python, it comes with other attribute:
+    - `Free_Threaded`: Check if Python program have Global Interpreter Lock (GIL). If enabled (`True`), the Python is Free-Threaded version.
+    - `env`: Python Environment Status. Could be `Global ENV`, `Virtual ENV`(Python VENV), `UV VENV`(Astral UV) or
+
+            `Conda ENV`(Anaconda/Miniconda). pipx/poetry/pyenv etc. currently not supported.
+    ```
+     >>> python_env_type = python.env
+     >>> python_have_GIL = python.have_GIL
+     >>> python_free_threaded_status = not python.have_GIL
+    ```
     """
-
-    # name map:
-    # gcc -> GCC
-    # cl.exe -> MSVC
-
-    __name_map__ = {
-        "git": "Git",
-        "git-lfs": "Git-LFS",
-        "python": "Python 3",
-        "python3": "Python 3",
-        "uv": "Astral UV",
-        "cmake": "CMake",
-        "ccache": "ccache",
-        "ninja": "Ninja",
-        "cl": "MSVC",
-        "ml64": "MSVC",
-        "lib": "MSVC",
-        "link": "MSVC",
-        "rc": "Windows SDK",
-        "gcc": "gcc",
-        "g++": "g++",
-        "gfortran": "gfortran",
-        "as": "as",
-        "ar": "ar",
-        "ld": "ld",
-    }
 
     def __init__(self, executable: str):
         super().__init__()
-        """
-        Set where object's specified progranm name.
-        executable: `str`
-        """
+
         import shutil, subprocess, re
 
         self._name = executable.lower()
-        _find = shutil.which(self._name)
-        self.exe = (
-            _find.replace("\\", "/").replace("EXE", "exe")
-            if _find is not None
-            else None
-        )
+        self._find = shutil.which(self._name)
 
         if self.exe is None:
-            self.version_num = None
+            self._version_num = None
         else:
             match executable:
                 case "cl" | "link" | "lib" | "ml64":
-                    self.version_num = (
+                    self._version_num = (
                         os.getenv("VCToolsVersion")
                         if os.getenv("VCToolsVersion")
                         else None
@@ -304,13 +191,13 @@ class where:
                         os.getenv("WindowsSDKVersion") != "\\"
                         or os.getenv("WindowsSDKVersion") is not None
                     ):
-                        self.version_num = os.getenv("WindowsSDKVersion").replace(
+                        self._version_num = os.getenv("WindowsSDKVersion").replace(
                             "\\", ""
                         )
                     else:
-                        self.version_num = None
+                        self._version_num = None
                 case "ar" | "as" | "ld":
-                    self.MAJOR_VERSION, self.MINOR_VERSION = map(
+                    self._major_version, self._minor_version = map(
                         int,
                         re.search(
                             r"\b(\d+)\.(\d+)\b",
@@ -322,53 +209,43 @@ class where:
                             ).stdout.strip(),
                         ).groups(),
                     )
-                    self.version_num = f"{self.MAJOR_VERSION}.{self.MINOR_VERSION}"
-                case "nvcc":
-                    self.MAJOR_VERSION, self.MINOR_VERSION, self.PATCH_VERSION = map(
-                        int,
-                        re.search(
-                            r"V(\d+)\.(\d+)\.(\d+)",
-                            subprocess.run(
-                                [self.exe, "--version"],
-                                capture_output=True,
-                                check=True,
-                                text=True,
-                            ).stdout.strip(),
-                        ).groups(),
-                    )
-                    self.version_num = f"{self.MAJOR_VERSION}.{self.MINOR_VERSION}.{self.PATCH_VERSION}"
+                    self._patch_version = None
+                    self._version_num = f"{self._major_version}.{self._minor_version}"
 
                 case "python" | "python3":
                     (
-                        self.MAJOR_VERSION,
-                        self.MINOR_VERSION,
-                        self.PATCH_VERSION,
-                        self.release,
+                        self._major_version,
+                        self._minor_version,
+                        self._patch_version,
+                        self._release,
                         _,
                     ) = sys.version_info
-                    self.version_num = f"{self.MAJOR_VERSION}.{self.MINOR_VERSION}.{self.PATCH_VERSION}"
+                    self._version_num = f"{self._major_version}.{self._minor_version}.{self._patch_version}"
 
                     if os.getenv("CONDA_PREFIX") is not None:
-                        self._env = True
-                        self.env = "Conda ENV"
-                        self.env_name = os.getenv("CONDA_DEFAULT_ENV")
-                        self.env_dir = os.getenv("CONDA_PREFIX")
+                        self._is_env = True
+                        self._env_type = "Conda ENV"
                     elif sys.prefix == sys.base_prefix:
-                        self._env = False
-                        self.env = "Global ENV"
-                        self.env_name = ""
-                        self.env_dir = sys.prefix
+                        self._is_env = False
+                        self._env_type = "Global ENV"
                     elif os.getenv("VIRTUAL_ENV") is not None:
-                        self._env = True
+                        self._is_env = True
                         _cfg = Path(f"{sys.prefix}/pyvenv.cfg").resolve()
                         with open(_cfg, "r") as file:
                             _conf = file.read()
-                        self.env = "uv VENV" if "uv" in _conf else "Python VENV"
-                        self.env_dir = sys.exec_prefix
-                        self.env_name = os.getenv("VIRTUAL_ENV_PROMPT")
+                            self._env_type = (
+                                "uv VENV" if "uv" in _conf else "Python VENV"
+                            )
+
+                    if self._minor_version <= 12:
+                        self.no_gil = False
+                    elif self._minor_version >= 13 and sys._is_gil_enabled() == True:
+                        self.no_gil = False
+                    elif self._minor_version >= 13 and sys._is_gil_enabled() == False:
+                        self.no_gil = True
 
                 case _:
-                    self.MAJOR_VERSION, self.MINOR_VERSION, self.PATCH_VERSION = map(
+                    self._major_version, self._minor_version, self._patch_version = map(
                         int,
                         re.search(
                             r"\b(\d+)\.(\d+)(?:\.(\d+))?\b",
@@ -380,9 +257,7 @@ class where:
                             ).stdout.strip(),
                         ).groups(),
                     )
-                    self.version_num = f"{self.MAJOR_VERSION}.{self.MINOR_VERSION}.{self.PATCH_VERSION}"
-
-        self._desc_: Optional[str] = None
+                    self._version_num = f"{self._major_version}.{self._minor_version}.{self._patch_version}"
 
     def __str__(self):
         return self.exe
@@ -391,136 +266,171 @@ class where:
         return self.__str__()
 
     @property
-    def name(self):
-        return self.__name_map__.get(self._name, self._name)
-
-    @property
-    def description(self) -> str:
-        return f"{self._desc_}" if self._desc_ is not None else ""
-
-    @description.setter
-    def description(self, info: Optional[str] = None):
-        self._desc_ = info
+    def exe(self):
+        return (
+            self._find.replace("\\", "/").replace("EXE", "exe")
+            if self._find is not None
+            else None
+        )
 
     @property
     def version(self):
-        if self.exe is None:
-            return None
-        else:
-            return self.version_num
+        return self._version_num
+
+    @property
+    def MAJOR_VERSION(self):
+        return self._major_version
+
+    @property
+    def MINOR_VERSION(self):
+        return self._minor_version
+
+    @property
+    def PATCH_VERSION(self):
+        return self._patch_version
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def Free_Threaded(self):
+        return self.no_gil if self.name in ("python", "python3") else None
+
+    @property
+    def env(self):
+        return self._env_type if self.name in ("python", "python3") else None
 
 
-class Device:
+class SystemInfo:
     """
-    ## class Device \n\n
-    A Device class for capturing system info.
+    ## SystemInfo class
+    A class for capturing system info.
+    >>> device = SystemInfo()
     """
 
     def __init__(self):
         super().__init__()
 
-        import platform
-
         # Define OS version.
-        _device_status_set = self.device_os_status()
-        if platform.system() == "Windows":
-            self.OS = "Windows"
-            self.OS_NAME = f"{_device_status_set[0]} {_device_status_set[1]}"
-            self.OS_PATCH = _device_status_set[2]
-            self.OS_BUILD = _device_status_set[3]
-
-        elif platform.system() == "Linux":
-            self.OS = "Linux"
-            self.OS_TYPE = f"{_device_status_set[0]} {_device_status_set[1]}"
-            self.OS_KERNEL = _device_status_set[2]
-        else:
-            ...
+        self._device_os_stat = self.device_os_status()
 
         # Define CPU configuration.
-        self.CPU_NAME, self.CPU_ARCH, self.CPU_CORE = self.device_cpu_status()
+        self._device_cpu_stat = self.device_cpu_status()
 
         # Define GPU configuration list.
-        self.GPU_LIST = self.device_gpu_list()
+        self._device_gpu_list = self.device_gpu_list()
 
         # Define Device Memory status.
-        if self.WINDOWS:
-            (
-                self.MEM_PHYS_TOTAL,
-                self.MEM_PHYS_AVAIL,
-                self.MEM_VIRTUAL_AVAIL,
-            ) = self.device_dram_status()
-        elif self.LINUX:
-            (
-                self.MEM_PHYS_TOTAL,
-                self.MEM_PHYS_AVAIL,
-                self.MEM_SWAP_AVAIL,
-            ) = self.device_dram_status()
-        else:
-            pass
+        self._device_dram_stat = self.device_dram_status()
 
         # Define Device Storage status.
-        (
-            self.DISK_REPO_PATH,
-            self.DISK_REPO_MOUNT,
-            self.DISK_TOTAL_SPACE,
-            self.DISK_USED_SPACE,
-            self.DISK_AVAIL_SPACE,
-            self.DISK_USAGE_RATIO,
-        ) = self.device_disk_status()
+        self._device_disk_stat = self.device_disk_status()
 
-        # Define is Windows status.
-
+    # Define is Operating system status.
     @property
-    def WINDOWS(self):
+    def OS(self):
+        return platform.system().capitalize()
+
+    # Define the device's system is Windows Operating System (Win32).
+    @property
+    def is_windows(self):
         return True if self.OS == "Windows" else False
 
-    if WINDOWS:
-        # Define if Windows environment is Cygwin/MSYS2, or We expected VS20XX.
+    @property
+    def is_linux(self):
+        return True if self.OS == "Linux" else False
+
+    @property
+    def OS_NAME(self):
+        if self.is_windows:
+            return f"{self._device_os_stat[0]} {self._device_os_stat[1]} ({self._device_os_stat[2]})"
+        elif self.is_linux:
+            return f"{self._device_os_stat[0]} {self._device_os_stat[1]}"
+
+    @property
+    def OS_KERNEL(self):
+        return self._device_os_stat[3]
+
+    if is_windows:
 
         @property
-        def CYGWIN(self):
+        def is_cygwin(self):
+            """
+            Define the system environment is Cygwin.
+            """
             return True if sys.platform == "cygwin" else False
 
         @property
-        def MSYS2(self):
+        def is_msys2(self):
+            """
+            Define the system environment is MSYS2.
+            """
             return True if sys.platform == "msys" else False
 
         @property
-        def VSVER(self):
-            if os.getenv("VisualStudioVersion") is not None:
-                return float(os.getenv("VisualStudioVersion"))
-            else:
-                None
+        def GPU_LIST(self):
+            return self._device_gpu_list
 
         @property
-        def VS20XX(self):
-            if self.VSVER is not None:
-                match self.VSVER:
-                    case 17.0:
-                        return "VS2022"
-                    case 16.0:
-                        return "VS2019"
-                    case 15.0:
-                        return "VS2017"
-                    case 14.0:
-                        return "VS2015"
-                    case _:
-                        return "Legacy"
-            else:
-                False
+        def VIRTUAL_MEMORY_AVAIL(self):
+            return self._device_dram_stat[-1]
 
-    # Define is Linux status.
+    if is_linux:
+
+        @property
+        def is_WSL2(self):
+            with open("/proc/version", "r") as f:
+                _f = f.read()
+            return True if "microsoft-standard-WSL2" in _f else False
+
+        @property
+        def SWAP_MEMORY_AVAIL(self):
+            return self._device_dram_stat[2]
+
     @property
-    def LINUX(self):
-        return True if self.OS == "Linux" else False
+    def CPU_NAME(self):
+        return self._device_cpu_stat[0]
 
-    if LINUX:
-        # Define if Linux is WSL2.
-        @property
-        def WSL2(self):
-            with open("/proc/version", "r") as _:
-                _ = _.read().splitlines()
-            return True if "microsoft-standard-WSL2" in _ else False
+    @property
+    def CPU_CORE(self):
+        return self._device_cpu_stat[1]
+
+    @property
+    def CPU_ARCH(self):
+        return self._device_cpu_stat[2]
+
+    @property
+    def PHYSICAL_MEMORY_TOTAL(self):
+        return self._device_dram_stat[0]
+
+    @property
+    def PHYSICAL_MEMORY_AVAIL(self):
+        return self._device_dram_stat[1]
+
+    @property
+    def DISK_REPO_PATH(self):
+        return self._device_disk_stat[0]
+
+    @property
+    def DISK_REPO_MOUNT(self):
+        return self._device_disk_stat[1]
+
+    @property
+    def DISK_TOTAL_SPACE(self):
+        return self._device_disk_stat[2]
+
+    @property
+    def DISK_USED_SPACE(self):
+        return self._device_disk_stat[3]
+
+    @property
+    def DISK_AVAIL_SPACE(self):
+        return self._device_disk_stat[4]
+
+    @property
+    def DISK_USAGE_RATIO(self):
+        return self._device_disk_stat[5]
 
     # Define Windows Registry Editor grep function in Windows platform.
     def get_regedit(
@@ -534,9 +444,9 @@ class Device:
         """
         ## Get-Regedit
         Function to get Key-Value in Windows Registry Editor.
-        `root_key`: Root Keys or Predefined Keys.\nYou can type-in Regedit style or pwsh style as the choice below:\n
-        - `HKEY_LOCAL_MACHINE` with pwsh alias `HKLM` \n
-        - `HKEY_CURRENT_USER` with pwsh alias `HKCU` \n
+        `root_key`: Root Keys or Predefined Keys.You can type-in Regedit style or pwsh style as the choice below:
+        - `HKEY_LOCAL_MACHINE` with pwsh alias `HKLM`
+        - `HKEY_CURRENT_USER` with pwsh alias `HKCU`
         """
 
         from winreg import HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER, QueryValueEx, OpenKey
@@ -565,7 +475,7 @@ class Device:
 
         import sys
 
-        if sys.platform == "win32":
+        if self.OS == "Windows":
             _os_major = platform.release()
             _os_build = platform.version()
             _os_update = self.get_regedit(
@@ -575,7 +485,7 @@ class Device:
             )
 
             return (platform.system(), _os_major, _os_update, _os_build)
-        elif sys.platform.capitalize() == "Linux":
+        elif self.OS == "Linux":
             with open("/proc/version", "r") as f:
                 _f = f.read().splitlines()
                 for _line in _f:
@@ -613,14 +523,14 @@ class Device:
 
     def device_cpu_status(self):
         """
-        **Warning:** This function may broken in Cluster systems.\n
+        **Warning:** This function may broken in Cluster systems.
         Return CPU status, include its name, architecture, total cpu count.
         -> `(CPU_NAME, CPU_ARCH, CPU_CORES)`
         """
 
         import os, platform, subprocess, re
 
-        if self.WINDOWS:
+        if self.is_windows:
             _cpu_name = self.get_regedit(
                 "HKLM",
                 r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
@@ -629,9 +539,9 @@ class Device:
             _cpu_arch = platform.machine()
             _cpu_core = os.cpu_count()
 
-            return (_cpu_name, _cpu_arch, _cpu_core)
+            return (_cpu_name, _cpu_core, _cpu_arch)
 
-        elif self.LINUX:
+        elif self.is_linux:
             _cpu_name = (
                 re.search(
                     r"^\s*Model name:\s*(.+)$",
@@ -646,7 +556,7 @@ class Device:
             _cpu_arch = platform.machine()
             _cpu_core = os.cpu_count()
 
-            return (_cpu_name, _cpu_arch, _cpu_core)
+            return (_cpu_name, _cpu_core, _cpu_arch)
 
         else:
             # <ADD BSD/Intel_MAC ???>
@@ -655,13 +565,13 @@ class Device:
 
     def device_gpu_list(self):
         """
-        Returns a list contains GPI info tuple on Windows platform.\n
-        If on Linux or Windows python environment have no `pywin32` module, we skip test as return `None`. \n
-        - Windows: `[(GPU_NUM, GPU_NAME, GPU_VRAM), (...), ...]` or `None`\n
+        Returns a list contains GPU info tuple on Windows platform.
+        If on Linux or Windows python environment have no `pywin32` module, we skip test as return `None`.
+        - Windows: `[(GPU_NUM, GPU_NAME, GPU_VRAM), (...), ...]` or `None`
         - Linux: `None`
         - Others: `None`
         """
-        if self.WINDOWS:
+        if self.is_windows:
             GPU_STATUS_LIST = []
             try:
                 from win32com import client
@@ -693,12 +603,12 @@ class Device:
 
     def device_dram_status(self):
         """
-        Analyze Device's DRAM Status. Both on Windows and Linux returns a tuple.\n
-        - Windows: `(DRAM_PHYS_TOTAL, DRAM_PHYS_AVAIL, DRAM_VITURAL_AVAIL)`\n
-        - Linux:   `(MEM_PHYS_TOTAL , MEM_PHYS_AVAIL , MEM_SWAP_AVAIL)`\n
+        Analyze Device's DRAM Status. Both on Windows and Linux returns a tuple.
+        - Windows: `(DRAM_PHYS_TOTAL, DRAM_PHYS_AVAIL, DRAM_VITURAL_AVAIL)`
+        - Linux:   `(MEM_PHYS_TOTAL , MEM_PHYS_AVAIL , MEM_SWAP_AVAIL)`
         -  Others: `None`.
         """
-        if self.WINDOWS:
+        if self.is_windows:
             import ctypes
 
             class memSTAT(ctypes.Structure):
@@ -726,7 +636,7 @@ class Device:
             )
 
             return (MEM_PHYS_TOTAL, MEM_PHYS_AVAIL, MEM_VITURAL_AVAIL)
-        elif self.LINUX:
+        elif self.is_linux:
             import re
 
             with open("/proc/meminfo", "r") as f:
@@ -752,8 +662,8 @@ class Device:
         """
         Return a tuple with Disk Total/Usage messages.
         `(DISK_DEVICE, DISK_MOUNT_POINT, DISK_TOTAL_SPACE, DISK_USAGE_SPACE, DISK_AVAIL_SPACE, DISK_USAGE_RATIO)`
-        - `DISK_DEVICE`: Returns `str`. The device "contains this repo" name and its mounting point.\n
-         - Windows: Returns a Drive Letter. eg `F:/` or `F:`\n
+        - `DISK_DEVICE`: Returns `str`. The device "contains this repo" name and its mounting point.
+         - Windows: Returns a Drive Letter. eg `F:/` or `F:`
          - Linux: Returns disk's mounted device name and its mounting point. eg `/dev/sdd at: /`
         - `DISK_REPO_POINT`: Returns `str`. TheRock current repo abs path.
         - `DISK_TOTAL_SPACE`: Returns `float`. Current repo stored disk's total space.
@@ -766,7 +676,7 @@ class Device:
         from shutil import disk_usage
         from pathlib import Path
 
-        if self.WINDOWS:
+        if self.is_windows:
             repo_path = TheRock.repo()
             repo_disk = os.path.splitdrive(repo_path)[0]
 
@@ -786,7 +696,7 @@ class Device:
                 DISK_USAGE_RATIO,
             )
 
-        elif self.LINUX:
+        elif self.is_linux:
             repo_path = TheRock.repo()
             DISK_STATUS_QUERY = (
                 subprocess.run(
@@ -822,113 +732,115 @@ class Device:
             )
 
     # Define system's tools/utilities status.
-    if True:
 
-        @property
-        def git(self):
-            return where("git")
+    @property
+    def git(self):
+        return Find_Program("git")
 
-        @property
-        def git_lfs(self):
-            return where("git-lfs")
+    @property
+    def git_lfs(self):
+        return Find_Program("git-lfs")
 
-        @property
-        def python(self):
-            return where("python") if self.WINDOWS else where("python3")
+    @property
+    def python(self):
+        return Find_Program("python") if self.is_windows else Find_Program("python3")
 
-        @property
-        def uv(self):
-            return where("uv")
+    @property
+    def cmake(self):
+        return Find_Program("cmake")
 
-        @property
-        def cmake(self):
-            return where("cmake")
+    @property
+    def ccache(self):
+        return Find_Program("ccache")
 
-        @property
-        def ccache(self):
-            return where("ccache")
-
-        @property
-        def ninja(self):
-            return where("ninja")
+    @property
+    def ninja(self):
+        return Find_Program("ninja")
 
     ## Check if system's GCC toolchain exist.
-    if True:
+
+    @property
+    def gcc(self):
+        return Find_Program("gcc")
+
+    @property
+    def gxx(self):
+        return Find_Program("g++")
+
+    @property
+    def gfortran(self):
+        return Find_Program("gfortran")
+
+    @property
+    def gcc_as(self):
+        return Find_Program("as")
+
+    @property
+    def gcc_ar(self):
+        return Find_Program("ar")
+
+    @property
+    def ld(self):
+        return Find_Program("ld")
+
+    ## Check if system's MSVC toolchain exist and VS20XX variables.
+
+    if is_windows:
 
         @property
-        def gcc(self):
-            return where("gcc")
-
-        @property
-        def gxx(self):
-            return where("g++")
-
-        @property
-        def gfortran(self):
-            return where("gfortran")
-
-        @property
-        def gcc_as(self):
-            return where("as")
-
-        @property
-        def gcc_ar(self):
-            return where("ar")
-
-        @property
-        def ld(self):
-            return where("ld")
-
-    ## Check if system's MSVC toolchain exist. If not WINDOWS just return Not found and None.
-
-    if WINDOWS:
-
-        @property
-        def msvc(self):
-            return where("cl")
+        def cl(self):
+            return Find_Program("cl")
 
         @property
         def ml64(self):
-            return where("ml64")
+            return Find_Program("ml64")
 
         @property
         def lib(self):
-            return where("lib")
+            return Find_Program("lib")
 
         @property
         def link(self):
-            return where("link")
+            return Find_Program("link")
 
         @property
         def rc(self):
-            return where("rc")
-
-    if WINDOWS:
+            return Find_Program("rc")
 
         @property
-        def hipcc(self):
-            return where("hipcc")
-
-    # Check if Windows have HIP SDK, ROCM_HOME.
-    if WINDOWS:
-
-        @property
-        def ROCM_HOME(self):
-            _rocm_home = os.getenv("ROCM_HOME")
-            return _rocm_home if _rocm_home is not None else None
+        def VSVER(self):
+            """
+            Define Visual Studio version.
+            """
+            _VSVER_NUM = os.getenv("VisualStudioVersion")
+            return (
+                None if (_VSVER_NUM is None or _VSVER_NUM == "") else float(_VSVER_NUM)
+            )
 
         @property
-        def HIP_PATH(self):
-            hipcc = self.hipcc
-            if hipcc.exe is not None:
-                _hip_path = Path(hipcc.exe).parent.parent.resolve()
+        def VS20XX(self):
+            """
+            Define Visual Studio yearly version.
+            """
+            if self.VSVER is not None:
+                match self.VSVER:
+                    case 17.0:
+                        return "VS2022"
+                    case 16.0:
+                        return "VS2019"
+                    case 15.0:
+                        return "VS2017"
+                    case 14.0:
+                        return "VS2015"
+                    case _:
+                        return "Legacy"
             else:
-                _hip_path = os.getenv("HIP_PATH")
-            return _hip_path if _hip_path is not None else None
+                return False
 
         @property
         def VC_VER(self):
-            _cl = self.msvc.exe
+            """Define MSVC build is v14X version."""
+            _cl = self.cl.exe
             _vc_ver = os.getenv("VCToolsVersion")
 
             if _vc_ver == "14.43.34808":
@@ -947,27 +859,32 @@ class Device:
 
         @property
         def VS20XX_INSTALL_DIR(self):
+            """Find Environment Variable `VSINSTALLDIR` to show the current installed VS20XX location."""
             _dir = os.getenv("VSINSTALLDIR")
             return _dir if _dir is not None else None
 
         @property
-        def VS_SDK(self):
+        def VC_SDK(self):
+            """Define Visual Studio current used Windows SDK version."""
             _sdk = os.getenv("WindowsSDKVersion")
             return _sdk.replace("\\", "") if _sdk is not None else None
 
         @property
-        def VS_HOST(self):
+        def VC_HOST(self):
+            """Find VC++ compiler host environment."""
             _host = os.getenv("VSCMD_ARG_HOST_ARCH")
             return _host if _host is not None else None
 
         @property
-        def VS_TARGET(self):
+        def VC_TARGET(self):
+            """Find VC++ compiler target environment."""
             _target = os.getenv("VSCMD_ARG_TGT_ARCH")
             return _target if _target is not None else None
 
         @property
         def MAX_PATH_LENGTH(self):
-            if self.WINDOWS:
+            """Find if Windows machine enabled Long PATHs."""
+            if self.is_windows:
                 _long_path = self.get_regedit(
                     "HKLM",
                     r"SYSTEM\CurrentControlSet\Control\FileSystem",
@@ -977,16 +894,28 @@ class Device:
             else:
                 return None
 
+    # Find if device have ROCM_HOME/HIP_DIR.
+    # TODO: Finds hipcc, AMD-LLVM toolchain if ROCM_HOME/HIP_DIR found.
+    # Currently for detection yet, not yet add to tests.
+
+    @property
+    def ROCM_HOME(self):
+        return os.getenv("ROCM_HOME")
+
+    @property
+    def HIP_PATH(self):
+        return os.getenv("HIP_PATH")
+
     # Define OS configuration.
     @property
     def OS_STATUS(self):
-        if self.WINDOWS:
-            return f"{self.OS_NAME} {self.OS_PATCH}, build {self.OS_BUILD}"
-        elif self.LINUX:
+        if self.is_windows:
+            return self.OS_NAME
+        elif self.is_linux:
             return (
-                f"{self.OS_TYPE}, GNU/Linux {self.OS_KERNEL} (WSL2)"
-                if self.WSL2
-                else f"{self.OS_TYPE}, GNU/Linux {self.OS_KERNEL} (WSL2)"
+                f"{self.OS_NAME}, GNU/Linux {self.OS_KERNEL} (WSL2)"
+                if self.is_WSL2
+                else f"{self.OS_NAME}, GNU/Linux {self.OS_KERNEL} (WSL2)"
             )
         else:
             pass
@@ -999,70 +928,74 @@ class Device:
     # Define GPU list status.
     @property
     def GPU_STATUS(self):
-        if self.device_gpu_list() is not None:
+        if self._device_gpu_list is not None:
             _gpulist = ""
-            for _gpu_info in self.device_gpu_list():
+            for _gpu_info in self._device_gpu_list:
                 _gpu_num, _gpu_name, _gpu_vram = _gpu_info
-                _gpulist += (
-                    f"GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)\n    "
-                )
+                _gpulist += f"""GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)
+    """
             return _gpulist
-        elif self.device_gpu_list() is None:
-            cstring(
+
+        elif self.is_linux:
+            return cstring(f"{Emoji.Warn} Skip GPU detection on Linux.", "warn")
+
+        elif self._device_gpu_list is None:
+            return cstring(
                 f"{Emoji.Warn} Python module 'pywin32' not found. Skip GPU detection.",
                 "warn",
             )
-        else:
-            cstring(f"{Emoji.Warn} Skip GPU detection on Linux.", "warn")
 
     # Define Memory Device status.
     @property
     def MEM_STATUS(self):
-        if self.WINDOWS:
-            return f"Total Physical Memory: {self.MEM_PHYS_TOTAL:.2f} GB, Avail Physical Memory: {self.MEM_PHYS_AVAIL:.2f} GB, Avail Virtual Memory: {self.MEM_VIRTUAL_AVAIL:.2f} GB"
-        elif self.LINUX:
-            return f"Total Physical Memory: {self.MEM_PHYS_TOTAL:.2f} GB, Avail Physical Memory: {self.MEM_PHYS_AVAIL:.2f} GB, Avail Swap Memory: {self.MEM_SWAP_AVAIL:.2f} GB"
+        if self.is_windows:
+            return f"""Total Physical Memory: {self.PHYSICAL_MEMORY_TOTAL:.2f} GB
+                Avail Physical Memory: {self.PHYSICAL_MEMORY_AVAIL:.2f} GB
+                Avail Virtual Memory: {self.VIRTUAL_MEMORY_AVAIL:.2f} GB
+            """
+        elif self.is_linux:
+            return f"""Total Physical Memory: {self.PHYSICAL_MEMORY_TOTAL:.2f} GB
+                Avail Physical Memory: {self.PHYSICAL_MEMORY_AVAIL:.2f} GB
+                Avail Swap Memory: {self.SWAP_MEMORY_AVAIL:.2f} GB
+            """
         else:
             pass
 
-    # Define Disk Device status. DRIVE_STATUS <--> DISK_STATUS.
-    @property
-    def DRIVE_STATUS(self):
-        return f"""Disk Total Space: {self.DISK_TOTAL_SPACE:.2f} GB | Disk Avail Space: {self.DISK_AVAIL_SPACE:.2f} GB | Disk Used: {self.DISK_USED_SPACE:.2f} GB |  Disk Usage: {self.DISK_USAGE_RATIO:.2f} %
-                Current Repo path: {self.DISK_REPO_PATH}, Disk Device: {self.DISK_REPO_MOUNT}
-                """
-
+    # Define Disk Device status.
     @property
     def DISK_STATUS(self):
-        return f"""Disk Total Space: {self.DISK_TOTAL_SPACE:.2f} GB | Disk Avail Space: {self.DISK_AVAIL_SPACE:.2f} GB | Disk Used: {self.DISK_USED_SPACE:.2f} GB |  Disk Usage: {self.DISK_USAGE_RATIO:.2f} %
+        return f"""Disk Total Space: {self.DISK_TOTAL_SPACE:.2f} GB
+                Disk Avail Space: {self.DISK_AVAIL_SPACE:.2f} GB
+                Disk Used: {self.DISK_USED_SPACE:.2f} GB
+                Disk Usage: {self.DISK_USAGE_RATIO:.2f} %
                 Current Repo path: {self.DISK_REPO_PATH}, Disk Device: {self.DISK_REPO_MOUNT}
-                """
+        """
 
     @property
     def ENV_STATUS(self):
-        if self.WINDOWS:
+        if self.is_windows:
             return f"""Python ENV: {self.python.exe} ({self.python.env})
-                VS20XX: {self.VS20XX}
-                Cygwin: {self.CYGWIN}
-                MSYS2: {self.MSYS2}"""
-        elif self.LINUX:
-            return f"""Python3 VENV: {self.python.exe} ({self.python.env}) | WSL2: {self.WSL2}"""
+                Visual Studio: {self.VS20XX}
+                Cygwin: {self.is_cygwin}
+                MSYS2: {self.is_msys2}"""
+        elif self.is_linux:
+            return f"""Python3 VENV: {self.python.exe} ({self.python.env}) | WSL2: {self.is_WSL2}"""
         else:
             return f"""Python3 VENV: {self.python.exe} ({self.python.env}) """
 
     @property
     def SDK_STATUS(self):
-        if self.WINDOWS:
+        if self.is_windows:
 
             _vs20xx_stat = self.VS20XX if self.VS20XX else "Not Detected"
             _vs20xx_msvc = self.VC_VER if self.VC_VER else "Not Detected"
-            _vs20xx_sdk = self.VS_SDK if self.VS_SDK else "Not Detected"
+            _vs20xx_sdk = self.VC_SDK if self.VC_SDK else "Not Detected"
 
             _hipcc_stat = self.HIP_PATH if self.HIP_PATH else "Not Detected"
             _rocm_stat = self.ROCM_HOME if self.ROCM_HOME else "Not Detected"
 
-            return f"""Visual Studio:  {_vs20xx_stat} | Host/Target: {self.VS_HOST} --> {self.VS_TARGET}
-                VC++ Compiler:  {_vs20xx_msvc} ({self.msvc.version})
+            return f"""Visual Studio:  {_vs20xx_stat} | Host/Target: {self.VC_HOST} --> {self.VC_TARGET}
+                VC++ Compiler:  {_vs20xx_msvc} ({self.cl.version})
                 VC++ UCRT:      {_vs20xx_sdk}
                 AMD HIP SDK:    {_hipcc_stat}
                 AMD ROCm:       {_rocm_stat}
@@ -1070,7 +1003,7 @@ class Device:
 
     @property
     def summary(self):
-        if self.WINDOWS:
+        if self.is_windows:
             print(
                 f"""
         ===========    Build Environment Summary    ===========
@@ -1080,18 +1013,23 @@ class Device:
     {self.GPU_STATUS}
     RAM:        {self.MEM_STATUS}
     STORAGE:    {self.DISK_STATUS}
-    MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
+
     ENV:        {self.ENV_STATUS}
+
     SDK:        {self.SDK_STATUS}
+
+    MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
     """
             )
 
-        elif self.LINUX:
+        elif self.is_linux:
             print(
                 f"""
-    ===========    Build Environment Summary    ===========
+        ===========    Build Environment Summary    ===========
+
     OS:         {self.OS_STATUS}
     CPU:        {self.CPU_STATUS}
+    GPU:        {self.GPU_STATUS}
     RAM:        {self.MEM_STATUS}
     STORAGE:    {self.DISK_STATUS}
     """
@@ -1100,15 +1038,15 @@ class Device:
 
 #####################################################
 class DeviceChecker:
-    def __init__(self, device: Device):
+    def __init__(self, device: SystemInfo):
         self.device = device
         self.passed, self.warned, self.errs = 0, 0, 0
         self.check_record = []
 
     def msg_stat(
-        self, status: Literal["pass", "warn", "err"], program: where | str, message: str
+        self, status: Literal["pass", "warn", "err"], program: str, message: str
     ):
-        if isinstance(program, where):
+        if isinstance(program, Find_Program):
             match status:
                 case "pass":
                     _emoji = Emoji.Pass
@@ -1117,7 +1055,7 @@ class DeviceChecker:
                 case "err":
                     _emoji = Emoji.Err
 
-            return f"[{_emoji}][{program.name}] {message}"
+            return f"[{_emoji}][{program}] {message}"
 
         elif isinstance(program, str):
             match status:
@@ -1131,39 +1069,42 @@ class DeviceChecker:
             return f"[{_emoji}][{program}] {message}"
 
     #
-    #   check_UTILITIES(self, exception)
+    #   check_PROGRAM() -> check_status, except_description, check_Countering_Measure
     #
     #   Defines the tools what we found.
     #   Generally, If tools we not found, we select what we need to print, pre-manually.
-    #   >>>
-    #       if NOTFOUND and REQUIRED:
-    #           return FATAL
-    #       elif NOTFOUND but OPTIONAL:
-    #           return FAILED
-    #       elif FOUND but UNEXCEPTED:
-    #           return FAILED/FATAL
     #
-    #   Countering Mesure on Found status:
-    #     > True:   Found
-    #     > False:  Failed
-    #     > None:   Fatal
-
     #
-    #    check_PROGRAM() -> check_status, except_description, check_Countering_Mesure
+    #   Countering Measure on Found status:
+    #     > True:   Found(pass)
+    #     > False:  Failed(warn)
+    #     > None:   Fatal(Err)
+    #     > ... :   Not counting in and ignore components count.
+    #               Additionally, Ellipsis can be a placeholder wait for future change if we need.
     #
-
+    #     >>>       _result = True / False / None / ...
+    #
+    #   We handle the conditions like this:
+    #
+    #       if REQUIRED but NOTFOUND:   return FATAL
+    #       elif NOTFOUND and OPTIONAL: return ... (Ellipsis)
+    #       elif FOUND but UNEXCEPTED:  return FAILED/FATAL
+    #       elif FOUND and FIT:         return True
+    #
     # ===========      OS / CPU / Disk Testing      ===========
 
     def check_Device_OS(self):
-        if self.device.WINDOWS and not (self.device.CYGWIN or self.device.MSYS2):
+        if self.device.is_windows and not (
+            self.device.is_cygwin or self.device.is_msys2
+        ):
             _stat = self.msg_stat(
                 "pass",
                 "Operating System",
-                f"Detected OS is {self.device.OS_NAME} {self.device.OS_PATCH}",
+                f"Detected OS is {self.device.OS_NAME}",
             )
             _except = ""
             _result = True
-        elif self.device.CYGWIN or self.device.MSYS2:
+        elif self.device.is_cygwin or self.device.is_msys2:
             _stat = self.msg_stat(
                 "err", "Operating System", f"Detected OS is Cygwin/MSYS2."
             )
@@ -1178,32 +1119,29 @@ class DeviceChecker:
                 "err",
             )
             _result = None
-        elif self.device.LINUX and self.device.WSL2:
+        elif self.device.is_linux and (not self.device.is_WSL2):
             _stat = self.msg_stat(
                 "pass",
                 "Operating System",
-                f"Detected OS is {self.device.OS_TYPE} {self.device.OS_KERNEL}",
+                f"Detected OS is {self.device.OS_NAME} {self.device.OS_KERNEL}",
             )
             _except = ""
             _result = True
-        elif self.device.LINUX and (not self.device.WSL2):
+        elif self.device.is_linux and self.device.is_WSL2:
             _stat = self.msg_stat(
-                "warn",
+                "err",
                 "Operating System",
-                f"Detected OS is {self.device.OS_TYPE} {self.device.OS_KERNEL}",
+                f"Detected OS is {self.device.OS_NAME} (GNU/Linux {self.device.OS_KERNEL})",
             )
             _except = cstring(
                 f"""
-    We detect your Linux distro {self.device.OS_TYPE} is WSL2 environment.
-    TheRock team still not examined on WSL2 environment. We cannot guarantee the build on WSL2.
-    In current early state developement, TheRock have no ETA on WSL2 environment.
-    For developers want to try on WSL2, We're welcome for 3rd-party/anyone deploy it.
-    For nightly-stable-builds, please build it on Original Linux or Windows.
+    Found Linux distro {self.device.OS_NAME} is WSL2 environment.
+    WSL2 is not yet supported. Please use native Linux or native Windows instead.
         traceback: Detected Linux is WSL2
-        """,
-                "warn",
+    """,
+                "err",
             )
-            _result = False
+            _result = None
         else:
             _os = platform.system()
             _stat = self.msg_stat("err", "Operating System", f"Detected OS is {_os}")
@@ -1277,81 +1215,100 @@ class DeviceChecker:
         return _stat, _except, _result
 
     # ===========   General Tools/Utilities  ===========
-    def check_py(self):
-        py = self.device.python
-        py.description = "Python"
-        _env_ = py.env
+    def check_python(self):
+        python = self.device.python
+        python.description = "Python 3"
+        _env_ = python.env
 
-        if py.MAJOR_VERSION == 2:
-            _stat = self.msg_stat("err", py, f"Found Python is Python 2 at {py.exe}")
+        if python.MAJOR_VERSION == 2:
+            _stat = self.msg_stat("err", "Python 3", f"Found Python 2: {python.exe}")
             _except = cstring(
                 f"""
-    Found {py.name} is Python 2.
-    TheRock not support build on Python 2 environment. Please Switch to Python 3 environment.
-    We recommends you use Python 3.9 and newer versions.
+    Found Python is Python 2.
+    TheRock not support Python 2. Please Switch to Python 3.9+ versions.
         traceback: Python major version too old
-            > expected version: 3.9.X ≤ python ≤ 3.13.X, found {py.version}
+            > expected version: 3.9.X ≤ python ≤ 3.13.X, found {python.version}
     """,
                 "err",
             )
             _result = None
 
-        elif py.MINOR_VERSION <= 8:
+        elif python.MINOR_VERSION <= 8:
             _stat = self.msg_stat(
-                "warn", py, f"Found Python {py.version} at {py.exe} {_env_}."
+                "err",
+                "Python 3",
+                f"Found Python {python.version} at {python.exe} {_env_}.",
             )
             _except = cstring(
                 f"""
-    Found {py.name} version: {py.version}
-    TheRock team still not examine on these older Python versions yet, and seems will be deprecated in future release.
-    The build maybe success, but we do not promise the stability on older versions.
-        traceback: Python3 version may unstable due to Python3 version too old.
-            > expected version: 3.9.X ≤ python ≤ 3.13.X, found {py.version}
+    Found Python version: {python.version}
+    TheRock not support Python 3.8 and older versions. Please Switch to Python 3.9+ versions.
+            > expected version: 3.9.X ≤ python ≤ 3.13.X, found {python.version}
     """,
-                "warn",
+                "err",
             )
-            _result = False
+            _result = None
 
-        elif py.MINOR_VERSION >= 14:
+        elif python.Free_Threaded == True:
             _stat = self.msg_stat(
-                "warn", py, f"Found Python {py.version} at {py.exe} {_env_}."
+                "err", "Python 3", f"Found Python {python.exe} is No-GIL version."
             )
             _except = cstring(
                 f"""
-    Found {py.name} version: {py.version}
-    TheRock team still not test on these newer Python versions yet.
-    The build maybe success, but we do not promise the stability on new versions.
+    TheRock have not support Free-Threaded Python yet.
+
+        traceback: Found Python3 using Free-Threaded (No-GIL) version
+    """,
+                "err",
+            )
+            _result = None
+
+        elif python.MINOR_VERSION >= 14:
+            _stat = self.msg_stat(
+                "warn",
+                "Python 3",
+                f"Found Python {python.version} at {python.exe} {_env_}.",
+            )
+            _except = cstring(
+                f"""
+    Found Python version: {python.version}
+    Warning: These newer Python versions are not yet tested.
 
         traceback: Python3 version may unstable due to Python3 version too new.
-            > expected version: 3.9.X ≤ python ≤ 3.13.X, found {py.version}
+            > expected version: 3.9.X ≤ python ≤ 3.13.X, found {python.version}
     """,
                 "warn",
             )
             _result = False
 
-        elif not py._env:
+        elif python.env == "Global ENV":
             _stat = self.msg_stat(
-                "warn", py, f"Found Python {py.version} at {py.exe} {_env_}."
+                "warn",
+                "Python 3",
+                f"Found Python {python.version} at {python.exe} {_env_}.",
             )
             _except = cstring(
                 f"""
-    Found {py.name} is Global ENV ({py.exe}).
-    We recommends you using venv like uv to create a clear Python environment to build TheRock.
+    Found Python is Global ENV ({python.exe}).
+    We recommends you using venv create a clear Python environment to build TheRock.
     Parts of TheRock installed Python dependices may pollute your Global ENV.
+
         traceback: Detected Global ENV Python3 environment
-            > expected Python3 is Virtual ENV, found Global ENV: {py.exe}
+            > expected Python3 is Virtual ENV, found Global ENV: {python.exe}
     """,
                 "warn",
             )
             _result = False
 
-        elif py.env == "Conda ENV":
+        elif python.env == "Conda ENV":
             _stat = self.msg_stat(
-                "pass", py, f"Found Python {py.version} at {py.exe} ({_env_})."
+                "pass",
+                "Python 3",
+                f"Found Python {python.version} at {python.exe} ({_env_}).",
             )
             _except = cstring(
                 f"""
-    Note: Found Python ENV is Conda ENV.
+    Note: Found Conda ENV.
     """,
                 "hint",
             )
@@ -1359,7 +1316,9 @@ class DeviceChecker:
 
         else:
             _stat = self.msg_stat(
-                "pass", py, f"Found Python {py.version} at {py.exe} ({_env_})."
+                "pass",
+                "Python 3",
+                f"Found Python {python.version} at {python.exe} ({_env_}).",
             )
             _except = ""
             _result = True
@@ -1371,10 +1330,10 @@ class DeviceChecker:
         git.description = "Git version control system"
 
         if git.exe is None:
-            _stat = self.msg_stat("warn", git, f"Cannot found git.")
+            _stat = self.msg_stat("warn", "Git", f"Cannot found git.")
             _except = cstring(
                 f"""
-    We cannot found git ({git.description}).
+    We cannot find git ({git.description}).
     TheRock needs git program to fetch patches and sub-projects.
     For Windows users, please install it from Git for Windows installer, or winget/choco.
     For Linux users please install it from your Linux distro's package manager.
@@ -1388,7 +1347,9 @@ class DeviceChecker:
             _result = False
 
         else:
-            _stat = self.msg_stat("pass", git, f"Found git {git.version} at {git.exe}")
+            _stat = self.msg_stat(
+                "pass", "Git", f"Found git {git.version} at {git.exe}"
+            )
             _except = ""
             _result = True
         return _stat, _except, _result
@@ -1399,19 +1360,19 @@ class DeviceChecker:
 
         if gitlfs.exe is not None:
             _stat = self.msg_stat(
-                "pass", gitlfs, f"Found git-lfs {gitlfs.version} at {gitlfs.exe}"
+                "pass", "Git-LFS", f"Found git-lfs {gitlfs.version} at {gitlfs.exe}"
             )
             _except = ""
             _result = True
 
         else:
-            if self.device.WINDOWS:
+            if self.device.is_windows:
                 _stat = self.msg_stat(
-                    "warn", gitlfs, f"Cannot found git-lfs {gitlfs.version}."
+                    "warn", "Git-LFS", f"Cannot found git-lfs {gitlfs.version}."
                 )
                 _except = cstring(
                     f"""
-    We cannot found git-lfs ({gitlfs.description}). We recommends git-lfs for additional tools.
+    We cannot find git-lfs ({gitlfs.description}). We recommends git-lfs for additional tools.
     For Windows users, you can install it from Git-LFS for Windows installer, or winget/choco.
         PS > winget install --id GitHub.GitLFS -e
         PS > choco install git-lfs -y
@@ -1421,13 +1382,13 @@ class DeviceChecker:
                 )
                 _result = False
 
-            elif self.device.LINUX:
+            elif self.device.is_linux:
                 _stat = self.msg_stat(
-                    "err", gitlfs, f"Cannot found git-lfs {gitlfs.version}."
+                    "err", "Git-LFS", f"Cannot found git-lfs {gitlfs.version}."
                 )
                 _except = cstring(
                     f"""
-    We cannot found git-lfs program as TheRock required.
+    We cannot find git-lfs program as TheRock required.
     For Linux users please install it from your Linux distro's package manager.
         sh $ apt/dnf install git-lfs
 
@@ -1439,49 +1400,18 @@ class DeviceChecker:
 
         return _stat, _except, _result
 
-    def check_uv(self):
-        uv = self.device.uv
-        uv.description = "Astral uv Python package and project manager"
-
-        if uv.exe is None:
-            _stat = self.msg_stat("warn", uv, f"Cannot find Astral uv.")
-            _except = cstring(
-                f"""
-    We recommends using uv ({uv.description}) to fastly build and manage Python VENV.
-    For Windows users can install via Global ENV Python PyPI or use Astral official powershell script.
-    For Linux   users can install via wget/curl command.
-        PS > powershell/pwsh -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-        PS > pip install uv
-        sh $ wget -qO- https://astral.sh/uv/install.sh | sh
-        sh $ curl -LsSf https://astral.sh/uv/install.sh | sh
-    Note: uv is a optional compoment. You can Ignore it if you prefer using venv or conda.
-        traceback: Optional program uv not found""",
-                "warn",
-            )
-            _result = False
-
-        else:
-            _stat = self.msg_stat(
-                "pass", uv, f"Found Astral uv {uv.version} at {uv.exe}"
-            )
-            _except = ""
-            _result = True
-
-        return _stat, _except, _result
-
     def check_cmake(self):
         cmake = self.device.cmake
         cmake.description = "Cross-Platform Make (CMake)"
 
         if cmake.exe is None:
-            _stat = self.msg_stat("err", cmake, f"Cannot find CMake program.")
+            _stat = self.msg_stat("err", "CMake", f"Cannot find CMake program.")
             _except = cstring(
                 f"""
-    We cannot find any possiable cmake program. Please check cmake program is installed and in PATH.
-    TheRock is a CMake super project requires cmake program.
-    For Windows users can install VS20XX, Strawberry Perl with its combined cmake or via command.
+    We cannot find any possiable CMake program. Please check CMake program is installed and in PATH.
+    TheRock is a CMake super project requires CMake program.
+    For Windows users, please install CMake for Windows support via Visual Studio Installer.
     For Linux users please install it via package manager.
-        PS > pip/uv pip/winget/choco install cmake
         sh $ apt/dnf install cmake
         sh $ pacman -S cmake
 
@@ -1493,13 +1423,14 @@ class DeviceChecker:
 
         elif cmake.MAJOR_VERSION >= 4:
             _stat = self.msg_stat(
-                "warn", cmake, f"Found CMake {cmake.MAJOR_VERSION} at {cmake.exe}"
+                "warn", "CMake", f"Found CMake {cmake.MAJOR_VERSION} at {cmake.exe}"
             )
             _except = cstring(
                 f"""
     We found you're using CMake program is CMake 4 (cmake {cmake.version}).
     The support of CMake 4 is still not confirmed, and the different CMake behavior may effect TheRock build.
     Please downgrade it and re-try again.
+
         traceback: CMake program too new may cause unstable
             expected: 3.25.X ≤ cmake ≤ 3.31.X, found {cmake.version}
     """,
@@ -1509,13 +1440,14 @@ class DeviceChecker:
 
         elif cmake.MAJOR_VERSION == 3 and cmake.MINOR_VERSION < 25:
             _stat = self.msg_stat(
-                "warn", cmake, f"Found CMake {cmake.version} at {cmake.exe}"
+                "warn", "CMake", f"Found CMake {cmake.version} at {cmake.exe}"
             )
             _except = cstring(
                 f"""
     We found you're CMake program is ({cmake.version}).
     Your CMake version is too old to TheRock project that requires version 3.25.
     Please upgrade your CMake program version.
+
         traceback: CMake program too old excluded by TheRock Top-Level CMakeLists.txt rules `cmake_minimum_required()`
             expected: 3.25.X ≤ cmake ≤ 3.31.X, found {cmake.version}
     """,
@@ -1525,7 +1457,7 @@ class DeviceChecker:
 
         else:
             _stat = self.msg_stat(
-                "pass", cmake, f"Found CMake {cmake.version} at {cmake.exe}"
+                "pass", "CMake", f"Found CMake {cmake.version} at {cmake.exe}"
             )
             _except = ""
             _result = True
@@ -1537,12 +1469,12 @@ class DeviceChecker:
         ninja.description = "A small buildsystem focus on speed"
 
         if ninja.exe is None:
-            _stat = self.msg_stat("err", ninja, f"Ninja Generator not found.")
+            _stat = self.msg_stat("err", "Ninja-build", f"Ninja Generator not found.")
             _except = cstring(
                 f"""
     We can't find required generator "Ninja".
     Ninja is TheRock project current supported generator.
-    For Windows users, please use ninja from VS20XX or Strawberry Perl, or build from source. Install from command line, please avoid version 1.11.
+    For Windows users, please use ninja from VS20XX, or build from source. Install from command line, please avoid version 1.11.
     For Linux users, please install it via package manager or build from source.
         PS > pip/uv pip/choco/winget install ninja
         sh $ apt/dnf install ninja-build
@@ -1555,7 +1487,7 @@ class DeviceChecker:
 
         elif ninja.MINOR_VERSION == 11:
             _stat = self.msg_stat(
-                "warn", ninja, f"Found Ninja {ninja.version} at {ninja.exe}"
+                "warn", "Ninja-build", f"Found Ninja {ninja.version} at {ninja.exe}"
             )
             _except = cstring(
                 f"""
@@ -1569,7 +1501,7 @@ class DeviceChecker:
 
         else:
             _stat = self.msg_stat(
-                "pass", ninja, f"Found Ninja {ninja.version} at {ninja.exe}"
+                "pass", "Ninja-build", f"Found Ninja {ninja.version} at {ninja.exe}"
             )
             _except = ""
             _result = True
@@ -1581,25 +1513,13 @@ class DeviceChecker:
         ccache.description = "Compiler Cache"
 
         if ccache.exe is None:
-            _stat = self.msg_stat("warn", ccache, f"ccache not found.")
-            _except = cstring(
-                f"""
-    We cannot find ccache ({ccache.description}).
-    Ccache is a program stores compiler cache, ready for accelerates re-build speed.
-    You can install it with Strawberry Perl, via package manager, or build it from source.
-    Note: ccache is a optional compoment. You can Ignore it if you not using ccache.
-    Note: ccache is still investigating the exact proper options on Windows platform.
-    If you want to avoid this issue, please ignore ccache setup and to avoid use
-       CMake cache variable `CMAKE_C_COMPILER_LAUNCHER` and `CMAKE_CXX_COMPILER_LAUNCHER`.
-        traceback: Optional program ccache not installed or in PATH
-    """,
-                "warn",
-            )
-            _result = False
+            _stat = self.msg_stat("warn", "ccache", f"ccache not found.")
+            _except = ""
+            _result = ...
 
         else:
             _stat = self.msg_stat(
-                "pass", ccache, f"Found ccache {ccache.version} at {ccache.exe}"
+                "pass", "ccache", f"Found ccache {ccache.version} at {ccache.exe}"
             )
             _except = cstring(
                 f"""
@@ -1617,11 +1537,10 @@ class DeviceChecker:
     #  ===========  GNU GCC Compiler Toolchain  ===========
     def check_gcc(self):
         gcc = self.device.gcc
-        gcc.description = "GCC Compiler C Language Frontend"
 
-        if self.device.LINUX:
+        if self.device.is_linux:
             if gcc.exe is None:
-                _stat = self.msg_stat("err", gcc, f"Cannot find {gcc.name} compiler.")
+                _stat = self.msg_stat("err", "GCC", f"Cannot find {gcc.name} compiler.")
                 _except = cstring(
                     f"""
     We can't find required C/C++ compilers.
@@ -1630,7 +1549,7 @@ class DeviceChecker:
         sh $ apt/dnf install gcc g++ binutils
 
         traceback: GCC program {gcc.name} not installed or not in PATH
-           > Hint: Missing GNU {gcc.description}
+           > Hint: Missing GCC Compiler C Language Frontend
     """,
                     "err",
                 )
@@ -1639,8 +1558,8 @@ class DeviceChecker:
             else:
                 _stat = self.msg_stat(
                     "pass",
-                    gcc,
-                    f"Found GCC compiler program {gcc.name} {gcc.version} at {gcc.exe}",
+                    "GCC",
+                    f"Found GCC compiler program gcc {gcc.version} at {gcc.exe}",
                 )
                 _except = ""
                 _result = True
@@ -1649,11 +1568,10 @@ class DeviceChecker:
 
     def check_gxx(self):
         gxx = self.device.gxx
-        gxx.description = "GCC Compiler C++ Language Frontend"
 
-        if self.device.LINUX:
+        if self.device.is_linux:
             if gxx.exe is None:
-                _stat = self.msg_stat("err", gxx, f"Cannot find {gxx.name} compiler.")
+                _stat = self.msg_stat("err", "GCC", f"Cannot find g++ .")
                 _except = cstring(
                     f"""
     We can't find required C/C++ compilers.
@@ -1662,7 +1580,7 @@ class DeviceChecker:
         sh $ apt/dnf install gcc g++ binutils
 
         traceback: GCC program {gxx.name} not installed or not in PATH
-           > Hint: Missing GNU {gxx.description}
+           > Hint: Missing GCC Compiler C++ Language Frontend
     """,
                     "err",
                 )
@@ -1671,8 +1589,8 @@ class DeviceChecker:
             else:
                 _stat = self.msg_stat(
                     "pass",
-                    gxx,
-                    f"Found GCC compiler program {gxx.name} {gxx.version} at {gxx.exe}",
+                    "GCC",
+                    f"Found GCC compiler program g++ {gxx.version} at {gxx.exe}",
                 )
                 _except = ""
                 _result = True
@@ -1681,20 +1599,20 @@ class DeviceChecker:
 
     def check_gfortran(self):
         gfortran = self.device.gfortran
-        gfortran.description = "GNU Fortran Compiler"
 
         if gfortran.exe is None:
             _stat = self.msg_stat(
-                "err", gfortran, f"Cannot found {gfortran.description}."
+                "err", "gfortran", f"Cannot found GCC Fortran Compiler."
             )
             _except = cstring(
                 f"""
-    We cannot found any available {gfortran.description}.
+    We cannot find any available Fortran Compiler.
     On Windows, please install gfortran in your device, via Strawberry/MinGW-builds etc.
     On Linux, please install via package managers.
-    Note: This requirement will be deprecated when TheRock team enables Flang/flang-new (LLVM based Fortran Compiler)
-        build on TheRock sub-project amd-llvm (ROCM/llvm-project).
-        traceback: No available Fortran compiler 'gfortran'
+        sh $ apt/dnf install gfortran
+        sh $ pacman -S gfortran
+
+        traceback: No available fortran compiler
     """,
                 "err",
             )
@@ -1703,8 +1621,8 @@ class DeviceChecker:
         else:
             _stat = self.msg_stat(
                 "pass",
-                gfortran,
-                f"Found Fortran compiler {gfortran.name} {gfortran.version} at {gfortran.exe}",
+                "gfortran",
+                f"Found Fortran compiler gfortran {gfortran.version} at {gfortran.exe}",
             )
             _except = ""
             _result = True
@@ -1713,22 +1631,19 @@ class DeviceChecker:
 
     def check_gcc_ar(self):
         gcc_ar = self.device.gcc_ar
-        gcc_ar.description = "GNU Binutils Archiver"
 
-        if self.device.LINUX:
+        if self.device.is_linux:
             if gcc_ar.exe is None:
-                _stat = self.msg_stat(
-                    "err", gcc_ar, f"Can't found {gcc_ar.description}."
-                )
+                _stat = self.msg_stat("err", "Binutils", f"Can't found GNU Archiver.")
                 _except = cstring(
                     f"""
     We can't found GNU toolchain required Archiver/Linker.
     Please configure your binutils is installed correctly.
     Please install it via package managers.
-        sh $ apt/dnf install gcc g++ binutils
+        sh $ apt/dnf install binutils
 
         traceback: GNU binutils {gcc_ar} not installed or not in PATH
-           > Hint: Missing GNU {gcc_ar.description}
+           > Hint: Missing GNU Archiver
     """,
                     "err",
                 )
@@ -1737,8 +1652,8 @@ class DeviceChecker:
             else:
                 _stat = self.msg_stat(
                     "pass",
-                    gcc_ar,
-                    f"Found {gcc_ar.description} {gcc_ar.version} at {gcc_ar.exe}",
+                    "Binutils",
+                    f"Found GNU Archiver {gcc_ar.version} at {gcc_ar.exe}",
                 )
                 _except = ""
                 _result = True
@@ -1747,22 +1662,19 @@ class DeviceChecker:
 
     def check_gcc_as(self):
         gcc_as = self.device.gcc_as
-        gcc_as.description = "GNU Binutils Assembler"
 
-        if self.device.LINUX:
+        if self.device.is_linux:
             if gcc_as.exe is None:
-                _stat = self.msg_stat(
-                    "err", gcc_as, f"Can't found {gcc_as.description}."
-                )
+                _stat = self.msg_stat("err", "Binutils", f"Can't found GNU Assembler.")
                 _except = cstring(
                     f"""
     We can't found GNU {gcc_as}.
     Please configure your binutils is installed correctly.
     Please install it via package managers.
-        sh $ apt/dnf install gcc g++ binutils
+        sh $ apt/dnf install binutils
 
         traceback: GNU binutils {gcc_as} not installed or not in PATH
-           > Hint: Missing GNU {gcc_as.description}
+           > Hint: Missing GNU Assembler
     """,
                     "err",
                 )
@@ -1771,8 +1683,8 @@ class DeviceChecker:
             else:
                 _stat = self.msg_stat(
                     "pass",
-                    gcc_as,
-                    f"Found {gcc_as.description} {gcc_as.version} at {gcc_as.exe}",
+                    "Binutils",
+                    f"Found GNU Assembler {gcc_as.version} at {gcc_as.exe}",
                 )
                 _except = ""
                 _result = True
@@ -1781,11 +1693,11 @@ class DeviceChecker:
 
     def check_ld(self):
         ld = self.device.ld
-        ld.description = "GNU Binutils Linker"
+        ld.description = "GNU Linker"
 
-        if self.device.LINUX:
+        if self.device.is_linux:
             if ld.exe is None:
-                _stat = self.msg_stat("err", ld, f"Can't found {ld.description}.")
+                _stat = self.msg_stat("err", "Binutils", f"Can't found GNU Linker.")
                 _except = cstring(
                     f"""
     We can't found GNU toolchain required Archiver/Linker.
@@ -1794,7 +1706,7 @@ class DeviceChecker:
         sh $ apt/dnf install gcc g++ binutils
 
         traceback: GNU binutils {ld} not installed or not in PATH
-           > Hint: Missing GNU {ld.description}
+           > Hint: Missing GNU Linker
     """,
                     "err",
                 )
@@ -1802,7 +1714,7 @@ class DeviceChecker:
 
             else:
                 _stat = self.msg_stat(
-                    "pass", ld, f"Found {ld.description} {ld.version} at {ld.exe}"
+                    "pass", "Binutils", f"Found GNU Linker {ld.version} at {ld.exe}"
                 )
                 _except = ""
                 _result = True
@@ -1811,18 +1723,18 @@ class DeviceChecker:
 
     #  ===========  MSVC Compiler Toolchain  ===========
     def check_msvc(self):
-        cl = self.device.msvc
-        cl.description = "Microsoft C/C++ compiler Driver"
+        cl = self.device.cl
 
-        if self.device.WINDOWS:
-            if cl.exe is None:
-                _stat = self.msg_stat(
-                    "err", cl, f"Cannot found MSVC program cl.exe {cl.description}"
-                )
-                _except = cstring(
-                    f"""
+        if cl.exe is None:
+            _stat = self.msg_stat(
+                "err",
+                "MSVC",
+                f"Cannot found Microsoft Optimized C/C++ compiler Driver cl.exe.",
+            )
+            _except = cstring(
+                f"""
     We can't found any available MSVC compiler on your Windows device.
-    MSVC (Microsoft Optimized Visual C/C++ compiler Driver), The C/C++ compliler for native Windows development.
+    MSVC (Microsoft Visual C/C++), The C/C++ compliler for native Windows development.
     Please re-configure your Visual Studio installed C/C++ correctly.
         Visual Studio Installer > C/C++ Development for Desktop:
         - MSVC v14X
@@ -1833,36 +1745,34 @@ class DeviceChecker:
         - C++ Address Sanitizer
         traceback: Required VC++ compiler not found
     """,
-                    "err",
-                )
-                _result = None
+                "err",
+            )
+            _result = None
 
-            else:
-                _stat = self.msg_stat(
-                    "pass",
-                    cl,
-                    f"Found MSVC {self.device.VC_VER} ({cl.version}) at {cl.exe}",
-                )
-                _except = ""
-                _result = True
+        else:
+            _stat = self.msg_stat(
+                "pass",
+                "MSVC",
+                f"Found MSVC {self.device.VC_VER} ({cl.version}) at {cl.exe}",
+            )
+            _except = ""
+            _result = True
 
-            return _stat, _except, _result
+        return _stat, _except, _result
 
     def check_ml64(self):
         ml64 = self.device.ml64
-        ml64.description = "Microsoft Macro Assembler"
 
-        if self.device.WINDOWS:
-            if ml64.exe is None:
-                _stat = self.msg_stat(
-                    "err",
-                    ml64,
-                    f"Cannot found MSVC program ml64.exe ({ml64.description}).",
-                )
-                _except = cstring(
-                    f"""
-    We can't found any available MSVC compiler on your Windows device.
-    MSVC {ml64.description}, The Assembler for native Windows development.
+        if ml64.exe is None:
+            _stat = self.msg_stat(
+                "err",
+                "MSVC",
+                f"Cannot found Microsoft Macro Assembler.",
+            )
+            _except = cstring(
+                f"""
+    We can't found any available Microsoft Macro Assembler on your Windows device.
+    ml64.exe is the Assembler for native Windows development.
     Please re-configure your Visual Studio installed C/C++ correctly.
         Visual Studio Installer > C/C++ Development for Desktop:
         - MSVC v14X
@@ -1871,44 +1781,41 @@ class DeviceChecker:
         - Windows SDK 10.0.XXXXX
         - CMake for Windows
         - C++ Address Sanitizer
-        traceback: Required VC++ compiler not found
+        traceback: Required Macro Assembler not found
     """,
-                    "err",
-                )
-                _result = None
+                "err",
+            )
+            _result = None
 
-            else:
-                _stat = self.msg_stat(
-                    "pass",
-                    ml64,
-                    f"Found MSVC Macro Assembler {ml64.version} at {ml64.exe}",
-                )
-                _except = ""
-                _result = True
+        else:
+            _stat = self.msg_stat(
+                "pass",
+                "MSVC",
+                f"Found Microsoft Macro Assembler {ml64.version} at {ml64.exe}",
+            )
+            _except = ""
+            _result = True
 
         return _stat, _except, _result
 
     def check_lib(self):
         lib = self.device.lib
-        lib.description = "Microsoft Linker Stub"
 
         if lib.exe is None:
-            _stat = self.msg_stat(
-                "err", lib, f"Cannot found MSVC program lib.exe ({lib.description})."
-            )
+            _stat = self.msg_stat("err", "MSVC", f"Cannot found MSVC program lib.exe.")
             _except = cstring(
                 f"""
-    We cannot found MSVC toolchain's archiver.
+    We cannot find MSVC toolchain's archiver.
     Please check your Microsoft VC++ installation is correct, or re-check if the install is broken.
 
-        traceback: MSVC Archiver lib.exe ({lib.exe}) not found
+        traceback: MSVC lib.exe ({lib.exe}) not found
     """,
                 "err",
             )
             _result = None
         else:
             _stat = self.msg_stat(
-                "pass", lib, f"Found MSVC program lib.exe at {lib.exe}"
+                "pass", "MSVC", f"Found MSVC program lib.exe at {lib.exe}"
             )
             _except = ""
             _result = True
@@ -1917,13 +1824,14 @@ class DeviceChecker:
 
     def check_link(self):
         link = self.device.link
-        link.description = "Microsoft Incremental Linker"
 
         if link.exe is None:
-            _stat = self.msg_stat("err", link, f"Cannot found {link.description}.")
+            _stat = self.msg_stat(
+                "err", "MSVC", f"Cannot found Microsoft Incremental Linker."
+            )
             _except = cstring(
                 f"""
-    We cannot found MSVC toolchain's linker link.exe ({link.description}).
+    We cannot find MSVC linker link.exe (Microsoft Incremental Linker).
     Please re-check your MSVC installation if it's broken.
         traceback: Missing MSVC required linker compoments link.exe
     """,
@@ -1932,7 +1840,7 @@ class DeviceChecker:
             _result = None
         else:
             _stat = self.msg_stat(
-                "pass", link, f"Found {link.description} at {link.exe}"
+                "pass", "MSVC", f"Found Microsoft Incremental Linker at {link.exe}"
             )
             _except = ""
             _result = True
@@ -1941,13 +1849,14 @@ class DeviceChecker:
 
     def check_rc(self):
         rc = self.device.rc
-        rc.description = "Microsoft Resource Compiler"
 
         if rc.exe is None:
-            _stat = self.msg_stat("err", rc, f"Cannot found {rc.description}.")
+            _stat = self.msg_stat(
+                "err", "Windows SDK", f"Cannot found Microsoft Resource Compiler."
+            )
             _except = cstring(
                 f"""
-    We cannot found rc.exe ({rc.description}) in your Windows SDK, or you have no Windows SDK installed.
+    We cannot find rc.exe (Microsoft Resource Compiler) in your Windows SDK, or you have no Windows SDK installed.
     Please re-configure your MSVC and Windows SDK installation via Visual Studio.
         Visual Studio Installer > C/C++ Development for Desktop:
             - MSVC v14X
@@ -1956,14 +1865,16 @@ class DeviceChecker:
             - Windows SDK 10.0.XXXXX
             - CMake for Windows
             - C++ Address Sanitizer
-        traceback: {rc.description} not found in Windows SDK or Windows SDK not installed
+        traceback: Microsoft Resource Compiler not found in Windows SDK or Windows SDK not installed
     """,
                 "err",
             )
             _result = None
 
         else:
-            _stat = self.msg_stat("pass", rc, f"Found {rc.description} at {rc.exe}")
+            _stat = self.msg_stat(
+                "pass", "Windows SDK", f"Found Microsoft Resource Compiler at {rc.exe}"
+            )
             _except = ""
             _result = True
 
@@ -1971,7 +1882,7 @@ class DeviceChecker:
 
     #  ==============    Find Environment    =============
     #
-    #   TaiXeflar: Only Windows needs to do VS20XX and MAX_PATH.
+    #   TaiXeflar: Only Windows needs to do this: VS20XX and MAX_PATH.
     #   Windows: Visual Studio have different profiles to select compile host machine and targeted machine.
     #   Windows: Detects Long PATHs are enabled.
     #
@@ -1986,7 +1897,8 @@ class DeviceChecker:
                 "err", "Visual Studio", f"Cannot found Visual Studio Environment."
             )
             _except = cstring(
-                f"""We can't found a available Visual Studio install version.
+                f"""
+                We can't found a available Visual Studio install version.
     This error might be you don't have Visual Studio installed, or running out of Visual Studio environment profile.
     Please open a Visual Studio environment Terminal and re-run this diagnosis script.
     By open A Windows Terminal `wt.exe` and open VS20XX profile from tab.
@@ -2008,15 +1920,15 @@ class DeviceChecker:
         return _stat, _except, _result
 
     def check_VC_HOST(self):
-        _host = self.device.VS_HOST
-        _cl = self.device.msvc
+        _host = self.device.VC_HOST
+        _cl = self.device.cl
         if _host == "x64":
-            _stat = self.msg_stat("pass", _cl, f"MSVC Host compiler is {_host}.")
+            _stat = self.msg_stat("pass", "VC Host", f"MSVC Host compiler is {_host}.")
             _except = ""
             _result = True
 
         else:
-            _stat = self.msg_stat("err", _cl, f"MSVC Host compiler is {_host}.")
+            _stat = self.msg_stat("err", "VC Host", f"MSVC Host compiler is {_host}.")
             _except = cstring(
                 f"""
     We detected your CPU architecture is {self.device.CPU_ARCH}, but your VC++ Host is {_host}.
@@ -2030,14 +1942,18 @@ class DeviceChecker:
         return _stat, _except, _result
 
     def check_VC_TARGET(self):
-        _target = self.device.VS_TARGET
-        _cl = self.device.msvc
+        _target = self.device.VC_TARGET
+        _cl = self.device.cl
         if _target == "x64":
-            _stat = self.msg_stat("pass", _cl, f"MSVC compile target is {_target}.")
+            _stat = self.msg_stat(
+                "pass", "VC Target", f"MSVC compile target is {_target}."
+            )
             _except = ""
             _result = True
         else:
-            _stat = self.msg_stat("err", _cl, f"MSVC Host compiler is {_target}.")
+            _stat = self.msg_stat(
+                "err", "VC Target", f"MSVC Host compiler is {_target}."
+            )
             _except = cstring(
                 f"""
     We found you are compiling to target {_target}.
@@ -2052,12 +1968,12 @@ class DeviceChecker:
         return _stat, _except, _result
 
     def check_VC_SDK(self):
-        _sdk = self.device.VS_SDK
+        _sdk = self.device.VC_SDK
         if _sdk is None:
             _stat = self.msg_stat("err", "WindowsSDK", f"Cannot found Windows SDK.")
             _except = cstring(
                 f"""
-    We cannot found available Windows SDK.
+    We cannot find available Windows SDK.
     Windows SDK provides Universal CRT(UCRT) library and Resource Compiler.
     Please re-configure Visual Studio installed compoments.
 
@@ -2091,8 +2007,9 @@ class DeviceChecker:
     Please enable this feature via one of these solution:
         > Using Registry Editor(regedit) or using Group Policy
         > Restart your device.
-    traceback: Windows Enable Long PATH support feature is Disabled
-    \t Registry Key Hint: HKLM:/SYSTEM/CurrentControlSet/Control/FileSystem LongPathsEnabled = 0 (DWORD)
+
+        traceback: Windows Enable Long PATH support feature is Disabled
+            Registry Key Hint: HKLM:/SYSTEM/CurrentControlSet/Control/FileSystem LongPathsEnabled = 0 (DWORD)
     """,
                 "warn",
             )
@@ -2101,6 +2018,7 @@ class DeviceChecker:
         return _stat, _except, _result
 
     #  ==============   Summarize   ================
+    #               Summarize count.
 
 
 def check_summary(result: DeviceChecker):
@@ -2116,19 +2034,18 @@ def check_summary(result: DeviceChecker):
 
 def run_test():
 
-    device = Device()
+    device = SystemInfo()
     tester = DeviceChecker(device=device)
 
-    if device.WINDOWS:
+    if device.is_windows:
         test = [
             tester.check_Device_OS,
             tester.check_Device_ARCH,
             tester.check_DISK_USAGE,
             tester.check_MAX_PATH,
-            tester.check_py,
+            tester.check_python,
             tester.check_git,
             tester.check_gitlfs,
-            tester.check_uv,
             tester.check_cmake,
             tester.check_ccache,
             tester.check_ninja,
@@ -2144,15 +2061,14 @@ def run_test():
             tester.check_rc,
         ]
 
-    elif device.LINUX:
+    elif device.is_linux:
         test = [
             tester.check_Device_OS,
             tester.check_Device_ARCH,
             tester.check_DISK_USAGE,
-            tester.check_py,
+            tester.check_python,
             tester.check_git,
             tester.check_gitlfs,
-            tester.check_uv,
             tester.check_cmake,
             tester.check_ccache,
             tester.check_ninja,
@@ -2172,21 +2088,15 @@ def run_test():
     check_summary(tester)
 
 
-# Define Main() as main diagnosis, Help() as `--help`, Track() as `--track`.
 def main():
-
     therock_detect_start = time.perf_counter()
-
-    # os.system("cls" if os.name == "nt" else "clear")  Disabled clear prompt.
-
     TheRock.__logo__()
-
-    device = Device()
+    device = SystemInfo()
     device.summary
 
     print(
         r"""
-        ===========    Start detecting conpoments for building ROCm\TheRock    ===========
+        ===========    Start detecting components for building ROCm\TheRock    ===========
     """
     )
 
@@ -2204,17 +2114,6 @@ def main():
     time.sleep(0.5)
 
 
-# Possiable Args.
-help_args = ("--help", "-help", "-?", "/help", "/?", "--i-need-help")
-
-
 # Launcher.
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        main()
-    else:
-        args = [arg.lower() for arg in sys.argv[1:]]
-        if any(arg in help_args for arg in args):
-            TheRock.help()
-        else:
-            TheRock.help()
+    main()
