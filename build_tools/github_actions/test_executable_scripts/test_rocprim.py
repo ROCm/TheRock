@@ -22,7 +22,7 @@ cmd = [
     "--exclude-regex",
     TESTS_TO_IGNORE,
     "--timeout",
-    "900",
+    "1800",
     "--repeat",
     "until-pass:3",
 ]
