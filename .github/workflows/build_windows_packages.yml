@@ -114,15 +114,6 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 96
 
-      - name: Verify hip-tests submodule (cmd)
-        shell: cmd
-        run: |
-          if not exist core\hip-tests\samples\1_Utils\hipInfo\hipInfo.cpp (
-            echo hip-tests submodule missing!
-            git submodule status
-            exit /b 1
-          )
-
       - name: Configure Projects
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
