@@ -95,7 +95,7 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     # spurious ccache panics where it randomly falls back to the real compiler
     # if the ccache invocation happens to coincide with parallel sandbox
     # creation for another sub-project.
-    lines.append(f"sloppiness = include_file_ctime")
+    lines.append(f"sloppiness = include_file_ctime,include_file_ctime,time_macros")
 
     # End with blank line.
     lines.append("")
