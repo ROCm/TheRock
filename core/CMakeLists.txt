@@ -156,8 +156,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     # hipInfo (from hip-tests)
     ##############################################################################
     therock_cmake_subproject_declare(hipInfo
-      EXTERNAL_SOURCE_DIR "hipInfo-ds"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo-ds"
+      EXTERNAL_SOURCE_DIR "hipInfo"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
       BACKGROUND_BUILD
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"

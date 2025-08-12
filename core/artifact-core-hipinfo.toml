@@ -1,5 +1,5 @@
 # hipInfo
-[components.run."core/hipInfo-ds/stage"]
+[components.run."core/hipInfo/stage"]
 optional = "windows"
 include = [
   "bin/hipInfo.exe",
