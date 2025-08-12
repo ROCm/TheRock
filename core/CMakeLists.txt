@@ -161,8 +161,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       BACKGROUND_BUILD
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"
-      BUILD_DEPS
-        hip-clr
       RUNTIME_DEPS
         hip-clr
     )
