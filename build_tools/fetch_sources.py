@@ -338,6 +338,7 @@ def main(argv):
             # "rocprofiler-systems",
             "roctracer",
             "ROCR-Runtime",
+            "hip-tests",
         ]
         + (
             [
