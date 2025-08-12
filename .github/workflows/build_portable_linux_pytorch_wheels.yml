@@ -254,7 +254,7 @@ jobs:
 
       - name: Check test result gating
         run: |
-          if [[ "${{ needs.generate_target_to_run.outputs.test_runs_on }}" != "" && "${{ needs.test_pytorch_wheels.result }}" == "failure" ]]; then
+          if [[ "${{ needs.generate_target_to_run.outputs.test_runs_on }}" != "" && "${{ needs.test_pytorch_wheels.result }}" == "failure" && "${{ needs.build_pytorch_wheels.result }}" != "success" ]]; then
             echo "::warning::Tests failed. Skipping upload."
             echo "upload=false" >> $GITHUB_ENV
           else
