@@ -323,6 +323,7 @@ def main(argv):
             "clr",
             "half",
             "HIP",
+            "hip-tests",
             "rccl",
             "rccl-tests",
             "rocm_smi_lib",
@@ -338,7 +339,6 @@ def main(argv):
             # "rocprofiler-systems",
             "roctracer",
             "ROCR-Runtime",
-            "hip-tests",
         ]
         + (
             [
