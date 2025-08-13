@@ -469,14 +469,30 @@ def do_build_triton(
 ) -> str:
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
-    # If TRITON_WHEEL_VERSION_SUFFIX is not set, version format
-    # for the build that is based on ROCm to 7.0.0rc20250728
-    # will not be just a `3.3.1`.
-    # If we are doing a Pytorch release/2.7 related Triton build,
-    # then Triton version format will be:
+    # Triton's setup.py construct the final version string by using
+    # a few components:
+    # * Base version: `3.3.1`
+    # * Version suffix
+    #
+    # Version suffix itself consist of from following two parts:
+    # * git hash suffix:
+    #   * "+git<githash>" for development builds
+    #   * empty string "" for builds made from git release branches
+    # * Additional version information is passed by using environment variable
+    #   TRITON_WHEEL_VERSION_SUFFIX
+    #   For example:
+    #       env["TRITON_WHEEL_VERSION_SUFFIX"] = "+rocm7.0.0rc20250728"
+    #
+    # Version suffix part of the version is allowed to have only a single
+    # "+"-character. Therefore if there are multiple suffixes,
+    # they are joined togeher with `-` characters
+    # instead of `+` characters in Triton's setup.py so that
+    # there is only a single `+` character after the base version.
+    #
+    # For example:
+    # * PyTorch release/2.7 builds use Triton versions like:
     #    3.3.1+rocm7.0.0rc20250728
-    # If we are doing a Pytorch nightly related Triton build,
-    # then Triton version format will be:
+    # * PyTorch nightly builds use Triton versions like:
     #    3.4.0+git12345678-rocm7.0.0rc20250728
     version_suffix += str(args.version_suffix)
     env["TRITON_WHEEL_VERSION_SUFFIX"] = version_suffix
