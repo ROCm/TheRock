@@ -32,6 +32,19 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
+def enable_longpaths():
+    # Supporting git longpath
+    exec(
+        [
+            "git",
+            "submodule",
+            "foreach",
+            "'git config core.longpaths true'"
+        ],
+        cwd=THEROCK_DIR,
+    )
+
+
 def get_enabled_projects(args) -> list[str]:
     projects = []
     if args.include_system_projects:
@@ -66,6 +79,7 @@ def run(args):
             + submodule_paths,
             cwd=THEROCK_DIR,
         )
+        enable_longpaths()
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
