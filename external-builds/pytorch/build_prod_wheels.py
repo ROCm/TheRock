@@ -469,7 +469,7 @@ def do_build_triton(
 ) -> str:
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
-    # Triton's setup.py construct the final version string by using
+    # Triton's setup.py constructs the final version string by using
     # a few components:
     # * Base version: `3.3.1`
     # * Version suffix
