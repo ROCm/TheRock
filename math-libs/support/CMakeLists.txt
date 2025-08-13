@@ -2,14 +2,8 @@
 # mxDataGenerator
 ################################################################################
 
-if(THEROCK_USE_ROCM_LIBRARIES)
-  set(_mxdatagenerator_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/mxdatagenerator")
-else()
-  set(_mxdatagenerator_source_dir "mxDataGenerator")
-endif()
-
 therock_cmake_subproject_declare(mxDataGenerator
-  EXTERNAL_SOURCE_DIR "${_mxdatagenerator_source_dir}"
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/mxdatagenerator"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/mxDataGenerator"
   BACKGROUND_BUILD
   CMAKE_ARGS

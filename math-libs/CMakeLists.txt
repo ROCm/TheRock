@@ -4,14 +4,8 @@ if(THEROCK_ENABLE_RAND)
   ##############################################################################
   set(_rand_subproject_names)
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_rocrand_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocrand")
-  else()
-    set(_rocrand_source_dir "rocRAND")
-  endif()
-
   therock_cmake_subproject_declare(rocRAND
-    EXTERNAL_SOURCE_DIR "${_rocrand_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocrand"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -39,14 +33,8 @@ if(THEROCK_ENABLE_RAND)
   # hipRAND
   ##############################################################################
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_hiprand_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand")
-  else()
-    set(_hiprand_source_dir "hipRAND")
-  endif()
-
   therock_cmake_subproject_declare(hipRAND
-    EXTERNAL_SOURCE_DIR "${_hiprand_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -93,14 +81,8 @@ if(THEROCK_ENABLE_PRIM)
   # rocPRIM
   ##############################################################################
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_rocprim_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim")
-  else()
-    set(_rocprim_source_dir "rocPRIM")
-  endif()
-
   therock_cmake_subproject_declare(rocPRIM
-    EXTERNAL_SOURCE_DIR "${_rocprim_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -123,14 +105,8 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_hipcub_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub")
-  else()
-    set(_hipcub_source_dir "hipCUB")
-  endif()
-
   therock_cmake_subproject_declare(hipCUB
-    EXTERNAL_SOURCE_DIR "${_hipcub_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -154,14 +130,8 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(hipCUB hipcub lib/cmake/hipcub)
   therock_cmake_subproject_activate(hipCUB)
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_rocthrust_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust")
-  else()
-    set(_rocthrust_source_dir "rocThrust")
-  endif()
-
   therock_cmake_subproject_declare(rocThrust
-    EXTERNAL_SOURCE_DIR "${_rocthrust_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocThrust"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -210,14 +180,8 @@ if(THEROCK_ENABLE_FFT)
   ##############################################################################
   set(_fft_subproject_names)
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_rocfft_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocfft")
-  else()
-    set(_rocfft_source_dir "rocFFT")
-  endif()
-
   therock_cmake_subproject_declare(rocFFT
-    EXTERNAL_SOURCE_DIR "${_rocfft_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocfft"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -248,14 +212,8 @@ if(THEROCK_ENABLE_FFT)
   # hipFFT
   ##############################################################################
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_hipfft_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipfft")
-  else()
-    set(_hipfft_source_dir "hipFFT")
-  endif()
-
   therock_cmake_subproject_declare(hipFFT
-    EXTERNAL_SOURCE_DIR "${_hipfft_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipfft"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
