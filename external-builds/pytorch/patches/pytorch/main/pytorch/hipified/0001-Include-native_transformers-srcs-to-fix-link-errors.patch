@@ -1,15 +1,14 @@
-From bd9e41913922b372724f31a46fb87d07dfab6d93 Mon Sep 17 00:00:00 2001
+From 7437670ec49462d10b31473408b19088b23d5b36 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Mon, 11 Aug 2025 13:05:44 -0700
-Subject: [PATCH 4/5] [ROCm][Windows] Include native_transformers srcs to fix
- link errors.
+Subject: [PATCH 1/2] Include native_transformers srcs to fix link errors.
 
 ---
  aten/src/ATen/CMakeLists.txt | 4 ----
  1 file changed, 4 deletions(-)
 
 diff --git a/aten/src/ATen/CMakeLists.txt b/aten/src/ATen/CMakeLists.txt
-index 5f4997357f8..e1939323fc9 100644
+index 5f4997357f..e1939323fc 100644
 --- a/aten/src/ATen/CMakeLists.txt
 +++ b/aten/src/ATen/CMakeLists.txt
 @@ -470,10 +470,6 @@ if(USE_ROCM)
@@ -24,5 +23,5 @@ index 5f4997357f8..e1939323fc9 100644
    # TODO: Codegen separate files for HIP and use those (s/cuda_generated_sources/hip_generated_sources)
    list(APPEND all_hip_cpp
 -- 
-2.45.1.windows.1
+2.50.1.windows.1
 

@@ -1,7 +1,7 @@
-From 39a7c6a0645e24ee4be09f21376f4dab50be5667 Mon Sep 17 00:00:00 2001
+From 9bb3a5176853782d8cde5f7a035311b672cf5dda Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
 Date: Sun, 10 Aug 2025 00:16:27 +0900
-Subject: [PATCH 5/5] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
+Subject: [PATCH 2/2] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
  on windows
 
 ---
@@ -12,7 +12,7 @@ Subject: [PATCH 5/5] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
  4 files changed, 235 insertions(+), 68 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index cc9476bb001..b5c50bcd60c 100644
+index 9fe3855242..120f2384a0 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -872,7 +872,7 @@ cmake_dependent_option(
@@ -34,7 +34,7 @@ index cc9476bb001..b5c50bcd60c 100644
    endif()
  endif()
 diff --git a/aten/src/ATen/native/transformers/hip/attention.hip b/aten/src/ATen/native/transformers/hip/attention.hip
-index 93c523ff71e..c12ac43ce0d 100644
+index 93c523ff71..c12ac43ce0 100644
 --- a/aten/src/ATen/native/transformers/hip/attention.hip
 +++ b/aten/src/ATen/native/transformers/hip/attention.hip
 @@ -97,6 +97,72 @@
@@ -111,7 +111,7 @@ index 93c523ff71e..c12ac43ce0d 100644
  
  namespace cuda::philox {
 diff --git a/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h b/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
-index f6f2240d4f0..71a19590659 100644
+index f6f2240d4f..71a1959065 100644
 --- a/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
 +++ b/aten/src/ATen/native/transformers/hip/flash_attn/flash_api.h
 @@ -270,7 +270,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor, at::Tensor> mha_varle
@@ -168,7 +168,7 @@ index f6f2240d4f0..71a19590659 100644
  inline std::tuple<
      at::Tensor,
 diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
-index 54564e42c90..fa9beea8026 100644
+index 54564e42c9..40e401154e 100644
 --- a/cmake/External/aotriton.cmake
 +++ b/cmake/External/aotriton.cmake
 @@ -22,7 +22,7 @@ if(NOT __AOTRITON_INCLUDED)
@@ -357,7 +357,7 @@ index 54564e42c90..fa9beea8026 100644
 +        file(REMOVE_RECURSE "${__AOTRITON_TARBALL_EXTRACT_DIR}")
 +        file(MAKE_DIRECTORY "${__AOTRITON_TARBALL_EXTRACT_DIR}")
 +        execute_process(
-+          COMMAND "${CMAKE_COMMAND}" -E tar xf "${__AOTRITON_TARBALL_PATH}"
++          COMMAND tar --options hdrcharset=UTF-8 -xf "${__AOTRITON_TARBALL_PATH}"
 +          WORKING_DIRECTORY "${__AOTRITON_TARBALL_EXTRACT_DIR}"
 +        )
 +
@@ -414,5 +414,5 @@ index 54564e42c90..fa9beea8026 100644
 +endif() # __AOTRITON_INCLUDED
 \ No newline at end of file
 -- 
-2.45.1.windows.1
+2.50.1.windows.1
 
