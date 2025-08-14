@@ -27,17 +27,17 @@ Two subcommands are provided for this: "enable" and "disable". Both take argumen
 For example, if after an initial boostrap, you only want to iterate on
 `ROCR-Runtime`, and you don't intend to change the public API and therefore
 don't care to build dependents, run:
-    python ./build_tools/prebuilts.py enable ROCR
+    python ./build_tools/buildctl.py enable ROCR
 
 If you do want to do codevelopment with clr, you could also do:
-    python ./build_tools/prebuilts.py enable ROCR clr
+    python ./build_tools/buildctl.py enable ROCR clr
 
 To reset to building everything, just run the `enable` command with no arguments.
 
 Similar usage can be made with `disable`. Let's say you would like to avoid
 spurious builds of some math libraries:
 
-    python ./build_tools/prebuilts.py disable hipBLASLt rocSOLVER
+    python ./build_tools/buildctl.py disable hipBLASLt rocSOLVER
 
 A report will be printed and if any changes to project state were made,
 "Reconfiguring..." will be printed and a CMake reconfigure of TheRock will be
@@ -54,6 +54,8 @@ date check (so if you touch this file, it will invalidate all dependents,
 forcing them to rebuild). You can manage these files yourself with `find`,
 `touch`, and `rm` but it is tedious. This tool aims to handle common workflows
 without filesystem hacking.
+
+TODO: Merge the functionality in bootstrap_build.py into this script.
 """
 
 import argparse
@@ -208,7 +210,7 @@ class CLIError(Exception):
 
 
 def main(cl_args: list[str]):
-    p = argparse.ArgumentParser("prebuilts.py", usage="prebuilts.py {command} ...")
+    p = argparse.ArgumentParser("buildctl.py", usage="buildctl.py {command} ...")
     sub_p = p.add_subparsers(required=True)
 
     def add_common_options(command_p: argparse.ArgumentParser, handler):
@@ -223,7 +225,7 @@ def main(cl_args: list[str]):
         command_p.add_argument(
             "--force-reconfigure",
             action="store_true",
-            help="Reconfigure, even if not change",
+            help="Reconfigure, even if not changed",
         )
         command_p.add_argument(
             "include", nargs="*", help="Regular expressions to include (all if empty)"

@@ -34,6 +34,8 @@ the hash. In this way, incremental builds will re-trigger if the build dir
 is bootstrapped with different artifacts. It can also be used in scripting to
 derive an appropriate hash key for the compiler, etc (i.e. setting up a ccache
 namespace based on the hash of all bootstrapped "*.prebuilt" files in the tree).
+
+TODO: Merge this into the buildctl.py script and remove this.
 """
 
 import argparse
