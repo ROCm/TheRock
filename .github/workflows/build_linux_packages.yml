@@ -71,7 +71,7 @@ jobs:
       - name: Verify AWS credentials
         run: |
           id
-          ls -ln /home/geofun
+          ls -ln /home
           ls -ln /tmp
           echo $AWS_PROFILE
           echo "Whoami: $(whoami)"
