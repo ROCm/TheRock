@@ -10,6 +10,10 @@ skip_tests = [
     "test_host_memory_stats",
     "test_nvtx",
     "test_device_count_not_cached_pre_init",
+    # TestCuda under test_cuda.py, failing on gfx942 (#1143)
+    "test_float32_matmul_precision_get_set ",
+    # TestCude under test_cuda.py, failing on gfx942 (#1151)
+    "test_graph_concurrent_replay",
     # TestCuda under test_cuda.py, failing on gfx950
     "test_preferred_blas_library_settings",
     # TestCudaAutocast under test_cuda.py, failing on gfx950

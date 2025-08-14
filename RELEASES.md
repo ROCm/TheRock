@@ -17,6 +17,7 @@ part of Continuous Delivery (CD) nightly releases. See also the
 Table of contents:
 
 - [Installing releases using pip](#installing-releases-using-pip)
+  - [Python packages release status](#python-packages-release-status)
   - [Installing ROCm Python packages](#installing-rocm-python-packages)
   - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
@@ -26,7 +27,6 @@ Table of contents:
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
   - [Using installed tarballs](#using-installed-tarballs)
-- [Using Dockerfiles](#using-dockerfiles)
 
 ## Installing releases using pip
 
@@ -189,22 +189,46 @@ framework.
 > This is under **active** development.
 
 Using the index pages listed above, you can install `torch` instead of
-`rocm[libraries,devel]`.
+`rocm[libraries,devel]`:
 
-For example, with gfx110X-dgpu:
+#### gfx94X-dcgpu
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
+  torch
+```
+
+#### gfx950-dcgpu
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
+  torch
+```
+
+#### gfx110X-dgpu
 
 ```bash
 python -m pip install \
   --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
   torch
+```
 
-pip freeze
-# ...
-# rocm==7.0.0rc20250615
-# rocm-sdk-core==7.0.0rc20250615
-# rocm-sdk-libraries-gfx110X-dgpu==7.0.0rc20250615
-# ...
-# torch==2.7.0a0+rocmsdk20250616
+#### gfx1151
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
+  torch
+```
+
+#### gfx120X-all
+
+```bash
+python -m pip install \
+  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
+  torch
 ```
 
 ### Using PyTorch Python packages
@@ -313,7 +337,7 @@ them from the expanded artifacts down to a ROCm SDK "dist folder" using the
 
 <!-- TODO: move this above the manual `tar -xf` commands? -->
 
-This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally.
+This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally. Please run `pip install boto3` to get the necessary library.
 
 Examples:
 

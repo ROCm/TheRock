@@ -7,7 +7,6 @@ Required environment variables:
   - ATTEMPT
 """
 
-from configure_ci import set_github_output
 import json
 import os
 from urllib.request import urlopen, Request

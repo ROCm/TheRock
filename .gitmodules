@@ -50,73 +50,13 @@
 	path = core/ROCR-Runtime
 	url = https://github.com/ROCm/ROCR-Runtime.git
 	branch = amd-mainline
-[submodule "hipBLAS-common"]
-	path = math-libs/BLAS/hipBLAS-common
-	url = https://github.com/ROCm/hipBLAS-common.git
-	branch = develop
-[submodule "hipBLAS"]
-	path = math-libs/BLAS/hipBLAS
-	url = https://github.com/ROCm/hipBLAS.git
-	branch = develop
-[submodule "hipBLASLt"]
-	path = math-libs/BLAS/hipBLASLt
-	url = https://github.com/ROCm/hipBLASLt.git
-	branch = develop
-[submodule "hipCUB"]
-	path = math-libs/hipCUB
-	url = https://github.com/ROCm/hipCUB.git
-	branch = develop
-[submodule "hipFFT"]
-	path = math-libs/hipFFT
-	url = https://github.com/ROCm/hipFFT.git
-	branch = develop
-[submodule "hipRAND"]
-	path = math-libs/hipRAND
-	url = https://github.com/ROCm/hipRAND.git
-	branch = develop
 [submodule "hipSOLVER"]
 	path = math-libs/BLAS/hipSOLVER
 	url = https://github.com/ROCm/hipSOLVER.git
 	branch = develop
-[submodule "hipSPARSE"]
-	path = math-libs/BLAS/hipSPARSE
-	url = https://github.com/ROCm/hipSPARSE.git
-	branch = develop
-[submodule "rocBLAS"]
-	path = math-libs/BLAS/rocBLAS
-	url = https://github.com/ROCm/rocBLAS.git
-	branch = develop
-[submodule "rocFFT"]
-	path = math-libs/rocFFT
-	url = https://github.com/ROCm/rocFFT.git
-	branch = develop
-[submodule "rocPRIM"]
-	path = math-libs/rocPRIM
-	url = https://github.com/ROCm/rocPRIM.git
-	branch = develop
-[submodule "rocRAND"]
-	path = math-libs/rocRAND
-	url = https://github.com/ROCm/rocRAND.git
-	branch = develop
 [submodule "rocSOLVER"]
 	path = math-libs/BLAS/rocSOLVER
 	url = https://github.com/ROCm/rocSOLVER.git
-	branch = develop
-[submodule "rocSPARSE"]
-	path = math-libs/BLAS/rocSPARSE
-	url = https://github.com/ROCm/rocSPARSE.git
-	branch = develop
-[submodule "rocThrust"]
-	path = math-libs/rocThrust
-	url = https://github.com/ROCm/rocThrust.git
-	branch = develop
-[submodule "MIOpen"]
-	path = ml-libs/MIOpen
-	url = https://github.com/ROCm/MIOpen.git
-	branch = develop
-[submodule "Tensile"]
-	path = math-libs/BLAS/Tensile
-	url = https://github.com/ROCm/Tensile.git
 	branch = develop
 [submodule "rccl-tests"]
 	path = comm-libs/rccl-tests
@@ -128,21 +68,21 @@
 [submodule "roctracer"]
 	path = profiler/roctracer
 	url = https://github.com/ROCm/roctracer.git
-[submodule "mxDataGenerator"]
-	path = math-libs/support/mxDataGenerator
-	url = https://github.com/ROCm/mxDataGenerator.git
-	branch = main
 [submodule "composable_kernel"]
 	path = ml-libs/composable_kernel
 	url = https://github.com/ROCm/composable_kernel.git
 	branch = develop
-[submodule "rocRoller"]
-	path = math-libs/BLAS/rocRoller
-	url = https://github.com/ROCm/rocRoller.git
-	branch = main
 [submodule "rocprof-trace-decoder"]
 	path = profiler/rocprof-trace-decoder/binaries
 	url = https://github.com/ROCm/rocprof-trace-decoder.git
 [submodule "amdgpu-windows-interop"]
 	path = core/amdgpu-windows-interop
 	url = https://github.com/ROCm/amdgpu-windows-interop.git
+[submodule "rocm-libraries"]
+	path = rocm-libraries
+	url = https://github.com/ROCm/rocm-libraries
+	branch = develop
+[submodule "hip-tests"]
+	path = core/hip-tests
+	url = https://github.com/ROCm/hip-tests.git
+	branch = amd-staging

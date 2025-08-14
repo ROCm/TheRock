@@ -12,7 +12,8 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   # TODO: Move this to math-libs
 
   therock_cmake_subproject_declare(composable_kernel
-    EXTERNAL_SOURCE_DIR "composable_kernel"
+    EXTERNAL_SOURCE_DIR "${THEROCK_CK_SOURCE_DIR}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -76,14 +77,6 @@ if(THEROCK_ENABLE_MIOPEN)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
-  # Only build miopen_gtest binary if we are using composable kernel since
-  # there are compile errors when building without it.  (We build the gtest binary
-  # if test discrete is off.)
-  set(miopen_test_discrete OFF)
-  if(NOT THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
-    set(miopen_test_discrete ON)
-  endif()
-
   if(MSVC)
     # HACK, see https://github.com/ROCm/TheRock/issues/525.
     # Take the most recent few MSVC versions from
@@ -102,7 +95,8 @@ if(THEROCK_ENABLE_MIOPEN)
   endif()
 
   therock_cmake_subproject_declare(MIOpen
-    EXTERNAL_SOURCE_DIR "MIOpen"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -112,7 +106,7 @@ if(THEROCK_ENABLE_MIOPEN)
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_BUILD_DRIVER=ON
-      -DMIOPEN_TEST_DISCRETE=${miopen_test_discrete}
+      -DMIOPEN_TEST_DISCRETE=OFF
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake

@@ -12,7 +12,8 @@ if(THEROCK_ENABLE_RCCL)
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
-    EXTERNAL_SOURCE_DIR "rccl"
+    EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_SOURCE_DIR}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -30,6 +31,7 @@ if(THEROCK_ENABLE_RCCL)
       amd-hip
     BUILD_DEPS
       rocm-cmake
+      therock-fmt
       therock-googletest
     RUNTIME_DEPS
       hip-clr
@@ -48,7 +50,8 @@ if(THEROCK_ENABLE_RCCL)
 
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rccl-tests
-      EXTERNAL_SOURCE_DIR "rccl-tests"
+      EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_TESTS_SOURCE_DIR}"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd

@@ -117,6 +117,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import shlex
 import subprocess
@@ -133,6 +134,7 @@ LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
+    "roctracer64",  # Linux only for the moment.
     "roctx64",  # Linux only for the moment.
     "hiprtc",
     "hipblas",
@@ -174,10 +176,14 @@ def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
 
 def capture(args: list[str | Path], cwd: Path) -> str:
     args = [str(arg) for arg in args]
+    print(f"++ Capture [{cwd}]$ {shlex.join(args)}")
     try:
-        return subprocess.check_output(args, cwd=str(cwd)).decode().strip()
+        return subprocess.check_output(
+            args, cwd=str(cwd), stderr=subprocess.STDOUT, text=True
+        ).strip()
     except subprocess.CalledProcessError as e:
         print(f"Error capturing output: {e}")
+        print(f"Output from the failed command:\n{e.output}")
         return ""
 
 
@@ -333,13 +339,13 @@ def do_build(args: argparse.Namespace):
     rocm_sdk_version = get_rocm_sdk_version()
     cmake_prefix = get_rocm_path("cmake")
     bin_dir = get_rocm_path("bin")
-    root_dir = get_rocm_path("root")
+    rocm_dir = get_rocm_path("root")
 
     print(f"rocm version {rocm_sdk_version}:")
     print(f"  PYTHON VERSION: {sys.version}")
     print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
     print(f"  BIN = {bin_dir}")
-    print(f"  ROCM_HOME = {root_dir}")
+    print(f"  ROCM_HOME = {rocm_dir}")
 
     system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
     print(f"  PATH = {system_path}")
@@ -361,11 +367,10 @@ def do_build(args: argparse.Namespace):
 
     env: dict[str, str] = {
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
-        "ROCM_HOME": str(root_dir),
-        "ROCM_PATH": str(root_dir),
+        "ROCM_HOME": str(rocm_dir),
+        "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        # TODO: Fix source dep on rocprofiler and enable.
-        "USE_KINETO": "OFF",
+        "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
 
     # GLOO enabled for only Linux
@@ -383,7 +388,7 @@ def do_build(args: argparse.Namespace):
             env.update(addl_triton_env)
 
     if is_windows:
-        llvm_dir = root_dir / "lib" / "llvm" / "bin"
+        llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
         env.update(
             {
                 "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
@@ -396,7 +401,7 @@ def do_build(args: argparse.Namespace):
             {
                 # Workaround GCC12 compiler flags.
                 "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-                "CPPFLAGS": "  -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
             }
         )
 
@@ -462,6 +467,36 @@ def do_build(args: argparse.Namespace):
 def do_build_triton(
     args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
 ) -> str:
+    version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
+
+    # Triton's setup.py constructs the final version string by using
+    # a few components:
+    # * Base version: `3.3.1`
+    # * Version suffix
+    #
+    # Version suffix itself consist of from following two parts:
+    # * git hash suffix:
+    #   * "+git<githash>" for development builds
+    #   * empty string "" for builds made from git release branches
+    # * Additional version information is passed by using environment variable
+    #   TRITON_WHEEL_VERSION_SUFFIX
+    #   For example:
+    #       env["TRITON_WHEEL_VERSION_SUFFIX"] = "+rocm7.0.0rc20250728"
+    #
+    # Version suffix part of the version is allowed to have only a single
+    # "+"-character. Therefore if there are multiple suffixes,
+    # they are joined togeher with `-` characters
+    # instead of `+` characters in Triton's setup.py so that
+    # there is only a single `+` character after the base version.
+    #
+    # For example:
+    # * PyTorch release/2.7 builds use Triton versions like:
+    #    3.3.1+rocm7.0.0rc20250728
+    # * PyTorch nightly builds use Triton versions like:
+    #    3.4.0+git12345678-rocm7.0.0rc20250728
+    version_suffix += str(args.version_suffix)
+    env["TRITON_WHEEL_VERSION_SUFFIX"] = version_suffix
+
     triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
     print(f"+++ Uninstall {triton_wheel_name}")
     exec(
@@ -518,6 +553,9 @@ def do_build_pytorch(
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+    print(
+        f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
+    )
     env["USE_ROCM"] = "ON"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
@@ -538,10 +576,21 @@ def do_build_pytorch(
 
     # Workaround missing features on windows.
     if is_windows:
+        use_flash_attention = (
+            "1" if args.enable_pytorch_flash_attention_windows else "0"
+        )
         env.update(
             {
-                "USE_FLASH_ATTENTION": "0",
-                "USE_MEM_EFF_ATTENTION": "0",
+                "USE_FLASH_ATTENTION": use_flash_attention,
+                "USE_MEM_EFF_ATTENTION": use_flash_attention,
+                # Currently, aotriton packages don't include windows binaries
+                # so we build them alongside pytorch using AOTRITON_INSTALL_FROM_SOURCE=1.
+                # On Windows, aotriton is built with "NOIMAGE" mode, so it needs kernel images built from Linux.
+                # TODO: TheRock provides aotriton artifacts compiled for windows including aotriton images built from Linux.
+                # For now, manually copy in the aotriton.images folder from linux binaries into <pytorch_root>/lib/aotriton.images.
+                # NOTE: this will not work without the corresponding patch in the main branch.
+                # which is in ./patches/pytorch/main/pytorch/hipified/0004-Support-FLASH_ATTENTION-MEM_EFF_ATTENTION-via.-aotriton.patch
+                "AOTRITON_INSTALL_FROM_SOURCE": use_flash_attention,
                 "DISTUTILS_USE_SDK": "1",
                 # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
                 # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
@@ -560,9 +609,14 @@ def do_build_pytorch(
         # TODO: include/rocm_smi/kfd_ioctl.h is included without its advertised
         # transitive includes. This triggers a compilation error for a missing
         # libdrm/drm.h.
-        sysdeps_dir = get_rocm_path("root") / "lib" / "rocm_sysdeps"
+        rocm_dir = get_rocm_path("root")
+        sysdeps_dir = rocm_dir / "lib" / "rocm_sysdeps"
         assert sysdeps_dir.exists(), f"No sysdeps directory found: {sysdeps_dir}"
         add_env_compiler_flags(env, "CXXFLAGS", f"-I{sysdeps_dir / 'include'}")
+        # Add correct include path for roctracer.h (for Kineto)
+        add_env_compiler_flags(
+            env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
+        )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
 
     print("+++ Uninstalling pytorch:")
@@ -583,8 +637,6 @@ def do_build_pytorch(
             "install",
             "-r",
             pytorch_dir / "requirements.txt",
-            # TODO: Remove cmake<4 pin once the world adapts (check at end of 2025).
-            "cmake<4",
         ]
         + pip_install_args,
         cwd=pytorch_dir,
@@ -619,6 +671,16 @@ def do_build_pytorch(
     exec(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
+
+    print("+++ Sanity checking installed torch (unavailable is okay on CPU machines):")
+    sanity_check_output = capture(
+        [sys.executable, "-c", "import torch; print(torch.cuda.is_available())"],
+        cwd=tempfile.gettempdir(),
+    )
+    if not sanity_check_output:
+        raise RuntimeError("torch package sanity check failed (see output above)")
+    else:
+        print(f"Sanity check output:\n{sanity_check_output}")
 
 
 def do_build_pytorch_audio(
@@ -669,6 +731,13 @@ def do_build_pytorch_vision(
             "TORCHVISION_USE_VIDEO_CODEC": "0",
         }
     )
+
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
 
     remove_dir_if_exists(pytorch_vision_dir / "dist")
     if args.clean:
@@ -732,7 +801,7 @@ def main(argv: list[str]):
         "--pytorch-audio-dir",
         default=directory_if_exists(script_dir / "pytorch_audio"),
         type=Path,
-        help="pytorch_audo source directory",
+        help="pytorch_audio source directory",
     )
     build_p.add_argument(
         "--pytorch-vision-dir",
@@ -770,6 +839,12 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch vision (requires --pytorch-vision-dir)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-flash-attention-windows",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch flash attention on Windows (enabled by default for Linux)",
     )
 
     today = date.today()

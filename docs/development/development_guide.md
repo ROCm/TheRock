@@ -57,6 +57,11 @@ If ever needing to reset and start over (using `hipify` as the component name), 
 
 If you blow away the entire component build directory, you may need to reconfigure the super-project (i.e. `cmake .` in the super-project build directory).
 
+The following special targets are added to every sub-project:
+
+- `therock-touch`: Deletes the `stage.stamp` file for the project, causing any future super-project build to see the project as out of date and in need of staging-install. This is added as `ALL` so that normal builds within the project (i.e. `ninja`) will leave the sub-project in an out of date state.
+- `therock-dist`: Deletes the `build.stmap` file, indicating that the project needs to be rebuilt and re-installed. Then invokes `{project}+dist` in the super-project so that all artifacts and distributions that depend on this project are updated. In most cases, for incremental rebuild, `ninja therock-dist` should be all you need to ensure that the results of your build make it into the super-project `build/dist` and `build/artifacts` directory.
+
 ### Option 2: Drive from the super-project
 
 If not doing deep development on the component, it is often effective to just use the targets exposed for each component at in the super-project and never touch the component build directory.
@@ -124,8 +129,10 @@ In addition, the following environment variables effect the project:
 
 #### Top-level targets:
 
-- `therock-archives`: Generates `.tar.xz` archives for each artifact in the build. These can be used for uploading to CI systems, bootstrapping later builds, or packaging.
-- `therock-dist`: Builds all components and materializes the `build/dist/rocm` unified tree from all artifacts. This is setup for `ALL`, so usually just building with no arguments is sufficient.
+- `artifacts`: Generates all `artifact/{...}` directories and manifests.
+- `archives`: Generates `.tar.xz` archives for each artifact in the build. These can be used for uploading to CI systems, bootstrapping later builds, or packaging.
+- `dist`: Builds all components and materializes the `build/dist/rocm` unified tree from all artifacts. This is setup for `ALL`, so usually just building with no arguments is sufficient.
+- `expunge`: Deletes build sub-project files for configuration, builds, artifacts, and distributions (note that `clean` in the super-project is a bit counter-intuitive because it just removes stamp files, causing everything to seem as out of date. Therefore, we choose the word `expunge` to indicate that all byproducts need to be removed).
 
 #### Per-component targets:
 
@@ -134,5 +141,5 @@ Each component build consists of stages: `configure > build > stage > dist`. The
 - `component+build`: Runs the component's build stage.
 - `component+configure`: Runs the component's configure stage.
 - `component+expunge`: Completely removes all intermediate files for the component.
-- `component+stage`: Performs component installation to the `stage/` directory.
-- `component+dist`: Assembles the component's `dist/` directory from its `stage/` directory and the `stage/` directories of all of its runtime dependencies.
+- `component+stage`: Performs component installation to the `stage/` and `dist/` directories.
+- `component+dist`: Generates all artifacts and distributions that depend on files from the component project.

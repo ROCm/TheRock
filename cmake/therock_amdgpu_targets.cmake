@@ -45,6 +45,7 @@ endfunction()
 therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X-all gfx90X-dgpu gfx90X-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
 therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
@@ -59,14 +60,17 @@ therock_add_amdgpu_target(gfx950 "" FAMILY dcgpu-all gfx950-all gfx950-dcgpu)
 therock_add_amdgpu_target(gfx1010 "AMD RX 5700" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 therock_add_amdgpu_target(gfx1011 "AMD Radeon Pro V520" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 
 # gfx103X family

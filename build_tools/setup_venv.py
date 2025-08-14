@@ -32,6 +32,7 @@ There are a few modes this can be used in:
 """
 
 import argparse
+import os
 from pathlib import Path
 import platform
 import shlex
@@ -39,7 +40,7 @@ import shutil
 import subprocess
 import sys
 
-THIS_DIR = Path(__file__).resolve().parent
+from github_actions.github_actions_utils import *
 
 is_windows = platform.system() == "Windows"
 
@@ -121,6 +122,41 @@ def install_packages(args: argparse.Namespace):
     exec(command)
 
 
+def activate_venv_in_gha(venv_dir: Path):
+    log("")
+    log(f"Activating venv for future GitHub Actions workflow steps")
+    gha_warn_if_not_running_on_ci()
+
+    # See https://docs.python.org/3/library/venv.html#how-venvs-work.
+    #
+    # The usual way to activate a venv is to run the platform-specific command:
+    #   POSIX bash         : `source <venv>/bin/activate`
+    #   Windows cmd.exe    : `<venv>\Scripts\activate.bat`
+    #   Windows powershell : `<venv>\Scripts\Activate.ps1`
+    #   etc.
+    #
+    # What these scripts actually do is a combination of setting environment
+    # variables, which we can't normally do (persistently) from a Python script.
+    # However, in the context of a GitHub Actions workflow, we *can* set
+    # environment variables (and job outputs, and step summaries, etc.) using
+    # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions.
+
+    if is_windows:
+        gha_add_to_path(venv_dir / "Scripts")
+    else:
+        gha_add_to_path(venv_dir / "bin")
+    gha_set_env({"VIRTUAL_ENV": venv_dir})
+
+
+def log_activate_instructions(venv_dir: Path):
+    log("")
+    log(f"Setup complete at '{venv_dir}'! Activate the venv with:")
+    if is_windows:
+        log(f"  {venv_dir}\\Scripts\\activate.bat")
+    else:
+        log(f"  source {venv_dir}/bin/activate")
+
+
 def run(args: argparse.Namespace):
     venv_dir = args.venv_dir
 
@@ -135,13 +171,10 @@ def run(args: argparse.Namespace):
     if args.packages:
         install_packages(args)
 
-    # Done with setup, log some useful information then exit.
-    log("")
-    log(f"Setup complete at '{venv_dir}'! Activate the venv with:")
-    if is_windows:
-        log(f"  {venv_dir}\\Scripts\\activate.bat")
+    if args.activate_in_future_github_actions_steps:
+        activate_venv_in_gha(venv_dir)
     else:
-        log(f"  source {venv_dir}/bin/activate")
+        log_activate_instructions(venv_dir)
 
 
 def main(argv: list[str]):
@@ -162,6 +195,11 @@ def main(argv: list[str]):
         "--disable-cache",
         action=argparse.BooleanOptionalAction,
         help="Disables the pip cache through the --no-cache-dir option",
+    )
+    general_options.add_argument(
+        "--activate-in-future-github-actions-steps",
+        action=argparse.BooleanOptionalAction,
+        help="Attempts to activate the venv persistently when running in a GitHub Action. This is less reliable than running the official activate command",
     )
 
     install_options = p.add_argument_group("Install options")

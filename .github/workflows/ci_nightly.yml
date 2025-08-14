@@ -59,6 +59,7 @@ jobs:
       matrix:
         families: ${{ fromJSON(needs.setup.outputs.linux_amdgpu_families) }}
     uses: ./.github/workflows/ci_linux.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ matrix.families.family }}
       test_runs_on: ${{ matrix.families.test-runs-on }}

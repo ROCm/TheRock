@@ -1,8 +1,9 @@
 # Partially retrieved from https://github.com/pytorch/pytorch/blob/main/requirements.txt
-# Python dependencies required for development
+# and https://github.com/pytorch/pytorch/blob/main/requirements-build.txt
 pytest==8.3.5
 pytest-xdist>=3.5.0
 expecttest>=0.3.0
 hypothesis
+ninja
 numpy
 psutil

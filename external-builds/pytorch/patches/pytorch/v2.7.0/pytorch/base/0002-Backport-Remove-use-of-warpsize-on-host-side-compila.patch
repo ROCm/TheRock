@@ -1,7 +1,7 @@
 From 4ad1931afefb714d84c3b371c41bb6c19cb8d226 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Wed, 16 Jul 2025 12:09:14 -0700
-Subject: [PATCH 2/2] Backport "Remove use of warpsize on host-side
+Subject: [PATCH 2/3] Backport "Remove use of warpsize on host-side
  compilation".
 
 https://github.com/pytorch/pytorch/commit/04bd7e6850e8efec77994963ffee87549555b9c3
