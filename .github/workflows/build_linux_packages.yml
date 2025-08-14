@@ -41,7 +41,7 @@ jobs:
       - name: Verify AWS credentials
         run: |
           id
-          ls -ln /home/runner
+          ls -ln /home/runner/externals
           ls -l $AWS_SHARED_CREDENTIALS_FILE
 
   build_linux_packages:
