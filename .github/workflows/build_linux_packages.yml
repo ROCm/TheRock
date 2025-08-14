@@ -75,6 +75,7 @@ jobs:
         run: |
           id
           ls -l /tmp
+          ls -l /tmp/credentials.ini
           echo $AWS_PROFILE
           echo "Whoami: $(whoami)"
           echo "HOME: $HOME"
