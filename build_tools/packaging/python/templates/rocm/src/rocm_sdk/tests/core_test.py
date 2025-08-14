@@ -1,6 +1,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import locale
 from pathlib import Path
 import platform
 import subprocess
@@ -24,12 +25,6 @@ is_windows = platform.system() == "Windows"
 
 LINUX_CONSOLE_SCRIPT_TESTS = [
     # These currently only have unprefixed names (e.g. 'clang') on Windows.
-    ("amdclang", ["--help"], "clang LLVM compiler", True),
-    ("amdclang++", ["--help"], "clang LLVM compiler", True),
-    ("amdclang-cpp", ["--help"], "clang LLVM compiler", True),
-    ("amdclang-cl", ["-help"], "clang LLVM compiler", True),
-    ("amdflang", ["--help"], "clang LLVM compiler", True),
-    ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
     # These tools are only available on Linux.
     ("rocm_agent_enumerator", [], "", True),
     ("rocminfo", [], "", True),
@@ -37,6 +32,12 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
 ]
 
 CONSOLE_SCRIPT_TESTS = [
+    ("amdclang", ["--help"], "clang LLVM compiler", True),
+    ("amdclang++", ["--help"], "clang LLVM compiler", True),
+    ("amdclang-cpp", ["--help"], "clang LLVM compiler", True),
+    ("amdclang-cl", ["-help"], "clang LLVM compiler", True),
+    ("amdflang", ["--help"], "clang LLVM compiler", True),
+    ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
 ] + (LINUX_CONSOLE_SCRIPT_TESTS if not is_windows else [])
@@ -100,10 +101,11 @@ class ROCmCoreTest(unittest.TestCase):
                     script_path,
                     msg=f"Console script {script_path} does not exist",
                 )
+                encoding = locale.getpreferredencoding()
                 output_text = subprocess.check_output(
                     [script_path] + cl,
                     stderr=subprocess.STDOUT,
-                ).decode()
+                ).decode(encoding)
                 if expected_text not in output_text:
                     self.fail(
                         f"Expected '{expected_text}' in console-script {script_name} outuput:\n"

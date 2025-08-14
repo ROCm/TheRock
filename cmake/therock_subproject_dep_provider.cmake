@@ -66,7 +66,8 @@ macro(therock_dependency_provider method package_name)
     endif()
   endif()
 endmacro()
-if(THEROCK_PROVIDED_PACKAGES)
+
+if(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER AND THEROCK_PROVIDED_PACKAGES)
   message(STATUS "Resolving packages from super-project: ${THEROCK_PROVIDED_PACKAGES}")
   cmake_language(
     SET_DEPENDENCY_PROVIDER therock_dependency_provider

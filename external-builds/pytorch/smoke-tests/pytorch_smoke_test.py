@@ -90,6 +90,10 @@ class TestMatrixOperations:
 
 
 class TestConvolutions:
+    def teardown_method(self):
+        # TODO(#999): fix tests stalling on exit without this
+        torch.cuda.synchronize()
+
     def test_conv_transpose2d(self):
         inputs = torch.randn(1, 4, 5, 5, device="cuda")
         weights = torch.randn(4, 8, 3, 3, device="cuda")

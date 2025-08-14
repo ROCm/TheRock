@@ -1,7 +1,10 @@
 # Build PyTorch with ROCm support
 
-This directory provides tooling for building PyTorch compatible with TheRock's
-ROCm dist packages.
+This directory provides tooling for building PyTorch with ROCm Python wheels.
+
+> [!TIP]
+> If you want to install our prebuilt PyTorch packages instead of building them
+> from source, see [RELEASES.md](/RELEASES.md) instead.
 
 There is nothing special about these build procedures except that they are meant
 to run as part of the ROCm CI and development flow and thus leave less room for
@@ -21,8 +24,8 @@ patches locally until they can be upstreamed. See the
 | Feature                  | Linux support | Windows support                                                       |
 | ------------------------ | ------------- | --------------------------------------------------------------------- |
 | PyTorch                  | ✅ Supported  | ✅ Supported                                                          |
-| torchvision              | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
-| torchaudio               | ✅ Supported  | 🟡 In progress ([#910](https://github.com/ROCm/TheRock/issues/910))   |
+| torchaudio               | ✅ Supported  | ✅ Supported                                                          |
+| torchvision              | ✅ Supported  | ✅ Supported                                                          |
 | Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
 
 ## Build instructions
@@ -39,8 +42,37 @@ and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
 for more background on these `rocm` packages.
 
 > [!WARNING]
-> Windows support for these packages is _very_ new so some instructions
-> may not work yet. Stay tuned!
+> On Windows, prefer to install Python for the current user only and to a path
+> **without spaces** like
+> `C:\Users\<username>\AppData\Local\Programs\Python\Python312`.
+>
+> Several developers have reported issues building torchvision when using
+> "Install Python for all users" with a default path like
+> `C:\Program Files\Python312` (note the space in "Program Files"). See
+> https://github.com/pytorch/vision/issues/9165 for details.
+
+> [!WARNING]
+> On Windows, when building with "--enable-pytorch-flash-attention-windows",
+> Make sure to use [ninja 1.13.1](https://github.com/ninja-build/ninja/releases/tag/v1.13.1) or above.
+>
+> PyTorch builds aotriton locally, but without the kernel images.
+> Make sure to copy the `aotriton.images` folder from an existing
+> aotriton linux build (`<aotriton_build_dir>/lib/aotriton.images`) and copy
+> that folder into your local pytorch lib directory: `<pytorch_dir>/torch/lib/`.
+> This is a temporary measure for manually producing aotriton builds.
+> NOTE: This will not work without the [corresponding patch](./patches/pytorch/main/pytorch/hipified/0004-Support-FLASH_ATTENTION-MEM_EFF_ATTENTION-via.-aotri.patch) for the main branch.
+>
+> On Windows, aotriton uses `dladdr`, which is implemented through
+> [dlfcn-win32](https://github.com/dlfcn-win32/dlfcn-win32), which unfortunately
+> uses `GetModuleFileNameA` (ANSI version) to get the base directory of
+> `libaotriton.so`. This means, if `libaotriton.so` is put under a path with
+> characters that cannot represented in current code page, the loading of GPU
+> kernels will fail.
+> See https://github.com/ROCm/aotriton/commit/e1be21d80b25f46139c2e3b4b0615e0279feccac
+> For possible fixes. A proper fix is planned and will eventually be added.
+>
+> NOTE: If you use ccache and face "invalid argument" errors during the aotriton build,
+> disable ccache and try again.
 
 ### Quickstart
 
@@ -63,7 +95,7 @@ throw-away container or CI environment.
 
 Now checkout repositories:
 
-- On Linux, use default paths (nested under this folder):
+- On Linux, use default paths (nested under this folder) and default branches:
 
   ```bash
   python pytorch_torch_repo.py checkout
@@ -71,11 +103,12 @@ Now checkout repositories:
   python pytorch_vision_repo.py checkout
   ```
 
-- On Windows, use shorter paths to avoid command length limits:
+- On Windows, use shorter paths to avoid command length limits and `main` branches:
 
   ```bash
-  # TODO(#910): Support torchvision and torchaudio on Windows
-  python pytorch_torch_repo.py checkout --repo C:/b/pytorch
+  python pytorch_torch_repo.py checkout --repo C:/b/pytorch --repo-hashtag main
+  python pytorch_audio_repo.py checkout --repo C:/b/audio --repo-hashtag main
+  python pytorch_vision_repo.py checkout --repo C:/b/vision --repo-hashtag main
   ```
 
 Now note the gfx target you want to build for and then...
@@ -102,6 +135,8 @@ mix/match build steps.
   python build_prod_wheels.py build \
     --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
     --pytorch-dir C:/b/pytorch \
+    --pytorch-audio-dir C:/b/audio \
+    --pytorch-vision-dir C:/b/vision \
     --output-dir %HOME%/tmp/pyout
   ```
 
@@ -202,6 +237,41 @@ To create patches
 
 ## Alternate Branches / Patch Sets
 
+We support several PyTorch branches with associated patch sets on Linux and
+Windows. The intent is to support the latest upstream PyTorch code (i.e. `main`
+or `nightly`) as well as recently published release branches which users depend
+on.
+
+> [!TIP]
+> Each branch combination below can also use specific commits by selecting a
+> patchset. For example, this will fetch PyTorch at
+> [pytorch/pytorch@3e2aa4b](https://github.com/pytorch/pytorch/commit/3e2aa4b0e3e971a81f665a9a6d803683452c022d)
+> using the patches from
+> [`patches/pytorch/main/pytorch/`](./patches/pytorch/main/pytorch/):
+>
+> ```bash
+> python pytorch_torch_repo.py checkout \
+>   --repo-hashtag 3e2aa4b0e3e971a81f665a9a6d803683452c022d \
+>   --patchset main
+> ```
+
+### PyTorch main
+
+This checks out the `main` branches from https://github.com/pytorch, tracking
+the latest (potentially unstable) code:
+
+- https://github.com/pytorch/pytorch/tree/main
+- https://github.com/pytorch/audio/tree/main
+- https://github.com/pytorch/vision/tree/main
+
+```bash
+python pytorch_torch_repo.py checkout --repo-hashtag main
+python pytorch_audio_repo.py checkout --repo-hashtag main
+python pytorch_vision_repo.py checkout --repo-hashtag main
+# Note that triton will be checked out at the PyTorch pin.
+python pytorch_triton_repo.py checkout
+```
+
 ### PyTorch Nightly
 
 This checks out the `nightly` branches from https://github.com/pytorch,
@@ -211,7 +281,7 @@ tracking the latest pytorch.org nightly release:
 - https://github.com/pytorch/audio/tree/nightly
 - https://github.com/pytorch/vision/tree/nightly
 
-```
+```bash
 python pytorch_torch_repo.py checkout --repo-hashtag nightly
 python pytorch_audio_repo.py checkout --repo-hashtag nightly
 python pytorch_vision_repo.py checkout --repo-hashtag nightly
@@ -242,7 +312,7 @@ NOTE: Presently broken at runtime on a HIP major version incompatibility in the
 pre-built aotriton (#1025). Must build with
 `USE_FLASH_ATTENTION=0 USE_MEM_EFF_ATTENTION=0` until fixed.
 
-```
+```bash
 python pytorch_torch_repo.py checkout \
   --gitrepo-origin https://github.com/ROCm/pytorch.git \
   --repo-hashtag release/2.7 \

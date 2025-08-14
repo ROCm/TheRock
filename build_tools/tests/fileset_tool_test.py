@@ -173,6 +173,7 @@ class FilesetToolTest(unittest.TestCase):
                 FILESET_TOOL,
                 "artifact-flatten",
                 artifact_archive,
+                "--verbose",
                 "-o",
                 flat2_dir,
             ]

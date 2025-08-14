@@ -7,6 +7,7 @@ download artifacts then unpack them into a usable install directory.
 
 Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   mkdir -p ~/.therock/artifacts_15685736080
+  pip install boto3
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
 
@@ -20,15 +21,27 @@ additional disk space):
 """
 
 import argparse
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
 import concurrent.futures
 from dataclasses import dataclass
-from html.parser import HTMLParser
 from pathlib import Path
 import platform
-from shutil import copyfileobj
 import sys
 import tarfile
-import urllib.request
+import time
+import warnings
+from urllib3.exceptions import InsecureRequestWarning
+
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)
+
+s3_client = boto3.client(
+    "s3",
+    verify=False,
+    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
+)
+paginator = s3_client.get_paginator("list_objects_v2")
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
 
@@ -41,37 +54,6 @@ GENERIC_VARIANT = "generic"
 PLATFORM = platform.system().lower()
 
 
-class FetchArtifactException(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-class ArtifactNotFoundExeption(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-class IndexPageParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.files = []
-        self.is_file_data = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "span":
-            for attr_name, attr_value in attrs:
-                if attr_name == "class" and attr_value == "name":
-                    self.is_file_data = True
-                    break
-
-    def handle_data(self, data):
-        if self.is_file_data:
-            self.files.append(data)
-            self.is_file_data = False
-
-
 # TODO(geomin12): switch out logging library
 def log(*args, **kwargs):
     print(*args, **kwargs)
@@ -81,38 +63,29 @@ def log(*args, **kwargs):
 def retrieve_s3_artifacts(run_id, amdgpu_family):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
-    BUCKET_URL = f"https://{BUCKET}.s3.amazonaws.com/{EXTERNAL_REPO}{run_id}-{PLATFORM}"
-    # TODO(scotttodd): hint when amdgpu_family is wrong/missing (root index for all families/platforms)?
-    index_page_url = f"{BUCKET_URL}/index-{amdgpu_family}.html"
-    log(f"Retrieving artifacts from {index_page_url}")
-    request = urllib.request.Request(index_page_url)
-    try:
-        with urllib.request.urlopen(request) as response:
-            # from the S3 index page, we search for artifacts inside the a tags "<span class='name'>{TAR_NAME}</span>"
-            parser = IndexPageParser()
-            parser.feed(str(response.read()))
-            data = set()
-            for artifact in parser.files:
-                # We only want to get .tar.xz files, not .tar.xz.sha256sum
-                if "sha256sum" not in artifact and "tar.xz" in artifact:
-                    data.add(artifact)
-            return data
-    except urllib.request.HTTPError as err:
-        if err.code == 404:
-            raise ArtifactNotFoundExeption(
-                f"No artifacts found for {run_id}-{PLATFORM}. Exiting..."
-            )
-        else:
-            raise FetchArtifactException(
-                f"Error when retrieving S3 bucket {run_id}-{PLATFORM}/index-{amdgpu_family}.html. Exiting..."
-            )
+    s3_directory_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}/"
+    page_iterator = paginator.paginate(Bucket=BUCKET, Prefix=s3_directory_path)
+    data = set()
+    for page in page_iterator:
+        if "Contents" in page:
+            for artifact in page["Contents"]:
+                artifact_key = artifact["Key"]
+                if (
+                    "sha256sum" not in artifact_key
+                    and "tar.xz" in artifact_key
+                    and (amdgpu_family in artifact_key or "generic" in artifact_key)
+                ):
+                    file_name = artifact_key.split("/")[-1]
+                    data.add(file_name)
+    return data
 
 
 @dataclass
 class ArtifactDownloadRequest:
     """Information about a request to download an artifact to a local path."""
 
-    artifact_url: str
+    artifact_key: str
+    bucket: str
     output_path: Path
 
 
@@ -129,16 +102,17 @@ def collect_artifacts_download_requests(
     existing_artifacts: set[str],
 ) -> list[ArtifactDownloadRequest]:
     """Collects S3 artifact URLs to execute later in parallel."""
-    bucket_url = get_bucket_url(run_id)
-
     artifacts_to_retrieve = []
+    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
+    s3_key_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}"
     for artifact_name in artifact_names:
         file_name = f"{artifact_name}_{variant}.tar.xz"
         # If artifact does exist in s3 bucket
         if file_name in existing_artifacts:
             artifacts_to_retrieve.append(
                 ArtifactDownloadRequest(
-                    artifact_url=f"{bucket_url}/{file_name}",
+                    artifact_key=f"{s3_key_path}/{file_name}",
+                    bucket=BUCKET,
                     output_path=output_dir / file_name,
                 )
             )
@@ -147,14 +121,27 @@ def collect_artifacts_download_requests(
 
 
 def download_artifact(artifact_download_request: ArtifactDownloadRequest):
-    artifact_url = artifact_download_request.artifact_url
-    output_path = artifact_download_request.output_path
-    log(f"++ Downloading from {artifact_url} to {output_path}")
-    with urllib.request.urlopen(artifact_url) as in_stream, open(
-        output_path, "wb"
-    ) as out_file:
-        copyfileobj(in_stream, out_file)
-    log(f"++ Download complete for {output_path}")
+    MAX_RETRIES = 3
+    BASE_DELAY = 3  # seconds
+    for attempt in range(MAX_RETRIES):
+        try:
+            artifact_key = artifact_download_request.artifact_key
+            bucket = artifact_download_request.bucket
+            output_path = artifact_download_request.output_path
+            log(f"++ Downloading {artifact_key} to {output_path}")
+            with open(output_path, "wb") as f:
+                s3_client.download_fileobj(bucket, artifact_key, f)
+            log(f"++ Download complete for {output_path}")
+        except Exception as e:
+            log(f"++ Error downloading {artifact_key}: {e}")
+            if attempt < MAX_RETRIES - 1:
+                delay = BASE_DELAY * (2**attempt)
+                print(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                log(
+                    f"++ Failed downloading from {artifact_key} after {MAX_RETRIES} retries"
+                )
 
 
 def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]):
@@ -175,9 +162,10 @@ def retrieve_all_artifacts(
     s3_artifacts: set[str],
 ):
     """Retrieves all available artifacts."""
-
-    bucket_url = get_bucket_url(run_id)
     artifacts_to_retrieve = []
+    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
+    s3_key_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}"
+
     for artifact in sorted(list(s3_artifacts)):
         an = ArtifactName.from_filename(artifact)
         if an.target_family != "generic" and target != an.target_family:
@@ -185,7 +173,8 @@ def retrieve_all_artifacts(
 
         artifacts_to_retrieve.append(
             ArtifactDownloadRequest(
-                artifact_url=f"{bucket_url}/{artifact}",
+                artifact_key=f"{s3_key_path}/{artifact}",
+                bucket=BUCKET,
                 output_path=output_dir / artifact,
             )
         )

@@ -24,8 +24,14 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
       release_type:
         description: The type of release to build ("nightly", or "dev")
         type: string
@@ -48,12 +54,18 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
+  release:
+    name: Release PyTorch | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
     strategy:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", 3.13]
+        pytorch_version: ["release/2.7", "nightly"]
+        include:
+          - pytorch_version: release/2.7
+            pytorch_patchset: "rocm_2.7"
+          - pytorch_version: nightly
+            pytorch_patchset: "nightly"
 
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
     with:
@@ -63,3 +75,5 @@ jobs:
       s3_subdir: ${{ inputs.s3_subdir }}
       cloudfront_url: ${{ inputs.cloudfront_url }}
       rocm_version: ${{ inputs.rocm_version }}
+      pytorch_version: ${{ matrix.pytorch_version }}
+      pytorch_patchset: ${{ matrix.pytorch_patchset }}

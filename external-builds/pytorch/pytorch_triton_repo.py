@@ -105,10 +105,6 @@ def main(cl_args: list[str]):
         help="git repository url",
     )
     checkout_p.add_argument(
-        "--repo-hashtag",
-        help="Git repository ref/tag to checkout",
-    )
-    checkout_p.add_argument(
         "--release",
         default=False,
         action=argparse.BooleanOptionalAction,
@@ -125,7 +121,7 @@ def main(cl_args: list[str]):
     checkout_p.add_argument(
         "--patch",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help="Apply patches for the repo-hashtag",
     )
     checkout_p.set_defaults(func=do_checkout)

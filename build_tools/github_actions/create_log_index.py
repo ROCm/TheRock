@@ -30,9 +30,18 @@ def index_log_files(build_dir: Path, amdgpu_family: str):
     indexer_path = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
 
     if log_dir.is_dir():
-        log(f"[INFO] Found '{log_dir}' directory. Indexing '*.log' files...")
+        log(
+            f"[INFO] Found '{log_dir}' directory. Indexing '*.log' and '*.tar.gz' files..."
+        )
         subprocess.run(
-            ["python", str(indexer_path), "-f", "*.log", normalize_path(log_dir)],
+            [
+                "python",
+                str(indexer_path),
+                normalize_path(log_dir),  # unnamed path arg in front of -f
+                "-f",
+                "*.log",
+                "*.tar.gz",  # accepts nargs! Take care not to consume path
+            ],
             check=True,
         )
     else:

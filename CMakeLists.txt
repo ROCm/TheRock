@@ -16,6 +16,7 @@ cmake_policy(SET CMP0135 NEW)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CMakeDependentOption)
 include(ExternalProject)
+include(therock_default_targets)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
@@ -59,16 +60,42 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 
 # Source settings.
-# Source can be consumed from the https://github.com/ROCm/rocm-libraries monorepo,
-# while the default is to consume the submodules defined in TheRock's `.gitmodules`.
-option(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES "Use the `rocm-libraries` monorepo instead of submodules" OFF)
-if(THEROCK_USE_EXTERNAL_ROCM_LIBRARIES AND NOT THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
-  message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_ROCM_LIBRARIES is set, THEROCK_ROCM_LIBRARIES_SOURCE_DIR is required!")
+# Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
+# allow to specify an alternative source location.
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-libraries")
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-libraries superrepo")
+cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
+
+# Use the rccl amd rccl-test repos tracked in TheRock's `.gitmodules` or
+# specify alternative source locations.
+option(THEROCK_USE_EXTERNAL_RCCL "Use external rccl source locations" OFF)
+set(THEROCK_RCCL_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/comm-libs/rccl")
+set(THEROCK_RCCL_TESTS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/comm-libs/rccl-tests")
+
+if(THEROCK_USE_EXTERNAL_RCCL)
+  if(NOT THEROCK_RCCL_SOURCE_DIR)
+    message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_RCCL is set, THEROCK_RCCL_SOURCE_DIR is required!")
+  endif()
+  if(NOT THEROCK_RCCL_TESTS_SOURCE_DIR)
+    message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_RCCL is set, THEROCK_RCCL_TESTS_SOURCE_DIR is required!")
+  endif()
 endif()
 
-if(THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
-  cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
+set(THEROCK_RCCL_SOURCE_DIR "${THEROCK_RCCL_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rccl sources")
+set(THEROCK_RCCL_TESTS_SOURCE_DIR "${THEROCK_RCCL_TESTS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rccl-tests sources")
+cmake_path(ABSOLUTE_PATH THEROCK_RCCL_SOURCE_DIR NORMALIZE)
+cmake_path(ABSOLUTE_PATH THEROCK_RCCL_TESTS_SOURCE_DIR NORMALIZE)
+
+# Use the composable_kernel tracked in TheRock's `.gitmodules` or
+# specify an alternative source location.
+option(THEROCK_USE_EXTERNAL_CK "Use external CK source location" OFF)
+set(THEROCK_CK_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel")
+
+if(THEROCK_USE_EXTERNAL_CK AND NOT THEROCK_CK_SOURCE_DIR)
+  message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_CK is set, THEROCK_CK_SOURCE_DIR is required!")
 endif()
+set(THEROCK_CK_SOURCE_DIR "${THEROCK_CK_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to ck sources")
+cmake_path(ABSOLUTE_PATH THEROCK_CK_SOURCE_DIR NORMALIZE)
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
@@ -117,6 +144,7 @@ endblock()
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
 option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
+option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 
 ################################################################################
 # Feature selection
@@ -420,4 +448,3 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
-therock_create_dist()

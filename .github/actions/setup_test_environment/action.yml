@@ -13,14 +13,11 @@ inputs:
     type: string
   FETCH_ARTIFACT_ARGS:
     type: string
-  PLATFORM:
-    type: string
 
 runs:
   using: "composite"
   steps:
     - name: "Setting up Python"
-      id: setup_python
       uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
       with:
         python-version: 3.11
@@ -30,18 +27,22 @@ runs:
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
-        python3 -m venv ${VENV_DIR}
-        if [ "${{ inputs.PLATFORM }}" == "linux" ]; then source ${VENV_DIR}/bin/activate ; else . ${VENV_DIR}/Scripts/activate ; fi
+        python build_tools/setup_venv.py ${VENV_DIR} \
+          --activate-in-future-github-actions-steps
+
+    - name: Install test requirements
+      shell: bash
+      run: |
         pip install -r requirements-test.txt
         pip freeze
 
     - name: Install the AWS tool
-      if: ${{ inputs.PLATFORM == 'linux'}}
+      if: ${{ runner.os == 'Linux' }}
       shell: bash
-      run: ./dockerfiles/cpubuilder/install_awscli.sh
+      run: ./dockerfiles/install_awscli.sh
 
     - name: Install the AWS tool
-      if: ${{ inputs.PLATFORM == 'windows'}}
+      if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: |
         choco install --no-progress -y awscli
@@ -50,7 +51,6 @@ runs:
     - name: Download and Unpack Artifacts
       shell: bash
       env:
-        VENV_DIR: ${{ inputs.VENV_DIR }}
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
         AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
