@@ -42,6 +42,7 @@ jobs:
         run: |
           id
           ls -ln /home/runner/externals
+          echo ""
           ls -l $AWS_SHARED_CREDENTIALS_FILE
 
   build_linux_packages:
