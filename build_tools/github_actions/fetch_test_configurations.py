@@ -130,7 +130,7 @@ def run():
             logging.info(f"Including job {job_name}")
             output_matrix.append(test_matrix[key])
 
-    gha_set_output({"components": json.dumps(output_matrix)})
+    gha_set_output({"components": json.dumps(output_matrix), "platform": platform})
 
 
 if __name__ == "__main__":

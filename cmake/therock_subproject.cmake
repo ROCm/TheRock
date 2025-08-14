@@ -552,6 +552,10 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(THEROCK_INSTALL_RPATH_EXECUTABLE_DIR "${target_name}" THEROCK_INSTALL_RPATH_EXECUTABLE_DIR)
   get_target_property(THEROCK_INSTALL_RPATH_LIBRARY_DIR "${target_name}" THEROCK_INSTALL_RPATH_LIBRARY_DIR)
 
+  # Stamp file paths.
+  set(_configure_stamp_file "${_stamp_dir}/configure.stamp")
+  set(_build_stamp_file "${_stamp_dir}/build.stamp")
+  set(_stage_stamp_file "${_stamp_dir}/stage.stamp")
 
   # Handle optional properties.
   if(NOT _sources)
@@ -626,6 +630,10 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_init_contents)
+  string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
+  string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
+  string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
+
   # Support generator expressions in install CODE
   # We rely on this for debug symbol separation and some of our very old projects
   # have a CMake minver < 3.14, defaulting them to OLD. Unfortunately, this policy
@@ -712,16 +720,9 @@ function(therock_cmake_subproject_activate target_name)
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
-  # on the dist.stamp file). These are a dependency for configure. We satisfy both
-  # build and runtime deps from the dist phase because even build-only deps may
-  # need to execute tools linked such that they require all transitive libraries
-  # materialized. We might be able to save some milliseconds by steering
-  # build-only deps to the stage.stamp file, but the complexity involved is not
-  # worth it, especially considering that it increases the likelihood of build
-  # non-determinism.
+  # on the stage.stamp file). These are a dependency for configure.
   set(_configure_dep_stamps)
-  _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps dist.stamp ${_build_deps})
-  _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps dist.stamp ${_runtime_deps})
+  _therock_cmake_subproject_deps_to_stamp(_configure_dep_stamps stage.stamp ${_build_deps} ${_runtime_deps})
 
   # Target flags.
   set(_all_option)
@@ -731,9 +732,6 @@ function(therock_cmake_subproject_activate target_name)
 
   # Detect whether the stage dir has been pre-built.
   set(_prebuilt_file "${_stage_dir}.prebuilt")
-  set(_configure_stamp_file "${_stamp_dir}/configure.stamp")
-  set(_build_stamp_file "${_stamp_dir}/build.stamp")
-  set(_stage_stamp_file "${_stamp_dir}/stage.stamp")
 
   # Derive the CMAKE_BUILD_TYPE from eiether {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
@@ -743,6 +741,10 @@ function(therock_cmake_subproject_activate target_name)
   else()
     message(STATUS "  PROJECT SPECIFIC CMAKE_BUILD_TYPE=${_cmake_build_type}")
   endif()
+
+  set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  _therock_cmake_subproject_get_stage_dirs(
+    _dist_source_dirs "${target_name}" ${_runtime_deps})
 
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
@@ -761,8 +763,12 @@ function(therock_cmake_subproject_activate target_name)
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
+      # Populate local dist directory with this+all transitive stage installs.
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
-      DEPENDS "${_prebuilt_file}"
+      DEPENDS
+        "${_prebuilt_file}"
+        "${_fileset_tool}"
     )
   else()
     # Not pre-built: normal configure/build/stage install.
@@ -889,45 +895,32 @@ function(therock_cmake_subproject_activate target_name)
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
+      # Install to stage directory.
       COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
+      # Populate local dist directory with this+all transitive stage installs.
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"
       ${_terminal_option}
       DEPENDS
         "${_build_stamp_file}"
+        "${_fileset_tool}"
     )
-    add_custom_target(
-      "${target_name}+stage"
-      ${_all_option}
-      DEPENDS
-        "${_stage_stamp_file}"
-    )
-    add_dependencies("${target_name}" "${target_name}+stage")
-  endif()
-
-  # dist install target.
-  set(_dist_stamp_file "${_stamp_dir}/dist.stamp")
-  set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
-  _therock_cmake_subproject_get_stage_dirs(
-    _dist_source_dirs "${target_name}" ${_runtime_deps})
-  add_custom_command(
-    OUTPUT "${_dist_stamp_file}"
-    COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${_dist_source_dirs}
-    COMMAND "${CMAKE_COMMAND}" -E touch "${_dist_stamp_file}"
-    COMMENT "Merging sub-project dist directory for ${target_name}"
-    ${_terminal_option}
-    DEPENDS
-      "${_stage_stamp_file}"
-      "${_fileset_tool}"
-  )
+  endif()  # Split between pre-built and build mode
   add_custom_target(
-    "${target_name}+dist"
+    "${target_name}+stage"
     ${_all_option}
     DEPENDS
-      "${_dist_stamp_file}"
+      "${_stage_stamp_file}"
   )
-  add_dependencies("${target_name}" "${target_name}+dist")
+  add_dependencies("${target_name}" "${target_name}+stage")
+
+  # Create a +dist target that can have dependencies added to it which will also
+  # populate combined artifacts and distributions. By default this does nothing,
+  # but when artifacts and distributions depend on the target, they will be
+  # added as dependencies here.
+  add_custom_target("${target_name}+dist")
 
   # expunge target
   add_custom_target(
@@ -935,6 +928,7 @@ function(therock_cmake_subproject_activate target_name)
     COMMAND
       ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}"
   )
+  add_dependencies(therock-expunge "${target_name}+expunge")
 endfunction()
 
 # therock_cmake_subproject_glob_c_sources
@@ -1133,13 +1127,11 @@ function(_therock_cmake_subproject_collect_runtime_deps
     get_target_property(_deps "${target_name}" THEROCK_RUNTIME_DEPS)
     list(APPEND _transitive_deps ${_deps} ${target_name})
 
-    # If we have program dirs, then this target's 'dist' phase has to become
-    # a transitive dep for all future configures (by default the build graph
-    # only depends on the 'stage' phase).
+    # Depend on stage installation.
     get_target_property(_program_dir "${target_name}" THEROCK_INTERFACE_PROGRAM_DIRS)
     if(_program_dir)
       list(APPEND _program_dirs ${_program_dir})
-      list(APPEND _transitive_configure_depend_files "${_stamp_dir}/dist.stamp")
+      list(APPEND _transitive_configure_depend_files "${_stamp_dir}/stage.stamp")
     endif()
 
     # PkgConfig dirs.
@@ -1310,7 +1302,7 @@ function(_therock_cmake_subproject_setup_toolchain
     set(_amd_llvm_cxx_flags_spaces )
     string(JOIN " " _amd_llvm_cxx_flags_spaces ${THEROCK_AMD_LLVM_DEFAULT_CXX_FLAGS})
 
-    list(APPEND _compiler_toolchain_addl_depends "${_amd_llvm_stamp_dir}/dist.stamp")
+    list(APPEND _compiler_toolchain_addl_depends "${_amd_llvm_stamp_dir}/stage.stamp")
     # We inject a toolchain root into the subproject so that magic overrides can
     # use it (i.e. for old projects that require path munging, etc).
     string(APPEND _toolchain_contents "set(THEROCK_TOOLCHAIN_ROOT \"${_amd_llvm_dist_dir}\")\n")
@@ -1339,7 +1331,7 @@ function(_therock_cmake_subproject_setup_toolchain
     get_target_property(_hip_stamp_dir hip-clr THEROCK_STAMP_DIR)
     # Add a dependency on HIP's stamp.
     set(_amd_llvm_device_lib_path "${_amd_llvm_dist_dir}/lib/llvm/amdgcn/bitcode")
-    list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/dist.stamp")
+    list(APPEND _compiler_toolchain_addl_depends "${_hip_stamp_dir}/stage.stamp")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-path=@_hip_dist_dir@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" --hip-device-lib-path=@_amd_llvm_device_lib_path@\")\n")
     if(THEROCK_VERBOSE)

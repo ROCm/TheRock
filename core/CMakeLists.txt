@@ -151,4 +151,31 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       libhiprtc-builtins.so
       libhiprtc.so
   )
+  if(WIN32)
+    ##############################################################################
+    # hipInfo (from hip-tests)
+    ##############################################################################
+    therock_cmake_subproject_declare(hipInfo
+      EXTERNAL_SOURCE_DIR "hipInfo"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DHIP_PLATFORM=amd"
+      RUNTIME_DEPS
+        hip-clr
+    )
+    therock_cmake_subproject_glob_c_sources(hipInfo SUBDIRS .)
+    therock_cmake_subproject_activate(hipInfo)
+
+    # Provide it as an artifact:
+    therock_provide_artifact(core-hipinfo
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-hipinfo.toml
+      COMPONENTS
+        run
+      SUBPROJECT_DEPS
+        hipInfo
+    )
+  endif()
+
 endif(THEROCK_ENABLE_HIP_RUNTIME)

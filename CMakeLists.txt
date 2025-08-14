@@ -16,6 +16,7 @@ cmake_policy(SET CMP0135 NEW)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CMakeDependentOption)
 include(ExternalProject)
+include(therock_default_targets)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
@@ -60,19 +61,10 @@ option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds in
 
 # Source settings.
 # Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
-# specify an alternative source location.
-option(THEROCK_USE_ROCM_LIBRARIES "Use the `rocm-libraries` superrepo" ON)
+# allow to specify an alternative source location.
 set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-libraries")
 set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-libraries superrepo")
-
 cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
-if(NOT THEROCK_USE_ROCM_LIBRARIES)
-  message(FATAL_ERROR
-    "Building from indvidual submodules is deprecated. "
-    "Set THEROCK_USE_ROCM_LIBRARIES to `ON` and re-run `fetch_sources.py` "
-    "to clone and patch the rocm-libraries submodule."
-  )
-endif()
 
 # Use the rccl amd rccl-test repos tracked in TheRock's `.gitmodules` or
 # specify alternative source locations.
@@ -456,4 +448,3 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
-therock_create_dist()

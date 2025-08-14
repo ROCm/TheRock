@@ -94,14 +94,8 @@ if(THEROCK_ENABLE_MIOPEN)
     endif()
   endif()
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_miopen_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen")
-  else()
-    set(_miopen_source_dir "MIOpen")
-  endif()
-
   therock_cmake_subproject_declare(MIOpen
-    EXTERNAL_SOURCE_DIR "${_miopen_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
     BACKGROUND_BUILD
     CMAKE_ARGS

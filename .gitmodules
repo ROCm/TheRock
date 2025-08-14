@@ -82,3 +82,7 @@
 	path = rocm-libraries
 	url = https://github.com/ROCm/rocm-libraries
 	branch = develop
+[submodule "hip-tests"]
+	path = core/hip-tests
+	url = https://github.com/ROCm/hip-tests.git
+	branch = amd-staging

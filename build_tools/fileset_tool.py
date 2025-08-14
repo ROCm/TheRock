@@ -269,8 +269,9 @@ def _do_artifact_flatten(args):
     flattener(*args.artifact)
     relpaths = list(flattener.relpaths)
     relpaths.sort()
-    for relpath in relpaths:
-        print(relpath)
+    if args.verbose:
+        for relpath in relpaths:
+            print(relpath)
 
 
 def _dup_list_or_str(v: list[str] | str) -> list[str]:

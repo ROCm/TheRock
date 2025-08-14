@@ -92,7 +92,7 @@ jobs:
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Configure Git Identity
         run: |
@@ -122,7 +122,7 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout --patch --patchset nightly
 
       # Then the else branch to checkout release version of source code instead.
       - name: Checkout PyTorch Source Repos from stable branch
@@ -186,7 +186,7 @@ jobs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Generating target to run
         id: configure
