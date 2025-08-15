@@ -111,6 +111,8 @@ jobs:
 
       - name: Fetch sources
         run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 96
 
       - name: Configure Projects
@@ -156,7 +158,7 @@ jobs:
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
