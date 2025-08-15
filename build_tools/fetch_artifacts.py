@@ -434,7 +434,7 @@ def main(argv):
         "--no-extract",
         default=False,
         action="store_true",
-        help="Extract files after fetching them",
+        help="Do no extraction or flattening",
     )
     postprocess_p.add_argument(
         "--extract",

@@ -102,7 +102,6 @@ def retrieve_artifacts_by_run_id(args):
     If the user requested TheRock artifacts by CI (run ID), this function will retrieve those assets
     """
     run_id = args.run_id
-    output_dir = args.output_dir
     log(f"Retrieving artifacts for run ID {run_id}")
     argv = [
         "--run-id",
