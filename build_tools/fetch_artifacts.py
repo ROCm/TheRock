@@ -206,7 +206,7 @@ def get_postprocess_mode(args) -> str | None:
         return "flatten"
     if args.no_extract:
         return None
-    return True
+    return "extract"
 
 
 def filter_base_artifacts(
