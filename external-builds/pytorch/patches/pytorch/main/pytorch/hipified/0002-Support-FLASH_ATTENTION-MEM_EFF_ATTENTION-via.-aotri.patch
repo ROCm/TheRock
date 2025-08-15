@@ -176,7 +176,7 @@ index 54564e42c9..40e401154e 100644
        "rocm7.0"
        )
 -  set(__AOTRITON_CI_COMMIT "6fca155f4deeb8d9529326f7b69f350aeeb93477")
-+  set(__AOTRITON_CI_COMMIT "e1be21d80b25f46139c2e3b4b0615e0279feccac")
++  set(__AOTRITON_CI_COMMIT "1f9a37cdfbfce218fa0c07f5c0de40403019e168")
    set(__AOTRITON_SHA256_LIST
        "861cd9f7479eec943933c27cb86920247e5b5dd139bc7c1376c81808abb7d7fe"  # rocm6.3
        "acea7d811a2d3bbe718b6e07fc2a9f739e49eecd60b4b6a36fcb3fe8edf85d78"  # rocm6.4
