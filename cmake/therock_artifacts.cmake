@@ -57,6 +57,7 @@ function(therock_provide_artifact slice_name)
 
   if(ARG_DISTRIBUTION)
     set(_dist_dir "${THEROCK_BINARY_DIR}/dist/${ARG_DISTRIBUTION}")
+    # First time we see the distribution, set up targets and install.
     if(NOT TARGET "dist-${ARG_DISTRIBUTION}")
       add_custom_target("dist-${ARG_DISTRIBUTION}" ALL)
       add_dependencies(therock-dist "dist-${ARG_DISTRIBUTION}")
@@ -68,6 +69,24 @@ function(therock_provide_artifact slice_name)
           "${CMAKE_COMMAND}" -E rm -rf "${_dist_dir}"
       )
       add_dependencies(therock-expunge "dist-${ARG_DISTRIBUTION}+expunge")
+
+      # Add install()
+      install(
+        DIRECTORY "${_dist_dir}/"
+        DESTINATION "."
+        COMPONENT "${ARG_DISTRIBUTION}"
+        USE_SOURCE_PERMISSIONS
+      )
+
+      add_custom_target(
+        "install-${ARG_DISTRIBUTION}"
+        COMMAND
+          "${CMAKE_COMMAND}"
+            --install "${THEROCK_BINARY_DIR}"
+            --component "${ARG_DISTRIBUTION}"
+        DEPENDS
+          "dist-${ARG_DISTRIBUTION}"
+      )
     endif()
   endif()
 
