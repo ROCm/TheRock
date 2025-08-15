@@ -13,6 +13,9 @@ inputs:
     type: string
   FETCH_ARTIFACT_ARGS:
     type: string
+  IS_PR_FROM_FORK:
+    type: boolean
+    default: false
 
 runs:
   using: "composite"
@@ -56,6 +59,7 @@ runs:
         AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
+        IS_PR_FROM_FORK: ${{ inputs.IS_PR_FROM_FORK }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \

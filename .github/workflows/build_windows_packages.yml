@@ -43,7 +43,7 @@ jobs:
       CCACHE_MAXSIZE: "4000M"
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-      IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
+      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
