@@ -62,8 +62,13 @@ import argparse
 from pathlib import Path, PosixPath
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
+
+from _therock_utils.artifacts import ArtifactCatalog, ArtifactPopulator, SkipPopulation
+from fetch_artifacts import main as fetch_artifacts_main
 
 
 def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
@@ -75,32 +80,113 @@ def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
     for rp, include in selection:
         stage_dir = build_dir / PosixPath(rp)
         prebuilt_file = stage_dir.with_name(stage_dir.name + ".prebuilt")
+        is_empty = False
         if not is_valid_stage_dir(stage_dir):
-            action = (False, "(EMPTY)")
+            action = (True, "(EMPTY)")
+            is_empty = True
         elif include:
             action = (True, "")
         else:
             action = (False, "")
 
         action_enable, message = action
-        if message == "(EMPTY)":
-            continue
 
         if not enable_mode:
-            action_enable = False
+            action_enable = not action_enable
 
         if action_enable:
+            # Enable by deleting the prebuilt file.
             if prebuilt_file.exists():
                 prebuilt_file.unlink()
                 changed = True
-        else:
+        elif not is_empty:
+            # Disable by touching the prebuilt file.
+            # When disabling, we only do so if the stage directory is non
+            # empty. This keeps us from setting up prebuilts for trivial
+            # projects like header only deps, etc.
             if not prebuilt_file.exists():
                 prebuilt_file.touch()
                 changed = True
-        print(f"[{'X' if action_enable else ' '}] {rp} {message}")
+        is_enabled = not prebuilt_file.exists()
+        print(f"[{'X' if is_enabled else ' '}] {rp} {message}")
 
     if changed or args.force_reconfigure:
         reconfigure(build_dir)
+
+
+def do_status(args: argparse.Namespace):
+    build_dir = resolve_build_dir(args)
+    stage_relpaths = find_stage_dirs(build_dir)
+    print("Projects marked with an 'X' will be build enabled:")
+    for stage_relpath in stage_relpaths:
+        stage_dir = build_dir / stage_relpath
+        prebuilt_file = stage_dir.with_name(stage_dir.name + ".prebuilt")
+        is_enabled = not prebuilt_file.exists()
+        print(f"[{'X' if is_enabled else ' '}] {stage_relpath}")
+
+
+def do_download(args: argparse.Namespace):
+    build_dir = resolve_build_dir(args)
+    stage_dirs = find_stage_dirs(build_dir)
+    if not stage_dirs:
+        raise CLIError(
+            f"There are no stage directories in the build dir {build_dir}: "
+            f"Has an initial configure been done yet?"
+        )
+    # Make sure the fetch temp dir is on the same file system as the build dir
+    # so that moving works.
+    temp_dir = build_dir / ".fetch_artifacts"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(dir=temp_dir, delete=False) as extract_dir_str:
+        print(f"Extracting to temporary directory: {extract_dir_str}")
+        extract_dir = Path(extract_dir_str)
+        fetch_args = [
+            "--output-dir",
+            str(extract_dir),
+            "--run-id",
+            args.run_id,
+            "--all",
+            "--target",
+            args.target,
+        ]
+        if args.exclude:
+            fetch_args.append("--exclude")
+            fetch_args.extend(args.exclude)
+        fetch_args.extend(args.include)
+        fetch_artifacts_main(fetch_args)
+
+        catalog = ArtifactCatalog(extract_dir)
+        prebuilt_stage_dirs: set[str] = set()
+
+        class PrebuiltArtifactPopulator(ArtifactPopulator):
+            def on_relpath(self, relpath):
+                if relpath not in stage_dirs:
+                    print(f"SKIP: {relpath} (not part of current build)")
+                    raise SkipPopulation()
+                if relpath in prebuilt_stage_dirs:
+                    # Already encountered: let it copy as is
+                    return
+                prebuilt_stage_dirs.add(relpath)
+
+                # First time: Delete and mark as prebuilt.
+                print(f"++ Populating {relpath} as a prebuilt")
+                build_stage_dir = build_dir / relpath
+                if build_stage_dir.exists():
+                    shutil.rmtree(build_stage_dir)
+                prebuilt_file = build_stage_dir.with_name(
+                    build_stage_dir.name + ".prebuilt"
+                )
+                print(f"++ Marking prebuilt {prebuilt_file}")
+                prebuilt_file.touch()
+
+        populator = PrebuiltArtifactPopulator(
+            output_path=build_dir, verbose=True, flatten=False
+        )
+        populator(*catalog.all_artifact_dirs)
+
+    do_status(args)
+    reconfigure(build_dir)
 
 
 def resolve_build_dir(args: argparse.Namespace) -> Path:
@@ -241,7 +327,7 @@ def main(cl_args: list[str]):
     add_common_options(enable_p, lambda args: do_enable_disable(args, enable_mode=True))
     add_selection_options(enable_p)
 
-    # 'unpin' command
+    # 'disable' command
     disable_p = sub_p.add_parser(
         "disable", help="Disable subset of projects as prebuilt"
     )
@@ -249,6 +335,40 @@ def main(cl_args: list[str]):
         disable_p, lambda args: do_enable_disable(args, enable_mode=False)
     )
     add_selection_options(disable_p)
+
+    # 'status' command
+    status_p = sub_p.add_parser("status", help="Show status of all pre-builts")
+    add_common_options(status_p, lambda args: do_status(args))
+
+    # 'download' command
+    download_p = sub_p.add_parser(
+        "download",
+        help="Download artifacts from a CI run and disable them in the build",
+    )
+    download_p.add_argument(
+        "--run-id",
+        type=str,
+        required=True,
+        help="GitHub run ID to retrieve artifacts from",
+    )
+    download_p.add_argument(
+        "--target",
+        type=str,
+        required=True,
+        help="Target variant for specific GPU target",
+    )
+    download_p.add_argument(
+        "include",
+        nargs="*",
+        help="Regular expression patterns of artifacts to include: "
+        "if supplied one pattern must match for an artifact to be included",
+    )
+    download_p.add_argument(
+        "--exclude",
+        nargs="*",
+        help="Regular expression patterns of artifacts to exclude",
+    )
+    add_common_options(download_p, do_download)
 
     args = p.parse_args(cl_args)
     try:
