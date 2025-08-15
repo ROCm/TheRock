@@ -84,10 +84,8 @@ jobs:
           git config fetch.parallel 10
 
       - name: Fetch sources
-       # testing
         run: |
-          ./build_tools/fetch_sources.py --jobs 12 \
-            --no-include-math-libs --no-include-ml-frameworks
+          ./build_tools/fetch_sources.py --jobs 12
 
       - name: Install python deps
         run: |
@@ -97,9 +95,7 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          # for testing
-          extra_cmake_options: "-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_HIPIFY=ON"
-          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py

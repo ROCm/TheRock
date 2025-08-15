@@ -110,18 +110,14 @@ jobs:
             windows-build-packages-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
-        # testing
         run: |
-          python ./build_tools/fetch_sources.py --jobs 96 \
-              --no-include-math-libs --no-include-ml-frameworks
+          python ./build_tools/fetch_sources.py --jobs 96
 
       - name: Configure Projects
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          # for testing
-          extra_cmake_options: "-DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_HIPIFY=ON"
-          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
           # clear cache before build and after download
           ccache -z
