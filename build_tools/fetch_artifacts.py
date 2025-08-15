@@ -273,7 +273,7 @@ def filter_enabled_artifacts(
     return artifacts_to_retrieve
 
 
-def _extract_artifact(artifact: ArtifactDownloadRequest, *, delete_archive: bool):
+def extract_artifact(artifact: ArtifactDownloadRequest, *, delete_archive: bool):
     # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
     # We can't just use .stem since that only removes the last extension.
     #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
@@ -357,7 +357,7 @@ def run(args):
             if args.extract:
                 extract_futures.append(
                     extract_executor.submit(
-                        _extract_artifact,
+                        extract_artifact,
                         download_result,
                         delete_archive=args.delete_after_extract,
                     )
