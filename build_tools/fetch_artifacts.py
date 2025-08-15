@@ -338,9 +338,8 @@ def run(args):
 
     artifacts_to_retrieve = [a for a in artifacts_to_retrieve if _should_include(a)]
 
-    log(
-        f"Downloading in parallel:\n  {'\n  '.join([str(item) for item in artifacts_to_retrieve])}\n"
-    )
+    joined_artifact_summary = "\n  ".join([str(item) for item in artifacts_to_retrieve])
+    log(f"Downloading in parallel:\n  {joined_artifact_summary}\n")
 
     # Download and extract in parallel.
     with concurrent.futures.ThreadPoolExecutor(
