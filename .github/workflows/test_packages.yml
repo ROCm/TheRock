@@ -97,6 +97,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ matrix.components.fetch_artifact_args }}
+          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       - name: Install additional packages
         if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt') }}
