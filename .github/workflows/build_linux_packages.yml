@@ -50,11 +50,6 @@ jobs:
       IS_FORKED_PR: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
-      - name: test aws
-        run: |
-          echo "Running sts call..."
-          aws sts get-caller-identity
-
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
