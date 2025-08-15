@@ -54,11 +54,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      - name: Verify AWS credentials
-        run: |
-          echo "Running sts call..."
-          aws sts get-caller-identity
-
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Runner Health Settings
