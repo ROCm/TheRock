@@ -41,7 +41,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from _therock_utils.artifacts import ArtifactPopulator
 
 PLATFORM = platform.system().lower()
 s3_client = boto3.client(
@@ -112,19 +111,13 @@ def retrieve_artifacts_by_run_id(args):
         args.amdgpu_family,
         "--output-dir",
         str(args.output_dir),
-        "--no-extract",
+        "--flatten",
     ]
     if args.base_only:
         argv.append("--base")
+    else:
+        argv.append("--all")
     fetch_artifacts_main(argv)
-
-    # Flattening artifacts from .tar* files then removing .tar* files
-    log(f"Untar-ing artifacts for {run_id}")
-    tar_file_paths = list(output_dir.glob("*.tar.*"))
-    flattener = ArtifactPopulator(output_path=output_dir, verbose=True, flatten=True)
-    flattener(*tar_file_paths)
-    for file_path in tar_file_paths:
-        file_path.unlink()
 
     log(f"Retrieved artifacts for run ID {run_id}")
 

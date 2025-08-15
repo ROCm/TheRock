@@ -44,6 +44,9 @@ import time
 import warnings
 from urllib3.exceptions import InsecureRequestWarning
 
+from _therock_utils.artifacts import ArtifactPopulator
+
+
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
 s3_client = boto3.client(
@@ -197,6 +200,15 @@ def filter_all_artifacts(
     return artifacts_to_retrieve
 
 
+def get_postprocess_mode(args) -> str | None:
+    """Returns 'extract', 'flatten' or None (default is 'extract')."""
+    if args.flatten:
+        return "flatten"
+    if args.no_extract:
+        return None
+    return True
+
+
 def filter_base_artifacts(
     args: argparse.Namespace,
     run_id: str,
@@ -273,19 +285,33 @@ def filter_enabled_artifacts(
     return artifacts_to_retrieve
 
 
-def extract_artifact(artifact: ArtifactDownloadRequest, *, delete_archive: bool):
+def extract_artifact(
+    artifact: ArtifactDownloadRequest, *, delete_archive: bool, postprocess_mode: str
+):
     # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
     # We can't just use .stem since that only removes the last extension.
     #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
     #   2. .partition('.') gets (before, sep, after), discard all but 'before'
     archive_file = artifact.output_path
     artifact_name, *_ = archive_file.name.partition(".")
-    output_dir = archive_file.parent / artifact_name
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    with tarfile.TarFile.open(archive_file, mode="r:xz") as tf:
-        log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
-        tf.extractall(archive_file.parent / artifact_name, filter="tar")
+
+    if postprocess_mode == "extract":
+        output_dir = archive_file.parent / artifact_name
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        with tarfile.TarFile.open(archive_file, mode="r:xz") as tf:
+            log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
+            tf.extractall(archive_file.parent / artifact_name, filter="tar")
+    elif postprocess_mode == "flatten":
+        output_dir = archive_file.parent
+        log(f"++ Flattening '{archive_file.name}' to '{artifact_name}'")
+        flattener = ArtifactPopulator(
+            output_path=output_dir, verbose=True, flatten=True
+        )
+        flattener(archive_file)
+    else:
+        raise AssertionError(f"Unhandled postprocess_mode = {postprocess_mode}")
+
     if delete_archive:
         archive_file.unlink()
 
@@ -342,6 +368,7 @@ def run(args):
     log(f"Downloading in parallel:\n  {joined_artifact_summary}\n")
 
     # Download and extract in parallel.
+    postprocess_mode = get_postprocess_mode(args)
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=args.download_concurrency
     ) as download_executor, concurrent.futures.ThreadPoolExecutor(
@@ -354,12 +381,13 @@ def run(args):
         extract_futures: list[concurrent.futures.Future] = []
         for download_future in concurrent.futures.as_completed(download_futures):
             download_result = download_future.result(timeout=60)
-            if args.extract:
+            if postprocess_mode:
                 extract_futures.append(
                     extract_executor.submit(
                         extract_artifact,
                         download_result,
                         delete_archive=args.delete_after_extract,
+                        postprocess_mode=postprocess_mode,
                     )
                 )
 
@@ -400,12 +428,27 @@ def main(argv):
         help="Output path for fetched artifacts, defaults to `build/artifacts/` as in source builds",
     )
 
-    parser.add_argument(
-        "--extract",
-        default=True,
-        action=argparse.BooleanOptionalAction,
+    # Post processing mode
+    postprocess_p = parser.add_mutually_exclusive_group()
+    postprocess_p.add_argument(
+        "--no-extract",
+        default=False,
+        action="store_true",
         help="Extract files after fetching them",
     )
+    postprocess_p.add_argument(
+        "--extract",
+        default=False,
+        action="store_true",
+        help="Extract files after fetching them",
+    )
+    postprocess_p.add_argument(
+        "--flatten",
+        default=False,
+        action="store_true",
+        help="Flattens artifacts after fetching them",
+    )
+
     parser.add_argument(
         "--delete-after-extract",
         default=True,
