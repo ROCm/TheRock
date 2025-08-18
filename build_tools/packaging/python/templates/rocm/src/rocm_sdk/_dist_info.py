@@ -5,8 +5,10 @@ of bootstrapping, we are including it inline for the moment.
 """
 
 import importlib.util
+from pathlib import Path
 import os
 import platform
+import subprocess
 
 
 CACHED_TARGET_FAMILY: str | None = None
@@ -93,6 +95,19 @@ class PackageEntry:
     def __repr__(self):
         return self.dist_package_template
 
+def get_build_dir() -> Path | None:
+    operating_system = platform.system()
+    if operating_system == "Windows":
+        build_dir = os.getenv("BUILD_DIR")
+        if not build_dir:
+            build_dir = "B:\\Build"
+        return Path(build_dir)
+    elif operating_system == "Linux":
+        output_dir = os.getenv("OUTPUT_DIR")
+        if not output_dir:
+            output_dir = "/therock/output"
+        return Path(output_dir) / 'build'
+    return None
 
 # Resolve the build target family. This consults a list of things in increasing
 # order of specificity:
@@ -100,7 +115,21 @@ class PackageEntry:
 #   2. Dynamically discovered/most salient target family on the actual system
 #   3. dist_info.DEFAULT_TARGET_FAMILY
 def discover_current_target_family() -> str | None:
-    # TODO: Implement dynamic discovery.
+    build_dir = get_build_dir()
+    if build_dir:
+        path_to_amdgpu_arch = str(build_dir / 'dist' / 'rocm' / 'lib' / 'llvm' / 'bin' / 'amdgpu-arch')
+        try:
+            result = subprocess.check_output([path_to_amdgpu_arch], text = True)
+            if result:
+                print(f"discover_current_target_family: amdgpu-arch - {result}")
+                return result.strip()
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] amdgpu-arch failed with return code {e.returncode}")
+            print(f"[stderr] {e.output}")
+        except FileNotFoundError:
+            print(f"[ERROR] amdgpu-arch not found at path: {path_to_amdgpu_arch}")
+        except Exception as e:
+            print(f"[ERROR] Unexpected error running amdgpu-arch: {e}")
     return None
 
 
