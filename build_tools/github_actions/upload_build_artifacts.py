@@ -31,7 +31,7 @@ def exec(cmd: list[str], cwd: Path):
 
 def retrieve_bucket_info() -> tuple[str, str]:
     github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
-    is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", False)
+    is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
     owner, repo_name = github_repository.split("/")
     external_repo = (
         ""
