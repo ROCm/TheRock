@@ -1,39 +1,39 @@
-#!/usr/bin/env python3
 """Given ROCm artifacts directories, performs the download and extraction of artifacts
 
 ```
 ./fetch_artifacts.py --artifact-dir ./output-linux-portable/build/artifacts \
-        --gfx-arch gfx94X 
+        --gfx-arch gfx94X
 ```
 """
 
 import urllib.request
 import tarfile
 import shutil
-#from pathlib import Path
-#import sys
+
+# from pathlib import Path
+# import sys
 import os
 
 from packaging_utils import *
 
-# Directory for downloading tar artifacts   
+# Directory for downloading tar artifacts
 ARTIFACTS_DOWNLOAD_DIR = f"{os.getcwd()}/artifacts_tar"
 # Directory for extracting tar artifacts
 ARTIFACTS_EXTRACT_DIR = f"{os.getcwd()}/artifacts"
 
-#TBD - Will get it as user input? full path or just build id?
-#ARTIFACT_URL = "https://therock-artifacts.s3.amazonaws.com"
-#BUILD_ID = "16418185899"
-#BUILD_ID_SUFFIX= "-linux"
+# TBD - Will get it as user input? full path or just build id?
+# ARTIFACT_URL = "https://therock-artifacts.s3.amazonaws.com"
+# BUILD_ID = "16418185899"
+# BUILD_ID_SUFFIX= "-linux"
 
 ############### Download artifacts #####################
 # Function will find the artifacts corresponding to the package
-# Download the artifacts 
+# Download the artifacts
 # Extract the artifacts
-def download_and_extract_artifacts( artifact_uri: str, pkg_name, gfx_arch):
-    ''' Function will find the artifacts corresponding to the package
-        Download the artifacts
-        Extract the artifacts '''
+def download_and_extract_artifacts(artifact_uri: str, pkg_name, gfx_arch):
+    """Function will find the artifacts corresponding to the package
+    Download the artifacts
+    Extract the artifacts"""
 
     os.makedirs(ARTIFACTS_DOWNLOAD_DIR, exist_ok=True)
     pkg_info = get_package_info(pkg_name)
@@ -69,12 +69,12 @@ def download_and_extract_artifacts( artifact_uri: str, pkg_name, gfx_arch):
         print(f"Extracting {destination_path} to {extract_directory}...")
         if tarfile.is_tarfile(destination_path):
             print("Valid tar file.")
-        else: 
+        else:
             print("Invalid tar file.")
             continue
 
         try:
-            with tarfile.open(destination_path, 'r:xz') as tar:
+            with tarfile.open(destination_path, "r:xz") as tar:
                 tar.extractall(path=extract_directory)
                 print("Extraction complete.")
         except tarfile.ReadError as e:
@@ -82,15 +82,16 @@ def download_and_extract_artifacts( artifact_uri: str, pkg_name, gfx_arch):
         except Exception as e:
             print(f"An error occurred during extraction: {e}")
 
+
 def clean_artifacts_download_dir():
-    ''' Clean download directory '''
+    """Clean download directory"""
     if os.path.exists(ARTIFACTS_DOWNLOAD_DIR) and os.path.isdir(ARTIFACTS_DOWNLOAD_DIR):
         shutil.rmtree(ARTIFACTS_DOWNLOAD_DIR)
         print(f"Removed directory: {ARTIFACTS_DOWNLOAD_DIR}")
 
+
 def clean_artifacts_extract_dir():
-    ''' Clean artifacts extraction directory '''
+    """Clean artifacts extraction directory"""
     if os.path.exists(ARTIFACTS_EXTRACT_DIR) and os.path.isdir(ARTIFACTS_EXTRACT_DIR):
         shutil.rmtree(ARTIFACTS_EXTRACT_DIR)
         print(f"Removed directory: {ARTIFACTS_EXTRACT_DIR}")
- 
