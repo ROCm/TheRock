@@ -152,6 +152,18 @@ minimal build):
 > A report of enabled/disabled features and flags will be printed on every
 > CMake configure.
 
+By default, components are built from the sources fetched via the submodules.
+For some components, external sources can be used instead.
+
+| External source settings                        | Description                                    |
+| ----------------------------------------------- | ---------------------------------------------- |
+| `-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=OFF`  | Use external composable-kernel source location |
+| `-DTHEROCK_USE_EXTERNAL_RCCL=OFF`               | Use external rccl source location              |
+| `-DTHEROCK_USE_EXTERNAL_RCCL_TESTS=OFF`         | Use external rccl-tests source location        |
+| `-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=<PATH>` | Path to composable-kernel sources              |
+| `-DTHEROCK_RCCL_SOURCE_DIR=<PATH>`              | Path to rccl sources                           |
+| `-DTHEROCK_RCCL_TESTS_SOURCE_DIR=<PATH>`        | Path to rccl-tests sources                     |
+
 ### CMake build usage
 
 To build ROCm/HIP:
