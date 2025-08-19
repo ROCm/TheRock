@@ -55,6 +55,10 @@ def hipconfig():
     _exec("bin/hipconfig")
 
 
+def hipInfo():
+    _exec("bin/hipInfo")
+
+
 def rocm_agent_enumerator():
     _exec("bin/rocm_agent_enumerator")
 

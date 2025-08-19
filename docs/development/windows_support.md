@@ -39,6 +39,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                              |           |                                               |
 | core                | [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime)                         | ❌        | Unsupported                                   |
 | core                | [rocminfo](https://github.com/ROCm/rocminfo)                                 | ❌        | Unsupported                                   |
+| core                | [hipInfo from hip-tests](https://github.com/ROCm/hip-tests)                  | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/clr)                                           | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                              |           |                                               |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❌        | Unsupported                                   |

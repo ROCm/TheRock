@@ -74,7 +74,7 @@ setup(
             ]
             if platform.system() != "Windows"
             else [
-                # TODO(#600): add hipInfo on Windows
+                "hipInfo=rocm_sdk_core._cli:hipInfo",
             ]
         ),
     },
