@@ -52,9 +52,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        # testing
-        with:
-          ref: users/geomin12/composite-action-conversion
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
