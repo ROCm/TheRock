@@ -19,21 +19,19 @@ runs:
   using: "composite"
   steps:
     - name: Configure AWS Credentials for non-forked repos
-      if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+      if: ${{ !github.event.pull_request.head.repo.fork }}
       uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
       with:
         aws-region: us-east-2
         role-to-assume: ${{ inputs.AWS_ROLE }}
 
     - name: Create Log archive
-      if: always()
       shell: bash
       run: |
         python3 ${{ inputs.THEROCK_DIR }}/build_tools/create_log_archive.py \
           --build-dir=${{ inputs.BUILD_DIR }}
 
     - name: Create Logs index Files
-      if: always()
       shell: bash
       run: |
         python3 ${{ inputs.THEROCK_DIR }}/build_tools/github_actions/create_log_index.py \
@@ -49,7 +47,6 @@ runs:
           --build-dir ${{ inputs.BUILD_DIR }}
 
     - name: Upload Logs
-      if: always()
       shell: bash
       run: |
         python3 ${{ inputs.THEROCK_DIR }}/build_tools/github_actions/upload_build_logs_to_s3.py \
@@ -58,7 +55,6 @@ runs:
           --amdgpu-family ${{ inputs.AMDGPU_FAMILIES }}
 
     - name: Add Links to Job Summary
-      if: always()
       shell: bash
       run: |
         python ${{ inputs.THEROCK_DIR }}/build_tools/github_actions/upload_build_summary.py \

@@ -128,6 +128,7 @@ jobs:
           tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
 
       - name: Upload artifacts and logs
+        if: always()
         uses: './.github/actions/artifact_upload'
         with:
           BUILD_DIR: build
