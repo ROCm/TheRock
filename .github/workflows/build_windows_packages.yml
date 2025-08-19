@@ -122,7 +122,9 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          # testing
+          extra_cmake_options: "${{ inputs.extra_cmake_options }} -DTHEROCK_ENABLE_ALL=OFF -DTHEROCK_ENABLE_COMPILER=ON"
+          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
           # clear cache before build and after download
           ccache -z
@@ -165,7 +167,7 @@ jobs:
         with:
           BUILD_DIR: ${{ env.BUILD_DIR }}
           AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
-          THEROCK_DIR: ${{ github.workspace }}
+          THEROCK_DIR: ./
           AWS_ROLE: arn:aws:iam::692859939525:role/therock-artifacts
 
       # - name: Configure AWS Credentials for non-forked repos
