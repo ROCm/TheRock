@@ -1,0 +1,259 @@
+From 5a7f40e080258a26104586482f4b391170aba57a Mon Sep 17 00:00:00 2001
+From: Jerry Mannil <jerry.mannil@amd.com>
+Date: Fri, 8 Aug 2025 00:26:58 +0000
+Subject: [PATCH] SWDEV-540609 - capture of MIOpen OCL kernels needs remainder
+ globalWorkSize
+
+---
+ hipamd/src/hip_graph.cpp          | 62 +++++++++++++++++++++----------
+ hipamd/src/hip_graph_internal.hpp | 34 ++++++++++++-----
+ rocclr/platform/ndrange.hpp       |  9 +++--
+ 3 files changed, 73 insertions(+), 32 deletions(-)
+
+diff --git a/hipamd/src/hip_graph.cpp b/hipamd/src/hip_graph.cpp
+index c467f18ea..19eb525d9 100644
+--- a/hipamd/src/hip_graph.cpp
++++ b/hipamd/src/hip_graph.cpp
+@@ -83,30 +83,48 @@ hipError_t ihipGraphAddKernelNode(hip::GraphNode** pGraphNode, hip::Graph* graph
+                                   hip::GraphNode* const* pDependencies, size_t numDependencies,
+                                   const hipKernelNodeParams* pNodeParams,
+                                   const ihipExtKernelEvents* pNodeEvents = nullptr,
+-                                  bool capture = true, int coopKernel = 0, int devId = 0) {
++                                  bool capture = true, int coopKernel = 0, int devId = 0,
++                                  int globalWorkSizeX_remainder = 0,
++                                  int globalWorkSizeY_remainder = 0,
++                                  int globalWorkSizeZ_remainder = 0) {
+   if (!hip::Graph::isGraphValid(graph)) {
+     return hipErrorInvalidValue;
+   }
++
+   hipFunction_t func = hip::GraphKernelNode::getFunc(*pNodeParams, ihipGetDevice());
+   if (!func) {
+     return hipErrorInvalidDeviceFunction;
+   }
+-  hipError_t status =
+-      hip::GraphKernelNode::validateKernelParams(pNodeParams, func, ihipGetDevice());
++
++  amd::HIPLaunchParams launch_params(pNodeParams->gridDim.x, pNodeParams->gridDim.y,
++                                     pNodeParams->gridDim.z, pNodeParams->blockDim.x,
++                                     pNodeParams->blockDim.y, pNodeParams->blockDim.z,
++                                     pNodeParams->sharedMemBytes, globalWorkSizeX_remainder,
++                                     globalWorkSizeY_remainder, globalWorkSizeZ_remainder);
++  if (!launch_params.IsValidConfig()) {
++    return hipErrorInvalidConfiguration;
++  }
++  hipError_t status = ihipLaunchKernel_validate(func, launch_params, pNodeParams->kernelParams,
++                                                pNodeParams->extra, ihipGetDevice(), 0);
+   if (hipSuccess != status) {
+     return status;
+   }
+
+-  size_t globalWorkSizeX = static_cast<size_t>(pNodeParams->gridDim.x) * pNodeParams->blockDim.x;
+-  size_t globalWorkSizeY = static_cast<size_t>(pNodeParams->gridDim.y) * pNodeParams->blockDim.y;
+-  size_t globalWorkSizeZ = static_cast<size_t>(pNodeParams->gridDim.z) * pNodeParams->blockDim.z;
++  size_t globalWorkSizeX = static_cast<size_t>(pNodeParams->gridDim.x) * pNodeParams->blockDim.x +
++      globalWorkSizeX_remainder;
++  size_t globalWorkSizeY = static_cast<size_t>(pNodeParams->gridDim.y) * pNodeParams->blockDim.y +
++      globalWorkSizeY_remainder;
++  size_t globalWorkSizeZ = static_cast<size_t>(pNodeParams->gridDim.z) * pNodeParams->blockDim.z +
++      globalWorkSizeZ_remainder;
+   if (globalWorkSizeX > std::numeric_limits<uint32_t>::max() ||
+       globalWorkSizeY > std::numeric_limits<uint32_t>::max() ||
+       globalWorkSizeZ > std::numeric_limits<uint32_t>::max()) {
+     return hipErrorInvalidConfiguration;
+   }
+
+-  *pGraphNode = new hip::GraphKernelNode(pNodeParams, pNodeEvents, coopKernel);
++  *pGraphNode =
++      new hip::GraphKernelNode(pNodeParams, pNodeEvents, coopKernel, globalWorkSizeX_remainder,
++                               globalWorkSizeY_remainder, globalWorkSizeZ_remainder);
+   if (devId != 0) {
+     (*pGraphNode)->SetDeviceId(devId);
+   }
+@@ -238,10 +256,13 @@ hipError_t capturehipLaunchKernel(hipStream_t& stream, const void*& hostFunction
+
+ hipError_t ihipExtLaunchKernel(hipStream_t stream, hipFunction_t f, uint32_t globalWorkSizeX,
+                                uint32_t globalWorkSizeY, uint32_t globalWorkSizeZ,
+-                               uint32_t localWorkSizeX, uint32_t localWorkSizeY,
+-                               uint32_t localWorkSizeZ, size_t sharedMemBytes, void** kernelParams,
+-                               void** extra, hipEvent_t startEvent, hipEvent_t stopEvent,
+-                               uint32_t flags, bool capture = true) {
++                               uint32_t globalWorkSizeX_remainder,
++                               uint32_t globalWorkSizeY_remainder,
++                               uint32_t globalWorkSizeZ_remainder, uint32_t localWorkSizeX,
++                               uint32_t localWorkSizeY, uint32_t localWorkSizeZ,
++                               size_t sharedMemBytes, void** kernelParams, void** extra,
++                               hipEvent_t startEvent, hipEvent_t stopEvent, uint32_t flags,
++                               bool capture = true) {
+   if (!hip::isValid(stream)) {
+     return hipErrorContextIsDestroyed;
+   }
+@@ -275,9 +296,10 @@ hipError_t ihipExtLaunchKernel(hipStream_t stream, hipFunction_t f, uint32_t glo
+   nodeParams.kernelParams = kernelParams;
+   nodeParams.sharedMemBytes = sharedMemBytes;
+
+-  status =
+-      ihipGraphAddKernelNode(&pGraphNode, s->GetCaptureGraph(), s->GetLastCapturedNodes().data(),
+-                             s->GetLastCapturedNodes().size(), &nodeParams, &nodeEvents);
++  status = ihipGraphAddKernelNode(
++      &pGraphNode, s->GetCaptureGraph(), s->GetLastCapturedNodes().data(),
++      s->GetLastCapturedNodes().size(), &nodeParams, &nodeEvents, true, 0, s->DeviceId(),
++      globalWorkSizeX_remainder, globalWorkSizeY_remainder, globalWorkSizeZ_remainder);
+
+   if (status != hipSuccess) {
+     return status;
+@@ -298,8 +320,10 @@ hipError_t capturehipExtModuleLaunchKernel(hipStream_t& stream, hipFunction_t& f
+           "[hipGraph] Current capture node ExtModuleLaunchKernel on stream : %p", stream);
+   return ihipExtLaunchKernel(stream, f, globalWorkSizeX / localWorkSizeX,
+                              globalWorkSizeY / localWorkSizeY, globalWorkSizeZ / localWorkSizeZ,
+-                             localWorkSizeX, localWorkSizeY, localWorkSizeZ, sharedMemBytes,
+-                             kernelParams, extra, startEvent, stopEvent, flags);
++                             globalWorkSizeX % localWorkSizeX, globalWorkSizeY % localWorkSizeY,
++                             globalWorkSizeZ % localWorkSizeZ, localWorkSizeX, localWorkSizeY,
++                             localWorkSizeZ, sharedMemBytes, kernelParams, extra, startEvent,
++                             stopEvent, flags);
+ }
+
+ hipError_t capturehipExtLaunchKernel(hipStream_t& stream, const void*& hostFunction, dim3& gridDim,
+@@ -308,9 +332,9 @@ hipError_t capturehipExtLaunchKernel(hipStream_t& stream, const void*& hostFunct
+   ClPrint(amd::LOG_INFO, amd::LOG_API,
+           "[hipGraph] Current capture node ExtLaunchKernel on stream : %p", stream);
+   return ihipExtLaunchKernel(
+-      stream, reinterpret_cast<hipFunction_t>(const_cast<void*>(hostFunction)),
+-      gridDim.x, gridDim.y, gridDim.z, blockDim.x,
+-      blockDim.y, blockDim.z, sharedMemBytes, args, nullptr, startEvent, stopEvent, flags);
++      stream, reinterpret_cast<hipFunction_t>(const_cast<void*>(hostFunction)), gridDim.x,
++      gridDim.y, gridDim.z, 0, 0, 0, blockDim.x, blockDim.y, blockDim.z, sharedMemBytes, args,
++      nullptr, startEvent, stopEvent, flags);
+ }
+
+ hipError_t capturehipModuleLaunchKernel(hipStream_t& stream, hipFunction_t& f, uint32_t& gridDimX,
+diff --git a/hipamd/src/hip_graph_internal.hpp b/hipamd/src/hip_graph_internal.hpp
+index e82a45dfe..bee901720 100644
+--- a/hipamd/src/hip_graph_internal.hpp
++++ b/hipamd/src/hip_graph_internal.hpp
+@@ -956,6 +956,9 @@ class GraphKernelNode : public GraphNode {
+   ihipExtKernelEvents kernelEvents_;   //!< Events for Ext launch kernel
+   bool hasHiddenHeap_;                 //!< Kernel has hidden heap(device side allocation)
+   int coopKernel_;                     //!< Launch cooperative kernel
++  int globalWorkSizeX_remainder_;
++  int globalWorkSizeY_remainder_;
++  int globalWorkSizeZ_remainder_;
+
+  public:
+   bool HasHiddenHeap() const { return hasHiddenHeap_; }
+@@ -1014,13 +1017,14 @@ class GraphKernelNode : public GraphNode {
+     char buffer[4096];
+     if (flag == hipGraphDebugDotFlagsVerbose) {
+       sprintf(buffer,
+-              "{\n%s\n| {ID | %d | %s\\<\\<\\<(%u,%u,%u),(%u,%u,%u),%u\\>\\>\\>}\n| {{node "
++              "{\n%s\n| {ID | %d | %s\\<\\<\\<(%u,%u,%u),(%u,%u,%u),(%u,%u,%u),%u\\>\\>\\>}\n| {{node "
+               "handle | func handle} | {%p | %p}}\n| {accessPolicyWindow | {base_ptr | num_bytes | "
+               "hitRatio | hitProp | missProp} | {%p | %zu | %f | %d | %d}}\n| {cooperative | "
+               "%u}\n| {priority | %d}\n}",
+               label_, GetID(), function->name().c_str(), kernelParams_.gridDim.x,
+               kernelParams_.gridDim.y, kernelParams_.gridDim.z, kernelParams_.blockDim.x,
+               kernelParams_.blockDim.y, kernelParams_.blockDim.z,
++              globalWorkSizeX_remainder_, globalWorkSizeY_remainder_, globalWorkSizeZ_remainder_,
+               kernelParams_.sharedMemBytes, this, kernelParams_.func,
+               kernelAttr_.accessPolicyWindow.base_ptr, kernelAttr_.accessPolicyWindow.num_bytes,
+               kernelAttr_.accessPolicyWindow.hitRatio, kernelAttr_.accessPolicyWindow.hitProp,
+@@ -1042,11 +1046,12 @@ class GraphKernelNode : public GraphNode {
+       label = buffer;
+     }
+     else if (flag == hipGraphDebugDotFlagsKernelNodeParams) {
+-      sprintf(buffer, "%d\n%s\n\\<\\<\\<(%u,%u,%u),(%u,%u,%u),%u\\>\\>\\>",
++      sprintf(buffer, "%d\n%s\n\\<\\<\\<(%u,%u,%u),(%u,%u,%u),(%u,%u,%u),%u\\>\\>\\>",
+               GetID(), function->name().c_str(), kernelParams_.gridDim.x,
+               kernelParams_.gridDim.y, kernelParams_.gridDim.z,
+-              kernelParams_.blockDim.x, kernelParams_.blockDim.y,
+-              kernelParams_.blockDim.z, kernelParams_.sharedMemBytes);
++              kernelParams_.blockDim.x, kernelParams_.blockDim.y, kernelParams_.blockDim.z,
++              globalWorkSizeX_remainder_, globalWorkSizeY_remainder_, globalWorkSizeZ_remainder_,
++              kernelParams_.sharedMemBytes);
+       label = buffer;
+     }
+     else {
+@@ -1150,7 +1155,10 @@ class GraphKernelNode : public GraphNode {
+   }
+
+   GraphKernelNode(const hipKernelNodeParams* pNodeParams, const ihipExtKernelEvents* pEvents,
+-                  int coopKernel = 0)
++                  int coopKernel = 0,
++                  int globalWorkSizeX_remainder = 0,
++                  int globalWorkSizeY_remainder = 0,
++                  int globalWorkSizeZ_remainder = 0)
+       : GraphNode(hipGraphNodeTypeKernel, "bold", "octagon", "KERNEL") {
+     kernelEvents_ = { 0 };
+     if (pEvents != nullptr) {
+@@ -1163,6 +1171,9 @@ class GraphKernelNode : public GraphNode {
+     kernelAttrInUse_ = 0;
+     hasHiddenHeap_ = false;
+     coopKernel_ = coopKernel;
++    globalWorkSizeX_remainder_ = globalWorkSizeX_remainder;
++    globalWorkSizeY_remainder_ = globalWorkSizeY_remainder;
++    globalWorkSizeZ_remainder_ = globalWorkSizeZ_remainder;
+   }
+
+   ~GraphKernelNode() { freeParams(); }
+@@ -1193,6 +1204,9 @@ class GraphKernelNode : public GraphNode {
+     kernelParams_ = rhs.kernelParams_;
+     kernelEvents_ = rhs.kernelEvents_;
+     coopKernel_ = rhs.coopKernel_;
++    globalWorkSizeX_remainder_ = rhs.globalWorkSizeX_remainder_;
++    globalWorkSizeY_remainder_ = rhs.globalWorkSizeY_remainder_;
++    globalWorkSizeZ_remainder_ = rhs.globalWorkSizeZ_remainder_;
+     hipError_t status = copyParams(&rhs.kernelParams_);
+     if (status != hipSuccess) {
+       ClPrint(amd::LOG_ERROR, amd::LOG_CODE, "[hipGraph] Failed to allocate memory to copy params");
+@@ -1240,7 +1254,8 @@ class GraphKernelNode : public GraphNode {
+     amd::HIPLaunchParams launch_params(kernelParams_.gridDim.x, kernelParams_.gridDim.y,
+                                        kernelParams_.gridDim.z, kernelParams_.blockDim.x,
+                                        kernelParams_.blockDim.y, kernelParams_.blockDim.z,
+-                                       kernelParams_.sharedMemBytes);
++                                       kernelParams_.sharedMemBytes, globalWorkSizeX_remainder_,
++                                       globalWorkSizeY_remainder_, globalWorkSizeZ_remainder_);
+
+     if (!launch_params.IsValidConfig()) {
+       return hipErrorInvalidConfiguration;
+@@ -1379,13 +1394,14 @@ class GraphKernelNode : public GraphNode {
+     return SetParams(&kernelNode->kernelParams_);
+   }
+
+-  static hipError_t validateKernelParams(const hipKernelNodeParams* pNodeParams,
+-                                         hipFunction_t func, int devId) {
++  hipError_t validateKernelParams(const hipKernelNodeParams* pNodeParams,
++                                  hipFunction_t func, int devId) {
+
+     amd::HIPLaunchParams launch_params(pNodeParams->gridDim.x, pNodeParams->gridDim.y,
+                                        pNodeParams->gridDim.z, pNodeParams->blockDim.x,
+                                        pNodeParams->blockDim.y, pNodeParams->blockDim.z,
+-                                       pNodeParams->sharedMemBytes);
++                                       pNodeParams->sharedMemBytes, globalWorkSizeX_remainder_,
++                                       globalWorkSizeY_remainder_, globalWorkSizeZ_remainder_);
+
+     if (!launch_params.IsValidConfig()) {
+       HIP_RETURN(hipErrorInvalidConfiguration);
+diff --git a/rocclr/platform/ndrange.hpp b/rocclr/platform/ndrange.hpp
+index b4ff92846..3ffa252dc 100644
+--- a/rocclr/platform/ndrange.hpp
++++ b/rocclr/platform/ndrange.hpp
+@@ -139,10 +139,11 @@ struct LaunchParams {
+ struct HIPLaunchParams : public LaunchParams {
+  public:
+   HIPLaunchParams(uint32_t gridX, uint32_t gridY, uint32_t gridZ, uint32_t blockX,
+-                  uint32_t blockY, uint32_t blockZ, uint32_t sharedMemBytes)
+-                  : LaunchParams(static_cast<uint32_t>(gridX) * blockX,
+-                                 static_cast<uint32_t>(gridY) * blockY,
+-                                 static_cast<uint32_t>(gridZ) * blockZ,
++                  uint32_t blockY, uint32_t blockZ, uint32_t sharedMemBytes,
++                  uint32_t globalX_remainder = 0, uint32_t globalY_remainder = 0, uint32_t globalZ_remainder = 0)
++                  : LaunchParams(static_cast<uint32_t>(gridX) * blockX + globalX_remainder,
++                                 static_cast<uint32_t>(gridY) * blockY + globalY_remainder,
++                                 static_cast<uint32_t>(gridZ) * blockZ + globalZ_remainder,
+                                  blockX, blockY, blockZ, sharedMemBytes) {
+     if (global_[0] > std::numeric_limits<uint32_t>::max() ||
+         global_[1] > std::numeric_limits<uint32_t>::max() ||
+--
+2.44.0.windows.1
+
