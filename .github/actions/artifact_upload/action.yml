@@ -1,4 +1,4 @@
-name: "Setup test environment"
+name: "Artifact upload"
 
 inputs:
   BUILD_DIR:
@@ -20,7 +20,6 @@ runs:
   steps:
     - name: Configure AWS Credentials for non-forked repos
       if: ${{ always() && !github.event.pull_request.head.repo.fork }}
-      shell: bash
       uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
       with:
         aws-region: us-east-2
