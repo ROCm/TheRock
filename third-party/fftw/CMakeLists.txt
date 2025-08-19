@@ -12,7 +12,7 @@ therock_cmake_subproject_declare(therock-fftw
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
 )
-therock_cmake_subproject_provide_package(therock-fftw FFTW lib/cmake/FFTW)
+therock_cmake_subproject_provide_package(therock-fftw FFTW3 lib/cmake/fftw3)
 therock_cmake_subproject_activate(therock-fftw)
 
 add_dependencies(therock-third-party therock-fftw)
