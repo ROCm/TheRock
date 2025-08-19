@@ -94,12 +94,8 @@ class PackageEntry:
 
     def __repr__(self):
         return self.dist_package_template
+        
 
-# Resolve the build target family. This consults a list of things in increasing
-# order of specificity:
-#   1. "ROCM_SDK_TARGET_FAMILY" environment variable
-#   2. Dynamically discovered/most salient target family on the actual system
-#   3. dist_info.DEFAULT_TARGET_FAMILY
 def discover_current_target_family() -> str | None:
     try:
         result = subprocess.check_output(["amdgpu-arch"], text = True)
@@ -114,7 +110,11 @@ def discover_current_target_family() -> str | None:
         print(f"[ERROR] Unexpected error running amdgpu-arch: {e}")
     return None
 
-
+# Resolve the build target family. This consults a list of things in increasing
+# order of specificity:
+#   1. "ROCM_SDK_TARGET_FAMILY" environment variable
+#   2. Dynamically discovered/most salient target family on the actual system
+#   3. dist_info.DEFAULT_TARGET_FAMILY
 def determine_target_family() -> str:
     global CACHED_TARGET_FAMILY
     if CACHED_TARGET_FAMILY is not None:
