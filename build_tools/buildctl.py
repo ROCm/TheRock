@@ -59,7 +59,7 @@ TODO: Merge the functionality in bootstrap_build.py into this script.
 """
 
 import argparse
-from pathlib import Path, PosixPath
+from pathlib import Path
 import os
 import re
 import subprocess
