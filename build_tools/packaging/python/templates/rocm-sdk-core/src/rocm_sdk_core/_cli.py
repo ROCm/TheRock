@@ -39,6 +39,10 @@ def amdclangpp():
     _exec("lib/llvm/bin/amdclang++")
 
 
+def amdgpu_arch():
+    _exec("lib/llvm/bin/amdgpu-arch")
+
+
 def amdflang():
     _exec("lib/llvm/bin/amdflang")
 
