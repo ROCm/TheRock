@@ -1,0 +1,64 @@
+From 3e03542f92b4702e10655133d8dff04bbc771f53 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Tue, 19 Aug 2025 15:51:55 -0700
+Subject: [PATCH 3/3] Revert "[inductor] Windows inductor use intel-openmp.
+ (#160258)"
+
+This reverts commit 41673110cd7c5960824cc74a6fcaeda1a8bc7a23.
+---
+ setup.py                       |  1 -
+ torch/_inductor/cpp_builder.py | 18 ++++++------------
+ 2 files changed, 6 insertions(+), 13 deletions(-)
+
+diff --git a/setup.py b/setup.py
+index 9ae29fc8fd2..203e09f1b73 100644
+--- a/setup.py
++++ b/setup.py
+@@ -1588,7 +1588,6 @@ def main() -> None:
+         "networkx>=2.5.1",
+         "jinja2",
+         "fsspec>=0.8.5",
+-        'intel-openmp==2025.1.1 ;platform_system == "Windows" ',  # for Windows inductor
+     ]
+     if BUILD_PYTHON_ONLY:
+         install_requires += [f"{LIBTORCH_PKG_NAME}=={TORCH_VERSION}"]
+diff --git a/torch/_inductor/cpp_builder.py b/torch/_inductor/cpp_builder.py
+index 74f45583ccd..c58849f9bf5 100644
+--- a/torch/_inductor/cpp_builder.py
++++ b/torch/_inductor/cpp_builder.py
+@@ -910,15 +910,8 @@ def _get_python_related_args() -> tuple[list[str], list[str]]:
+             str(
+                 (
+                     Path(sysconfig.get_path("include", scheme="nt")).parent / "libs"
+-                ).absolute()  # python[ver].lib
+-            ),
+-            str(
+-                (
+-                    Path(sysconfig.get_path("include", scheme="nt")).parent
+-                    / "Library"
+-                    / "lib"
+-                ).absolute()  # install python librarys location, such as intel-openmp
+-            ),
++                ).absolute()
++            )
+         ]
+     else:
+         python_lib_path = [sysconfig.get_config_var("LIBDIR")]
+@@ -1084,10 +1077,11 @@ def _get_openmp_args(
+             libs.append("libiomp5md")
+             perload_icx_libomp_win(cpp_compiler)
+         else:
++            # /openmp, /openmp:llvm
++            # llvm on Windows, new openmp: https://devblogs.microsoft.com/cppblog/msvc-openmp-update/
++            # msvc openmp: https://learn.microsoft.com/zh-cn/cpp/build/reference/openmp-enable-openmp-2-0-support?view=msvc-170
+             cflags.append("openmp")
+-            cflags.append("openmp:experimental")
+-            libs.append("libiomp5md")  # intel-openmp
+-            ldflags.append("nodefaultlib:vcomp")
++            cflags.append("openmp:experimental")  # MSVC CL
+     else:
+         if config.is_fbcode():
+             include_dir_paths.append(build_paths.openmp_include)
+-- 
+2.47.1.windows.2
+
