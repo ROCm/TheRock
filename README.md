@@ -164,6 +164,17 @@ For some components, external sources can be used instead.
 | `-DTHEROCK_RCCL_SOURCE_DIR=<PATH>`              | Path to rccl sources                           |
 | `-DTHEROCK_RCCL_TESTS_SOURCE_DIR=<PATH>`        | Path to rccl-tests sources                     |
 
+Further flags allow to build components with specific features enabled.
+
+| Other flags                 | Description                                                              |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `-DTHEROCK_ENABLE_MPI=OFF`  | Enables building components with Message Passing Interface (MPI) support |
+
+> [!NOTE]
+> Building components with MPI support, currently requires MPI to be
+> pre-installed until issue [#128](https://github.com/ROCm/TheRock/issues/128)
+> is resolved.
+
 ### CMake build usage
 
 To build ROCm/HIP:
