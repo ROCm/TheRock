@@ -113,6 +113,6 @@ jobs:
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          python3 -m ensurepip
+          sudo dnf install python3-pip python3-wheel
           pip3 install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
