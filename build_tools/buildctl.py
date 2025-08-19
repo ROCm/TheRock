@@ -73,7 +73,7 @@ def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
     changed = False
     print("Projects marked with an 'X' will be build enabled:")
     for rp, include in selection:
-        stage_dir = build_dir / PosixPath(rp)
+        stage_dir = build_dir / Path(rp).as_posix()
         prebuilt_file = stage_dir.with_name(stage_dir.name + ".prebuilt")
         if not is_valid_stage_dir(stage_dir):
             action = (False, "(EMPTY)")
