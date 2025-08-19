@@ -172,7 +172,7 @@ Further flags allow to build components with specific features enabled.
 
 > [!NOTE]
 > Building components with MPI support, currently requires MPI to be
-> pre-installed until issue [#128](https://github.com/ROCm/TheRock/issues/128)
+> pre-installed until [issue #128](https://github.com/ROCm/TheRock/issues/128)
 > is resolved.
 
 ### CMake build usage
