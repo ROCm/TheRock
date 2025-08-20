@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   test_wheels:
-    name: Test JAX Wheels | ${{ inputs.amdgpu_family }}
+    name: Test | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     steps:
       - name: Checkout
