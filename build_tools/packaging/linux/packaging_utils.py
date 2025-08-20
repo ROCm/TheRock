@@ -1,5 +1,8 @@
 import json
 
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 
 def read_package_json_file():
     """Reads a JSON file and returns the parsed data
@@ -82,10 +85,17 @@ def version_to_str(version_str):
     Ex : 7.1.0 -> 70100
          7.10.0 -> 71000
          10.1.0 - > 100100
+         7.1 -> 70100
+         7.1.1.1 -> 70101
     Parameters: ROCm version separated by dots
 
     Returns: Version string
     """
 
-    major, minor, patch = version_str.split(".")
+    parts = version_str.split(".")
+    # Ensure we have exactly 3 parts: major, minor, patch
+    while len(parts) < 3:
+        parts.append("0")  # Default missing parts to "0"
+    major, minor, patch = parts[:3]  # Ignore extra parts
+
     return f"{int(major):01d}{int(minor):02d}{int(patch):02d}"
