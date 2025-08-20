@@ -1,7 +1,7 @@
-From 80b7d127116b67c6fefc96081d3f3cca081a29f8 Mon Sep 17 00:00:00 2001
+From 0de0be39459dfebd3f8791d789821d159b0f9556 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Fri, 18 Jul 2025 14:44:31 +0000
-Subject: [PATCH 08/17] Enable hipblaslt on windows and for static builds
+Subject: [PATCH 08/22] Enable hipblaslt on windows and for static builds
 
 ---
  projects/rocblas/CMakeLists.txt                |  5 ++---
@@ -82,5 +82,5 @@ index f4bdfb5f97..e972869a9e 100644
  
    if( NOT BUILD_SHARED_LIBS )
 -- 
-2.43.0
+2.34.1
 

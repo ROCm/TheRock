@@ -1,7 +1,7 @@
-From 0e0efad44628e979ce6076ddb0ad7e193cb42a2f Mon Sep 17 00:00:00 2001
+From 5cc5c3410fa04ecf207de18aefb09ec31746e5d0 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Fri, 21 Mar 2025 17:01:20 +0000
-Subject: [PATCH 12/17] Work around race condition
+Subject: [PATCH 12/22] Work around race condition
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -28,5 +28,5 @@ index b5e4eb0fb6..41364efb12 100644
    include_directories(${CMAKE_BINARY_DIR}/include/hipblas)
    include_directories(${CMAKE_BINARY_DIR}/include)
 -- 
-2.43.0
+2.34.1
 

@@ -1,7 +1,7 @@
-From 05f7bd80b25853b26f1c63dcda570e3234e2ed6b Mon Sep 17 00:00:00 2001
+From e0d23de07c6bebae6ea756b407156aa56cea2999 Mon Sep 17 00:00:00 2001
 From: Brian Harrison <brian.harrison@amd.com>
 Date: Thu, 7 Aug 2025 20:43:58 +0000
-Subject: [PATCH] Add missing internals export
+Subject: [PATCH 20/22] Add missing internals export
 
 ---
  projects/miopen/src/include/miopen/conv/solvers.hpp | 3 ++-
@@ -22,5 +22,5 @@ index 513b5552f2..5fa56cb8da 100644
      MIOPEN_INTERNALS_EXPORT size_t GetWorkspaceSize(
          const ExecutionContext&, const miopen::conv::ProblemDescription&) const override;
 -- 
-2.43.0
+2.34.1
 

@@ -1,0 +1,30 @@
+From 25d0b1bc6f443b51b9a5863796df7cefac3ff990 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Tue, 19 Aug 2025 20:18:54 -0700
+Subject: [PATCH 21/22] hipfftt Remove hardcoding to /opt/rocm
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ projects/hipfft/CMakeLists.txt | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/projects/hipfft/CMakeLists.txt b/projects/hipfft/CMakeLists.txt
+index d502bb1830..c0f6d938e0 100644
+--- a/projects/hipfft/CMakeLists.txt
++++ b/projects/hipfft/CMakeLists.txt
+@@ -39,8 +39,10 @@ endif()
+ 
+ 
+ # Workarounds..
+-list( APPEND CMAKE_PREFIX_PATH /opt/rocm/llvm /opt/rocm )
+-list( APPEND CMAKE_MODULE_PATH ${ROCM_PATH}/lib/cmake/hip /opt/rocm/lib/cmake/hip /opt/rocm/hip/cmake )
++if (DEFINED ENV{ROCM_PATH})
++  list( APPEND CMAKE_PREFIX_PATH ${ROCM_PATH}/llvm ${ROCM_PATH} )
++  list( APPEND CMAKE_MODULE_PATH ${ROCM_PATH}/lib/cmake/hip ${ROCM_PATH}/lib/cmake/hip ${ROCM_PATH}/hip/cmake )
++endif()
+ 
+ # This has to be initialized before the project() command appears
+ # Set the default of CMAKE_BUILD_TYPE to be release, unless user specifies with -D.
+-- 
+2.34.1
+
