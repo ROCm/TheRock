@@ -276,17 +276,82 @@ See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-pa
 
 ## Development instructions
 
-To create patches
+### Avoid using patch files if possible
 
-1. Commit your change(s) within the relevant source folder(s)
-1. Run the `save-patches` subcommand of the relevant source management script(s)
+In order, developers should prefer:
 
-## Alternate Branches / Patch Sets
+1. Contributing to upstream `main` branches
+1. Contributing to upstream `release/` branches
+1. Maintaining downstream git forks with their own branches
+1. Using an upstream or downstream branch with patch files
 
-Each `pytorch_*_repo.py` script accepts arguments like `--repo`,
-`--repo-hashtag`, and `--patchset` to control which repository to clone, which
-branch/tag/ref to checkout, and where to look for patches to apply after
-checkout.
+> [!WARNING]
+> We carry some patch files out of necessity while waiting on upstream consensus
+> and code review, but maintaining patch files carries significant overhead. For
+> long term support, we use downstream git forks like the
+> [ROCm PyTorch release branches](#rocm-pytorch-release-branches).
+
+### Checking out and applying patches
+
+Each `pytorch_*_repo.py` script handles a few aspects of working with the
+associated repository:
+
+1. Clone the repository as needed from `--gitrepo-origin` to the `--repo-name`
+   folder under path `--repo`
+1. Checkout the `--repo-hashtag` git ref/tag
+1. Apply "base" patches from the `--patchset` subfolders of `--patch-dir`
+1. Run 'hipify' on the repository, editing source files and committing the
+   changes
+1. Apply "hipified" patches from the `--patchset` subfolders of `--patch-dir`
+
+After running one of the `pytorch_*_repo.py` scripts you should have a
+repository with history like this:
+
+```console
+$ python pytorch_torch_repo.py checkout --repo-hashtag main --patchset main
+$ cd src/pytorch
+$ git log --oneline
+
+bbb55555555 (HEAD) Example 'hipified' patch 2
+bbb44444444 Example 'hipified' patch 1
+bbb33333333 (tag: THEROCK_HIPIFY_DIFFBASE) DO NOT SUBMIT: HIPIFY
+bbb22222222 Example 'base' patch 2
+bbb11111111 Example 'base' patch 1
+aaa22222222 (tag: THEROCK_UPSTREAM_DIFFBASE, origin/main) Example upstream commit 2
+aaa11111111 Example upstream commit 1
+```
+
+Note the sequence of commits and tags that were created:
+
+- `main` is checked out initially and is tagged `THEROCK_UPSTREAM_DIFFBASE`
+- "base" patches are added _before_ running hipify
+- hipify is run and its changes are tagged `THEROCK_HIPIFY_DIFFBASE`
+- "hipified" patches are added _after_ running hipify
+
+> [!NOTE]
+> For repositories with no patches, this simplifies to "clone the repo, checkout
+> a branch, then run hipify".
+>
+> If you maintain a downstream fork like https://github.com/ROCm/pytorch,
+> aim to have a branch that only depends on hipify running on it.
+
+### Saving new patches
+
+To create patches, modify the commits after the `THEROCK_UPSTREAM_DIFFBASE` tag
+then run the `save-patches` subcommand of the relevant source management script.
+If you want a patch to be applied _before_ hipify, you can put it before
+`THEROCK_HIPIFY_DIFFBASE` while editing git history or you can move the patch
+file from the `hipified` patch folder to the `base` patch folder.
+
+- If a patch modifies code at a `*/cuda/*` path, it likely needs to be a 'base'
+  patch that is applied before hipify is run.
+- If a patch modifies code at a `*/hip/*` path, it should either be a
+  'hipified' patch or should be reworked to modify `*/cuda/*` code that gets
+  correctly transformed by hipify.
+- Most other patches can be categorized as 'base' or 'hipified', though
+  'hipified' is simplest to construct based on git history
+
+### Alternate branches / patch sets
 
 > [!TIP]
 > Each branch combination below can also use specific commits by selecting a
@@ -301,7 +366,7 @@ checkout.
 >   --patchset main
 > ```
 
-### PyTorch main
+#### PyTorch main branches
 
 This checks out the `main` branches from https://github.com/pytorch, tracking
 the latest (potentially unstable) code:
@@ -318,7 +383,7 @@ python pytorch_vision_repo.py checkout --repo-hashtag main
 python pytorch_triton_repo.py checkout
 ```
 
-### PyTorch Nightly
+#### PyTorch Nightly branches
 
 This checks out the `nightly` branches from https://github.com/pytorch,
 tracking the latest pytorch.org nightly release:
@@ -335,7 +400,7 @@ python pytorch_vision_repo.py checkout --repo-hashtag nightly
 python pytorch_triton_repo.py checkout
 ```
 
-### ROCm PyTorch Release Branches
+#### ROCm PyTorch release branches
 
 Because upstream PyTorch freezes at release but AMD needs to keep updating
 stable versions for a longer period of time, backport branches are maintained.
@@ -352,7 +417,7 @@ have proper defaults.
 You are welcome to maintain your own branches that extend one of AMD's.
 Change origins and tags as appropriate.
 
-### v2.7.x
+#### ROCm release v2.7.x branch
 
 NOTE: Presently broken at runtime on a HIP major version incompatibility in the
 pre-built aotriton (#1025). Must build with
