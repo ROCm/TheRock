@@ -60,7 +60,7 @@ THEROCK_DIR = Path(__file__).resolve().parent.parent
 
 # Importing build_artifact_upload.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from upload_build_artifacts import retrieve_bucket_info
+from post_build_upload import retrieve_bucket_info
 from _therock_utils.artifacts import ArtifactName
 
 GENERIC_VARIANT = "generic"
