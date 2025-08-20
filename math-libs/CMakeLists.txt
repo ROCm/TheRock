@@ -200,6 +200,7 @@ if(THEROCK_ENABLE_FFT)
       therock-boost
       therock-googletest
       therock-fftw
+      therock-fftwf
     RUNTIME_DEPS
       hip-clr
       hipRAND
@@ -234,6 +235,7 @@ if(THEROCK_ENABLE_FFT)
       therock-boost
       therock-googletest
       therock-fftw
+      therock-fftwf
     RUNTIME_DEPS
       hip-clr
       rocFFT
