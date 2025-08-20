@@ -1,0 +1,53 @@
+From fc4b14ecde0c95d91704b112ca7cf9efa5fd9120 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Wed, 20 Aug 2025 13:18:03 -0700
+Subject: [PATCH 24/24] Fixing GTest check for TheRock
+
+- remove version check from find
+- variable GTEST_FOUND is GTest_FOUND in newer CMakes
+- link libraries against GTest::gtest
+  instead of using ${GTEST_LIBRARIES}
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ projects/hipfft/clients/CMakeLists.txt       | 4 ++--
+ projects/hipfft/clients/tests/CMakeLists.txt | 5 +++--
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/projects/hipfft/clients/CMakeLists.txt b/projects/hipfft/clients/CMakeLists.txt
+index 739ef036a2..58ae4fd143 100644
+--- a/projects/hipfft/clients/CMakeLists.txt
++++ b/projects/hipfft/clients/CMakeLists.txt
+@@ -88,9 +88,9 @@ if( BUILD_CLIENTS_SAMPLES )
+ endif( )
+ 
+ if( BUILD_CLIENTS_TESTS )
+-  find_package( GTest 1.11.0 )
++  find_package( GTest REQUIRED )
+   include( ExternalProject )
+-  if( NOT GTEST_FOUND )
++  if( NOT GTest_FOUND )
+     set( GTEST_INCLUDE_DIRS
+       ${CMAKE_CURRENT_BINARY_DIR}/src/gtest/googletest/include
+       )
+diff --git a/projects/hipfft/clients/tests/CMakeLists.txt b/projects/hipfft/clients/tests/CMakeLists.txt
+index ecbff97486..b85b869c88 100644
+--- a/projects/hipfft/clients/tests/CMakeLists.txt
++++ b/projects/hipfft/clients/tests/CMakeLists.txt
+@@ -185,10 +185,11 @@ foreach( target ${TEST_TARGETS} )
+   rocm_install(TARGETS ${target} COMPONENT tests)
+ endforeach()
+ 
+-if( GTEST_FOUND )
++if( GTest_FOUND )
+   target_include_directories( hipfft-test PRIVATE $<BUILD_INTERFACE:${GTEST_INCLUDE_DIRS}> )
+-  target_link_libraries( hipfft-test PRIVATE ${GTEST_LIBRARIES} )
++  target_link_libraries( hipfft-test PRIVATE GTest::gtest )
+ else()
++  # gtest build by the hipFFT
+   add_dependencies( hipfft-test gtest )
+   target_include_directories( hipfft-test PRIVATE hipfft-test_include_dirs ${GTEST_INCLUDE_DIRS} )
+   target_link_libraries( hipfft-test PRIVATE ${GTEST_LIBRARIES} )
+-- 
+2.34.1
+

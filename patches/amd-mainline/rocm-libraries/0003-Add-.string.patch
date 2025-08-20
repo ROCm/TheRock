@@ -1,7 +1,7 @@
-From 5512eab576956cc0f36ca756f879e97fb59340b5 Mon Sep 17 00:00:00 2001
+From dfa6f01ae3f6fd6894d47e5d22172f407d6e3419 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Fri, 18 Jul 2025 03:12:09 +0000
-Subject: [PATCH 03/22] Add .string()
+Subject: [PATCH 03/24] Add .string()
 
 ---
  .../library/src/amd_detail/rocblaslt/src/tensile_host.cpp       | 2 +-

@@ -1,7 +1,7 @@
-From 25d0b1bc6f443b51b9a5863796df7cefac3ff990 Mon Sep 17 00:00:00 2001
+From c379ba8d3b1431e143de1b36d620b92ebef7f779 Mon Sep 17 00:00:00 2001
 From: Mika Laitio <mika.laitio@amd.com>
 Date: Tue, 19 Aug 2025 20:18:54 -0700
-Subject: [PATCH 21/22] hipfftt Remove hardcoding to /opt/rocm
+Subject: [PATCH 21/24] hipfftt Remove hardcoding to /opt/rocm
 
 Signed-off-by: Mika Laitio <mika.laitio@amd.com>
 ---

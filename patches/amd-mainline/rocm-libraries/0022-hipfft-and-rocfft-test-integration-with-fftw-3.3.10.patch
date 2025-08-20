@@ -1,7 +1,7 @@
-From 2038552f2d206a9368ad201cab26cf8c2a3e946c Mon Sep 17 00:00:00 2001
+From 762254a6184b40ef3e058ba48c4a1b5e01e0541d Mon Sep 17 00:00:00 2001
 From: Mika Laitio <mika.laitio@amd.com>
 Date: Tue, 19 Aug 2025 16:23:23 -0700
-Subject: [PATCH 22/22] hipfft and rocfft test integration with fftw-3.3.10
+Subject: [PATCH 22/24] hipfft and rocfft test integration with fftw-3.3.10
 
 Works for finding the newer fftw3 version that has been
 integrated to TheRock build.

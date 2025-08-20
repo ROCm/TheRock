@@ -1,7 +1,7 @@
-From 76b36cce592a3893bb8ec2d094f315b74623d98f Mon Sep 17 00:00:00 2001
+From f02e47afedee71f9ebbe9891c77fd256ff99f035 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Thu, 1 May 2025 11:29:42 -0700
-Subject: [PATCH 15/22] Setup Fortran on Windows.
+Subject: [PATCH 15/24] Setup Fortran on Windows.
 
 ---
  projects/hipblas/CMakeLists.txt | 11 +++++------

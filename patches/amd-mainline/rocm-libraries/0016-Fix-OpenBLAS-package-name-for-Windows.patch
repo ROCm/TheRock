@@ -1,7 +1,7 @@
-From 65b7c0e32ef784b72cd78d7a2d42f33f8b79b2ff Mon Sep 17 00:00:00 2001
+From a7299ca5779c87004a3139eebe44183c03ecf451 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Thu, 1 May 2025 11:29:55 -0700
-Subject: [PATCH 16/22] Fix OpenBLAS package name for Windows.
+Subject: [PATCH 16/24] Fix OpenBLAS package name for Windows.
 
 ---
  projects/hipblas/clients/CMakeLists.txt | 2 +-

@@ -1,7 +1,7 @@
-From 09d12945f2276dc9778bb4ace3c539f638b92a2c Mon Sep 17 00:00:00 2001
+From cf887a475869175f4961b8dc93f52d51d8b1bb57 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Tue, 3 Jun 2025 13:07:11 +0000
-Subject: [PATCH 17/22] Remove Windows third_party_dlls copying code.
+Subject: [PATCH 17/24] Remove Windows third_party_dlls copying code.
 
 This code is built on shaky assumptions that don't hold inside TheRock.
 We'll need a better solution that works across projects.

@@ -1,7 +1,7 @@
-From b3346682dcaae2da1967ca0292c9b85001f6e2f8 Mon Sep 17 00:00:00 2001
+From 15064cae3f4a000198d01ec7a7dd77a89d8dd0a8 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Mon, 28 Jul 2025 13:02:51 +0000
-Subject: [PATCH 02/22] Fix linkage for tensilelite-host target and bump
+Subject: [PATCH 02/24] Fix linkage for tensilelite-host target and bump
  mxdatagen
 
 - Updates linkage for tensilelite-host msgpack dependency because it is

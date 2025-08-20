@@ -1,7 +1,7 @@
-From 3cf3c326b03df3a0a55b505997122dbf55d30bb1 Mon Sep 17 00:00:00 2001
+From b2ea542ea56b997964803e377baf54b867c31023 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 25 Mar 2025 12:13:13 +0000
-Subject: [PATCH 11/22] Fix finding LAPACK and CBLAS
+Subject: [PATCH 11/24] Fix finding LAPACK and CBLAS
 
 Use target names provided by `find_package()` instead of assuming that
 the reference NETLIB libraries should be used.
