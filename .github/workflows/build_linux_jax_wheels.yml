@@ -115,4 +115,4 @@ jobs:
         run: |
           sudo apt install python3-venv python3-pip -y
           pip3 install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+          python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
