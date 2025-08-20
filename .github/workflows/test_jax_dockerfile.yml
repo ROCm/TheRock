@@ -10,9 +10,11 @@ on:
       image_name:
         required: true
         description: JAX docker image to run tests with
+        type: string
       jax_version:
         description: Version of JAX to install
         required: false
+        type: string
       jax_plugin_branch:
         required: true
         description: JAX plugin branch to checkout
@@ -27,9 +29,11 @@ on:
       image_name:
         required: true
         description: JAX docker image to run tests with
+        type: string
       jax_version:
         description: Version of JAX to install instead of the one on the docker image
         required: false
+        type: string
       jax_plugin_branch:
         required: true
         description: JAX plugin branch to checkout to use for test scripts
