@@ -59,7 +59,7 @@ of accidentally referencing too-new glibc symbols).
 
 To install locally built packages you can either
 
-1. Directly install the wheels by file name:
+1. Directly install the Python packages by file name:
 
    ```bash
    python3 -m venv .venv && source .venv/bin/activate
