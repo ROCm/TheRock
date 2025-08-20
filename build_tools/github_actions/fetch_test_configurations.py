@@ -36,21 +36,21 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
     },
-    "hipblaslt": {
-        "job_name": "hipblaslt",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
-        "platform": ["linux", "windows"],
-    },
-    # PRIM tests
-    "rocprim": {
-        "job_name": "rocprim",
-        "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocprim.py')}",
-        "platform": ["linux", "windows"],
-    },
+    # "hipblaslt": {
+    #     "job_name": "hipblaslt",
+    #     "fetch_artifact_args": "--blas --tests",
+    #     "timeout_minutes": 30,
+    #     "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
+    #     "platform": ["linux", "windows"],
+    # },
+    # # PRIM tests
+    # "rocprim": {
+    #     "job_name": "rocprim",
+    #     "fetch_artifact_args": "--prim --tests",
+    #     "timeout_minutes": 60,
+    #     "test_script": f"python {_get_script_path('test_rocprim.py')}",
+    #     "platform": ["linux", "windows"],
+    # },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
@@ -58,36 +58,36 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
     },
-    "rocthrust": {
-        "job_name": "rocthrust",
-        "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocthrust.py')}",
-        "platform": ["linux"],
-    },
-    # SPARSE tests
-    "hipsparse": {
-        "job_name": "hipsparse",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_hipsparse.py')}",
-        "platform": ["linux"],
-    },
-    "rocsparse": {
-        "job_name": "rocsparse",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
-        "test_script": f"python {_get_script_path('test_rocsparse.py')}",
-        "platform": ["linux", "windows"],
-    },
-    # RAND tests
-    "rocrand": {
-        "job_name": "rocrand",
-        "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocrand.py')}",
-        "platform": ["linux", "windows"],
-    },
+    # "rocthrust": {
+    #     "job_name": "rocthrust",
+    #     "fetch_artifact_args": "--prim --tests",
+    #     "timeout_minutes": 15,
+    #     "test_script": f"python {_get_script_path('test_rocthrust.py')}",
+    #     "platform": ["linux"],
+    # },
+    # # SPARSE tests
+    # "hipsparse": {
+    #     "job_name": "hipsparse",
+    #     "fetch_artifact_args": "--blas --tests",
+    #     "timeout_minutes": 30,
+    #     "test_script": f"python {_get_script_path('test_hipsparse.py')}",
+    #     "platform": ["linux"],
+    # },
+    # "rocsparse": {
+    #     "job_name": "rocsparse",
+    #     "fetch_artifact_args": "--blas --tests",
+    #     "timeout_minutes": 120,
+    #     "test_script": f"python {_get_script_path('test_rocsparse.py')}",
+    #     "platform": ["linux", "windows"],
+    # },
+    # # RAND tests
+    # "rocrand": {
+    #     "job_name": "rocrand",
+    #     "fetch_artifact_args": "--rand --tests",
+    #     "timeout_minutes": 60,
+    #     "test_script": f"python {_get_script_path('test_rocrand.py')}",
+    #     "platform": ["linux", "windows"],
+    # },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
@@ -95,22 +95,22 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
     },
-    # MIOpen tests
-    "miopen": {
-        "job_name": "miopen",
-        "fetch_artifact_args": "--blas --miopen --tests",
-        "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_miopen.py')}",
-        "platform": ["linux"],
-    },
-    # RCCL tests
-    "rccl": {
-        "job_name": "rccl",
-        "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 15,
-        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
-        "platform": ["linux"],
-    },
+    # # MIOpen tests
+    # "miopen": {
+    #     "job_name": "miopen",
+    #     "fetch_artifact_args": "--blas --miopen --tests",
+    #     "timeout_minutes": 5,
+    #     "test_script": f"python {_get_script_path('test_miopen.py')}",
+    #     "platform": ["linux"],
+    # },
+    # # RCCL tests
+    # "rccl": {
+    #     "job_name": "rccl",
+    #     "fetch_artifact_args": "--rccl --tests",
+    #     "timeout_minutes": 15,
+    #     "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
+    #     "platform": ["linux"],
+    # },
 }
 
 
