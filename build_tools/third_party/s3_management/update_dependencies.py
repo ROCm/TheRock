@@ -32,7 +32,6 @@ PACKAGES_PER_PROJECT = {
     "filelock": {"version": "latest", "project": "torch"},
     "fsspec": {"version": "latest", "project": "torch"},
     "typing-extensions": {"version": "latest", "project": "torch"},
-    "intel-openmp": {"version": "2025.1.1", "project": "torch"},
     "setuptools": {"version": "latest", "project": "rocm"},
 }
 
