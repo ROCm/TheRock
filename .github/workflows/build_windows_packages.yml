@@ -119,8 +119,7 @@ jobs:
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          # for testing
-          extra_cmake_options: "${{ inputs.extra_cmake_options }} -DTHEROCK_ENABLE_COMPILER=ON -DTHEROCK_ENABLE_ALL=OFF"
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
         run: |
           # clear cache before build and after download
           ccache -z
