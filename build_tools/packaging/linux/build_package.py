@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+
 """Given ROCm artifacts directories, performs packaging to
 create RPM and DEB packages and upload to artifactory server
 
@@ -12,14 +17,15 @@ create RPM and DEB packages and upload to artifactory server
 import argparse
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
 
-from pathlib import Path
-from packaging_utils import *
-from fetch_artifacts import *
 from dataclasses import dataclass
+from jinja2 import Environment, FileSystemLoader, Template
+from packaging_utils import *
+from pathlib import Path
 
 # User inputs required for packaging
 # pkg_dir - For saving the rpm/deb packages
@@ -37,9 +43,10 @@ class PackageConfig:
     enable_rpath: bool
 
 
+ARTIFACTS_DIR = Path.cwd() / "artifacts_tar"
 # Directory for debian and RPM packaging
-DEBIAN_CONTENTS_DIR = f"{os.getcwd()}/DEB"
-RPM_CONTENTS_DIR = f"{os.getcwd()}/RPM"
+DEBIAN_CONTENTS_DIR = Path.cwd() / "DEB"
+RPM_CONTENTS_DIR = Path.cwd() / "RPM"
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm"
 
@@ -71,7 +78,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     sourcedir_list = []
     for pkg in pkg_list:
-        dir_list = filter_components_fromartifactory(pkg)
+        dir_list = filter_components_fromartifactory(pkg, config.gfx_arch)
         sourcedir_list.extend(dir_list)
 
     for source_path in sourcedir_list:
@@ -113,7 +120,8 @@ def generate_control_file(pkg_info, pkg_dir, config: PackageConfig):
     pkg_name = pkg_name.replace("-devel", "-dev")
     arch = pkg_info.get("Architecture")
     description = pkg_info.get("Description")
-    version = pkg_info.get("Version")
+    # version = pkg_info.get("Version")
+    version = config.rocm_version
     section = pkg_info.get("Section")
     priority = pkg_info.get("Priority")
     maintainer = pkg_info.get("Maintainer")
@@ -124,17 +132,24 @@ def generate_control_file(pkg_info, pkg_dir, config: PackageConfig):
     # Package.json maintains development package name as devel
     depends = depends.replace("-devel", "-dev")
 
+    env = Environment(loader=FileSystemLoader("."))
+    template = env.get_template("controlfile_template.j2")
+    # Prepare your context dictionary
+    context = {
+        "arch": arch,
+        "depends": depends,
+        "description": description,
+        "homepage": homepage,
+        "maintainer": maintainer,
+        "pkg_name": pkg_name,
+        "priority": priority,
+        "section": section,
+        "version": version,
+    }
+
     with open(controlfile, "w") as f:
-        f.write(f"Architecture: {arch}\n")
-        f.write(f"Depends: {depends}\n")
-        f.write(f"Description: {description}\n")
-        f.write(f"Homepage: {homepage}\n")
-        f.write(f"Maintainer: {maintainer}\n")
-        f.write(f"Package: {pkg_name}\n")
-        f.write(f"Priority: {priority}\n")
-        f.write(f"Section: {section}\n")
-        f.write(f"Version: {version}\n")
-        f.close()
+        f.write(template.render(context))
+        f.write("\n")  # Adds a blank line. For fixing missing final newline
 
 
 def copy_package_contents(source_dir, destination_dir):
@@ -255,54 +270,46 @@ def generate_spec_file(pkginfo, specfile, config: PackageConfig):
     requires_list = pkginfo.get("RPMRequires", [])
     requires = convert_to_versiondependency(requires_list, config)
 
-    with open(specfile, "w") as f:
-        f.write(f"Name: {pkg_name}\n")
-        f.write(f"Version: {version}\n")
-        f.write(f"Release: {release}\n")
-        f.write(f"BuildArch: {build_arch}\n")
-        f.write(f"Summary: {description}\n")
-        f.write(f"Group: {group}\n")
-        f.write(f"License: {pkg_license}\n")
-        f.write(f"Vendor: {vendor}\n")
-        f.write(f"Prefix: {install_prefix}\n")
-        # use if check for tags that are optional/can be empty
-        if requires:
-            f.write(f"Requires: {requires}\n")
-        if rpmrecommends:
-            f.write(f"Recommends: {rpmrecommends}\n")
-        f.write(f"%description\n")
-        f.write(f"{description}\n")
-        f.write(f"%prep\n")
-        f.write(f"%setup -T -D -c -n {pkg_name}\n")
-        f.write(f"%build\n")
-        f.write(f"%install\n")
-        f.write(f"mkdir -p  $RPM_BUILD_ROOT{install_prefix}\n")
+    # check the package is group of basic package or not
+    pkg_list = pkginfo.get("Includes")
 
-        # check the package is group of basic package or not
-        pkg_list = pkginfo.get("Includes")
+    if pkg_list is None:
+        pkg_list = [pkginfo.get("Package")]
 
-        if pkg_list is None:
-            pkg_list = [pkginfo.get("Package")]
+    sourcedir_list = []
+    for pkg in pkg_list:
+        dir_list = filter_components_fromartifactory(pkg, config.gfx_arch)
+        sourcedir_list.extend(dir_list)
 
-        sourcedir_list = []
-        for pkg in pkg_list:
-            dir_list = filter_components_fromartifactory(pkg)
-            sourcedir_list.extend(dir_list)
+    # Filter out non-existing directories
+    sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
 
+    if config.enable_rpath:
+        print("ENABLE RPATH")
         for path in sourcedir_list:
-            if not os.path.isdir(path):
-                print(f"Directory does not exist: {path}")
-                continue
-            if config.enable_rpath:
-                print("ENABLE RPATH")
-                subprocess.run(["python3", "runpath_to_rpath.py", path])
-            f.write(f"cp -R  {path}/* $RPM_BUILD_ROOT{install_prefix}\n")
+            subprocess.run(["python3", "runpath_to_rpath.py", path])
 
-        f.write(f"%files\n")
-        f.write(f"{install_prefix}\n")
-        f.write(f"%clean\n")
-        f.write(f"rm -rf $RPM_BUILD_ROOT\n")
-        f.close()
+    env = Environment(loader=FileSystemLoader("."))
+    template = env.get_template("specfile_template.j2")
+
+    # Prepare your context dictionary
+    context = {
+        "pkg_name": pkg_name,
+        "version": version,
+        "release": release,
+        "build_arch": build_arch,
+        "description": description,
+        "group": group,
+        "pkg_license": pkg_license,
+        "vendor": vendor,
+        "install_prefix": install_prefix,
+        "requires": requires,
+        "rpmrecommends": rpmrecommends,
+        "sourcedir_list": sourcedir_list,
+    }
+
+    with open(specfile, "w") as f:
+        f.write(template.render(context))
 
 
 def package_with_rpmbuild(spec_file):
@@ -371,7 +378,7 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
     return depends
 
 
-def filter_components_fromartifactory(pkg):
+def filter_components_fromartifactory(pkg, gfx_arch):
     """Get the list of artifactory directories required for creating the package.
     Package.json defines the required artifactories for each package
 
@@ -385,8 +392,13 @@ def filter_components_fromartifactory(pkg):
     sourcedir_list = []
     component_list = pkg_info.get("Components", [])
     artifact_prefix = pkg_info.get("Artifact")
+    if str(pkg_info.get("Gfxarch", "false")).strip().lower() == "true":
+        artifact_suffix = gfx_arch + "-dcgpu"
+    else:
+        artifact_suffix = "generic"
+
     for component in component_list:
-        source_dir = f"{ARTIFACTS_EXTRACT_DIR}/{artifact_prefix}_{component}"
+        source_dir = f"{ARTIFACTS_DIR}/{artifact_prefix}_{component}_{artifact_suffix}"
         filename = f"{source_dir}/artifact_manifest.txt"
         with open(filename, "r") as file:
             for line in file:
@@ -402,6 +414,21 @@ def filter_components_fromartifactory(pkg):
 
     print(sourcedir_list)
     return sourcedir_list
+
+
+def extract_build_id(url):
+    """Extract the buildid from the input URL
+    Parameters:
+    artifact_url : Artifacts directory URL
+
+    Returns: build id
+    """
+
+    match = re.search(r"/(\d+)-linux/", url)
+    if match:
+        return match.group(1)
+    else:
+        return None
 
 
 def get_gfxarch_from_url(artifact_url):
@@ -471,11 +498,11 @@ def clean_artifacts_dir(clean_all):
 
     Returns: None
     """
-
     if clean_all:
-        clean_artifacts_download_dir()
+        if os.path.exists(ARTIFACTS_DIR) and os.path.isdir(ARTIFACTS_DIR):
+            shutil.rmtree(ARTIFACTS_DIR)
+            print(f"Removed directory: {ARTIFACTS_DIR}")
 
-    clean_artifacts_extract_dir()
     if os.path.exists(DEBIAN_CONTENTS_DIR) and os.path.isdir(DEBIAN_CONTENTS_DIR):
         shutil.rmtree(DEBIAN_CONTENTS_DIR)
         print(f"Removed directory: {DEBIAN_CONTENTS_DIR}")
@@ -494,15 +521,14 @@ def run(args: argparse.Namespace):
     clean_artifacts_dir(args.clean_build)
     # Create destination dir to save the created packages
     os.makedirs(args.dest_dir, exist_ok=True)
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
 
     gfxarch = get_gfxarch_from_url(args.artifact_url)
-    # TBD: Full URL will be passed or just Build-ID
-    artifact_url = "/".join(args.artifact_url.rstrip("/").split("/")[:-1])
     # TBD: Whether to parse from url or get it user arguments
-    # gfxarch = args.gfx_arch
-
+    #    artifact_url = "/".join(args.artifact_url.rstrip("/").split("/")[:-1])
+    #    gfxarch = args.gfx_arch
+    #    run_id = args.run_id
     pkg_type = args.pkg_type
-
     # Append rocm version to default install prefix
     if args.install_prefix == f"{DEFAULT_INSTALL_PREFIX}":
         prefix = args.install_prefix + "-" + args.rocm_version
@@ -517,8 +543,27 @@ def run(args: argparse.Namespace):
     )
     pkg_list = parse_input_package_list(args.pkg_names)
     # Download and extract the required artifacts
-    for pkg_name in pkg_list:
-        download_and_extract_artifacts(str(artifact_url), pkg_name, gfxarch)
+    run_id = extract_build_id(args.artifact_url)
+    gfxarch_params = gfxarch + "-dcgpu"
+
+    subprocess.run(
+        [
+            "python3",
+            "../../fetch_artifacts.py",
+            "--run-id",
+            run_id,
+            "--target",
+            gfxarch_params,
+            "--extract",
+            "--all",
+            "--output-dir",
+            ARTIFACTS_DIR,
+        ]
+    )
+    # Using fetch_artiifacts.py from current folder.
+    # Commented for time being and use the one provided by build_tools
+    #    for pkg_name in pkg_list:
+    #        download_and_extract_artifacts(str(artifact_url), pkg_name, gfxarch)
 
     # Create deb/rpm packages
     package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
@@ -543,6 +588,12 @@ def main(argv: list[str]):
         required=True,
         help="Source artifacts/ dir from a build",
     )
+    p.add_argument(
+        "--run-id",
+        type=str,
+        help="Source artifacts/ dir from a build",
+    )
+
     p.add_argument(
         "--dest-dir",
         type=Path,

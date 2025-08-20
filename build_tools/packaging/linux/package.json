@@ -1,7 +1,7 @@
 [
   {
     "Package": "rocm-core",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
@@ -30,7 +30,7 @@
   },
   {
     "Package": "rocm-cmake",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [],
@@ -53,7 +53,7 @@
   },
   {
     "Package": "rocm-smi-lib",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
@@ -87,7 +87,7 @@
   },
   {
     "Package": "rocprofiler-register",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
@@ -119,7 +119,7 @@
   },
   {
     "Package": "amd-llvm",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
@@ -165,7 +165,7 @@
   },
   {
     "Package": "amd-llvm-devel",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
@@ -210,7 +210,7 @@
   },
   {
     "Package": "rccl",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
@@ -245,7 +245,7 @@
   },
   {
     "Package": "rccl-devel",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
@@ -270,7 +270,7 @@
   },
   {
     "Package": "rocm-base",
-    "Version": "7.1.0",
+    "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
