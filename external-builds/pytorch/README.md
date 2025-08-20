@@ -6,9 +6,10 @@ This directory provides tooling for building PyTorch with ROCm Python wheels.
 > If you want to install our prebuilt PyTorch packages instead of building them
 > from source, see [RELEASES.md](/RELEASES.md) instead.
 
-There is nothing special about these build procedures except that they are meant
-to run as part of the ROCm CI and development flow and thus leave less room for
-interpretation with respect to golden path in upstream docs.
+These build procedures are meant to run as part of ROCm CI and development flows
+and thus leave less room for interpretation than in upstream repositories. Some
+of this tooling is being migrated upstream as part of
+[[RFC] Enable native Windows CI/CD on ROCm](https://github.com/pytorch/pytorch/issues/159520).
 
 This incorporates advice from:
 
@@ -21,12 +22,45 @@ patches locally until they can be upstreamed. See the
 
 ## Feature support status
 
-| Feature                  | Linux support | Windows support                                                       |
+| Project / feature        | Linux support | Windows support                                                       |
 | ------------------------ | ------------- | --------------------------------------------------------------------- |
-| PyTorch                  | ✅ Supported  | ✅ Supported                                                          |
+| torch                    | ✅ Supported  | ✅ Supported                                                          |
 | torchaudio               | ✅ Supported  | ✅ Supported                                                          |
 | torchvision              | ✅ Supported  | ✅ Supported                                                          |
 | Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
+
+## Supported versions
+
+We support building ROCm source and nightly releases together with several
+different PyTorch versions. The intent is to support the latest upstream PyTorch
+code (i.e. `main` or `nightly`) as well as recently published release branches
+which users depend on. Developers can also build variations of these versions to
+suite their own requirements.
+
+Each PyTorch version uses a combination of:
+
+- Git repository URLs for each project
+- Git "repo hashtags" (branch names, tag names, or commit refs) for each project
+- Optional patches to be applied on top of a git checkout
+
+See this table for how each version is supported:
+
+| PyTorch version     | Linux                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Windows                                                                                                                                                                                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| main (2.9 alpha)    | (Similar to nightly)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | ✅ Using upstream pytorch<br><ul><li>[pytorch/pytorch `main` branch](https://github.com/pytorch/pytorch/tree/main)</li><li>[pytorch/audio `main` branch](https://github.com/pytorch/audio/tree/main)</li><li>[pytorch/vision `main` branch](https://github.com/pytorch/vision/tree/main)</li></ul> |
+| nightly (2.9 alpha) | ✅ Using upstream pytorch<br><ul><li>[pytorch/pytorch `nightly` branch](https://github.com/pytorch/pytorch/tree/nightly)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/pytorch/pytorch/blob/nightly/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio `nightly` branch](https://github.com/pytorch/audio/tree/nightly)</li><li>[pytorch/vision `nightly` branch](https://github.com/pytorch/vision/tree/nightly)</li></ul>                                                                                                                                            | (Similar to main)                                                                                                                                                                                                                                                                                  |
+| 2.8                 | Unsupported                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Unsupported                                                                                                                                                                                                                                                                                        |
+| 2.7                 | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.7` branch](https://github.com/ROCm/pytorch/tree/release/2.7)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.7/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github/com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.7/related_commits)</li><li>[pytorch/vision](https://github/com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.7/related_commits)</li></ul> | Unsupported                                                                                                                                                                                                                                                                                        |
+
+See also:
+
+- The [Alternate Branches / Patch Sets](#alternate-branches--patch-sets) section
+  for detailed information about configurations
+- The upstream PyTorch
+  [release documentation](https://github.com/pytorch/pytorch/blob/main/RELEASE.md)
+- Workflow source code:
+  - [`.github/workflows/build_portable_linux_pytorch_wheels.yml`](/.github/workflows/build_portable_linux_pytorch_wheels.yml)
+  - [`.github/workflows/build_windows_pytorch_wheels.yml`](/.github/workflows/build_windows_pytorch_wheels.yml)
 
 ## Build instructions
 
@@ -207,16 +241,28 @@ the same wheel archive to produce a standalone install including both PyTorch
 and ROCm, with all necessary patches to shared library / DLL loading for out of
 the box operation.
 
-To produce such a fat wheel, see `windows_patch_fat_wheel.py` and a future
+To produce such a fat wheel, see
+[`windows_patch_fat_wheel.py`](./windows_patch_fat_wheel.py) and a future
 equivalent script for Linux.
 
 ## Running/testing PyTorch
 
+### Running ROCm and PyTorch sanity checks
+
+The simplest tests for a working PyTorch with ROCm install are:
+
+```bash
+rocm-sdk test
+# Should show passing tests
+
+python -c "import torch; print(torch.cuda.is_available())"
+# Should print "True"
+```
+
 ### Running PyTorch smoketests
 
-We have some basic smoketests to check that the build succeeded and the
-environment setup is correct. See [smoke-tests](./smoke-tests/) for details, or
-just run:
+We have additional smoketests that run some sample computations. See
+[smoke-tests](./smoke-tests/) for details, or just run:
 
 ```bash
 pytest -v smoke-tests
@@ -237,10 +283,10 @@ To create patches
 
 ## Alternate Branches / Patch Sets
 
-We support several PyTorch branches with associated patch sets on Linux and
-Windows. The intent is to support the latest upstream PyTorch code (i.e. `main`
-or `nightly`) as well as recently published release branches which users depend
-on.
+Each `pytorch_*_repo.py` script accepts arguments like `--repo`,
+`--repo-hashtag`, and `--patchset` to control which repository to clone, which
+branch/tag/ref to checkout, and where to look for patches to apply after
+checkout.
 
 > [!TIP]
 > Each branch combination below can also use specific commits by selecting a
