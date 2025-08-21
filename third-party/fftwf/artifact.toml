@@ -1,0 +1,5 @@
+# fftwf
+[components.dbg."third-party/fftwf/stage"]
+[components.dev."third-party/fftwf/stage"]
+[components.doc."third-party/fftwf/stage"]
+[components.lib."third-party/fftwf/stage"]
