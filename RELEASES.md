@@ -188,15 +188,15 @@ framework.
 > [!WARNING]
 > This is under **active** development.
 
-Using the index pages listed above, you can install `torch` instead of
-`rocm[libraries,devel]`:
+Using the index pages listed above, you can install `torch`, `torchaudio`, and
+`torchvision` instead of `rocm[libraries,devel]`:
 
 #### gfx94X-dcgpu
 
 ```bash
 python -m pip install \
   --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
-  torch
+  torch torchaudio torchvision
 ```
 
 #### gfx950-dcgpu
@@ -204,7 +204,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
-  torch
+  torch torchaudio torchvision
 ```
 
 #### gfx110X-dgpu
@@ -212,7 +212,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
-  torch
+  torch torchaudio torchvision
 ```
 
 #### gfx1151
@@ -220,7 +220,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
-  torch
+  torch torchaudio torchvision
 ```
 
 #### gfx120X-all
@@ -228,7 +228,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
-  torch
+  torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages
