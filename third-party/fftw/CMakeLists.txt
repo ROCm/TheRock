@@ -16,3 +16,15 @@ therock_cmake_subproject_provide_package(therock-fftw FFTW3 lib/cmake/fftw3)
 therock_cmake_subproject_activate(therock-fftw)
 
 add_dependencies(therock-third-party therock-fftw)
+
+therock_provide_artifact(fftw
+  DESCRIPTOR artifact.toml
+  TARGET_NEUTRAL
+  COMPONENTS
+    dbg
+    dev
+    doc
+    lib
+    run
+  SUBPROJECT_DEPS therock-fftw
+)
