@@ -32,4 +32,3 @@ therock_provide_artifact(fftwf
     run
   SUBPROJECT_DEPS therock-fftwf
 )
-
