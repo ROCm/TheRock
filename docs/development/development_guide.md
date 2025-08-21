@@ -4,6 +4,80 @@ While TheRock started life as a super-project for doing combined builds and rele
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
+## Overall build architecture
+
+TheRock provides:
+
+- A CMake-based build for ROCm components
+- A setuptools-based build for ROCm Python packages
+- (Coming soon!) Scripts for producing native RPM and DEB packages
+- Scripts for building projects like PyTorch and JAX
+
+### diagram 1
+
+```mermaid
+flowchart TD
+    subgraph artifacts [ROCm artifacts]
+        direction TB
+        artifacts_1["Build<br>(CMake)"]
+        artifacts_2[Download prebuilt]
+    end
+
+    subgraph rocm_native [ROCm native packages]
+        direction TB
+        rocm_native_1["Build<br>(scripts)"]
+        rocm_native_2["Install<br>(dpkg/rpm)"]
+    end
+
+    subgraph rocm_python [ROCm Python packages]
+        direction TB
+        rocm_python_1["Build<br>(setuptools)"]
+        rocm_python_2["Install<br>(pip)"]
+    end
+
+    subgraph pytorch [PyTorch]
+        direction TB
+        pytorch_1["Build<br>(scripts)"]
+        pytorch_2["Install<br>(pip)"]
+    end
+
+    subgraph jax [JAX]
+        direction TB
+        jax_1["Build<br>(scripts)"]
+        jax_2["Install<br>(pip)"]
+    end
+
+    artifacts --> rocm_python
+    artifacts --> rocm_native
+    rocm_python --> pytorch
+    rocm_python --> jax
+```
+
+### diagram 2
+
+```mermaid
+flowchart TD
+    A[Build therock-archives]
+    B[Run fetch_artifacts.py]
+    C[artifacts]
+    A --> C
+    B --> C
+
+    D[Run build_python_packages.py]
+    C --> D
+    E[pip install rocm]
+    F[rocm packages]
+    D --> F
+    E --> F
+
+    G[Run build_prod_wheels.py]
+    F --> G
+    H[pip install torch]
+    I[torch packages]
+    G --> I
+    H --> I
+```
+
 ## IDE Support
 
 Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide.
