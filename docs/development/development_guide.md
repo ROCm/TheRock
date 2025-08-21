@@ -6,7 +6,10 @@ While there is much overlap between using TheRock as a development environment a
 
 ## IDE Support
 
-Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide. Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
+Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide.
+
+> [!NOTE]
+> Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
 
 ## Single Component Development
 
