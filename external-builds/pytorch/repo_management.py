@@ -12,14 +12,39 @@ HIPIFY_COMMIT_MESSAGE = "DO NOT SUBMIT: HIPIFY"
 
 
 def exec(args: list[str | Path], cwd: Path, *, stdout_devnull: bool = False):
-    args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
-    subprocess.check_call(
-        args,
-        cwd=str(cwd),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL if stdout_devnull else None,
-    )
+    """Enhanced exec that captures and logs stdout/stderr for debugging"""
+    args_str = [str(arg) for arg in args]
+    print(f"++ Exec [{cwd}]$ {shlex.join(args_str)}")
+
+    try:
+        # Capture both stdout and stderr for logging
+        result = subprocess.run(
+            args_str,
+            cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        # Log stdout/stderr if they exist
+        if result.stdout:
+            print(f"[DEBUG] Command stdout: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"[DEBUG] Command stderr: {result.stderr.strip()}")
+
+        return result
+
+    except subprocess.CalledProcessError as e:
+        # Log the failure details.
+        print(f"[DEBUG] Command failed with exit code: {e.returncode}")
+        if e.stdout:
+            print(f"[DEBUG] Failed command stdout: {e.stdout.strip()}")
+        if e.stderr:
+            print(f"[DEBUG] Failed command stderr: {e.stderr.strip()}")
+
+        # Re-raise the original exception to maintain existing behavior
+        raise
 
 
 def rev_parse(repo_path: Path, rev: str) -> str | None:
@@ -220,8 +245,73 @@ def commit_hipify(args: argparse.Namespace):
         status = list_status(module_path)
         if not status:
             continue
+
         print(f"HIPIFY made changes to {module_path}: Committing")
+
+        # LOGGING: Check staged changes BEFORE git add -A
+        try:
+            pre_add_result = subprocess.run(
+                ["git", "diff", "--cached", "--quiet"],
+                cwd=str(module_path),
+                capture_output=True,
+            )
+            print(
+                f"[DEBUG] Before git add -A: staged changes exist = {pre_add_result.returncode != 0}"
+            )
+        except Exception as e:
+            print(f"[DEBUG] Before git add -A: staged check failed: {e}")
+
         exec(["git", "add", "-A"], cwd=module_path)
+
+        # LOGGING: Check staged changes AFTER git add -A
+        try:
+            post_add_result = subprocess.run(
+                ["git", "diff", "--cached", "--quiet"],
+                cwd=str(module_path),
+                capture_output=True,
+            )
+            staged_changes_exist = post_add_result.returncode != 0
+            print(
+                f"[DEBUG] After git add -A: staged changes exist = {staged_changes_exist}"
+            )
+
+            # Log the problematic scenario
+            if not staged_changes_exist:
+                print(
+                    f"[DEBUG] POTENTIAL ISSUE: list_status() found changes but nothing staged after git add -A!"
+                )
+                print(f"[DEBUG] Original list_status() result: {status}")
+
+                # Show detailed comparison
+                try:
+                    status_output = subprocess.run(
+                        ["git", "status", "--porcelain", "-u", "--ignore-submodules"],
+                        cwd=str(module_path),
+                        capture_output=True,
+                        text=True,
+                    )
+                    staged_files = subprocess.run(
+                        ["git", "diff", "--cached", "--name-only"],
+                        cwd=str(module_path),
+                        capture_output=True,
+                        text=True,
+                    )
+                    print(
+                        f"[DEBUG] Current git status output: '{status_output.stdout.strip()}'"
+                    )
+                    print(
+                        f"[DEBUG] Currently staged files: '{staged_files.stdout.strip()}'"
+                    )
+                    print(
+                        f"[DEBUG] This will likely cause git commit to fail with 'nothing to commit'"
+                    )
+                except Exception as e:
+                    print(f"[DEBUG] Failed to get detailed git info: {e}")
+
+        except Exception as e:
+            print(f"[DEBUG] After git add -A: staged check failed: {e}")
+
+        # Original commit logic - will fail if no staged changes
         exec(
             ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
             cwd=module_path,
