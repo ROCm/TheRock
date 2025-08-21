@@ -94,13 +94,22 @@ class PackageEntry:
 
     def __repr__(self):
         return self.dist_package_template
-        
+
 
 def discover_current_target_family() -> str | None:
     try:
-        result = subprocess.check_output(["amdgpu-arch"], text = True)
+        result = subprocess.check_output(["amdgpu-arch"], text=True)
         if result:
-            return result.strip()
+            arch_set = set(result.strip().split("\n"))
+            suffixes = ["-all", "-dgpu", "-igpu", "-dcgpu"]
+            for arch in arch_set:
+                arch_family = arch[:-1] + "X"
+                for suffix in suffixes:
+                    target_family = arch_family + suffix
+                    if target_family in AVAILABLE_TARGET_FAMILIES:
+                        return target_family
+                if arch in AVAILABLE_TARGET_FAMILIES:
+                    return arch
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] amdgpu-arch failed with return code {e.returncode}")
         print(f"[stderr] {e.output}")
@@ -109,6 +118,7 @@ def discover_current_target_family() -> str | None:
     except Exception as e:
         print(f"[ERROR] Unexpected error running amdgpu-arch: {e}")
     return None
+
 
 # Resolve the build target family. This consults a list of things in increasing
 # order of specificity:
