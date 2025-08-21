@@ -172,19 +172,21 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
 - Building the rocm Python packages from artifacts fetched from a CI run:
 
+  <!-- TODO: teach scripts to look up latest stable run and mkdir themselves -->
+
   ```bash
   # From the repository root
-  mkdir $HOME/.therock/15914707463
-  mkdir $HOME/.therock/15914707463/artifacts
+  mkdir $HOME/.therock/17123441166
+  mkdir $HOME/.therock/17123441166/artifacts
   python ./build_tools/fetch_artifacts.py \
-    --run-id=15914707463 \
+    --run-id=17123441166 \
     --target=gfx110X-dgpu \
-    --output-dir=$HOME/.therock/15914707463/artifacts \
+    --output-dir=$HOME/.therock/17123441166/artifacts \
     --all
 
   python ./build_tools/build_python_packages.py \
-    --artifact-dir=$HOME/.therock/15914707463/artifacts \
-    --dest-dir=$HOME/.therock/15914707463/packages
+    --artifact-dir=$HOME/.therock/17123441166/artifacts \
+    --dest-dir=$HOME/.therock/17123441166/packages
   ```
 
 - Building the rocm Python packages from artifacts built from source:
