@@ -396,6 +396,41 @@ file from the `hipified` patch folder to the `base` patch folder.
 - Most other patches can be categorized as 'base' or 'hipified', though
   'hipified' is simplest to construct based on git history
 
+Here is a complete example:
+
+```bash
+cd external-builds/pytorch
+python -m venv .venv && source .venv/bin/activate
+
+# Checkout, applying patches and running hipify.
+python pytorch_torch_repo.py checkout --repo-hashtag main --patchset main
+
+# Switch into the new source directory and make a change.
+pushd pytorch
+git log --oneline -n 5
+# f3d83d2abee (HEAD) Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton on windows
+# b3787ab8e90 Include native_transformers srcs to fix link errors.
+# cb53ee6fd45 (tag: THEROCK_HIPIFY_DIFFBASE) DO NOT SUBMIT: HIPIFY
+# 96682103026 (tag: THEROCK_UPSTREAM_DIFFBASE, origin/main) Allow bypasses for Precompile when guards, etc. cannot be serialized (#160902)
+# 3f5a8e2003f Fix torchaudio build when TORCH_CUDA_ARCH_LIST is not set (#161084)
+touch test.txt
+git add -A
+git commit -m "Test commit for patch saving"
+popd
+
+# Save the patch.
+python pytorch_torch_repo.py save-patches --repo-hashtag main
+
+git status
+# Untracked files:
+#   (use "git add <file>..." to include in what will be committed)
+#         patches/pytorch/main/pytorch/hipified/0003-Test-commit-for-patch-saving.patch
+```
+
+Since the commit was added on top of `THEROCK_HIPIFY_DIFFBASE`, it was written
+to the `hipified/` patch folder. The patch could stay there or be moved to the
+`base/` patch folder.
+
 ### Alternate branches / patch sets
 
 > [!TIP]
@@ -428,7 +463,7 @@ python pytorch_vision_repo.py checkout --repo-hashtag main
 python pytorch_triton_repo.py checkout
 ```
 
-#### PyTorch Nightly branches
+#### PyTorch nightly branches
 
 This checks out the `nightly` branches from https://github.com/pytorch,
 tracking the latest pytorch.org nightly release:
