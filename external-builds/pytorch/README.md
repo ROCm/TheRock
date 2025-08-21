@@ -6,6 +6,14 @@ This directory provides tooling for building PyTorch with ROCm Python wheels.
 > If you want to install our prebuilt PyTorch packages instead of building them
 > from source, see [RELEASES.md](/RELEASES.md) instead.
 
+Table of contents:
+
+- [Support status](#support-status)
+- [Build instructions](#build-instructions)
+- [Running/testing PyTorch](#runningtesting-pytorch)
+- [Advanced build instructions](#advanced-build-instructions)
+- [Development instructions](#development-instructions)
+
 These build procedures are meant to run as part of ROCm CI and development flows
 and thus leave less room for interpretation than in upstream repositories. Some
 of this tooling is being migrated upstream as part of
@@ -16,11 +24,9 @@ This incorporates advice from:
 - https://github.com/pytorch/pytorch#from-source
 - `.ci/manywheel/build_rocm.sh` and friends
 
-Note that the above statement is currently aspirational as we contain some
-patches locally until they can be upstreamed. See the
-[`patches/` directory](./patches/).
+## Support status
 
-## Feature support status
+### Project and feature support status
 
 | Project / feature        | Linux support | Windows support                                                       |
 | ------------------------ | ------------- | --------------------------------------------------------------------- |
@@ -29,7 +35,7 @@ patches locally until they can be upstreamed. See the
 | torchvision              | ✅ Supported  | ✅ Supported                                                          |
 | Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
 
-## Supported versions
+### Supported PyTorch versions
 
 We support building ROCm source and nightly releases together with several
 different PyTorch versions. The intent is to support the latest upstream PyTorch
@@ -113,19 +119,13 @@ for more background on these `rocm` packages.
 It is highly recommended to use a virtual environment unless working within a
 throw-away container or CI environment.
 
-- On Linux:
+```bash
+# On Linux
+python -m venv .venv && source .venv/bin/activate
 
-  ```bash
-  python -m venv .venv
-  source .venv/bin/activate
-  ```
-
-- On Windows:
-
-  ```bash
-  python -m venv .venv
-  .venv\Scripts\activate.bat
-  ```
+# On Windows
+python -m venv .venv && .venv\Scripts\activate.bat
+```
 
 Now checkout repositories:
 
@@ -173,6 +173,35 @@ mix/match build steps.
     --pytorch-vision-dir C:/b/vision \
     --output-dir %HOME%/tmp/pyout
   ```
+
+## Running/testing PyTorch
+
+### Running ROCm and PyTorch sanity checks
+
+The simplest tests for a working PyTorch with ROCm install are:
+
+```bash
+rocm-sdk test
+# Should show passing tests
+
+python -c "import torch; print(torch.cuda.is_available())"
+# Should print "True"
+```
+
+### Running PyTorch smoketests
+
+We have additional smoketests that run some sample computations. See
+[smoke-tests](./smoke-tests/) for details, or just run:
+
+```bash
+pytest -v smoke-tests
+```
+
+### Running full PyTorch tests
+
+See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation
+
+<!-- TODO(erman-gurses): update docs here -->
 
 ## Advanced build instructions
 
@@ -247,45 +276,24 @@ To produce such a fat wheel, see
 [`windows_patch_fat_wheel.py`](./windows_patch_fat_wheel.py) and a future
 equivalent script for Linux.
 
-## Running/testing PyTorch
-
-### Running ROCm and PyTorch sanity checks
-
-The simplest tests for a working PyTorch with ROCm install are:
-
-```bash
-rocm-sdk test
-# Should show passing tests
-
-python -c "import torch; print(torch.cuda.is_available())"
-# Should print "True"
-```
-
-### Running PyTorch smoketests
-
-We have additional smoketests that run some sample computations. See
-[smoke-tests](./smoke-tests/) for details, or just run:
-
-```bash
-pytest -v smoke-tests
-```
-
-### Running full PyTorch tests
-
-See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation
-
-<!-- TODO(erman-gurses): update docs here -->
-
 ## Development instructions
 
-### Avoid using patch files if possible
+This section covers recommended practices for making changes to PyTorch and
+other repositories for use with the build scripts and integration with
+version control systems.
 
-In order, developers should prefer:
+### Recommendation: avoid using patch files if possible
+
+If you want to make changes to PyTorch source code, prefer in this order:
 
 1. Contributing to upstream `main` branches
 1. Contributing to upstream `release/` branches
 1. Maintaining downstream git forks with their own branches
+   - This allows for standard git workflows to merge, resolve conflicts, etc.
 1. Using an upstream or downstream branch with patch files
+   - Patch files can be applied on top of git history and do not require commit
+     access in an upstream repository but require extra effort to keep current
+     and provide no path to being merged
 
 > [!WARNING]
 > We carry some patch files out of necessity while waiting on upstream consensus
@@ -293,9 +301,44 @@ In order, developers should prefer:
 > long term support, we use downstream git forks like the
 > [ROCm PyTorch release branches](#rocm-pytorch-release-branches).
 
+### About patch files and patchsets
+
+Patches are commits saved to text files generated by
+[`git format-patch`](https://git-scm.com/docs/git-format-patch) that can be
+replayed later using [`git am`](https://git-scm.com/docs/git-am).
+
+We store patches in a directory hierarchy within the
+[`patches/` subdirectory](./patches/):
+
+```text
+pytorch/                 <-- project name (for pytorch_torch_repo.py)
+  main/                  <-- patchset name (typically a git tag or branch name)
+    pytorch/             <-- folder within the project
+      base/              <-- patches to apply before hipify
+        0001-COMMIT_MESSAGE.patch
+        0002-COMMIT_MESSAGE.patch
+      hipified/          <-- patches to apply after hipify
+        0001-COMMIT_MESSAGE.patch
+    third_party/         <-- another folder within the project
+      fbgemm/
+        base/
+        hipified/
+          0001-COMMIT_MESSAGE.patch
+  v2.7.0/                <-- a different patchset name
+    pytorch/
+      base/
+        0001-COMMIT_MESSAGE.patch
+
+pytorch_audio/
+  main/
+    ...
+  v2.7.0/
+    ...
+```
+
 ### Checking out and applying patches
 
-Each `pytorch_*_repo.py` script handles a few aspects of working with the
+Each `pytorch_*_repo.py` scripts handle a few aspects of working with each
 associated repository:
 
 1. Clone the repository as needed from `--gitrepo-origin` to the `--repo-name`
