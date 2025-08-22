@@ -319,6 +319,7 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
+            "amdsmi",
             "aqlprofile",
             "clr",
             "half",
