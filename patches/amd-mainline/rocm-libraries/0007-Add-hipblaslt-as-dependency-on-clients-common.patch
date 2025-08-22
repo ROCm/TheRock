@@ -1,7 +1,7 @@
-From 6dd2eae72eff1b19ffcf9f77b986c413570222c0 Mon Sep 17 00:00:00 2001
+From 24391443f0d175cb8041948d364cf7d947e49e0b Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Fri, 18 Jul 2025 03:14:47 +0000
-Subject: [PATCH 07/17] Add hipblaslt as dependency on clients common
+Subject: [PATCH 07/21] Add hipblaslt as dependency on clients common
 
 ---
  projects/rocblas/clients/common/CMakeLists.txt | 2 +-

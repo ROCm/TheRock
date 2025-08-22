@@ -1,8 +1,8 @@
-From c42a9bd55f3db752f08767999edcf1d36ec9c64c Mon Sep 17 00:00:00 2001
+From 79c7091f725701559edeb87f781caa7bbf92d7e2 Mon Sep 17 00:00:00 2001
 From: Jonathan Lichtner
  <195780826+JonathanLichtnerAMD@users.noreply.github.com>
 Date: Thu, 3 Jul 2025 21:00:13 +0000
-Subject: [PATCH 04/17] Workaround CK include issue for unit tests in TheRock
+Subject: [PATCH 04/21] Workaround CK include issue for unit tests in TheRock
 
 The test unit_implicitgemm_ck_util.cpp includes from CK, but this
 currently fails.  Skip this test as a temporary workaround.
