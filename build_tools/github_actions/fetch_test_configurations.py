@@ -111,6 +111,14 @@ test_matrix = {
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
     },
+    # SOLVER tests
+    "hipsolver": {
+        "job_name": "hipsolver",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipsolver.py')}",
+        "platform": ["linux", "windows"],
+    },
 }
 
 

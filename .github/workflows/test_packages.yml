@@ -100,7 +100,7 @@ jobs:
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       - name: Install additional packages
-        if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt') }}
+        if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt' || matrix.components.job_name == 'hipsolver') }}
         run: sudo apt install libgfortran5 -y
 
       - name: Test
