@@ -403,6 +403,7 @@ class RockProjectRepo:
 
     # repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
     def repo_hashtag_to_patches_dir_name(self, version_ref: str) -> str:
+        version_ref = version_ref.replace("/", "_")
         pos = version_ref.find("-")
         if pos != -1:
             return version_ref[:pos]
@@ -537,10 +538,13 @@ class RockProjectRepo:
             # Apply base patches to main repository. Patches to
             # submodules will be applied later. This enables patches
             # to modify submodule version to be checked out.
+            patch_dir_name = self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag)
+            print("patch_dir_name: " + patch_dir_name)
+            full_patch_dir = self.project_patch_dir_root / patch_dir_name
+            print("full patch dir: " + str(full_patch_dir))
             self.apply_main_repository_patches(
                 self.project_src_dir,
-                self.project_patch_dir_root
-                / self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag),
+                full_patch_dir,
                 self.project_name,
                 "base",
             )
@@ -573,11 +577,12 @@ class RockProjectRepo:
         self.git_config_ignore_submodules(self.project_src_dir)
 
         if apply_patches_enabled:
+            patch_dir_name = self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag)
+            print("patch_dir_name: " + patch_dir_name)
             # Apply base patches to submodules.
             self.apply_submodule_patches(
                 self.project_src_dir,
-                self.project_patch_dir_root
-                / self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag),
+                self.project_patch_dir_root / patch_dir_name,
                 self.project_name,
                 "base",
             )
