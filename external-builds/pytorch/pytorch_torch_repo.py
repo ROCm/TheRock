@@ -77,7 +77,7 @@ def main(cl_args: list[str]):
         )
 
     p = argparse.ArgumentParser("pytorch_torch_repo.py")
-    default_repo_hashtag = "v2.7.0"
+    default_repo_hashtag = "main"
     sub_p = p.add_subparsers(required=True)
     checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
     add_common(checkout_p)

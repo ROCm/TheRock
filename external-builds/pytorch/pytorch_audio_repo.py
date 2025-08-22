@@ -55,7 +55,7 @@ THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
     os="centos",
     project="torchaudio",
     default_origin="https://github.com/pytorch/audio.git",
-    default_hashtag="v2.7.0",
+    default_hashtag="main",
     default_patchset=None,
 )
 
