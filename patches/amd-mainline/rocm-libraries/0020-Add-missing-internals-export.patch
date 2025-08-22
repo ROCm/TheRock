@@ -1,7 +1,7 @@
-From 05f7bd80b25853b26f1c63dcda570e3234e2ed6b Mon Sep 17 00:00:00 2001
+From 9d336945de187879c854b7549343a5b2479c975e Mon Sep 17 00:00:00 2001
 From: Brian Harrison <brian.harrison@amd.com>
 Date: Thu, 7 Aug 2025 20:43:58 +0000
-Subject: [PATCH] Add missing internals export
+Subject: [PATCH 20/21] Add missing internals export
 
 ---
  projects/miopen/src/include/miopen/conv/solvers.hpp | 3 ++-

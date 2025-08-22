@@ -1,7 +1,7 @@
-From bde2fe52438bf647d6b0e3dc483beac05f784bdc Mon Sep 17 00:00:00 2001
+From eef4fc3b29b6f7699ecaf056960f585308331f56 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Wed, 4 Jun 2025 14:37:14 -0700
-Subject: [PATCH 09/17] Skip i128 in test_device_transform.cpp if unsupported.
+Subject: [PATCH 09/21] Skip i128 in test_device_transform.cpp if unsupported.
 
 See https://github.com/ROCm/TheRock/issues/405.
 ---

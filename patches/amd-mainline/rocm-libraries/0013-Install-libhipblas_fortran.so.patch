@@ -1,7 +1,7 @@
-From 7e26c6c64ba19d9a7d6dcb736aba374407df0673 Mon Sep 17 00:00:00 2001
+From 48ddc16c545eb391b8671dd34245ca1f65220c27 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 1 Apr 2025 20:58:38 +0000
-Subject: [PATCH 13/17] Install `libhipblas_fortran.so`
+Subject: [PATCH 13/21] Install `libhipblas_fortran.so`
 
 This is required by the test and benchmark clients but was not part of
 the installation so far.
