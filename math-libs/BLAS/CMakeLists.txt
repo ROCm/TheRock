@@ -156,6 +156,13 @@ list(APPEND _blas_subproject_names hipBLASLt)
 # rocBLAS
 ##############################################################################
 
+set(rocBLAS_device_enumerator_deps)
+if(WIN32)
+  list(APPEND rocBLAS_device_enumerator_deps hipInfo)
+else()
+  list(APPEND rocBLAS_device_enumerator_deps rocminfo)
+endif()
+
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
@@ -194,6 +201,7 @@ therock_cmake_subproject_declare(rocBLAS
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
+    ${rocBLAS_device_enumerator_deps}
     ${rocBLAS_optional_runtime_deps}
     ${optional_profiler_deps}
 )
