@@ -361,30 +361,14 @@ def verify_build_env(args, rock_builder_home_dir: Path, rock_builder_build_dir: 
         rocm_home_lib_path = rocm_home_lib_path.resolve()
         rocm_home_llvm_path = rocm_home_root_path / "lib" / "llvm" / "bin"
         rocm_home_llvm_path = rocm_home_llvm_path.resolve()
-        if rocm_home_bin_path.exists():
-            # check that THEROCK_AMDGPU_TARGETS has been specified on Windows builds.
-            # This is needdd because on locally build rocm sdk we can not automatically query
-            # what are the build targets that are supported by rocm_sdk used.
-            if not "THEROCK_AMDGPU_TARGETS" in os.environ:
-                if is_posix:
-                    gpu_targets = get_rocm_sdk_targets_on_linux(rocm_home_bin_path)
-                    os.environ["THEROCK_AMDGPU_TARGETS"] = gpu_targets
-                    print("gpu_targets: " + gpu_targets)
-                else:
-                    print(
-                        "Error, THEROCK_AMDGPU_TARGETS must be set on Windows to select the target GPUs"
-                    )
-                    print(
-                        "Target GPU must match with the GPU selected on TheRock core build"
-                    )
-                    print("Example for building for AMD Strix Halo and RX 9070:")
-                    print("  set THEROCK_AMDGPU_TARGETS=gfx1151;gfx1201")
-                    sys.exit(1)
-        # set ROCM_HOME if not yet set
-        if not "ROCM_HOME" in os.environ:
-            # print("ROCM_HOME: " + rocm_home_root_path.as_posix())
-            os.environ["ROCM_HOME"] = rocm_home_root_path.as_posix()
-        if rocm_home_lib_path.exists():
+        if rocm_home_bin_path.exists() and rocm_home_lib_path.exists():
+            # set ROCM_HOME if not yet set
+            if not "ROCM_HOME" in os.environ:
+                # print("ROCM_HOME: " + rocm_home_root_path.as_posix())
+                os.environ["ROCM_HOME"] = rocm_home_root_path.as_posix()
+            # set ROCM_PATH to always point to same location than ROCM_HOME
+            # ROCM_PATH is used by some ROCM applications instead of ROCM_HOME
+            os.environ["ROCM_PATH"] = rocm_home_root_path.as_posix()
             if not is_directory_in_env_variable_path(
                 "PATH", rocm_home_bin_path.as_posix()
             ):
@@ -431,6 +415,25 @@ def verify_build_env(args, rock_builder_home_dir: Path, rock_builder_build_dir: 
                         clang_home = clang_home.resolve()
                         os.environ["ROCK_BUILDER_CLANG_HOME"] = clang_home.as_posix()
                         break
+            # check that THEROCK_AMDGPU_TARGETS environment variable is set.
+            # If not:
+            #   - Linux: check the gpus available and assign them to THEROCK_AMDGPU_TARGETS
+            #   - Windows: exit on error, because it can not be queried automatically
+            if not "THEROCK_AMDGPU_TARGETS" in os.environ:
+                if is_posix:
+                    gpu_targets = get_rocm_sdk_targets_on_linux(rocm_home_bin_path)
+                    os.environ["THEROCK_AMDGPU_TARGETS"] = gpu_targets
+                    print("gpu_targets: " + gpu_targets)
+                else:
+                    print(
+                        "Error, THEROCK_AMDGPU_TARGETS must be set on Windows to select the target GPUs"
+                    )
+                    print(
+                        "Target GPU must match with the GPU selected on TheRock core build"
+                    )
+                    print("Example for building for AMD Strix Halo and RX 9070:")
+                    print("  set THEROCK_AMDGPU_TARGETS=gfx1151;gfx1201")
+                    sys.exit(1)
         else:
             print(
                 "Error, could not find directory ROCM_SDK/lib: "
