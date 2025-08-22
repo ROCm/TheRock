@@ -1,0 +1,31 @@
+From bf504c8e83f5b4c5afbf426913059121bd57df48 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <lamikr@gmail.com>
+Date: Wed, 12 Mar 2025 18:59:17 -0700
+Subject: [PATCH 2/2] rccl phoenix, strix point and strix halo support
+
+- disable trace_hwreg command as the assembly command
+  s_getreg_b32 HW_REG_HW_ID is not supported in the
+  newer dgpus and iGPUs like gfx1103, gfx1150, gfx1151
+  and gfx1200
+
+Signed-off-by: Mika Laitio <lamikr@gmail.com>
+---
+ src/device/common.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/device/common.h b/src/device/common.h
+index a8e66ec7..eb6645fb 100644
+--- a/src/device/common.h
++++ b/src/device/common.h
+@@ -26,7 +26,7 @@
+   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
+ #endif
+ 
+-#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__)
++#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || defined(__gfx1151__) || defined(__gfx1200__) || defined(__gfx1201__)
+ #define __trace_hwreg()
+ #else
+ #define __trace_hwreg() \
+-- 
+2.43.0
+
