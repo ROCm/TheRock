@@ -13,70 +13,21 @@ TheRock provides:
 - (Coming soon!) Scripts for producing native RPM and DEB packages
 - Scripts for building projects like PyTorch and JAX
 
-### diagram 1
+![Build architecture](therock_build_architecture.excalidraw.svg)
 
-```mermaid
-flowchart TD
-    subgraph artifacts [ROCm artifacts]
-        direction TB
-        artifacts_1["Build<br>(CMake)"]
-        artifacts_2[Download prebuilt]
-    end
+Note that at each layer of the build, developers can build from source OR fetch prebuilt artifacts/packages from sources like pre-commit CI workflow runs or nightly package releases.
 
-    subgraph rocm_native [ROCm native packages]
-        direction TB
-        rocm_native_1["Build<br>(scripts)"]
-        rocm_native_2["Install<br>(dpkg/rpm)"]
-    end
+For example:
 
-    subgraph rocm_python [ROCm Python packages]
-        direction TB
-        rocm_python_1["Build<br>(setuptools)"]
-        rocm_python_2["Install<br>(pip)"]
-    end
+- If you want to build PyTorch using ROCm Python packages that have already been built for your operating system and GPU architecture family, you can skip most of the source builds:
 
-    subgraph pytorch [PyTorch]
-        direction TB
-        pytorch_1["Build<br>(scripts)"]
-        pytorch_2["Install<br>(pip)"]
-    end
+  ![Build architecture highlight torch](therock_build_architecture_highlight_torch.excalidraw.svg)
 
-    subgraph jax [JAX]
-        direction TB
-        jax_1["Build<br>(scripts)"]
-        jax_2["Install<br>(pip)"]
-    end
+- If you want to build native packages for a Linux distro including some source changes to ROCm components, you can build ROCm artifacts using CMake then package them for your distro:
 
-    artifacts --> rocm_python
-    artifacts --> rocm_native
-    rocm_python --> pytorch
-    rocm_python --> jax
-```
+  ![Build architecture highlight cmake native](therock_build_architecture_highlight_cmake_native.excalidraw.svg)
 
-### diagram 2
-
-```mermaid
-flowchart TD
-    A[Build therock-archives]
-    B[Run fetch_artifacts.py]
-    C[artifacts]
-    A --> C
-    B --> C
-
-    D[Run build_python_packages.py]
-    C --> D
-    E[pip install rocm]
-    F[rocm packages]
-    D --> F
-    E --> F
-
-    G[Run build_prod_wheels.py]
-    F --> G
-    H[pip install torch]
-    I[torch packages]
-    G --> I
-    H --> I
-```
+Most of this document focuses on the ROCm build itself (at the top of the diagrams).
 
 ## IDE Support
 
