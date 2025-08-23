@@ -1,14 +1,14 @@
-From 0e265339515c100bb519473ca700b9b95084c1af Mon Sep 17 00:00:00 2001
+From c2c7df79c2302f3e29df3823fe383ba3256da505 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Fri, 18 Jul 2025 03:12:09 +0000
-Subject: [PATCH 03/17] Add .string()
+Subject: [PATCH 02/16] Add .string()
 
 ---
  .../library/src/amd_detail/rocblaslt/src/tensile_host.cpp       | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
-index 1826ea2f52..08711fbbb7 100644
+index 4ca8f9ef3b..a0d593ce81 100644
 --- a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
 +++ b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/tensile_host.cpp
 @@ -2062,7 +2062,7 @@ namespace
@@ -21,5 +21,5 @@ index 1826ea2f52..08711fbbb7 100644
                          std::cerr << "\nrocblaslt error: Could not initialize Tensile library "
                                       "mapping"
 -- 
-2.43.0
+2.25.1
 
