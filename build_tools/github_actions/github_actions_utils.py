@@ -97,3 +97,26 @@ def gha_append_step_summary(summary: str):
     with open(step_summary_file, "a") as f:
         # Use double newlines to split sections in markdown.
         f.write(summary + "\n\n")
+
+
+def retrieve_bucket_info() -> tuple[str, str]:
+    """Retrieves bucket information based on env variables
+
+    Environment variables:
+    - GITHUB_REPOSITORY
+    - IS_PR_FROM_FORK
+    """
+    github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
+    is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
+    owner, repo_name = github_repository.split("/")
+    external_repo = (
+        ""
+        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
+        else f"{owner}-{repo_name}/"
+    )
+    bucket = (
+        "therock-artifacts"
+        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
+        else "therock-artifacts-external"
+    )
+    return (external_repo, bucket)

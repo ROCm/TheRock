@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 
 """
+Usage:
+post_build_upload.py [-h] [--build-dir BUILD_DIR] --amdgpu-family AMDGPU_FAMILY [--run-id RUN_ID] [--upload | --no-upload]
+
 This script runs after building TheRock, where this script does:
 1. Create log archives
 2. Create log index files
 3. (optional) upload artifacts
 4. (optional) upload logs
 5. (optional) add links to GitHub job summary
+
+In the case that a CI build fails, this step will always upload available logs and artifacts.
+
+For AWS credentials to upload, reach out to the #rocm-ci channel in the AMD Developer Community Discord
 """
 
 import argparse
@@ -40,10 +47,6 @@ def exec(cmd: list[str], cwd: Path):
 
 def is_windows():
     return platform.system().lower() == "windows"
-
-
-def normalize_path(p: Path) -> str:
-    return str(p).replace("\\", "/") if is_windows() else str(p)
 
 
 def check_aws_cli_available():
@@ -106,7 +109,7 @@ def index_log_files(build_dir: Path, amdgpu_family: str):
             [
                 "python",
                 str(indexer_path),
-                normalize_path(log_dir),  # unnamed path arg in front of -f
+                log_dir.as_posix(),  # unnamed path arg in front of -f
                 "-f",
                 "*.log",
                 "*.tar.gz",  # accepts nargs! Take care not to consume path
@@ -131,26 +134,9 @@ def index_log_files(build_dir: Path, amdgpu_family: str):
         log(f"[WARN] '{index_file}' not found. Skipping link rewrite.")
 
 
-def retrieve_bucket_info() -> tuple[str, str]:
-    github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
-    is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
-    owner, repo_name = github_repository.split("/")
-    external_repo = (
-        ""
-        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
-        else f"{owner}-{repo_name}/"
-    )
-    bucket = (
-        "therock-artifacts"
-        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
-        else "therock-artifacts-external"
-    )
-    return (external_repo, bucket)
-
-
 def create_index_file(args: argparse.Namespace):
-    log("Creating index file")
     build_dir = args.build_dir / "artifacts"
+    log(f"Creating index file at {str(build_dir / 'index.html')}")
 
     indexer_args = argparse.Namespace()
     indexer_args.filter = ["*.tar.xz*"]
@@ -240,15 +226,16 @@ def upload_build_summary(args):
 
 
 def run(args):
+    is_ci = os.getenv("CI", False)
     log("Creating Ninja log archive")
     log("--------------------------")
     create_ninja_log_archive(args.build_dir)
 
-    log("Indexing log files")
+    log(f"Indexing log files in {str(args.build_dir)}")
     log("------------------")
     index_log_files(args.build_dir, args.amdgpu_family)
 
-    if args.ci or args.upload:
+    if is_ci or args.upload:
         check_aws_cli_available()
         log("Upload build artifacts")
         log("----------------------")
@@ -263,7 +250,7 @@ def run(args):
         log("----------")
         upload_logs_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
 
-    if args.ci and args.upload:
+    if is_ci and args.upload:
         log("Upload build summary")
         log("--------------------")
         upload_build_summary(args)
@@ -285,12 +272,6 @@ if __name__ == "__main__":
         help="AMDGPU family name (default: $AMDGPU_FAMILIES)",
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
-    parser.add_argument(
-        "--ci",
-        default=False,
-        help="Enable CI steps",
-        action=argparse.BooleanOptionalAction,
-    )
     parser.add_argument(
         "--upload",
         default=False,
