@@ -107,13 +107,18 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag main
+            --repo-hashtag main \
+            --max-checkout-attempts 3
+
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/audio \
-            --repo-hashtag main
+            --repo-hashtag main \
+            --max-checkout-attempts 3
+
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag main
+            --repo-hashtag main \
+            --max-checkout-attempts 3
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}

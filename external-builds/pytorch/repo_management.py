@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import os
+import time
 
 TAG_UPSTREAM_DIFFBASE = "THEROCK_UPSTREAM_DIFFBASE"
 TAG_HIPIFY_DIFFBASE = "THEROCK_HIPIFY_DIFFBASE"
@@ -229,11 +230,131 @@ def commit_hipify(args: argparse.Namespace):
         exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
 
+def perform_submodule_update_with_retry(
+    repo_dir: Path, args: argparse.Namespace, max_attempts: int = 3
+):
+    """Perform submodule update with retry logic and continue after max attempts"""
+    fetch_args = []
+    if args.depth is not None:
+        fetch_args.extend(["--depth", str(args.depth)])
+    if args.jobs:
+        fetch_args.extend(["-j", str(args.jobs)])
+
+    for attempt in range(1, max_attempts + 1):
+        print(f"=== Submodule update attempt {attempt}/{max_attempts} ===")
+
+        try:
+            # Perform submodule update
+            exec(
+                ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
+                cwd=repo_dir,
+            )
+
+            # Check for dirty git status after submodule update
+            if check_git_status_clean(repo_dir):
+                print(f"Submodule update successful on attempt {attempt}")
+                return
+            else:
+                print(
+                    f"Git status has warnings after submodule update (attempt {attempt})"
+                )
+                if attempt < max_attempts:
+                    print(f"Will retry after cleanup")
+                    cleanup_dirty_state(repo_dir)
+                    time.sleep(10 + (attempt * 5))  # Progressive delay
+
+        except subprocess.CalledProcessError as e:
+            print(
+                f"Submodule update attempt {attempt} failed with exit code {e.returncode}"
+            )
+            if attempt < max_attempts:
+                wait_time = 15 + (attempt * 5)
+                print(f"Retrying in {wait_time} seconds...")
+                cleanup_dirty_state(repo_dir)
+                time.sleep(wait_time)
+
+    # After all attempts, continue anyway
+    print(f"WARNING: Submodule update had issues after {max_attempts} attempts")
+    print("Continuing with build anyway - some submodules may be incomplete")
+
+
+def check_git_status_clean(repo_dir: Path) -> bool:
+    """Check if git status is clean"""
+    try:
+        # Capture both stdout and stderr to check for warnings
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "-u", "--ignore-submodules"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        # Check stderr for warnings about missing directories
+        if result.stderr:
+            warning_lines = [
+                line
+                for line in result.stderr.splitlines()
+                if "could not open directory" in line.lower()
+                or "no such file or directory" in line.lower()
+            ]
+
+            if warning_lines:
+                print(f"Detected {len(warning_lines)} directory warnings in git status")
+                for warning in warning_lines[:5]:  # Show first 5 warnings
+                    print(f"   {warning}")
+                return False
+
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f"Git status check failed: {e}")
+        return False
+
+
+def cleanup_dirty_state(repo_dir: Path):
+    """Clean up dirty git state before retry"""
+    print("Cleaning up git state...")
+
+    try:
+        # Reset any uncommitted changes in main repo
+        exec(["git", "reset", "--hard", "HEAD"], cwd=repo_dir)
+        exec(["git", "clean", "-fdx"], cwd=repo_dir)
+
+        # Clean up submodules
+        subprocess.run(
+            [
+                "git",
+                "submodule",
+                "foreach",
+                "--recursive",
+                "git reset --hard HEAD && git clean -fdx",
+            ],
+            cwd=str(repo_dir),
+            capture_output=True,
+        )
+
+        # Deinitialize all submodules to start fresh
+        subprocess.run(
+            ["git", "submodule", "deinit", "--all", "--force"],
+            cwd=str(repo_dir),
+            capture_output=True,
+        )
+
+    except subprocess.CalledProcessError as e:
+        print(f"Cleanup warning: {e}")
+        # Don't fail on cleanup issues
+
+
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     repo_dir: Path = args.repo
     repo_patch_dir_base = args.patch_dir
     check_git_dir = repo_dir / ".git"
     patches_dir_name = get_patches_dir_name(args)
+
+    # Get retry parameters for submodule operations (default to 3 if not specified)
+    max_attempts = getattr(args, "max_checkout_attempts", 3)
+
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
         exec(["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir)
@@ -253,14 +374,10 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     exec(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
-    try:
-        exec(
-            ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
-            cwd=repo_dir,
-        )
-    except subprocess.CalledProcessError:
-        print("Failed to fetch git submodules")
-        sys.exit(1)
+
+    # Submodule update with retry logic
+    perform_submodule_update_with_retry(repo_dir, args, max_attempts)
+
     exec(
         [
             "git",

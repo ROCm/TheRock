@@ -89,6 +89,12 @@ def main(cl_args: list[str]):
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
     checkout_p.add_argument("--jobs", default=10, type=int, help="Number of fetch jobs")
     checkout_p.add_argument(
+        "--max-checkout-attempts",
+        default=3,
+        type=int,
+        help="Maximum number of checkout retry attempts (default: 3)"
+    )
+    checkout_p.add_argument(
         "--hipify",
         action=argparse.BooleanOptionalAction,
         default=True,
