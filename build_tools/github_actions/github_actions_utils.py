@@ -102,6 +102,11 @@ def gha_append_step_summary(summary: str):
 def retrieve_bucket_info() -> tuple[str, str]:
     """Retrieves bucket information based on env variables
 
+    Returns a tuple [EXTERNAL_REPO, BUCKET], where:
+    - EXTERNAL_REPO = if CI is run on an external repo, we create a S3 sub-folder
+                      to avoid conflicting run IDs
+    - BUCKET = the name of the S3 bucket if it's an external repo
+
     Environment variables:
     - GITHUB_REPOSITORY
     - IS_PR_FROM_FORK

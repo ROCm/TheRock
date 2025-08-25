@@ -226,7 +226,6 @@ def upload_build_summary(args):
 
 
 def run(args):
-    is_ci = os.getenv("CI", False)
     log("Creating Ninja log archive")
     log("--------------------------")
     create_ninja_log_archive(args.build_dir)
@@ -235,7 +234,7 @@ def run(args):
     log("------------------")
     index_log_files(args.build_dir, args.amdgpu_family)
 
-    if is_ci or args.upload:
+    if args.upload:
         check_aws_cli_available()
         log("Upload build artifacts")
         log("----------------------")
@@ -250,7 +249,6 @@ def run(args):
         log("----------")
         upload_logs_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
 
-    if is_ci and args.upload:
         log("Upload build summary")
         log("--------------------")
         upload_build_summary(args)
@@ -272,9 +270,10 @@ if __name__ == "__main__":
         help="AMDGPU family name (default: $AMDGPU_FAMILIES)",
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
+    is_ci = os.getenv("CI", False)
     parser.add_argument(
         "--upload",
-        default=False,
+        default=is_ci,
         help="Enable upload steps",
         action=argparse.BooleanOptionalAction,
     )
