@@ -42,6 +42,31 @@ positive_filter.append("*/GPU_conv*")
 # Solvers
 positive_filter.append("*/GPU_UnitTestConv*")
 
+# Misc
+
+positive_filter.append("*/GPU_Dropout*")
+positive_filter.append("*/GPU_GetitemBwd*")
+positive_filter.append("*/GPU_GLU_*")
+
+positive_filter.append("*/GPU_Bwd_Mha_*")
+positive_filter.append("*/GPU_Fwd_Mha_*")
+
+positive_filter.append("*/GPU_MhaBackward_*")
+positive_filter.append("*/GPU_MhaForward_*")
+positive_filter.append("*/GPU_GroupConv*")
+positive_filter.append("*/GPU_GroupNorm_*")
+positive_filter.append("*/GPU_GRUExtra_*")
+positive_filter.append("*/GPU_TestActivation*")
+positive_filter.append("*/GPU_HipBLASLtGEMMTest*")
+positive_filter.append("*/GPU_KernelTuningNetTestConv*")
+positive_filter.append("*/GPU_Kthvalue_*")
+positive_filter.append("*/GPU_LayerNormTest*")
+positive_filter.append("*/GPU_LayoutTransposeTest_*")
+positive_filter.append("*/GPU_Lrn*")
+positive_filter.append("*/GPU_lstm_extra*")
+
+#############################################
+
 negative_filter.append("*DBSync*")
 negative_filter.append("*DeepBench*")
 negative_filter.append("*MIOpenTestConv*")
