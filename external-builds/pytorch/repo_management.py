@@ -243,6 +243,10 @@ def perform_submodule_update_with_retry(
     for attempt in range(1, max_attempts + 1):
         print(f"=== Submodule update attempt {attempt}/{max_attempts} ===")
 
+        # Warn if this is a retry
+        if attempt > 1:
+            print(f"WARNING: This is retry attempt {attempt} after previous failure")
+
         try:
             # Perform submodule update
             exec(
@@ -256,26 +260,33 @@ def perform_submodule_update_with_retry(
                 return
             else:
                 print(
-                    f"Git status has warnings after submodule update (attempt {attempt})"
+                    f"WARNING: Git status has issues after submodule update (attempt {attempt})"
                 )
                 if attempt < max_attempts:
                     print(f"Will retry after cleanup")
                     cleanup_dirty_state(repo_dir)
                     time.sleep(10 + (attempt * 5))  # Progressive delay
+                else:
+                    print(f"WARNING: Final attempt completed with git status issues")
 
         except subprocess.CalledProcessError as e:
             print(
-                f"Submodule update attempt {attempt} failed with exit code {e.returncode}"
+                f"WARNING: Submodule update attempt {attempt} failed with exit code {e.returncode}"
             )
             if attempt < max_attempts:
                 wait_time = 15 + (attempt * 5)
                 print(f"Retrying in {wait_time} seconds...")
                 cleanup_dirty_state(repo_dir)
                 time.sleep(wait_time)
+            else:
+                print(f"WARNING: Final attempt failed with exit code {e.returncode}")
 
     # After all attempts, continue anyway
     print(f"WARNING: Submodule update had issues after {max_attempts} attempts")
-    print("Continuing with build anyway - some submodules may be incomplete")
+    print("WARNING: Continuing with build anyway - some submodules may be incomplete")
+    print(
+        "WARNING: Build may fail or have missing functionality due to incomplete submodules"
+    )
 
 
 def check_git_status_clean(repo_dir: Path) -> bool:
