@@ -38,11 +38,15 @@ def retrieve_bucket_info() -> tuple[str, str]:
         if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
         else f"{owner}-{repo_name}/"
     )
-    bucket = (
-        "therock-artifacts"
-        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
-        else "therock-artifacts-external"
-    )
+
+    # TODO: We should probably change this logic to a default and allow passing in an
+    # environment variable.
+    if external_repo == "":
+        bucket = "therock-artifacts"
+    elif repo_name == "therock-releases" and owner == "ROCm" and not is_pr_from_fork:
+        bucket = "therock-artifacts-internal"
+    else:
+        bucket = "therock-artifacts-external"
     return (external_repo, bucket)
 
 
