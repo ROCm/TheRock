@@ -240,8 +240,19 @@ def perform_submodule_update_with_retry(
     if args.jobs:
         fetch_args.extend(["-j", str(args.jobs)])
 
+    initial_status = None
+    final_status = None
+
     for attempt in range(1, max_attempts + 1):
         print(f"=== Submodule update attempt {attempt}/{max_attempts} ===")
+
+        # Get initial status on first attempt
+        if attempt == 1:
+            initial_status = get_submodule_status(repo_dir)
+            if initial_status["uninitialized"]:
+                print(
+                    f"Found {len(initial_status['uninitialized'])} uninitialized submodules to fetch"
+                )
 
         # Warn if this is a retry
         if attempt > 1:
@@ -257,6 +268,8 @@ def perform_submodule_update_with_retry(
             # Check for dirty git status after submodule update
             if check_git_status_clean(repo_dir):
                 print(f"Submodule update successful on attempt {attempt}")
+                final_status = get_submodule_status(repo_dir)
+                print_submodule_summary(final_status)
                 return
             else:
                 print(
@@ -281,12 +294,136 @@ def perform_submodule_update_with_retry(
             else:
                 print(f"WARNING: Final attempt failed with exit code {e.returncode}")
 
+    # Get final status after all attempts
+    final_status = get_submodule_status(repo_dir)
+    print_submodule_summary(final_status)
+
     # After all attempts, continue anyway
     print(f"WARNING: Submodule update had issues after {max_attempts} attempts")
     print("WARNING: Continuing with build anyway - some submodules may be incomplete")
     print(
         "WARNING: Build may fail or have missing functionality due to incomplete submodules"
     )
+
+
+def get_submodule_status(repo_dir: Path) -> dict:
+    """Get detailed status of all submodules"""
+    submodule_status = {
+        "successful": [],
+        "uninitialized": [],
+        "modified": [],
+        "conflicted": [],
+        "error": [],
+    }
+
+    try:
+        # Get list of all expected submodules from .gitmodules
+        gitmodules_path = repo_dir / ".gitmodules"
+        expected_submodules = set()
+
+        if gitmodules_path.exists():
+            result = subprocess.run(
+                ["git", "config", "--file", ".gitmodules", "--get-regexp", "path"],
+                cwd=str(repo_dir),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    if "path" in line:
+                        _, path = line.split(None, 1)
+                        expected_submodules.add(path)
+
+        # Check actual submodule status
+        submodule_result = subprocess.run(
+            ["git", "submodule", "status", "--recursive"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if submodule_result.returncode != 0:
+            submodule_status["error"].append(
+                f"Failed to check: {submodule_result.stderr}"
+            )
+        else:
+            initialized_submodules = set()
+            for line in submodule_result.stdout.splitlines():
+                # Parse submodule status line
+                parts = line.strip().split(None, 2)
+                if len(parts) >= 2:
+                    status_char = line[0]
+                    submodule_path = parts[1]
+
+                    if status_char == "-":
+                        submodule_status["uninitialized"].append(submodule_path)
+                    elif status_char == "+":
+                        submodule_status["modified"].append(submodule_path)
+                        initialized_submodules.add(submodule_path)
+                    elif status_char == "U":
+                        submodule_status["conflicted"].append(submodule_path)
+                    else:
+                        submodule_status["successful"].append(submodule_path)
+                        initialized_submodules.add(submodule_path)
+
+            # Check for completely missing submodules
+            missing = expected_submodules - initialized_submodules
+            for path in missing:
+                if path not in submodule_status["uninitialized"]:
+                    submodule_status["uninitialized"].append(path)
+
+    except Exception as e:
+        submodule_status["error"].append(str(e))
+
+    return submodule_status
+
+
+def print_submodule_summary(submodule_status: dict):
+    """Print a summary of submodule status"""
+    print("\n=== SUBMODULE STATUS SUMMARY ===")
+
+    total = sum(len(v) for k, v in submodule_status.items() if k != "error")
+
+    if submodule_status["successful"]:
+        print(f"SUCCESSFUL: {len(submodule_status['successful'])} submodules")
+        for path in submodule_status["successful"][:3]:
+            print(f"   + {path}")
+        if len(submodule_status["successful"]) > 3:
+            print(f"   ... and {len(submodule_status['successful']) - 3} more")
+
+    if submodule_status["uninitialized"]:
+        print(
+            f"FAILED/UNINITIALIZED: {len(submodule_status['uninitialized'])} submodules"
+        )
+        for path in submodule_status["uninitialized"][:5]:
+            print(f"   - {path}")
+        if len(submodule_status["uninitialized"]) > 5:
+            print(f"   ... and {len(submodule_status['uninitialized']) - 5} more")
+
+    if submodule_status["modified"]:
+        print(f"MODIFIED: {len(submodule_status['modified'])} submodules")
+        for path in submodule_status["modified"][:3]:
+            print(f"   M {path}")
+
+    if submodule_status["conflicted"]:
+        print(f"CONFLICTED: {len(submodule_status['conflicted'])} submodules")
+        for path in submodule_status["conflicted"]:
+            print(f"   ! {path}")
+
+    if submodule_status["error"]:
+        print(f"ERRORS: {len(submodule_status['error'])}")
+        for error in submodule_status["error"]:
+            print(f"   ERROR: {error}")
+
+    # Summary statistics
+    success_rate = (
+        (len(submodule_status["successful"]) / total * 100) if total > 0 else 0
+    )
+    print(
+        f"\nSUCCESS RATE: {len(submodule_status['successful'])}/{total} ({success_rate:.1f}%)"
+    )
+    print("================================\n")
 
 
 def check_git_status_clean(repo_dir: Path) -> bool:
