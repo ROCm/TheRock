@@ -1,15 +1,7 @@
-[submodule "clr"]
-	path = core/clr
-	url = https://github.com/ROCm/clr
-	branch = amd-staging
 [submodule "half"]
 	path = base/half
 	url = https://github.com/ROCm/half.git
 	branch = rocm
-[submodule "HIP"]
-	path = core/HIP
-	url = https://github.com/ROCm/HIP.git
-	branch = amd-staging
 [submodule "HIPIFY"]
 	path = compiler/hipify
 	url = https://github.com/ROCm/HIPIFY.git
@@ -22,34 +14,10 @@
 	path = comm-libs/rccl
 	url = https://github.com/ROCm/rccl.git
 	branch = mainline
-[submodule "rocm_smi_lib"]
-	path = base/rocm_smi_lib
-	url = https://github.com/ROCm/rocm_smi_lib.git
-	branch = amd-mainline
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
 	branch = mainline
-[submodule "rocm-core"]
-	path = base/rocm-core
-	url = https://github.com/ROCm/rocm-core.git
-	branch = master
-[submodule "rocminfo"]
-	path = core/rocminfo
-	url = https://github.com/ROCm/rocminfo.git
-	branch = amd-staging
-[submodule "rocprofiler-register"]
-	path = base/rocprofiler-register
-	url = https://github.com/ROCm/rocprofiler-register.git
-	branch = amd-staging
-[submodule "rocprofiler-sdk"]
-	path = profiler/rocprofiler-sdk
-	url = https://github.com/ROCm/rocprofiler-sdk.git
-	branch = amd-staging
-[submodule "ROCR-Runtime"]
-	path = core/ROCR-Runtime
-	url = https://github.com/ROCm/ROCR-Runtime.git
-	branch = amd-mainline
 [submodule "hipSOLVER"]
 	path = math-libs/BLAS/hipSOLVER
 	url = https://github.com/ROCm/hipSOLVER.git
@@ -62,12 +30,6 @@
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
 	branch = develop
-[submodule "aqlprofile"]
-	path = profiler/aqlprofile
-	url = https://github.com/ROCm/aqlprofile.git
-[submodule "roctracer"]
-	path = profiler/roctracer
-	url = https://github.com/ROCm/roctracer.git
 [submodule "composable_kernel"]
 	path = ml-libs/composable_kernel
 	url = https://github.com/ROCm/composable_kernel.git
@@ -86,3 +48,7 @@
 	path = core/hip-tests
 	url = https://github.com/ROCm/hip-tests.git
 	branch = amd-staging
+[submodule "rocm-systems"]
+	path = rocm-systems
+	url = https://github.com/ROCm/rocm-systems.git
+	branch = develop

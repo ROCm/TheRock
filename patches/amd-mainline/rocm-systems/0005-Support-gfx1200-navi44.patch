@@ -1,17 +1,17 @@
-From 74b14b84aff8e075be7a9cdcebc5e5694455d29e Mon Sep 17 00:00:00 2001
+From e6622799d8cca17bdca35e310bbb856a41ce447f Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
 Date: Thu, 31 Jul 2025 21:05:50 +0900
-Subject: [PATCH] Support gfx1200 (navi44)
+Subject: [PATCH 5/9] Support gfx1200 (navi44)
 
 ---
- rocclr/device/pal/paldevice.cpp   | 1 +
- rocclr/device/pal/palsettings.cpp | 1 +
+ projects/clr/rocclr/device/pal/paldevice.cpp   | 1 +
+ projects/clr/rocclr/device/pal/palsettings.cpp | 1 +
  2 files changed, 2 insertions(+)
 
-diff --git a/rocclr/device/pal/paldevice.cpp b/rocclr/device/pal/paldevice.cpp
-index 59edc1a23..3f92fb92b 100644
---- a/rocclr/device/pal/paldevice.cpp
-+++ b/rocclr/device/pal/paldevice.cpp
+diff --git a/projects/clr/rocclr/device/pal/paldevice.cpp b/projects/clr/rocclr/device/pal/paldevice.cpp
+index f7a6126dd7..dd23b6974a 100644
+--- a/projects/clr/rocclr/device/pal/paldevice.cpp
++++ b/projects/clr/rocclr/device/pal/paldevice.cpp
 @@ -102,6 +102,7 @@ static constexpr PalDevice supportedPalDevices[] = {
    {11, 0,  3,  Pal::GfxIpLevel::GfxIp11_0, "gfx1103",       Pal::AsicRevision::HawkPoint2},
    {11, 5,  0,  Pal::GfxIpLevel::GfxIp11_5, "gfx1150",       Pal::AsicRevision::Strix1},
@@ -20,10 +20,10 @@ index 59edc1a23..3f92fb92b 100644
    {12, 0,  1,  Pal::GfxIpLevel::GfxIp12,   "gfx1201",       Pal::AsicRevision::Navi48},
  };
  
-diff --git a/rocclr/device/pal/palsettings.cpp b/rocclr/device/pal/palsettings.cpp
-index 0cd5ca70a..11fde4c09 100644
---- a/rocclr/device/pal/palsettings.cpp
-+++ b/rocclr/device/pal/palsettings.cpp
+diff --git a/projects/clr/rocclr/device/pal/palsettings.cpp b/projects/clr/rocclr/device/pal/palsettings.cpp
+index 0cd5ca70ae..11fde4c09b 100644
+--- a/projects/clr/rocclr/device/pal/palsettings.cpp
++++ b/projects/clr/rocclr/device/pal/palsettings.cpp
 @@ -163,6 +163,7 @@ bool Settings::create(const Pal::DeviceProperties& palProp,
    switch (palProp.revision) {
      // Fall through for Navi4x ...
@@ -33,5 +33,5 @@ index 0cd5ca70a..11fde4c09 100644
      case Pal::AsicRevision::Navi33:
      case Pal::AsicRevision::Navi32:
 -- 
-2.50.1.windows.1
+2.43.0
 

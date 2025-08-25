@@ -1,7 +1,7 @@
-From 7f04a22c8b20e319056f6e28a0cc905a9a547c53 Mon Sep 17 00:00:00 2001
+From 8b9d41236fc6488dafae744f9bd0a2e10c4b12eb Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Sat, 10 May 2025 15:56:02 -0700
-Subject: [PATCH 2/3] Fix assembler error in pal trap handler.
+Subject: [PATCH 4/9] Fix assembler error in pal trap handler.
 
 This has been showing up in real use as an error printed to the console complaining that the ".not_s_trap" label cannot be found on device initialization.
 
@@ -11,13 +11,13 @@ In [the referenced original source](https://github.com/ROCm/ROCR-Runtime/tree/am
 
 Tested by running hipblaslt tests on Windows/gfx1151 in TheRock and verifying that the error was not printed and tests run correctly.
 ---
- rocclr/device/pal/palblitcl.cpp | 2 +-
+ projects/clr/rocclr/device/pal/palblitcl.cpp | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/rocclr/device/pal/palblitcl.cpp b/rocclr/device/pal/palblitcl.cpp
-index 6616a7fed..9072073df 100644
---- a/rocclr/device/pal/palblitcl.cpp
-+++ b/rocclr/device/pal/palblitcl.cpp
+diff --git a/projects/clr/rocclr/device/pal/palblitcl.cpp b/projects/clr/rocclr/device/pal/palblitcl.cpp
+index 6616a7fed9..9072073df6 100644
+--- a/projects/clr/rocclr/device/pal/palblitcl.cpp
++++ b/projects/clr/rocclr/device/pal/palblitcl.cpp
 @@ -120,7 +120,7 @@ const char* TrapHandlerCode = RUNTIME_KERNEL(
  \ntrap_entry:
  \n  // Extract trap_id from ttmp2
@@ -28,5 +28,5 @@ index 6616a7fed..9072073df 100644
  \n  // Check if the it was an host trap.
  \n  s_bitcmp1_b32                         ttmp1, SQ_WAVE_PC_HI_HT_SHIFT
 -- 
-2.47.1.windows.2
+2.43.0
 
