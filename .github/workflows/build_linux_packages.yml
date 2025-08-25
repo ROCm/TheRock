@@ -129,42 +129,14 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
-      - name: Create Log archive
+      - name: Post Build Upload
         if: always()
         run: |
-          python3 build_tools/create_log_archive.py \
-            --build-dir=build
-
-      - name: Create Logs index Files
-        if: always()
-        run: |
-          python3 build_tools/github_actions/create_log_index.py \
-            --build-dir=build \
-            --amdgpu-family=${{ inputs.amdgpu_families }}
-
-      - name: Upload artifacts
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
+          python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ inputs.amdgpu_families }} \
-            --build-dir build
-
-      - name: Upload Logs
-        if: always()
-        run: |
-          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=build \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }}
-
-      - name: Add Links to Job Summary
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_summary.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
-            --build-dir build
+            --build-dir build \
+            --upload
 
       - name: Upload job metrics to Redshift database
         if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
