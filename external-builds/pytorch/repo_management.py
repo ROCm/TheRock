@@ -243,16 +243,29 @@ def perform_submodule_update_with_retry(
     initial_status = None
     final_status = None
 
+    # Check if repository has submodules
+    gitmodules_path = repo_dir / ".gitmodules"
+    has_submodules = gitmodules_path.exists() and gitmodules_path.stat().st_size > 0
+
+    if not has_submodules:
+        print("No submodules found in this repository - skipping submodule update")
+        return
+
     for attempt in range(1, max_attempts + 1):
         print(f"=== Submodule update attempt {attempt}/{max_attempts} ===")
 
         # Get initial status on first attempt
         if attempt == 1:
             initial_status = get_submodule_status(repo_dir)
-            if initial_status["uninitialized"]:
-                print(
-                    f"Found {len(initial_status['uninitialized'])} uninitialized submodules to fetch"
-                )
+            total_submodules = sum(
+                len(v) for k, v in initial_status.items() if k != "error"
+            )
+            if total_submodules > 0:
+                if initial_status["uninitialized"]:
+                    print(
+                        f"Found {len(initial_status['uninitialized'])} uninitialized submodules to fetch"
+                    )
+                print(f"Total submodules: {total_submodules}")
 
         # Warn if this is a retry
         if attempt > 1:
@@ -385,6 +398,12 @@ def print_submodule_summary(submodule_status: dict):
 
     total = sum(len(v) for k, v in submodule_status.items() if k != "error")
 
+    # Handle case where there are no submodules
+    if total == 0:
+        print("No submodules found in this repository")
+        print("================================\n")
+        return
+
     if submodule_status["successful"]:
         print(f"SUCCESSFUL: {len(submodule_status['successful'])} submodules")
         for path in submodule_status["successful"][:3]:
@@ -418,7 +437,7 @@ def print_submodule_summary(submodule_status: dict):
 
     # Summary statistics
     success_rate = (
-        (len(submodule_status["successful"]) / total * 100) if total > 0 else 0
+        (len(submodule_status["successful"]) / total * 100) if total > 0 else 100
     )
     print(
         f"\nSUCCESS RATE: {len(submodule_status['successful'])}/{total} ({success_rate:.1f}%)"
