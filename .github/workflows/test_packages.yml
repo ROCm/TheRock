@@ -99,7 +99,7 @@ jobs:
           FETCH_ARTIFACT_ARGS: ${{ matrix.components.fetch_artifact_args }}
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      - name: Install additional packages
+      - name: Install additional libgfortran packages
         if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt') }}
         run: sudo apt install libgfortran5 -y
 
