@@ -252,17 +252,26 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
-      - name: Check test result gating
+      - name: Determine upload flag
+        env:
+          BUILD_RESULT: ${{ needs.build_pytorch_wheels.result }}
+          TEST_RESULT: ${{ needs.test_pytorch_wheels.result }}
+          TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
         run: |
-          if [[ "${{ needs.generate_target_to_run.outputs.test_runs_on }}" != "" \
-             && ( "${{ needs.test_pytorch_wheels.result }}" == "failure" || "${{ needs.test_pytorch_wheels.result }}" == "skipped" ) \
-             && "${{ needs.build_pytorch_wheels.result }}" != "success" ]]; then
-            echo "::warning::Tests failed or skipped. Skipping upload."
-            echo "upload=false" >> $GITHUB_ENV
-          else
-            echo "upload=true" >> $GITHUB_ENV
-          fi
+          # 1) If the build failed → upload=false
+          if [[ "$BUILD_RESULT" != "success" ]]; then
+            echo "::warning::Build failed. Skipping upload."
+            echo "upload=false" >> "$GITHUB_ENV"
 
+          # 2) Else if there was a test runner AND tests failed or were skipped → upload=false
+          elif [[ -n "$TEST_RUNS_ON" && ( "$TEST_RESULT" == "failure" || "$TEST_RESULT" == "skipped" ) ]]; then
+            echo "::warning::Tests failed or were skipped (runner present). Skipping upload."
+            echo "upload=false" >> "$GITHUB_ENV"
+
+          # 3) Else → upload=true
+          else
+            echo "upload=true" >> "$GITHUB_ENV"
+          fi
 
       - name: Copy PyTorch wheels from staging to release S3
         if: ${{ env.upload == 'true' }}
