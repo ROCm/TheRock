@@ -15,7 +15,7 @@ TheRock provides:
 
 ![Build architecture](therock_build_architecture.excalidraw.svg)
 
-Note that at each layer of the build, developers can build from source OR fetch prebuilt artifacts/packages from sources like pre-commit CI workflow runs or nightly package releases.
+Note that at each layer of the build, developers can build from source _or_ fetch prebuilt artifacts/packages from sources like pre-commit CI workflow runs or nightly package releases.
 
 For example:
 
@@ -23,7 +23,7 @@ For example:
 
   ![Build architecture highlight torch](therock_build_architecture_highlight_torch.excalidraw.svg)
 
-- If you want to build native packages for a Linux distro including some source changes to ROCm components, you can build ROCm artifacts using CMake then package them for your distro:
+- If you want to build native packages for a Linux distribution including some source changes to ROCm components, you can build ROCm artifacts using CMake then package them for your distribution:
 
   ![Build architecture highlight cmake native](therock_build_architecture_highlight_cmake_native.excalidraw.svg)
 
