@@ -170,7 +170,6 @@ jobs:
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
             --build-dir ${{ env.BUILD_DIR }} \
-            --ci \
             --upload
 
       - name: Save cache
