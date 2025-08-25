@@ -40,6 +40,11 @@ PREFIXES = [
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
+    "v2-staging/gfx110X-dgpu",
+    "v2-staging/gfx1151",
+    "v2-staging/gfx120X-all",
+    "v2-staging/gfx94X-dcgpu",
+    "v2-staging/gfx950-dcgpu"
 ]
 
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
