@@ -290,9 +290,11 @@ def perform_submodule_update_with_retry(
 
 
 def check_git_status_clean(repo_dir: Path) -> bool:
-    """Check if git status is clean"""
+    """Check if git status is clean (no uncommitted changes or missing directories)"""
+    issues_found = False
+
     try:
-        # Capture both stdout and stderr to check for warnings
+        # Check 1: Check for uncommitted changes in main repo
         result = subprocess.run(
             ["git", "status", "--porcelain", "-u", "--ignore-submodules"],
             cwd=str(repo_dir),
@@ -300,6 +302,16 @@ def check_git_status_clean(repo_dir: Path) -> bool:
             text=True,
             check=True,
         )
+
+        # Check if there are any uncommitted changes (stdout)
+        if result.stdout.strip():
+            uncommitted = result.stdout.strip().splitlines()
+            print(f"WARNING: Found {len(uncommitted)} uncommitted changes:")
+            for change in uncommitted[:5]:  # Show first 5
+                print(f"   {change}")
+            if len(uncommitted) > 5:
+                print(f"   ... and {len(uncommitted) - 5} more")
+            issues_found = True
 
         # Check stderr for warnings about missing directories
         if result.stderr:
@@ -311,15 +323,67 @@ def check_git_status_clean(repo_dir: Path) -> bool:
             ]
 
             if warning_lines:
-                print(f"Detected {len(warning_lines)} directory warnings in git status")
+                print(f"WARNING: Detected {len(warning_lines)} directory warnings:")
                 for warning in warning_lines[:5]:  # Show first 5 warnings
                     print(f"   {warning}")
-                return False
+                if len(warning_lines) > 5:
+                    print(f"   ... and {len(warning_lines) - 5} more")
+                issues_found = True
 
-        return True
+        # Check 2: Verify submodules are properly initialized
+        submodule_result = subprocess.run(
+            ["git", "submodule", "status", "--recursive"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
+        if submodule_result.returncode != 0:
+            print(
+                f"WARNING: Failed to check submodule status: {submodule_result.stderr}"
+            )
+            issues_found = True
+        else:
+            # Check for uninitialized (-), modified (+), or conflicted (U) submodules
+            problem_submodules = []
+            for line in submodule_result.stdout.splitlines():
+                if line.startswith("-"):
+                    problem_submodules.append(("uninitialized", line))
+                elif line.startswith("+"):
+                    problem_submodules.append(("modified", line))
+                elif line.startswith("U"):
+                    problem_submodules.append(("conflicted", line))
+
+            if problem_submodules:
+                print(
+                    f"WARNING: Found {len(problem_submodules)} problematic submodules:"
+                )
+                for status, line in problem_submodules[:5]:
+                    print(f"   [{status}] {line}")
+                if len(problem_submodules) > 5:
+                    print(f"   ... and {len(problem_submodules) - 5} more")
+                issues_found = True
+
+        # Check 3: Verify no merge conflicts
+        merge_check = subprocess.run(
+            ["git", "diff", "--check"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+        )
+
+        if merge_check.stdout:
+            print(f"WARNING: Potential merge conflicts or whitespace issues detected")
+            issues_found = True
+
+        return not issues_found
+
+    except subprocess.TimeoutExpired:
+        print(f"WARNING: Git status check timed out")
+        return False
     except subprocess.CalledProcessError as e:
-        print(f"Git status check failed: {e}")
+        print(f"WARNING: Git status check failed: {e}")
         return False
 
 
