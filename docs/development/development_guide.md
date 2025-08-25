@@ -4,9 +4,37 @@ While TheRock started life as a super-project for doing combined builds and rele
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
+## Overall build architecture
+
+TheRock provides:
+
+- A CMake-based build for ROCm components
+- A setuptools-based build for ROCm Python packages
+- (Coming soon!) Scripts for producing native RPM and DEB packages
+- Scripts for building projects like PyTorch and JAX
+
+![Build architecture](therock_build_architecture.excalidraw.svg)
+
+Note that at each layer of the build, developers can build from source _or_ fetch prebuilt artifacts/packages from sources like pre-commit CI workflow runs or nightly package releases.
+
+For example:
+
+- If you want to build PyTorch using ROCm Python packages that have already been built for your operating system and GPU architecture family, you can skip most of the source builds:
+
+  ![Build architecture highlight torch](therock_build_architecture_highlight_torch.excalidraw.svg)
+
+- If you want to build native packages for a Linux distribution including some source changes to ROCm components, you can build ROCm artifacts using CMake then package them for your distribution:
+
+  ![Build architecture highlight cmake native](therock_build_architecture_highlight_cmake_native.excalidraw.svg)
+
+Most of this document focuses on the ROCm build itself (at the top of the diagrams).
+
 ## IDE Support
 
-Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide. Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
+Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide.
+
+> [!NOTE]
+> Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
 
 ## Single Component Development
 
