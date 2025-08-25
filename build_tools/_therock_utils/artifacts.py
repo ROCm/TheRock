@@ -85,8 +85,11 @@ class ArtifactCatalog:
         excludes: Sequence[str] = (),
     ):
         self.artifact_dir = artifact_dir
+        # Tuple of ArtifactName to manifest basedir within each artifact.
         self.artifact_basedirs: list[tuple[ArtifactName, Path]] = []
         self.pm = PatternMatcher(includes=includes, excludes=excludes)
+        # Full paths to all discovered artifacts.
+        self.all_artifact_dirs: list[Path] = []
 
         for subdir in self.artifact_dir.iterdir():
             if not subdir.is_dir():
@@ -99,6 +102,7 @@ class ArtifactCatalog:
             manifest = subdir / "artifact_manifest.txt"
             if not manifest.exists():
                 continue
+            self.all_artifact_dirs.append(subdir)
             manifest_lines = manifest.read_text().splitlines()
             for manifest_line in manifest_lines:
                 if not manifest_line:
@@ -121,6 +125,12 @@ class ArtifactCatalog:
         )
 
 
+class SkipPopulation(Exception):
+    """Exception to be thrown to indicate that population should be skipped."""
+
+    ...
+
+
 class ArtifactPopulator:
     """Populates a list of artifacts into one output directory, optionally flattening.
 
@@ -139,7 +149,10 @@ class ArtifactPopulator:
         self.relpaths: set[str] = set()
 
     def on_relpath(self, relpath: str):
-        """Callback that is invoked for every top-level relpath encountered."""
+        """Callback that is invoked for every top-level relpath encountered.
+
+        If SkipPopulation is raised, then the relpath will not be processed.
+        """
         if relpath not in self.relpaths:
             self.on_first_relpath(relpath)
         self.relpaths.add(relpath)
@@ -149,11 +162,17 @@ class ArtifactPopulator:
         pass
 
     def on_artifact_dir(self, artifact_dir: Path):
-        """Callback that is invoked for every exploded artifact directory encountered."""
+        """Callback that is invoked for every exploded artifact directory encountered.
+
+        If SkipPopulation is raised, then the relpath will not be processed.
+        """
         pass
 
     def on_artifact_archive(self, artifact_archive: Path):
-        """Callback that is invoked for every artifact archive encountered."""
+        """Callback that is invoked for every artifact archive encountered.
+
+        If SkipPopulation is raised, then the relpath will not be processed.
+        """
         pass
 
     def __call__(self, *artifact_paths: Sequence[Path]):
@@ -161,14 +180,20 @@ class ArtifactPopulator:
         for artifact_path in artifact_paths:
             if artifact_path.is_dir():
                 # Process an exploded artifact dir.
-                self.on_artifact_dir(artifact_path)
+                try:
+                    self.on_artifact_dir(artifact_path)
+                except SkipPopulation:
+                    continue
                 manifest_path: Path = artifact_path / "artifact_manifest.txt"
                 relpaths = manifest_path.read_text().splitlines()
                 for relpath in relpaths:
                     if not relpath:
                         continue
                     pm = PatternMatcher()
-                    self.on_relpath(relpath)
+                    try:
+                        self.on_relpath(relpath)
+                    except SkipPopulation:
+                        continue
                     source_dir = artifact_path / relpath
                     if not source_dir.exists():
                         continue
@@ -180,7 +205,10 @@ class ArtifactPopulator:
             else:
                 # Process as an archive file.
                 with tarfile.TarFile.open(artifact_path, mode="r:xz") as tf:
-                    self.on_artifact_archive(artifact_path)
+                    try:
+                        self.on_artifact_archive(artifact_path)
+                    except SkipPopulation:
+                        continue
                     # Read manifest first.
                     manifest_member = tf.next()
                     if (
@@ -191,9 +219,15 @@ class ArtifactPopulator:
                             f"Artifact archive {artifact_path} must have artifact_manifest.txt as its first member"
                         )
                     with tf.extractfile(manifest_member) as mf_file:
-                        relpaths = mf_file.read().decode().splitlines()
+                        all_relpaths = mf_file.read().decode().splitlines()
+                        relpaths = []
                         for relpath in relpaths:
-                            self.on_relpath(relpath)
+                            try:
+                                self.on_relpath(relpath)
+                            except SkipPopulation:
+                                ...
+                            else:
+                                relpaths.append(relpath)
                     # Iterate over all remaining members.
                     while member := tf.next():
                         member_name = member.name
