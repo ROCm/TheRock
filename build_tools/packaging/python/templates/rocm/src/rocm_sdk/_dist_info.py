@@ -103,6 +103,8 @@ def discover_current_target_family() -> str | None:
             arch_set = set(result.strip().split("\n"))
             suffixes = ["-all", "-dgpu", "-igpu", "-dcgpu"]
             for arch in arch_set:
+                # There may be multiple architecture supported on the system.
+                # This will select the first matching family.
                 arch_family = arch[:-1] + "X"
                 for suffix in suffixes:
                     target_family = arch_family + suffix
