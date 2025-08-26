@@ -13,7 +13,8 @@ TheRock provides:
 - (Coming soon!) Scripts for producing native RPM and DEB packages
 - Scripts for building projects like PyTorch and JAX
 
-![Build architecture](assets/therock_build_architecture.excalidraw.svg)
+![Build architecture](assets/therock_build_architecture.excalidraw.svg#gh-light-mode-only)
+![Build architecture (dark)](assets/therock_build_architecture_dark.excalidraw.svg#gh-dark-mode-only)
 
 Note that at each layer of the build, developers can build from source _or_ fetch prebuilt artifacts/packages from sources like pre-commit CI workflow runs or nightly package releases.
 
@@ -21,11 +22,13 @@ For example:
 
 - If you want to build PyTorch using ROCm Python packages that have already been built for your operating system and GPU architecture family, you can skip most of the source builds:
 
-  ![Build architecture highlight torch](assets/therock_build_architecture_highlight_torch.excalidraw.svg)
+  ![Build architecture highlight torch](assets/therock_build_architecture_highlight_torch.excalidraw.svg#gh-light-mode-only)
+  ![Build architecture highlight torch (dark)](assets/therock_build_architecture_highlight_torch_dark.excalidraw.svg#gh-dark-mode-only)
 
 - If you want to build native packages for a Linux distribution including some source changes to ROCm components, you can build ROCm artifacts using CMake then package them for your distribution:
 
-  ![Build architecture highlight cmake native](assets/therock_build_architecture_highlight_cmake_native.excalidraw.svg)
+  ![Build architecture highlight cmake native](assets/therock_build_architecture_highlight_cmake_native.excalidraw.svg#gh-light-mode-only)
+  ![Build architecture highlight cmake native (dark)](assets/therock_build_architecture_highlight_cmake_native_dark.excalidraw.svg#gh-dark-mode-only)
 
 Most of this document focuses on the ROCm build itself, which is split into
 phases for each feature group like "base", "compiler", "core", and "math-libs".
@@ -38,7 +41,8 @@ phases for each feature group like "base", "compiler", "core", and "math-libs".
 - Each subproject build _depends on_ the `stage/` and `dist/` outputs of
   some subset of prior subproject builds
 
-![Subprojects build](assets/therock_subprojects_build.excalidraw.svg)
+![Subprojects build](assets/therock_subprojects_build.excalidraw.svg#gh-light-mode-only)
+![Subprojects build (dark)](assets/therock_subprojects_build_dark.excalidraw.svg#gh-dark-mode-only)
 
 This separation between subprojects allows for incremental rebuilds and
 bootstrapping from prebuilt artifacts produced by prior builds (local, from
@@ -46,7 +50,8 @@ another developer, or from CI). For example, building a subproject like
 "ROCR-Runtime" can skip rebuilding the "amd-llvm" subproject by reusing build
 outputs for that dependency.
 
-![Subprojects build prebuilt](assets/therock_subprojects_build_prebuilt.excalidraw.svg)
+![Subprojects build prebuilt](assets/therock_subprojects_build_prebuilt.excalidraw.svg#gh-light-mode-only)
+![Subprojects build prebuilt (dark)](assets/therock_subprojects_build_prebuilt_dark.excalidraw.svg#gh-dark-mode-only)
 
 ## IDE Support
 
