@@ -10,15 +10,14 @@ function(therock_enable_external_source package_name default_source_dir option_d
     if(NOT THEROCK_${_PACKAGE}_SOURCE_DIR)
         message(FATAL_ERROR "If THEROCK_USE_EXTERNAL_${_PACKAGE} is set, THEROCK_${_PACKAGE}_SOURCE_DIR is required!")
     endif()
-    cmake_path(ABSOLUTE_PATH THEROCK_${_PACKAGE}_SOURCE_DIR NORMALIZE)
+    cmake_path(ABSOLUTE_PATH THEROCK_${_PACKAGE}_SOURCE_DIR NORMALIZE OUTPUT_VARIABLE _source_dir)
 
     # Check if the user provided source directory exists.
-    if(NOT EXISTS ${THEROCK_${_PACKAGE}_SOURCE_DIR})
-        message(FATAL_ERROR "THEROCK_${_PACKAGE}_SOURCE_DIR points to '${THEROCK_${_PACKAGE}_SOURCE_DIR}' which does not exist!")
+    if(NOT EXISTS ${_source_dir})
+        message(FATAL_ERROR "THEROCK_${_PACKAGE}_SOURCE_DIR points to '${_source_dir}' which does not exist!")
     endif()
+    set(THEROCK_${_PACKAGE}_SOURCE_DIR "${_source_dir}" CACHE STRING "Path to ${package_name} sources" FORCE)
+  else()
+    set(THEROCK_${_PACKAGE}_SOURCE_DIR "${default_source_dir}" CACHE STRING "Path to ${package_name} sources" FORCE)
   endif()
-
-  # This cannot be moved before the check above, as `THEROCK_${_PACKAGE}_SOURCE_DIR` would
-  # always and it cannot be checked if it was provided by the user.
-  set(THEROCK_${_PACKAGE}_SOURCE_DIR "${default_source_dir}" CACHE STRING "Path to ${package_name} sources")
 endfunction()
