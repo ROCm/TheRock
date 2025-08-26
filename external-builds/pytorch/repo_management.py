@@ -109,8 +109,7 @@ def git_config_ignore_submodules(repo_path: Path):
                 ["git", "update-index", "--skip-worktree"] + submodule_paths,
                 cwd=repo_path,
             )
-        except Exception as e:
-            # pytorch audio has empty .gitmodules file which can cause exception
+        except Exception:
             pass
 
 
@@ -256,6 +255,11 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     try:
         exec(
             ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
+            cwd=repo_dir,
+        )
+        # Enforce longpaths in all submodules (Windows fix)
+        exec(
+            ["git", "submodule", "foreach", "--recursive", "git config core.longpaths true"],
             cwd=repo_dir,
         )
     except subprocess.CalledProcessError:
