@@ -1,7 +1,7 @@
-From de507351b531aeefbb1db6d4988e128df6f9f686 Mon Sep 17 00:00:00 2001
+From a1dfc34314ae686fe9cc9c547a6569b014c04e63 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Mon, 31 Mar 2025 22:24:41 +0000
-Subject: [PATCH 01/17] Work around race condition
+Subject: [PATCH 01/16] Work around race condition
 
 With `add_dependency`, compiling the `hipsolver_fortran_client` target
 fails as `hipsolver.mod` is not created in time for the first build
@@ -25,5 +25,5 @@ index d715fd236a..2590d8535a 100644
      include_directories(${CMAKE_BINARY_DIR}/include/hipsolver/internal)
      target_compile_definitions(hipsolver_fortran_client INTERFACE HAVE_HIPSOLVER_FORTRAN_CLIENT)
 -- 
-2.43.0
+2.25.1
 

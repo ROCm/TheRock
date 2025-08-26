@@ -1,7 +1,7 @@
-From 66e663065ffbb12beb725bbeb39c76d169c68bf6 Mon Sep 17 00:00:00 2001
+From 0653e491063c088b6d215fc5807a5c5fcb5f288e Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 14:26:45 +0000
-Subject: [PATCH 06/17] Find `rocm_smi` via config files
+Subject: [PATCH 05/16] Find `rocm_smi` via config files
 
 Use the config files provided by upstream instead of a custom finder.
 ---
@@ -83,5 +83,5 @@ index 698f6884a6..0000000000
 -    IMPORTED_LOCATION "${ROCM_SMI_LIBRARY}"
 -    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ROCM_SMI_ROOT}/include")
 -- 
-2.43.0
+2.25.1
 

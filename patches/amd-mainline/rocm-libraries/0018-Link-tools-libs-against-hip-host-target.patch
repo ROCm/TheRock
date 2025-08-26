@@ -1,0 +1,56 @@
+From e693ed1b71e2580f2ec97f3eabe83ff6c8df7946 Mon Sep 17 00:00:00 2001
+From: David Dixon <david.dixon@amd.com>
+Date: Mon, 25 Aug 2025 23:42:59 +0000
+Subject: [PATCH 18/18] Link tools libs against hip host target
+
+---
+ projects/rocsparse/clients/CMakeLists.txt      | 18 ++++++++++--------
+ .../rocsparse/clients/tools/CMakeLists.txt     |  2 ++
+ 2 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/projects/rocsparse/clients/CMakeLists.txt b/projects/rocsparse/clients/CMakeLists.txt
+index 90eac6b226..8eed62f3b2 100644
+--- a/projects/rocsparse/clients/CMakeLists.txt
++++ b/projects/rocsparse/clients/CMakeLists.txt
+@@ -93,15 +93,17 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+ endif()
+ 
+ # OpenMP
+-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET OpenMP::omp)
++if(NOT WIN32)
++  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET OpenMP::omp)
+   set(ROCSPARSE_CLIENT_LIBS "OpenMP::omp")
+-  message(STATUS "Found openmp-config.cmake at ${OpenMP_DIR}")
+-else()
+-  # if it fails to find OpenMP compile and link flags in strange configurations it can just use non-parallel reference computation
+-  # if there is no omp.h to find the client compilation will fail and this should be obvious, used to be REQUIRED
+-  find_package(OpenMP)
+-  if (TARGET OpenMP::OpenMP_CXX)
+-    set(ROCSPARSE_CLIENT_LIBS "OpenMP::OpenMP_CXX")
++    message(STATUS "Found openmp-config.cmake at ${OpenMP_DIR}")
++  else()
++    # if it fails to find OpenMP compile and link flags in strange configurations it can just use non-parallel reference computation
++    # if there is no omp.h to find the client compilation will fail and this should be obvious, used to be REQUIRED
++    find_package(OpenMP)
++    if (TARGET OpenMP::OpenMP_CXX)
++      set(ROCSPARSE_CLIENT_LIBS "OpenMP::OpenMP_CXX")
++    endif()
+   endif()
+ endif()
+ 
+diff --git a/projects/rocsparse/clients/tools/CMakeLists.txt b/projects/rocsparse/clients/tools/CMakeLists.txt
+index 301b239c2d..6418256d48 100644
+--- a/projects/rocsparse/clients/tools/CMakeLists.txt
++++ b/projects/rocsparse/clients/tools/CMakeLists.txt
+@@ -40,6 +40,8 @@ foreach(app ${ROCSPARSEIO_TOOLS_SOURCES})
+   # Set tools output directory
+   set_target_properties(${app} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/staging")
+ 
++  target_link_libraries(${app} PRIVATE hip::host)
++
+   # Install
+   if(WIN32)
+     rocm_install(PROGRAMS $<TARGET_FILE:${app}> DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clients)
+-- 
+2.25.1
+

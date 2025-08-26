@@ -1,7 +1,7 @@
-From 45af9b9798be9513c44310b8db7608bde6e4ea11 Mon Sep 17 00:00:00 2001
+From ee5167d94cdec904ca5f220ecdec42a5a6394f9e Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 2 May 2025 15:27:13 -0700
-Subject: [PATCH] Limit number of Tensile workers to 61 on Windows due to
+Subject: [PATCH 16/16] Limit number of Tensile workers to 61 on Windows due to
  system limit.
 
 ---
@@ -25,5 +25,5 @@ index a643c1aea3..f483d26466 100644
              cpu_count = len(os.sched_getaffinity(0))
          cpuThreads = globalParameters["CpuThreads"]
 -- 
-2.43.0
+2.25.1
 

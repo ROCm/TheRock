@@ -1,7 +1,7 @@
-From 80b7d127116b67c6fefc96081d3f3cca081a29f8 Mon Sep 17 00:00:00 2001
+From b15bb4d6a7b775a7aeeee9ddf0c97f6407734b73 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Fri, 18 Jul 2025 14:44:31 +0000
-Subject: [PATCH 08/17] Enable hipblaslt on windows and for static builds
+Subject: [PATCH 07/16] Enable hipblaslt on windows and for static builds
 
 ---
  projects/rocblas/CMakeLists.txt                |  5 ++---
@@ -10,10 +10,10 @@ Subject: [PATCH 08/17] Enable hipblaslt on windows and for static builds
  3 files changed, 6 insertions(+), 17 deletions(-)
 
 diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
-index cbd021a4a6..589eac2bdb 100644
+index 0b62447111..e56507c9b2 100644
 --- a/projects/rocblas/CMakeLists.txt
 +++ b/projects/rocblas/CMakeLists.txt
-@@ -146,17 +146,16 @@ set( GPU_TARGETS "${target_list}" CACHE STRING "List of GPUs (gfx targets) to su
+@@ -145,17 +145,16 @@ set( GPU_TARGETS "${target_list}" CACHE STRING "List of GPUs (gfx targets) to su
  set( AMDGPU_TARGETS "${GPU_TARGETS}" CACHE STRING "List of GPUs (gfx targets) to support" FORCE ) # for old hip cmake files backward compatibility
  
  option( BUILD_WITH_HIPBLASLT "Build with HipBLASLt" ON )
@@ -82,5 +82,5 @@ index f4bdfb5f97..e972869a9e 100644
  
    if( NOT BUILD_SHARED_LIBS )
 -- 
-2.43.0
+2.25.1
 
