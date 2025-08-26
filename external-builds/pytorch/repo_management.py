@@ -272,7 +272,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         cwd=repo_dir,
         stdout_devnull=True,
     )
-    git_config_ignore_submodules(repo_dir)
+    # git_config_ignore_submodules(repo_dir)
 
     # Base patches.
     if args.patch and patches_dir_name:
