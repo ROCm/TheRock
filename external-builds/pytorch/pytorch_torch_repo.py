@@ -87,7 +87,7 @@ def main(cl_args: list[str]):
         help="git repository url",
     )
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
-    checkout_p.add_argument("--jobs", default=10, type=int, help="Number of fetch jobs")
+    checkout_p.add_argument("--jobs", default=1, type=int, help="Number of fetch jobs")
     checkout_p.add_argument(
         "--hipify",
         action=argparse.BooleanOptionalAction,
