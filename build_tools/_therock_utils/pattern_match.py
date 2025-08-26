@@ -136,8 +136,30 @@ class PatternMatcher:
                     os.symlink(targetpath, destpath)
                 else:
                     # Regular file.
+
+                    # Sometimes multiple processes try to link the same file.
+                    # On Unix, we can safely unlink/remove a file and overwrite
+                    # it. However, on Windows a file that is in use cannot be
+                    # removed: https://docs.python.org/3/library/os.html#os.remove.
+                    # Here we check if the inode matches (true for hardlinks)
+                    # and avoid the unlink/link step in that case.
+                    if (
+                        destpath.exists()
+                        and not always_copy
+                        and os.stat(destpath).st_ino == os.stat(direntry.path).st_ino
+                    ):
+                        if verbose:
+                            print(
+                                f"skipping unlink and link for existing hardlink {direntry.path} -> {destpath}",
+                                file=sys.stderr,
+                                end="",
+                            )
+                        continue
+
                     if not remove_dest and (destpath.exists() or destpath.is_symlink()):
+                        # Hopefully safe even on Windows given the check above.
                         os.unlink(destpath)
+
                     destpath.parent.mkdir(parents=True, exist_ok=True)
                     linked_file = False
                     if not always_copy:

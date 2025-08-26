@@ -6,7 +6,6 @@ The install_rocm_from_artifacts.py script builds on top of this script to both
 download artifacts then unpack them into a usable install directory.
 
 Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
-  mkdir -p ~/.therock/artifacts_15685736080
   pip install boto3
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
@@ -14,10 +13,19 @@ Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
 Or, to fetch _all_ artifacts and not just a subset (this is safest for packaging
 workflows where dependencies may not be accurately modeled, at the cost of
 additional disk space):
-  mkdir -p ~/.therock/artifacts_15685736080
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
     --all
+
+Alternatively, include/exclude regular expressions can be given to control what
+is downloaded (this implies --all):
+  python build_tools/fetch_artifacts.py \
+    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
+    amd-llvm base 'core-(hip|runtime)' sysdeps \
+    --exclude _dbg_
+
+This will process artifacts that match any of the include patterns and do not
+match any of the exclude patterns.
 """
 
 import argparse
@@ -28,11 +36,16 @@ import concurrent.futures
 from dataclasses import dataclass
 from pathlib import Path
 import platform
+import re
+import shutil
 import sys
 import tarfile
 import time
 import warnings
 from urllib3.exceptions import InsecureRequestWarning
+
+from _therock_utils.artifacts import ArtifactPopulator
+
 
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
@@ -88,6 +101,9 @@ class ArtifactDownloadRequest:
     bucket: str
     output_path: Path
 
+    def __str__(self):
+        return f"{self.bucket}:{self.artifact_key}"
+
 
 def get_bucket_url(run_id: str):
     external_repo, bucket = retrieve_bucket_info()
@@ -120,7 +136,9 @@ def collect_artifacts_download_requests(
     return artifacts_to_retrieve
 
 
-def download_artifact(artifact_download_request: ArtifactDownloadRequest):
+def download_artifact(
+    artifact_download_request: ArtifactDownloadRequest,
+) -> ArtifactDownloadRequest:
     MAX_RETRIES = 3
     BASE_DELAY = 3  # seconds
     for attempt in range(MAX_RETRIES):
@@ -132,6 +150,7 @@ def download_artifact(artifact_download_request: ArtifactDownloadRequest):
             with open(output_path, "wb") as f:
                 s3_client.download_fileobj(bucket, artifact_key, f)
             log(f"++ Download complete for {output_path}")
+            return artifact_download_request
         except Exception as e:
             log(f"++ Error downloading {artifact_key}: {e}")
             if attempt < MAX_RETRIES - 1:
@@ -155,13 +174,13 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
             future.result(timeout=60)
 
 
-def retrieve_all_artifacts(
+def filter_all_artifacts(
     run_id: str,
     target: str,
     output_dir: Path,
     s3_artifacts: set[str],
-):
-    """Retrieves all available artifacts."""
+) -> list[ArtifactDownloadRequest]:
+    """Filters to all available artifacts."""
     artifacts_to_retrieve = []
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     s3_key_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}"
@@ -178,17 +197,25 @@ def retrieve_all_artifacts(
                 output_path=output_dir / artifact,
             )
         )
+    return artifacts_to_retrieve
 
-    download_artifacts(artifacts_to_retrieve)
+
+def get_postprocess_mode(args) -> str | None:
+    """Returns 'extract', 'flatten' or None (default is 'extract')."""
+    if args.flatten:
+        return "flatten"
+    if args.no_extract:
+        return None
+    return "extract"
 
 
-def retrieve_base_artifacts(
+def filter_base_artifacts(
     args: argparse.Namespace,
     run_id: str,
     output_dir: Path,
     s3_artifacts: set[str],
-):
-    """Retrieves TheRock base artifacts using urllib."""
+) -> list[ArtifactDownloadRequest]:
+    """Filters TheRock base artifacts."""
     base_artifacts = [
         "core-runtime_run",
         "core-runtime_lib",
@@ -207,17 +234,17 @@ def retrieve_base_artifacts(
     artifacts_to_retrieve = collect_artifacts_download_requests(
         base_artifacts, run_id, output_dir, GENERIC_VARIANT, s3_artifacts
     )
-    download_artifacts(artifacts_to_retrieve)
+    return artifacts_to_retrieve
 
 
-def retrieve_enabled_artifacts(
+def filter_enabled_artifacts(
     args: argparse.Namespace,
     target: str,
     run_id: str,
     output_dir: Path,
     s3_artifacts: set[str],
-):
-    """Retrieves TheRock artifacts using urllib, based on the enabled arguments.
+) -> list[ArtifactDownloadRequest]:
+    """Filters TheRock artifacts using based on the enabled arguments.
 
     If no artifacts have been collected, we assume that we want to install the default subset.
     If `args.tests` have been enabled, we also collect test artifacts.
@@ -255,57 +282,131 @@ def retrieve_enabled_artifacts(
     artifacts_to_retrieve = collect_artifacts_download_requests(
         enabled_artifacts, run_id, output_dir, target, s3_artifacts
     )
-    download_artifacts(artifacts_to_retrieve)
+    return artifacts_to_retrieve
 
 
-def _extract_archives_into_subdirectories(output_dir: Path):
-    """
-    Extracts all files in output_dir to output_dir/{filename}, matching
-    the directory structure of the `therock-archives` CMake target. This
-    operation is different from the modes in other files that merge the
-    extracted files by component type or flatten into just bin/dist/.
-    """
-    # TODO(scotttodd): Move this code to artifacts.py? should move more of this
-    #                  logic into that file and add comprehensive unit tests
-    log(f"Extracting archives in '{output_dir}'")
-    archive_files = list(output_dir.glob("*.tar.*"))
-    for archive_file in archive_files:
-        # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
-        # We can't just use .stem since that only removes the last extension.
-        #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
-        #   2. .partition('.') gets (before, sep, after), discard all but 'before'
-        archive_file_stem, _, _ = archive_file.name.partition(".")
+def extract_artifact(
+    artifact: ArtifactDownloadRequest, *, delete_archive: bool, postprocess_mode: str
+):
+    # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
+    # We can't just use .stem since that only removes the last extension.
+    #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
+    #   2. .partition('.') gets (before, sep, after), discard all but 'before'
+    archive_file = artifact.output_path
+    artifact_name, *_ = archive_file.name.partition(".")
 
+    if postprocess_mode == "extract":
+        output_dir = archive_file.parent / artifact_name
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
         with tarfile.TarFile.open(archive_file, mode="r:xz") as tf:
-            log(f"++ Extracting '{archive_file.name}' to '{archive_file_stem}'")
-            tf.extractall(output_dir / archive_file_stem, filter="tar")
+            log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
+            tf.extractall(archive_file.parent / artifact_name, filter="tar")
+    elif postprocess_mode == "flatten":
+        output_dir = archive_file.parent
+        log(f"++ Flattening '{archive_file.name}' to '{artifact_name}'")
+        flattener = ArtifactPopulator(
+            output_path=output_dir, verbose=True, flatten=True
+        )
+        flattener(archive_file)
+    else:
+        raise AssertionError(f"Unhandled postprocess_mode = {postprocess_mode}")
+
+    if delete_archive:
+        archive_file.unlink()
 
 
 def run(args):
     run_id = args.run_id
     target = args.target
     output_dir = args.output_dir
-    if not output_dir.is_dir():
-        log(f"Output dir '{output_dir}' does not exist. Exiting...")
-        return
+    output_dir.mkdir(parents=True, exist_ok=True)
     s3_artifacts = retrieve_s3_artifacts(run_id, target)
     if not s3_artifacts:
         log(f"S3 artifacts for {run_id} does not exist. Exiting...")
-        return
+        sys.exit(1)
 
+    # Filter the artifacts we will retrieve.
+    artifacts_to_retrieve: list[ArtifactDownloadRequest] | None = None
+    if args.include:
+        args.all = True
     if args.all:
-        retrieve_all_artifacts(run_id, target, output_dir, s3_artifacts)
+        artifacts_to_retrieve = filter_all_artifacts(
+            run_id, target, output_dir, s3_artifacts
+        )
     else:
-        retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
+        artifacts_to_retrieve = filter_base_artifacts(
+            args, run_id, output_dir, s3_artifacts
+        )
         if not args.base_only:
-            retrieve_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
+            artifacts_to_retrieve.extend(
+                filter_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
+            )
 
-    if args.extract:
-        _extract_archives_into_subdirectories(output_dir)
+    # Include/exclude filtering.
+    def _should_include(artifact: ArtifactDownloadRequest) -> bool:
+        if not args.include:
+            return True
+        # If includes, then one include must match.
+        for include in args.include:
+            pattern = re.compile(include)
+            if pattern.search(artifact.artifact_key):
+                break
+        else:
+            return False
+        # If excludes, then no excludes must match.
+        if args.exclude:
+            for exclude in args.exclude:
+                pattern = re.compile(exclude)
+                if pattern.search(artifact.artifact_key):
+                    return False
+        return True
+
+    artifacts_to_retrieve = [a for a in artifacts_to_retrieve if _should_include(a)]
+
+    joined_artifact_summary = "\n  ".join([str(item) for item in artifacts_to_retrieve])
+    log(f"Downloading in parallel:\n  {joined_artifact_summary}\n")
+
+    # Download and extract in parallel.
+    postprocess_mode = get_postprocess_mode(args)
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=args.download_concurrency
+    ) as download_executor, concurrent.futures.ThreadPoolExecutor(
+        max_workers=args.extract_concurrency
+    ) as extract_executor:
+        download_futures = [
+            download_executor.submit(download_artifact, req)
+            for req in artifacts_to_retrieve
+        ]
+        extract_futures: list[concurrent.futures.Future] = []
+        for download_future in concurrent.futures.as_completed(download_futures):
+            download_result = download_future.result(timeout=60)
+            if postprocess_mode:
+                extract_futures.append(
+                    extract_executor.submit(
+                        extract_artifact,
+                        download_result,
+                        delete_archive=args.delete_after_extract,
+                        postprocess_mode=postprocess_mode,
+                    )
+                )
+
+        [f.result() for f in extract_futures]
 
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="fetch_artifacts")
+    parser.add_argument(
+        "--download-concurrency",
+        type=int,
+        default=10,
+        help="Number of concurrent download jobs to execute at once",
+    )
+    parser.add_argument(
+        "--extract-concurrency",
+        type=int,
+        help="Number of extract jobs to execute at once (defaults to python VM defaults for CPU tasks)",
+    )
     parser.add_argument(
         "--run-id",
         type=str,
@@ -327,13 +428,33 @@ def main(argv):
         help="Output path for fetched artifacts, defaults to `build/artifacts/` as in source builds",
     )
 
-    parser.add_argument(
+    # Post processing mode
+    postprocess_p = parser.add_mutually_exclusive_group()
+    postprocess_p.add_argument(
+        "--no-extract",
+        default=False,
+        action="store_true",
+        help="Do no extraction or flattening",
+    )
+    postprocess_p.add_argument(
         "--extract",
-        default=True,
-        action=argparse.BooleanOptionalAction,
+        default=False,
+        action="store_true",
         help="Extract files after fetching them",
     )
+    postprocess_p.add_argument(
+        "--flatten",
+        default=False,
+        action="store_true",
+        help="Flattens artifacts after fetching them",
+    )
 
+    parser.add_argument(
+        "--delete-after-extract",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Delete archive files after extraction",
+    )
     artifacts_group = parser.add_argument_group("artifacts_group")
     artifacts_group.add_argument(
         "--all",
@@ -341,6 +462,18 @@ def main(argv):
         help="Include all artifacts",
         action=argparse.BooleanOptionalAction,
     )
+    parser.add_argument(
+        "include",
+        nargs="*",
+        help="Regular expression patterns of artifacts to include (implies --all): "
+        "if supplied one pattern must match for an artifact to be included",
+    )
+    parser.add_argument(
+        "--exclude",
+        nargs="*",
+        help="Regular expression patterns of artifacts to exclude",
+    )
+
     artifacts_group.add_argument(
         "--blas",
         default=False,
@@ -389,7 +522,7 @@ def main(argv):
 
     args = parser.parse_args(argv)
 
-    if args.all and (
+    if (args.all or args.include) and (
         args.blas
         or args.fft
         or args.miopen

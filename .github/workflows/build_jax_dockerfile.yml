@@ -1,0 +1,79 @@
+name: Build Linux JAX Docker Images
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      python_versions:
+        required: true
+        type: string
+      release_type:
+        description: The type of release to build ("nightly", or "dev")
+        required: true
+        type: string
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version to install
+        type: string
+      tar_url:
+        description: URL to TheRock tarball to build against
+        type: string
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      python_versions:
+        required: true
+        type: string
+      release_type:
+        description: The type of release to build ("nightly", or "dev")
+        required: true
+        type: string
+        default: "dev"
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
+        type: string
+        default: "v2"
+      rocm_version:
+        description: ROCm version to install
+        type: string
+      tar_url:
+        description: URL to TheRock tarball to build against
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build_jax_wheels:
+    strategy:
+      matrix:
+        jax_ref: [master]
+    name: Build | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    env:
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax_rocm_plugin/wheelhouse
+      S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+    steps:
+      - name: Checkout TheRock
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Checkout JAX
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          path: jax
+          repository: rocm/rocm-jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "therockbot"
+          git config --global user.email "therockbot@amd.com"
+      # TODO: Pull down JAX plugin wheels into the wheelhouse directory and run the image build script from rocm-jax

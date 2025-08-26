@@ -31,13 +31,16 @@ def exec(cmd: list[str], cwd: Path):
 
 def retrieve_bucket_info() -> tuple[str, str]:
     github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
+    is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
     owner, repo_name = github_repository.split("/")
     external_repo = (
-        "" if repo_name == "TheRock" and owner == "ROCm" else f"{owner}-{repo_name}/"
+        ""
+        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
+        else f"{owner}-{repo_name}/"
     )
     bucket = (
         "therock-artifacts"
-        if repo_name == "TheRock" and owner == "ROCm"
+        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
         else "therock-artifacts-external"
     )
     return (external_repo, bucket)

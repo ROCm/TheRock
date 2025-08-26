@@ -331,6 +331,7 @@ function(therock_cmake_subproject_declare target_name)
   # Stage directory.
   set(_stage_dir "${ARG_BINARY_DIR}/${ARG_DIR_PREFIX}stage")
   make_directory("${_stage_dir}")
+  file(TOUCH "${ARG_BINARY_DIR}/.${ARG_DIR_PREFIX}stage.marker")
 
   # Dist directory.
   set(_dist_dir "${ARG_BINARY_DIR}/${ARG_DIR_PREFIX}dist")

@@ -31,11 +31,8 @@ import argparse
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
-from fetch_artifacts import (
-    retrieve_base_artifacts,
-    retrieve_enabled_artifacts,
-    retrieve_s3_artifacts,
-)
+from fetch_artifacts import main as fetch_artifacts_main
+
 import os
 from pathlib import Path
 import platform
@@ -44,7 +41,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from _therock_utils.artifacts import ArtifactPopulator
 
 PLATFORM = platform.system().lower()
 s3_client = boto3.client(
@@ -106,25 +102,21 @@ def retrieve_artifacts_by_run_id(args):
     If the user requested TheRock artifacts by CI (run ID), this function will retrieve those assets
     """
     run_id = args.run_id
-    output_dir = args.output_dir
-    amdgpu_family = args.amdgpu_family
     log(f"Retrieving artifacts for run ID {run_id}")
-    s3_artifacts = retrieve_s3_artifacts(run_id, amdgpu_family)
-
-    # Retrieving base and all math-lib tar artifacts and downloading them to output_dir
-    retrieve_base_artifacts(args, run_id, output_dir, s3_artifacts)
-    if not args.base_only:
-        retrieve_enabled_artifacts(
-            args, amdgpu_family, run_id, output_dir, s3_artifacts
-        )
-
-    # Flattening artifacts from .tar* files then removing .tar* files
-    log(f"Untar-ing artifacts for {run_id}")
-    tar_file_paths = list(output_dir.glob("*.tar.*"))
-    flattener = ArtifactPopulator(output_path=output_dir, verbose=True, flatten=True)
-    flattener(*tar_file_paths)
-    for file_path in tar_file_paths:
-        file_path.unlink()
+    argv = [
+        "--run-id",
+        run_id,
+        "--target",
+        args.amdgpu_family,
+        "--output-dir",
+        str(args.output_dir),
+        "--flatten",
+    ]
+    if args.base_only:
+        argv.append("--base")
+    else:
+        argv.append("--all")
+    fetch_artifacts_main(argv)
 
     log(f"Retrieved artifacts for run ID {run_id}")
 

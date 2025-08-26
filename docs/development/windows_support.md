@@ -39,6 +39,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                              |           |                                               |
 | core                | [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime)                         | ❌        | Unsupported                                   |
 | core                | [rocminfo](https://github.com/ROCm/rocminfo)                                 | ❌        | Unsupported                                   |
+| core                | [hipInfo from hip-tests](https://github.com/ROCm/hip-tests)                  | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/clr)                                           | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                              |           |                                               |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocprofiler-sdk)                   | ❌        | Unsupported                                   |
@@ -154,14 +155,14 @@ If you prefer to install tools manually, you will need:
 - (Optional) ccache: https://ccache.dev/, or sccache:
   https://github.com/mozilla/sccache
 
+- gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
+
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
-  > [!WARNING]
-  > Prefer to install Python for the current user only and to a path
-  > **without spaces** like
-  > `C:\Users\<username>\AppData\Local\Programs\Python\Python312`.
-
-- Strawberry Perl, which comes with gfortran: https://strawberryperl.com/
+> [!WARNING]
+> Prefer to install Python for the current user only and to a path
+> **without spaces** like
+> `C:\Users\<username>\AppData\Local\Programs\Python\Python312`.
 
 #### Important tool settings
 

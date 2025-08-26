@@ -1,2 +1,2 @@
 recursive-include src/* *.tar
-recursive-include src/* *.tar.gz
+recursive-include src/* *.tar.xz

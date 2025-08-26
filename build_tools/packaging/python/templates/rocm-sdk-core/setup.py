@@ -57,6 +57,7 @@ setup(
             "amdclang++=rocm_sdk_core._cli:amdclangpp",
             "amdclang-cpp=rocm_sdk_core._cli:amdclang_cpp",
             "amdclang-cl=rocm_sdk_core._cli:amdclang_cl",
+            "amdgpu-arch=rocm_sdk_core._cli:amdgpu_arch",
             "amdflang=rocm_sdk_core._cli:amdflang",
             "amdlld=rocm_sdk_core._cli:amdlld",
             "hipcc=rocm_sdk_core._cli:hipcc",
@@ -74,7 +75,7 @@ setup(
             ]
             if platform.system() != "Windows"
             else [
-                # TODO(#600): add hipInfo on Windows
+                "hipInfo=rocm_sdk_core._cli:hipInfo",
             ]
         ),
     },

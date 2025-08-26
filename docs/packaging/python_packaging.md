@@ -49,13 +49,36 @@ built-in tests (via `rocm-sdk test`) verify these conditions.
 ```bash
 ./build_tools/build_python_packages.py \
     --artifact-dir ./output-linux-portable/build/artifacts \
-    --dest-dir $HOME/tmp/packages
+    --dest-dir ${HOME}/tmp/packages
 ```
 
 Note that this does do some dynamic compilation of files and it performs
 patching via patchelf. On Linux, it is recommended to run this in the same
 portable container as was used to build the SDK (so as to avoid the possibility
 of accidentally referencing too-new glibc symbols).
+
+To install locally built packages you can either
+
+1. Directly install the Python packages by file name:
+
+   ```bash
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install ${HOME}/tmp/packages/dist/rocm-7.0.0.dev0.tar.gz \
+               ${HOME}/tmp/packages/dist/rocm_sdk_core-7.0.0.dev0-py3-none-linux_x86_64.whl
+   # Optionally install rocm_sdk_devel and rocm_sdk_libraries wheels
+   ```
+
+1. Generate a local index using [piprepo](https://pypi.org/project/piprepo/) and
+   install using more natural package names:
+
+   ```
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install piprepo setuptools
+   piprepo build ${HOME}/tmp/packages/dist
+   pip install rocm[libraries,devel]==7.0.0.dev0 \
+     --extra-index-url ${HOME}/tmp/packages/dist/simple \
+     --force-reinstall --no-cache-dir
+   ```
 
 ## Using Packages from Frameworks
 
