@@ -88,8 +88,8 @@ project layouts.**
 
 | **Product Name**                   | **GFX Family** |
 | ---------------------------------- | -------------- |
-| MI300A/MI300X CDNA                 | gfx94X-dcgpu   |
-| MI350X/MI355X CDNA                 | gfx950-dcgpu   |
+| MI300A/MI300X                      | gfx94X-dcgpu   |
+| MI350X/MI355X                      | gfx950-dcgpu   |
 | AMD RX 7900 XTX                    | gfx110X-dgpu   |
 | AMD RX 7800 XT                     | gfx110X-dgpu   |
 | AMD RX 7700S / Framework Laptop 16 | gfx110X-dgpu   |
