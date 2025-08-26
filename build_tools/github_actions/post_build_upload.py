@@ -270,7 +270,7 @@ if __name__ == "__main__":
         help="AMDGPU family name (default: $AMDGPU_FAMILIES)",
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
-    is_ci = os.getenv("CI", "")
+    is_ci = str2bool(os.getenv("CI", "false"))
     parser.add_argument(
         "--upload",
         default=is_ci,
