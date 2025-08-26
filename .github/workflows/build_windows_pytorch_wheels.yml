@@ -80,6 +80,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
+      - name: Configure Git for Windows filesystem 
+        run: |
+          git config --system core.protectNTFS false
+          git config --global core.precomposeunicode true
+          git config --global core.longpaths true
+
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
