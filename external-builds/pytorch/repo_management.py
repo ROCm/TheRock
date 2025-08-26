@@ -212,8 +212,6 @@ def do_hipify(args: argparse.Namespace):
 
 def commit_hipify(args: argparse.Namespace):
     repo_dir: Path = args.repo
-    # Iterate over the base repository and all submodules. Because we process
-    # the root repo first, it will not add submodule changes.
     all_paths = get_all_repositories(repo_dir)
     for module_path in all_paths:
         status = list_status(module_path)
@@ -226,6 +224,17 @@ def commit_hipify(args: argparse.Namespace):
             cwd=module_path,
         )
         exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
+
+
+#  Helper
+def enable_longpaths_for_all_repos(repo_dir: Path):
+    """Enable core.longpaths=true for root and all submodules"""
+    all_repos = get_all_repositories(repo_dir)
+    for path in all_repos:
+        try:
+            exec(["git", "config", "core.longpaths", "true"], cwd=path)
+        except subprocess.CalledProcessError:
+            print(f"WARNING: could not enable longpaths in {path}")
 
 
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
@@ -257,14 +266,13 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
             ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
             cwd=repo_dir,
         )
-        # Enforce longpaths in all submodules (Windows fix)
-        exec(
-            ["git", "submodule", "foreach", "--recursive", "git config core.longpaths true"],
-            cwd=repo_dir,
-        )
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
+
+    # === Ensure longpaths everywhere ===
+    enable_longpaths_for_all_repos(repo_dir)
+
     exec(
         [
             "git",
