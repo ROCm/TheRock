@@ -26,7 +26,7 @@
       "doc"
     ],
     "Artifact": "base",
-    "Gfxarch": "false"
+    "Gfxarch": "False"
   },
   {
     "Package": "rocm-cmake",
@@ -49,7 +49,7 @@
       "doc"
     ],
     "Artifact": "base",
-    "Gfxarch": "false"
+    "Gfxarch": "False"
   },
   {
     "Package": "rocm-smi-lib",
@@ -83,7 +83,7 @@
       "doc"
     ],
     "Artifact": "base",
-    "Gfxarch": "false"
+    "Gfxarch": "False"
   },
   {
     "Package": "rocprofiler-register",
@@ -114,7 +114,7 @@
       "doc"
     ],
     "Artifact": "base",
-    "Gfxarch": "false"
+    "Gfxarch": "False"
 
   },
   {
@@ -160,7 +160,8 @@
       "devtoolset-7-gcc-c++"
     ],
     "Artifact": "amd-llvm",
-    "Gfxarch": "false"
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
 
   },
   {
@@ -206,7 +207,7 @@
       "devtoolset-7-gcc-c++"
     ],
     "Artifact": "amd-llvm",
-    "Gfxarch": "false"
+    "Gfxarch": "False"
   },
   {
     "Package": "rccl",
@@ -301,7 +302,7 @@
       "doc"
     ],
     "Artifact": "base",
-    "Gfxarch": "false",
+    "Gfxarch": "False",
     "Composite": ""
   }
 

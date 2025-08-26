@@ -17,15 +17,19 @@ create RPM and DEB packages and upload to artifactory server
 import argparse
 import glob
 import os
+import platform
 import re
 import shutil
 import subprocess
 import sys
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import format_datetime
 from jinja2 import Environment, FileSystemLoader, Template
 from packaging_utils import *
 from pathlib import Path
+
 
 # User inputs required for packaging
 # pkg_dir - For saving the rpm/deb packages
@@ -67,9 +71,16 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     # Create package contents in DEB/pkg_name/install_prefix folder
     package_dir = f"{DEBIAN_CONTENTS_DIR}/{pkg_name}"
-    dest_dir = f"{package_dir}/{config.install_prefix}"
+    deb_dir = f"{package_dir}/debian"
+    # Create package directory and debian directory
+    os.makedirs(deb_dir, exist_ok=True)
+
     pkg_info = get_package_info(pkg_name)
-    generate_control_file(pkg_info, package_dir, config)
+
+    generate_changelog_file(pkg_info, deb_dir, config)
+    generate_rules_file(pkg_info, deb_dir, config)
+    generate_install_file(pkg_info, deb_dir, config)
+    generate_control_file(pkg_info, deb_dir, config)
     # check the package is group of basic package or not
     pkg_list = pkg_info.get("Includes")
 
@@ -81,51 +92,149 @@ def create_deb_package(pkg_name, config: PackageConfig):
         dir_list = filter_components_fromartifactory(pkg, config.gfx_arch)
         sourcedir_list.extend(dir_list)
 
+    dest_dir = f"{package_dir}/{config.install_prefix}"
     for source_path in sourcedir_list:
         print(source_path)
         copy_package_contents(source_path, dest_dir)
 
-    pkg_name = update_package_name(pkg_name, config)
-    pkg_name = pkg_name.replace("-devel", "-dev")
-    arch = pkg_info.get("Architecture")
-    version_str = version_to_str(config.rocm_version)
-    debpkg_name = (
-        f"{pkg_name}_{config.rocm_version}.{version_str}-{config.version_suffix}_{arch}"
-    )
     if config.enable_rpath:
         print("ENABLE RPATH")
         subprocess.run(["python3", "runpath_to_rpath.py", package_dir])
 
-    package_with_dpkg_deb(package_dir, config.pkg_dir, debpkg_name)
+    package_with_dpkg_deb(package_dir)
+
+    pkg_name = update_debian_package_name(pkg_name, config)
+    deb_files = glob.glob(os.path.join(DEBIAN_CONTENTS_DIR, "*.deb"))
+    # Move deb file to the target directory
+    for file_path in deb_files:
+        file_name = os.path.basename(file_path)
+        if file_name.startswith(pkg_name):
+            dest_file = os.path.join(config.pkg_dir, file_name)
+
+            if os.path.exists(dest_file):
+                os.remove(dest_file)
+            shutil.move(file_path, config.pkg_dir)
 
 
-def generate_control_file(pkg_info, pkg_dir, config: PackageConfig):
+def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
+    """Function will generate changelog for debian package
+
+    Parameters:
+    pkg_info : Package details from the Json file
+    deb_dir: Directory where debian package control file is saved
+    config: Configuration object containing package metadata
+
+    Returns: None
+    """
+
+    print("Generate changelog")
+    changelog = Path(deb_dir) / "changelog"
+
+    pkg_name = update_debian_package_name(pkg_info.get("Package"), config)
+    maintainer = pkg_info.get("Maintainer")
+    name_part, email_part = maintainer.split("<")
+    name = name_part.strip()
+    email = email_part.replace(">", "").strip()
+    # version is used along with package name
+    version = (
+        config.rocm_version
+        + "."
+        + version_to_str(config.rocm_version)
+        + "-"
+        + config.version_suffix
+    )
+
+    env = Environment(loader=FileSystemLoader("."))
+    template = env.get_template("template/debian_changelog.j2")
+
+    # Prepare context dictionary
+    context = {
+        "package": pkg_name,
+        "version": version,
+        "distribution": "UNRELEASED",
+        "urgency": "medium",
+        "changes": ["Initial release"],  # TODO: Will get from package.json?
+        "maintainer_name": name,
+        "maintainer_email": email,
+        "date": format_datetime(
+            datetime.now(timezone.utc)
+        ),  # TODO. How to get the date info?
+    }
+
+    with changelog.open("w", encoding="utf-8") as f:
+        f.write(template.render(context))
+
+
+def generate_install_file(pkg_info, deb_dir, config: PackageConfig):
+    """Function will generate install file for debian package
+
+    Parameters:
+    pkg_info : Package details from the Json file
+    deb_dir: Directory where debian package control file is saved
+    config: Configuration object containing package metadata
+
+    Returns: None
+    """
+    # Note: pkg_info is not used currently:
+    # May be required in future to populate any context
+    print("Generate install file")
+    install_file = Path(deb_dir) / "install"
+
+    env = Environment(loader=FileSystemLoader("."))
+    template = env.get_template("template/debian_install.j2")
+    # Prepare your context dictionary
+    context = {
+        "path": config.install_prefix,
+    }
+
+    with install_file.open("w", encoding="utf-8") as f:
+        f.write(template.render(context))
+
+
+def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """Function will generate control file for debian package
 
     Parameters:
     pkg_info : Package details from the Json file
-    pkg_dir: Directory where package contents and control file is saved
+    deb_dir: Directory where debian package control file is saved
+    config: Configuration object containing package metadata
+
+    Returns: None
+    """
+    print("Generate rules file")
+    rules_file = Path(deb_dir) / "rules"
+
+    disable_dwz = (
+        None if pkg_info.get("Disable_DWZ") in (None, False, "False", "false") else True
+    )
+    env = Environment(loader=FileSystemLoader("."))
+    template = env.get_template("template/debian_rules.j2")
+    # Prepare  context dictionary
+    context = {
+        "disable_dwz": disable_dwz,
+    }
+
+    with rules_file.open("w", encoding="utf-8") as f:
+        f.write(template.render(context))
+    # set executable permission for rules file
+    rules_file.chmod(0o755)
+
+
+def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
+    """Function will generate control file for debian package
+
+    Parameters:
+    pkg_info : Package details from the Json file
+    deb_dir: Directory where debian package control file is saved
     config: Configuration object containing package metadata
 
     Returns: None
     """
 
     print("Generate control file")
-    control_dir = f"{pkg_dir}/DEBIAN"
-    os.makedirs(control_dir, exist_ok=True)
-    controlfile = f"{control_dir}/control"
+    control_file = Path(deb_dir) / "control"
 
-    pkg_name = update_package_name(pkg_info.get("Package"), config)
-    # Only required for debian developement package
-    pkg_name = pkg_name.replace("-devel", "-dev")
-    arch = pkg_info.get("Architecture")
-    description = pkg_info.get("Description")
-    # version = pkg_info.get("Version")
-    version = config.rocm_version
-    section = pkg_info.get("Section")
-    priority = pkg_info.get("Priority")
-    maintainer = pkg_info.get("Maintainer")
-    homepage = pkg_info.get("Homepage")
+    pkg_name = update_debian_package_name(pkg_info.get("Package"), config)
     depends_list = pkg_info.get("DEBDepends", [])
     depends = convert_to_versiondependency(depends_list, config)
     # Note: The dev package name update should be done after version dependency
@@ -133,21 +242,25 @@ def generate_control_file(pkg_info, pkg_dir, config: PackageConfig):
     depends = depends.replace("-devel", "-dev")
 
     env = Environment(loader=FileSystemLoader("."))
-    template = env.get_template("controlfile_template.j2")
+    template = env.get_template("template/debian_control.j2")
     # Prepare your context dictionary
+    # TODO: description short and long need to defined in package.json
+    # Time being setting both to description
     context = {
-        "arch": arch,
+        "source": pkg_name,
         "depends": depends,
-        "description": description,
-        "homepage": homepage,
-        "maintainer": maintainer,
         "pkg_name": pkg_name,
-        "priority": priority,
-        "section": section,
-        "version": version,
+        "arch": pkg_info.get("Architecture"),
+        "description_short": pkg_info.get("Description"),
+        "description_long": pkg_info.get("Description"),
+        "homepage": pkg_info.get("Homepage"),
+        "maintainer": pkg_info.get("Maintainer"),
+        "priority": pkg_info.get("Priority"),
+        "section": pkg_info.get("Section"),
+        "version": config.rocm_version,
     }
 
-    with open(controlfile, "w") as f:
+    with control_file.open("w", encoding="utf-8") as f:
         f.write(template.render(context))
         f.write("\n")  # Adds a blank line. For fixing missing final newline
 
@@ -178,7 +291,7 @@ def copy_package_contents(source_dir, destination_dir):
             shutil.copy2(s, d)
 
 
-def package_with_dpkg_deb(source_dir, output_dir, package_name):
+def package_with_dpkg_deb(pkg_dir):
     """Create deb package
 
     Parameters:
@@ -188,11 +301,10 @@ def package_with_dpkg_deb(source_dir, output_dir, package_name):
 
     Returns: None
     """
-    # Construct paths
-    output_deb = f"{output_dir}/{package_name}.deb"
-
+    current_dir = Path.cwd()
+    os.chdir(Path(pkg_dir))
     # Build the command
-    cmd = ["fakeroot", "dpkg-deb", "-Zgzip", "--build", source_dir, output_deb]
+    cmd = ["debuild", "-uc", "-us", "-b"]
 
     # Execute the command
     try:
@@ -200,6 +312,8 @@ def package_with_dpkg_deb(source_dir, output_dir, package_name):
         print("Package built successfully.")
     except subprocess.CalledProcessError as e:
         print("Error building package:", e)
+
+    os.chdir(current_dir)
 
 
 ######################## RPM package creation ####################
@@ -216,13 +330,15 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     Returns: None
     """
 
-    package_dir = f"{RPM_CONTENTS_DIR}/{pkg_name}"
-    specfile = f"{package_dir}/specfile"
+    package_dir = Path(RPM_CONTENTS_DIR) / pkg_name
+    specfile = package_dir / "specfile"
     pkg_info = get_package_info(pkg_name)
     generate_spec_file(pkg_info, specfile, config)
 
     package_with_rpmbuild(specfile)
-    rpm_files = glob.glob(os.path.join(f"{package_dir}/RPMS/x86_64", "*.rpm"))
+    rpm_files = glob.glob(
+        os.path.join(f"{package_dir}/RPMS/{platform.machine()}", "*.rpm")
+    )
     # Move each file to the target directory
     for file_path in rpm_files:
         dest_file = f"{config.pkg_dir}/{os.path.basename(file_path)}"
@@ -248,22 +364,9 @@ def generate_spec_file(pkginfo, specfile, config: PackageConfig):
     # Update package name with version details and gfxarch
     pkg_name = update_package_name(pkginfo.get("Package"), config)
     # populate packge config details
-    install_prefix = config.install_prefix
     version = f"{config.rocm_version}.{version_to_str(config.rocm_version)}"
     # TBD: Whether to use component version details?
     #    version = pkginfo.get("Version")
-    release = config.version_suffix
-    # Populate package details from Json
-    description = pkginfo.get("Description")
-    arch = pkginfo.get("Architecture")
-    build_arch = pkginfo.get("BuildArch")
-    section = pkginfo.get("Section")
-    priority = pkginfo.get("Priority")
-    maintainer = pkginfo.get("Maintainer")
-    group = pkginfo.get("Group")
-    vendor = pkginfo.get("Vendor")
-    pkg_license = pkginfo.get("License")
-    homepage = pkginfo.get("Homepage")
     recommends_list = pkginfo.get("RPMRecommends", [])
     rpmrecommends = convert_to_versiondependency(recommends_list, config)
 
@@ -290,25 +393,25 @@ def generate_spec_file(pkginfo, specfile, config: PackageConfig):
             subprocess.run(["python3", "runpath_to_rpath.py", path])
 
     env = Environment(loader=FileSystemLoader("."))
-    template = env.get_template("specfile_template.j2")
+    template = env.get_template("template/rpm_specfile.j2")
 
     # Prepare your context dictionary
     context = {
         "pkg_name": pkg_name,
         "version": version,
-        "release": release,
-        "build_arch": build_arch,
-        "description": description,
-        "group": group,
-        "pkg_license": pkg_license,
-        "vendor": vendor,
-        "install_prefix": install_prefix,
+        "release": config.version_suffix,
+        "build_arch": pkginfo.get("BuildArch"),
+        "description": pkginfo.get("Description"),
+        "group": pkginfo.get("Group"),
+        "pkg_license": pkginfo.get("License"),
+        "vendor": pkginfo.get("Vendor"),
+        "install_prefix": config.install_prefix,
         "requires": requires,
         "rpmrecommends": rpmrecommends,
         "sourcedir_list": sourcedir_list,
     }
 
-    with open(specfile, "w") as f:
+    with open(specfile, "w", encoding="utf-8") as f:
         f.write(template.render(context))
 
 
@@ -350,11 +453,30 @@ def update_package_name(pkg_name, config: PackageConfig):
         pkg_suffix = f"-rpath{config.rocm_version}"
 
     if check_for_gfxarch(pkg_name):
-        pkg_name = pkg_name + pkg_suffix + "-" + config.gfx_arch
+        pkg_name = pkg_name + pkg_suffix + "-" + config.gfx_arch.lower()
         # pkg_name = pkg_name + "-" + config.gfx_arch + pkg_suffix
     else:
         pkg_name = pkg_name + pkg_suffix
     return pkg_name
+
+
+def update_debian_package_name(pkg_name, config: PackageConfig):
+    """Function will update package name for debian package.
+    Development package names are defined as devel in json file
+    For debian package dev should be used
+
+    Parameters:
+    pkg_name : Package name
+    config: Configuration object containing package metadata
+
+    Returns: Updated package name
+    """
+
+    deb_pkgname = update_package_name(pkg_name, config)
+    # Only required for debian developement package
+    deb_pkgname = deb_pkgname.replace("-devel", "-dev")
+
+    return deb_pkgname
 
 
 def convert_to_versiondependency(dependency_list, config: PackageConfig):
@@ -392,7 +514,7 @@ def filter_components_fromartifactory(pkg, gfx_arch):
     sourcedir_list = []
     component_list = pkg_info.get("Components", [])
     artifact_prefix = pkg_info.get("Artifact")
-    if str(pkg_info.get("Gfxarch", "false")).strip().lower() == "true":
+    if str(pkg_info.get("Gfxarch", "False")).strip().lower() == "true":
         artifact_suffix = gfx_arch + "-dcgpu"
     else:
         artifact_suffix = "generic"
@@ -546,20 +668,30 @@ def run(args: argparse.Namespace):
     run_id = extract_build_id(args.artifact_url)
     gfxarch_params = gfxarch + "-dcgpu"
 
-    subprocess.run(
-        [
-            "python3",
-            "../../fetch_artifacts.py",
-            "--run-id",
-            run_id,
-            "--target",
-            gfxarch_params,
-            "--extract",
-            "--all",
-            "--output-dir",
-            ARTIFACTS_DIR,
-        ]
-    )
+    try:
+        subprocess.run(
+            [
+                "python3",
+                "../../fetch_artifacts.py",
+                "--run-id",
+                run_id,
+                "--target",
+                gfxarch_params,
+                "--extract",
+                "--all",
+                "--output-dir",
+                ARTIFACTS_DIR,
+            ]
+        )
+        print("Artifacts fetched successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error: Command failed with exit code {e.returncode}")
+        print(f"Command: {e.cmd}")
+    except FileNotFoundError:
+        print("Error: Python or script not found. Check your paths.")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
     # Using fetch_artiifacts.py from current folder.
     # Commented for time being and use the one provided by build_tools
     #    for pkg_name in pkg_list:

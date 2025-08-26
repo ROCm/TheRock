@@ -1,1 +1,2 @@
 pyelftools
+boto3
