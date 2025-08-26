@@ -349,6 +349,7 @@ def main(argv):
         default=[
             "HIPIFY",
             "llvm-project",
+            "spirv-llvm-translator",
         ],
     )
     parser.add_argument(
