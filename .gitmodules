@@ -86,3 +86,6 @@
 	path = core/hip-tests
 	url = https://github.com/ROCm/hip-tests.git
 	branch = amd-staging
+[submodule "base/amdsmi"]
+	path = base/amdsmi
+	url = https://github.com/ROCm/amdsmi.git

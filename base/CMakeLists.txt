@@ -1,4 +1,19 @@
 ################################################################################
+# amdsmi
+################################################################################
+
+therock_cmake_subproject_declare(therock-amdsmi
+  EXTERNAL_SOURCE_DIR "amdsmi"
+  USE_DIST_AMDGPU_TARGETS
+  BACKGROUND_BUILD
+)
+
+therock_cmake_subproject_provide_package(therock-amdsmi
+  amdsmi lib/cmake/amd_smi)
+
+therock_cmake_subproject_activate(therock-amdsmi)
+
+################################################################################
 # aux-overlay
 ################################################################################
 
