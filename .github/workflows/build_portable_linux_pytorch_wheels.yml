@@ -143,7 +143,7 @@ jobs:
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout --patch --patchset nightly
-      
+
       # Then the else branch to checkout release version of source code instead.
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ inputs.pytorch_version != 'nightly' }}
@@ -252,11 +252,13 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
+
       - name: Determine upload flag
         env:
           BUILD_RESULT: ${{ needs.build_pytorch_wheels.result }}
           TEST_RESULT: ${{ needs.test_pytorch_wheels.result }}
           TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+          ALWAYS_UPLOAD: ${{ needs.generate_target_to_run.outputs.always_upload }}
         run: |
           # 1) If the build failed → upload=false
           if [[ "$BUILD_RESULT" != "success" ]]; then
@@ -268,7 +270,12 @@ jobs:
             echo "::warning::Tests failed or were skipped (runner present). Skipping upload."
             echo "upload=false" >> "$GITHUB_ENV"
 
-          # 3) Else → upload=true
+          # 3) Else if ALWAYS_UPLOAD is not set and there was no test runner → upload=false
+          elif [[ -z "$ALWAYS_UPLOAD" && -z "$TEST_RUNS_ON" ]]; then
+            echo "::warning::No test runner and ALWAYS_UPLOAD not set. Skipping upload."
+            echo "upload=false" >> "$GITHUB_ENV"
+
+          # 4) Otherwise → upload=true
           else
             echo "upload=true" >> "$GITHUB_ENV"
           fi
