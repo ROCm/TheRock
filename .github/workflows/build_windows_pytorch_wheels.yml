@@ -161,10 +161,10 @@ jobs:
 
             while read -r sm; do
               [ -z "$sm" ] && continue
-              if [ ! -d "$sm/.git" ]; then
-                echo ">>> Submodule $sm (no .git dir) — skipping"
-                continue
-              fi
+            if ! git -C "$sm" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+              echo ">>> Submodule $sm (not a work tree) — skipping"
+              continue
+            fi
 
               echo ""
               echo ">>> Submodule: $sm"
