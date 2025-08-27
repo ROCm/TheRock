@@ -212,18 +212,40 @@ def do_hipify(args: argparse.Namespace):
 
 def commit_hipify(args: argparse.Namespace):
     repo_dir: Path = args.repo
+    # Iterate over the base repository and all submodules. Because we process
+    # the root repo first, it will not add submodule changes.
     all_paths = get_all_repositories(repo_dir)
+
     for module_path in all_paths:
         status = list_status(module_path)
         if not status:
             continue
+
         print(f"HIPIFY made changes to {module_path}: Committing")
-        exec(["git", "add", "-A"], cwd=module_path)
-        exec(
+
+        subprocess.run(["git", "add", "-A"], cwd=module_path)
+
+        # Run commit but don’t fail CI if nothing to commit
+        result = subprocess.run(
             ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
             cwd=module_path,
         )
-        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
+
+        if result.returncode == 0:
+            print(f"Committed HIPIFY changes in {module_path}")
+        elif result.returncode == 1:
+            print(f"No changes to commit in {module_path} (continuing)")
+        else:
+            print(
+                f"WARNING: git commit in {module_path} failed with exit code {result.returncode} (continuing)"
+            )
+
+        # Always try to tag, even if commit didn’t happen
+        subprocess.run(
+            ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"],
+            cwd=module_path,
+        )
+
 
 
 #  Helper
