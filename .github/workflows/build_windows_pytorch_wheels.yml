@@ -125,7 +125,7 @@ jobs:
       - name: Diagnose missing files + auto-fix with LFS
         shell: bash
         run: |
-          echo "=== Running Git diagnostics across all repos ==="
+          echo "=== Running Git diagnostics across all repos (including submodules) ==="
 
           REPOS=(
             "$CHECKOUT_ROOT/torch"
@@ -143,34 +143,38 @@ jobs:
             echo "===== Checking $repo ====="
             cd "$repo"
 
-            echo "--- git status warnings ---"
+            echo "--- git status warnings (top-level) ---"
             git status 2>&1 | grep "could not open directory" || true
 
-            if [ -d "third_party/onnx/backend/test/data/node" ]; then
-              echo "--- Checking ONNX test data files ---"
-              find third_party/onnx/backend/test/data/node -type f | head -20 | while read -r path; do
+            # Check the repo itself for ONNX test data
+            if [ -d "onnx/backend/test/data/node" ]; then
+              echo "--- Checking ONNX test data in $repo ---"
+              find onnx/backend/test/data/node -type f | head -10 | while read -r path; do
                 echo "Checking: $path"
-
-                if [ -f "$path" ]; then
-                  echo "  Exists ✅"
-                else
-                  echo "  Missing ❌"
-                fi
-
-                # Inline Python (no temp files)
+                [ -f "$path" ] && echo "  Exists ✅" || echo "  Missing ❌"
                 python -c "import os,sys; p=sys.argv[1]; print(f'  Path length: {len(os.path.abspath(p))}') " "$path" || true
-
-                if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
-                  echo "  Tracked by Git ✅"
-                  ATTRS=$(git check-attr filter -- "$path" || true)
-                  echo "  Git attributes: $ATTRS"
-                  if echo "$ATTRS" | grep -q "lfs"; then
-                    echo "  File is LFS-managed → pulling..."
-                    git lfs pull --include="$path" || echo "  WARNING: LFS pull failed"
-                  fi
-                else
-                  echo "  Not tracked by Git ❌"
-                fi
+                git ls-files --error-unmatch "$path" >/dev/null 2>&1 && echo "  Tracked by Git ✅" || echo "  Not tracked by Git ❌"
               done
             fi
+
+            # Now recurse into submodules
+            git submodule foreach --recursive '
+              echo ""
+              echo ">>> Submodule: $name at $sm_path"
+              cd "$sm_path"
+
+              echo "--- git status warnings (submodule) ---"
+              git status 2>&1 | grep "could not open directory" || true
+
+              if [ -d "onnx/backend/test/data/node" ]; then
+                echo "--- Checking ONNX test data in submodule $sm_path ---"
+                find onnx/backend/test/data/node -type f | head -10 | while read -r path; do
+                  echo "Checking: $path"
+                  [ -f "$path" ] && echo "  Exists ✅" || echo "  Missing ❌"
+                  python -c "import os,sys; p=sys.argv[1]; print(f'  Path length: {len(os.path.abspath(p))}') " "$path" || true
+                  git ls-files --error-unmatch "$path" >/dev/null 2>&1 && echo "  Tracked by Git ✅" || echo "  Not tracked by Git ❌"
+                done
+              fi
+            '
           done
+
