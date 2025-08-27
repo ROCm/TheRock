@@ -143,11 +143,9 @@ jobs:
             echo "===== Checking $repo ====="
             cd "$repo"
 
-            # Look for warnings
             echo "--- git status warnings ---"
             git status 2>&1 | grep "could not open directory" || true
 
-            # Find candidate missing test files under onnx/backend/test/data if present
             if [ -d "third_party/onnx/backend/test/data/node" ]; then
               echo "--- Checking ONNX test data files ---"
               find third_party/onnx/backend/test/data/node -type f | head -20 > /tmp/test_files.txt
@@ -160,14 +158,12 @@ jobs:
                   echo "  Missing ❌"
                 fi
 
-                # Path length (must not indent heredoc)
-                python - <<'PYCODE' "$path"
+                # Run inline Python properly
+                python - "$path" <<'PYCODE'
                   import os, sys
                   p = sys.argv[1]
                   print(f"  Path length: {len(os.path.abspath(p))}")
                 PYCODE
-
-                # Check Git tracking
                 if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
                   echo "  Tracked by Git ✅"
                   ATTRS=$(git check-attr filter -- "$path" || true)
