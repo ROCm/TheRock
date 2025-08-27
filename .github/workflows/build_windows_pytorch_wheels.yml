@@ -122,19 +122,6 @@ jobs:
             --repo ${{ env.CHECKOUT_ROOT }}/vision \
             --repo-hashtag main
 
-    - name: Checkout PyTorch source repos (main branch)
-        run: |
-          git config --global core.longpaths true
-          python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --repo ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag main
-          python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
-            --repo ${{ env.CHECKOUT_ROOT }}/audio \
-            --repo-hashtag main
-          python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
-            --repo ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag main
-
       - name: Diagnose missing files + auto-fix with LFS
         shell: bash
         run: |
@@ -173,12 +160,13 @@ jobs:
                   echo "  Missing ❌"
                 fi
 
-                # Path length
+                # Path length (must not indent heredoc)
                 python - <<'PYCODE' "$path"
-                import os, sys
-                p = sys.argv[1]
-                print(f"  Path length: {len(os.path.abspath(p))}")
-                PYCODE "$path" || true
+                  import os, sys
+                  p = sys.argv[1]
+                  print(f"  Path length: {len(os.path.abspath(p))}")
+                PYCODE
+
                 # Check Git tracking
                 if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
                   echo "  Tracked by Git ✅"
