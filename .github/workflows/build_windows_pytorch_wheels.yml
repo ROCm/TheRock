@@ -127,13 +127,9 @@ jobs:
         run: |
           echo "=== Running Git diagnostics across all repos (including submodules) ==="
 
-          REPOS=(
-            "$CHECKOUT_ROOT/torch"
-            "$CHECKOUT_ROOT/audio"
-            "$CHECKOUT_ROOT/vision"
-          )
+          REPOS="$CHECKOUT_ROOT/torch $CHECKOUT_ROOT/audio $CHECKOUT_ROOT/vision"
 
-          for repo in "${REPOS[@]}"; do
+          for repo in $REPOS; do
             if [ ! -d "$repo/.git" ]; then
               echo "Skipping $repo (not a git repo)"
               continue
@@ -146,7 +142,6 @@ jobs:
             echo "--- git status warnings (top-level) ---"
             git status 2>&1 | grep "could not open directory" || true
 
-            # Check the repo itself for ONNX test data
             if [ -d "onnx/backend/test/data/node" ]; then
               echo "--- Checking ONNX test data in $repo ---"
               find onnx/backend/test/data/node -type f | head -10 | while read -r path; do
@@ -157,7 +152,7 @@ jobs:
               done
             fi
 
-            # Now recurse into submodules
+            # Submodules
             git submodule foreach --recursive '
               echo ""
               echo ">>> Submodule: $name at $sm_path"
@@ -177,4 +172,5 @@ jobs:
               fi
             '
           done
+
 
