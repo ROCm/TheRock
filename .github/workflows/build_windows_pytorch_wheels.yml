@@ -164,13 +164,13 @@ jobs:
             fi
 
             # Ensure worktree is clean (remove stray/untracked)
-            ( cd "$sm" && git reset --hard && git clean -fdx )
+            # ( cd "$sm" && git reset --hard && git clean -fdx )
 
             # Re-verify this submodule only
             if ( cd "$sm" && test -z "$(git status --porcelain -u --ignore-submodules=all)" ); then
               echo "Healed $sm"
             else
-              echo "Still DIRTY ❌ $sm"
+              echo "Still DIRTY $sm"
               STILL_BAD=1
             fi
           done
