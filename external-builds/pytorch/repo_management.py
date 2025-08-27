@@ -215,36 +215,17 @@ def commit_hipify(args: argparse.Namespace):
     # Iterate over the base repository and all submodules. Because we process
     # the root repo first, it will not add submodule changes.
     all_paths = get_all_repositories(repo_dir)
-
     for module_path in all_paths:
         status = list_status(module_path)
         if not status:
             continue
-
         print(f"HIPIFY made changes to {module_path}: Committing")
-
-        subprocess.run(["git", "add", "-A"], cwd=module_path)
-
-        # Run commit but don’t fail CI if nothing to commit
-        result = subprocess.run(
+        exec(["git", "add", "-A"], cwd=module_path)
+        exec(
             ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
             cwd=module_path,
         )
-
-        if result.returncode == 0:
-            print(f"Committed HIPIFY changes in {module_path}")
-        elif result.returncode == 1:
-            print(f"No changes to commit in {module_path} (continuing)")
-        else:
-            print(
-                f"WARNING: git commit in {module_path} failed with exit code {result.returncode} (continuing)"
-            )
-
-        # Always try to tag, even if commit didn’t happen
-        subprocess.run(
-            ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"],
-            cwd=module_path,
-        )
+        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
 
 #  Helper
@@ -258,7 +239,9 @@ def enable_longpaths_for_all_repos(repo_dir: Path):
             print(f"WARNING: could not enable longpaths in {path}")
 
 
-def heal_submodules_force_checkout(repo_dir: Path, *, jobs: int = 1, depth: int | None = None):
+def heal_submodules_force_checkout(
+    repo_dir: Path, *, jobs: int = 1, depth: int | None = None
+):
     """
     For each submodule that is DIRTY (files deleted/modified/untracked), try to heal it by
     forcing a checkout of the recorded commit.
@@ -300,12 +283,24 @@ def heal_submodules_force_checkout(repo_dir: Path, *, jobs: int = 1, depth: int 
         print(f"[heal] {rel}: forcing checkout (shallow first)")
         # Ensure it exists
         try:
-            subprocess.check_call(["git", "submodule", "update", "--init", "--", str(rel)], cwd=str(repo_dir))
+            subprocess.check_call(
+                ["git", "submodule", "update", "--init", "--", str(rel)],
+                cwd=str(repo_dir),
+            )
         except subprocess.CalledProcessError as e:
             print(f"  init failed for {rel}: rc={e.returncode}")
 
         # Try shallow force-checkout if depth provided
-        cmd = ["git", "submodule", "update", "--force", "--checkout", "--recursive", "-j", str(jobs)]
+        cmd = [
+            "git",
+            "submodule",
+            "update",
+            "--force",
+            "--checkout",
+            "--recursive",
+            "-j",
+            str(jobs),
+        ]
         if depth is not None:
             cmd += ["--depth", str(depth)]
         cmd += ["--", str(rel)]
@@ -313,7 +308,18 @@ def heal_submodules_force_checkout(repo_dir: Path, *, jobs: int = 1, depth: int 
         if rc != 0:
             print(f"  shallow update failed for {rel} (rc={rc}); retrying full depth")
             rc = subprocess.call(
-                ["git", "submodule", "update", "--force", "--checkout", "--recursive", "-j", str(jobs), "--", str(rel)],
+                [
+                    "git",
+                    "submodule",
+                    "update",
+                    "--force",
+                    "--checkout",
+                    "--recursive",
+                    "-j",
+                    str(jobs),
+                    "--",
+                    str(rel),
+                ],
                 cwd=str(repo_dir),
             )
 
@@ -377,7 +383,9 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     heal_submodules_force_checkout(
         repo_dir,
         jobs=(args.jobs if hasattr(args, "jobs") and args.jobs else 1),
-        depth=(args.depth if hasattr(args, "depth") and args.depth is not None else None),
+        depth=(
+            args.depth if hasattr(args, "depth") and args.depth is not None else None
+        ),
     )
 
     # === Ensure longpaths everywhere ===
