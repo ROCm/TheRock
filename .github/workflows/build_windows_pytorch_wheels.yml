@@ -173,16 +173,18 @@ jobs:
                 echo "--- git status warnings (submodule) ---"
                 git status 2>&1 | grep "could not open directory" || true
 
-                if [ -d "onnx/backend/test/data/node" ]; then
+                test_path="onnx/backend/test/data/node"
+                if [ -d "$test_path" ]; then
                   echo "--- Checking ONNX test data in submodule $sm ---"
-                  # (No python -c here to avoid nested quoting issues)
-                  find onnx/backend/test/data/node -type f | head -10 | while read -r sp; do
+                  find "$test_path" -type f | head -10 | while read -r sp; do
                     echo "Checking: $sp"
                     [ -f "$sp" ] && echo "  Exists OK" || echo "  Missing"
                     git ls-files --error-unmatch "$sp" >/dev/null 2>&1 \
                       && echo "  Tracked by Git OK" \
                       || echo "  Not tracked by Git"
                   done
+                else
+                  echo "No ONNX test data dir in $sm (looked for: $test_path)"
                 fi
               )
             done < /tmp/submods.txt
