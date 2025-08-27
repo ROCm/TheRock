@@ -173,7 +173,7 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Matrix creation logic based on PR, push or workflow_dispatch
+# Matrix creation logic based on PR, push, or workflow_dispatch
 # --------------------------------------------------------------------------- #
 
 
@@ -186,7 +186,7 @@ def get_pr_labels(args) -> List[str]:
     return labels
 
 
-def filter_known_target_names(requested_target_names: List[str]):
+def filter_known_target_names(requested_target_names: List[str]) -> List[str]:
     """Filters a requested target names list down to known target names."""
     target_names = []
     for target_name in requested_target_names:
@@ -196,6 +196,10 @@ def filter_known_target_names(requested_target_names: List[str]):
 
         if target_name in amdgpu_family_info_matrix_all:
             target_names.append(target_name)
+        else:
+            print(
+                f"WARNING: unknown target name '{target_name}' not found in matrix:\n{amdgpu_family_info_matrix_all}"
+            )
 
     return target_names
 

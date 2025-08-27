@@ -17,6 +17,9 @@ class ConfigureCITest(unittest.TestCase):
                 any(entry.get("expect_failure") for entry in target_output)
             )
 
+    ###########################################################################
+    # Tests for should_ci_run_given_modified_paths
+
     def test_run_ci_if_source_file_edited(self):
         paths = ["source_file.h"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
@@ -57,6 +60,15 @@ class ConfigureCITest(unittest.TestCase):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
+
+    ###########################################################################
+    # Tests for matrix_generator and helper functions
+
+    def test_filter_known_target_names(self):
+        requested_target_names = ["gfx110X", "abcdef"]
+        target_names = configure_ci.filter_known_target_names(requested_target_names)
+        self.assertIn("gfx110x", target_names)
+        self.assertNotIn("abcdef", target_names)
 
     def test_valid_linux_workflow_dispatch_matrix_generator(self):
         build_families = {"amdgpu_families": "   gfx94X , gfx103X"}
