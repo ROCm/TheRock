@@ -191,13 +191,6 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 96
 
-      - name: Checkout closed source AMDGPU/ROCm interop library folder
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          repository: nod-ai/amdgpu-windows-interop
-          path: amdgpu-windows-interop
-          lfs: true
-
       - name: Configure Projects
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
