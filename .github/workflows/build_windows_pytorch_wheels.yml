@@ -148,8 +148,7 @@ jobs:
 
             if [ -d "third_party/onnx/backend/test/data/node" ]; then
               echo "--- Checking ONNX test data files ---"
-              find third_party/onnx/backend/test/data/node -type f | head -20 > /tmp/test_files.txt
-              while read -r path; do
+              find third_party/onnx/backend/test/data/node -type f | head -20 | while read -r path; do
                 echo "Checking: $path"
 
                 if [ -f "$path" ]; then
@@ -158,12 +157,8 @@ jobs:
                   echo "  Missing ❌"
                 fi
 
-                # Inline Python with safe heredoc
-                python - "$path" <<EOF
-import os, sys
-p = sys.argv[1]
-print(f"  Path length: {len(os.path.abspath(p))}")
-EOF
+                # Inline Python (no temp files)
+                python -c "import os,sys; p=sys.argv[1]; print(f'  Path length: {len(os.path.abspath(p))}') " "$path" || true
 
                 if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
                   echo "  Tracked by Git ✅"
@@ -176,6 +171,6 @@ EOF
                 else
                   echo "  Not tracked by Git ❌"
                 fi
-              done < /tmp/test_files.txt
+              done
             fi
           done
