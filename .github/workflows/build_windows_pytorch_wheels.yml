@@ -142,6 +142,24 @@ jobs:
             echo "--- git status warnings (top-level) ---"
             git status 2>&1 | grep "could not open directory" || true
 
+            echo ""
+            echo "--- Top-level ONNX scan ---"
+            test_path="onnx/backend/test/data/node"
+            if [ -d "$test_path" ]; then
+              echo "--- Checking ONNX test data in $repo ---"
+              (
+                find "$test_path" -type f | head -10 | while read -r path; do
+                  echo "Checking: $path"
+                  [ -f "$path" ] && echo "  Exists OK" || echo "  Missing"
+                  git ls-files --error-unmatch "$path" >/dev/null 2>&1 \
+                    && echo "  Tracked by Git OK" \
+                    || echo "  Not tracked by Git"
+                done
+              ) || true   # prevent SIGPIPE from killing CI
+            else
+              echo "No ONNX test data dir in $repo (looked for: $test_path)"
+            fi
+
             if [ -d "onnx/backend/test/data/node" ]; then
               echo "--- Checking ONNX test data in $repo ---"
               find onnx/backend/test/data/node -type f | head -10 | while read -r path; do
@@ -176,13 +194,15 @@ jobs:
                 test_path="onnx/backend/test/data/node"
                 if [ -d "$test_path" ]; then
                   echo "--- Checking ONNX test data in submodule $sm ---"
-                  find "$test_path" -type f | head -10 | while read -r sp; do
-                    echo "Checking: $sp"
-                    [ -f "$sp" ] && echo "  Exists OK" || echo "  Missing"
-                    git ls-files --error-unmatch "$sp" >/dev/null 2>&1 \
-                      && echo "  Tracked by Git OK" \
-                      || echo "  Not tracked by Git"
-                  done
+                  (
+                    find "$test_path" -type f | head -10 | while read -r sp; do
+                      echo "Checking: $sp"
+                      [ -f "$sp" ] && echo "  Exists OK" || echo "  Missing"
+                      git ls-files --error-unmatch "$sp" >/dev/null 2>&1 \
+                        && echo "  Tracked by Git OK" \
+                        || echo "  Not tracked by Git"
+                    done
+                  ) || true   # prevent SIGPIPE from killing CI
                 else
                   echo "No ONNX test data dir in $sm (looked for: $test_path)"
                 fi
