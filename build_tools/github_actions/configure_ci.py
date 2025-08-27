@@ -298,6 +298,7 @@ def main(base_args, linux_families, windows_families):
     print(f"  is_push: {is_push}")
     print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
     print(f"  is_pull_request: {is_pull_request}")
+    print("")
 
     print(f"Generating build matrix for Linux: {str(linux_families)}")
     linux_target_output = matrix_generator(
@@ -309,8 +310,9 @@ def main(base_args, linux_families, windows_families):
         linux_families,
         platform="linux",
     )
+    print("")
 
-    print(f"Generating test matrix for Windows: {str(windows_families)}")
+    print(f"Generating build matrix for Windows: {str(windows_families)}")
     windows_target_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
@@ -320,6 +322,7 @@ def main(base_args, linux_families, windows_families):
         windows_families,
         platform="windows",
     )
+    print("")
 
     # In the case of a scheduled run, we always want to build
     if is_schedule:
