@@ -99,14 +99,14 @@ test_matrix = {
     "rocfft": {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         "platform": ["linux", "windows"],
     },
     "hipfft": {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipfft.py')}",
         "platform": ["linux", "windows"],
     },

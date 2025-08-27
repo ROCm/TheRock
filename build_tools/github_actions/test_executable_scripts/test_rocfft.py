@@ -14,7 +14,7 @@ cmd = [
     f"{THEROCK_BIN_DIR}/rocfft-test",
     "--gtest_filter=-*multi_gpu*",
     "--test_prob",
-    "0.002"
+    "0.01"
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
