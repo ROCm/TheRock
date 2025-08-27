@@ -85,6 +85,7 @@ jobs:
           git config --system core.protectNTFS false
           git config --global core.precomposeunicode true
           git config --global core.longpaths true
+          git config --system core.longpaths true
 
       - name: Configure Git Identity
         run: |
