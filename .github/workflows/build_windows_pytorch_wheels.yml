@@ -129,70 +129,111 @@ jobs:
 
           echo "=== Scan submodules for DIRTY status ==="
           TFILE="$(mktemp)"
-          # Collect DIRTY submodules into $TFILE; print a concise status line for each.
+          CLEAN_CNT=0
+          DIRTY_CNT=0
+
+          # Initial pass: print name/path/commit and status for EVERY submodule.
           git submodule foreach --recursive '
+            short_commit="$(git rev-parse --short=12 HEAD 2>/dev/null || echo "????????????")"
             st="$(git status --porcelain -u --ignore-submodules=all || true)"
+            # $name and $sm_path are provided by "git submodule foreach"
+            echo ""
+            echo ">>> Submodule: $name"
+            echo "    Path   : $sm_path"
+            echo "    Commit : $short_commit"
             if [ -n "$st" ]; then
-              echo "DIRTY  $sm_path"
+              echo "    Status : DIRTY"
               echo "$sm_path" >> "$tfile"
+              echo "    Diff   :"
+              echo "$st" | sed "s/^/      /"
             else
-              echo "CLEAN  $sm_path"
+              echo "    Status : CLEAN"
             fi
           ' tfile="$TFILE"
 
-          if [ ! -s "$TFILE" ]; then
-            echo "All submodules are clean"
-            rm -f "$TFILE"
+          # Build list of DIRTY submodules (if any)
+          if [ -s "$TFILE" ]; then
+            mapfile -t DIRTY_LIST < "$TFILE"
+            DIRTY_CNT="${#DIRTY_LIST[@]}"
+          else
+            DIRTY_LIST=()
+            DIRTY_CNT=0
+          fi
+          rm -f "$TFILE"
+
+          echo ""
+          echo "=== Summary after initial scan ==="
+          # Count cleans by subtracting from total
+          TOTAL_SUBMODS="$(git submodule status --recursive | wc -l || echo 0)"
+          CLEAN_CNT=$(( TOTAL_SUBMODS - DIRTY_CNT ))
+          echo "Total submodules : $TOTAL_SUBMODS"
+          echo "CLEAN            : $CLEAN_CNT"
+          echo "DIRTY            : $DIRTY_CNT"
+
+          # Nothing to heal
+          if [ "$DIRTY_CNT" -eq 0 ]; then
+            echo "All submodules are clean."
             exit 0
           fi
 
           echo ""
           echo "=== Attempting self-heal for DIRTY submodules ==="
-          mapfile -t DIRTY_LIST < "$TFILE"
-          rm -f "$TFILE"
-
+          STILL_BAD=0
           for sm in "${DIRTY_LIST[@]}"; do
             echo ""
             echo ">>> Healing: $sm"
-            # Make sure the directory exists (init if missing)
+            # Ensure the submodule dir exists and is initialized
             git submodule update --init -- "$sm"
 
-            # Try a clean forced checkout of the recorded commit (shallow first, then full)
+            # Force checkout the recorded commit (shallow retry -> full)
             if ! git submodule update --force --checkout --recursive -j 1 --depth 1 -- "$sm"; then
               echo "Shallow update failed for $sm; retrying without --depth"
               git submodule update --force --checkout --recursive -j 1 -- "$sm"
             fi
 
-            # Ensure worktree is clean (remove stray/untracked)
-            # ( cd "$sm" && git reset --hard && git clean -fdx )
+            # Clean any untracked/ignored clutter in that submodule
+            ( cd "$sm" && git reset --hard && git clean -fdx )
 
-            # Re-verify this submodule only
-            if ( cd "$sm" && test -z "$(git status --porcelain -u --ignore-submodules=all)" ); then
-              echo "Healed $sm"
-            else
-              echo "Still DIRTY $sm"
-              STILL_BAD=1
-            fi
+            # Re-verify this submodule only (print status again)
+            (
+              cd "$sm"
+              short_commit="$(git rev-parse --short=12 HEAD 2>/dev/null || echo "????????????")"
+              st="$(git status --porcelain -u --ignore-submodules=all || true)"
+              echo "    After heal - Commit : $short_commit"
+              if [ -z "$st" ]; then
+                echo "    After heal - Status : CLEAN "
+              else
+                echo "    After heal - Status : DIRTY "
+                echo "$st" | sed "s/^/      /"
+                STILL_BAD=1
+              fi
+            )
           done
 
           echo ""
           echo "=== Final verification pass (all submodules) ==="
           BAD=0
           git submodule foreach --recursive '
+            short_commit="$(git rev-parse --short=12 HEAD 2>/dev/null || echo "????????????")"
             st="$(git status --porcelain -u --ignore-submodules=all || true)"
+            echo ""
+            echo ">>> Submodule: $name"
+            echo "    Path   : $sm_path"
+            echo "    Commit : $short_commit"
             if [ -n "$st" ]; then
-              echo "DIRTY (post-heal)  $sm_path"
-              echo "$st"
+              echo "    Status : DIRTY (post-heal)"
+              echo "$st" | sed "s/^/      /"
               exit 10
             else
-              echo "CLEAN (post-heal)  $sm_path"
+              echo "    Status : CLEAN (post-heal)"
             fi
           ' || BAD=$?
 
+          echo ""
+          echo "=== Final summary ==="
           if [ "${STILL_BAD:-0}" -ne 0 ] || [ "$BAD" -ne 0 ]; then
             echo "::error::Some submodules remain DIRTY after forced checkout."
             exit 1
           fi
-
-          echo "All targeted submodules healed and clean"
+          echo "All targeted submodules healed and clean."
 
