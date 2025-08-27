@@ -158,12 +158,13 @@ jobs:
                   echo "  Missing ❌"
                 fi
 
-                # Run inline Python properly
-                python - "$path" <<'PYCODE'
-                  import os, sys
-                  p = sys.argv[1]
-                  print(f"  Path length: {len(os.path.abspath(p))}")
-                PYCODE
+                # Inline Python with safe heredoc
+                python - "$path" <<EOF
+import os, sys
+p = sys.argv[1]
+print(f"  Path length: {len(os.path.abspath(p))}")
+EOF
+
                 if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
                   echo "  Tracked by Git ✅"
                   ATTRS=$(git check-attr filter -- "$path" || true)
