@@ -204,6 +204,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      always_upload: ${{ steps.configure.outputs.always_upload }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
