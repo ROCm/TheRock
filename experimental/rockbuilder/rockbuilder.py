@@ -401,6 +401,20 @@ def verify_build_env(args, rock_builder_home_dir: Path, rock_builder_build_dir: 
                 folder_path = folder_path.resolve()
                 os.environ["ROCK_BUILDER_BITCODE_HOME"] = folder_path.as_posix()
                 break
+            # find hipcc
+            if is_posix:
+                hipcc_exec_name = "hipcc"
+            else:
+                hipcc_exec_name = "hipcc.bat"
+            for folder_path in Path(rocm_home_root_path).glob("**/" + hipcc_exec_name):
+                hipcc_home = folder_path.parent
+                # make sure that we found bin/clang and not clang folder
+                if hipcc_home.name.lower() == "bin":
+                    hipcc_home = hipcc_home.parent
+                    if hipcc_home.is_dir():
+                        hipcc_home = hipcc_home.resolve()
+                        os.environ["ROCK_BUILDER_HIPCC_HOME"] = hipcc_home.as_posix()
+                        break
             # find clang
             if is_posix:
                 clang_exec_name = "clang"
