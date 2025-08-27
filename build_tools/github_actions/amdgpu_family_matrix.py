@@ -79,3 +79,9 @@ amdgpu_family_info_matrix_nightly = {
         }
     },
 }
+
+amdgpu_family_info_matrix_all = (
+    amdgpu_family_info_matrix_presubmit
+    | amdgpu_family_info_matrix_postsubmit
+    | amdgpu_family_info_matrix_nightly
+)
