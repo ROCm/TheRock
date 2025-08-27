@@ -1,7 +1,11 @@
 """
-This AMD GPU Family Matrix is the "source of truth" for GitHub workflows, indicating which families and test runners are available to use
+This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
+
+* Each entry determines which families and test runners are available to use
+* Each group determines which entries run by default on workflow triggers
 """
 
+# The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
@@ -21,6 +25,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
 }
 
+# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
@@ -50,19 +55,20 @@ amdgpu_family_info_matrix_postsubmit = {
     },
 }
 
-amdgpu_family_matrix_xfail = {
+# The 'nightly' matrix runs on 'schedule' triggers.
+amdgpu_family_info_matrix_nightly = {
     "gfx90x": {
         "linux": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
-            "expect_failure": True,
+            "expect_failure": False,
         }
     },
     "gfx101x": {
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": True,
+            "expect_failure": False,
         }
     },
     "gfx103x": {

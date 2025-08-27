@@ -48,7 +48,7 @@ import string
 from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
     amdgpu_family_info_matrix_postsubmit,
-    amdgpu_family_matrix_xfail,
+    amdgpu_family_info_matrix_nightly,
 )
 
 from github_actions_utils import *
@@ -208,65 +208,72 @@ def matrix_generator(
     platform="linux",
 ):
     """Parses and generates build matrix with build requirements"""
-    targets = []
-    matrix = amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
 
-    # For the specific event trigger, parse linux and windows target information
-    # if the trigger is a workflow_dispatch, parse through the inputs and retrieve the list
+    targets = []
+    all_targets_matrix = (
+        amdgpu_family_info_matrix_presubmit
+        | amdgpu_family_info_matrix_postsubmit
+        | amdgpu_family_info_matrix_nightly
+    )
+
+    # Populate targets based on the trigger. Targets will be filtered by platform afterwards.
+
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
-        # For workflow dispatch, user can select an "expect_failure" family or regular family
-        matrix = matrix | amdgpu_family_matrix_xfail
 
+        # Parse inputs into a targets list.
         input_gpu_targets = families.get("amdgpu_families")
-
         # Sanitizing the string to remove any punctuation from the input
         # After replacing punctuation with spaces, turning string input to an array
         # (ex: ",gfx94X ,|.gfx1201" -> "gfx94X   gfx1201" -> ["gfx94X", "gfx1201"])
         translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
         potential_targets = input_gpu_targets.translate(translator).split()
-        targets.extend(discover_targets(potential_targets, matrix))
 
-    # if the trigger is a pull_request label, parse through the labels and retrieve the list
+        targets.extend(discover_targets(potential_targets, all_targets_matrix))
+
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
+
+        # Add presubmit targets.
+        for target in amdgpu_family_info_matrix_presubmit:
+            targets.append(target)
+
+        # Extend with any additional targets that PR labels opt-in to testing.
         potential_targets = []
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
             if "gfx" in label:
                 target, _ = label.split("-")
                 potential_targets.append(target)
-        targets.extend(discover_targets(potential_targets, matrix))
-
-        # Add the presubmit targets
-        for target in amdgpu_family_info_matrix_presubmit:
-            targets.append(target)
+        targets.extend(discover_targets(potential_targets, all_targets_matrix))
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
-        # Add all options except for families that allow failures
-        for key in matrix:
-            targets.append(key)
+
+        # Add presubmit and postsubmit targets.
+        for target in (
+            amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+        ):
+            targets.append(target)
 
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
-        # For schedule runs, we will run build and tests for only expect_failure families
-        matrix = matrix | amdgpu_family_matrix_xfail
 
-        # Add all options that allow failures
-        for key in amdgpu_family_matrix_xfail:
+        # Add _only_ nightly targets.
+        for key in amdgpu_family_info_matrix_nightly:
             targets.append(key)
+
+    target_output = []
 
     # Ensure the targets in the list are unique
     unique_targets = list(set(targets))
 
-    target_output = []
+    # Filter targets to only those matching the requested platform.
     for target in unique_targets:
-        if platform in matrix.get(target):
-            target_output.append(matrix.get(target).get(platform))
+        if platform in all_targets_matrix.get(target):
+            target_output.append(all_targets_matrix.get(target).get(platform))
 
     print(f"Generated build matrix: {str(target_output)}")
-
     return target_output
 
 
