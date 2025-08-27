@@ -122,7 +122,7 @@ jobs:
             --repo ${{ env.CHECKOUT_ROOT }}/vision \
             --repo-hashtag main
 
-      - name: Diagnose missing files + auto-fix with LFS
+      - name: Diagnose missing files
         shell: bash
         run: |
           echo "=== Running Git diagnostics across all repos (including submodules) ==="
@@ -146,29 +146,24 @@ jobs:
               echo "--- Checking ONNX test data in $repo ---"
               find onnx/backend/test/data/node -type f | head -10 | while read -r path; do
                 echo "Checking: $path"
-                [ -f "$path" ] && echo "  Exists ✅" || echo "  Missing ❌"
-                python -c "import os,sys; p=sys.argv[1]; print(f'  Path length: {len(os.path.abspath(p))}')" "$path" || true
-                git ls-files --error-unmatch "$path" >/dev/null 2>&1 && echo "  Tracked by Git ✅" || echo "  Not tracked by Git ❌"
+                [ -f "$path" ] && echo "  Exists OK" || echo "  Missing"
+                python -c "import os,sys; p=sys.argv[1]; import pathlib; print('  Path length:', len(str(pathlib.Path(p).resolve())))" "$path" || true
+                git ls-files --error-unmatch "$path" >/dev/null 2>&1 && echo "  Tracked by Git OK" || echo "  Not tracked by Git"
               done
             fi
 
-            # Submodules (use here-doc to avoid parsing issues)
-            git submodule foreach --recursive bash <<'EOS'
-              echo ""
-              echo ">>> Submodule: $name at $sm_path"
-              cd "$sm_path"
-
-              echo "--- git status warnings (submodule) ---"
-              git status 2>&1 | grep "could not open directory" || true
-
-              if [ -d "onnx/backend/test/data/node" ]; then
-                echo "--- Checking ONNX test data in submodule $sm_path ---"
-                find onnx/backend/test/data/node -type f | head -10 | while read -r path; do
-                  echo "Checking: $path"
-                  [ -f "$path" ] && echo "  Exists ✅" || echo "  Missing ❌"
-                  python -c "import os,sys; p=sys.argv[1]; print(f'  Path length: {len(os.path.abspath(p))}')" "$path" || true
-                  git ls-files --error-unmatch "$path" >/dev/null 2>&1 && echo "  Tracked by Git ✅" || echo "  Not tracked by Git ❌"
-                done
-              fi
-            EOS
+            # Recurse into submodules - single-quoted command string for foreach
+            git submodule foreach --recursive 'echo ""; \
+              echo ">>> Submodule: $name at $sm_path"; \
+              echo "--- git status warnings (submodule) ---"; \
+              git status 2>&1 | grep "could not open directory" || true; \
+              if [ -d "onnx/backend/test/data/node" ]; then \
+                echo "--- Checking ONNX test data in submodule $sm_path ---"; \
+                find onnx/backend/test/data/node -type f | head -10 | while read -r path; do \
+                  echo "Checking: $path"; \
+                  [ -f "$path" ] && echo "  Exists OK" || echo "  Missing"; \
+                  python -c "import os,sys; p=sys.argv[1]; import pathlib; print('  Path length:', len(str(pathlib.Path(p).resolve())))" "$path" || true; \
+                  git ls-files --error-unmatch "$path" >/dev/null 2>&1 && echo "  Tracked by Git OK" || echo "  Not tracked by Git"; \
+                done; \
+              fi'
           done
