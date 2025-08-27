@@ -70,8 +70,8 @@ def create_deb_package(pkg_name, config: PackageConfig):
     """
 
     # Create package contents in DEB/pkg_name/install_prefix folder
-    package_dir = f"{DEBIAN_CONTENTS_DIR}/{pkg_name}"
-    deb_dir = f"{package_dir}/debian"
+    package_dir = Path(DEBIAN_CONTENTS_DIR) / pkg_name
+    deb_dir = package_dir / "debian"
     # Create package directory and debian directory
     os.makedirs(deb_dir, exist_ok=True)
 
@@ -92,14 +92,13 @@ def create_deb_package(pkg_name, config: PackageConfig):
         dir_list = filter_components_fromartifactory(pkg, config.gfx_arch)
         sourcedir_list.extend(dir_list)
 
-    dest_dir = f"{package_dir}/{config.install_prefix}"
+    dest_dir = package_dir / Path(config.install_prefix).relative_to("/")
     for source_path in sourcedir_list:
         print(source_path)
         copy_package_contents(source_path, dest_dir)
 
     if config.enable_rpath:
-        print("ENABLE RPATH")
-        subprocess.run(["python3", "runpath_to_rpath.py", package_dir])
+        convert_runpath_to_rpath(package_dir)
 
     package_with_dpkg_deb(package_dir)
 
@@ -312,6 +311,7 @@ def package_with_dpkg_deb(pkg_dir):
         print("Package built successfully.")
     except subprocess.CalledProcessError as e:
         print("Error building package:", e)
+        sys.exit(e.returncode)
 
     os.chdir(current_dir)
 
@@ -341,7 +341,7 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     )
     # Move each file to the target directory
     for file_path in rpm_files:
-        dest_file = f"{config.pkg_dir}/{os.path.basename(file_path)}"
+        dest_file = Path(config.pkg_dir) / Path(file_path).name
         if os.path.exists(dest_file):
             os.remove(dest_file)
         shutil.move(file_path, config.pkg_dir)
@@ -388,9 +388,8 @@ def generate_spec_file(pkginfo, specfile, config: PackageConfig):
     sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
 
     if config.enable_rpath:
-        print("ENABLE RPATH")
         for path in sourcedir_list:
-            subprocess.run(["python3", "runpath_to_rpath.py", path])
+            convert_runpath_to_rpath(path)
 
     env = Environment(loader=FileSystemLoader("."))
     template = env.get_template("template/rpm_specfile.j2")
@@ -433,9 +432,35 @@ def package_with_rpmbuild(spec_file):
         print("RPM build completed successfully.")
     except subprocess.CalledProcessError as e:
         print("RPM build failed:", e)
+        sys.exit(e.returncode)
 
 
 ############### Common functions for packaging ##################
+def convert_runpath_to_rpath(package_dir):
+    """Function will invoke runpath_to_rpath.py script.
+    Convert the RUNPATH in binaries and libraries to RPATH
+
+    Parameters:
+    package_dir : Package contents directory
+
+    Returns: None
+    """
+
+    print("Convert RUNPATH to RPATH")
+    try:
+        subprocess.run(["python3", "runpath_to_rpath.py", package_dir], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: Script failed with exit code {e.returncode}")
+        print(f"Command: {e.cmd}")
+        sys.exit(e.returncode)
+    except FileNotFoundError as e:
+        print(f"Error: Python or script not found. Check your paths. {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        sys.exit(1)
+
+
 def update_package_name(pkg_name, config: PackageConfig):
     """Function will update package name by adding suffix.
     rocmversion, -rpath or gfxarch will be added based on conditions
@@ -520,8 +545,11 @@ def filter_components_fromartifactory(pkg, gfx_arch):
         artifact_suffix = "generic"
 
     for component in component_list:
-        source_dir = f"{ARTIFACTS_DIR}/{artifact_prefix}_{component}_{artifact_suffix}"
-        filename = f"{source_dir}/artifact_manifest.txt"
+        source_dir = (
+            Path(ARTIFACTS_DIR) / f"{artifact_prefix}_{component}_{artifact_suffix}"
+        )
+        filename = source_dir / "artifact_manifest.txt"
+
         with open(filename, "r") as file:
             for line in file:
                 if (
@@ -531,7 +559,7 @@ def filter_components_fromartifactory(pkg, gfx_arch):
                     or pkg.replace("-dev", "") in line
                 ):
                     print("Matching line:", line.strip())
-                    source_path = f"{source_dir}/{line.strip()}"
+                    source_path = source_dir / line.strip()
                     sourcedir_list.append(source_path)
 
     print(sourcedir_list)
@@ -612,6 +640,47 @@ def parse_input_package_list(pkg_name):
     return pkg_list
 
 
+def download_and_extract_artifacts(run_id, gfxarch):
+    """Function will invoke fetch_artifacts.py
+    Download the entire artifacts and extract it
+
+    Parameters:
+    run_id : Flag to clean artifacts download directory
+    gfxarch: Graphics architecture
+
+    Returns: None
+    """
+    gfxarch_params = gfxarch + "-dcgpu"
+
+    try:
+        subprocess.run(
+            [
+                "python3",
+                "../../fetch_artifacts.py",
+                "--run-id",
+                run_id,
+                "--target",
+                gfxarch_params,
+                "--extract",
+                "--all",
+                "--output-dir",
+                ARTIFACTS_DIR,
+            ],
+            check=True,
+        )
+        print("Artifacts fetched successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error: Artifacts fetch failed with exit code {e.returncode}")
+        print(f"Command: {e.cmd}")
+        sys.exit(e.returncode)
+    except FileNotFoundError as e:
+        print("Error: Python or script not found. Check your paths. {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        sys.exit(1)
+
+
 def clean_artifacts_dir(clean_all):
     """Clean the artifacts directory
 
@@ -666,37 +735,7 @@ def run(args: argparse.Namespace):
     pkg_list = parse_input_package_list(args.pkg_names)
     # Download and extract the required artifacts
     run_id = extract_build_id(args.artifact_url)
-    gfxarch_params = gfxarch + "-dcgpu"
-
-    try:
-        subprocess.run(
-            [
-                "python3",
-                "../../fetch_artifacts.py",
-                "--run-id",
-                run_id,
-                "--target",
-                gfxarch_params,
-                "--extract",
-                "--all",
-                "--output-dir",
-                ARTIFACTS_DIR,
-            ]
-        )
-        print("Artifacts fetched successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error: Command failed with exit code {e.returncode}")
-        print(f"Command: {e.cmd}")
-    except FileNotFoundError:
-        print("Error: Python or script not found. Check your paths.")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-
-    # Using fetch_artiifacts.py from current folder.
-    # Commented for time being and use the one provided by build_tools
-    #    for pkg_name in pkg_list:
-    #        download_and_extract_artifacts(str(artifact_url), pkg_name, gfxarch)
-
+    download_and_extract_artifacts(run_id, gfxarch)
     # Create deb/rpm packages
     package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
     for pkg_name in pkg_list:
