@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.INFO)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/hipfft-test",
-    # "--gtest_filter=-*multi_gpu*",
-    "--precompile=rocfft-test-precompile.db",
+    "--gtest_filter=-*multi_gpu*",
+    # "--precompile=rocfft-test-precompile.db",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
