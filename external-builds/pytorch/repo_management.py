@@ -209,22 +209,42 @@ def do_hipify(args: argparse.Namespace):
     if build_amd_path.exists():
         exec([sys.executable, build_amd_path], cwd=repo_dir)
 
+
 def commit_hipify(args: argparse.Namespace):
     repo_dir: Path = args.repo
     # Iterate over the base repository and all submodules. Because we process
     # the root repo first, it will not add submodule changes.
     all_paths = get_all_repositories(repo_dir)
+
     for module_path in all_paths:
         status = list_status(module_path)
         if not status:
             continue
+
         print(f"HIPIFY made changes to {module_path}: Committing")
-        exec(["git", "add", "-A"], cwd=module_path)
-        exec(
+
+        subprocess.run(["git", "add", "-A"], cwd=module_path)
+
+        # Run commit but don’t fail CI if nothing to commit
+        result = subprocess.run(
             ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
             cwd=module_path,
         )
-        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
+
+        if result.returncode == 0:
+            print(f"Committed HIPIFY changes in {module_path}")
+        elif result.returncode == 1:
+            print(f"No changes to commit in {module_path} (continuing)")
+        else:
+            print(
+                f"WARNING: git commit in {module_path} failed with exit code {result.returncode} (continuing)"
+            )
+
+        # Always try to tag, even if commit didn’t happen
+        subprocess.run(
+            ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"],
+            cwd=module_path,
+        )
 
 
 #  Helper
@@ -236,6 +256,88 @@ def enable_longpaths_for_all_repos(repo_dir: Path):
             exec(["git", "config", "core.longpaths", "true"], cwd=path)
         except subprocess.CalledProcessError:
             print(f"WARNING: could not enable longpaths in {path}")
+
+
+def heal_submodules_force_checkout(repo_dir: Path, *, jobs: int = 1, depth: int | None = None):
+    """
+    For each submodule that is DIRTY (files deleted/modified/untracked), try to heal it by
+    forcing a checkout of the recorded commit.
+    """
+    rel_paths = list_submodules(repo_dir, relative=True, recursive=True)
+    if not rel_paths:
+        print("No submodules to heal.")
+        return
+
+    def is_dirty(path: Path) -> bool:
+        try:
+            out = subprocess.check_output(
+                ["git", "status", "--porcelain", "-u", "--ignore-submodules=all"],
+                cwd=str(path),
+            ).decode()
+        except subprocess.CalledProcessError:
+            return True
+        return len(out.strip()) > 0
+
+    print("\n=== Healer: scanning submodules for DIRTY state ===")
+    any_dirty = False
+    for rel in rel_paths:
+        sm_abs = repo_dir / rel
+        state = "DIRTY" if is_dirty(sm_abs) else "CLEAN"
+        print(f"[scan] {rel} -> {state}")
+        if state == "DIRTY":
+            any_dirty = True
+
+    if not any_dirty:
+        print("All submodules already CLEAN; nothing to heal.")
+        return
+
+    print("\n=== Healer: attempting forced checkout on DIRTY submodules ===")
+    for rel in rel_paths:
+        sm_abs = repo_dir / rel
+        if not is_dirty(sm_abs):
+            continue
+
+        print(f"[heal] {rel}: forcing checkout (shallow first)")
+        # Ensure it exists
+        try:
+            subprocess.check_call(["git", "submodule", "update", "--init", "--", str(rel)], cwd=str(repo_dir))
+        except subprocess.CalledProcessError as e:
+            print(f"  init failed for {rel}: rc={e.returncode}")
+
+        # Try shallow force-checkout if depth provided
+        cmd = ["git", "submodule", "update", "--force", "--checkout", "--recursive", "-j", str(jobs)]
+        if depth is not None:
+            cmd += ["--depth", str(depth)]
+        cmd += ["--", str(rel)]
+        rc = subprocess.call(cmd, cwd=str(repo_dir))
+        if rc != 0:
+            print(f"  shallow update failed for {rel} (rc={rc}); retrying full depth")
+            rc = subprocess.call(
+                ["git", "submodule", "update", "--force", "--checkout", "--recursive", "-j", str(jobs), "--", str(rel)],
+                cwd=str(repo_dir),
+            )
+
+        # Recheck
+        if rc == 0 and not is_dirty(sm_abs):
+            print(f"[heal] {rel}: HEALED ")
+        else:
+            print(f"[heal] {rel}: STILL DIRTY  (rc={rc})")
+
+    print("\n=== Healer: final pass ===")
+    leftover = []
+    for rel in rel_paths:
+        if is_dirty(repo_dir / rel):
+            leftover.append(rel)
+            print(f"[final] {rel}: DIRTY ")
+        else:
+            print(f"[final] {rel}: CLEAN ")
+
+    if leftover:
+        print("Some submodules remain DIRTY after forced checkout:")
+        for rel in leftover:
+            print(f"  - {rel}")
+        # If you want CI to fail on leftovers, raise here:
+        # raise RuntimeError("Some submodules remain DIRTY after forced checkout.")
 
 
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
@@ -270,6 +372,13 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
+
+    # Heal any DIRTY submodules
+    heal_submodules_force_checkout(
+        repo_dir,
+        jobs=(args.jobs if hasattr(args, "jobs") and args.jobs else 1),
+        depth=(args.depth if hasattr(args, "depth") and args.depth is not None else None),
+    )
 
     # === Ensure longpaths everywhere ===
     enable_longpaths_for_all_repos(repo_dir)
