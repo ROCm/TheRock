@@ -122,90 +122,107 @@ jobs:
             --repo ${{ env.CHECKOUT_ROOT }}/vision \
             --repo-hashtag main
 
-      - name: Diagnose missing files
+      - name: Diagnose submodules 
         shell: bash
         run: |
-          echo "=== Running Git diagnostics across all repos (including submodules) ==="
+          echo "=== Diagnose submodules ==="
+          set -euo pipefail
 
-          REPOS="$CHECKOUT_ROOT/torch $CHECKOUT_ROOT/audio $CHECKOUT_ROOT/vision"
+          # Make sure submodules are at least initialized so we can inspect them
+          git config core.longpaths true || true
+          git submodule sync --recursive || true
+          git submodule update --init --recursive --jobs 8 || true
 
-          for repo in $REPOS; do
-            if [ ! -d "$repo/.git" ]; then
-              echo "Skipping $repo (not a git repo)"
+          SM_LIST_FILE="/tmp/submods.txt"
+          echo ""
+          echo "--- Collecting submodule status ---"
+          git submodule status --recursive > "$SM_LIST_FILE" || true
+
+          echo ""
+          echo ">>> Top-level repo: $(pwd)"
+          echo "--- git status (top-level, ignoring submodules) ---"
+          git status --porcelain -u --ignore-submodules || true
+
+          echo ""
+          echo "--- Top-level ONNX sample ---"
+          top_test_path="onnx/backend/test/data/node"
+          if [ -d "$top_test_path" ]; then
+            find "$top_test_path" -type f | head -10 | while read -r p; do
+              [ -f "$p" ] && echo "  Exists: $p" || echo "  Missing: $p"
+            done
+          else
+            echo "  No ONNX test data dir at $(pwd)/$top_test_path"
+          fi
+
+          echo ""
+          echo "--- Walking submodules (NO LFS checks) ---"
+          while read -r line; do
+            sha_raw=$(printf "%s\n" "$line" | awk '{print $1}')
+            sm_path=$(printf "%s\n" "$line" | awk '{print $2}')
+            [ -n "${sm_path:-}" ] || continue
+
+            echo ""
+            echo ">>> Submodule: $sm_path"
+
+            if [ ! -d "$sm_path" ]; then
+              echo "  ERROR: path missing"
               continue
             fi
 
-            echo ""
-            echo "===== Checking $repo ====="
-            cd "$repo"
-
-            echo "--- git status warnings (top-level) ---"
-            git status 2>&1 | grep "could not open directory" || true
-
-            echo ""
-            echo "--- Top-level ONNX scan ---"
-            test_path="onnx/backend/test/data/node"
-            if [ -d "$test_path" ]; then
-              echo "--- Checking ONNX test data in $repo ---"
-              (
-                find "$test_path" -type f | head -10 | while read -r path; do
-                  echo "Checking: $path"
-                  [ -f "$path" ] && echo "  Exists OK" || echo "  Missing"
-                  git ls-files --error-unmatch "$path" >/dev/null 2>&1 \
-                    && echo "  Tracked by Git OK" \
-                    || echo "  Not tracked by Git"
-                done
-              ) || true   # prevent SIGPIPE from killing CI
+            if (cd "$sm_path" && git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
+              :
             else
-              echo "No ONNX test data dir in $repo (looked for: $test_path)"
-            fi
-
-            if [ -d "onnx/backend/test/data/node" ]; then
-              echo "--- Checking ONNX test data in $repo ---"
-              find onnx/backend/test/data/node -type f | head -10 | while read -r path; do
-                echo "Checking: $path"
-                [ -f "$path" ] && echo "  Exists OK" || echo "  Missing"
-                python -c "import os,sys,pathlib; p=sys.argv[1]; print('  Path length:', len(str(pathlib.Path(p).resolve())))" "$path" || true
-                git ls-files --error-unmatch "$path" >/dev/null 2>&1 \
-                  && echo "  Tracked by Git OK" \
-                  || echo "  Not tracked by Git"
-              done
-            fi
-
-            echo ""
-            echo "--- Submodule list (recursive) ---"
-            # List submodules (paths are in column 2)
-            git submodule status --recursive | awk '{print $2}' > /tmp/submods.txt || true
-
-            while read -r sm; do
-              [ -z "$sm" ] && continue
-            if ! git -C "$sm" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-              echo ">>> Submodule $sm (not a work tree) — skipping"
+              echo "  ERROR: not a git work-tree (.git missing or invalid)"
               continue
             fi
 
-              echo ""
-              echo ">>> Submodule: $sm"
-              (
-                cd "$sm"
-                echo "--- git status warnings (submodule) ---"
-                git status 2>&1 | grep "could not open directory" || true
+            (
+              cd "$sm_path"
 
-                test_path="onnx/backend/test/data/node"
-                if [ -d "$test_path" ]; then
-                  echo "--- Checking ONNX test data in submodule $sm ---"
-                  (
-                    find "$test_path" -type f | head -10 | while read -r sp; do
-                      echo "Checking: $sp"
-                      [ -f "$sp" ] && echo "  Exists OK" || echo "  Missing"
-                      git ls-files --error-unmatch "$sp" >/dev/null 2>&1 \
-                        && echo "  Tracked by Git OK" \
-                        || echo "  Not tracked by Git"
-                    done
-                  ) || true   # prevent SIGPIPE from killing CI
-                else
-                  echo "No ONNX test data dir in $sm (looked for: $test_path)"
-                fi
-              )
-            done < /tmp/submods.txt
-          done
+              # Clean/dirty
+              dirty=$(git status --porcelain -u --ignore-submodules)
+              if [ -n "$dirty" ]; then
+                echo "  Status: DIRTY"
+                echo "$dirty"
+              else
+                echo "  Status: clean"
+              fi
+
+              # Commit alignment with recorded index
+              sha_expected="${sha_raw#[-+ ]}"
+              sha_expected="${sha_expected%% *}"
+              sha_actual=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+              case "$sha_raw" in
+                -*)
+                  echo "  WARNING: submodule not initialized or checkout incomplete (status='$sha_raw')"
+                  ;;
+                +*)
+                  echo "  NOTE: submodule commit differs from recorded index"
+                  echo "        expected: $sha_expected"
+                  echo "        actual  : $sha_actual"
+                  ;;
+                *)
+                  if [ -n "$sha_expected" ] && [ "$sha_expected" != "$sha_actual" ]; then
+                    echo "  WARNING: HEAD ($sha_actual) != expected ($sha_expected)"
+                  else
+                    echo "  Commit OK: $sha_actual"
+                  fi
+                  ;;
+              esac
+
+              # Small ONNX presence probe
+              test_path="onnx/backend/test/data/node"
+              if [ -d "$test_path" ]; then
+                echo "  ONNX sample in $sm_path:"
+                find "$test_path" -type f | head -5 | while read -r p; do
+                  [ -f "$p" ] && echo "    Exists: $p" || echo "    Missing: $p"
+                done
+              else
+                echo "  No ONNX test data dir in $sm_path (looked for: $test_path)"
+              fi
+            )
+          done < "$SM_LIST_FILE"
+
+          echo ""
+          echo "=== Diagnose submodules complete (NO LFS) ==="
