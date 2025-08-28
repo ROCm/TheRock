@@ -74,11 +74,11 @@ def get_upload_label(target: str, platform: str) -> str:
             )
             continue
 
-        # If there is no test machine available and always_upload flag is True for GPU family and platform, output always_upload as True
-        always_upload = platform_for_key.get("always_upload")
-        if always_upload:
-            print(f"  always_upload: True")
-            return always_upload
+        # If there is no test machine available and bypass_tests_for_releases flag is True for GPU family and platform, output bypass_tests_for_releases as True
+        bypass_tests_for_releases = platform_for_key.get("bypass_tests_for_releases")
+        if bypass_tests_for_releases:
+            print(f"  bypass_tests_for_releases: True")
+            return bypass_tests_for_releases
     return ""
 
 
@@ -88,7 +88,7 @@ def main(target: str, platform: str):
         gha_set_output({"test-runs-on": runner_label})
     upload_label = get_upload_label(target, platform)
     if upload_label:
-        gha_set_output({"always_upload": upload_label})
+        gha_set_output({"bypass_tests_for_releases": upload_label})
 
 
 if __name__ == "__main__":

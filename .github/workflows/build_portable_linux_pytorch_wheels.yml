@@ -130,7 +130,7 @@ jobs:
           if ! [ -x "${python_dir}/bin/python" ]; then
             echo "ERROR: Could not find python: ${python_dir}"
             exit 1
-            fi
+          fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
       # Github workflows do not have if/else and therefore we define two jobs with different if clauses.
@@ -204,7 +204,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
-      always_upload: ${{ steps.configure.outputs.always_upload }}
+      bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -259,7 +259,7 @@ jobs:
           BUILD_RESULT: ${{ needs.build_pytorch_wheels.result }}
           TEST_RESULT: ${{ needs.test_pytorch_wheels.result }}
           TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-          ALWAYS_UPLOAD: ${{ needs.generate_target_to_run.outputs.always_upload }}
+          BYPASS_TESTS_FOR_RELEASES: ${{ needs.generate_target_to_run.outputs.bypass_tests_for_releases }}
         run: |
           # 1) If the build failed → upload=false
           if [[ "$BUILD_RESULT" != "success" ]]; then
@@ -271,9 +271,9 @@ jobs:
             echo "::warning::Tests failed or were skipped (runner present). Skipping upload."
             echo "upload=false" >> "$GITHUB_ENV"
 
-          # 3) Else if ALWAYS_UPLOAD is not set and there was no test runner → upload=false
-          elif [[ -z "$ALWAYS_UPLOAD" && -z "$TEST_RUNS_ON" ]]; then
-            echo "::warning::No test runner and ALWAYS_UPLOAD not set. Skipping upload."
+          # 3) Else if BYPASS_TESTS_FOR_RELEASES is not set and there was no test runner → upload=false
+          elif [[ -z "$BYPASS_TESTS_FOR_RELEASES" && -z "$TEST_RUNS_ON" ]]; then
+            echo "::warning::No test runner and BYPASS_TESTS_FOR_RELEASES not set. Skipping upload."
             echo "upload=false" >> "$GITHUB_ENV"
 
           # 4) Otherwise → upload=true
