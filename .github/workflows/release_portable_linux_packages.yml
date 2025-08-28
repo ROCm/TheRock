@@ -11,11 +11,11 @@ on:
       package_suffix:
         type: string
       s3_subdir:
-        description: "Subdirectory to push the Python packages"
+        description: "Subdirectory to push the packages"
         type: string
         default: "v2"
       s3_staging_subdir:
-        description: "Staging subdirectory to push the Python packages"
+        description: "Staging subdirectory to push the packages"
         type: string
         default: "v2-staging"
   # Trigger manually (typically to test the workflow or manually build a release [candidate])
@@ -28,11 +28,11 @@ on:
       package_suffix:
         type: string
       s3_subdir:
-        description: "Subdirectory to push the Python packages"
+        description: "Subdirectory to push the packages"
         type: string
         default: "v2"
       s3_staging_subdir:
-        description: "Staging subdirectory to push the Python packages"
+        description: "Staging subdirectory to push the packages"
         type: string
         default: "v2-staging"
       families:
@@ -59,6 +59,7 @@ jobs:
       release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
+      cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -88,6 +89,7 @@ jobs:
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
           echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
+          echo "cloudfront_staging_url=${cloudfront_base_url}/${{ env.S3_STAGING_SUBDIR }}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -239,7 +241,9 @@ jobs:
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_SUBDIR }}",
+              "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
+              "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}"
             }
 
