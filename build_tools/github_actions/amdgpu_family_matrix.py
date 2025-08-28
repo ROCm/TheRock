@@ -85,8 +85,31 @@ amdgpu_family_info_matrix_nightly = {
     },
 }
 
-amdgpu_family_info_matrix_all = (
-    amdgpu_family_info_matrix_presubmit
-    | amdgpu_family_info_matrix_postsubmit
-    | amdgpu_family_info_matrix_nightly
+
+def merge_matrices(matrices):
+    merged = {}
+    for matrix in matrices:
+        for key in matrix:
+            info_for_key = matrix[key]
+            if not key in merged:
+                merged[key] = info_for_key
+            else:
+                # The key, e.g. "gfx115x", already exists.
+                # This probably means that presubmit had one platform and
+                # postsubmit had a different platform for that key.
+                for platform in info_for_key:
+                    if platform in merged[key]:
+                        raise LookupError(
+                            f"Duplicate platform {platform} for key {key}"
+                        )
+                    merged[key][platform] = info_for_key[platform]
+    return merged
+
+
+amdgpu_family_info_matrix_all = merge_matrices(
+    [
+        amdgpu_family_info_matrix_presubmit,
+        amdgpu_family_info_matrix_postsubmit,
+        amdgpu_family_info_matrix_nightly,
+    ]
 )
