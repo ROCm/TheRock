@@ -345,15 +345,14 @@ def run(args):
 
     # Include/exclude filtering.
     def _should_include(artifact: ArtifactDownloadRequest) -> bool:
-        if not args.include:
-            return True
-        # If includes, then one include must match.
-        for include in args.include:
-            pattern = re.compile(include)
-            if pattern.search(artifact.artifact_key):
-                break
-        else:
-            return False
+        if args.include:
+            # If includes, then one include must match.
+            for include in args.include:
+                pattern = re.compile(include)
+                if pattern.search(artifact.artifact_key):
+                    break
+            else:
+                return False
         # If excludes, then no excludes must match.
         if args.exclude:
             for exclude in args.exclude:
