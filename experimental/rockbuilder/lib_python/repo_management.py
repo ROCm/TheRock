@@ -21,7 +21,8 @@ class RockProjectRepo:
     def __init__(
         self,
         wheel_install_dir,
-        project_name,
+        project_name: str,
+        project_cfg_name: str,
         project_root_dir: Path,
         project_src_dir: Path,
         project_build_dir: Path,
@@ -32,6 +33,7 @@ class RockProjectRepo:
     ):
         self.wheel_install_dir = wheel_install_dir
         self.project_name = project_name
+        self.project_cfg_name = project_cfg_name
         self.project_src_dir = Path(project_src_dir)
         self.project_build_dir = Path(project_build_dir)
         self.project_exec_dir = Path(project_exec_dir)
@@ -142,18 +144,18 @@ class RockProjectRepo:
                     inst_cmd = "pip install " + latest_whl
                     ret = self._exec_subprocess_cmd(inst_cmd, self.project_exec_dir)
                     if not ret:
-                        print("Install failed for " + self.project_name)
+                        print("Install failed for " + self.project_cfg_name)
                         print("Failed command: " + install_cmd)
                         ret = False
                 except:
                     print(
                         "Python wheel copy or install failed for project: "
-                        + self.project_name
+                        + self.project_cfg_name
                     )
                     ret = False
             else:
                 # no wheel found
-                print("Failed to find python wheel from project: " + self.project_name)
+                print("Failed to find python wheel from project: " + self.project_cfg_name)
                 ret = False
         return ret
 
@@ -442,7 +444,7 @@ class RockProjectRepo:
                 else:
                     print(
                         "Error, Invalid environment variable key-value pair in project: "
-                        + self.project_name
+                        + self.project_cfg_name
                     )
                     print("Key: " + key_value_str)
                     ret = False
