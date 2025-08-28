@@ -26,12 +26,18 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
       python_versions:
         required: true
         type: string
-        default:
+        default: "3.12"
       release_type:
         description: The type of release to build ("nightly", or "dev")
         required: true
@@ -53,9 +59,6 @@ permissions:
   contents: read
 
 jobs:
-  call_setup:
-    uses: rocm/therock/.github/workflows/setup.yml@main
-
   build_jax_wheels:
     strategy:
       matrix:
