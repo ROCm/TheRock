@@ -53,12 +53,16 @@ permissions:
   contents: read
 
 jobs:
+  call_setup:
+    uses: rocm/therock/.github/workflows/setup.yml@main
+
   build_jax_wheels:
     strategy:
       matrix:
         jax_ref: [master]
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    needs: call_setup
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
