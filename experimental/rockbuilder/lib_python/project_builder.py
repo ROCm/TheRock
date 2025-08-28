@@ -52,6 +52,12 @@ class RockProjectBuilder(configparser.ConfigParser):
             self.repo_url = self.get("project_info", "repo_url")
         else:
             self.repo_url = None
+        if self.has_option("project_info", "repo_tags"):
+            self.repo_depth = 0
+            self.repo_tags = self.get("project_info", "repo_tags")
+        else:
+            self.repo_depth = 1
+            self.repo_tags = None
         # If the project's version_override parameter has been set, then use that version
         # instead of using the version specified in the project.cfg file
         env_version_name = "--" + project_name + "-version"
@@ -194,7 +200,7 @@ class RockProjectBuilder(configparser.ConfigParser):
 
     def checkout(self):
         if self.repo_url:
-            res = self.project_repo.do_checkout()
+            res = self.project_repo.do_checkout(repo_fetch_depth=self.repo_depth, repo_fetch_tags=self.repo_tags)
             if not res:
                 self.printout_error_and_terminate("checkout")
 

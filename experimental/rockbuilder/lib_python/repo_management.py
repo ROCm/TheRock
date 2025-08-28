@@ -480,6 +480,7 @@ class RockProjectRepo:
     def do_checkout(
         self,
         repo_fetch_depth=1,
+        repo_fetch_tags=None,
         repo_fetch_job_cnt=1,
         apply_patches_enabled=1,
         hipify_enabled=1,
@@ -508,15 +509,21 @@ class RockProjectRepo:
 
         # fetch and checkout
         fetch_args = []
+        fetch_args_main_prj_only = []
         if repo_fetch_depth:
             fetch_args.extend(["--depth", str(repo_fetch_depth)])
+        if repo_fetch_tags:
+            # can not go to submodule fetch
+            # fetch also tags when full fetch is wanted because
+            # full fetch may be wanted for projects that checkouts also tags
+            fetch_args_main_prj_only.extend(["--tags"])
         if repo_fetch_job_cnt:
             fetch_args.extend(["-j", str(repo_fetch_job_cnt)])
         self.exec(["git", "reset", "--hard"], cwd=self.project_src_dir)
         try:
             self.exec(
                 ["git", "fetch"]
-                + fetch_args
+                + fetch_args + fetch_args_main_prj_only
                 + ["origin", "tag", self.project_version_hashtag],
                 cwd=self.project_src_dir,
             )
@@ -528,12 +535,11 @@ class RockProjectRepo:
             # no git tag available, fetch and checkout other way
             self.exec(
                 ["git", "fetch"]
-                + fetch_args
+                + fetch_args + fetch_args_main_prj_only
                 + ["origin", self.project_version_hashtag],
                 cwd=self.project_src_dir,
             )
             self.exec(["git", "checkout", "FETCH_HEAD"], cwd=self.project_src_dir)
-
         if apply_patches_enabled:
             # Apply base patches to main repository. Patches to
             # submodules will be applied later. This enables patches
