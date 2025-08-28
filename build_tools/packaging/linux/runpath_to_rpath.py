@@ -27,7 +27,6 @@ def update_rpath(search_path, excludes):
     3. Toggle the DT_RUNPATH(0x1d) tag byte to DT_RPATH(0xf) and write back to file"""
     for path, dirs, files in os.walk(search_path, topdown=True, followlinks=True):
         dirs[:] = [d for d in dirs if d not in excludes]
-        print(dirs)
         for filename in files:
             filename = os.path.join(path, filename)
             print("Opening file ", filename)
@@ -45,9 +44,7 @@ def update_rpath(search_path, excludes):
                         if tag.entry.d_tag == "DT_RUNPATH":
                             offset = section.header.sh_offset + n * section._tagsize
                             section.stream.seek(offset)
-                            section.stream.write(
-                                bytes([ENUM_D_TAG["DT_RPATH"]])
-                            )  # DT_PATH
+                            section.stream.write(bytes([ENUM_D_TAG["DT_RPATH"]]))
                             print("DT_RUNPATH changed to DT_RPATH ")
                             break
                         # DT_RUNPATH tag not found. Loop to the next tag
@@ -163,8 +160,7 @@ def main():
         )
         sys.exit(0)
 
-    # Find the elf files in the serach path and update DT_RUNPATH to DT_RPATH
-    # SWDEV-467155 : remove the exclusion of llvm folder
+    # Find the elf files in the search path and update DT_RUNPATH to DT_RPATH
     excludes = []
     update_rpath(args.searchdir, excludes)
     # Update rocm clang configs to default to DT_RPATH
