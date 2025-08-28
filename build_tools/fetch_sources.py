@@ -328,7 +328,6 @@ def main(argv):
         type=str,
         default=[
             "half",
-            "hip-tests",
             "rccl",
             "rccl-tests",
             "rocm-cmake",
