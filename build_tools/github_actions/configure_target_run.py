@@ -46,6 +46,7 @@ def get_runner_label(target: str, platform: str) -> str:
         if test_runs_on_machine:
             print(f"  Found runner: '{test_runs_on_machine}'")
             return test_runs_on_machine
+    return ""
 
 
 def get_upload_label(target: str, platform: str) -> str:

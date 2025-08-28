@@ -230,7 +230,7 @@ jobs:
       pytorch_version: ${{ inputs.pytorch_version }}
 
   upload_pytorch_wheels:
-    name: Upload PyTorch Wheels to S3
+    name: Release PyTorch Wheels to S3
     needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
     if: always()
     runs-on: ubuntu-24.04
