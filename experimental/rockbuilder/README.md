@@ -122,10 +122,10 @@ python torch_audio_hello_world.py
 
 Wheels that have been build can be found from the packages/wheels directory.
 
-## Checkout all projects (without build and install)
+## Checkout all pytorch_28_amd projects (without build and install)
 
 ```bash
-python rockbuilder.py --checkout
+python rockbuilder.py --checkout --project_list projects/pytorch_28_amd.pcfg
 ```
 
 Source code would be checked out to directory `src_projects`
@@ -146,6 +146,12 @@ Note that pytorch audio requires that pytorch has been built and installed first
 
 ```bash
 python rockbuilder.py --project pytorch_audio --output-dir test
+```
+
+or
+
+```bash
+python rockbuilder.py --project projects/pytorch_audio.cfg --output-dir test
 ```
 
 By default this checks out pytorch audio source to directory `src_projects/pytorch_audio`:

@@ -12,6 +12,7 @@ import lib_python.rockbuilder_config as RockBuilderConfig
 from pathlib import Path, PurePosixPath
 
 ROCK_BUILDER_VERSION = "2025-06-25_01"
+PROJECT_CFG_FILE_SUFFIX = ".cfg"
 
 
 def get_rocm_builder_root_dir():
@@ -50,23 +51,28 @@ def get_project_list_manager(rock_builder_home_dir: Path):
     parser.add_argument(
         "--project_list",
         type=str,
-        help="select project list for the actions.",
+        help="specify project list for the actions, for example: projects/pytorch_apps.pcfg",
         default=None,
     )
     parser.add_argument(
         "--project",
         type=str,
-        help="select target for the action. Must be one project from projects-directory.",
+        help="specify target for the action, for example: pytorch or projects/pytorch.cfg",
         default=None,
     )
     prj = None
     prj_list = None
     args, unknown = parser.parse_known_args()
+    prj_cfg_file = get_project_cfg_file_path(rock_builder_home_dir, args.project)
     ret = project_builder.RockExternalProjectListManager(
-        rock_builder_home_dir, args.project_list, args.project
+        rock_builder_home_dir, args.project_list, prj_cfg_file
     )
     return ret
 
+def get_project_cfg_base_name_without_extension(project_name: str):
+    ret = os.path.basename(project_name)
+    ret = os.path.splitext(ret)[0]
+    return ret
 
 # create user parameter parser
 def create_build_argument_parser(
@@ -79,13 +85,13 @@ def create_build_argument_parser(
     parser.add_argument(
         "--project_list",
         type=str,
-        help="select project list for the actions.",
+        help="specify project list for the actions, for example: projects/pytorch_apps.pcfg",
         default=None,
     )
     parser.add_argument(
         "--project",
         type=str,
-        help="select target for the action. Must be one project from projects-directory.",
+        help="specify project for the action, for example: pytorch or projects/pytorch.cfg",
         default=None,
     )
     parser.add_argument(
@@ -158,11 +164,12 @@ def create_build_argument_parser(
         default=rock_builder_home_dir / "packages" / "wheels",
     )
     for ii, prj_item in enumerate(project_list):
-        arg_name = "--" + prj_item + "-version"
+        base_name = get_project_cfg_base_name_without_extension(prj_item)
+        arg_name = "--" + base_name + "-version"
         print("arg_name: " + arg_name)
         parser.add_argument(
-            "--" + prj_item + "-version",
-            help=prj_item + " version used for the operations",
+            "--" + base_name + "-version",
+            help = base_name + " version used for the operations",
             default=None,
         )
     return parser
@@ -539,6 +546,21 @@ def do_therock(prj_builder):
     return ret
 
 
+# if the project_name is full path to cfg file, return it
+# othetwise assume that project name is "projects/project_name.cfg"
+def get_project_cfg_file_path(rock_builder_home_dir: Path, project_name: str):
+    if project_name:
+        if project_name.endswith(PROJECT_CFG_FILE_SUFFIX):
+            ret = Path(project_name)
+        else:
+            ret = (
+                Path(rock_builder_home_dir) / "projects" / f"{project_name}.cfg"
+            )
+        ret = ret.resolve()
+    else:
+        ret = project_name
+    return ret
+
 is_posix = not any(platform.win32_ver())
 
 rock_builder_home_dir = get_rocm_builder_root_dir()
@@ -580,14 +602,17 @@ if not args.project:
     for ii, prj_item in enumerate(project_list):
         print(f"[{ii}]: {prj_item}")
         # argparser --> Keyword for parameter "--my-project-version=xyz" = "my_project_version"
-        prj_version_keyword = project_list[ii] + "_version"
+        prj_cfg_file = get_project_cfg_file_path(rock_builder_home_dir, project_list[ii])
+        prj_cfg_base_name = get_project_cfg_base_name_without_extension(prj_cfg_file)
+        prj_version_keyword = prj_cfg_base_name + "_version"
         prj_version_keyword = prj_version_keyword.replace("-", "_")
         version_override = args_dict[prj_version_keyword]
         # when issuing a command for all projects, we assume that the src_base_dir
         # is the base source directory under each project specific directory is checked out.
         prj_builder = project_manager.get_rock_project_builder(
-            args.src_base_dir / project_list[ii],
-            project_list[ii],
+            args.src_base_dir / prj_cfg_base_name,
+            prj_cfg_base_name,
+            prj_cfg_file,
             args.output_dir,
             version_override,
         )
@@ -598,19 +623,26 @@ if not args.project:
 else:
     # process only a single project specified with the "--project" parameter
     # argparser --> Keyword for parameter "--my-project-version=xyz" = "my_project_version"
-    prj_version_keyword = args.project + "_version"
+    prj_cfg_file = get_project_cfg_file_path(rock_builder_home_dir, args.project)
+    prj_cfg_base_name = get_project_cfg_base_name_without_extension(prj_cfg_file)
+    prj_version_keyword = prj_cfg_base_name + "_version"
     prj_version_keyword = prj_version_keyword.replace("-", "_")
     version_override = args_dict[prj_version_keyword]
     if args.src_dir:
         # source checkout dir = "--src-dir"
         prj_builder = project_manager.get_rock_project_builder(
-            args.src_dir, args.project, args.output_dir, version_override
+            args.src_dir,
+            prj_cfg_base_name,
+            prj_cfg_file,
+            args.output_dir,
+            version_override
         )
     else:
         # source checkout dir = "--src-base-dir" / project_name
         prj_builder = project_manager.get_rock_project_builder(
-            args.src_base_dir / args.project,
-            args.project,
+            args.src_base_dir / prj_cfg_base_name,
+            prj_cfg_base_name,
+            prj_cfg_file,
             args.output_dir,
             version_override,
         )

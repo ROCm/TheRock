@@ -26,7 +26,8 @@ class RockProjectBuilder(configparser.ConfigParser):
         self,
         rock_builder_root_dir,
         project_src_dir: Path,
-        project_cfg_name,
+        project_cfg_base_name: str,
+        project_cfg_file_path: Path,
         package_output_dir,
         version_override,
     ):
@@ -34,24 +35,22 @@ class RockProjectBuilder(configparser.ConfigParser):
 
         self.is_posix = not any(platform.win32_ver())
         self.rock_builder_root_dir = rock_builder_root_dir
-        self.project_cfg_name = project_cfg_name
-        self.cfg_file_path = (
-            Path(rock_builder_root_dir) / "projects" / f"{project_cfg_name}.cfg"
-        )
+        self.project_cfg_base_name = project_cfg_base_name
+        self.project_cfg_file_path = project_cfg_file_path
         self.package_output_dir = package_output_dir
-        if self.cfg_file_path.exists():
-            self.read(self.cfg_file_path)
+        if self.project_cfg_file_path.exists():
+            self.read(self.project_cfg_file_path)
         else:
             raise ValueError(
                 "Could not find the configuration file: "
-                + self.cfg_file_path.as_posix()
+                + self.project_cfg_file_path.as_posix()
             )
         # name, repo_url and version are not mandatory
         # (project could want to run pip install command for example)
         if self.has_option("project_info", "name"):
             self.project_name = self.get("project_info", "name")
         else:
-            self.project_name = project_cfg_name
+            self.project_name = project_cfg_base_name
         if self.has_option("project_info", "repo_url"):
             self.repo_url = self.get("project_info", "repo_url")
         else:
@@ -128,7 +127,7 @@ class RockProjectBuilder(configparser.ConfigParser):
         self.project_root_dir_path = Path(rock_builder_root_dir)
         self.project_src_dir_path = project_src_dir
         self.project_build_dir_path = (
-            Path(rock_builder_root_dir) / "builddir" / self.project_cfg_name
+            Path(rock_builder_root_dir) / "builddir" / self.project_cfg_base_name
         )
 
         self.cmd_execution_dir = self._get_project_info_config_value("cmd_exec_dir")
@@ -145,7 +144,7 @@ class RockProjectBuilder(configparser.ConfigParser):
         self.project_repo = RockProjectRepo(
             self.package_output_dir,
             self.project_name,
-            self.project_cfg_name,
+            self.project_cfg_base_name,
             self.project_root_dir_path,
             self.project_src_dir_path,
             self.project_build_dir_path,
@@ -158,15 +157,15 @@ class RockProjectBuilder(configparser.ConfigParser):
     # printout project builder specific info for logging and debug purposes
     def printout(self, phase):
         print("Project build phase " + phase + ": -----")
-        print("    project_name: " + self.project_name)
-        print("    project_cfg_name: " + self.project_cfg_name)
-        print("    Config_path:  " + self.cfg_file_path.as_posix())
+        print("    Project_name:     " + self.project_name)
+        print("    Project cfg name: " + self.project_cfg_base_name)
+        print("    Project cfg file: " + self.project_cfg_file_path.as_posix())
         if self.project_version:
-            print("    Version:      " + self.project_version)
-        print("    Source_dir:   " + self.project_src_dir_path.as_posix())
+            print("    Version:          " + self.project_version)
+        print("    Source dir:       " + self.project_src_dir_path.as_posix())
         for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
-            print("    Patch_dir[" + str(ii) + "]: " + str(cur_patch_dir_root))
-        print("    Build_dir:    " + self.project_build_dir_path.as_posix())
+            print("    Patch dir[" + str(ii) + "]:     " + str(cur_patch_dir_root))
+        print("    Build dir:        " + self.project_build_dir_path.as_posix())
         print("------------------------")
 
     def printout_error_and_terminate(self, phase):
@@ -293,7 +292,8 @@ class RockExternalProjectListManager(configparser.ConfigParser):
     def get_rock_project_builder(
         self,
         project_src_dir: Path,
-        project_cfg_name,
+        project_cfg_base_name: str,
+        project_cfg_file_path: Path,
         package_output_dir: Path,
         version_override,
     ):
@@ -302,7 +302,8 @@ class RockExternalProjectListManager(configparser.ConfigParser):
             ret = RockProjectBuilder(
                 self.rock_builder_root_dir,
                 project_src_dir,
-                project_cfg_name,
+                project_cfg_base_name,
+                project_cfg_file_path,
                 package_output_dir,
                 version_override,
             )
