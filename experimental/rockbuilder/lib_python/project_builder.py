@@ -74,6 +74,10 @@ class RockProjectBuilder(configparser.ConfigParser):
                 self.project_version = self.get("project_info", "version")
             else:
                 self.project_version = None
+        if self.has_option("project_info", "patch_dir"):
+            self.project_patch_dir_base_name = self.get("project_info", "patch_dir")
+        else:
+            self.project_patch_dir_base_name = self.project_version
 
         # environment setup can have common and os-specific sections that needs to be appended together
         if self.is_posix:
@@ -151,6 +155,7 @@ class RockProjectBuilder(configparser.ConfigParser):
             self.cmd_execution_dir,
             self.repo_url,
             self.project_version,
+            self.project_patch_dir_base_name,
             self.patch_dir_root_arr,
         )
 
@@ -164,7 +169,14 @@ class RockProjectBuilder(configparser.ConfigParser):
             print("    Version:          " + self.project_version)
         print("    Source dir:       " + self.project_src_dir_path.as_posix())
         for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
-            print("    Patch dir[" + str(ii) + "]:     " + str(cur_patch_dir_root))
+            if self.project_name:
+                if self.project_patch_dir_base_name:
+                    print("    Patch dir[" + str(ii) + "]:     " + str(cur_patch_dir_root / self.project_name / self.project_patch_dir_base_name))
+                else:
+                    print("    Patch dir[" + str(ii) + "]:     " + str(cur_patch_dir_root / self.project_name))
+            else:
+                print("    Patch dir[" + str(ii) + "]:     " + str(cur_patch_dir_root / self.project_name))
+                sys.exit(1)
         print("    Build dir:        " + self.project_build_dir_path.as_posix())
         print("------------------------")
 

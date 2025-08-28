@@ -27,8 +27,9 @@ class RockProjectRepo:
         project_src_dir: Path,
         project_build_dir: Path,
         project_exec_dir: Path,
-        project_repo_url,
-        project_version_hashtag,
+        project_repo_url:str,
+        project_version_hashtag:str,
+        project_patch_dir_base_name: str,
         patch_dir_root_arr: Path,
     ):
         self.wheel_install_dir = wheel_install_dir
@@ -39,6 +40,7 @@ class RockProjectRepo:
         self.project_exec_dir = Path(project_exec_dir)
         self.project_repo_url = project_repo_url
         self.project_version_hashtag = project_version_hashtag
+        self.project_patch_dir_base_name = project_patch_dir_base_name
         self.patch_dir_root_arr = patch_dir_root_arr
         self.orig_env_variables_hashtable = dict()
         os.environ["ROCK_BUILDER_APP_SRC_DIR"] = project_src_dir.as_posix()
@@ -561,7 +563,7 @@ class RockProjectRepo:
             for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
                 full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
                                                             self.project_name,
-                                                            self.project_version_hashtag)
+                                                            self.project_patch_dir_base_name)
                 print("full patch dir: " + str(full_patch_dir))
                 if full_patch_dir.is_dir():
                     self.apply_main_repository_patches(
@@ -604,7 +606,7 @@ class RockProjectRepo:
             for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
                 full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
                                                             self.project_name,
-                                                            self.project_version_hashtag)
+                                                            self.project_patch_dir_base_name)
                 print("apply submodule patches")
                 print("full patch dir: " + str(full_patch_dir))
                 if full_patch_dir.is_dir():
@@ -649,7 +651,7 @@ class RockProjectRepo:
         for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
             full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
                                                         self.project_name,
-                                                        self.project_version_hashtag)
+                                                        self.project_patch_dir_base_name)
             print("apply submodule patches")
             print("full patch dir: " + str(full_patch_dir))
             if full_patch_dir.is_dir():
@@ -722,7 +724,7 @@ class RockProjectRepo:
         cur_patch_dir_root = self.patch_dir_root_arr[0]
         full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
                                                     self.project_name,
-                                                    self.project_version_hashtag)
+                                                    self.project_patch_dir_base_name)
         self.save_repo_patches(self.project_src_dir, full_patch_dir / self.project_name)
         relative_sm_paths = self.list_submodules(self.project_src_dir, relative=True)
         for relative_sm_path in relative_sm_paths:

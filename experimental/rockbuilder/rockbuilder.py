@@ -617,6 +617,7 @@ if not args.project:
             version_override,
         )
         if prj_builder is None:
+            print("Error, could not get a project builder")
             sys.exit(1)
         else:
             do_therock(prj_builder)
