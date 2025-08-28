@@ -13,12 +13,12 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
-            "always_upload": True,
+            "bypass_tests_for_releases": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
-            "always_upload": True,
+            "bypass_tests_for_releases": True,
         },
     },
 }
@@ -34,7 +34,7 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1151",
-            "always_upload": True,
+            "bypass_tests_for_releases": True,
         },
         "windows": {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
@@ -45,12 +45,12 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "",  # removed due to machine issues, label is "linux-rx9070-gpu-rocm"
             "family": "gfx120X-all",
-            "always_upload": True,
+            "bypass_tests_for_releases": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx120X-all",
-            "always_upload": True,
+            "bypass_tests_for_releases": True,
         },
     },
 }
