@@ -28,7 +28,7 @@ class RockProjectRepo:
         project_exec_dir: Path,
         project_repo_url,
         project_version_hashtag,
-        project_patch_dir_root: Path,
+        patch_dir_root_arr: Path,
     ):
         self.wheel_install_dir = wheel_install_dir
         self.project_name = project_name
@@ -37,7 +37,7 @@ class RockProjectRepo:
         self.project_exec_dir = Path(project_exec_dir)
         self.project_repo_url = project_repo_url
         self.project_version_hashtag = project_version_hashtag
-        self.project_patch_dir_root = project_patch_dir_root
+        self.patch_dir_root_arr = patch_dir_root_arr
         self.orig_env_variables_hashtable = dict()
         os.environ["ROCK_BUILDER_APP_SRC_DIR"] = project_src_dir.as_posix()
         os.environ["ROCK_BUILDER_APP_BUILD_DIR"] = project_build_dir.as_posix()
@@ -401,13 +401,24 @@ class RockProjectRepo:
         self.apply_submodule_patches(root_repo_path, patches_path, repo_name, patchset_name)
 
 
-    # repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
+    # repo_hashtag_to_patches_dir_name examples:
+    #
+    #     "2.7.0-rc9"    --> "2.7.0"
+    #     "releases/2.7" --> "releases_2.7"
     def repo_hashtag_to_patches_dir_name(self, version_ref: str) -> str:
         version_ref = version_ref.replace("/", "_")
         pos = version_ref.find("-")
         if pos != -1:
             return version_ref[:pos]
         return version_ref
+
+    # repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
+    def get_project_patch_dir_root(self,
+                  patch_dir_root: Path,
+                  project_name: str,
+                  project_patch_dir_name: str) -> Path:
+        project_patch_dir_name = self.repo_hashtag_to_patches_dir_name(project_patch_dir_name)
+        return Path(patch_dir_root / project_name / project_patch_dir_name)
 
     def do_env_setup(self, env_setup_cmd_list):
         ret = True
@@ -544,16 +555,21 @@ class RockProjectRepo:
             # Apply base patches to main repository. Patches to
             # submodules will be applied later. This enables patches
             # to modify submodule version to be checked out.
-            patch_dir_name = self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag)
-            print("patch_dir_name: " + patch_dir_name)
-            full_patch_dir = self.project_patch_dir_root / patch_dir_name
-            print("full patch dir: " + str(full_patch_dir))
-            self.apply_main_repository_patches(
-                self.project_src_dir,
-                full_patch_dir,
-                self.project_name,
-                "base",
-            )
+            print("project_src_dir: " + str(self.project_src_dir))
+            for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
+                full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
+                                                            self.project_name,
+                                                            self.project_version_hashtag)
+                print("full patch dir: " + str(full_patch_dir))
+                if full_patch_dir.is_dir():
+                    self.apply_main_repository_patches(
+                        self.project_src_dir,
+                        full_patch_dir,
+                        self.project_name,
+                        "base",
+                    )
+                    # apply patches only from the first directory that exist
+                    break
 
         # add our own git tag to help with the create patches command
         self.exec(
@@ -583,15 +599,22 @@ class RockProjectRepo:
         self.git_config_ignore_submodules(self.project_src_dir)
 
         if apply_patches_enabled:
-            patch_dir_name = self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag)
-            print("patch_dir_name: " + patch_dir_name)
-            # Apply base patches to submodules.
-            self.apply_submodule_patches(
-                self.project_src_dir,
-                self.project_patch_dir_root / patch_dir_name,
-                self.project_name,
-                "base",
-            )
+            for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
+                full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
+                                                            self.project_name,
+                                                            self.project_version_hashtag)
+                print("apply submodule patches")
+                print("full patch dir: " + str(full_patch_dir))
+                if full_patch_dir.is_dir():
+                    # Apply base patches to submodules.
+                    self.apply_submodule_patches(
+                        self.project_src_dir,
+                        full_patch_dir,
+                        self.project_name,
+                        "base",
+                    )
+                    # apply patches only from the first directory that exist
+                    break
         return ret
 
     def do_hipify(self, hipify_cmd):
@@ -620,14 +643,24 @@ class RockProjectRepo:
                 )
             print("do_hipify, hipified files committed")
         # always apply the patches from hipified directory. (even if hipify_cmd was not specified in config file for project)
-        self.apply_all_patches(
-            self.project_src_dir,
-            self.project_patch_dir_root
-            / self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag),
-            self.project_name,
-            "hipified",
-        )
-        print("do_hipify, hipified patches applied")
+
+        for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
+            full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
+                                                        self.project_name,
+                                                        self.project_version_hashtag)
+            print("apply submodule patches")
+            print("full patch dir: " + str(full_patch_dir))
+            if full_patch_dir.is_dir():
+                self.apply_all_patches(
+                    self.project_src_dir,
+                    full_patch_dir,
+                    self.project_name,
+                    "hipified",
+                )
+                print("do_hipify, hipified patches applied")
+                # apply patches only from the first directory that exist
+                break
+
         return ret
 
     def do_pre_config(self, pre_config_cmd):
@@ -682,14 +715,16 @@ class RockProjectRepo:
 
     def do_save_patches(self):
         ret = True
-        patches_dir = (
-            self.project_patch_dir_root
-            / self.repo_hashtag_to_patches_dir_name(self.project_version_hashtag)
-        )
-        self.save_repo_patches(self.project_src_dir, patches_dir / self.project_name)
+        # even if there are multiple patch dirs from where to patches can be applied,
+        # patches are always wanted to be saved to first dir in the list
+        cur_patch_dir_root = self.patch_dir_root_arr[0]
+        full_patch_dir = self.get_project_patch_dir_root(cur_patch_dir_root,
+                                                    self.project_name,
+                                                    self.project_version_hashtag)
+        self.save_repo_patches(self.project_src_dir, full_patch_dir / self.project_name)
         relative_sm_paths = self.list_submodules(self.project_src_dir, relative=True)
         for relative_sm_path in relative_sm_paths:
             self.save_repo_patches(
-                self.project_src_dir / relative_sm_path, patches_dir / relative_sm_path
+                self.project_src_dir / relative_sm_path, full_patch_dir / relative_sm_path
             )
         return ret

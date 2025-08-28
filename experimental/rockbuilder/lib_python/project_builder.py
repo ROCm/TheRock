@@ -131,12 +131,13 @@ class RockProjectBuilder(configparser.ConfigParser):
         if self.cmd_execution_dir is None:
             # default value if not specified in the config-file
             self.cmd_execution_dir = self.project_src_dir_path
-        self.project_patch_dir_root = (
-            Path(rock_builder_root_dir)
-            / "../../external-builds/pytorch/patches"
-            / self.project_name
-        )
-        self.project_patch_dir_root = self.project_patch_dir_root.resolve()
+        self.patch_dir_root_arr = []
+        self.patch_dir_root_arr.append(Path(rock_builder_root_dir)
+                      / "patches")
+        self.patch_dir_root_arr.append(Path(rock_builder_root_dir)
+                      / "../../external-builds/pytorch/patches")
+        for ii, element in enumerate(self.patch_dir_root_arr):
+            self.patch_dir_root_arr[ii] = self.patch_dir_root_arr[ii].resolve()
         self.project_repo = RockProjectRepo(
             self.package_output_dir,
             self.project_name,
@@ -146,19 +147,20 @@ class RockProjectBuilder(configparser.ConfigParser):
             self.cmd_execution_dir,
             self.repo_url,
             self.project_version,
-            self.project_patch_dir_root,
+            self.patch_dir_root_arr,
         )
 
     # printout project builder specific info for logging and debug purposes
     def printout(self, phase):
         print("Project build phase " + phase + ": -----")
         print("    Project_name: " + self.project_name)
-        print("    Config_path: " + self.cfg_file_path.as_posix())
+        print("    Config_path:  " + self.cfg_file_path.as_posix())
         if self.project_version:
-            print("    Version:     " + self.project_version)
-        print("    Source_dir:  " + self.project_src_dir_path.as_posix())
-        print("    Patch_dir:   " + self.project_patch_dir_root.as_posix())
-        print("    Build_dir:   " + self.project_build_dir_path.as_posix())
+            print("    Version:      " + self.project_version)
+        print("    Source_dir:   " + self.project_src_dir_path.as_posix())
+        for ii, cur_patch_dir_root in enumerate(self.patch_dir_root_arr):
+            print("    Patch_dir[" + str(ii) + "]: " + str(cur_patch_dir_root))
+        print("    Build_dir:    " + self.project_build_dir_path.as_posix())
         print("------------------------")
 
     def printout_error_and_terminate(self, phase):
