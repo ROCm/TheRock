@@ -11,6 +11,7 @@ create RPM and DEB packages and upload to artifactory server
 ./build_package.py --artifact-url https://therock-artifacts.s3.amazonaws.com/16418185899-linux/index-gfx94X-dcgpu.html \
         --dest-dir ./OUTPUT_PKGDIR \
         --rocm-version 7.1.0
+        --pkg-type deb (or rpm)
 ```
 """
 
@@ -303,7 +304,7 @@ def package_with_dpkg_deb(pkg_dir):
     current_dir = Path.cwd()
     os.chdir(Path(pkg_dir))
     # Build the command
-    cmd = ["debuild", "-uc", "-us", "-b"]
+    cmd = ["dpkg-buildpackage", "-uc", "-us", "-b"]
 
     # Execute the command
     try:
@@ -778,6 +779,8 @@ def main(argv: list[str]):
 
     p.add_argument(
         "--pkg-type",
+        type=str,
+        required=True,
         help="Choose the package format to be generated: DEB or RPM",
     )
     p.add_argument("--rocm-version", default="9.9.9", help="ROCm Release version")

@@ -8,7 +8,7 @@
 
 
 override_dh_builddeb:
-	dh_builddeb -- -Zxz
+	dh_builddeb -- -Zgzip
 
 {% if disable_dwz %}
 override_dh_dwz:

@@ -3,10 +3,22 @@ The current scope of this is for producing AMD vendor packaging for hosting in A
 
 #Prerequisites:
 Python version required : python 3.12 or above
-Install rpm package. Ex: apt install rpm (in Ubuntu)
+ Almalinux:
+dnf install rpm-build
+pip install -r requirements.txt
+
+ Ubuntu:
+apt update
+apt install -y python3
+apt install -y python3-pip
+apt install -y debhelper
 pip install -r requirements.txt
 
 #Usage:
-./build_package.py --artifact-url "https://therock-artifacts.s3.amazonaws.com/16418185899-linux/index-gfx94X-dcgpu.html" --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0
+Almalinux:
+./build_package.py --artifact-url "https://therock-artifacts.s3.amazonaws.com/16418185899-linux/index-gfx94X-dcgpu.html" --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type rpm
+
+Ubuntu:
+./build_package.py --artifact-url "https://therock-artifacts.s3.amazonaws.com/16418185899-linux/index-gfx94X-dcgpu.html" --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb
 
 For more options ./build_package.py -h
