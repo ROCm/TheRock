@@ -69,7 +69,7 @@ python ./build_tools/fetch_sources.py
 > Windows builds are currently unstable during the subproject migration to
 > [rocm-systems](https://github.com/ROCm/rocm-systems)!
 >
-> **The last known good commit on Windows is [16ee54f](https://github.com/ROCm/TheRock/commit/16ee54fb580a4dde62dc4133f978e73370a545af) .**
+> **The last known good commit on Windows is [16ee54f](https://github.com/ROCm/TheRock/commit/529fa36d69c7d4295317a70d3c5c88000a364b2c) .**
 >
 > Builds are expected to succeed but there are runtime errors and timeouts.
 > See https://github.com/ROCm/TheRock/issues/1347 for details.
