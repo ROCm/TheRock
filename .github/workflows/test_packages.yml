@@ -123,8 +123,8 @@ jobs:
         run: |
           ${{ matrix.components.test_script }}
 
-      #Github's 'Complete job' step is unaware of launched executables
-      #and will fail to clean up orphan processes
+      # GitHub's 'Complete job' step is unaware of launched executables
+      # and will fail to clean up orphan processes.
       - name: Post-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
         shell: powershell
