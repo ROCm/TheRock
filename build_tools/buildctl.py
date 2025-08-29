@@ -54,8 +54,6 @@ date check (so if you touch this file, it will invalidate all dependents,
 forcing them to rebuild). You can manage these files yourself with `find`,
 `touch`, and `rm` but it is tedious. This tool aims to handle common workflows
 without filesystem hacking.
-
-TODO: Merge the functionality in bootstrap_build.py into this script.
 """
 
 import argparse
@@ -64,6 +62,61 @@ import os
 import re
 import subprocess
 import sys
+import shutil
+
+from _therock_utils.artifacts import ArtifactPopulator, ArtifactName
+
+
+def do_bootstrap_and_enable_disable(args: argparse.Namespace):
+    enable_mode = None
+    if args.mode:
+        enable_mode = args.mode == "enable"
+    elif args.include or args.exclude or args.force_reconfigure:
+        raise CLIError(
+            "--mode must be specified if you use --force-reconfigure or any include/exclude patterns"
+        )
+    do_bootstrap(args)
+    if enable_mode is not None:
+        do_enable_disable(args, enable_mode=enable_mode)
+
+
+def do_bootstrap(args: argparse.Namespace):
+    class CleaningPopulator(ArtifactPopulator):
+        def on_first_relpath(self, relpath: str):
+            full_path = self.output_path / relpath
+            if full_path.exists():
+                print(f"CLEANING: {full_path}")
+                shutil.rmtree(full_path)
+            # Write the ".prebuilt" marker file that the build system uses to
+            # indicate that the staging install has already been done.
+            prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
+            prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
+            prebuilt_path.touch()
+
+        def on_artifact_dir(self, artifact_dir: Path):
+            print(f"FLATTENING {artifact_dir.name}")
+
+        def on_artifact_archive(self, artifact_archive: Path):
+            print(f"EXPANDING {artifact_archive.name}")
+
+    build_dir = resolve_build_dir(args)
+    build_dir.mkdir(parents=True, exist_ok=True)
+    flattener = CleaningPopulator(
+        output_path=build_dir, verbose=args.verbose, flatten=False
+    )
+    artifact_names: set[ArtifactName] = set()
+    for entry in args.artifact_dir.iterdir():
+        an = ArtifactName.from_path(entry)
+        if not an:
+            continue
+        if an.target_family != "generic":
+            print(f"SKIP {entry.name}: Not generic target")
+            continue
+        if an in artifact_names:
+            print(f"SKIP {entry.name}: Duplicate")
+            continue
+        artifact_names.add(an)
+        flattener(entry)
 
 
 def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
@@ -249,6 +302,31 @@ def main(cl_args: list[str]):
         disable_p, lambda args: do_enable_disable(args, enable_mode=False)
     )
     add_selection_options(disable_p)
+
+    # 'bootstrap_build' command
+    bootstrap_p = sub_p.add_parser(
+        "bootstrap",
+        help="Bootstrap a build directory using artifacts"
+        " from a prior build invocation, with optional arguments to enable/disable"
+        " the bootstrapped projects",
+    )
+    add_common_options(bootstrap_p, lambda args: do_bootstrap_and_enable_disable(args))
+    add_selection_options(bootstrap_p)
+    bootstrap_p.add_argument(
+        "--artifact-dir",
+        type=Path,
+        required=True,
+        help="Directory from which to source artifacts",
+    )
+    bootstrap_p.add_argument(
+        "--verbose", action="store_true", help="Print verbose status"
+    )
+    bootstrap_p.add_argument(
+        "--mode",
+        choices=["enable", "disable"],
+        default=None,
+        help="Whether to treat included projects as enabled or disabled (default: no change)",
+    )
 
     args = p.parse_args(cl_args)
     try:
