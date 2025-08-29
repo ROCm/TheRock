@@ -89,12 +89,6 @@ def parse_components(components: list[str]) -> list[list]:
             "rccl-tests",
         ]
 
-    # if "core" in components:
-    #     # amdgpu-windows-interop is Windows only and is updated manually.
-    #     # hip-tests is Windows only and is updated manually.
-    #     system_projects += [
-    #     ]
-
     if "profiler" in components:
         system_projects += [
             "rocprof-trace-decoder",

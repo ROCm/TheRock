@@ -249,7 +249,14 @@ def populate_submodules_if_exists(args, git_dir: Path):
     if args.jobs:
         update_args += ["--jobs", str(args.jobs)]
     exec(["git", "submodule", "update", "--init"] + update_args, cwd=git_dir)
-
+    if is_windows():
+        # check for DVC config in the submodule and pull if present
+        # presently, only amdgpu-windows-interop in rocm-systems uses DVC, but...
+        # eventually, DVC will be rolled out to math libraries and in linux
+        dvc_config = git_dir / ".dvc" / "config"
+        if dvc_config.exists():
+            print(f"DVC detected in {git_dir}, running dvc pull")
+            exec(["dvc", "pull"], cwd=git_dir)
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="fetch_sources")
@@ -332,14 +339,7 @@ def main(argv):
             "rccl-tests",
             "rocm-cmake",
             "rocprof-trace-decoder",
-        ]
-        + (
-            [
-                "amdgpu-windows-interop",
-            ]
-            if is_windows()
-            else []
-        ),
+        ],
     )
     parser.add_argument(
         "--compiler-projects",
