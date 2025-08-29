@@ -258,6 +258,7 @@ def populate_submodules_if_exists(args, git_dir: Path):
             print(f"DVC detected in {git_dir}, running dvc pull")
             exec(["dvc", "pull"], cwd=git_dir)
 
+
 def main(argv):
     parser = argparse.ArgumentParser(prog="fetch_sources")
     parser.add_argument(
