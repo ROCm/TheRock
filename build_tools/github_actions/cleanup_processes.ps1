@@ -25,6 +25,11 @@
 # Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
 $regex_build_exe = "\build\.*[.]exe"
 
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::
+            GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+echo "[*] Checking if elevated: $isAdmin | current user: $currentUser"
+
 # Some test runners have been setup with differing working directories
 # etc. "C:\runner" vs "B:\actions-runner" so use the workspace env var
 if($ENV:GITHUB_WORKSPACE -ne $null) {
@@ -46,7 +51,12 @@ if($ps_list.Count -gt 0) {
     echo "[*] Attempting to stop executable(s) forcefully..."
     $ps_list | ForEach-Object {
         echo "    > $($_.MainModule.ModuleName)"
-        Stop-Process $_ -Force
+        try {
+            Stop-Process $_ -Force
+        } catch {
+            echo "[-] Error stopping executable:"
+            echo $_.Exception.Messsage
+        }
     }
 
     $ps_list = Get-Process | Where-Object { $_.MainModule.FileName -Match $regex_build_exe }
