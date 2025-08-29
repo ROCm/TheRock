@@ -15,7 +15,7 @@ on:
         type: string
         default: "v2"
       s3_staging_subdir:
-        description: Staging subdirectory to push the wheels for test"
+        description: Staging subdirectory to push the wheels for test
         type: string
         default: "v2-staging"
       cloudfront_url:
