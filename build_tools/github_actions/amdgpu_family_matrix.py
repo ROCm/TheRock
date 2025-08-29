@@ -25,16 +25,6 @@ amdgpu_family_info_matrix_presubmit = {
             "bypass_tests_for_releases": True,
         },
     },
-}
-
-# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
-amdgpu_family_info_matrix_postsubmit = {
-    "gfx950": {
-        "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
-            "family": "gfx950-dcgpu",
-        }
-    },
     "gfx115x": {
         "linux": {
             "test-runs-on": "",
@@ -45,6 +35,16 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
             "family": "gfx1151",
         },
+    },
+}
+
+# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
+amdgpu_family_info_matrix_postsubmit = {
+    "gfx950": {
+        "linux": {
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            "family": "gfx950-dcgpu",
+        }
     },
     "gfx120x": {
         "linux": {
