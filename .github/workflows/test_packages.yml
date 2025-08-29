@@ -36,8 +36,8 @@ jobs:
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
     steps:
-      #Checkout failure is possible on windows, as it's the first job on a GPU Test runner
-      #Post-job cleanup isn't necessary since no executables are launched in this job.
+      # Checkout failure is possible on Windows, as it's the first job on a GPU test runner.
+      # Post-job cleanup isn't necessary since no executables are launched in this job.
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
         shell: powershell
