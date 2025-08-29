@@ -36,6 +36,13 @@ jobs:
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
     steps:
+      #Checkout failure is possible on windows, as it's the first job on a GPU Test runner
+      #Post-job cleanup isn't necessary since no executables are launched in this job.
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+
       - name: "Checking out repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
@@ -87,6 +94,11 @@ jobs:
       PLATFORM: ${{ inputs.platform }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -110,3 +122,11 @@ jobs:
         timeout-minutes: ${{ matrix.components.timeout_minutes }}
         run: |
           ${{ matrix.components.test_script }}
+
+      #Github's 'Complete job' step is unaware of launched executables
+      #and will fail to clean up orphan processes
+      - name: Post-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+
