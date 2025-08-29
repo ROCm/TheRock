@@ -31,16 +31,13 @@ include(therock_testing)
 # If there are ongoing issues for specific configurations log them here.
 ################################################################################
 
-if(WIN32)
-  message(WARNING
-    "*************************************************\n"
-    "Windows builds are currently unstable during the migration to rocm-systems!"
-    " Builds are expected to succeed but there are runtime errors and timeouts."
-    " The last known good commit on Windows is"
-    " https://github.com/ROCm/TheRock/commit/529fa36d69c7d4295317a70d3c5c88000a364b2c"
-    " See https://github.com/ROCm/TheRock/issues/1347 for details.\n"
-    "*************************************************")
-endif()
+#   message(WARNING
+#     "*************************************************\n"
+#     ".."
+#     " The last known good commit on {Windows,Linux} is"
+#     " https://github.com/ROCm/TheRock/commit/{HASH}"
+#     " See https://github.com/ROCm/TheRock/issues/{ISSUE} for details.\n"
+#     "*************************************************")
 
 ################################################################################
 # Testing Setup
