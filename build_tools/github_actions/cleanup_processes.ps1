@@ -52,7 +52,9 @@ if($ps_list.Count -gt 0) {
     $ps_list = Get-Process | Where-Object { $_.MainModule.FileName -Match $regex_build_exe }
     if($ps_list.Count -gt 0) {
         echo "[-] Failed to stop executable(s): "
-        echo "    > $($_.MainModule.ModuleName)"
+        $ps_list | ForEach-Object {
+            echo "    > $($_.MainModule.ModuleName)"
+        }
         exit 1
     } else {
         echo "[+] All $ps_list_len executable(s) were stopped."
