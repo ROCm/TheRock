@@ -281,7 +281,14 @@ def main(argv: list[str]):
     if args.packages and not (args.index_name or args.index_url):
         p.error("If --packages is set, one of --index-name or --index-url must be set")
     if args.packages and not args.index_subdir:
-        p.error(f"If --packages is set, --index-subdir must be set")
+        if all_subdir_sets_congruent or not args.index_name:
+            p.error(
+                f"If --packages is set, --index-subdir must be set from the following list: {subdirs}"
+            )
+        else:
+            p.error(
+                f"If --packages is set, --index-subdir must be set from the following list: {subdirs[args.index_name]}"
+            )
 
     run(args)
 
