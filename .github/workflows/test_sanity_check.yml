@@ -54,6 +54,17 @@ jobs:
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
+      - name: "Fetch 'build_tools' from repository"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: build_tools
+          path: prejob
+
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -77,3 +88,8 @@ jobs:
         timeout-minutes: 5
         run: |
           pytest tests/ --log-cli-level=info --timeout=60
+
+      - name: Post-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
