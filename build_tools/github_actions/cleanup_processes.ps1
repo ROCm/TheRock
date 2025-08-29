@@ -1,13 +1,13 @@
 #
-# cleanup_processes.ps1 
+# cleanup_processes.ps1
 #
-# Optional Environment variable inputs: 
+# Optional Environment variable inputs:
 #   GITHUB_WORKSPACE - Path to github workspace, typically to a git repo directory
-#                      in which to look for a `build` folder with running executables 
-#                      (if undefined, defaults to equivalent glob of `**\build\**\*.exe`) 
-# Will exit with error code if not all processes are stopped for some reason 
+#                      in which to look for a `build` folder with running executables
+#                      (if undefined, defaults to equivalent glob of `**\build\**\*.exe`)
+# Will exit with error code if not all processes are stopped for some reason
 #
-# This powershell script is used on non-ephemeral Windows runners to stop 
+# This powershell script is used on non-ephemeral Windows runners to stop
 # any processes that still exist after a Github actions job has completed
 # typically due to timing out. It's written in powershell per the specifications
 # for github pre or post job scripts in this article:
@@ -16,16 +16,16 @@
 #
 # The typical next steps in the workflow would be to "Set up job" and "Checkout Repository"
 # which refers to Github's official `actions/checkout` step that will delete the repo
-# directory specified in the GITHUB_WORKSPACE environment variable. This will only 
-# succeed if no processes are running in that directory. 
-# 
+# directory specified in the GITHUB_WORKSPACE environment variable. This will only
+# succeed if no processes are running in that directory.
+#
 # This script will defer the step of deleting the repo directory to `actions/checkout`
-# 
+#
 
 # Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
 $regex_build_exe = "\build\.*[.]exe"
 
-# Some test runners have been setup with differing working directories 
+# Some test runners have been setup with differing working directories
 # etc. "C:\runner" vs "B:\actions-runner" so use the workspace env var
 if($ENV:GITHUB_WORKSPACE -ne $null) {
     echo "[*] GITHUB_WORKSPACE env var defined: $ENV:GITHUB_WORKSPACE"
@@ -59,6 +59,5 @@ if($ps_list.Count -gt 0) {
     }
 
 } else {
-    echo "[+] No executables to clean up."    
+    echo "[+] No executables to clean up."
 }
-
