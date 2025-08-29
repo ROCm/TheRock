@@ -34,11 +34,10 @@ on:
         description: "Extra options to pass to the CMake configure command"
         type: string
 
-  # TODO: Re-enable once Windows build got fixed (#1347).
-  # # Trigger on a schedule to build nightly release candidates.
-  # schedule:
-  #   # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
-  #   - cron: '0 11 * * *'
+  # Trigger on a schedule to build nightly release candidates.
+  schedule:
+    # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
+    - cron: '0 11 * * *'
 
 permissions:
   contents: read
