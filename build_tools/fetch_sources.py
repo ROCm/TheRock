@@ -395,8 +395,7 @@ def main(argv):
                 "rocm-systems",
             ]
             if is_windows()
-            else [
-            ]
+            else []
         ),
     )
     args = parser.parse_args(argv)
