@@ -69,7 +69,7 @@ def run(args):
             cwd=THEROCK_DIR,
         )
     if args.dvc_projects:
-        pull_large_files(args.dvc_projects, args.projects)
+        pull_large_files(args.dvc_projects, projects)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
