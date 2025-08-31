@@ -34,6 +34,7 @@ from botocore import UNSIGNED
 from botocore.config import Config
 import concurrent.futures
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import platform
 import re
@@ -52,8 +53,11 @@ warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 s3_client = boto3.client(
     "s3",
     verify=False,
-    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
+    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+    aws_session_token=os.environ.get("AWS_SESSION_TOKEN"),
 )
+
 paginator = s3_client.get_paginator("list_objects_v2")
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent
