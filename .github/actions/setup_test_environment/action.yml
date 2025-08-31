@@ -53,6 +53,7 @@ runs:
 
     - name: Download and Unpack Artifacts
       shell: bash
+      secrets: inherit
       env:
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
