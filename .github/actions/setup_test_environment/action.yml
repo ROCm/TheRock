@@ -16,12 +16,6 @@ inputs:
   IS_PR_FROM_FORK:
     type: boolean
     default: false
-  AWS_ACCESS_KEY_ID:
-    type: string
-  AWS_SECRET_ACCESS_KEY:
-    type: string
-  AWS_SESSION_TOKEN:
-    type: string
 
 runs:
   using: "composite"
@@ -66,10 +60,6 @@ runs:
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
         IS_PR_FROM_FORK: ${{ inputs.IS_PR_FROM_FORK }}
-        AWS_ACCESS_KEY_ID: ${{ inputs.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
-        AWS_SESSION_TOKEN: ${{ inputs.AWS_SESSION_TOKEN }}
-
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
