@@ -1,16 +1,16 @@
-From 63edea5b7e5676698d66cb88af6233309abe4c91 Mon Sep 17 00:00:00 2001
+From 28d195faa8f568878801fb0f3fd663fa3e2ea46c Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 15 Jul 2025 09:48:47 +0000
-Subject: [PATCH 2/2] Find bundled libelf
+Subject: [PATCH 9/9] Find bundled libelf
 
 ---
- cmake/rocprofiler_config_interfaces.cmake | 4 ++--
+ .../rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/cmake/rocprofiler_config_interfaces.cmake b/cmake/rocprofiler_config_interfaces.cmake
-index b41780f6..6a548648 100644
---- a/cmake/rocprofiler_config_interfaces.cmake
-+++ b/cmake/rocprofiler_config_interfaces.cmake
+diff --git a/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake b/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake
+index b41780f63a..6a548648a1 100644
+--- a/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake
++++ b/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake
 @@ -204,8 +204,8 @@ target_link_libraries(rocprofiler-sdk-ptl INTERFACE PTL::ptl-static)
  #
  # ----------------------------------------------------------------------------------------#

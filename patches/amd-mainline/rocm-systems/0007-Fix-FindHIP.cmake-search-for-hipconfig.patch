@@ -1,16 +1,16 @@
-From 027cb4a11e2b6c47606308b01e8180507496701d Mon Sep 17 00:00:00 2001
+From 42350ae31c7a156e921b3de34434ffb804c43dee Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <jem456.vasishta@gmail.com>
 Date: Tue, 6 May 2025 15:07:26 +0530
-Subject: [PATCH] Fix FindHIP.cmake search for hipconfig.
+Subject: [PATCH 7/9] Fix FindHIP.cmake search for hipconfig.
 
 ---
- cmake/FindHIP.cmake | 11 ++---------
+ projects/hip/cmake/FindHIP.cmake | 11 ++---------
  1 file changed, 2 insertions(+), 9 deletions(-)
 
-diff --git a/cmake/FindHIP.cmake b/cmake/FindHIP.cmake
-index 422b7089..a93e839f 100644
---- a/cmake/FindHIP.cmake
-+++ b/cmake/FindHIP.cmake
+diff --git a/projects/hip/cmake/FindHIP.cmake b/projects/hip/cmake/FindHIP.cmake
+index 422b708917..a93e839f05 100644
+--- a/projects/hip/cmake/FindHIP.cmake
++++ b/projects/hip/cmake/FindHIP.cmake
 @@ -99,7 +99,7 @@ if(NOT APPLE)
          # Search in user specified path first
          find_path(
@@ -45,5 +45,5 @@ index 422b7089..a93e839f 100644
      # Find HIPCC_CMAKE_LINKER_HELPER executable
      find_program(
 -- 
-2.47.1.windows.2
+2.43.0
 

@@ -40,6 +40,8 @@ def get_enabled_projects(args) -> list[str]:
         projects.extend(args.compiler_projects)
     if args.include_rocm_libraries:
         projects.extend(["rocm-libraries"])
+    if args.include_rocm_systems:
+        projects.extend(["rocm-systems"])
     if args.include_math_libs:
         projects.extend(args.math_lib_projects)
     if args.include_ml_frameworks:
@@ -300,7 +302,13 @@ def main(argv):
         "--include-rocm-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
-        help="Include supported rocm-libraries projhects",
+        help="Include supported rocm-libraries projects",
+    )
+    parser.add_argument(
+        "--include-rocm-systems",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include supported rocm-systems projects",
     )
     parser.add_argument(
         "--include-math-libs",
@@ -319,26 +327,11 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
-            "aqlprofile",
-            "clr",
             "half",
-            "HIP",
-            "hip-tests",
             "rccl",
             "rccl-tests",
-            "rocm_smi_lib",
             "rocm-cmake",
-            "rocm-core",
-            "rocminfo",
-            "rocprofiler-register",
-            # TODO: Re-enable when used.
-            # "rocprofiler-compute",
-            "rocprofiler-sdk",
             "rocprof-trace-decoder",
-            # TODO: Re-enable when used.
-            # "rocprofiler-systems",
-            "roctracer",
-            "ROCR-Runtime",
         ]
         + (
             [
@@ -355,6 +348,7 @@ def main(argv):
         default=[
             "HIPIFY",
             "llvm-project",
+            "spirv-llvm-translator",
         ],
     )
     parser.add_argument(

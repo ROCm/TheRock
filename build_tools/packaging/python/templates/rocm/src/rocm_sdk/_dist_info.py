@@ -185,12 +185,12 @@ PackageEntry(
 
 # Public libraries.
 LibraryEntry("amdhip64", "core", "libamdhip64.so.7", "amdhip64_7.dll")
-LibraryEntry("hiprtc", "core", "libhiprtc.so.7", "hiprtc0700.dll")
+LibraryEntry("hiprtc", "core", "libhiprtc.so.7", "hiprtc0701.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so.4", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so.1", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so.4", "")
 
-LibraryEntry("amd_comgr", "core", "libamd_comgr.so.3", "amd_comgr0700.dll")
+LibraryEntry("amd_comgr", "core", "libamd_comgr.so.3", "amd_comgr0701.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so.3", "libhipblas.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so.0", "hipfft.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so.1", "hiprand.dll")

@@ -34,10 +34,11 @@ on:
         description: "Extra options to pass to the CMake configure command"
         type: string
 
-  # Trigger on a schedule to build nightly release candidates.
-  schedule:
-    # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
-    - cron: '0 11 * * *'
+  # TODO: Re-enable once Windows build got fixed (#1347).
+  # # Trigger on a schedule to build nightly release candidates.
+  # schedule:
+  #   # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
+  #   - cron: '0 11 * * *'
 
 permissions:
   contents: read
@@ -190,13 +191,6 @@ jobs:
           git config --global core.symlinks true
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 96
-
-      - name: Checkout closed source AMDGPU/ROCm interop library folder
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          repository: nod-ai/amdgpu-windows-interop
-          path: amdgpu-windows-interop
-          lfs: true
 
       - name: Configure Projects
         env:

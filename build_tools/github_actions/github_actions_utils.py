@@ -97,3 +97,76 @@ def gha_append_step_summary(summary: str):
     with open(step_summary_file, "a") as f:
         # Use double newlines to split sections in markdown.
         f.write(summary + "\n\n")
+
+
+def retrieve_bucket_info() -> tuple[str, str]:
+    """Retrieves bucket information based on env variables
+
+    Returns a tuple [EXTERNAL_REPO, BUCKET], where:
+    - EXTERNAL_REPO = if CI is run on an external repo, we create a S3 sub-folder
+                      to avoid conflicting run IDs
+    - BUCKET = the name of the S3 bucket if it's an external repo
+
+    Environment variables:
+    - GITHUB_REPOSITORY
+    - IS_PR_FROM_FORK
+    """
+    github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
+    is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
+    owner, repo_name = github_repository.split("/")
+    external_repo = (
+        ""
+        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
+        else f"{owner}-{repo_name}/"
+    )
+
+    # TODO: We should probably change this logic to a default and allow passing in an
+    # environment variable.
+    if external_repo == "":
+        bucket = "therock-artifacts"
+    elif repo_name == "therock-releases" and owner == "ROCm" and not is_pr_from_fork:
+        bucket = "therock-artifacts-internal"
+    else:
+        bucket = "therock-artifacts-external"
+    return (external_repo, bucket)
+
+
+def str2bool(value: str | None) -> bool:
+    """Convert environment variables to boolean values."""
+    if not value:
+        return False
+    if not isinstance(value, str):
+        raise ValueError(
+            f"Expected a string value for boolean conversion, got {type(value)}"
+        )
+    value = value.strip().lower()
+    if value in (
+        "1",
+        "true",
+        "t",
+        "yes",
+        "y",
+        "on",
+        "enable",
+        "enabled",
+        "found",
+    ):
+        return True
+    if value in (
+        "0",
+        "false",
+        "f",
+        "no",
+        "n",
+        "off",
+        "disable",
+        "disabled",
+        "notfound",
+        "none",
+        "null",
+        "nil",
+        "undefined",
+        "n/a",
+    ):
+        return False
+    raise ValueError(f"Invalid string value for boolean conversion: {value}")

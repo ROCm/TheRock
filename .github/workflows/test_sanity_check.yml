@@ -67,6 +67,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--base-only"
+          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}

@@ -44,6 +44,22 @@ built-in tests (via `rocm-sdk test`) verify these conditions.
 
 ## Building Packages
 
+### Target Family Selection
+
+The target GPU family used when building packages is determined in the following order:
+
+1. `ROCM_SDK_TARGET_FAMILY` environment variable, if set.
+1. Dynamically discovered target family on the system.
+1. The fallback default defined in `dist_info.DEFAULT_TARGET_FAMILY`.
+
+For CI builds on CPU-only machines, this will typically fall through to (3).
+For developer machines with GPUs, the dynamic detection in (2) should suffice,
+but can be overridden by setting (1).
+
+In case of multiple GPU architectures present, the dynamically discovered target family
+defaults to the first available family, in which case it might be necessary to set the
+`ROCM_SDK_TARGET_FAMILY` environment variable.
+
 ### Example
 
 ```bash

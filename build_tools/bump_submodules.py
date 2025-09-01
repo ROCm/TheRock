@@ -81,9 +81,6 @@ def parse_components(components: list[str]) -> list[list]:
         system_projects += [
             "half",
             "rocm-cmake",
-            "rocm-core",
-            "rocm_smi_lib",
-            "rocprofiler-register",
         ]
 
     if "comm-libs" in components:
@@ -92,21 +89,15 @@ def parse_components(components: list[str]) -> list[list]:
             "rccl-tests",
         ]
 
-    if "core" in components:
-        # amdgpu-windows-interop is Windows only and is updated manually.
-        system_projects += [
-            "HIP",
-            "ROCR-Runtime",
-            "clr",
-            "rocminfo",
-        ]
+    # if "core" in components:
+    #     # amdgpu-windows-interop is Windows only and is updated manually.
+    #     # hip-tests is Windows only and is updated manually.
+    #     system_projects += [
+    #     ]
 
     if "profiler" in components:
         system_projects += [
-            "aqlprofile",
             "rocprof-trace-decoder",
-            "rocprofiler-sdk",
-            "roctracer",
         ]
 
     if "rocm-libraries" in components:
@@ -125,6 +116,11 @@ def parse_components(components: list[str]) -> list[list]:
             arguments.append("--include-ml-frameworks")
         else:
             arguments.append("--no-include-ml-frameworks")
+
+    if "rocm-systems" in components:
+        arguments.append("--include-rocm-systems")
+    else:
+        arguments.append("--no-include-rocm-systems")
 
     if "compiler" in components:
         arguments.append("--include-compilers")
@@ -224,10 +220,10 @@ def main(argv):
                   base,
                   comm-libs,
                   compiler,
-                  core,
                   math-libs,
                   ml-libs,
                   rocm-libraries,
+                  rocm-systems,
                   profiler
              """,
     )

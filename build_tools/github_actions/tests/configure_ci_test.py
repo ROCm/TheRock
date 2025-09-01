@@ -8,9 +8,17 @@ import configure_ci
 
 
 class ConfigureCITest(unittest.TestCase):
-    def assert_target_output_is_valid(self, target_output):
+    def assert_target_output_is_valid(self, target_output, allow_xfail):
         self.assertTrue(all("test-runs-on" in entry for entry in target_output))
         self.assertTrue(all("family" in entry for entry in target_output))
+
+        if not allow_xfail:
+            self.assertFalse(
+                any(entry.get("expect_failure") for entry in target_output)
+            )
+
+    ###########################################################################
+    # Tests for should_ci_run_given_modified_paths
 
     def test_run_ci_if_source_file_edited(self):
         paths = ["source_file.h"]
@@ -53,6 +61,15 @@ class ConfigureCITest(unittest.TestCase):
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
 
+    ###########################################################################
+    # Tests for matrix_generator and helper functions
+
+    def test_filter_known_target_names(self):
+        requested_target_names = ["gfx110X", "abcdef"]
+        target_names = configure_ci.filter_known_target_names(requested_target_names)
+        self.assertIn("gfx110x", target_names)
+        self.assertNotIn("abcdef", target_names)
+
     def test_valid_linux_workflow_dispatch_matrix_generator(self):
         build_families = {"amdgpu_families": "   gfx94X , gfx103X"}
         linux_target_output = configure_ci.matrix_generator(
@@ -71,8 +88,9 @@ class ConfigureCITest(unittest.TestCase):
             any("gfx103X-dgpu" == entry["family"] for entry in linux_target_output)
         )
         self.assertGreaterEqual(len(linux_target_output), 2)
-        self.assert_target_output_is_valid(linux_target_output)
-        self.assertTrue(any("expect_failure" in entry for entry in linux_target_output))
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=True
+        )
 
     def test_invalid_linux_workflow_dispatch_matrix_generator(self):
         build_families = {
@@ -109,7 +127,9 @@ class ConfigureCITest(unittest.TestCase):
             any("gfx110X-dgpu" == entry["family"] for entry in linux_target_output)
         )
         self.assertGreaterEqual(len(linux_target_output), 2)
-        self.assert_target_output_is_valid(linux_target_output)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=False
+        )
 
     def test_duplicate_windows_pull_request_matrix_generator(self):
         base_args = {
@@ -128,7 +148,9 @@ class ConfigureCITest(unittest.TestCase):
             any("gfx110X-dgpu" == entry["family"] for entry in windows_target_output)
         )
         self.assertGreaterEqual(len(windows_target_output), 1)
-        self.assert_target_output_is_valid(windows_target_output)
+        self.assert_target_output_is_valid(
+            target_output=windows_target_output, allow_xfail=False
+        )
 
     def test_invalid_linux_pull_request_matrix_generator(self):
         base_args = {
@@ -144,7 +166,9 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
-        self.assert_target_output_is_valid(linux_target_output)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=False
+        )
 
     def test_empty_windows_pull_request_matrix_generator(self):
         base_args = {"pr_labels": "{}"}
@@ -158,7 +182,9 @@ class ConfigureCITest(unittest.TestCase):
             platform="windows",
         )
         self.assertGreaterEqual(len(windows_target_output), 1)
-        self.assert_target_output_is_valid(windows_target_output)
+        self.assert_target_output_is_valid(
+            target_output=windows_target_output, allow_xfail=False
+        )
 
     def test_main_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
@@ -172,8 +198,9 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
-        self.assertGreaterEqual(len(linux_target_output), 1)
-        self.assert_target_output_is_valid(linux_target_output)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=False
+        )
 
     def test_main_windows_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main"}
@@ -187,8 +214,9 @@ class ConfigureCITest(unittest.TestCase):
             platform="windows",
         )
         self.assertGreaterEqual(len(windows_target_output), 1)
-        self.assertGreaterEqual(len(windows_target_output), 1)
-        self.assert_target_output_is_valid(windows_target_output)
+        self.assert_target_output_is_valid(
+            target_output=windows_target_output, allow_xfail=False
+        )
 
     def test_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "test_branch"}
@@ -214,9 +242,8 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
-        self.assert_target_output_is_valid(linux_target_output)
-        self.assertTrue(
-            all(entry.get("expect_failure") for entry in linux_target_output)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=True
         )
 
     def test_windows_schedule_matrix_generator(self):

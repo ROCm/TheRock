@@ -4,9 +4,61 @@ While TheRock started life as a super-project for doing combined builds and rele
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
+## Overall build architecture
+
+TheRock provides:
+
+- A CMake-based build for ROCm components
+- A setuptools-based build for ROCm Python packages
+- (Coming soon!) Scripts for producing native RPM and DEB packages
+- Scripts for building projects like PyTorch and JAX
+
+![Build architecture](assets/therock_build_architecture.excalidraw.svg#gh-light-mode-only)
+![Build architecture (dark)](assets/therock_build_architecture_dark.excalidraw.svg#gh-dark-mode-only)
+
+Note that at each layer of the build, developers can build from source _or_ fetch prebuilt artifacts/packages from sources like pre-commit CI workflow runs or nightly package releases.
+
+For example:
+
+- If you want to build PyTorch using ROCm Python packages that have already been built for your operating system and GPU architecture family, you can skip most of the source builds:
+
+  ![Build architecture highlight torch](assets/therock_build_architecture_highlight_torch.excalidraw.svg#gh-light-mode-only)
+  ![Build architecture highlight torch (dark)](assets/therock_build_architecture_highlight_torch_dark.excalidraw.svg#gh-dark-mode-only)
+
+- If you want to build native packages for a Linux distribution including some source changes to ROCm components, you can build ROCm artifacts using CMake then package them for your distribution:
+
+  ![Build architecture highlight cmake native](assets/therock_build_architecture_highlight_cmake_native.excalidraw.svg#gh-light-mode-only)
+  ![Build architecture highlight cmake native (dark)](assets/therock_build_architecture_highlight_cmake_native_dark.excalidraw.svg#gh-dark-mode-only)
+
+Most of this document focuses on the ROCm build itself, which is split into
+phases for each feature group like "base", "compiler", "core", and "math-libs".
+
+- Feature groups are roughly aligned with git superrepos (e.g.
+  https://github.com/ROCm/rocm-libraries and https://github.com/ROCm/rocm-systems),
+  with individual subprojects in the `projects/` subfolders
+- Each subproject build _produces_ `build/`, `stage/`, and `dist/` outputs
+  (see [TheRock Build System Manual - Build Directory Layout](./build_system.md#build-directory-layout))
+- Each subproject build _depends on_ the `stage/` and `dist/` outputs of
+  some subset of prior subproject builds
+
+![Subprojects build](assets/therock_subprojects_build.excalidraw.svg#gh-light-mode-only)
+![Subprojects build (dark)](assets/therock_subprojects_build_dark.excalidraw.svg#gh-dark-mode-only)
+
+This separation between subprojects allows for incremental rebuilds and
+bootstrapping from prebuilt artifacts produced by prior builds (local, from
+another developer, or from CI). For example, building a subproject like
+"ROCR-Runtime" can skip rebuilding the "amd-llvm" subproject by reusing build
+outputs for that dependency.
+
+![Subprojects build prebuilt](assets/therock_subprojects_build_prebuilt.excalidraw.svg#gh-light-mode-only)
+![Subprojects build prebuilt (dark)](assets/therock_subprojects_build_prebuilt_dark.excalidraw.svg#gh-dark-mode-only)
+
 ## IDE Support
 
-Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide. Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
+Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide.
+
+> [!NOTE]
+> Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
 
 ## Single Component Development
 
@@ -23,7 +75,13 @@ First, build TheRock as usual but requesting only a certain component. This is d
 # flags to the new settings.
 ```
 
-TODO: Add CMake preset files for useful configurations in order to make this more ergonomic.
+> [!TIP]
+> We maintain a set of
+> [CMake presets](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html)
+> with useful configurations in [`CMakePresets.json`](/CMakePresets.json).
+>
+> Additional presets for development workflows could be added to either that
+> shared file or a `CMakeUserPresets.json` file.
 
 ### Build directory layout
 
@@ -48,6 +106,9 @@ These entries are explained here:
 - `stamp`: This directory contains "stamp" files which help the super-project know when a component needs to be reconfigured or rebuilt. Deleting the stamp files is one way to get around issues where the super-project is not detecting sub-project changes and is therefore not incrementally building.
 - `_init.cmake`: This file is generated by the super-project and CMake will include it upon encountering the first `project` command in the component (See [cmake-commands(7) >> project >> Code Injection](https://cmake.org/cmake/help/v3.31/command/project.html#code-injection) for details). This includes a variety of customizations to the build, enabling it to properly find dependencies, set up program/linker paths, etc. It also triggers inclusion of the `pre_hook_${component}.cmake` and `post_hook_${component}.cmake` files, which are used to further customize individual projects as part of the overall build.
 - `_toolchain.cmake`: This file is generated by the super-project and set as the [CMAKE_TOOLCHAIN_FILE](https://cmake.org/cmake/help/latest/variable/CMAKE_TOOLCHAIN_FILE.html) for the component. This contains overrides for CMake settings that influence the compiler toolchain. Different components will have different toolchain settings (i.e. HIP projects will reference the in-tree built HIP compiler, whereas non-HIP projects will configure the host toolchain).
+
+> [!TIP]
+> See also [TheRock Build System Manual - Build Directory Layout](./build_system.md#build-directory-layout).
 
 ### Option 1: Work directly on the project
 

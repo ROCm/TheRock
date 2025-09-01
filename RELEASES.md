@@ -86,7 +86,16 @@ project layouts.**
 > If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
 > In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
 
-<!-- TODO: mapping from product name to gfx family -->
+| **Product Name**                   | **GFX Family** |
+| ---------------------------------- | -------------- |
+| MI300A/MI300X                      | gfx94X-dcgpu   |
+| MI350X/MI355X                      | gfx950-dcgpu   |
+| AMD RX 7900 XTX                    | gfx110X-dgpu   |
+| AMD RX 7800 XT                     | gfx110X-dgpu   |
+| AMD RX 7700S / Framework Laptop 16 | gfx110X-dgpu   |
+| AMD Strix Halo iGPU                | gfx1151        |
+| AMD RX 9060 / XT                   | gfx120X-all    |
+| AMD RX 9070 / XT                   | gfx120X-all    |
 
 #### gfx94X-dcgpu
 
