@@ -93,7 +93,7 @@ positive_filter.append("/*GPU_VecAddTest_*")
 
 #############################################
 
-#negative_filter.append("*DBSync*")
+# negative_filter.append("*DBSync*")
 negative_filter.append("*DeepBench*")
 negative_filter.append("*MIOpenTestConv*")
 
