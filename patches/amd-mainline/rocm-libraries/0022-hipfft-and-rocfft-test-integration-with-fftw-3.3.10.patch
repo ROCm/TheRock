@@ -9,31 +9,32 @@ integrated to TheRock build.
 Changes in cmake configuration compared to older version:
 1) FFTW_INCLUDE_DIRS --> FFTW3_INCLUDE_DIRS
 2) FFTW_LIBRARIES
---> FFTW3::fftw3 FFTW3::fftw3f
+-->FFTW3::fftw3 FFTW3::fftw3f
 
 (fftw3q and fftw3qd may need to be added later if support
- for those are also built in fftw and corresponding tests
- added)
+ for those are also build to fftw and then added tests
+ also)
 
 Signed-off-by: Mika Laitio <mika.laitio@amd.com>
 ---
- projects/hipfft/clients/tests/CMakeLists.txt | 4 ++--
+ projects/hipfft/clients/tests/CMakeLists.txt |  5 +++--
  projects/rocfft/clients/tests/CMakeLists.txt | 10 ++++++----
- 2 files changed, 8 insertions(+), 6 deletions(-)
+ 2 files changed, 9 insertions(+), 6 deletions(-)
 
 diff --git a/projects/hipfft/clients/tests/CMakeLists.txt b/projects/hipfft/clients/tests/CMakeLists.txt
-index e49c87b6f6..7761cb445d 100644
+index e49c87b6f6..ecbff97486 100644
 --- a/projects/hipfft/clients/tests/CMakeLists.txt
 +++ b/projects/hipfft/clients/tests/CMakeLists.txt
-@@ -158,7 +158,6 @@ foreach( target ${TEST_TARGETS} )
+@@ -158,7 +158,7 @@ foreach( target ${TEST_TARGETS} )
    target_include_directories( ${target}
      PRIVATE
      $<BUILD_INTERFACE:${Boost_INCLUDE_DIRS}>
--    $<BUILD_INTERFACE:${FFTW3_INCLUDE_DIRS}>
+-    $<BUILD_INTERFACE:${FFTW_INCLUDE_DIRS}>
++    $<BUILD_INTERFACE:${FFTW3_INCLUDE_DIRS}>
      $<BUILD_INTERFACE:${hip_INCLUDE_DIRS}>
      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../library/include>
    )
-@@ -166,7 +165,8 @@ foreach( target ${TEST_TARGETS} )
+@@ -166,7 +166,8 @@ foreach( target ${TEST_TARGETS} )
    target_link_libraries( ${target}
      PRIVATE
      hip::hipfft
@@ -82,7 +83,7 @@ index cfec9a283d..81282b237e 100644
 -      ${FFTW_LIBRARIES}
 +      FFTW3::fftw3
 +      FFTW3::fftw3f
-     )
+     )    
      endif()
      set_target_properties(${worker}
 -- 
