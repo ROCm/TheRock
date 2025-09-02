@@ -255,11 +255,8 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
 
-    # Enable sparse-checkout to avoid pulling massive/missing dirs
+    # Enable sparse-checkout with flexible (non-cone) patterns
     print("[do_checkout] Enabling sparse-checkout excludes...")
-    exec(["git", "sparse-checkout", "init"], cwd=repo_dir)
-
-    # Write sparse-checkout rules directly into .git/info/sparse-checkout
     exec(["git", "sparse-checkout", "init"], cwd=repo_dir)
 
     sparse_file = repo_dir / ".git" / "info" / "sparse-checkout"
