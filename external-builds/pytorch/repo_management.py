@@ -259,13 +259,16 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     print("[do_checkout] Enabling sparse-checkout excludes...")
     exec(["git", "sparse-checkout", "init", "--cone"], cwd=repo_dir)
 
-    # Keep almost everything, but exclude problematic folders
-    sparse_paths = [
-        ".",   # include root
-        "!onnx/backend/test/data/node/*",
-        "!ports/*",
+    # Write sparse-checkout rules directly into .git/info/sparse-checkout
+    sparse_file = repo_dir / ".git" / "info" / "sparse-checkout"
+    sparse_rules = [
+        "/*",                                   # include everything by default
+        "!/onnx/backend/test/data/node",        # exclude ONNX test data dir
+        "!/ports",                              # exclude vcpkg ports dir
     ]
-    exec(["git", "sparse-checkout", "set"] + sparse_paths, cwd=repo_dir)
+    sparse_file.write_text("\n".join(sparse_rules) + "\n")
+
+    exec(["git", "read-tree", "-mu", "HEAD"], cwd=repo_dir)
 
     try:
         exec(
