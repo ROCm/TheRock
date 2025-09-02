@@ -30,7 +30,6 @@ index e49c87b6f6..ecbff97486 100644
      PRIVATE
      $<BUILD_INTERFACE:${Boost_INCLUDE_DIRS}>
 -    $<BUILD_INTERFACE:${FFTW_INCLUDE_DIRS}>
-+    $<BUILD_INTERFACE:${FFTW3_INCLUDE_DIRS}>
      $<BUILD_INTERFACE:${hip_INCLUDE_DIRS}>
      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../library/include>
    )
@@ -88,4 +87,3 @@ index cfec9a283d..81282b237e 100644
      set_target_properties(${worker}
 -- 
 2.34.1
-
