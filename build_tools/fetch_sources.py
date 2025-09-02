@@ -8,6 +8,7 @@ import hashlib
 from pathlib import Path
 import platform
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -91,20 +92,25 @@ def run(args):
 
 
 def pull_large_files(dvc_projects, projects):
+    # Check if dvc is in the PATH
+    if shutil.which("dvc") is None:
+        print("Could not find dvc on PATH so large files could not be fetched")
+        print("To install dvc, run pip install dvc or pip install -r requirements.txt")
     for project in dvc_projects:
-        if project in projects:
-            submodule_path = get_submodule_path(project)
-            project_dir = THEROCK_DIR / submodule_path
-            dvc_config_file = project_dir / ".dvc" / "config"
-            if dvc_config_file.exists():
-                # check for DVC config in the submodule and run dvc pull if found.
-                # presently, only amdgpu-windows-interop in rocm-systems uses DVC, but...
-                # eventually, DVC will be rolled out to math libraries and in linux
-                print(f"dvc detected in {project_dir}, running dvc pull")
-                exec(["dvc", "pull"], cwd=project_dir)
-            else:
-                log(f"WARNING: dvc config not found in {project_dir}, when expected.")
-                continue
+        if not project in projects:
+            continue
+        submodule_path = get_submodule_path(project)
+        project_dir = THEROCK_DIR / submodule_path
+        dvc_config_file = project_dir / ".dvc" / "config"
+        if dvc_config_file.exists():
+            # check for DVC config in the submodule and run dvc pull if found.
+            # presently, only amdgpu-windows-interop in rocm-systems uses DVC, but...
+            # eventually, DVC will be rolled out to math libraries and in linux
+            print(f"dvc detected in {project_dir}, running dvc pull")
+            exec(["dvc", "pull"], cwd=project_dir)
+        else:
+            log(f"WARNING: dvc config not found in {project_dir}, when expected.")
+            continue
 
 
 def remove_smrev_files(args, projects):
