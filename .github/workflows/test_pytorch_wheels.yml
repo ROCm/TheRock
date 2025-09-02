@@ -15,7 +15,7 @@ on:
         description: CloudFront URL pointing to Python index
         required: true
         type: string
-        default: "https://d2awnip2yjpvqn.cloudfront.net/v2"
+        default: "https://rocm.nightlies.amd.com/v2"
       python_version:
         required: true
         type: string
