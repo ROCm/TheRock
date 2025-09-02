@@ -1,0 +1,27 @@
+From ca7dc6a22f6cb2f6ede5a92803a23d65387536d6 Mon Sep 17 00:00:00 2001
+From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
+Date: Tue, 2 Sep 2025 18:59:35 +0900
+Subject: [PATCH 2/2] Fix windows pytorch build with USE_DISTRIBUTED=ON by
+ default
+
+---
+ torch/csrc/distributed/c10d/FileStore.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/torch/csrc/distributed/c10d/FileStore.cpp b/torch/csrc/distributed/c10d/FileStore.cpp
+index 862c983d9e..4a260863a4 100644
+--- a/torch/csrc/distributed/c10d/FileStore.cpp
++++ b/torch/csrc/distributed/c10d/FileStore.cpp
+@@ -33,6 +33,9 @@
+ #define LOCK_SH 0x00000010
+ #define LOCK_UN 0x00000100
+ 
++#if defined(_WIN32) && defined(USE_ROCM)
++static
++#endif
+ int flock_(int fd, int op) {
+   HANDLE hdl = (HANDLE)_get_osfhandle(fd);
+   DWORD low = 1, high = 0;
+-- 
+2.50.1.windows.1
+

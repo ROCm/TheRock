@@ -1,7 +1,7 @@
-From 9bb3a5176853782d8cde5f7a035311b672cf5dda Mon Sep 17 00:00:00 2001
+From 5c9a99dc188f0954c93ce34857540ed4726ecd30 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
 Date: Sun, 10 Aug 2025 00:16:27 +0900
-Subject: [PATCH 2/2] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
+Subject: [PATCH 1/2] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
  on windows
 
 ---
@@ -12,10 +12,10 @@ Subject: [PATCH 2/2] Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton
  4 files changed, 235 insertions(+), 68 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 9fe3855242..120f2384a0 100644
+index 3825cc494a..e5db6c077c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -872,7 +872,7 @@ cmake_dependent_option(
+@@ -873,7 +873,7 @@ cmake_dependent_option(
    "Whether to build the flash_attention kernel for scaled dot product attention.\
    Will be disabled if not supported by the platform"
    ON
@@ -24,7 +24,7 @@ index 9fe3855242..120f2384a0 100644
    OFF)
  
  cmake_dependent_option(
-@@ -896,7 +896,7 @@ cmake_dependent_option(
+@@ -897,7 +897,7 @@ cmake_dependent_option(
  # USE_FLASH_ATTENTION -> USE_ROCM -> Dependencies.cmake -> aotriton.cmake
  #
  if(USE_ROCM)
@@ -168,7 +168,7 @@ index f6f2240d4f..71a1959065 100644
  inline std::tuple<
      at::Tensor,
 diff --git a/cmake/External/aotriton.cmake b/cmake/External/aotriton.cmake
-index 54564e42c9..40e401154e 100644
+index 54564e42c9..1580373cf3 100644
 --- a/cmake/External/aotriton.cmake
 +++ b/cmake/External/aotriton.cmake
 @@ -22,7 +22,7 @@ if(NOT __AOTRITON_INCLUDED)
