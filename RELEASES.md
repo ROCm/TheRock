@@ -319,8 +319,6 @@ them from the expanded artifacts down to a ROCm SDK "dist folder" using the
    [AWS CLI](https://aws.amazon.com/cli/) or
    [AWS SDK for Python (Boto3)](https://aws.amazon.com/sdk-for-python/):
 
-   <!-- TODO: replace URLs with cloudfront / some other CDN instead of raw S3 -->
-
    ```bash
    export LOCAL_ARTIFACTS_DIR=~/therock-artifacts
    export LOCAL_INSTALL_DIR=${LOCAL_ARTIFACTS_DIR}/install
