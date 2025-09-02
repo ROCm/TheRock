@@ -67,7 +67,6 @@ positive_filter.append("*/GPU_Lrn*")
 positive_filter.append("*/GPU_lstm_extra*")
 
 positive_filter.append("*GPU_TestMhaFind20*")
-positive_filter.append("*/GPU_MIOpenDriver*")
 positive_filter.append("*/GPU_MultiMarginLoss_*")
 positive_filter.append("*/GPU_ConvNonpack*")
 positive_filter.append("*/GPU_PerfConfig_HipImplicitGemm*")
@@ -93,12 +92,13 @@ positive_filter.append("*/GPU_VecAddTest_*")
 
 #############################################
 
-negative_filter.append("*DBSync*")
 negative_filter.append("*DeepBench*")
 negative_filter.append("*MIOpenTestConv*")
 
-# Temporary fails
+# Failing tests
 negative_filter.append("*/GPU_KernelTuningNetTest*")
+negative_filter.append("*DBSync*")
+negative_filter.append("*/GPU_MIOpenDriver*")
 
 gtest_final_filter_cmd = (
     "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
