@@ -255,6 +255,18 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
 
+    # Enable sparse-checkout to avoid pulling massive/missing dirs
+    print("[do_checkout] Enabling sparse-checkout excludes...")
+    exec(["git", "sparse-checkout", "init", "--cone"], cwd=repo_dir)
+
+    # Keep almost everything, but exclude problematic folders
+    sparse_paths = [
+        ".",   # include root
+        "!onnx/backend/test/data/node/*",
+        "!ports/*",
+    ]
+    exec(["git", "sparse-checkout", "set"] + sparse_paths, cwd=repo_dir)
+
     try:
         exec(
             ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
@@ -264,19 +276,6 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         print("Failed to fetch git submodules")
         sys.exit(1)
 
-    # Add excludes to silence missing folder warnings
-    exclude_file = repo_dir / ".git" / "info" / "exclude"
-    excludes = [
-        "onnx/backend/test/data/node/*",
-        "ports/*",
-    ]
-    with open(exclude_file, "a") as f:
-        f.write("\n# Auto-added by do_checkout to silence missing folder warnings\n")
-        for pattern in excludes:
-            f.write(pattern + "\n")
-    print(f"[do_checkout] Wrote {len(excludes)} patterns to {exclude_file}")
-
-    # Tag all submodules at current state
     exec(
         [
             "git",
