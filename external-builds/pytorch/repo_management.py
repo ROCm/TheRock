@@ -234,6 +234,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     repo_patch_dir_base = args.patch_dir
     check_git_dir = repo_dir / ".git"
     patches_dir_name = get_patches_dir_name(args)
+
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
         exec(["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir)
@@ -253,6 +254,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     exec(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
+
     try:
         exec(
             ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
@@ -261,6 +263,20 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
+
+    # Add excludes to silence missing folder warnings
+    exclude_file = repo_dir / ".git" / "info" / "exclude"
+    excludes = [
+        "onnx/backend/test/data/node/*",
+        "ports/*",
+    ]
+    with open(exclude_file, "a") as f:
+        f.write("\n# Auto-added by do_checkout to silence missing folder warnings\n")
+        for pattern in excludes:
+            f.write(pattern + "\n")
+    print(f"[do_checkout] Wrote {len(excludes)} patterns to {exclude_file}")
+
+    # Tag all submodules at current state
     exec(
         [
             "git",
