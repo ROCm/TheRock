@@ -27,6 +27,19 @@ include(therock_job_pools)
 include(therock_testing)
 
 ################################################################################
+# Notices
+# If there are ongoing issues for specific configurations log them here.
+################################################################################
+
+#   message(WARNING
+#     "*************************************************\n"
+#     ".."
+#     " The last known good commit on {Windows,Linux} is"
+#     " https://github.com/ROCm/TheRock/commit/{HASH}"
+#     " See https://github.com/ROCm/TheRock/issues/{ISSUE} for details.\n"
+#     "*************************************************")
+
+################################################################################
 # Testing Setup
 # Does normal CMake setup so that BUILD_TESTING functions as a master control
 # switch. Then we set THEROCK_BUILD_TESTING if not explicitly set by the user
@@ -68,6 +81,10 @@ set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-librar
 set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-libraries superrepo")
 cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
 
+set(THEROCM_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-systems")
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCM_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-systems superrepo")
+cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
+
 # Allow to specify alternative source locations instead of using
 # repositories tracked in TheRock's `.gitmodules`.
 therock_enable_external_source("rccl" "${THEROCK_SOURCE_DIR}/comm-libs/rccl" OFF)
@@ -103,7 +120,7 @@ endblock()
 # least from a major/minor perspective, the ROCM version is a "user" version, whereas
 # the HIP version is hardcoded into various places in the code.
 block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
-  set(VERSION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/core/HIP/VERSION")
+  set(VERSION_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip/VERSION")
   if(NOT EXISTS "${VERSION_PATH}")
     message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
   endif()

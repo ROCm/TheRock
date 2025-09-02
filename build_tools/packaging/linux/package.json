@@ -1,0 +1,309 @@
+[
+  {
+    "Package": "rocm-core",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description": "ROCM-CORE package helps to get ROCm release version and install path",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "base",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "rocm-cmake",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [],
+    "RPMRequires": [],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description": "rocm-cmake built using CMake",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-cmake",
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "base",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "rocm-smi-lib",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "RocmSMILib Support <rocm-smi.support@amd.com>",
+    "Description": "AMD System Management libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Suggests": [
+      "sudo",
+      "libdrm-dev",
+      "libdrm-amdgpu-dev"
+    ],
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "base",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "rocprofiler-register",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "libgcc-s1",
+      "libstdc++6"
+    ],
+    "RPMRequires": [
+      "glibc",
+      "libgcc",
+      "libstdc++"
+    ],
+    "Maintainer": "ROCm Profiler Support <dl.ROCm-Profiler.support@amd.com>",
+    "Description": "Registration library for rocprofiler",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "base",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "amd-llvm",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "libstdc++6|libstdc++8",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc",
+      "libstdc++",
+      "libgcc"
+    ],
+    "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
+    "Description": "ROCm llvm compiler based on LLVM 20.0.0",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "System Environment/Libraries",
+    "License": "ASL 2.0 with exceptions",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "DEBRecommends": [
+      "gcc",
+      "g++",
+      "gcc-multilib",
+      "g++-multilib"
+    ],
+    "RPMRecommends": [
+      "gcc",
+      "gcc-c++",
+      "devtoolset-7-gcc-c++"
+    ],
+    "Artifact": "amd-llvm",
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
+
+  },
+  {
+    "Package": "amd-llvm-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amd-llvm",
+      "python3",
+      "libc6",
+      "libstdc++6|libstdc++8",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev"
+    ],
+    "RPMRequires": [
+      "amd-llvm",
+      "python3",
+      "glibc",
+      "libstdc++",
+      "libgcc"
+    ],
+    "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
+    "Description": "ROCm compiler dev tool",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "System Environment/Libraries",
+    "License": "ASL 2.0 with exceptions",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Components": [
+      "dev"
+    ],
+    "DEBRecommends": [
+      "gcc",
+      "g++",
+      "gcc-multilib",
+      "g++-multilib"
+    ],
+    "RPMRecommends": [
+      "gcc",
+      "gcc-c++",
+      "devtoolset-7-gcc-c++"
+    ],
+    "Artifact": "amd-llvm",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "rccl",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-smi-lib",
+      "rocm-core",
+      "libc6",
+      "libgcc-s1",
+      "libstdc++6"
+    ],
+    "RPMRequires": [
+      "rocm-smi-lib",
+      "rocm-core",
+      "glibc",
+      "libgcc",
+      "libstdc++"
+    ],
+    "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
+    "Description": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rccl",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "rccl",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rccl-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rccl"
+    ],
+    "RPMRequires": [
+      "rccl"
+    ],
+    "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
+    "Description": "ROCm Communication Collectives Library development package",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "unknown",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rccl",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "rccl",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocm-base",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description": "ROCM-base package contains the basic ROCm components like rocm-core, rocm-cmake and rocprofiler-register",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Includes": [
+      "rocm-core",
+      "rocm-smi-lib",
+      "rocprofiler-register"
+    ],
+    "Components": [
+      "lib",
+      "dev",
+      "run",
+      "doc"
+    ],
+    "Artifact": "base",
+    "Gfxarch": "False",
+    "Composite": ""
+  }
+
+]

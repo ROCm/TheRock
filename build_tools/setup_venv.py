@@ -45,7 +45,7 @@ from github_actions.github_actions_utils import *
 is_windows = platform.system() == "Windows"
 
 INDEX_URLS_MAP = {
-    "nightly": "https://d2awnip2yjpvqn.cloudfront.net/v2",
+    "nightly": "https://rocm.nightlies.amd.com/v2",
     "dev": "https://d25kgig7rdsyks.cloudfront.net/v2",
 }
 

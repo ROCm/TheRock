@@ -11,6 +11,7 @@ repos:
         exclude: patches/
     -   id: end-of-file-fixer
         exclude: patches/
+        exclude_types: ["image", "jupyter"]
     -   id: check-yaml
         exclude: patches/
     -   id: check-merge-conflict
@@ -40,4 +41,4 @@ repos:
   rev: v1.5.5
   hooks:
   - id: forbid-tabs
-    exclude: ".gitmodules|docs/development/git_chores.md"
+    exclude: ".gitmodules|docs/development/git_chores.md|build_tools/packaging/linux/template/debian_rules.j2"

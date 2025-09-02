@@ -163,42 +163,14 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
 
-      - name: Create Log archive
+      - name: Post Build Upload
         if: always()
         run: |
-          python3 build_tools/create_log_archive.py \
-            --build-dir=${{ env.BUILD_DIR }}
-
-      - name: Create Logs index Files
-        if: always()
-        run: |
-          python3 build_tools/github_actions/create_log_index.py \
-            --build-dir=${{ env.BUILD_DIR }} \
-            --amdgpu-family=${{ env.AMDGPU_FAMILIES }}
-
-      - name: Upload artifacts
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_artifacts.py \
+          python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir ${{ env.BUILD_DIR }}
-
-      - name: Upload Logs
-        if: always()
-        run: |
-          python3 build_tools/github_actions/upload_build_logs_to_s3.py \
-            --build-dir=${{ env.BUILD_DIR }} \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }}
-
-      - name: Add Links to Job Summary
-        if: always()
-        run: |
-          python build_tools/github_actions/upload_build_summary.py \
-            --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --build-dir ${{ env.BUILD_DIR }}
+            --build-dir ${{ env.BUILD_DIR }} \
+            --upload
 
       - name: Save cache
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4

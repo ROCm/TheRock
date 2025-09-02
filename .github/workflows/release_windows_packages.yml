@@ -68,7 +68,7 @@ jobs:
         run: |
           version_suffix="$(printf 'rc%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://d2awnip2yjpvqn.cloudfront.net" >> $GITHUB_ENV
+          echo "cloudfront_base_url=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
@@ -190,13 +190,6 @@ jobs:
           git config --global core.symlinks true
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 96
-
-      - name: Checkout closed source AMDGPU/ROCm interop library folder
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          repository: nod-ai/amdgpu-windows-interop
-          path: amdgpu-windows-interop
-          lfs: true
 
       - name: Configure Projects
         env:

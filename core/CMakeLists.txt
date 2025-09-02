@@ -5,7 +5,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
 
   therock_cmake_subproject_declare(ROCR-Runtime
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "ROCR-Runtime"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ROCR-Runtime"
     BACKGROUND_BUILD
     CMAKE_ARGS
       "-DBUILD_SHARED_LIBS=ON"
@@ -41,7 +42,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
 
   therock_cmake_subproject_declare(rocminfo
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "rocminfo"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocminfo"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocminfo"
     BACKGROUND_BUILD
     RUNTIME_DEPS
       ROCR-Runtime
@@ -77,7 +79,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   set(HIP_CLR_RUNTIME_DEPS)
   if(WIN32)
     # Windows CLR options
-    set(_compute_pal_dir "${CMAKE_CURRENT_SOURCE_DIR}/amdgpu-windows-interop/20250722a")
+    set(_compute_pal_dir "${CMAKE_CURRENT_SOURCE_DIR}/amdgpu-windows-interop/20250820a")
     cmake_path(NORMAL_PATH _compute_pal_dir)
     list(APPEND HIP_CLR_CMAKE_ARGS
       "-DUSE_PROF_API=OFF"
@@ -97,13 +99,14 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
 
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "clr"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/clr"
     INTERFACE_PROGRAM_DIRS
       bin
     BACKGROUND_BUILD
     CMAKE_ARGS
       "-DHIP_PLATFORM=amd"
-      "-DHIP_COMMON_DIR=${CMAKE_CURRENT_SOURCE_DIR}/HIP"
+      "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
       "-DCLR_BUILD_HIP=ON"
       # Legacy: Disable various auto-detection logic that breaks out of jail
       # and can use local machine tools.
@@ -161,6 +164,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       BACKGROUND_BUILD
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"
+        "-DHIP_TESTS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests"
       RUNTIME_DEPS
         hip-clr
     )

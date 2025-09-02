@@ -60,7 +60,7 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
@@ -102,7 +102,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```

@@ -11,9 +11,13 @@ on:
       package_suffix:
         type: string
       s3_subdir:
-        description: "Subdirectory to push the Python packages"
+        description: "Subdirectory to push the packages"
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging subdirectory to push the packages"
+        type: string
+        default: "v2-staging"
   # Trigger manually (typically to test the workflow or manually build a release [candidate])
   workflow_dispatch:
     inputs:
@@ -24,9 +28,13 @@ on:
       package_suffix:
         type: string
       s3_subdir:
-        description: "Subdirectory to push the Python packages"
+        description: "Subdirectory to push the packages"
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging subdirectory to push the packages"
+        type: string
+        default: "v2-staging"
       families:
         description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
         type: string
@@ -44,12 +52,14 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
+      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.release_information.outputs.version }}
       release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
+      cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -64,7 +74,7 @@ jobs:
         run: |
           version_suffix="$(printf 'rc%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://d2awnip2yjpvqn.cloudfront.net" >> $GITHUB_ENV
+          echo "cloudfront_base_url=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
@@ -79,6 +89,7 @@ jobs:
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
           echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
+          echo "cloudfront_staging_url=${cloudfront_base_url}/${{ env.S3_STAGING_SUBDIR }}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -109,6 +120,7 @@ jobs:
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
+      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
 
     steps:
       - name: "Checking out repository"
@@ -147,6 +159,11 @@ jobs:
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
 
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: 3.12
+
       - name: Build Python Packages
         run: |
           ./build_tools/linux_portable_build.py \
@@ -171,6 +188,22 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
 
+      - name: Upload Releases to staging S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
+          --recursive --no-follow-symlinks \
+          --exclude "*" \
+          --include "*.whl" \
+          --include "*.tar.gz"
+
+      - name: (Re-)Generate Python package release index for staging
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
+
+      ## TODO: Restrict uploading to the non-staging S3 directory until ROCm sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
@@ -180,12 +213,6 @@ jobs:
           --exclude "*" \
           --include "*.whl" \
           --include "*.tar.gz"
-
-      - name: Setup Python
-        if: ${{ github.repository_owner == 'ROCm' }}
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: 3.12
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -214,7 +241,9 @@ jobs:
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_SUBDIR }}",
+              "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
+              "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}"
             }
 

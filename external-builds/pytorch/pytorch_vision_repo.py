@@ -58,7 +58,7 @@ THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
     os="centos",
     project="torchvision",
     default_origin="https://github.com/pytorch/vision.git",
-    default_hashtag="v0.22.0",
+    default_hashtag="main",
     default_patchset=None,
 )
 

@@ -7,8 +7,8 @@ set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
 # Use TheRock-provided HIP
 find_package(hip REQUIRED CONFIG)
 
-# Locate upstream sources (hip-tests is a sibling submodule)
-set(HIP_TESTS_DIR "${CMAKE_CURRENT_LIST_DIR}/../hip-tests")
+# Locate sources (hip-tests is a subproject under rocm-systems)
+set(HIP_TESTS_DIR CACHE STRING "")  # Set by the superproject.
 set(HIPINFO_SRC "${HIP_TESTS_DIR}/samples/1_Utils/hipInfo/hipInfo.cpp")
 set(HIPINFO_INC "${HIP_TESTS_DIR}/samples/common")
 
