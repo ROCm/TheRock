@@ -255,18 +255,16 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
 
-    # Enable sparse-checkout with flexible (non-cone) patterns
+    # Enable sparse-checkout (exclude large/unneeded dirs)
     print("[do_checkout] Enabling sparse-checkout excludes...")
     exec(["git", "sparse-checkout", "init"], cwd=repo_dir)
-
     sparse_file = repo_dir / ".git" / "info" / "sparse-checkout"
     sparse_rules = [
-        "/*",                                   # include everything
-        "!/onnx/backend/test/data/node/**",     # exclude ONNX testdata
-        "!/ports/**",                           # exclude vcpkg ports
+        "/*",                                # include everything
+        "!onnx/backend/test/data/node/*",    # exclude ONNX testdata
+        "!ports/*",                          # exclude vcpkg ports
     ]
     sparse_file.write_text("\n".join(sparse_rules) + "\n")
-
     exec(["git", "read-tree", "-mu", "HEAD"], cwd=repo_dir)
 
     try:
@@ -278,6 +276,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         print("Failed to fetch git submodules")
         sys.exit(1)
 
+    # Tag all submodules at current state
     exec(
         [
             "git",
