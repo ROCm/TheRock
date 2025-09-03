@@ -1,0 +1,38 @@
+%global _debugsource_template %{nil}
+%global debug_package %{nil}          # disables -debuginfo
+
+Name: {{ pkg_name }}
+Version: {{ version }}
+Release: {{ release }}
+BuildArch: {{ build_arch }}
+Summary: {{ description }}
+Group: {{ group }}
+License: {{ pkg_license }}
+Vendor: {{ vendor }}
+Prefix: {{ install_prefix }}
+{% if requires %}
+Requires: {{ requires }}
+{% endif %}
+{% if rpmrecommends %}
+Recommends: {{ rpmrecommends }}
+{% endif %}
+
+%description
+{{ description }}
+
+%prep
+%setup -T -D -c -n {{ pkg_name }}
+
+%build
+
+%install
+mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
+{% for path in sourcedir_list %}
+cp -R {{ path }}/* $RPM_BUILD_ROOT{{ install_prefix }}
+{% endfor %}
+
+%files
+{{ install_prefix }}
+
+%clean
+rm -rf $RPM_BUILD_ROOT

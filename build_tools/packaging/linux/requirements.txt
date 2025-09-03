@@ -1,0 +1,3 @@
+pyelftools
+boto3
+jinja2

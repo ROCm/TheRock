@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+#export DH_VERBOSE = 1
+
+%:
+	dh $@ --no-parallel
+
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
+
+{% if disable_dwz %}
+override_dh_dwz:
+	:
+{% endif %}
+
+
+
+override_dh_shlibdeps:
+	@echo "Skipping dh_shlibdeps"
+
+
+override_dh_clean:
+	dh_clean
+	rm -f ../*.dsc ../*.tar.gz

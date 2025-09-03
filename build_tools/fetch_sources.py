@@ -328,7 +328,6 @@ def main(argv):
         type=str,
         default=[
             "half",
-            "hip-tests",
             "rccl",
             "rccl-tests",
             "rocm-cmake",
@@ -349,6 +348,7 @@ def main(argv):
         default=[
             "HIPIFY",
             "llvm-project",
+            "spirv-llvm-translator",
         ],
     )
     parser.add_argument(

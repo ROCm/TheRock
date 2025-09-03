@@ -101,7 +101,7 @@ project layouts.**
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
   rocm[libraries,devel]
 ```
 
@@ -109,7 +109,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
   rocm[libraries,devel]
 ```
 
@@ -117,7 +117,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
   rocm[libraries,devel]
 ```
 
@@ -125,7 +125,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
   rocm[libraries,devel]
 ```
 
@@ -133,7 +133,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
   rocm[libraries,devel]
 ```
 
@@ -204,7 +204,7 @@ Using the index pages listed above, you can install `torch`, `torchaudio`, and
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
   torch torchaudio torchvision
 ```
 
@@ -212,7 +212,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
   torch torchaudio torchvision
 ```
 
@@ -220,7 +220,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
   torch torchaudio torchvision
 ```
 
@@ -228,7 +228,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
   torch torchaudio torchvision
 ```
 
@@ -236,7 +236,7 @@ python -m pip install \
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
   torch torchaudio torchvision
 ```
 
@@ -318,8 +318,6 @@ them from the expanded artifacts down to a ROCm SDK "dist folder" using the
 1. Download the artifacts for that workflow run from S3 using either the
    [AWS CLI](https://aws.amazon.com/cli/) or
    [AWS SDK for Python (Boto3)](https://aws.amazon.com/sdk-for-python/):
-
-   <!-- TODO: replace URLs with cloudfront / some other CDN instead of raw S3 -->
 
    ```bash
    export LOCAL_ARTIFACTS_DIR=~/therock-artifacts

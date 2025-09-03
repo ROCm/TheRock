@@ -27,6 +27,19 @@ include(therock_job_pools)
 include(therock_testing)
 
 ################################################################################
+# Notices
+# If there are ongoing issues for specific configurations log them here.
+################################################################################
+
+#   message(WARNING
+#     "*************************************************\n"
+#     ".."
+#     " The last known good commit on {Windows,Linux} is"
+#     " https://github.com/ROCm/TheRock/commit/{HASH}"
+#     " See https://github.com/ROCm/TheRock/issues/{ISSUE} for details.\n"
+#     "*************************************************")
+
+################################################################################
 # Testing Setup
 # Does normal CMake setup so that BUILD_TESTING functions as a master control
 # switch. Then we set THEROCK_BUILD_TESTING if not explicitly set by the user
