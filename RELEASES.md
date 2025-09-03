@@ -244,7 +244,7 @@ python -m pip install \
 ```
 
 Similarly, compatible wheels for `torch 2.9.0` can be installed with 
-`torch==2.9.0a torchaudio==2.8.0a0 torchvision==0.24.0a0`.
+`torch==2.9.0a0 torchaudio==2.8.0a0 torchvision==0.24.0a0`.
 A list of available versions can be found at [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions).
 Alternatively, all available wheels can be seen by navigating the
 [nightlies page](https://rocm.nightlies.amd.com/v2/).
