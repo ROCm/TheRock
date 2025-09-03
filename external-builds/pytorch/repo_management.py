@@ -243,6 +243,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         exec(["git", "init", "--initial-branch=main"], cwd=repo_dir)
         exec(["git", "config", "advice.detachedHead", "false"], cwd=repo_dir)
         exec(["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir)
+
     # Fetch and checkout.
     fetch_args = []
     if args.depth is not None:
@@ -288,6 +289,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         stdout_devnull=True,
     )
     git_config_ignore_submodules(repo_dir)
+
     # Base patches.
     if args.patch and patches_dir_name:
         apply_all_patches(
@@ -296,10 +298,12 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
             args.repo_name,
             "base",
         )
+
     # Hipify.
     if args.hipify:
         custom_hipify(args)
         commit_hipify(args)
+
     # Hipified patches.
     if args.hipify and args.patch and patches_dir_name:
         apply_all_patches(
