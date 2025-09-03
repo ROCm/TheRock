@@ -260,15 +260,37 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
+    # Debug: List submodules
+    print(f"Submodules: {list_submodules(repo_dir, relative=True)}")
     # Clean up unwanted directories in submodules
     exclude_paths = [
-        repo_dir / "onnx" / "backend" / "test" / "data" / "node",
+        repo_dir / "third_party" / "onnx" / "backend" / "test" / "data" / "node",
         repo_dir / "ports",
     ]
     for exclude_path in exclude_paths:
         if exclude_path.exists():
             print(f"Removing excluded directory: {exclude_path}")
             shutil.rmtree(exclude_path, ignore_errors=True)
+        else:
+            print(f"Excluded directory not found: {exclude_path}")
+    # Debug: List contents of onnx submodule if it exists
+    onnx_path = repo_dir / "third_party" / "onnx"
+    if onnx_path.exists():
+        print(f"Contents of {onnx_path}: {list(onnx_path.iterdir())}")
+        # Check commit hash of onnx submodule
+        try:
+            commit_hash = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=str(onnx_path),
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
+            print(f"Commit hash of {onnx_path}: {commit_hash}")
+        except subprocess.CalledProcessError:
+            print(f"Could not get commit hash for {onnx_path}")
     exec(
         [
             "git",
@@ -301,6 +323,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
             args.repo_name,
             "hipified",
         )
+
 
 def do_save_patches(args: argparse.Namespace):
     repo_name = args.repo_name
