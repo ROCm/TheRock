@@ -45,6 +45,9 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | RDNA2        | gfx1035     |               |               |               |
 | RDNA2        | gfx1032     |               |               |               |
 | RDNA2        | gfx1030     |               |               |               |
+| RDNA1        | gfx1012     | ✅            |               |               |
+| RDNA1        | gfx1011     | ✅            |               |               |
+| RDNA1        | gfx1010     | ✅            |               |               |
 | GCN5.1       | gfx906      | ✅            |               |               |
 
 ### ROCm on Windows
@@ -66,4 +69,7 @@ Check [windows_support.md](docs/development/windows_support.md) on current statu
 | RDNA2        | gfx1035     |               |               |               |
 | RDNA2        | gfx1032     |               |               |               |
 | RDNA2        | gfx1030     |               |               |               |
+| RDNA1        | gfx1012     |               |               |               |
+| RDNA1        | gfx1011     |               |               |               |
+| RDNA1        | gfx1010     |               |               |               |
 | GCN5.1       | gfx906      |               |               |               |
