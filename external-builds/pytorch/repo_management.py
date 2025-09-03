@@ -261,7 +261,9 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
-    # Clean up unwanted directories
+    # Delete directories which are the source of flaky pytorch 
+    # checkouts on Windows and are not used during the build.
+    # See https://github.com/ROCm/TheRock/issues/1149.
     exclude_paths = [
         repo_dir
         / "third_party"
