@@ -228,7 +228,6 @@ def commit_hipify(args: argparse.Namespace):
         )
         exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
-
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     repo_dir: Path = args.repo
     repo_patch_dir_base = args.patch_dir
@@ -257,14 +256,16 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
 
     # Enable sparse-checkout (exclude large/unneeded dirs)
     print("[do_checkout] Enabling sparse-checkout excludes...")
-    exec(["git", "sparse-checkout", "init"], cwd=repo_dir)
+    exec(["git", "sparse-checkout", "init", "--cone"], cwd=repo_dir)
+
     sparse_file = repo_dir / ".git" / "info" / "sparse-checkout"
     sparse_rules = [
-        "/*",                                # include everything
-        "!onnx/backend/test/data/node/*",    # exclude ONNX testdata
-        "!ports/*",                          # exclude vcpkg ports
+        "/*",                                   # include everything
+        "!onnx/backend/test/data/node",         # exclude ONNX testdata dir
+        "!ports",                               # exclude vcpkg ports dir
     ]
     sparse_file.write_text("\n".join(sparse_rules) + "\n")
+
     exec(["git", "read-tree", "-mu", "HEAD"], cwd=repo_dir)
 
     try:
