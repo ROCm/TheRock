@@ -229,10 +229,6 @@ def commit_hipify(args: argparse.Namespace):
         exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
 
-from pathlib import Path
-import subprocess
-import shutil
-
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     repo_dir: Path = args.repo
     repo_patch_dir_base = args.patch_dir
@@ -264,79 +260,22 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
-    # Debug: List submodules
-    submodules = list_submodules(repo_dir, relative=True)
-    print(f"Submodules: {submodules}")
-    # Search for additional 'ports' directories using Bash find command (optional)
-    ports_paths = []
-    try:
-        result = subprocess.check_output(
-            ["find", str(repo_dir), "-type", "d", "-name", "ports"],
-            cwd=str(repo_dir),
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        ports_paths = [Path(line.strip()) for line in result.splitlines() if line.strip()]
-        for path in ports_paths:
-            print(f"Found ports directory: {path}")
-    except subprocess.CalledProcessError:
-        print("No additional ports directories found in root repository")
-    for submodule in submodules:
-        try:
-            result = subprocess.check_output(
-                ["find", str(repo_dir / submodule), "-type", "d", "-name", "ports"],
-                cwd=str(repo_dir / submodule),
-                stderr=subprocess.DEVNULL,
-                text=True,
-            )
-            submodule_ports = [Path(line.strip()) for line in result.splitlines() if line.strip()]
-            for path in submodule_ports:
-                print(f"Found ports directory in submodule {submodule}: {path}")
-                ports_paths.append(path)
-        except subprocess.CalledProcessError:
-            print(f"No additional ports directories found in submodule {submodule}")
     # Clean up unwanted directories
     exclude_paths = [
-        repo_dir / "third_party" / "onnx" / "onnx" / "backend" / "test" / "data" / "node",
+        repo_dir
+        / "third_party"
+        / "onnx"
+        / "onnx"
+        / "backend"
+        / "test"
+        / "data"
+        / "node",
         repo_dir / "third_party" / "opentelemetry-cpp" / "tools" / "vcpkg" / "ports",
-    ] + ports_paths  # Include any additional ports directories
+    ]
     for exclude_path in exclude_paths:
         if exclude_path.exists():
             print(f"Removing excluded directory: {exclude_path}")
             shutil.rmtree(exclude_path, ignore_errors=True)
-        else:
-            print(f"Excluded directory not found: {exclude_path}")
-    # Debug: List contents of onnx and opentelemetry-cpp submodules
-    onnx_path = repo_dir / "third_party" / "onnx"
-    if onnx_path.exists():
-        print(f"Contents of {onnx_path}: {list(onnx_path.iterdir())}")
-        onnx_subpath = onnx_path / "onnx"
-        if onnx_subpath.exists():
-            print(f"Contents of {onnx_subpath}: {list(onnx_subpath.iterdir())}")
-        try:
-            commit_hash = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                cwd=str(onnx_path),
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
-            print(f"Commit hash of {onnx_path}: {commit_hash}")
-        except subprocess.CalledProcessError:
-            print(f"Could not get commit hash for {onnx_path}")
-    opentelemetry_path = repo_dir / "third_party" / "opentelemetry-cpp"
-    if opentelemetry_path.exists():
-        print(f"Contents of {opentelemetry_path}: {list(opentelemetry_path.iterdir())}")
-        vcpkg_subpath = opentelemetry_path / "tools" / "vcpkg"
-        if vcpkg_subpath.exists():
-            print(f"Contents of {vcpkg_subpath}: {list(vcpkg_subpath.iterdir())}")
-        try:
-            commit_hash = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                cwd=str(opentelemetry_path),
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
-            print(f"Commit hash of {opentelemetry_path}: {commit_hash}")
-        except subprocess.CalledProcessError:
-            print(f"Could not get commit hash for {opentelemetry_path}")
     exec(
         [
             "git",
