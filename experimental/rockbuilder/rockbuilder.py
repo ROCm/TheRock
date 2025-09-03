@@ -417,6 +417,7 @@ def verify_build_env(args, rock_builder_home_dir: Path, rock_builder_build_dir: 
                 hipcc_home = folder_path.parent
                 # make sure that we found bin/clang and not clang folder
                 if hipcc_home.name.lower() == "bin":
+                    os.environ["ROCK_BUILDER_COMPILER_HIPCC"] = folder_path.as_posix()
                     hipcc_home = hipcc_home.parent
                     if hipcc_home.is_dir():
                         hipcc_home = hipcc_home.resolve()
@@ -431,6 +432,7 @@ def verify_build_env(args, rock_builder_home_dir: Path, rock_builder_build_dir: 
                 clang_home = folder_path.parent
                 # make sure that we found bin/clang and not clang folder
                 if clang_home.name.lower() == "bin":
+                    os.environ["ROCK_BUILDER_COMPILER_CLANG"] = folder_path.as_posix()
                     clang_home = clang_home.parent
                     if clang_home.is_dir():
                         clang_home = clang_home.resolve()
