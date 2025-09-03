@@ -176,6 +176,17 @@ mix/match build steps.
 
 ## Running/testing PyTorch
 
+## Gating releases with Pytorch tests
+
+With passing builds we upload Pytorch, TorchVisual, TorchAudio and Triton wheels to "v2-staging" s3 bucket
+https://rocm.nightlies.amd.com/<v2-staging>/<gfx110X-dgpu>/
+
+Only with passing Torch tests we promote passed wheels to release s3 bucket
+https://rocm.nightlies.amd.com/<v2>/<gfx110X-dgpu>/
+
+If no runner is available: Promotion is blocked by default. Set bypass_tests_for_releases=true only for exceptional cases under amdgpu_family_matrix.py.
+(/build_tools/github_actions/amdgpu_family_matrix.py)
+
 ### Running ROCm and PyTorch sanity checks
 
 The simplest tests for a working PyTorch with ROCm install are:
