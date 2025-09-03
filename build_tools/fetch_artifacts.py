@@ -69,7 +69,7 @@ if None not in (_access_key_id, _secret_access_key, _session_token):
         aws_access_key_id=_access_key_id,
         aws_secret_access_key=_secret_access_key,
         aws_session_token=_session_token,
-)
+    )
 else:
     # Otherwise use anonymous boto file.
     s3_client = boto3.client(
