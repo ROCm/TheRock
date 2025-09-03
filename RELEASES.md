@@ -195,17 +195,20 @@ framework.
 ### Installing PyTorch Python packages
 
 > [!WARNING]
-> This is under **active** development.
+> This is under **active** development. Compatibility matrix for these wheels
+> is in progress.
 
 Using the index pages listed above, you can install `torch`, `torchaudio`, and
-`torchvision` instead of `rocm[libraries,devel]`:
+`torchvision` instead of `rocm[libraries,devel]`. Specfic versions should be
+specified to avoid incompatibilities which might arise due to `pip`'s default
+behavior. For example, for `torch` 2.7.1:
 
 #### gfx94X-dcgpu
 
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  torch torchaudio torchvision
+  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 ```
 
 #### gfx950-dcgpu
@@ -213,7 +216,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  torch torchaudio torchvision
+  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 ```
 
 #### gfx110X-dgpu
@@ -221,7 +224,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  torch torchaudio torchvision
+  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 ```
 
 #### gfx1151
@@ -229,7 +232,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  torch torchaudio torchvision
+  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 ```
 
 #### gfx120X-all
@@ -237,8 +240,14 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  torch torchaudio torchvision
+  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 ```
+
+Similarly, compatible wheels for `torch 2.9.0` can be installed with 
+`torch==2.9.0a torchaudio==2.8.0a0 torchvision==0.24.0a0`.
+A list of available versions can be found at [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions).
+Alternatively, all available wheels can be seen by navigating the
+[nightlies page](https://rocm.nightlies.amd.com/v2/).
 
 ### Using PyTorch Python packages
 
