@@ -67,21 +67,36 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "expect_failure": False,
-        }
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx90X-dcgpu",
+            "expect_failure": False,
+        },
     },
     "gfx101x": {
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "expect_failure": False,
-        }
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx101X-dgpu",
+            "expect_failure": False,
+        },
     },
     "gfx103x": {
         "linux": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "expect_failure": True,
-        }
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx103X-dgpu",
+            "expect_failure": True,
+        },
     },
 }
 
