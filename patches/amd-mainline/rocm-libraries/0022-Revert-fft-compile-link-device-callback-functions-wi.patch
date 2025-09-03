@@ -1,8 +1,8 @@
-From 26d7d8da8f2a091175ac702ea17347bf88a5f825 Mon Sep 17 00:00:00 2001
+From 5827d16f1d19737ee2f0e1498a0400179ee8cd37 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 26 Aug 2025 16:42:49 +0000
-Subject: [PATCH] Revert "fft: compile/link device callback functions with
- -fgpu-rdc (#1103)"
+Subject: [PATCH 22/23] Revert "fft: compile/link device callback functions
+ with -fgpu-rdc (#1103)"
 
 This reverts commit db31de0fb97a0aecbeeaedafa755b50f6f0d5451.
 ---
@@ -114,5 +114,5 @@ index 69beaa26a2..943facac61 100644
    target_compile_definitions(rocfft PRIVATE ROCFFT_MPI_ENABLE)
    include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 -- 
-2.43.0
+2.47.1.windows.2
 

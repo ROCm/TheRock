@@ -1,14 +1,12 @@
-From 51c4addeb6e94cbe9fb9affaa3452847299192f6 Mon Sep 17 00:00:00 2001
+From f4fe4261e2505e92f9f59f45fb1a03a6ab360633 Mon Sep 17 00:00:00 2001
 From: geomin12 <geomin12@amd.com>
-Date: Wed, 20 Aug 2025 10:15:52 -0700
-Subject: [PATCH 23/24] Adding gtest target link for rocFFT
+Date: Wed, 3 Sep 2025 14:13:17 -0700
+Subject: [PATCH 23/23] Adding gtest target link rocFFT
 
-Co-authored-by: Mika Laitio <mika.laitio@amd.com>
-Signed-off-by: geomin12 <geomin12@amd.com>
 ---
  .../rocfft/clients/cmake/build-gtest.cmake    | 48 -------------------
- projects/rocfft/clients/tests/CMakeLists.txt  | 12 +----
- 2 files changed, 2 insertions(+), 58 deletions(-)
+ projects/rocfft/clients/tests/CMakeLists.txt  | 14 +-----
+ 2 files changed, 2 insertions(+), 60 deletions(-)
  delete mode 100644 projects/rocfft/clients/cmake/build-gtest.cmake
 
 diff --git a/projects/rocfft/clients/cmake/build-gtest.cmake b/projects/rocfft/clients/cmake/build-gtest.cmake
@@ -66,13 +64,15 @@ index 441eca65d3..0000000000
 -endif()
 -
 diff --git a/projects/rocfft/clients/tests/CMakeLists.txt b/projects/rocfft/clients/tests/CMakeLists.txt
-index 81282b237e..79d371b2c5 100644
+index 3e49f2345a..8edcbc90da 100644
 --- a/projects/rocfft/clients/tests/CMakeLists.txt
 +++ b/projects/rocfft/clients/tests/CMakeLists.txt
-@@ -189,16 +189,8 @@ set( rocfft-test_link_libs
-   FFTW3::fftw3 FFTW3::fftw3f OpenMP::OpenMP_CXX
+@@ -212,18 +212,8 @@ if( BUILD_CLIENTS_TESTS_OPENMP )
    )
+ endif()
  
+-
+-
 -include( ../cmake/build-gtest.cmake )
 -
 -if( BUILD_GTEST OR NOT GTEST_FOUND )
@@ -89,5 +89,5 @@ index 81282b237e..79d371b2c5 100644
  target_compile_options( rocfft-test PRIVATE ${WARNING_FLAGS} -Wno-cpp )
  
 -- 
-2.34.1
+2.47.1.windows.2
 

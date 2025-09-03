@@ -1,7 +1,7 @@
-From 6187c53459567244256d102882dc417ac24c739a Mon Sep 17 00:00:00 2001
+From 12a89b42ea765598e72a7f81d534bc3ecd27341d Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Wed, 20 Aug 2025 20:59:07 +0000
-Subject: [PATCH 17/17] Use workgroupMappingDim in rocroller_host
+Subject: [PATCH 21/23] Use workgroupMappingDim in rocroller_host
 
 The api for command solution changed so
 use the workgroupMappingDim rather than workgroupMapping
@@ -23,5 +23,5 @@ index c505f9122d..d724d600e7 100644
  
      if(gemm->workgroupRemapXCC)
 -- 
-2.25.1
+2.47.1.windows.2
 

@@ -1,20 +1,15 @@
-From fc4b14ecde0c95d91704b112ca7cf9efa5fd9120 Mon Sep 17 00:00:00 2001
-From: Mika Laitio <mika.laitio@amd.com>
-Date: Wed, 20 Aug 2025 13:18:03 -0700
-Subject: [PATCH 24/24] Fix GTest detection for TheRock
+From dfc1878a68d366337341a6556b03766d91090f07 Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Wed, 3 Sep 2025 14:37:26 -0700
+Subject: [PATCH 24/24] Changing gtest check for hipFFT
 
-- Removed REQUIRED keyword from find_package to allow fallback
-- Updated detection logic to use modern CMake variable `GTest_FOUND`
-- Linked against GTest::gtest instead of ${GTEST_LIBRARIES}
-
-Signed-off-by: Mika Laitio <mika.laitio@amd.com>
 ---
  projects/hipfft/clients/CMakeLists.txt       | 4 ++--
- projects/hipfft/clients/tests/CMakeLists.txt | 6 ++++--
- 2 files changed, 6 insertions(+), 4 deletions(-)
+ projects/hipfft/clients/tests/CMakeLists.txt | 7 ++++---
+ 2 files changed, 6 insertions(+), 5 deletions(-)
 
 diff --git a/projects/hipfft/clients/CMakeLists.txt b/projects/hipfft/clients/CMakeLists.txt
-index 739ef036a2..4c4e5f32a7 100644
+index 739ef036a2..67de6e8830 100644
 --- a/projects/hipfft/clients/CMakeLists.txt
 +++ b/projects/hipfft/clients/CMakeLists.txt
 @@ -88,9 +88,9 @@ if( BUILD_CLIENTS_SAMPLES )
@@ -30,12 +25,12 @@ index 739ef036a2..4c4e5f32a7 100644
        ${CMAKE_CURRENT_BINARY_DIR}/src/gtest/googletest/include
        )
 diff --git a/projects/hipfft/clients/tests/CMakeLists.txt b/projects/hipfft/clients/tests/CMakeLists.txt
-index ecbff97486..99827428aa 100644
+index 7ce9b49987..c186460c1f 100644
 --- a/projects/hipfft/clients/tests/CMakeLists.txt
 +++ b/projects/hipfft/clients/tests/CMakeLists.txt
-@@ -185,10 +185,12 @@ foreach( target ${TEST_TARGETS} )
-   rocm_install(TARGETS ${target} COMPONENT tests)
- endforeach()
+@@ -223,10 +223,11 @@ endforeach()
+ 
+ find_package( GTest 1.11.0 )
  
 -if( GTEST_FOUND )
 -  target_include_directories( hipfft-test PRIVATE $<BUILD_INTERFACE:${GTEST_INCLUDE_DIRS}> )
@@ -44,10 +39,10 @@ index ecbff97486..99827428aa 100644
 +  message(STATUS "Using system GTest")
 +  target_link_libraries( hipfft-test PRIVATE GTest::gtest )
  else()
-+  message(STATUS "System GTest not found, using manually built GTest")
++  # gtest build by hipFFT
    add_dependencies( hipfft-test gtest )
    target_include_directories( hipfft-test PRIVATE hipfft-test_include_dirs ${GTEST_INCLUDE_DIRS} )
    target_link_libraries( hipfft-test PRIVATE ${GTEST_LIBRARIES} )
- endif()
 -- 
-2.34.1
+2.47.1.windows.2
+
