@@ -1,0 +1,55 @@
+From e47dca55fccc06af91ccc2488b26b05a32270868 Mon Sep 17 00:00:00 2001
+From: Troy Alderson <58866654+tfalders@users.noreply.github.com>
+Date: Wed, 27 Aug 2025 14:05:51 -0600
+Subject: [PATCH 02/25] Changelog for 7.1 FC (#1015)
+
+---
+ CHANGELOG.md   | 15 +++------------
+ CMakeLists.txt |  2 +-
+ 2 files changed, 4 insertions(+), 13 deletions(-)
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 1a86816a8f..bbbaff1f1c 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -2,21 +2,12 @@
+ 
+ Full documentation for rocSOLVER is available at the [rocSOLVER documentation](https://rocm.docs.amd.com/projects/rocSOLVER/en/latest/index.html).
+ 
+-## (Unreleased) rocSOLVER
++## rocSOLVER 3.31.0 for ROCm 7.1.0
+ 
+-### Added
+-### Changed
+-### Removed
+ ### Optimized
+ 
+-* Improved the performance of LARFT and downstream functions such as GEQRF and ORMTR
+-* Improved the performance of LARF and downstream functions such as GEQR2
+-* Improved the performance of ORMTR and downstream functions such as SYEVD
+-* Improved the performance of GEQR2 and downstream functions such as GEQRF
+-
+-### Resolved issues
+-### Known issues
+-### Upcoming changes
++* Improved the performance of LARF, LARFT, GEQR2, and downstream functions such as GEQRF
++* Improved the performance of STEDC and divide and conquer Eigensolvers
+ 
+ 
+ 
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 32757570f7..16e9bbf62b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -206,7 +206,7 @@ find_package(hip REQUIRED CONFIG PATHS ${ROCM_PATH} /opt/rocm)
+ find_package(rocblas REQUIRED CONFIG PATHS ${ROCM_PATH})
+ get_imported_target_location(location roc::rocblas)
+ message(STATUS "Found rocBLAS: ${location}")
+-set(rocblas_minimum 4.4)
++set(rocblas_minimum 5.1)
+ rocm_package_add_dependencies(SHARED_DEPENDS "rocblas >= ${rocblas_minimum}")
+ rocm_package_add_rpm_dependencies(STATIC_DEPENDS "rocblas-static-devel >= ${rocblas_minimum}")
+ rocm_package_add_deb_dependencies(STATIC_DEPENDS "rocblas-static-dev >= ${rocblas_minimum}")
+-- 
+2.47.1.windows.2
+

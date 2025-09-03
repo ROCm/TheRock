@@ -1,0 +1,380 @@
+From de81b0b006edf566b5545ac6460c2d0af81731d9 Mon Sep 17 00:00:00 2001
+From: "assistant-librarian[bot]"
+ <210906412+assistant-librarian[bot]@users.noreply.github.com>
+Date: Wed, 27 Aug 2025 14:55:53 -0700
+Subject: [PATCH 04/25] Adding auto-allocation logic for rocfft tests (#993)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Following up here upon completion of
+https://github.com/ROCm/hipFFT/pull/160.
+
+Note:
+1. if auto-allocation is used, plans allocate resources at execution for
+rocFFT whereas they do it at plan generation for hipFFT;
+2. "default" auto-allocation flag for rocFFT tests is equivalent to
+"off", while "default" auto-allocation behavior for hipFFT tests is
+equivalent to "on", consistently with the above;
+3. If "on" auto-allocation flag is used for a rocFFT test, that would
+force the underlying plan to allocate resources at execution time. It
+might be best to have a warning printed by bench in that case?
+
+---
+🔁 Imported from
+[ROCm/rocFFT#626](https://github.com/ROCm/rocFFT/pull/626)
+🧑‍💻 Originally authored by @regan-amd
+
+Co-authored-by: Raphael Egan <Raphael.Egan@amd.com>
+---
+ projects/rocfft/clients/bench/bench.cpp      |  6 +-
+ projects/rocfft/clients/tests/gtest_main.cpp |  5 ++
+ projects/rocfft/shared/accuracy_test.h       |  4 +-
+ projects/rocfft/shared/fft_params.h          | 77 ++++++++++++++++----
+ projects/rocfft/shared/params_gen.h          | 54 ++++++++++----
+ projects/rocfft/shared/rocfft_params.h       |  6 +-
+ 6 files changed, 117 insertions(+), 35 deletions(-)
+
+diff --git a/projects/rocfft/clients/bench/bench.cpp b/projects/rocfft/clients/bench/bench.cpp
+index 4ebe3e739f..1d30106bbf 100644
+--- a/projects/rocfft/clients/bench/bench.cpp
++++ b/projects/rocfft/clients/bench/bench.cpp
+@@ -87,7 +87,11 @@ int main(int argc, char* argv[])
+                      "Type of transform:\n0) complex forward\n1) complex inverse\n2) real "
+                      "forward\n3) real inverse")
+         ->default_val(fft_transform_type_complex_forward);
+-
++    non_token
++        ->add_option("--auto_allocation",
++                     params.auto_allocate,
++                     "rocFFT's auto-allocation behavior: \"on\", \"off\", or \"default\"")
++        ->default_val("default");
+     non_token
+         ->add_option(
+             "--precision", params.precision, "Transform precision: single (default), double, half")
+diff --git a/projects/rocfft/clients/tests/gtest_main.cpp b/projects/rocfft/clients/tests/gtest_main.cpp
+index 45147642bf..aff9dc16e4 100644
+--- a/projects/rocfft/clients/tests/gtest_main.cpp
++++ b/projects/rocfft/clients/tests/gtest_main.cpp
+@@ -486,6 +486,11 @@ int main(int argc, char* argv[])
+                      "Type of transform:\n0) complex forward\n1) complex inverse\n2) real "
+                      "forward\n3) real inverse")
+         ->default_val(fft_transform_type_complex_forward);
++    non_token
++        ->add_option("--auto_allocation",
++                     manual_params.auto_allocate,
++                     "rocFFT's auto-allocation behavior: \"on\", \"off\", or \"default\"")
++        ->default_val("default");
+     non_token
+         ->add_option("--precision",
+                      manual_params.precision,
+diff --git a/projects/rocfft/shared/accuracy_test.h b/projects/rocfft/shared/accuracy_test.h
+index 156c4f51e1..3d21fab090 100644
+--- a/projects/rocfft/shared/accuracy_test.h
++++ b/projects/rocfft/shared/accuracy_test.h
+@@ -569,7 +569,7 @@ inline void run_round_trip_inverse(Tparams&              params,
+     catch(fft_params::work_buffer_alloc_failure& e)
+     {
+         std::stringstream ss;
+-        ss << "Failed to allocate work buffer (size: " << params.workbuffersize << ")";
++        ss << "Failed to allocate work buffer (size: " << e.attempted_size << ")";
+         ++n_hip_failures;
+         if(skip_runtime_fails)
+         {
+@@ -770,7 +770,7 @@ inline void fft_vs_reference_impl(Tparams& params, bool round_trip)
+     {
+         ++n_hip_failures;
+         std::stringstream ss;
+-        ss << "Work buffer allocation failed with size: " << params.workbuffersize;
++        ss << "Work buffer allocation failed with size: " << e.attempted_size;
+         if(skip_runtime_fails)
+         {
+             throw ROCFFT_SKIP{ss.str()};
+diff --git a/projects/rocfft/shared/fft_params.h b/projects/rocfft/shared/fft_params.h
+index 0fcbd97cd6..60c6158cb7 100644
+--- a/projects/rocfft/shared/fft_params.h
++++ b/projects/rocfft/shared/fft_params.h
+@@ -74,7 +74,7 @@ enum fft_precision
+     fft_precision_double,
+ };
+ 
+-// Used for CLI11 parsing of input gen enum
++// Used for CLI11 parsing of precision enum
+ static bool lexical_cast(const std::string& word, fft_precision& precision)
+ {
+     if(word == "half")
+@@ -88,6 +88,28 @@ static bool lexical_cast(const std::string& word, fft_precision& precision)
+     return true;
+ }
+ 
++enum fft_auto_allocation
++{
++    fft_auto_allocation_on,
++    fft_auto_allocation_off,
++    fft_auto_allocation_default
++};
++
++// Used for CLI11 parsing of auto-allocation enum
++static bool lexical_cast(const std::string& word, fft_auto_allocation& auto_allocation)
++{
++    if(word == "on")
++        auto_allocation = fft_auto_allocation_on;
++    else if(word == "off")
++        auto_allocation = fft_auto_allocation_off;
++    else if(word == "default")
++        auto_allocation = fft_auto_allocation_default;
++    else
++        throw std::runtime_error(
++            "Invalid auto-allocation behavior specified (choose \"on\", \"off\", or \"default\")");
++    return true;
++}
++
+ // fft_input_generator: linearly spaced sequence in [-0.5,0.5]
+ // fft_input_random_generator: pseudo-random sequence in [-0.5,0.5]
+ enum fft_input_generator
+@@ -491,7 +513,7 @@ public:
+     fft_input_generator igen = fft_input_random_generator_host;
+ #endif
+ 
+-    size_t workbuffersize = 0;
++    fft_auto_allocation auto_allocate = fft_auto_allocation_default;
+ 
+     enum fft_mp_lib
+     {
+@@ -1069,6 +1091,12 @@ public:
+             ret += std::to_string(multiGPU);
+         }
+ 
++        if(auto_allocate != fft_auto_allocation_default)
++        {
++            ret += "_autoallocation_";
++            ret += (auto_allocate == fft_auto_allocation_on ? "on" : "off");
++        }
++
+         return ret;
+     }
+ 
+@@ -1228,6 +1256,13 @@ public:
+             ++pos;
+             multiGPU = std::stoull(vals[pos++]);
+         }
++
++        auto_allocate = fft_auto_allocation_default; // default if unspecified
++        if(pos < vals.size() && vals[pos] == "autoallocation")
++        {
++            ++pos;
++            lexical_cast(vals[pos++], auto_allocate);
++        }
+     }
+ 
+     // Stream output operator (for gtest, etc).
+@@ -2277,7 +2312,18 @@ public:
+     // Tests that hit this can't fit on the GPU and should be skipped.
+     struct work_buffer_alloc_failure : public std::runtime_error
+     {
+-        work_buffer_alloc_failure(const std::string& s)
++        const size_t attempted_size;
++        work_buffer_alloc_failure(const std::string& s, size_t _attempted_size = 0)
++            : std::runtime_error(s)
++            , attempted_size(_attempted_size)
++        {
++        }
++    };
++
++    // Specific exception type for unimplemented feature(s).
++    struct unimplemented_exception : public std::runtime_error
++    {
++        unimplemented_exception(const std::string& s)
+             : std::runtime_error(s)
+         {
+         }
+@@ -2303,18 +2349,19 @@ public:
+             throw std::runtime_error("Transform type not forward.");
+         }
+ 
+-        length    = params_forward.length;
+-        istride   = params_forward.ostride;
+-        ostride   = params_forward.istride;
+-        nbatch    = params_forward.nbatch;
+-        precision = params_forward.precision;
+-        placement = params_forward.placement;
+-        idist     = params_forward.odist;
+-        odist     = params_forward.idist;
+-        itype     = params_forward.otype;
+-        otype     = params_forward.itype;
+-        ioffset   = params_forward.ooffset;
+-        ooffset   = params_forward.ioffset;
++        length        = params_forward.length;
++        istride       = params_forward.ostride;
++        ostride       = params_forward.istride;
++        nbatch        = params_forward.nbatch;
++        precision     = params_forward.precision;
++        placement     = params_forward.placement;
++        idist         = params_forward.odist;
++        odist         = params_forward.idist;
++        itype         = params_forward.otype;
++        otype         = params_forward.itype;
++        ioffset       = params_forward.ooffset;
++        ooffset       = params_forward.ioffset;
++        auto_allocate = params_forward.auto_allocate;
+ 
+         run_callbacks = params_forward.run_callbacks;
+         multiGPU      = params_forward.multiGPU;
+diff --git a/projects/rocfft/shared/params_gen.h b/projects/rocfft/shared/params_gen.h
+index a82c5e0dfc..c8c5d30c2b 100644
+--- a/projects/rocfft/shared/params_gen.h
++++ b/projects/rocfft/shared/params_gen.h
+@@ -58,6 +58,27 @@ inline double hash_prob(const int seed, const std::string& token)
+     return roll;
+ }
+ 
++template <typename T, std::enable_if_t<std::is_arithmetic_v<T>, bool> = true>
++std::vector<T> merge_and_sort_values(const std::vector<std::vector<T>>& set_of_vecs,
++                                     size_t max_num_elem = std::numeric_limits<size_t>::max())
++{
++    std::vector<T> merged;
++    for(const auto& vec : set_of_vecs)
++    {
++        std::copy(vec.begin(), vec.end(), std::back_inserter(merged));
++    }
++    std::sort(merged.begin(), merged.end());
++    auto last_unique = std::unique(merged.begin(), merged.end());
++    merged.erase(last_unique, merged.end());
++    std::ranlux24_base gen(random_seed);
++    while(merged.size() > max_num_elem)
++    {
++        // remove pseudo-randomly chosen elements
++        merged.erase(merged.begin() + (static_cast<size_t>(gen()) % merged.size()));
++    }
++    return merged;
++}
++
+ // Given a vector of vector of lengths, generate all unique permutations.
+ // Add an optional vector of ad-hoc lengths to the result.
+ inline std::vector<std::vector<size_t>>
+@@ -248,7 +269,8 @@ inline auto param_generator_base(const double                             base_p
+                                  const std::vector<std::vector<size_t>>&  ooffset_range,
+                                  const std::vector<fft_result_placement>& place_range,
+                                  const bool                               planar        = true,
+-                                 const bool                               run_callbacks = false)
++                                 const bool                               run_callbacks = false,
++                                 const fft_auto_allocation auto_alloc = fft_auto_allocation_default)
+ {
+     std::vector<fft_params> params;
+ 
+@@ -300,6 +322,7 @@ inline auto param_generator_base(const double                             base_p
+                                             param.otype          = std::get<3>(types);
+                                             param.ioffset        = ioffset;
+                                             param.ooffset        = ooffset;
++                                            param.auto_allocate  = auto_alloc;
+ 
+                                             if(run_callbacks)
+                                             {
+@@ -369,8 +392,8 @@ inline auto param_generator(const double                             base_prob,
+                             const std::vector<std::vector<size_t>>&  ooffset_range,
+                             const std::vector<fft_result_placement>& place_range,
+                             const bool                               planar,
+-
+-                            const bool run_callbacks = false)
++                            const bool                               run_callbacks = false,
++                            const fft_auto_allocation auto_alloc = fft_auto_allocation_default)
+ {
+     return param_generator_base(base_prob,
+                                 trans_type_range,
+@@ -383,9 +406,9 @@ inline auto param_generator(const double                             base_prob,
+                                 ioffset_range,
+                                 ooffset_range,
+                                 place_range,
+-
+                                 planar,
+-                                run_callbacks);
++                                run_callbacks,
++                                auto_alloc);
+ }
+ 
+ // Create an array of parameters to pass to gtest.  Only tests complex-type transforms
+@@ -398,9 +421,10 @@ inline auto param_generator_complex(const double                             bas
+                                     const std::vector<std::vector<size_t>>&  ioffset_range,
+                                     const std::vector<std::vector<size_t>>&  ooffset_range,
+                                     const std::vector<fft_result_placement>& place_range,
+-
+-                                    const bool planar,
+-                                    const bool run_callbacks = false)
++                                    const bool                               planar,
++                                    const bool                               run_callbacks = false,
++                                    const fft_auto_allocation                auto_alloc
++                                    = fft_auto_allocation_default)
+ {
+     return param_generator_base(base_prob,
+                                 trans_type_range_complex,
+@@ -413,9 +437,9 @@ inline auto param_generator_complex(const double                             bas
+                                 ioffset_range,
+                                 ooffset_range,
+                                 place_range,
+-
+                                 planar,
+-                                run_callbacks);
++                                run_callbacks,
++                                auto_alloc);
+ }
+ 
+ // Create an array of parameters to pass to gtest.
+@@ -428,9 +452,9 @@ inline auto param_generator_real(const double                             base_p
+                                  const std::vector<std::vector<size_t>>&  ioffset_range,
+                                  const std::vector<std::vector<size_t>>&  ooffset_range,
+                                  const std::vector<fft_result_placement>& place_range,
+-
+-                                 const bool planar,
+-                                 const bool run_callbacks = false)
++                                 const bool                               planar,
++                                 const bool                               run_callbacks = false,
++                                 const fft_auto_allocation auto_alloc = fft_auto_allocation_default)
+ {
+     return param_generator_base(base_prob,
+                                 trans_type_range_real,
+@@ -443,9 +467,9 @@ inline auto param_generator_real(const double                             base_p
+                                 ioffset_range,
+                                 ooffset_range,
+                                 place_range,
+-
+                                 planar,
+-                                run_callbacks);
++                                run_callbacks,
++                                auto_alloc);
+ }
+ 
+ template <class Tcontainer>
+diff --git a/projects/rocfft/shared/rocfft_params.h b/projects/rocfft/shared/rocfft_params.h
+index 8dadecd6fd..de18cd5017 100644
+--- a/projects/rocfft/shared/rocfft_params.h
++++ b/projects/rocfft/shared/rocfft_params.h
+@@ -170,6 +170,7 @@ public:
+     rocfft_execution_info   info = nullptr;
+     rocfft_plan_description desc = nullptr;
+     gpubuf_t<void>          wbuffer;
++    size_t                  workbuffersize = 0;
+ 
+     explicit rocfft_params_base() = default;
+ 
+@@ -410,7 +411,8 @@ public:
+         {
+             return ret;
+         }
+-        if(workbuffersize > 0)
++        // default behavior is to feed rocfft with a work area if it needs one
++        if(workbuffersize > 0 && auto_allocate != fft_auto_allocation_on)
+         {
+             hipError_t hip_status = hipSuccess;
+             hip_status            = wbuffer.alloc(workbuffersize);
+@@ -429,7 +431,7 @@ public:
+                 {
+                     oss << "hipMemGetInfo also failed";
+                 }
+-                throw work_buffer_alloc_failure(oss.str());
++                throw work_buffer_alloc_failure(oss.str(), workbuffersize);
+             }
+ 
+             auto rocret
+-- 
+2.47.1.windows.2
+

@@ -1,0 +1,77 @@
+From f4b419e0205af02ed271092d4678782a876311d4 Mon Sep 17 00:00:00 2001
+From: Braden Stefanuk <121893577+bstefanuk@users.noreply.github.com>
+Date: Wed, 27 Aug 2025 12:33:38 -0600
+Subject: [PATCH 01/25] [superbuild] Add pipeline trigger (#1375)
+
+## Motivation
+
+In order to have testing on the first superbuild PR #1239 this trigger
+file is required.
+
+## Technical Details
+
+Adds branch and PR triggers only for the top-level CMakeLists.txt and
+cmake directory.
+
+## Test Plan
+
+Testing for this trigger will be conducted in #1239, which will also
+update the relevant trigger directories for the supported projects.
+
+## Test Result
+
+Passed
+---
+ .azuredevops/superbuild.yml | 36 ++++++++++++++++++++++++++++++++++--
+ 1 file changed, 34 insertions(+), 2 deletions(-)
+
+diff --git a/.azuredevops/superbuild.yml b/.azuredevops/superbuild.yml
+index 9407a30809..f49392be79 100644
+--- a/.azuredevops/superbuild.yml
++++ b/.azuredevops/superbuild.yml
+@@ -15,8 +15,40 @@ resources:
+     name: ROCm/ROCm
+     ref: ${{ parameters.pipelinesRepoRef }}
+ 
+-trigger: none
+-pr: none
++trigger:
++  batch: true
++  branches:
++    include:
++    - develop
++    - release-staging/rocm-rel-7.*
++  paths:
++    include:
++    - CMakeLists.txt
++    - cmake
++    exclude:
++    - .githooks
++    - .github
++    - docs
++    - CODEOWNERS
++    - .*.y*ml
++    - ./**/*.md
++
++pr:
++  branches:
++    include:
++    - develop
++    - release-staging/rocm-rel-7.*
++  paths:
++    include:
++    - CMakeLists.txt
++    - cmake
++    exclude:
++    - .githooks
++    - .github
++    - docs
++    - CODEOWNERS
++    - .*.y*ml
++    - ./**/*.md
+ 
+ stages:
+ - stage: rocm_libraries
+-- 
+2.47.1.windows.2
+
