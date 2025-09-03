@@ -1,0 +1,123 @@
+From 6d125d188dc107d6787cfed1017f89a42079f6a3 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Wed, 3 Sep 2025 00:55:13 -0700
+Subject: [PATCH] rccl fixes for rockbuilder gfx1150 build
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ CMakeLists.txt               | 33 ++++++++++++++++++++++-----------
+ cmake/MSCCLPP.cmake          |  2 +-
+ src/device/common.h          |  2 +-
+ tools/JitterBench/Common.hpp |  2 +-
+ 4 files changed, 25 insertions(+), 14 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 27dcb70..c00c202 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -5,6 +5,19 @@
+ #==================================================================================================
+ cmake_minimum_required(VERSION 3.16)
+ 
++# Try to establish ROCM_PATH (for find_package)
++#==================================================================================================
++if(NOT DEFINED ROCM_PATH)
++  # Guess default location
++  set(ROCM_PATH "/opt/rocm")
++  message(WARNING "Unable to find ROCM_PATH: Falling back to ${ROCM_PATH}")
++else()
++  message(STATUS "ROCM_PATH found: ${ROCM_PATH}")
++endif()
++set(ENV{ROCM_PATH} ${ROCM_PATH})
++message(STATUS "DEVICE_LIB_PATH: ${DEVICE_LIB_PATH}")
++message(STATUS "ROCM_PATH: ${ROCM_PATH}")
++
+ # CMake Toolchain file to define compilers and path to ROCm
+ #==================================================================================================
+ if (NOT CMAKE_TOOLCHAIN_FILE)
+@@ -44,9 +57,17 @@ set(DEFAULT_GPUS
+       gfx942
+       gfx950
+       gfx1030
++      gfx1031
++      gfx1032
++      gfx1034
++      gfx1035
++      gfx1036
+       gfx1100
+       gfx1101
+       gfx1102
++      gfx1103
++      gfx1150
++      gfx1151
+       gfx1200
+       gfx1201)
+ 
+@@ -103,17 +124,6 @@ message(STATUS "Compiling for ${GPU_TARGETS}")
+ ## NOTE: Reload rocm-cmake in order to update GPU_TARGETS
+ include(cmake/Dependencies.cmake) # Reloading to use desired GPU_TARGETS instead of defaults
+ 
+-# Try to establish ROCM_PATH (for find_package)
+-#==================================================================================================
+-if(NOT DEFINED ROCM_PATH)
+-  # Guess default location
+-  set(ROCM_PATH "/opt/rocm")
+-  message(WARNING "Unable to find ROCM_PATH: Falling back to ${ROCM_PATH}")
+-else()
+-  message(STATUS "ROCM_PATH found: ${ROCM_PATH}")
+-endif()
+-set(ENV{ROCM_PATH} ${ROCM_PATH})
+-
+ if("${CMAKE_CXX_COMPILER}" MATCHES ".*amdclang\\+\\+")
+   message(STATUS "Compiling with amdclang++")
+   set(COMPILER_EXE_NAME amdclang++)
+@@ -333,6 +343,7 @@ if (ENABLE_MSCCLPP AND NOT ARCH_MATCH_FOUND)
+   set(ENABLE_MSCCLPP OFF)
+   message(WARNING "Can only build MSCCL++ for supported GPU_TARGETS: ${MSCCLPP_SUPPORTED_ARCHS}; current GPU_TARGETS: ${GPU_TARGETS}; so disabling MSCCL++ build")
+ endif()
++set(ENABLE_MSCCLPP OFF)
+ 
+ # MSCCL++ is only supported on ROCm 6.2.0 or newer
+ if (ENABLE_MSCCLPP AND ROCM_VERSION VERSION_LESS "60200")
+diff --git a/cmake/MSCCLPP.cmake b/cmake/MSCCLPP.cmake
+index 0a9ec65..e0d3bdb 100644
+--- a/cmake/MSCCLPP.cmake
++++ b/cmake/MSCCLPP.cmake
+@@ -105,7 +105,7 @@ if(ENABLE_MSCCLPP)
+ 
+         if(NOT DEFINED CACHE{MSCCLPP_GPU_TARGETS})
+             message(STATUS "Building MSCCL++ only for supported variants: gfx942;gfx950")
+-            set(MSCCLPP_GPU_TARGETS "gfx942;gfx950")
++            set(MSCCLPP_GPU_TARGETS "gfx1150")
+             if(BUILD_ADDRESS_SANITIZER)
+                 set(MSCCLPP_GPU_TARGETS "gfx942:xnack+;gfx950:xnack+")
+             endif()
+diff --git a/src/device/common.h b/src/device/common.h
+index a564b10..e373ec4 100644
+--- a/src/device/common.h
++++ b/src/device/common.h
+@@ -27,7 +27,7 @@
+   { __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST); }
+ #endif
+ 
+-#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1200__) || defined(__gfx1201__)
++#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || defined(__gfx1151__) || defined(__gfx1200__) || defined(__gfx1201__)
+ #define __trace_hwreg()
+ #else
+ #define __trace_hwreg() \
+diff --git a/tools/JitterBench/Common.hpp b/tools/JitterBench/Common.hpp
+index bad12a1..7dd851e 100644
+--- a/tools/JitterBench/Common.hpp
++++ b/tools/JitterBench/Common.hpp
+@@ -43,7 +43,7 @@ THE SOFTWARE.
+ #endif
+ 
+ // Macro for collecting HW_REG_HW_ID
+-#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__NVCC__)
++#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || defined(__gfx1150__) || defined(__gfx1151__) || defined(__gfx1200__) || defined(__gfx1201__) || defined(__NVCC__)
+ #define GetHwId(val) \
+   val = 0
+ #else
+-- 
+2.43.0
+

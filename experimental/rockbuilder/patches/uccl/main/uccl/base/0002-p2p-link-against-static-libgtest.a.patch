@@ -1,0 +1,43 @@
+From 505f12cdacc24772c5b577fd581dd07c71005567 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Wed, 3 Sep 2025 01:08:17 -0700
+Subject: [PATCH 2/3] p2p link against static libgtest.a
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ p2p/MakefileHip | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/p2p/MakefileHip b/p2p/MakefileHip
+index 76cdb15..9835b45 100644
+--- a/p2p/MakefileHip
++++ b/p2p/MakefileHip
+@@ -8,7 +8,7 @@ CONDA_LIB_HOME?=/usr/lib
+ CXX := g++
+ CXXFLAGS := -O3 -shared -std=c++17 -fPIC -I../include -I../rdma -I$(HIP_INC) \
+ 	-Wno-pointer-arith -Wno-sign-compare -Wno-unused-variable \
+-	-Wl,-rpath=/usr/lib/x86_64-linux-gnu -Wl,-rpath=${CONDA_LIB_HOME} -I${CONDA_LIB_HOME}/../include -L${CONDA_LIB_HOME} -lglog -lgflags -lgtest -lz -lelf -libverbs -lpthread
++	-Wl,-rpath=/usr/lib/x86_64-linux-gnu -Wl,-rpath=${CONDA_LIB_HOME} -I${CONDA_LIB_HOME}/../include -L${CONDA_LIB_HOME} -L${HIP_HOME}/../../third-party/googletest/dist/lib -lglog -lgflags -l:libgtest.a -lz -lelf -libverbs -lpthread
+ 
+ # Python and pybind11 configuration
+ PYTHON          ?= python3
+@@ -27,7 +27,8 @@ REDIS_CFLAGS    := $(shell $(REDIS_PKGCONFIG) --cflags hiredis redis++)
+ REDIS_LIBS      := $(shell $(REDIS_PKGCONFIG) --libs hiredis redis++)
+ CXXFLAGS       += $(REDIS_CFLAGS) -D__HIP_PLATFORM_AMD__
+ LDFLAGS         = -L$(HIP_LIB) -lamdhip64 $(REDIS_LIBS) \
+-                  -Wl,-rpath,$(HIP_LIB) -I${CONDA_LIB_HOME}/../include -L${CONDA_LIB_HOME} -lglog -lgflags -lgtest \
++                  -L ${HIP_HOME}/../../third-party/googletest/dist/lib \
++                  -Wl,-rpath,$(HIP_LIB) -I${CONDA_LIB_HOME}/../include -L${CONDA_LIB_HOME} -lglog -lgflags -l:libgtest.a \
+                   -lz -lelf -libverbs -lpthread
+ 
+ # Target and source files
+@@ -82,4 +83,4 @@ help:
+ 	@echo "  install-deps - Install pybind11 dependency"
+ 	@echo "  help         - Show this help message"
+ 
+-.PHONY: all clean test install-deps help install 
+\ No newline at end of file
++.PHONY: all clean test install-deps help install 
+-- 
+2.43.0
+

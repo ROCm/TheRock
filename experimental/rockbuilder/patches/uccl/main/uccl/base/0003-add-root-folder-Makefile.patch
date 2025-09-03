@@ -1,0 +1,70 @@
+From c29f7e7739131563c9da3179cdd420c884f99bc4 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Wed, 3 Sep 2025 00:53:02 -0700
+Subject: [PATCH 3/3] add root folder Makefile
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ Makefile | 50 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+ create mode 100644 Makefile
+
+diff --git a/Makefile b/Makefile
+new file mode 100644
+index 0000000..b3ef16f
+--- /dev/null
++++ b/Makefile
+@@ -0,0 +1,50 @@
++USE_ROCM ?= 1
++MAKE=make
++
++ifdef USE_ROCM
++    RDMA_LIB = librccl-net-uccl.so
++    RDMA_DEPS = rccl
++    RDMA_MAKEFILE = MakefileHip
++    P2P_MAKEFILE = MakefileHip
++    ROCM_HOME ?= /opt/rocm
++    ROCM_PATH ?= ${ROCM_HOME}
++    HIP_HOME ?= ${ROCM_HOME}
++	CC=${ROCM_HOME}/bin/hipcc
++	CXX=${ROCM_HOME}/bin/hipcc
++	DEVICE_LIB_PATH ?= ${ROCM_HOME}/lib/llvm/amdgcn/bitcode
++	HIP_DEVICE_LIB_PATH ?= ${DEVICE_LIB_PATH}
++	THEROCK_AMDGPU_TARGETS ?= gfx942
++	export ROCM_HOME
++	export ROCM_PATH
++	export HIP_HOME
++	export DEVICE_LIB_PATH
++	export HIP_DEVICE_LIB_PATH
++else
++    RDMA_LIB = libnccl-net-uccl.so  
++    RDMA_DEPS = 
++    RDMA_MAKEFILE = Makefile
++    P2P_MAKEFILE = Makefile
++endif
++
++$(info Makefile. make=$(MAKE), cc=$(CC))
++
++rccl:
++	echo "rccl"
++	echo "ROCM_PATH: ${ROCM_PATH}"
++	cmake -B thirdparty/rccl/build/release -DHIP_PLATFORM=amd -DGPU_BUILD_TARGETS="${THEROCK_AMDGPU_TARGETS}" -DMSCCLPP_GPU_TARGETS="${THEROCK_AMDGPU_TARGETS}" -DROCM_PATH=${ROCM_PATH} -DROCM_HOME=${ROCM_HOME} -DHIP_DEVICE_LIB_PATH=${HIP_DEVICE_LIB_PATH} -DCMAKE_EXPORT_COMPILE_COMMANDS=OFF -DCMAKE_CXX_COMPILER=${CXX} -S thirdparty/rccl
++
++rdma: ${RDMA_DEPS}
++	echo "rdma"
++	echo "CC: $(CC)"
++	$(MAKE) -C rdma -f $(RDMA_MAKEFILE) clean
++	$(MAKE) -C rdma -f $(RDMA_MAKEFILE)
++	
++p2p: rdma
++	echo "p2p"
++	$(MAKE) -C p2p -f $(P2P_MAKEFILE) clean
++	$(MAKE) -C p2p -f $(P2P_MAKEFILE)
++
++
++all: rdma p2p
++
++.PHONY: all
+-- 
+2.43.0
+
