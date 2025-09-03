@@ -64,11 +64,11 @@ _session_token = aws_session_token=os.environ.get("AWS_SESSION_TOKEN")
 # Create S3 client leveraging AWS credentials if available.
 if None not in (_access_key_id, _secret_access_key, _session_token):
     s3_client = boto3.client(
-    "s3",
-    verify=False,
-    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-    aws_session_token=os.environ.get("AWS_SESSION_TOKEN"),
+        "s3",
+        verify=False,
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        aws_session_token=os.environ.get("AWS_SESSION_TOKEN"),
 )
 else:
     # Otherwise use anonymous boto file.
