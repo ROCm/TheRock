@@ -228,12 +228,12 @@ def commit_hipify(args: argparse.Namespace):
         )
         exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
 
+
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     repo_dir: Path = args.repo
     repo_patch_dir_base = args.patch_dir
     check_git_dir = repo_dir / ".git"
     patches_dir_name = get_patches_dir_name(args)
-
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
         exec(["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir)
@@ -243,7 +243,6 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         exec(["git", "init", "--initial-branch=main"], cwd=repo_dir)
         exec(["git", "config", "advice.detachedHead", "false"], cwd=repo_dir)
         exec(["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir)
-
     # Fetch and checkout.
     fetch_args = []
     if args.depth is not None:
@@ -253,21 +252,6 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     exec(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
-
-    # Enable sparse-checkout (exclude large/unneeded dirs)
-    print("[do_checkout] Enabling sparse-checkout excludes...")
-    exec(["git", "sparse-checkout", "init", "--cone"], cwd=repo_dir)
-
-    sparse_file = repo_dir / ".git" / "info" / "sparse-checkout"
-    sparse_rules = [
-        "/*",                                   # include everything
-        "!onnx/backend/test/data/node",         # exclude ONNX testdata dir
-        "!ports",                               # exclude vcpkg ports dir
-    ]
-    sparse_file.write_text("\n".join(sparse_rules) + "\n")
-
-    exec(["git", "read-tree", "-mu", "HEAD"], cwd=repo_dir)
-
     try:
         exec(
             ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
@@ -276,8 +260,15 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
-
-    # Tag all submodules at current state
+    # Clean up unwanted directories in submodules
+    exclude_paths = [
+        repo_dir / "onnx" / "backend" / "test" / "data" / "node",
+        repo_dir / "ports",
+    ]
+    for exclude_path in exclude_paths:
+        if exclude_path.exists():
+            print(f"Removing excluded directory: {exclude_path}")
+            shutil.rmtree(exclude_path, ignore_errors=True)
     exec(
         [
             "git",
@@ -290,7 +281,6 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         stdout_devnull=True,
     )
     git_config_ignore_submodules(repo_dir)
-
     # Base patches.
     if args.patch and patches_dir_name:
         apply_all_patches(
@@ -299,12 +289,10 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
             args.repo_name,
             "base",
         )
-
     # Hipify.
     if args.hipify:
         custom_hipify(args)
         commit_hipify(args)
-
     # Hipified patches.
     if args.hipify and args.patch and patches_dir_name:
         apply_all_patches(
@@ -313,7 +301,6 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
             args.repo_name,
             "hipified",
         )
-
 
 def do_save_patches(args: argparse.Namespace):
     repo_name = args.repo_name
