@@ -13,7 +13,7 @@
 [submodule "rccl"]
 	path = comm-libs/rccl
 	url = https://github.com/ROCm/rccl.git
-	branch = mainline
+	branch = develop
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
