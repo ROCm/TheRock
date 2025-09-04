@@ -111,7 +111,7 @@ def run(args):
                     f"{apply_directory}",
                 ]
                 + patch_files,
-                cwd=THEROCK_DIR
+                cwd=args.repo
             )
         else:
             apply_directory = str(project_path.relative_to(args.repo))
