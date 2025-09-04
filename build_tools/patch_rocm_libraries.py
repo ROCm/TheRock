@@ -45,7 +45,7 @@ def exec(args: list[str | Path], cwd: Path):
 
 def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
     if category == "rocm-libraries" or category == "rocm-systems":
-        return repo
+        return Path(name.lower())
     else:
         relpath = repo / category / Path(name.lower())
         return relpath
@@ -79,9 +79,9 @@ def run(args):
             category = "projects"
         elif project_to_patch in shared:
             category = "shared"
-        elif args.apply_to_monorepo and project_to_patch == "rocm-libraries":
+        elif args.apply_to_monorepo and "rocm-libraries" in projects:
             category = "rocm-libraries"
-        elif args.apply_to_monorepo and project_to_patch == "rocm-systems":
+        elif args.apply_to_monorepo and "rocm-systems" in projects:
             category = "rocm-systems"
         else:
             log(
