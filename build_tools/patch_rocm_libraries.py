@@ -97,7 +97,7 @@ def run(args):
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
         if project_to_patch == "rocm-libraries" or project_to_patch == "rocm-systems":
-            apply_directory = Path(args.repo).resolve()
+            apply_directory = args.repo
             exec(
                 [
                     "git",
@@ -107,8 +107,6 @@ def run(args):
                     "user.email=therockbot@amd.com",
                     "am",
                     "--whitespace=nowarn",
-                    "--directory",
-                    f"{apply_directory}",
                 ]
                 + patch_files,
                 cwd=args.repo
