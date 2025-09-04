@@ -154,6 +154,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       libhiprtc-builtins.so
       libhiprtc.so
   )
+
   if(WIN32)
     ##############################################################################
     # hipInfo (from hip-tests)
