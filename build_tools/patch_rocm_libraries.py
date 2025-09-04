@@ -44,7 +44,7 @@ def exec(args: list[str | Path], cwd: Path):
 
 
 def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
-    if category == "rocm-libraries" or category == "rocm-systems":
+    if name == "rocm-libraries" or name == "rocm-systems":
         return repo
     else:
         relpath = repo / category / Path(name.lower())
@@ -81,15 +81,16 @@ def run(args):
             category = "projects"
         elif project_to_patch in shared:
             category = "shared"
-        elif args.apply_to_monorepo and "rocm-libraries" == project_to_patch:
+        elif args.apply_to_monorepo and "rocm-libraries" == project_to_patch and "rocm-libraries" in projects:
             category = "rocm-libraries"
-        elif args.apply_to_monorepo and "rocm-systems" == project_to_patch:
+        elif args.apply_to_monorepo and "rocm-systems" == project_to_patch and "rocm-systems" in projects:
             category = "rocm-systems"
         else:
             log(
                 f"* Project patch directory {patch_project_dir.name} was not included. Skipping."
             )
             continue
+        log(f"DEBUG CATEGORY {category}")
         project_path = get_monorepo_path(args.repo, category, project_to_patch)
         log(f"DEBUG PROJECT MONOREPO PATH: {project_path}")
         patch_files = list(patch_project_dir.glob("*.patch"))
