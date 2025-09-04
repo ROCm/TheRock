@@ -44,8 +44,11 @@ def exec(args: list[str | Path], cwd: Path):
 
 
 def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
-    relpath = repo / category / Path(name.lower())
-    return relpath
+    if category == "rocm-libraries":
+        return repo
+    else:
+        relpath = repo / category / Path(name.lower())
+        return relpath
 
 
 def run(args):
@@ -76,6 +79,8 @@ def run(args):
             category = "projects"
         elif project_to_patch in shared:
             category = "shared"
+        elif args.apply_to_monorepo and project_to_patch == "rocm-libraries":
+            category = "rocm-libraries"
         else:
             log(
                 f"* Project patch directory {patch_project_dir.name} was not included. Skipping."
@@ -144,6 +149,13 @@ def main(argv):
         default=False,
         action=argparse.BooleanOptionalAction,
         help="Include shared projects",
+    )
+    parser.add_argument(
+        "--apply-to-monorepo",
+        # TODO: Set to True once the patchset applies to Tensile
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Apply patches to monorepo",
     )
     parser.add_argument(
         "--repo",
