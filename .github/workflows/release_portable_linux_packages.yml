@@ -259,7 +259,7 @@ jobs:
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_SUBDIR }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
-              "tag_url": "${{ ??? }}"
+              "tag_url": "https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
             }
 
       - name: Save cache
