@@ -45,7 +45,7 @@ def exec(args: list[str | Path], cwd: Path):
 
 def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
     if category == "rocm-libraries" or category == "rocm-systems":
-        return Path(name.lower())
+        return repo
     else:
         relpath = repo / category / Path(name.lower())
         return relpath
@@ -53,6 +53,7 @@ def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
 
 def run(args):
     projects = list(args.projects)
+    log(f"DEBUG PROJECTS: {projects}")
     shared = list()
     if args.include_shared:
         shared = list(args.shared)
@@ -75,6 +76,7 @@ def run(args):
         log(f"* Processing project patch directory {patch_project_dir}:")
         # Check that project patch directory was included and set the category
         project_to_patch = patch_project_dir.name
+        log(f"DEBUG PROJECT TO PATCH: {project_to_patch}")
         if project_to_patch in projects:
             category = "projects"
         elif project_to_patch in shared:
@@ -89,6 +91,7 @@ def run(args):
             )
             continue
         project_path = get_monorepo_path(args.repo, category, project_to_patch)
+        log(f"DEBUG PROJECT MONOREPO PATH: {project_path}")
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
