@@ -198,10 +198,11 @@ framework.
 > This is under **active** development. Compatibility matrix for these wheels
 > is in progress.
 
-Using the index pages listed above, you can install `torch`, `torchaudio`, and
-`torchvision` instead of `rocm[libraries,devel]`. Specfic versions should be
-specified to avoid incompatibilities which might arise due to `pip`'s default
-behavior. For example, for `torch` 2.7.1:
+> [!NOTE]
+> Each torchaudio package is compiled against specific version of torch. Please refer to the [PyTorch compatibilty matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix) and install the correct pair of torch and torchaudio.
+
+Using the index pages listed above, you can install `torch`, `torchaudio`, and `torchvision` instead of `rocm[libraries,devel]`.
+For example, for `torch` 2.7.1:
 
 #### gfx94X-dcgpu
 
@@ -243,7 +244,7 @@ python -m pip install \
   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 ```
 
-Similarly, compatible wheels for `torch 2.9.0` can be installed with 
+Similarly, compatible wheels for `torch 2.9.0` can be installed with
 `torch==2.9.0a0 torchaudio==2.8.0a0 torchvision==0.24.0a0`.
 A list of available versions can be found at [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions).
 Alternatively, all available wheels can be seen by navigating the
