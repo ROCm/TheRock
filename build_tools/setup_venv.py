@@ -272,11 +272,19 @@ def main(argv: list[str]):
     subdirs: dict[str, set[str]] | set[str] | None = scrape_subdirs()
     all_subdir_sets_congruent = isinstance(subdirs, set)
 
+    index_subdir_help = "Index subdirectory"
+    if not all_subdir_sets_congruent and subdirs:
+        index_subdir_help += ". Available options per index: " + str(subdirs)
+    elif not subdirs:
+        index_subdir_help += ", such as 'gfx110X-dgpu'"
+    else:
+        index_subdir_help += "."
+
     install_options.add_argument(
         "--index-subdir",
         "--index-subdirectory",
         type=str,
-        help=f"Index subdirectory. {'Available options per index: ' + str(subdirs) if not all_subdir_sets_congruent else ''}",
+        help=index_subdir_help,
         choices=subdirs if all_subdir_sets_congruent else None,
     )
 
