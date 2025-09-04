@@ -48,6 +48,8 @@ except ImportError:
 
 from github_actions.github_actions_utils import *
 
+GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
+
 is_windows = platform.system() == "Windows"
 
 INDEX_URLS_MAP = {
@@ -173,8 +175,7 @@ def scrape_subdirs() -> dict[str, set[str]] | set[str] | None:
 
         # matches the text inside the <a></a> elements to find all gfx targets, then puts returns them in a set
         html = response.text
-        pattern = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
-        matches = re.findall(pattern, html)
+        matches = re.findall(GFX_TARGET_REGEX, html)
         return set(matches)
 
     # for every index url in the map fetches the subdirs and puts them in a dict with the index_name being the key
