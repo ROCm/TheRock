@@ -17,6 +17,9 @@ Example usage:
 
     # Apply patches to `rocm-libraries/projects/{rocblas,rocthrust}`
     python patch_monorepo.py --repo /tmp/rocm-libraries --projects rocBLAS rocThrust
+    
+    # Apply patches to `rocm-libraries`
+    python patch_monorepo.py --repo /tmp/rocm-libraries --patch-external-monorepo --projects rocm-libraries
 
 """
 
@@ -43,8 +46,8 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
-    if name == "rocm-libraries" or name == "rocm-systems":
+def get_monorepo_path(repo: Path, category: str, name: str, patch_external_monorepo: bool) -> Path:
+    if patch_external_monorepo:
         return repo
     else:
         relpath = repo / category / Path(name.lower())
@@ -53,7 +56,6 @@ def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
 
 def run(args):
     projects = list(args.projects)
-    log(f"DEBUG PROJECTS: {projects}")
     shared = list()
     if args.include_shared:
         shared = list(args.shared)
@@ -76,28 +78,20 @@ def run(args):
         log(f"* Processing project patch directory {patch_project_dir}:")
         # Check that project patch directory was included and set the category
         project_to_patch = patch_project_dir.name
-        log(f"DEBUG PROJECT TO PATCH: {project_to_patch}")
         if project_to_patch in projects:
             category = "projects"
         elif project_to_patch in shared:
             category = "shared"
-        elif args.apply_to_monorepo and "rocm-libraries" == project_to_patch and "rocm-libraries" in projects:
-            category = "rocm-libraries"
-        elif args.apply_to_monorepo and "rocm-systems" == project_to_patch and "rocm-systems" in projects:
-            category = "rocm-systems"
         else:
             log(
                 f"* Project patch directory {patch_project_dir.name} was not included. Skipping."
             )
             continue
-        log(f"DEBUG CATEGORY {category}")
-        project_path = get_monorepo_path(args.repo, category, project_to_patch)
-        log(f"DEBUG PROJECT MONOREPO PATH: {project_path}")
+        project_path = get_monorepo_path(args.repo, category, project_to_patch, args.patch_external_monorepo)
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
-        if project_to_patch == "rocm-libraries" or project_to_patch == "rocm-systems":
-            apply_directory = args.repo
+        if args.patch_external_monorepo:
             exec(
                 [
                     "git",
@@ -173,10 +167,10 @@ def main(argv):
         help="Include shared projects",
     )
     parser.add_argument(
-        "--apply-to-monorepo",
+        "--patch-external-monorepo",
         default=False,
         action=argparse.BooleanOptionalAction,
-        help="Apply patches to monorepo",
+        help="Apply patches to an external monorepo",
     )
     parser.add_argument(
         "--repo",
