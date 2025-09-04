@@ -17,3 +17,9 @@ add_test(
     COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fileset_tool_test.py"
 )
+
+add_test(
+    NAME build_tools_setup_venv_test
+    COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/setup_venv_test.py"
+)
