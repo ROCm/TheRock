@@ -17,7 +17,7 @@ Example usage:
 
     # Apply patches to `rocm-libraries/projects/{rocblas,rocthrust}`
     python patch_monorepo.py --repo /tmp/rocm-libraries --projects rocBLAS rocThrust
-    
+
     # Apply patches to `rocm-libraries`
     python patch_monorepo.py --repo /tmp/rocm-libraries --patch-external-monorepo --projects rocm-libraries
 
@@ -46,7 +46,9 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def get_monorepo_path(repo: Path, category: str, name: str, patch_external_monorepo: bool) -> Path:
+def get_monorepo_path(
+    repo: Path, category: str, name: str, patch_external_monorepo: bool
+) -> Path:
     if patch_external_monorepo:
         return repo
     else:
@@ -87,7 +89,9 @@ def run(args):
                 f"* Project patch directory {patch_project_dir.name} was not included. Skipping."
             )
             continue
-        project_path = get_monorepo_path(args.repo, category, project_to_patch, args.patch_external_monorepo)
+        project_path = get_monorepo_path(
+            args.repo, category, project_to_patch, args.patch_external_monorepo
+        )
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
@@ -103,7 +107,7 @@ def run(args):
                     "--whitespace=nowarn",
                 ]
                 + patch_files,
-                cwd=args.repo
+                cwd=args.repo,
             )
         else:
             apply_directory = str(project_path.relative_to(args.repo))
