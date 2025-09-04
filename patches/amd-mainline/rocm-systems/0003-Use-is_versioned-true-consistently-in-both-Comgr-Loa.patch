@@ -1,4 +1,4 @@
-From 546d8a36e57b1d0e4a739340918da26e50802744 Mon Sep 17 00:00:00 2001
+From 81def63b75bb7876e67f9bcc4a6ef9b0165ce880 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 9 May 2025 19:21:34 -0700
 Subject: [PATCH 3/9] Use is_versioned = true consistently in both
@@ -10,10 +10,10 @@ Prior to this, RTCProgram was using is_version = true and device initialization 
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/projects/clr/rocclr/device/device.cpp b/projects/clr/rocclr/device/device.cpp
-index 41d51bffec..ae9498f6c1 100644
+index 6beb967129..e7554a32d8 100644
 --- a/projects/clr/rocclr/device/device.cpp
 +++ b/projects/clr/rocclr/device/device.cpp
-@@ -826,7 +826,7 @@ bool Device::ValidateComgr() {
+@@ -782,7 +782,7 @@ bool Device::ValidateComgr() {
  #if defined(USE_COMGR_LIBRARY)
    // Check if Lightning compiler was requested
    if (settings_->useLightning_) {

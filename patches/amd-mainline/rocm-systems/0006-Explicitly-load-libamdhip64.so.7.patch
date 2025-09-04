@@ -1,4 +1,4 @@
-From 2acb422421f1207803a9bbc2adb9a7a2b0e6aabb Mon Sep 17 00:00:00 2001
+From 4e1e8d095fc07d353cb33f1844cb882a3519295e Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 6 Aug 2025 20:53:01 +0000
 Subject: [PATCH 6/9] Explicitly load `libamdhip64.so.7`
@@ -9,10 +9,10 @@ Subject: [PATCH 6/9] Explicitly load `libamdhip64.so.7`
  2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/projects/clr/hipamd/src/hip_comgr_helper.cpp b/projects/clr/hipamd/src/hip_comgr_helper.cpp
-index e48f1b18af..74b6a7ba9d 100644
+index 8f700eb85c..8141718ca6 100644
 --- a/projects/clr/hipamd/src/hip_comgr_helper.cpp
 +++ b/projects/clr/hipamd/src/hip_comgr_helper.cpp
-@@ -907,7 +907,7 @@ bool RTCProgram::findIsa() {
+@@ -901,7 +901,7 @@ bool RTCProgram::findIsa() {
    std::string dll_name = std::string("amdhip64_" + std::to_string(HIP_VERSION_MAJOR) + ".dll");
    libName = dll_name.c_str();
  #else
@@ -22,10 +22,10 @@ index e48f1b18af..74b6a7ba9d 100644
  
    void* handle = amd::Os::loadLibrary(libName);
 diff --git a/projects/clr/hipamd/src/hip_platform.cpp b/projects/clr/hipamd/src/hip_platform.cpp
-index 9b264d8663..f85a1d59b5 100644
+index 996c3fdac7..2226962304 100644
 --- a/projects/clr/hipamd/src/hip_platform.cpp
 +++ b/projects/clr/hipamd/src/hip_platform.cpp
-@@ -1048,7 +1048,7 @@ void* PlatformState::getDynamicLibraryHandle() {
+@@ -1044,7 +1044,7 @@ void* PlatformState::getDynamicLibraryHandle() {
  #ifdef _WIN32
    const char* libName = "amdhip64.dll";
  #else

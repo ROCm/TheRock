@@ -1,4 +1,4 @@
-From 3441f6a53eeaabb0d436099c6714d4d76f348d3e Mon Sep 17 00:00:00 2001
+From 63a6174ae42f3173121390b1328bbbee8eb0386b Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 18 Jun 2025 14:10:51 +0000
 Subject: [PATCH 2/9] Force gzip to overwrite an existing changelog
