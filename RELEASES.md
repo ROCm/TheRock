@@ -198,18 +198,14 @@ framework.
 > This is under **active** development. Compatibility matrix for these wheels
 > is in progress.
 
-> [!NOTE]
-> Each torchaudio package is compiled against specific version of torch. Please refer to the [PyTorch compatibilty matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix) and install the correct pair of torch and torchaudio.
-
 Using the index pages listed above, you can install `torch`, `torchaudio`, and `torchvision` instead of `rocm[libraries,devel]`.
-For example, for `torch` 2.7.1:
 
 #### gfx94X-dcgpu
 
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+  --pre torch torchaudio torchvision
 ```
 
 #### gfx950-dcgpu
@@ -217,7 +213,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+  --pre torch torchaudio torchvision
 ```
 
 #### gfx110X-dgpu
@@ -225,7 +221,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+  --pre torch torchaudio torchvision
 ```
 
 #### gfx1151
@@ -233,7 +229,7 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+  --pre torch torchaudio torchvision
 ```
 
 #### gfx120X-all
@@ -241,14 +237,17 @@ python -m pip install \
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+  --pre torch torchaudio torchvision
 ```
 
-Similarly, compatible wheels for `torch 2.9.0` can be installed with
-`torch==2.9.0a0 torchaudio==2.8.0a0 torchvision==0.24.0a0`.
-A list of available versions can be found at [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions).
-Alternatively, all available wheels can be seen by navigating the
-[nightlies page](https://rocm.nightlies.amd.com/v2/).
+> [!NOTE]
+> These installation commands will install the latest versions, including prerelease wheels,
+> by default. On Linux, older versions can be specified; a list of available versions can be
+> found at [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+> and the full list of available wheels can be seen by navigating the [nightlies page](https://rocm.nightlies.amd.com/v2/).
+> For example, `torch` 2.7.1 wheels can be installed by specifying `torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1`.
+> Each torchaudio package is compiled against a specific version of torch; please refer to the [PyTorch compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix) and install compatible versions of torch and torchaudio.
+> The build dates for the wheels should also be consistent with each other.
 
 ### Using PyTorch Python packages
 
