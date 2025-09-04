@@ -90,42 +90,32 @@ def run(args):
             )
             continue
         project_path = get_monorepo_path(
-            args.repo, category, project_to_patch, args.patch_external_monorepo
+            repo=args.repo,
+            category=category,
+            name=project_to_patch,
+            patch_external_monorepo=args.patch_external_monorepo,
         )
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
-        if args.patch_external_monorepo:
-            exec(
+        am_command = [
+            "git",
+            "-c",
+            "user.name=therockbot",
+            "-c",
+            "user.email=therockbot@amd.com",
+            "am",
+            "--whitespace=nowarn",
+        ]
+        if not args.patch_external_monorepo:
+            am_command.extend(
                 [
-                    "git",
-                    "-c",
-                    "user.name=therockbot",
-                    "-c",
-                    "user.email=therockbot@amd.com",
-                    "am",
-                    "--whitespace=nowarn",
-                ]
-                + patch_files,
-                cwd=args.repo,
-            )
-        else:
-            apply_directory = str(project_path.relative_to(args.repo))
-            exec(
-                [
-                    "git",
-                    "-c",
-                    "user.name=therockbot",
-                    "-c",
-                    "user.email=therockbot@amd.com",
-                    "am",
-                    "--whitespace=nowarn",
                     "--directory",
-                    f"{apply_directory}",
+                    f"{project_path.relative_to(args.repo)}",
                 ]
-                + patch_files,
-                cwd=args.repo,
             )
+        am_command.extend(patch_files)
+        exec(am_command, cwd=args.repo)
 
     # TODO: This is take over from `fetch_sources` and likley only applies
     #   to submodules. Re-evaluate here if needed.
