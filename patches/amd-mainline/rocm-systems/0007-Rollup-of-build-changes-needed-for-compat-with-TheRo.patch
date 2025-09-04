@@ -1,7 +1,7 @@
-From 643fae4bff51ba2d284218e9a9e7d6fbb09d0562 Mon Sep 17 00:00:00 2001
+From aa1d0322791804e3d6a2c299ca063783e796b5fd Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Mon, 23 Jun 2025 21:38:53 +0000
-Subject: [PATCH 8/9] Rollup of build changes needed for compat with TheRock.
+Subject: [PATCH 7/9] Rollup of build changes needed for compat with TheRock.
 
 * When built for a non-default ROCM location, the HIP headers can't be found by a few targets.
 * Uses pkg_check for DRM libraries like ROCR-Runtime does (which avoids accidental fallback to system versions).
