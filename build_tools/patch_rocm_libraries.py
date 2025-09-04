@@ -96,40 +96,40 @@ def run(args):
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
-        # if category == "rocm-libraries" or category == "rocm-systems":
-        #     apply_directory = Path(args.repo).resolve()
-        #     exec(
-        #         [
-        #             "git",
-        #             "-c",
-        #             "user.name=therockbot",
-        #             "-c",
-        #             "user.email=therockbot@amd.com",
-        #             "am",
-        #             "--whitespace=nowarn",
-        #             "--directory",
-        #             f"{apply_directory}",
-        #         ]
-        #         + patch_files,
-        #         cwd=THEROCK_DIR
-        #     )
-        # else:
-        apply_directory = str(project_path.relative_to(args.repo))
-        exec(
-            [
-                "git",
-                "-c",
-                "user.name=therockbot",
-                "-c",
-                "user.email=therockbot@amd.com",
-                "am",
-                "--whitespace=nowarn",
-                "--directory",
-                f"{apply_directory}",
-            ]
-            + patch_files,
-            cwd=args.repo,
-        )
+        if project_to_patch == "rocm-libraries" or project_to_patch == "rocm-systems":
+            apply_directory = Path(args.repo).resolve()
+            exec(
+                [
+                    "git",
+                    "-c",
+                    "user.name=therockbot",
+                    "-c",
+                    "user.email=therockbot@amd.com",
+                    "am",
+                    "--whitespace=nowarn",
+                    "--directory",
+                    f"{apply_directory}",
+                ]
+                + patch_files,
+                cwd=THEROCK_DIR
+            )
+        else:
+            apply_directory = str(project_path.relative_to(args.repo))
+            exec(
+                [
+                    "git",
+                    "-c",
+                    "user.name=therockbot",
+                    "-c",
+                    "user.email=therockbot@amd.com",
+                    "am",
+                    "--whitespace=nowarn",
+                    "--directory",
+                    f"{apply_directory}",
+                ]
+                + patch_files,
+                cwd=args.repo,
+            )
 
     # TODO: This is take over from `fetch_sources` and likley only applies
     #   to submodules. Re-evaluate here if needed.
