@@ -84,6 +84,11 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
+      - name: "Setting up Python"
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: 3.11
+
       - name: Build JAX Wheels
         run: |
           ls -lah
@@ -119,6 +124,7 @@ jobs:
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          sudo apt install python3-venv python3-pip -y
+          python3 -m venv .venv
+          source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
