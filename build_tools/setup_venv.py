@@ -39,8 +39,12 @@ import shlex
 import shutil
 import subprocess
 import sys
-import requests
 import re
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 from github_actions.github_actions_utils import *
 
@@ -150,7 +154,10 @@ def activate_venv_in_gha(venv_dir: Path):
     gha_set_env({"VIRTUAL_ENV": venv_dir})
 
 
-def scrape_subdirs() -> dict[str, set[str]] | set[str]:
+def scrape_subdirs() -> dict[str, set[str]] | set[str] | None:
+    if not requests:
+        return None
+
     index_subdirs: dict[str, set[str]] | set[str] = dict()
 
     def scrape_subdirs_from_index(index_url: str) -> set[str]:
@@ -262,7 +269,7 @@ def main(argv: list[str]):
         help="Full URL for a release index to use with 'pip install --index-url='",
     )
 
-    subdirs: dict[str, set[str]] | set[str] = scrape_subdirs()
+    subdirs: dict[str, set[str]] | set[str] | None = scrape_subdirs()
     all_subdir_sets_congruent = isinstance(subdirs, set)
 
     install_options.add_argument(
