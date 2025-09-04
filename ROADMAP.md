@@ -20,22 +20,24 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 
 ### ROCm on Linux
 
-**AMD Instinct**
+#### AMD Instinct - Linux
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
+| **CDNA4**    | **gfx950**  | ✅            | ✅            | ✅            |
 | **CDNA3**    | **gfx942**  | ✅            | ✅            | ✅            |
-| CDNA2        | gfx90a      |               |               |               |
-| CDNA         | gfx908      |               |               |               |
-| GCN5.1       | gfx906      |               |               |               |
-| GCN5         | gfx900      |               |               |               |
+| CDNA2        | gfx90a      | ✅            |               |               |
+| CDNA         | gfx908      | ✅            |               |               |
+| GCN5.1       | gfx906      | ✅            |               |               |
 
-**AMD Radeon**
+#### AMD Radeon - Linux
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
 | **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
+| **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1151** | ✅            |               |               |
+| **RDNA3.5**  | **gfx1150** | ✅            |               |               |
 | **RDNA3**    | **gfx1102** | ✅            |               |               |
 | **RDNA3**    | **gfx1101** | ✅            |               |               |
 | **RDNA3**    | **gfx1100** | ✅            |               |               |
@@ -43,18 +45,23 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | RDNA2        | gfx1035     |               |               |               |
 | RDNA2        | gfx1032     |               |               |               |
 | RDNA2        | gfx1030     |               |               |               |
-| GCN5.1       | gfx906      |               |               |               |
+| RDNA1        | gfx1012     | ✅            |               |               |
+| RDNA1        | gfx1011     | ✅            |               |               |
+| RDNA1        | gfx1010     | ✅            |               |               |
+| GCN5.1       | gfx906      | ✅            |               |               |
 
-### HIP Runtime and SDK on Windows
+### ROCm on Windows
 
 Check [windows_support.md](docs/development/windows_support.md) on current status of development.
 
-**AMD Radeon**
+#### AMD Radeon - Windows
 
 | Architecture | LLVM target | Build Passing | Sanity Tested | Release Ready |
 | ------------ | ----------- | ------------- | ------------- | ------------- |
 | **RDNA4**    | **gfx1201** | ✅            |               |               |
+| **RDNA4**    | **gfx1200** | ✅            |               |               |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            |               |
+| **RDNA3.5**  | **gfx1150** | ✅            |               |               |
 | **RDNA3**    | **gfx1102** | ✅            |               |               |
 | **RDNA3**    | **gfx1101** | ✅            |               |               |
 | **RDNA3**    | **gfx1100** | ✅            | ✅            |               |
@@ -62,4 +69,7 @@ Check [windows_support.md](docs/development/windows_support.md) on current statu
 | RDNA2        | gfx1035     |               |               |               |
 | RDNA2        | gfx1032     |               |               |               |
 | RDNA2        | gfx1030     |               |               |               |
-| GCN5.1       | gfx906      |               |               |               |
+| RDNA1        | gfx1012     | ✅            |               |               |
+| RDNA1        | gfx1011     | ✅            |               |               |
+| RDNA1        | gfx1010     | ✅            |               |               |
+| GCN5.1       | gfx906      | ✅            |               |               |
