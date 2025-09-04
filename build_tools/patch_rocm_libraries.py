@@ -81,9 +81,9 @@ def run(args):
             category = "projects"
         elif project_to_patch in shared:
             category = "shared"
-        elif args.apply_to_monorepo and "rocm-libraries" in projects:
+        elif args.apply_to_monorepo and "rocm-libraries" == project_to_patch:
             category = "rocm-libraries"
-        elif args.apply_to_monorepo and "rocm-systems" in projects:
+        elif args.apply_to_monorepo and "rocm-systems" == project_to_patch:
             category = "rocm-systems"
         else:
             log(
@@ -175,7 +175,6 @@ def main(argv):
     )
     parser.add_argument(
         "--apply-to-monorepo",
-        # TODO: Set to True once the patchset applies to Tensile
         default=False,
         action=argparse.BooleanOptionalAction,
         help="Apply patches to monorepo",
