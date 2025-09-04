@@ -107,7 +107,8 @@ jobs:
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag main
+            --repo-hashtag main \
+            --no-patch
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/audio \
             --repo-hashtag main
