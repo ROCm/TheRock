@@ -1,7 +1,7 @@
-From 28d195faa8f568878801fb0f3fd663fa3e2ea46c Mon Sep 17 00:00:00 2001
+From aaebe92ab5fb65d79981e941d7fc2e87b96d5351 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 15 Jul 2025 09:48:47 +0000
-Subject: [PATCH 9/9] Find bundled libelf
+Subject: [PATCH 8/9] Find bundled libelf
 
 ---
  .../rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake | 4 ++--

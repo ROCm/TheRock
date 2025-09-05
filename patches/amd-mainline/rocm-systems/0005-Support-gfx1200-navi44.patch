@@ -1,4 +1,4 @@
-From f8cbf95dca44c3889c8b4ce68e100b5a131f842b Mon Sep 17 00:00:00 2001
+From 58256f458fc5aff0d0bfee710f56fb5d3e9edfc8 Mon Sep 17 00:00:00 2001
 From: Aaryaman Vasishta <aaryaman.vasishta@amd.com>
 Date: Tue, 26 Aug 2025 09:28:38 +0000
 Subject: [PATCH 5/9] Support gfx1200 (navi44)
@@ -9,7 +9,7 @@ Subject: [PATCH 5/9] Support gfx1200 (navi44)
  2 files changed, 2 insertions(+)
 
 diff --git a/projects/clr/rocclr/device/pal/paldevice.cpp b/projects/clr/rocclr/device/pal/paldevice.cpp
-index 327b765a42..d8da7fcbb0 100644
+index dcf58d531c..bc7910db0e 100644
 --- a/projects/clr/rocclr/device/pal/paldevice.cpp
 +++ b/projects/clr/rocclr/device/pal/paldevice.cpp
 @@ -102,6 +102,7 @@ static constexpr PalDevice supportedPalDevices[] = {
@@ -21,7 +21,7 @@ index 327b765a42..d8da7fcbb0 100644
  };
  
 diff --git a/projects/clr/rocclr/device/pal/palsettings.cpp b/projects/clr/rocclr/device/pal/palsettings.cpp
-index 6e8593d343..698cc80972 100644
+index 33e3ef97d4..06d5878669 100644
 --- a/projects/clr/rocclr/device/pal/palsettings.cpp
 +++ b/projects/clr/rocclr/device/pal/palsettings.cpp
 @@ -162,6 +162,7 @@ bool Settings::create(const Pal::DeviceProperties& palProp,

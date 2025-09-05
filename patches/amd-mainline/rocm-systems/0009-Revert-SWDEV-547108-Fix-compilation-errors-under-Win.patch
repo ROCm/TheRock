@@ -1,7 +1,7 @@
-From 3b7cf35aab3ac4db5a0146b3935303b3f68be0d2 Mon Sep 17 00:00:00 2001
+From e236496b15e6d6cc7d38839f357097870b3da73f Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Thu, 28 Aug 2025 14:10:41 -0700
-Subject: [PATCH 10/11] Revert "SWDEV-547108 - Fix compilation errors under
+Subject: [PATCH 9/9] Revert "SWDEV-547108 - Fix compilation errors under
  Windows (#867)"
 
 This reverts commit 72b9408fedb08da67d0f3fec89316fb6e44153f2.
@@ -62,10 +62,10 @@ index 79896ab862..91e87d4dd9 100644
  }
  #endif
 diff --git a/projects/clr/rocclr/device/rocm/rocblit.cpp b/projects/clr/rocclr/device/rocm/rocblit.cpp
-index 35fad4d650..cb5623a942 100644
+index 842d322554..b8de542d5c 100644
 --- a/projects/clr/rocclr/device/rocm/rocblit.cpp
 +++ b/projects/clr/rocclr/device/rocm/rocblit.cpp
-@@ -2706,7 +2706,7 @@ bool KernelBlitManager::runScheduler(uint64_t vqVM, hsa_queue_t* schedulerQueue,
+@@ -2710,7 +2710,7 @@ bool KernelBlitManager::runScheduler(uint64_t vqVM, hsa_queue_t* schedulerQueue,
    sp->child_queue = reinterpret_cast<uint64_t>(schedulerQueue);
    sp->complete_signal = gpu().Barriers().ActiveSignal(kInitSignalValueOne, nullptr);
    sp->vqueue_header = vqVM;
@@ -75,10 +75,10 @@ index 35fad4d650..cb5623a942 100644
    if (dev().info().maxEngineClockFrequency_ > 0) {
      sp->eng_clk = (1000 * 1024) / dev().info().maxEngineClockFrequency_;
 diff --git a/projects/clr/rocclr/device/rocm/rocdevice.cpp b/projects/clr/rocclr/device/rocm/rocdevice.cpp
-index 0c36b9b209..5f3e2016e2 100644
+index 104f40f76e..bd3a7580d7 100644
 --- a/projects/clr/rocclr/device/rocm/rocdevice.cpp
 +++ b/projects/clr/rocclr/device/rocm/rocdevice.cpp
-@@ -56,6 +56,7 @@
+@@ -54,6 +54,7 @@
  #include <iostream>
  #include <iomanip>
  #include <memory>
@@ -86,7 +86,7 @@ index 0c36b9b209..5f3e2016e2 100644
  #ifdef ROCCLR_SUPPORT_NUMA_POLICY
  #include <numa.h>
  #include <numaif.h>
-@@ -1007,7 +1008,7 @@ bool Sampler::create(const amd::Sampler& owner) {
+@@ -969,7 +970,7 @@ bool Sampler::create(const amd::Sampler& owner) {
      return false;
    }
  
@@ -95,7 +95,7 @@ index 0c36b9b209..5f3e2016e2 100644
    hwState_ = reinterpret_cast<address>(hsa_sampler.handle);
  
    return true;
-@@ -1259,7 +1260,8 @@ bool Device::populateOCLDeviceConstants() {
+@@ -1221,7 +1222,8 @@ bool Device::populateOCLDeviceConstants() {
      assert(alloc_granularity_ > 0);
    } else {
      // We suppose half of physical memory can be used by GPU in APU system
@@ -105,7 +105,7 @@ index 0c36b9b209..5f3e2016e2 100644
      info_.globalMemSize_ = std::max(info_.globalMemSize_, uint64_t(1 * Gi));
      info_.globalMemSize_ = (static_cast<uint64_t>(std::min(GPU_MAX_HEAP_SIZE, 100u)) *
                              static_cast<uint64_t>(info_.globalMemSize_)) /
-@@ -3154,16 +3156,19 @@ void Device::releaseQueue(hsa_queue_t* queue, const std::vector<uint32_t>& cuMas
+@@ -3122,16 +3124,19 @@ void Device::releaseQueue(hsa_queue_t* queue, const std::vector<uint32_t>& cuMas
  void* Device::getOrCreateHostcallBuffer(hsa_queue_t* queue, bool coop_queue,
                                          const std::vector<uint32_t>& cuMask) {
    decltype(queuePool_)::value_type::iterator qIter;
@@ -128,7 +128,7 @@ index 0c36b9b209..5f3e2016e2 100644
  
      if (qIter->second.hostcallBuffer_) {
        return qIter->second.hostcallBuffer_;
-@@ -3391,7 +3396,9 @@ hsa_status_t Device::BackendErrorCallBackHandler(const hsa_amd_event_t* event, v
+@@ -3359,7 +3364,9 @@ hsa_status_t Device::BackendErrorCallBackHandler(const hsa_amd_event_t* event, v
    }
  
    // Execute the default handler if a GPU core file should be generated ...
@@ -139,7 +139,7 @@ index 0c36b9b209..5f3e2016e2 100644
      return HSA_STATUS_ERROR;
    }
  
-@@ -3637,7 +3644,9 @@ void callbackQueue(hsa_status_t status, hsa_queue_t* queue, void* data) {
+@@ -3605,7 +3612,9 @@ void callbackQueue(hsa_status_t status, hsa_queue_t* queue, void* data) {
                errorMsg, status);
      }
  
@@ -151,10 +151,10 @@ index 0c36b9b209..5f3e2016e2 100644
      }
      amd::Device::gpu_error_ = ConvertHSAErrorIntoCLError(status);
 diff --git a/projects/clr/rocclr/device/rocm/rocglinterop.hpp b/projects/clr/rocclr/device/rocm/rocglinterop.hpp
-index 3ba10c1371..47a284bb9a 100644
+index 478e45cd10..638c465c9f 100644
 --- a/projects/clr/rocclr/device/rocm/rocglinterop.hpp
 +++ b/projects/clr/rocclr/device/rocm/rocglinterop.hpp
-@@ -26,14 +26,8 @@
+@@ -24,14 +24,8 @@
  #include <GL/glx.h>
  #include <EGL/egl.h>
  #else
@@ -170,7 +170,7 @@ index 3ba10c1371..47a284bb9a 100644
  typedef __GLXcontextRec* GLXContext;
  #endif
 diff --git a/projects/clr/rocclr/device/rocm/rockernel.hpp b/projects/clr/rocclr/device/rocm/rockernel.hpp
-index 02f2cc3158..708221d24a 100644
+index c88021d060..3d2daf20cb 100644
 --- a/projects/clr/rocclr/device/rocm/rockernel.hpp
 +++ b/projects/clr/rocclr/device/rocm/rockernel.hpp
 @@ -21,6 +21,7 @@
@@ -181,7 +181,7 @@ index 02f2cc3158..708221d24a 100644
  #include "rocprogram.hpp"
  #include "top.hpp"
  #include "rocprintf.hpp"
-@@ -59,7 +60,10 @@ class Kernel : public device::Kernel {
+@@ -57,7 +58,10 @@ class Kernel : public device::Kernel {
   private:
    void initDemangledName() {
      if (demangled_name_.empty()) {
@@ -194,10 +194,10 @@ index 02f2cc3158..708221d24a 100644
    }
  
 diff --git a/projects/clr/rocclr/device/rocm/rocmemory.cpp b/projects/clr/rocclr/device/rocm/rocmemory.cpp
-index f85a1680d9..bd6f8d341a 100644
+index d337f92985..49a26f605d 100644
 --- a/projects/clr/rocclr/device/rocm/rocmemory.cpp
 +++ b/projects/clr/rocclr/device/rocm/rocmemory.cpp
-@@ -203,17 +203,11 @@ void Memory::cpuUnmap(device::VirtualDevice& vDev) {
+@@ -201,17 +201,11 @@ void Memory::cpuUnmap(device::VirtualDevice& vDev) {
  }
  
  // ================================================================================================
@@ -216,7 +216,7 @@ index f85a1680d9..bd6f8d341a 100644
    hsa_status_t status = hsa_amd_interop_map_buffer(1, &agent, fd, 0, &size, &interop_deviceMemory_,
                                                     &metadata_size, (const void**)&metadata);
    ClPrint(amd::LOG_DEBUG, amd::LOG_MEM, "Map Interop memory %p, size 0x%zx", interop_deviceMemory_,
-@@ -236,7 +230,7 @@ hsa_status_t Memory::interopMapBuffer(amd::Os::FileDesc fdn) {
+@@ -234,7 +228,7 @@ hsa_status_t Memory::interopMapBuffer(amd::Os::FileDesc fdn) {
  // Setup an interop buffer (dmabuf handle) as an OpenCL buffer
  // ================================================================================================
  bool Memory::createInteropBuffer(GLenum targetType, int miplevel) {
@@ -225,7 +225,7 @@ index f85a1680d9..bd6f8d341a 100644
    return false;
  #else
    assert(owner()->isInterop() && "Object is not an interop object.");
-@@ -848,7 +842,8 @@ bool Buffer::create(bool alloc_local) {
+@@ -845,7 +839,8 @@ bool Buffer::create(bool alloc_local) {
              return false;
            }
  
@@ -236,10 +236,10 @@ index f85a1680d9..bd6f8d341a 100644
            // Disable host access to force blit path for memeory writes.
            flags_ &= ~HostMemoryDirectAccess;
 diff --git a/projects/clr/rocclr/device/rocm/rocmemory.hpp b/projects/clr/rocclr/device/rocm/rocmemory.hpp
-index dfeb56de9e..eec46b291f 100644
+index 10e6915bf5..f758cc97ba 100644
 --- a/projects/clr/rocclr/device/rocm/rocmemory.hpp
 +++ b/projects/clr/rocclr/device/rocm/rocmemory.hpp
-@@ -128,7 +128,7 @@ class Memory : public device::Memory {
+@@ -126,7 +126,7 @@ class Memory : public device::Memory {
  
    // Free / deregister device memory.
    virtual void destroy() = 0;
@@ -271,7 +271,7 @@ index 7f21305762..3256bb9e9d 100644
  #ifndef copysign
  #ifdef _MSC_VER
 diff --git a/projects/clr/rocclr/device/rocm/rocvirtual.cpp b/projects/clr/rocclr/device/rocm/rocvirtual.cpp
-index 1266643e7f..ba82e85b5e 100644
+index a9d1d58762..89c217f5d9 100644
 --- a/projects/clr/rocclr/device/rocm/rocvirtual.cpp
 +++ b/projects/clr/rocclr/device/rocm/rocvirtual.cpp
 @@ -44,8 +44,6 @@
@@ -335,7 +335,7 @@ index 1266643e7f..ba82e85b5e 100644
  
    hsa_signal_store_screlease(gpu_queue_->doorbell_signal, index);
    ClPrint(amd::LOG_DEBUG, amd::LOG_AQL,
-@@ -3203,8 +3192,8 @@ bool VirtualGPU::createVirtualQueue(uint deviceQueueSize) {
+@@ -3204,8 +3193,8 @@ bool VirtualGPU::createVirtualQueue(uint deviceQueueSize) {
  }
  
  // ================================================================================================
@@ -346,7 +346,7 @@ index 1266643e7f..ba82e85b5e 100644
      void* __restrict dst, const void* __restrict src, size_t size) {
  #if defined(ATI_ARCH_X86)
  #if defined(__AVX512F__)
-@@ -3250,12 +3239,6 @@ __attribute__((optimize("unroll-all-loops"), always_inline)) static inline void
+@@ -3251,12 +3240,6 @@ __attribute__((optimize("unroll-all-loops"), always_inline)) static inline void
    std::memcpy(dst, src, size);
  #endif
  }
@@ -630,5 +630,5 @@ index 67d55a21c6..eac2235b9d 100644
  
  #endif  // _WIN32 || __CYGWIN__
 -- 
-2.47.1.windows.2
+2.43.0
 

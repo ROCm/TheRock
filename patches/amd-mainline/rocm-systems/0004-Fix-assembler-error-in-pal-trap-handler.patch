@@ -1,6 +1,6 @@
-From ef0b2eb65777acfb0e6e085b395cf495318964d7 Mon Sep 17 00:00:00 2001
+From d4d02b80930e6f597eb5c619f0571744226f2c8f Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
-Date: Tue, 26 Aug 2025 09:23:35 +0000
+Date: Sat, 10 May 2025 15:56:02 -0700
 Subject: [PATCH 4/9] Fix assembler error in pal trap handler.
 
 This has been showing up in real use as an error printed to the console complaining that the ".not_s_trap" label cannot be found on device initialization.
@@ -15,18 +15,18 @@ Tested by running hipblaslt tests on Windows/gfx1151 in TheRock and verifying th
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/projects/clr/rocclr/device/pal/palblitcl.cpp b/projects/clr/rocclr/device/pal/palblitcl.cpp
-index 7612f48afd..ec548b08b6 100644
+index c60c2bd5af..4186cb8bc4 100644
 --- a/projects/clr/rocclr/device/pal/palblitcl.cpp
 +++ b/projects/clr/rocclr/device/pal/palblitcl.cpp
-@@ -122,7 +122,7 @@ const char* TrapHandlerCode = RUNTIME_KERNEL(
+@@ -120,7 +120,7 @@ const char* TrapHandlerCode = RUNTIME_KERNEL(
+ \ntrap_entry:
  \n  // Extract trap_id from ttmp2
- \n s_bfe_u32 ttmp2, ttmp1,
-     SQ_WAVE_PC_HI_TRAP_ID_BFE
--\n s_cbranch_scc0.not_s_trap  // If trap_id == 0, it's not an s_trap nor host trap
-+\n s_cbranch_scc0.no_skip_debugtrap  // If trap_id == 0, it's not an s_trap nor host trap
+ \n  s_bfe_u32                             ttmp2, ttmp1, SQ_WAVE_PC_HI_TRAP_ID_BFE
+-\n  s_cbranch_scc0                        .not_s_trap                      // If trap_id == 0, it's not an s_trap nor host trap
++\n  s_cbranch_scc0                        .no_skip_debugtrap            // If trap_id == 0, it's not an s_trap nor host trap
  \n
  \n  // Check if the it was an host trap.
- \n s_bitcmp1_b32 ttmp1,
+ \n  s_bitcmp1_b32                         ttmp1, SQ_WAVE_PC_HI_HT_SHIFT
 -- 
 2.43.0
 
