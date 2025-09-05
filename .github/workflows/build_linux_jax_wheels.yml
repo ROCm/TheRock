@@ -90,13 +90,15 @@ jobs:
           python-version: ${{ inputs.python_versions }}
 
       - name: Build JAX Wheels
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
         run: |
           ls -lah
           pushd jax
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_versions }}" \
-            --rocm-version="${{ inputs.rocm_version }}" \
+            --rocm-version="${ROCM_VERSION:0:5}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
 
