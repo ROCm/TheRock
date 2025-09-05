@@ -584,13 +584,12 @@ def do_build_pytorch(
                 "USE_FLASH_ATTENTION": use_flash_attention,
                 "USE_MEM_EFF_ATTENTION": use_flash_attention,
                 # Currently, aotriton packages don't include windows binaries
-                # so we build them alongside pytorch using AOTRITON_INSTALL_FROM_SOURCE=1.
+                # so pytorch builds the runtime part of aotriton from source, and downloads the kernel images from the prebuilt binaries
                 # On Windows, aotriton is built with "NOIMAGE" mode, so it needs kernel images built from Linux.
                 # TODO: TheRock provides aotriton artifacts compiled for windows including aotriton images built from Linux.
                 # For now, manually copy in the aotriton.images folder from linux binaries into <pytorch_root>/lib/aotriton.images.
                 # NOTE: this will not work without the corresponding patch in the main branch.
                 # which is in ./patches/pytorch/main/pytorch/hipified/0004-Support-FLASH_ATTENTION-MEM_EFF_ATTENTION-via.-aotriton.patch
-                "AOTRITON_INSTALL_FROM_SOURCE": use_flash_attention,
                 "DISTUTILS_USE_SDK": "1",
                 # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
                 # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
