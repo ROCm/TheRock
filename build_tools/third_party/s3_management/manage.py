@@ -132,6 +132,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "xformers",
     "executorch",
     "setuptools",
+    "setuptools_scm",
     "wheel",
     # ---- JAX ----
     "jax",
