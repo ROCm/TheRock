@@ -1,0 +1,28 @@
+From 8346e326c7e03a069fa7e8df752ede1023e3c7b8 Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Wed, 3 Sep 2025 09:04:47 -0700
+Subject: [PATCH 27/27] Removing hipFFT hard-coded path
+
+---
+ projects/hipfft/CMakeLists.txt | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/projects/hipfft/CMakeLists.txt b/projects/hipfft/CMakeLists.txt
+index d502bb1830..564c0f47d3 100644
+--- a/projects/hipfft/CMakeLists.txt
++++ b/projects/hipfft/CMakeLists.txt
+@@ -37,11 +37,6 @@ else()
+     "Install path prefix, prepended onto install directories" )
+ endif()
+ 
+-
+-# Workarounds..
+-list( APPEND CMAKE_PREFIX_PATH /opt/rocm/llvm /opt/rocm )
+-list( APPEND CMAKE_MODULE_PATH ${ROCM_PATH}/lib/cmake/hip /opt/rocm/lib/cmake/hip /opt/rocm/hip/cmake )
+-
+ # This has to be initialized before the project() command appears
+ # Set the default of CMAKE_BUILD_TYPE to be release, unless user specifies with -D.
+ # MSVC_IDE does not use CMAKE_BUILD_TYPE
+-- 
+2.47.1.windows.2
+
