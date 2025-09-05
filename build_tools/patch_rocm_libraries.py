@@ -18,6 +18,9 @@ Example usage:
     # Apply patches to `rocm-libraries/projects/{rocblas,rocthrust}`
     python patch_monorepo.py --repo /tmp/rocm-libraries --projects rocBLAS rocThrust
 
+    # Apply patches to `rocm-libraries`
+    python patch_monorepo.py --repo /tmp/rocm-libraries --patch-external-monorepo --projects rocm-libraries
+
 """
 
 import argparse
@@ -43,9 +46,14 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def get_monorepo_path(repo: Path, category: str, name: str) -> Path:
-    relpath = repo / category / Path(name.lower())
-    return relpath
+def get_monorepo_path(
+    repo: Path, category: str, name: str, patch_external_monorepo: bool
+) -> Path:
+    if patch_external_monorepo:
+        return repo
+    else:
+        relpath = repo / category / Path(name.lower())
+        return relpath
 
 
 def run(args):
@@ -81,26 +89,33 @@ def run(args):
                 f"* Project patch directory {patch_project_dir.name} was not included. Skipping."
             )
             continue
-        project_path = get_monorepo_path(args.repo, category, project_to_patch)
+        project_path = get_monorepo_path(
+            repo=args.repo,
+            category=category,
+            name=project_to_patch,
+            patch_external_monorepo=args.patch_external_monorepo,
+        )
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
-        apply_directory = str(project_path.relative_to(args.repo))
-        exec(
-            [
-                "git",
-                "-c",
-                "user.name=therockbot",
-                "-c",
-                "user.email=therockbot@amd.com",
-                "am",
-                "--whitespace=nowarn",
-                "--directory",
-                f"{apply_directory}",
-            ]
-            + patch_files,
-            cwd=args.repo,
-        )
+        am_command = [
+            "git",
+            "-c",
+            "user.name=therockbot",
+            "-c",
+            "user.email=therockbot@amd.com",
+            "am",
+            "--whitespace=nowarn",
+        ]
+        if not args.patch_external_monorepo:
+            am_command.extend(
+                [
+                    "--directory",
+                    f"{project_path.relative_to(args.repo)}",
+                ]
+            )
+        am_command.extend(patch_files)
+        exec(am_command, cwd=args.repo)
 
     # TODO: This is take over from `fetch_sources` and likley only applies
     #   to submodules. Re-evaluate here if needed.
@@ -144,6 +159,12 @@ def main(argv):
         default=False,
         action=argparse.BooleanOptionalAction,
         help="Include shared projects",
+    )
+    parser.add_argument(
+        "--patch-external-monorepo",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Apply patches to an external monorepo",
     )
     parser.add_argument(
         "--repo",
