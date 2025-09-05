@@ -249,10 +249,12 @@ framework.
 > [!NOTE]
 > These installation commands will install the latest versions, including prerelease wheels,
 > by default. Older versions can also be installed from available versions found at
+>
 > * The [nightly releases page](https://rocm.nightlies.amd.com/v2/)
 > * Documentation for [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
 >
 > For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
+>
 > ```
 > torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 > ```
