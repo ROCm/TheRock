@@ -192,6 +192,7 @@ function(therock_provide_artifact slice_name)
       "${CMAKE_COMMAND}" -E rm -rf ${_component_dirs}
   )
   add_dependencies(therock-expunge "${_target_name}+expunge")
+  add_dependencies("dist-${ARG_DISTRIBUTION}+expunge" "${_target_name}+expunge")
 
   # For each subproject dep, we add a dependency on its +dist target to also
   # trigger overall artifact construction. In this way `ninja myfoo+dist`
