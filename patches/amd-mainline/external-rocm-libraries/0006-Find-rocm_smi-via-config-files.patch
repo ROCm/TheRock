@@ -1,0 +1,87 @@
+From 66e663065ffbb12beb725bbeb39c76d169c68bf6 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Wed, 12 Mar 2025 14:26:45 +0000
+Subject: [PATCH 06/17] Find `rocm_smi` via config files
+
+Use the config files provided by upstream instead of a custom finder.
+---
+ projects/rocblas/clients/CMakeLists.txt       |  4 +-
+ .../rocblas/clients/cmake/FindROCmSMI.cmake   | 51 -------------------
+ 2 files changed, 2 insertions(+), 53 deletions(-)
+ delete mode 100644 projects/rocblas/clients/cmake/FindROCmSMI.cmake
+
+diff --git a/projects/rocblas/clients/CMakeLists.txt b/projects/rocblas/clients/CMakeLists.txt
+index 3abff7ffa7..16ccedd3da 100644
+--- a/projects/rocblas/clients/CMakeLists.txt
++++ b/projects/rocblas/clients/CMakeLists.txt
+@@ -212,8 +212,8 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+ 
+   # Find the package ROCmSMI
+   if(NOT WIN32)
+-      find_package(ROCmSMI REQUIRED)
+-      list( APPEND COMMON_LINK_LIBS rocm_smi )
++      find_package(rocm_smi CONFIG REQUIRED)
++      list( APPEND COMMON_LINK_LIBS rocm_smi64 )
+   endif()
+ 
+   find_package( GTest REQUIRED )
+diff --git a/projects/rocblas/clients/cmake/FindROCmSMI.cmake b/projects/rocblas/clients/cmake/FindROCmSMI.cmake
+deleted file mode 100644
+index 698f6884a6..0000000000
+--- a/projects/rocblas/clients/cmake/FindROCmSMI.cmake
++++ /dev/null
+@@ -1,51 +0,0 @@
+-# ########################################################################
+-# Copyright (C) 2016-2024 Advanced Micro Devices, Inc. All rights reserved.
+-#
+-# Permission is hereby granted, free of charge, to any person obtaining a copy
+-# of this software and associated documentation files (the "Software"), to deal
+-# in the Software without restriction, including without limitation the rights
+-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell cop-
+-# ies of the Software, and to permit persons to whom the Software is furnished
+-# to do so, subject to the following conditions:
+-#
+-# The above copyright notice and this permission notice shall be included in all
+-# copies or substantial portions of the Software.
+-#
+-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IM-
+-# PLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+-# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+-# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+-# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNE-
+-# CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-#
+-# ########################################################################
+-
+-if(NOT ROCM_ROOT)
+-    if(NOT ROCM_DIR)
+-        set(ROCM_ROOT "/opt/rocm")
+-    else()
+-        set(ROCM_DIR "${ROCM_DIR}/../../..")
+-    endif()
+-endif()
+-
+-
+-# For some reason the *_DIR variables have inconsistent values between Tensile and rocBLAS.  Search various paths.
+-find_path(ROCM_SMI_ROOT "include/rocm_smi/rocm_smi.h"
+-    PATHS "${ROCM_ROOT}" "${HIP_DIR}/../../../.." "${HIP_DIR}/../../.."
+-    PATH_SUFFIXES "rocm_smi"
+-    )
+-mark_as_advanced(ROCM_SMI_ROOT)
+-
+-find_library(ROCM_SMI_LIBRARY rocm_smi64
+-    PATHS "${ROCM_SMI_ROOT}/lib")
+-mark_as_advanced(ROCM_SMI_LIBRARY)
+-
+-include( FindPackageHandleStandardArgs )
+-find_package_handle_standard_args( ROCmSMI DEFAULT_MSG ROCM_SMI_LIBRARY ROCM_SMI_ROOT )
+-
+-add_library(rocm_smi SHARED IMPORTED)
+-
+-set_target_properties(rocm_smi PROPERTIES
+-    INTERFACE_INCLUDE_DIRECTORIES "${ROCM_SMI_ROOT}/include"
+-    IMPORTED_LOCATION "${ROCM_SMI_LIBRARY}"
+-    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ROCM_SMI_ROOT}/include")
+-- 
+2.43.0
+

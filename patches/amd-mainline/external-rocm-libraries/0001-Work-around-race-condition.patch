@@ -1,0 +1,29 @@
+From de507351b531aeefbb1db6d4988e128df6f9f686 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Mon, 31 Mar 2025 22:24:41 +0000
+Subject: [PATCH 01/17] Work around race condition
+
+With `add_dependency`, compiling the `hipsolver_fortran_client` target
+fails as `hipsolver.mod` is not created in time for the first build
+attempt. A second run passes. Using `target_link_libraries` resovles
+this.
+---
+ projects/hipsolver/clients/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/hipsolver/clients/CMakeLists.txt b/projects/hipsolver/clients/CMakeLists.txt
+index d715fd236a..2590d8535a 100644
+--- a/projects/hipsolver/clients/CMakeLists.txt
++++ b/projects/hipsolver/clients/CMakeLists.txt
+@@ -76,7 +76,7 @@ endif()
+ if(BUILD_CLIENTS_TESTS OR BUILD_CLIENTS_BENCHMARKS)
+   if(BUILD_FORTRAN_BINDINGS)
+     add_library(hipsolver_fortran_client STATIC ${hipsolver_f90_source_clients})
+-    add_dependencies(hipsolver_fortran_client hipsolver_fortran)
++    target_link_libraries(hipsolver_fortran_client hipsolver_fortran)
+     include_directories(${CMAKE_BINARY_DIR}/include/hipsolver)
+     include_directories(${CMAKE_BINARY_DIR}/include/hipsolver/internal)
+     target_compile_definitions(hipsolver_fortran_client INTERFACE HAVE_HIPSOLVER_FORTRAN_CLIENT)
+-- 
+2.43.0
+

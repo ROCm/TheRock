@@ -1,0 +1,34 @@
+From a7e8c062e1c8828b2fce7c44e5243e03e6920ba6 Mon Sep 17 00:00:00 2001
+From: Scott <scott.todd0@gmail.com>
+Date: Thu, 1 May 2025 11:29:42 -0700
+Subject: [PATCH 15/17] Setup Fortran on Windows.
+
+---
+ projects/hipblas/CMakeLists.txt | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/projects/hipblas/CMakeLists.txt b/projects/hipblas/CMakeLists.txt
+index 56ec2fd5b4..58f33dda67 100644
+--- a/projects/hipblas/CMakeLists.txt
++++ b/projects/hipblas/CMakeLists.txt
+@@ -42,12 +42,11 @@ if( NOT DEFINED CMAKE_CONFIGURATION_TYPES AND NOT DEFINED CMAKE_BUILD_TYPE )
+   set( CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." )
+ endif()
+ 
+-if (NOT WIN32)
+-    if ( NOT DEFINED CMAKE_Fortran_COMPILER AND NOT DEFINED ENV{FC} )
+-      set( CMAKE_Fortran_COMPILER  "gfortran" )
+-    endif()
+-    set( fortran_language "Fortran" )
+-endif( )
++if ( NOT DEFINED CMAKE_Fortran_COMPILER AND NOT DEFINED ENV{FC} )
++  set( CMAKE_Fortran_COMPILER  "gfortran" )
++endif()
++
++set( fortran_language "Fortran" )
+ 
+ project( hipblas LANGUAGES CXX ${fortran_language} )
+ 
+-- 
+2.43.0
+

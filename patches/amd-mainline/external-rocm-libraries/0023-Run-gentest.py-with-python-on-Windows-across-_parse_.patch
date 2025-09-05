@@ -1,0 +1,131 @@
+From 4d57c0ccfd87ca370a948bceed04299a0a772ac1 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Wed, 3 Sep 2025 13:06:42 -0700
+Subject: [PATCH 23/23] Run gentest.py with 'python' on Windows across
+ `_parse_data.cpp` files.
+
+---
+ .../hipblas/clients/common/hipblas_parse_data.cpp   | 13 +++++++++++--
+ .../clients/common/src/hipblaslt_parse_data.cpp     | 11 ++++++++++-
+ .../clients/common/hipsparselt_parse_data.cpp       | 11 ++++++++++-
+ .../rocblas/clients/common/rocblas_parse_data.cpp   | 13 +++++++++++--
+ .../clients/common/rocsparse_parse_data.cpp         |  2 +-
+ 5 files changed, 43 insertions(+), 7 deletions(-)
+
+diff --git a/projects/hipblas/clients/common/hipblas_parse_data.cpp b/projects/hipblas/clients/common/hipblas_parse_data.cpp
+index 753b8dfca6..936482c6f8 100644
+--- a/projects/hipblas/clients/common/hipblas_parse_data.cpp
++++ b/projects/hipblas/clients/common/hipblas_parse_data.cpp
+@@ -35,10 +35,19 @@
+ // Parse YAML data
+ static std::string hipblas_parse_yaml(const std::string& yaml)
+ {
++#ifdef WIN32
++    // Explicitly run via `python.exe`, without relying on the .py file being
++    // treated as an executable that should be run via the python interpreter.
++    std::string python_command_launcher = "python ";
++#else
++    // Rely on the shebang in the file, e.g. `#!/usr/bin/env python3`.
++    std::string python_command_launcher = "";
++#endif
++
+     std::string tmp     = hipblas_tempname();
+     auto        exepath = hipblas_exepath();
+-    auto cmd = exepath + "hipblas_gentest.py --template " + exepath + "hipblas_template.yaml -o "
+-               + tmp + " " + yaml;
++    auto        cmd = python_command_launcher + exepath + "hipblas_gentest.py --template " + exepath
++               + "hipblas_template.yaml -o " + tmp + " " + yaml;
+     std::cerr << cmd << std::endl;
+ 
+ #ifdef WIN32
+diff --git a/projects/hipblaslt/clients/common/src/hipblaslt_parse_data.cpp b/projects/hipblaslt/clients/common/src/hipblaslt_parse_data.cpp
+index 34a99d7ae8..a180ed8b45 100644
+--- a/projects/hipblaslt/clients/common/src/hipblaslt_parse_data.cpp
++++ b/projects/hipblaslt/clients/common/src/hipblaslt_parse_data.cpp
+@@ -37,12 +37,21 @@
+ // Parse YAML data
+ static std::string hipblaslt_parse_yaml(const std::string& yaml)
+ {
++#ifdef WIN32
++    // Explicitly run via `python.exe`, without relying on the .py file being
++    // treated as an executable that should be run via the python interpreter.
++    std::string python_command_launcher = "python ";
++#else
++    // Rely on the shebang in the file, e.g. `#!/usr/bin/env python3`.
++    std::string python_command_launcher = "";
++#endif
++
+     // TODO: This function is inherently unsafe because it returns a string vs an open
+     // file handle which will block further colliding creates. See comments in
+     // hipblaslt_tempname() and under no circumstances copy this to new code.
+     std::string tmp     = hipblaslt_tempname();
+     auto        exepath = hipblaslt_exepath();
+-    auto        cmd     = exepath + "hipblaslt_gentest.py --template " + exepath
++    auto cmd = python_command_launcher + exepath + "hipblaslt_gentest.py --template " + exepath
+                + "hipblaslt_template.yaml -o " + tmp + " " + yaml;
+     hipblaslt_cerr << cmd << std::endl;
+ 
+diff --git a/projects/hipsparselt/clients/common/hipsparselt_parse_data.cpp b/projects/hipsparselt/clients/common/hipsparselt_parse_data.cpp
+index 5b81b740ca..69badb1e59 100644
+--- a/projects/hipsparselt/clients/common/hipsparselt_parse_data.cpp
++++ b/projects/hipsparselt/clients/common/hipsparselt_parse_data.cpp
+@@ -49,9 +49,18 @@ namespace std
+ // Parse YAML data
+ static std::string hipsparselt_parse_yaml(const std::string& yaml)
+ {
++#ifdef WIN32
++    // Explicitly run via `python.exe`, without relying on the .py file being
++    // treated as an executable that should be run via the python interpreter.
++    std::string python_command_launcher = "python ";
++#else
++    // Rely on the shebang in the file, e.g. `#!/usr/bin/env python3`.
++    std::string python_command_launcher = "";
++#endif
++
+     std::string tmp     = hipsparselt_tempname();
+     auto        exepath = hipsparselt_exepath();
+-    auto        cmd     = exepath + "hipsparselt_gentest.py --template " + exepath
++    auto cmd = python_command_launcher + exepath + "hipsparselt_gentest.py --template " + exepath
+                + "hipsparselt_template.yaml -o " + tmp + " " + yaml;
+     hipsparselt_cerr << cmd << std::endl;
+ 
+diff --git a/projects/rocblas/clients/common/rocblas_parse_data.cpp b/projects/rocblas/clients/common/rocblas_parse_data.cpp
+index 830397511f..20c2778b35 100644
+--- a/projects/rocblas/clients/common/rocblas_parse_data.cpp
++++ b/projects/rocblas/clients/common/rocblas_parse_data.cpp
+@@ -47,8 +47,17 @@ static std::string rocblas_parse_yaml(const std::string& yaml)
+         yaml_path = yaml;
+     }
+ 
+-    auto cmd = exepath + "rocblas_gentest.py --template " + exepath + "rocblas_template.yaml -o "
+-               + tmp + " " + yaml_path;
++#ifdef WIN32
++    // Explicitly run via `python.exe`, without relying on the .py file being
++    // treated as an executable that should be run via the python interpreter.
++    std::string python_command_launcher = "python ";
++#else
++    // Rely on the shebang in the file, e.g. `#!/usr/bin/env python3`.
++    std::string python_command_launcher = "";
++#endif
++
++    auto cmd = python_command_launcher + exepath + "rocblas_gentest.py --template " + exepath
++               + "rocblas_template.yaml -o " + tmp + " " + yaml_path;
+     rocblas_cerr << cmd << std::endl;
+ 
+ #ifdef WIN32
+diff --git a/projects/rocsparse/clients/common/rocsparse_parse_data.cpp b/projects/rocsparse/clients/common/rocsparse_parse_data.cpp
+index 4c04a4aedc..d765573b65 100644
+--- a/projects/rocsparse/clients/common/rocsparse_parse_data.cpp
++++ b/projects/rocsparse/clients/common/rocsparse_parse_data.cpp
+@@ -66,7 +66,7 @@ static std::string rocsparse_parse_yaml(const std::string& yaml, const char* inc
+ 
+     auto        exepath       = rocsparse_exepath();
+     const char* matrices_path = rocsparse_clients_matrices_dir_get(false);
+-    auto        cmd           = exepath + "rocsparse_gentest.py ";
++    auto        cmd           = "python " + exepath + "rocsparse_gentest.py ";
+     if(include_path != nullptr)
+     {
+         cmd += " -I ";
+-- 
+2.47.1.windows.2
+
