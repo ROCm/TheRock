@@ -50,10 +50,11 @@ General issue guidelines:
 
 ### New feature development
 
-Please [file a new issue](https://github.com/ROCm/TheRock/issues) or reach out
-[on Discord](https://discord.com/invite/amd-dev) to discuss a new feature. We
-are also considering using
-[GitHub discussions](https://github.com/ROCm/TheRock/discussions) more in the future.
+Discussion about new features is welcome via
+
+- Filing a [GitHub issue](https://github.com/ROCm/TheRock/issues)
+- Reaching out [on Discord](https://discord.com/invite/amd-dev)
+- Posting a [GitHub discussion](https://github.com/ROCm/TheRock/discussions) (discussions are not as active)
 
 ### Pull requests
 
