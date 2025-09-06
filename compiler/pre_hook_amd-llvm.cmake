@@ -27,7 +27,7 @@ else()
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
     set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
-    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_SOURCE_DIR}/core/ROCR-Runtime")
+    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_SOURCE_DIR}/rocm-systems/projects/rocr-runtime")
     set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
   endif()
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
