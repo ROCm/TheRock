@@ -57,13 +57,13 @@ class ROCmLibrariesTest(unittest.TestCase):
         for so_path in so_paths:
             with self.subTest(msg="Check shared library loads", so_path=so_path):
 
-                # If libgfortran is not installed for Linux, we skip the fortran tests
+                # If libgfortran is not installed for Linux, we skip the fortran checks
                 # TODO(#1417): Remove fortran dependency for TheRock testing
                 libgfortran_path = ctypes.util.find_library("gfortran")
                 if (
                     "fortran" in so_path
                     and not libgfortran_path
-                    and platform.system() == "Linuxs"
+                    and platform.system() == "Linux"
                 ):
                     self.skipTest(
                         f"Skipping {so_path} test as libgfortran is not installed"
