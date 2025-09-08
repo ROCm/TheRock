@@ -170,13 +170,11 @@ jobs:
       #   run: |
       #     python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
 
-      - name: Upload wheels to S3
+      - name: Upload wheels to S3 staging
         if: ${{ github.repository_owner == 'ROCm' }}
-        # Using 'cmd' here since PACKAGE_DIST_DIR uses \ in paths instead of /
         shell: cmd
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ ^
-            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ ^
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: Upload wheels to S3 staging
