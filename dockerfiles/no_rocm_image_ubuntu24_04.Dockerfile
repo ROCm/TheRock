@@ -29,7 +29,8 @@ RUN sudo apt-get update -y \
     clang \
     lld \
     wget \
-    psmisc
+    psmisc \
+    libgfortran5
 
 RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && \
     sudo apt-get install git-lfs
