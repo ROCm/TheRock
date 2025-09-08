@@ -97,9 +97,7 @@ def pull_large_files(dvc_projects, projects):
         return
     if shutil.which("dvc") is None:
         print("Could not find `dvc` on PATH so large files could not be fetched")
-        print(
-            "To install dvc, run `pip install dvc` or `pip install -r requirements.txt`"
-        )
+        print("Visit https://dvc.org/doc/install for installation instructions.")
         sys.exit(1)
     for project in dvc_projects:
         if not project in projects:
