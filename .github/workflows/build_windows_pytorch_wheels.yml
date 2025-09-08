@@ -172,12 +172,14 @@ jobs:
 
       - name: Upload wheels to S3 staging
         if: ${{ github.repository_owner == 'ROCm' }}
+        shell: cmd
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
+        shell: cmd
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}
@@ -222,7 +224,6 @@ jobs:
       TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
       TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
-      TRITON_VERSION: "${{ needs.build_pytorch_wheels.outputs.triton_version }}"
 
     steps:
       - name: Checkout
@@ -242,26 +243,7 @@ jobs:
           TEST_RESULT: ${{ needs.test_pytorch_wheels.result }}
           TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
           BYPASS_TESTS_FOR_RELEASES: ${{ needs.generate_target_to_run.outputs.bypass_tests_for_releases }}
-        run: |
-          # 1) If the build failed → upload=false
-          if [[ "$BUILD_RESULT" != "success" ]]; then
-            echo "::warning::Build failed. Skipping upload."
-            echo "upload=false" >> "$GITHUB_ENV"
-
-          # 2) Else if there was a test runner AND tests failed or were skipped → upload=false
-          elif [[ -n "$TEST_RUNS_ON" && ( "$TEST_RESULT" == "failure" || "$TEST_RESULT" == "skipped" ) ]]; then
-            echo "::warning::Tests failed or were skipped (runner present). Skipping upload."
-            echo "upload=false" >> "$GITHUB_ENV"
-
-          # 3) Else if BYPASS_TESTS_FOR_RELEASES is not set and there was no test runner → upload=false
-          elif [[ -z "$BYPASS_TESTS_FOR_RELEASES" && -z "$TEST_RUNS_ON" ]]; then
-            echo "::warning::No test runner and BYPASS_TESTS_FOR_RELEASES not set. Skipping upload."
-            echo "upload=false" >> "$GITHUB_ENV"
-
-          # 4) Otherwise → upload=true
-          else
-            echo "upload=true" >> "$GITHUB_ENV"
-          fi
+        run: python ./build_tools/github_actions/promote_wheels_based_on_policy.py
 
       - name: Copy PyTorch wheels from staging to release S3
         if: ${{ env.upload == 'true' }}
@@ -272,10 +254,9 @@ jobs:
             s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive \
             --exclude "*" \
-            --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "pytorch_triton_rocm-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "torch-${TORCH_VERSION}-${CP_VERSION}-win_amd64.whl" \
+            --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-win_amd64.whl" \
+            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-win_amd64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
