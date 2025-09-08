@@ -2,11 +2,12 @@
 
 """Installation package tests for the core package."""
 
+import ctypes.util
 import importlib
 from pathlib import Path
+import platform
 import subprocess
 import sys
-import sysconfig
 import unittest
 
 from .. import _dist_info as di
@@ -55,6 +56,18 @@ class ROCmLibrariesTest(unittest.TestCase):
 
         for so_path in so_paths:
             with self.subTest(msg="Check shared library loads", so_path=so_path):
+
+                # If libgfortran is not installed for Linux, we skip the fortran tests
+                # TODO(#1417): Remove fortran dependency for TheRock testing
+                libgfortran_path = ctypes.util.find_library("gfortran")
+                if (
+                    "fortran" in so_path
+                    and not libgfortran_path
+                    and platform.system() == "Linuxs"
+                ):
+                    self.skipTest(
+                        f"Skipping {so_path} test as libgfortran is not installed"
+                    )
 
                 # For Windows compatibility, we first preload libraries (DLLs)
                 # that are not co-located. Specifically this is for
