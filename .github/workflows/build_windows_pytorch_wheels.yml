@@ -87,7 +87,11 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
     outputs:
+      cp_version: ${{ env.cp_version }}
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
+      torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
+      torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
+
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
@@ -226,7 +230,6 @@ jobs:
       TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
       TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
-
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -237,7 +240,6 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
-
 
       - name: Determine upload flag
         env:
