@@ -213,8 +213,7 @@ https://rocm.nightlies.amd.com/<v2-staging>/<gfx110X-dgpu>/
 Only with passing Torch tests we promote passed wheels to release s3 bucket
 https://rocm.nightlies.amd.com/<v2>/<gfx110X-dgpu>/
 
-If no runner is available: Promotion is blocked by default. Set bypass_tests_for_releases=true only for exceptional cases under \[`amdgpu_family_matrix.py`\]
-(/build_tools/github_actions/amdgpu_family_matrix.py)
+If no runner is available: Promotion is blocked by default. Set bypass_tests_for_releases=true only for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
 
 ## Advanced build instructions
 
