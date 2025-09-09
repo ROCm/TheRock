@@ -109,6 +109,11 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      - name: Select Python version
+        run: |
+          python build_tools/github_actions/python_to_cp_version.py \
+            --python-version ${{ inputs.python_version }}
+
       # TODO(amd-justchen): share with build_windows_packages.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
