@@ -52,6 +52,7 @@ When TheRock was started, an initial directory tree was chosen to organize the b
 This was always seen as a first attempt to provide an overall organization to ROCm that would be revisited once various repository migrations were complete. Note that sub-project load order must be a DAG relative to project dependencies.
 
 Current load order:
+
 ```
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
@@ -71,7 +72,7 @@ Note that prior to the migration to the libraries and systems super-repos, each 
 
 In this prior state, it was easier to see which of the above directories contained which projects, because the sub-projects would all have a submodule/directory that was plainly visible. Now they are just artifacts in the corresponding `CMakeLists.txt` files. To keep from paging through, here are the sub-projects of each TLD:
 
-- `base/':
+- `base`:
   - Artifacts:
     - `base`
   - Sub-projects:
@@ -187,6 +188,8 @@ Much of this categorization is historical. Further, the long sub-project depende
 
 We may not actually execute such renames any time soon, but thinking of them in these terms may help when considering layering, artifacts/packaging, and code organization.
 
+We will also be promoting everything in this stack to a unified build vs a cascade of individual sub-projects in the near future, and any organization should enable us to do that cleanly with proper nesting.
+
 ### Profiler Layering
 
 The profiler stack is mostly self contained with the exception of rocprofiler-register, which is a base rendezvous library upon which many other components of ROCm depend. As such, it must be defined before most other projects, but the profiler itself does not generally have inbound deps.
@@ -201,16 +204,18 @@ This document will propse structuring congruent with this future state.
 
 ### Others
 
-There are other projects which have a non-trivial evolution roadmap in front of them but are not yet in TheRock build system. These will be considered in a later phase of project organization:
+There are other projects which have a non-trivial evolution roadmap in front of them but these changes are not yet in TheRock build system. These will be considered in a later phase of project organization:
 
 - `rccl`: Potential aggregation with higher level distribution libraries and other implementation changes
-- Decoders (`rocDECODE`, `rocJPEG`): Will be added to the `rocm-systems` super-repo and potentially re-organized into one project in concert with dependency improvements with respect to their user-mode drivers.
+- Decoders (`rocDECODE`, `rocJPEG`): Will be added to the `rocm-systems` super-repo and potentially re-organized into one project in concert with dependency improvements with respect to their user-mode drivers. Their language bindings will be separated to the language binding tree.
 - `*smi`, `rdc`, etc: Work is ongoing to separate concerns and land these properly into `rocm-systems`
 - Python bindings: Many projects contain integrated builds of various Python bindings that are distributed for public consumption. These bindings are being disaggregated from their backing C++ API projects and will be built/deployed independently (with the exception of Python projects that are build-only dependencies that are not distributed).
 
 ## Abstract Proposal
 
 Currently, TheRock hosts all sub-project and artifact definition files, while source code and project-specific `CMakeLists.txt` files are stored in the submodules. While useful for bootstrapping, this is not a great state of affairs for managing project evolution since it creates a coupling between the super-project (TheRock) for various build system details and component projects. This can make it difficult to perform lock-step changes to the project build system.
+
+Further, the systems and libraries super-repos have a mostly flat directory layout (under `projects/` and `shared/`) that was expedient for bootstrapping but should be reconsidered.
 
 We propose letting TheRock continue to be the build driver, while relocating the sub-project and artifact definitions to the component repositories. We will specifically focus on the rocm-systems and rocm-libraries super-repos and ignore the remaining stand-alone repositories. In order to provide sound ordering/layering, this will force a hierarchical directory structure in the libraries/systems super-repos that corresponds to the layering of the actual software -- whereas today, all of the sources are in a flat tree under `projects/` or `shared/`.
 
@@ -267,7 +272,7 @@ airplane/
       therock_artifact_housing.toml
 ```
 
-This will necessitate some upgrades to how the existing macros work but shouldn't be too bad. We will need to add a new `therock_add_subdirectory()` to add super-project sub-directories that look for the special `therock_options.cmake` and `therock_subproject.cmake`.
+This will necessitate some upgrades to how the existing macros work but shouldn't be too bad. We will need to add a new `therock_add_subdirectory()` to add super-project sub-directories that look for the special `therock_subproject.cmake`, which performs actual subproject setup.
 
 The idea is that `therock.cmake` does the following:
 
@@ -277,7 +282,7 @@ The idea is that `therock.cmake` does the following:
 
 Then, once the directory tree is traversed, and sub-directories that contain a `therock_subprojects.cmake` will be invoked in new scopes as the super-project `CMakeLists.txt` are today.
 
-This will reduce add_subdirectory block in TheRock's top-level `CMakeLists.txt` to something like:
+This will reduce the add_subdirectory block in TheRock's top-level `CMakeLists.txt` to something like:
 
 ```
 therock_add_subdirectory(rocm-systems)
@@ -398,6 +403,31 @@ dnn-providers/
   foo-provider/
     ...
 ```
+
+#### Implied Functional Changes
+
+##### Relayering of the GEMM/LA libraries to better reflect current thinking
+
+Implicit in this layering is an expansion with respect to the artifacts in the new `gemmla` grouping. Whereas we did have one `blas` artifact, we now will have:
+
+- `gemmla-common`
+- `gemm-dense` (dep: `gemmla-common`)
+- `gemm-sparse` (dep: `gemmla-dense`, `gemmla-common`)
+- `la` (dep: `gemmla-dense`, `gemmla-common`)
+- `gemm-api` (dep: `gemmla-common`, `gemm-dense`, `la`)
+
+These artifacts will be mirrored into native packages by the packaging scripts. Note that in the future, API layers from hipblaslt and hipsparselt may be moved to the `gemm-api` artifact if we desire a more normalized library layering.
+
+##### Categorizing kernel and device libraries
+
+Futher, we create two additional categories of libraries:
+
+- `kernel-libs`: Non gemmla libraries of specialty kernels.
+- `device-libs`: (mostly header only) APIs for doing device library development.
+
+##### Setting up the namespace for hipdnn
+
+As mentioned above, miopen is being expanded into a suite. This layout reflects where that is going.
 
 ### Implementation Plan
 
