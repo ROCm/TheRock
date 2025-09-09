@@ -25,6 +25,7 @@
 # Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
 $regex_build_exe = "\build\.*[.]exe"
 
+# https://superuser.com/questions/749243/detect-if-powershell-is-running-as-administrator/756696#756696
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::
             GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
