@@ -362,6 +362,7 @@ def do_build(args: argparse.Namespace):
         )
 
     env: dict[str, str] = {
+        "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(rocm_dir),
         "ROCM_PATH": str(rocm_dir),
@@ -584,7 +585,7 @@ def do_build_pytorch(
     # Add the _rocm_init.py file.
     (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
 
-    # Workaround missing features on windows.
+    # Windows-specific options.
     if is_windows:
         use_flash_attention = (
             "1" if args.enable_pytorch_flash_attention_windows else "0"
@@ -593,14 +594,6 @@ def do_build_pytorch(
             {
                 "USE_FLASH_ATTENTION": use_flash_attention,
                 "USE_MEM_EFF_ATTENTION": use_flash_attention,
-                # Currently, aotriton packages don't include windows binaries
-                # so we build them alongside pytorch using AOTRITON_INSTALL_FROM_SOURCE=1.
-                # On Windows, aotriton is built with "NOIMAGE" mode, so it needs kernel images built from Linux.
-                # TODO: TheRock provides aotriton artifacts compiled for windows including aotriton images built from Linux.
-                # For now, manually copy in the aotriton.images folder from linux binaries into <pytorch_root>/lib/aotriton.images.
-                # NOTE: this will not work without the corresponding patch in the main branch.
-                # which is in ./patches/pytorch/main/pytorch/hipified/0004-Support-FLASH_ATTENTION-MEM_EFF_ATTENTION-via.-aotriton.patch
-                "AOTRITON_INSTALL_FROM_SOURCE": use_flash_attention,
                 "DISTUTILS_USE_SDK": "1",
                 # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
                 # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
