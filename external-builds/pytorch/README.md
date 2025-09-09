@@ -207,13 +207,11 @@ See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-pa
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload Pytorch, TorchVisual, TorchAudio and Triton wheels to "v2-staging" s3 bucket
-https://rocm.nightlies.amd.com/<v2-staging>/<gfx110X-dgpu>/
+With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `pytorch-triton-rocm` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
 
-Only with passing Torch tests we promote passed wheels to release s3 bucket
-https://rocm.nightlies.amd.com/<v2>/<gfx110X-dgpu>/
+Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
 
-If no runner is available: Promotion is blocked by default. Set bypass_tests_for_releases=true only for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
+If no runner is available: Promotion is blocked by default. Set `bypass_tests_for_releases=true` for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
 
 ## Advanced build instructions
 
