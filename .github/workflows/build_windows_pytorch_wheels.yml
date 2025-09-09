@@ -117,9 +117,7 @@ jobs:
       # TODO(amd-justchen): share with build_windows_packages.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
-          # ninja pinned due to a bug in the 1.13.0 release:
-          # https://github.com/ninja-build/ninja/issues/2616
-          choco install --no-progress -y ninja --version 1.12.1
+          choco install --no-progress -y ninja --version 1.13.1
           choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
@@ -161,6 +159,7 @@ jobs:
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             ${{ env.optional_build_prod_arguments }}
