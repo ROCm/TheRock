@@ -49,8 +49,9 @@ When TheRock was started, an initial directory tree was chosen to organize the b
 └── profiler
 ```
 
-This was always seen as a first attempt to provide an overall organization to ROCm such that an arrangement whereby there was some semantic meaning to the structure and dependencies always formed a DAG with respect to the directory tree: sub-projects can only depend on others that come before them in load-order, which causes certain nested arrangements to be invalid. The current load order is:
+This was always seen as a first attempt to provide an overall organization to ROCm that would be revisited once various repository migrations were complete. Note that sub-project load order must be a DAG relative to project dependencies.
 
+Current load order:
 ```
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
@@ -70,7 +71,7 @@ Note that prior to the migration to the libraries and systems super-repos, each 
 
 In this prior state, it was easier to see which of the above directories contained which projects, because the sub-projects would all have a submodule/directory that was plainly visible. Now they are just artifacts in the corresponding `CMakeLists.txt` files. To keep from paging through, here are the sub-projects of each TLD:
 
-- \`base/':
+- `base/':
   - Artifacts:
     - `base`
   - Sub-projects:
