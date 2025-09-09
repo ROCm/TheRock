@@ -61,7 +61,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # TODO(#1417): Remove fortran dependency for TheRock testing
                 libgfortran_path = ctypes.util.find_library("gfortran")
                 if (
-                    "fortran" in so_path
+                    "fortran" in str(so_path)
                     and not libgfortran_path
                     and platform.system() == "Linux"
                 ):
