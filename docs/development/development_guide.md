@@ -289,7 +289,7 @@ extension can be used to configure the superproject and build individual targets
 Settings for CMake builds can be specified in `settings.json` or
 `*.code-workspace` files, like so:
 
-```json
+```jsonc
 {
   "cmake.generator": "Ninja",
   "cmake.configureArgs": [
@@ -312,7 +312,7 @@ Settings for CMake builds can be specified in `settings.json` or
 
 A `launch.json` file can be used to debug programs. For example on Windows:
 
-```json
+```jsonc
 {
   "version": "0.2.0",
   "configurations": [
