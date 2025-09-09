@@ -113,7 +113,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx950-dcgpu
@@ -129,7 +129,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx110X-dgpu
@@ -147,7 +147,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx1151
@@ -163,7 +163,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx120X-all
@@ -180,7 +180,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 ### Using ROCm Python packages
