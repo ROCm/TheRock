@@ -3,11 +3,10 @@ author: Stella Laurenzo (stellaraccident)
 created: 2025-09-08
 modified: 2025-09-08
 status: draft
+discussion: https://github.com/ROCm/TheRock/discussions/1425
 ---
 
 # Build Tree Normalization Post Super-Repo Migrations
-
-Discussion link: https://github.com/ROCm/TheRock/discussions/1425
 
 This RFC recommends a re-organization of project directories to meet the following goals:
 
