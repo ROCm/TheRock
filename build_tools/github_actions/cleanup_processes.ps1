@@ -47,16 +47,16 @@ $ps_list_len = $ps_list.Count
 
 if($ps_list.Count -gt 0) {
     echo "[*] Found $ps_list_len running build executable(s):"
-    $ps_list | % { echo "    > $($_.MainModule.FileName) "}
+    $ps_list | % { echo "    > $($_.MainModule.FileName)"}
 
-    echo "[*] Attempting to stop executable(s) forcefully..."
+    echo "[*] Attempting to stop executable(s) forcefully with 'Stop-Process' ..."
     $ps_list | ForEach-Object {
         echo "    > $($_.MainModule.ModuleName)"
-        try {
-            Stop-Process $_ -Force
-        } catch {
-            echo "[-] Error stopping executable:"
-            echo $_.Exception.Messsage
+        echo "      | pid: $($_.id)"
+        Stop-Process $_ -Force
+        echo "      | exited: $($_.HasExited)"
+    }
+
         }
     }
 
