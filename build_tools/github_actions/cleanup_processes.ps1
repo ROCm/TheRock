@@ -57,9 +57,20 @@ if($ps_list.Count -gt 0) {
         echo "      | exited: $($_.HasExited)"
     }
 
+    # Try to stop any still running processes with WMI
+    $ps_list = Get-Process | Where-Object { $_.MainModule.FileName -Match $regex_build_exe }
+    if($ps_list.Count -gt 0) {
+        echo "[-] Attemping to stop any remaining executable(s) with WMI: "
+        $ps_list | ForEach-Object {
+            echo "    > $($_.MainModule.ModuleName)" 
+            echo "      | pid: $($_.id)"
+            #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
+            (Get-WmiObject win32_process -Filter "ProcessId = '$($_.id)'").Terminate() | Out-Null
+            echo "      | exited: $($_.HasExited)"
         }
     }
 
+    # Query list of processes again to see whether processes may have hung
     $ps_list = Get-Process | Where-Object { $_.MainModule.FileName -Match $regex_build_exe }
     if($ps_list.Count -gt 0) {
         echo "[-] Failed to stop executable(s): "
