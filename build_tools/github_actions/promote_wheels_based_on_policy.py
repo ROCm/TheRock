@@ -1,5 +1,18 @@
+"""
+Decide whether to upload/promote build artifacts in GitHub Actions.
+
+
+Reads env vars BUILD_RESULT, TEST_RESULT, TEST_RUNS_ON, BYPASS_TESTS_FOR_RELEASES and
+sets `upload` ("true"/"false") via `gha_set_env` using this policy:
+1) build != "success" → false
+2) test runner present and tests failed/skipped → false
+3) no test runner and not bypassing → false
+4) otherwise → true
+"""
+
 import argparse
 import os
+import sys
 from github_actions_utils import *
 
 
