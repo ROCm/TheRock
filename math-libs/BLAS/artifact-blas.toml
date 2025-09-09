@@ -115,14 +115,14 @@ optional = true
 optional = true
 [components.lib."math-libs/BLAS/hipSOLVER/stage"]
 exclude = [
-  "lib/libhipsolver_fortran.so",
+  "lib/libhipsolver_fortran.so*",
 ]
 optional = true
 [components.test."math-libs/BLAS/hipSOLVER/stage"]
 include = [
   "bin/hipsolver-bench*",
   "bin/hipsolver-test*",
-  "lib/libhipsolver_fortran.so",
+  "lib/libhipsolver_fortran.so*",
   "share/hipsolver/test/**",
 ]
 optional = true
