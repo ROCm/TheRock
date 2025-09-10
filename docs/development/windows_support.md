@@ -130,6 +130,7 @@ These instructions mostly mirror the instructions in the root
 > choco install ccache -y
 > choco install python -y
 > choco install strawberryperl -y
+> choco install dvc -y
 > ```
 
 If you prefer to install tools manually, you will need:
@@ -156,6 +157,8 @@ If you prefer to install tools manually, you will need:
   https://github.com/mozilla/sccache
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
+  
+- dvc: https://dvc.org/doc/install
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
