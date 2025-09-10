@@ -116,7 +116,7 @@ def discover_current_target_family() -> str | None:
         print(f"[WARNING] amdgpu-arch failed with return code {e.returncode}")
         print(f"[stderr] {e.output}")
     except FileNotFoundError:
-        print(f"[WARNING] failed to run amdgpu-arch, binary not found.")
+        print(f"[WARNING] failed to run amdgpu-arch: binary not found.")
     except Exception as e:
         print(f"[WARNING] Unexpected error running amdgpu-arch: {e}")
     return None
