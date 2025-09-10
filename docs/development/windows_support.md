@@ -157,7 +157,7 @@ If you prefer to install tools manually, you will need:
   https://github.com/mozilla/sccache
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
-  
+
 - dvc: https://dvc.org/doc/install/windows
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
