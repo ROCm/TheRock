@@ -79,6 +79,7 @@ chcp 65001
 
 ```bash
 # Install dependencies following the Windows support guide
+# dvc is required (https://dvc.org/doc/install/windows)
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
