@@ -16,17 +16,32 @@ def read_package_json_file():
     return data
 
 
-def is_packaging_disabled(package):
+def is_packaging_disabled(pkg_info):
     """
     Checks if packaging is disabled for a given package.
 
     Parameters:
-    package (dict): A dictionary containing package details.
+    pkg_info (dict): A dictionary containing package details.
 
     Returns:
     bool: True if 'DisablePackaging' key exists, False otherwise.
     """
-    return "DisablePackaging" in package
+    return any(key.lower() == "disablepackaging" for key in pkg_info)
+
+
+def is_composite_package(pkg_info):
+    """
+    Checks whether the package is a composite package.
+    Package that Includes multiple other package is considered composite
+    If no "Includes" and "Artifact_Subdir" tag, then the package is marked as composite
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if 'Composite' key exists, False otherwise.
+    """
+    return any(key.lower() == "composite" for key in pkg_info)
 
 
 def get_package_info(pkgname):
