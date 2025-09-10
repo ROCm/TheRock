@@ -15,6 +15,7 @@ therock_cmake_subproject_declare(therock-yaml-cpp
     therock-fmt
   CMAKE_ARGS
     -DYAML_BUILD_SHARED_LIBS=OFF
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 therock_cmake_subproject_provide_package(therock-yaml-cpp yaml-cpp lib/cmake)
 therock_cmake_subproject_activate(therock-yaml-cpp)
