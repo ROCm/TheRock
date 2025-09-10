@@ -1,19 +1,19 @@
-From 80b7d127116b67c6fefc96081d3f3cca081a29f8 Mon Sep 17 00:00:00 2001
+From 8ed64560b0300ac1df0b49e6babcfa6f3e4bbf45 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
-Date: Fri, 18 Jul 2025 14:44:31 +0000
-Subject: [PATCH 08/17] Enable hipblaslt on windows and for static builds
+Date: Wed, 10 Sep 2025 12:20:33 +0000
+Subject: [PATCH] Enable hipblaslt on windows and for static builds
 
 ---
  projects/rocblas/CMakeLists.txt                |  5 ++---
  projects/rocblas/clients/common/CMakeLists.txt | 12 ++++--------
- projects/rocblas/library/src/CMakeLists.txt    |  6 ------
- 3 files changed, 6 insertions(+), 17 deletions(-)
+ projects/rocblas/library/src/CMakeLists.txt    |  8 +-------
+ 3 files changed, 7 insertions(+), 18 deletions(-)
 
 diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
-index cbd021a4a6..589eac2bdb 100644
+index 1b46a68300..cb7d8067dd 100644
 --- a/projects/rocblas/CMakeLists.txt
 +++ b/projects/rocblas/CMakeLists.txt
-@@ -146,17 +146,16 @@ set( GPU_TARGETS "${target_list}" CACHE STRING "List of GPUs (gfx targets) to su
+@@ -145,17 +145,16 @@ set( GPU_TARGETS "${target_list}" CACHE STRING "List of GPUs (gfx targets) to su
  set( AMDGPU_TARGETS "${GPU_TARGETS}" CACHE STRING "List of GPUs (gfx targets) to support" FORCE ) # for old hip cmake files backward compatibility
  
  option( BUILD_WITH_HIPBLASLT "Build with HipBLASLt" ON )
@@ -34,7 +34,7 @@ index cbd021a4a6..589eac2bdb 100644
    endif()
  endif()
 diff --git a/projects/rocblas/clients/common/CMakeLists.txt b/projects/rocblas/clients/common/CMakeLists.txt
-index 2d32fe7fef..8c2445ed77 100644
+index 55118129d7..7529d3ca2a 100644
 --- a/projects/rocblas/clients/common/CMakeLists.txt
 +++ b/projects/rocblas/clients/common/CMakeLists.txt
 @@ -54,13 +54,6 @@ function( rocblas_client_library_settings lib_target_ )
@@ -51,10 +51,10 @@ index 2d32fe7fef..8c2445ed77 100644
    target_compile_definitions( ${lib_target_} PRIVATE ROCM_USE_FLOAT16 ROCBLAS_INTERNAL_API ROCBLAS_NO_DEPRECATED_WARNINGS )
    target_compile_definitions( ${lib_target_} PRIVATE ${TENSILE_DEFINES} ${HIPBLASLT_DEFINES} GOOGLE_TEST )
    # GOOGLE_TEST left off for reuse of this function by by gemm tuner
-@@ -168,7 +161,10 @@ target_compile_definitions( rocblas_clients_common PRIVATE ROCBLAS_REFERENCE_LIB
+@@ -169,7 +162,10 @@ target_compile_definitions( rocblas_clients_common PRIVATE ROCBLAS_REFERENCE_LIB
  
  
- # target is not linked as OBJECT library but we want any interface flags from dependencies
+ # target is not linked as OBJECT library but we want any interface flags from dependencies, e.g. COMMON_LINK_LIBS may bring OpenMP
 -target_link_libraries( rocblas_clients_common PUBLIC roc::rocblas hip::host hip::device $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} PRIVATE roc::hipblaslt )
 +target_link_libraries( rocblas_clients_common roc::rocblas hip::host hip::device $<IF:$<TARGET_EXISTS:GTest::gtest>,GTest::gtest,GTest::GTest> $<IF:$<TARGET_EXISTS:GTest::gtest_main>,GTest::gtest_main,GTest::Main> ${COMMON_LINK_LIBS} )
 +if(BUILD_WITH_HIPBLASLT)
@@ -64,7 +64,7 @@ index 2d32fe7fef..8c2445ed77 100644
  
  
 diff --git a/projects/rocblas/library/src/CMakeLists.txt b/projects/rocblas/library/src/CMakeLists.txt
-index f4bdfb5f97..e972869a9e 100644
+index f4bdfb5f97..12df4f47f3 100644
 --- a/projects/rocblas/library/src/CMakeLists.txt
 +++ b/projects/rocblas/library/src/CMakeLists.txt
 @@ -690,13 +690,7 @@ if( BUILD_WITH_TENSILE )
@@ -76,8 +76,9 @@ index f4bdfb5f97..e972869a9e 100644
 -        $<BUILD_INTERFACE:${HIPBLASLT_INCLUDE_DIR}>
 -    )
 -    if( BUILD_SHARED_LIBS )
-       target_link_libraries( rocblas PRIVATE roc::hipblaslt )
+-      target_link_libraries( rocblas PRIVATE roc::hipblaslt )
 -    endif()
++    target_link_libraries( rocblas PRIVATE roc::hipblaslt )
    endif()
  
    if( NOT BUILD_SHARED_LIBS )
