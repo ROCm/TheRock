@@ -14,10 +14,18 @@ on:
         description: S3 subdirectory, not including the GPU-family
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: Staging subdirectory to push the wheels for test
+        type: string
+        default: "v2-staging"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
       rocm_version:
         description: ROCm version to pip install
         type: string
@@ -40,10 +48,18 @@ on:
         description: S3 subdirectory, not including the GPU-family
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging subdirectory to push the wheels for test"
+        type: string
+        default: "v2-staging"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
@@ -66,5 +82,7 @@ jobs:
       python_version: ${{ matrix.python_version }}
       release_type: ${{ inputs.release_type }}
       s3_subdir: ${{ inputs.s3_subdir }}
+      s3_staging_subdir: ${{ inputs.s3_staging_subdir }}
       cloudfront_url: ${{ inputs.cloudfront_url }}
+      cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}

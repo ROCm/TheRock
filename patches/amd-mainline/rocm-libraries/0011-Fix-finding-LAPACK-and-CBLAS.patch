@@ -1,7 +1,7 @@
-From c194b05d6b1fb98da896784c580ecba5c36b1297 Mon Sep 17 00:00:00 2001
+From fa6af5c20b2d3700c3570ac8c4c5fea02e21e781 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
-Date: Tue, 25 Mar 2025 12:13:13 +0000
-Subject: [PATCH 11/17] Fix finding LAPACK and CBLAS
+Date: Tue, 26 Aug 2025 10:09:28 +0000
+Subject: [PATCH] Fix finding LAPACK and CBLAS
 
 Use target names provided by `find_package()` instead of assuming that
 the reference NETLIB libraries should be used.
@@ -10,7 +10,7 @@ the reference NETLIB libraries should be used.
  1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/projects/hipblas/clients/CMakeLists.txt b/projects/hipblas/clients/CMakeLists.txt
-index a230135a10..b5e4eb0fb6 100644
+index 4ba4e950c9..6863e7c080 100644
 --- a/projects/hipblas/clients/CMakeLists.txt
 +++ b/projects/hipblas/clients/CMakeLists.txt
 @@ -28,8 +28,8 @@ function( get_lapack lapack_lib lapack_inc )
@@ -33,15 +33,15 @@ index a230135a10..b5e4eb0fb6 100644
      endif()
    endif()
    set( ${cblas_libs} ${libs} PARENT_SCOPE )
-@@ -221,7 +221,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+@@ -236,7 +236,7 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
    find_package( GTest REQUIRED )
  
    message(STATUS "Build Dir: ${BUILD_DIR}")
 -  message(STATUS "Linking Ref. Libs: ${BLAS_LIBRARY}")
 +  message(STATUS "Linking Libs: ${BLAS_LIBRARY}")
  
-   if( BUILD_CLIENTS_TESTS )
-     add_subdirectory( gtest )
+   if( NOT TARGET hipblas )
+     find_package( hipblas REQUIRED CONFIG PATHS ${HIPBLAS_LIBRARY_DIR} )
 -- 
 2.43.0
 

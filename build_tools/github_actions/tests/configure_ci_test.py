@@ -256,7 +256,10 @@ class ConfigureCITest(unittest.TestCase):
             families={},
             platform="windows",
         )
-        self.assertEqual(windows_target_output, [])
+        self.assertGreaterEqual(len(windows_target_output), 1)
+        self.assert_target_output_is_valid(
+            target_output=windows_target_output, allow_xfail=True
+        )
 
 
 if __name__ == "__main__":

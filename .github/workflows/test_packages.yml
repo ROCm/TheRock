@@ -62,7 +62,7 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     runs-on: ${{ inputs.test_runs_on }}
     container:
-      image: ${{ needs.configure_test_matrix.outputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      image: ${{ needs.configure_test_matrix.outputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd
@@ -101,10 +101,6 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ matrix.components.fetch_artifact_args }}
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-
-      - name: Install additional packages
-        if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt') }}
-        run: sudo apt install libgfortran5 -y
 
       - name: Test
         timeout-minutes: ${{ matrix.components.timeout_minutes }}

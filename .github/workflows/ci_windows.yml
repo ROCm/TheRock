@@ -9,6 +9,8 @@ on:
         type: string
       test_runs_on:
         type: string
+      expect_failure:
+        type: boolean
       windows_use_prebuilt_artifacts:
         type: string
       extra_cmake_options:
@@ -26,6 +28,7 @@ jobs:
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       extra_cmake_options: ${{ inputs.extra_cmake_options }}
+      expect_failure: ${{ inputs.expect_failure }}
     permissions:
       contents: read
       id-token: write

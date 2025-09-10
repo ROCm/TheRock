@@ -159,7 +159,7 @@ mix/match build steps.
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
     --output-dir $HOME/tmp/pyout
   ```
 
@@ -167,7 +167,7 @@ mix/match build steps.
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
     --pytorch-dir C:/b/pytorch \
     --pytorch-audio-dir C:/b/audio \
     --pytorch-vision-dir C:/b/vision \
@@ -203,6 +203,16 @@ See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-pa
 
 <!-- TODO(erman-gurses): update docs here -->
 
+## Nightly releases
+
+### Gating releases with Pytorch tests
+
+With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `pytorch-triton-rocm` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
+
+Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
+
+If no runner is available: Promotion is blocked by default. Set `bypass_tests_for_releases=true` for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
+
 ## Advanced build instructions
 
 ### Other ways to install the rocm packages
@@ -215,7 +225,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   build_prod_wheels.py
-      --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
       install-rocm
   ```
 
@@ -224,7 +234,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   ```bash
   # From therock-nightly-python
   python -m pip install \
-    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
     rocm[libraries,devel]
 
   # OR from therock-dev-python

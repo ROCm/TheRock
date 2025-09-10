@@ -35,6 +35,20 @@ We recommend installing ROCm and projects like PyTorch via `pip`, the
 
 We currently support Python 3.11, 3.12, and 3.13.
 
+> [!TIP]
+> We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
+>
+> ```bash
+> python -m venv .venv
+> source .venv/bin/activate
+> ```
+>
+> Multiple virtual environments can be present on a system at a time, allowing you to switch between them at will.
+
+> [!WARNING]
+> If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
+> In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
+
 ### Python packages release status
 
 > [!IMPORTANT]
@@ -47,6 +61,27 @@ We currently support Python 3.11, 3.12, and 3.13.
 | -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) |
 | Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) |             [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |
+
+### Index page listing
+
+For now, `rocm` and `torch` packages are published to GPU-architecture-specific index
+pages and must be installed using an appropriate `--find-links` argument to `pip`.
+They may later be pushed to the
+[Python Package Index (PyPI)](https://pypi.org/) or other channels using a process
+like https://wheelnext.dev/. **Please check back regularly
+as these instructions will change as we migrate to official indexes and adjust
+project layouts.**
+
+| Product Name                       | GFX Target | GFX Family   | Install instructions                                               |
+| ---------------------------------- | ---------- | ------------ | ------------------------------------------------------------------ |
+| MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) |
+| MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
+| AMD RX 7800 XT                     | gfx1101    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
+| AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151)           |
+| AMD RX 9060 / XT                   | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
+| AMD RX 9070 / XT                   | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
 
 ### Installing ROCm Python packages
 
@@ -65,76 +100,87 @@ We provide several Python packages which together form the complete ROCm SDK.
 | `rocm-sdk-devel`     | OS-specific development tools                                      |
 | `rocm-sdk-libraries` | OS-specific libraries                                              |
 
-For now these packages are published to GPU architecture-specific index pages
-and must be installed using an appropriate `--find-links` argument to `pip`.
-They will later be pushed to the
-[Python Package Index (PyPI)](https://pypi.org/). **Please check back regularly
-as these instructions will change as we migrate to official indexes and adjust
-project layouts.**
+#### rocm for gfx94X-dcgpu
 
-> [!TIP]
-> We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
->
-> ```bash
-> python -m venv .venv
-> source .venv/bin/activate
-> ```
->
-> Multiple virtual environments can be present on a system at a time, allowing you to switch between them at will.
+Supported devices in this family:
 
-> [!WARNING]
-> If you _really_ want a system-wide install, you can pass `--break-system-packages` to `pip` outside a virtual enivornment.
-> In this case, commandline interface shims for executables are installed to `/usr/local/bin`, which normally has precedence over `/usr/bin` and might therefore conflict with a previous installation of ROCm.
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI300A/MI300X | gfx942     |
 
-| **Product Name**                   | **GFX Family** |
-| ---------------------------------- | -------------- |
-| MI300A/MI300X                      | gfx94X-dcgpu   |
-| MI350X/MI355X                      | gfx950-dcgpu   |
-| AMD RX 7900 XTX                    | gfx110X-dgpu   |
-| AMD RX 7800 XT                     | gfx110X-dgpu   |
-| AMD RX 7700S / Framework Laptop 16 | gfx110X-dgpu   |
-| AMD Strix Halo iGPU                | gfx1151        |
-| AMD RX 9060 / XT                   | gfx120X-all    |
-| AMD RX 9070 / XT                   | gfx120X-all    |
-
-#### gfx94X-dcgpu
+Install instructions:
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
-  rocm[libraries,devel]
+  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
+  "rocm[libraries,devel]"
 ```
 
-#### gfx950-dcgpu
+#### rocm for gfx950-dcgpu
+
+Supported devices in this family:
+
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI350X/MI355X | gfx950     |
+
+Install instructions:
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
-  rocm[libraries,devel]
+  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
+  "rocm[libraries,devel]"
 ```
 
-#### gfx110X-dgpu
+#### rocm for gfx110X-dgpu
+
+Supported devices in this family:
+
+| Product Name                       | GFX Target |
+| ---------------------------------- | ---------- |
+| AMD RX 7900 XTX                    | gfx1100    |
+| AMD RX 7800 XT                     | gfx1101    |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+
+Install instructions:
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
-  rocm[libraries,devel]
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+  "rocm[libraries,devel]"
 ```
 
-#### gfx1151
+#### rocm for gfx1151
+
+Supported devices in this family:
+
+| Product Name        | GFX Target |
+| ------------------- | ---------- |
+| AMD Strix Halo iGPU | gfx1151    |
+
+Install instructions:
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
-  rocm[libraries,devel]
+  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
+  "rocm[libraries,devel]"
 ```
 
-#### gfx120X-all
+#### rocm for gfx120X-all
+
+Supported devices in this family:
+
+| Product Name     | GFX Target |
+| ---------------- | ---------- |
+| AMD RX 9060 / XT | gfx1200    |
+| AMD RX 9070 / XT | gfx1201    |
+
+Install instructions:
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
-  rocm[libraries,devel]
+  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
+  "rocm[libraries,devel]"
 ```
 
 ### Using ROCm Python packages
@@ -195,49 +241,98 @@ framework.
 ### Installing PyTorch Python packages
 
 > [!WARNING]
-> This is under **active** development.
+> This is under **active** development. Compatibility matrix for these wheels is in progress.
+>
+> Each `torchaudio` package is compiled against a specific version of `torch`; please refer to the [PyTorch compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix) for compatible versions of torch and torchaudio.
+> The build dates for nightly wheels should also be consistent with each other.
 
-Using the index pages listed above, you can install `torch`, `torchaudio`, and
+> [!NOTE]
+> These installation commands will install the latest versions, including prerelease wheels,
+> by default. Older versions can also be installed from available versions found at
+>
+> - The [nightly releases page](https://rocm.nightlies.amd.com/v2/)
+> - Documentation for [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+>
+> For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
+>
+> ```
+> torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+> ```
+
+Using the index pages [listed above](#installing-rocm-python-packages), you can install `torch`, `torchaudio`, and
 `torchvision` instead of `rocm[libraries,devel]`:
 
-#### gfx94X-dcgpu
+#### torch for gfx94X-dcgpu
+
+Supported devices in this family:
+
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI300A/MI300X | gfx942     |
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx94X-dcgpu/ \
-  torch torchaudio torchvision
+  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
+  --pre torch torchaudio torchvision
 ```
 
-#### gfx950-dcgpu
+#### torch for gfx950-dcgpu
+
+Supported devices in this family:
+
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI350X/MI355X | gfx950     |
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx950-dcgpu/ \
-  torch torchaudio torchvision
+  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
+  --pre torch torchaudio torchvision
 ```
 
-#### gfx110X-dgpu
+#### torch for gfx110X-dgpu
+
+Supported devices in this family:
+
+| Product Name                       | GFX Target |
+| ---------------------------------- | ---------- |
+| AMD RX 7900 XTX                    | gfx1100    |
+| AMD RX 7800 XT                     | gfx1101    |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
-  torch torchaudio torchvision
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+  --pre torch torchaudio torchvision
 ```
 
-#### gfx1151
+#### torch for gfx1151
+
+Supported devices in this family:
+
+| Product Name        | GFX Target |
+| ------------------- | ---------- |
+| AMD Strix Halo iGPU | gfx1151    |
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx1151/ \
-  torch torchaudio torchvision
+  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
+  --pre torch torchaudio torchvision
 ```
 
-#### gfx120X-all
+#### torch for gfx120X-all
+
+Supported devices in this family:
+
+| Product Name     | GFX Target |
+| ---------------- | ---------- |
+| AMD RX 9060 / XT | gfx1200    |
+| AMD RX 9070 / XT | gfx1201    |
 
 ```bash
 python -m pip install \
-  --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx120X-all/ \
-  torch torchaudio torchvision
+  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
+  --pre torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages
@@ -318,8 +413,6 @@ them from the expanded artifacts down to a ROCm SDK "dist folder" using the
 1. Download the artifacts for that workflow run from S3 using either the
    [AWS CLI](https://aws.amazon.com/cli/) or
    [AWS SDK for Python (Boto3)](https://aws.amazon.com/sdk-for-python/):
-
-   <!-- TODO: replace URLs with cloudfront / some other CDN instead of raw S3 -->
 
    ```bash
    export LOCAL_ARTIFACTS_DIR=~/therock-artifacts

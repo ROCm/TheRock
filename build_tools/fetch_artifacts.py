@@ -26,6 +26,13 @@ is downloaded (this implies --all):
 
 This will process artifacts that match any of the include patterns and do not
 match any of the exclude patterns.
+
+Note this module will respect:
+    AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY
+    AWS_SESSION_TOKEN
+if and only if all are specified in the environment to connect with S3.
+If unspecified, we will create an anonymous boto file that can only acccess public artifacts.
 """
 
 import argparse
@@ -34,6 +41,7 @@ from botocore import UNSIGNED
 from botocore.config import Config
 import concurrent.futures
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import platform
 import re
@@ -49,11 +57,27 @@ from _therock_utils.artifacts import ArtifactPopulator
 
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
-s3_client = boto3.client(
-    "s3",
-    verify=False,
-    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
-)
+_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
+_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+_session_token = os.environ.get("AWS_SESSION_TOKEN")
+
+# Create S3 client leveraging AWS credentials if available.
+if None not in (_access_key_id, _secret_access_key, _session_token):
+    s3_client = boto3.client(
+        "s3",
+        verify=False,
+        aws_access_key_id=_access_key_id,
+        aws_secret_access_key=_secret_access_key,
+        aws_session_token=_session_token,
+    )
+else:
+    # Otherwise use anonymous boto file.
+    s3_client = boto3.client(
+        "s3",
+        verify=False,
+        config=Config(max_pool_connections=100, signature_version=UNSIGNED),
+    )
+
 paginator = s3_client.get_paginator("list_objects_v2")
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent

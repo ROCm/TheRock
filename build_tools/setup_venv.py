@@ -39,13 +39,21 @@ import shlex
 import shutil
 import subprocess
 import sys
+import re
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 from github_actions.github_actions_utils import *
+
+GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
 
 is_windows = platform.system() == "Windows"
 
 INDEX_URLS_MAP = {
-    "nightly": "https://d2awnip2yjpvqn.cloudfront.net/v2",
+    "nightly": "https://rocm.nightlies.amd.com/v2",
     "dev": "https://d25kgig7rdsyks.cloudfront.net/v2",
 }
 
@@ -148,6 +156,40 @@ def activate_venv_in_gha(venv_dir: Path):
     gha_set_env({"VIRTUAL_ENV": venv_dir})
 
 
+def scrape_subdirs() -> dict[str, set[str]] | set[str] | None:
+    if not requests:
+        return None
+
+    index_subdirs: dict[str, set[str]] | set[str] = dict()
+
+    def scrape_subdirs_from_index(index_url: str) -> set[str]:
+        index_url = index_url.rstrip("/") + "/"
+        try:
+            response = requests.get(index_url)
+            response.raise_for_status()
+        except Exception as e:
+            print(
+                f"[ERROR]: fetching subdirs from index url: {index_url} failed with: {e}"
+            )
+            return set()
+
+        # matches the text inside the <a></a> elements to find all gfx targets, then puts returns them in a set
+        html = response.text
+        matches = re.findall(GFX_TARGET_REGEX, html)
+        return set(matches)
+
+    # for every index url in the map fetches the subdirs and puts them in a dict with the index_name being the key
+    for index_name, index_url in INDEX_URLS_MAP.items():
+        index_subdirs[index_name] = scrape_subdirs_from_index(index_url)
+
+    # compares the first set of dirs to the rest of them, then, if they are all equal, returns a singular set instead of a dictionary
+    subdirs_sets = list(index_subdirs.values())
+    if all(s == subdirs_sets[0] for s in subdirs_sets[1:]):
+        index_subdirs = subdirs_sets[0]
+
+    return index_subdirs
+
+
 def log_activate_instructions(venv_dir: Path):
     log("")
     log(f"Setup complete at '{venv_dir}'! Activate the venv with:")
@@ -228,13 +270,23 @@ def main(argv: list[str]):
         help="Full URL for a release index to use with 'pip install --index-url='",
     )
 
-    # TODO(#1036): Enumerate possible options here (hardcode or scrape) and
-    #              help the user make a choice
+    subdirs: dict[str, set[str]] | set[str] | None = scrape_subdirs()
+    all_subdir_sets_congruent = isinstance(subdirs, set)
+
+    index_subdir_help = "Index subdirectory"
+    if not all_subdir_sets_congruent and subdirs:
+        index_subdir_help += ". Available options per index: " + str(subdirs)
+    elif not subdirs:
+        index_subdir_help += ", such as 'gfx110X-dgpu'"
+    else:
+        index_subdir_help += "."
+
     install_options.add_argument(
         "--index-subdir",
         "--index-subdirectory",
         type=str,
-        help="Index subdirectory, such as 'gfx110X-dgpu'",
+        help=index_subdir_help,
+        choices=subdirs if all_subdir_sets_congruent else None,
     )
 
     args = p.parse_args(argv)
@@ -245,7 +297,17 @@ def main(argv: list[str]):
     if args.packages and not (args.index_name or args.index_url):
         p.error("If --packages is set, one of --index-name or --index-url must be set")
     if args.packages and not args.index_subdir:
-        p.error("If --packages is set, --index-subdir must be set")
+        if subdirs and not all_subdir_sets_congruent:
+            if not args.index_name:
+                p.error(
+                    f"If --packages is set, --index-subdir must be set from the following list: {subdirs}"
+                )
+            else:
+                p.error(
+                    f"If --packages is set, --index-subdir must be set from the following list: {subdirs[args.index_name]}"
+                )
+        else:
+            p.error("If --packages is set, --index-subdir must be set")
 
     run(args)
 

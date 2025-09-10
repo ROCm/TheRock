@@ -9,6 +9,8 @@ on:
       amdgpu_families:
         type: string
         default: gfx110X-dgpu
+      expect_failure:
+        type: boolean
       extra_cmake_options:
         type: string
 
@@ -19,6 +21,8 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      expect_failure:
+        type: boolean
       extra_cmake_options:
         type: string
 
@@ -27,8 +31,9 @@ permissions:
 
 jobs:
   build_windows_packages:
-    name: Build Windows Packages
+    name: Build Windows Packages (xfail ${{ inputs.expect_failure }})
     runs-on: azure-windows-scale-rocm
+    continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
     defaults:

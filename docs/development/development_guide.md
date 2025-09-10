@@ -4,6 +4,13 @@ While TheRock started life as a super-project for doing combined builds and rele
 
 While there is much overlap between using TheRock as a development environment and as a CI/release platform, this document is geared at exposing features and techniques specifically targeted at making ROCm developers more productive. Since development features and approaches are built on an as-needed basis, please consider this a working document that presents approaches that have worked for core developers.
 
+Table of contents:
+
+- [Overall build architecture](#overall-build-architecture)
+- [Single component development](#single-component-development)
+- [Developer CMake flags](#developer-cmake-flags)
+- [IDE support and features](#ide-support-and-features)
+
 ## Overall build architecture
 
 TheRock provides:
@@ -53,14 +60,7 @@ outputs for that dependency.
 ![Subprojects build prebuilt](assets/therock_subprojects_build_prebuilt.excalidraw.svg#gh-light-mode-only)
 ![Subprojects build prebuilt (dark)](assets/therock_subprojects_build_prebuilt_dark.excalidraw.svg#gh-dark-mode-only)
 
-## IDE Support
-
-Once configured, the project outputs a combined `compile_commands.json` for all configured project components. This means that if opened in IDEs such as VSCode, with an appropriate C++ development extension, code assistance should be available project wide.
-
-> [!NOTE]
-> Since the project is quite large, this can add a significant overhead to your development machine, and we are still gathering experience on the best way to optimize this powerful feature.
-
-## Single Component Development
+## Single component development
 
 When working on a single component, TheRock can be configured to build only a desired subset, allowing rapid iteration once the initial configure/build is done. See the *Feature Flags* in the main project README or the corresponding documentation in the top-level `CMakeLists.txt` for help in selecting a subset. As an example, this section will use the HIPIFY component to demonstrate the basic flow.
 
@@ -141,9 +141,9 @@ Every component is a submodule (not strictly true: there are some small compatib
 
 An outer level execution of `./build_tools/fetch_sources.py` will reset all submodule state and re-apply any local patches. If this results in loss of local commits, they can typically be found in the component's `git reflog`. It should not be possibly to truly lose uncommitted work, but re-fetching sources will effectively `git reset --hard`.
 
-## Developer CMake Flags
+## Developer CMake flags
 
-### CMake System Flags
+### CMake system flags
 
 The following CMake flags are mirrored to component projects (see `THEROCK_DEFAULT_CMAKE_VARS` in `therock_subproject.cmake`):
 
@@ -175,7 +175,24 @@ In addition, if a component is using the host toolchain, the following are mirro
 If building with the in-tree HIP compiler, `CMAKE_C_COMPILER`, `CMAKE_CXX_COMPILER`, `CMAKE_LINKER`, `AMDGPU_TARGETS`,
 `GPU_TARGETS` and `CMAKE_CXX_FLAGS_INIT` will be set accordingly.
 
-### Additional Developer Ergonomic Flags
+### Per-project CMake flags
+
+These CMake flags allow overriding the global options for individual sub-projects:
+
+- `{project}_BUILD_TYPE`
+
+For example, this will build the "hipBLASLt" subproject in `RelWithDebInfo` and all other projects in `Release`:
+
+```bash
+  -DCMAKE_BUILD_TYPE=Release \
+  -DhipBLASLt_BUILD_TYPE=RelWithDebInfo \
+```
+
+> [!TIP]
+> See the [Tips for using VSCode](#tips-for-using-vscode) section below for an
+> example of how to debug programs built in this way.
+
+### Additional CMake developer ergonomic flags
 
 We add developer ergonomic flags as needed in order to support project-wide development activities. This currently includes:
 
@@ -186,7 +203,7 @@ In addition, the following environment variables effect the project:
 
 - `THEROCK_INTERACTIVE`: Sets up all build actions for `USES_TERMINAL`. This disables all background building and causes all configure/build steps to stream to the console. This can be useful for debugging tricky issues, but it is usually more convenien to just look at the log files under `build/logs/`. (TODO: Change this to a CMake cache variable as it is somewhat unwieldy as an environment variable).
 
-### Additional Build Targets
+### Additional build targets
 
 #### Top-level targets:
 
@@ -204,3 +221,134 @@ Each component build consists of stages: `configure > build > stage > dist`. The
 - `component+expunge`: Completely removes all intermediate files for the component.
 - `component+stage`: Performs component installation to the `stage/` and `dist/` directories.
 - `component+dist`: Generates all artifacts and distributions that depend on files from the component project.
+
+## IDE support and features
+
+### Code assistance using `compile_commands.json`
+
+In addition to generating `compile_commands.json` files within the subproject
+build directories (e.g. `build/math-libs/BLAS/hipBLAS/build/compile_commands.json`),
+the superproject can also generate a combined `compile_commands.json` so that
+IDEs such as VSCode, with an appropriate C++ development extension, can provide
+code assistance across all subprojects.
+
+The superproject generates `compile_commands_fragment_*.json` files at the
+top level for each subproject and then combines them into a single
+`compile_commands.json` when the CMake `therock_merged_compile_commands` utility
+target is built.
+
+> [!NOTE]
+> Since the project is quite large, this can add a significant overhead to your
+> development machine, and we are still gathering experience on the best way to
+> optimize this powerful feature.
+
+```bash
+λ cmake --build build --target therock_merged_compile_commands
+[0/2] Re-checking globbed directories...
+[1/2] Merging compile_commands.json
+
+# See the combined file in the source directory.
+λ ls . | grep compile_commands
+compile_commands.json
+
+# See the fragment and "_merged" files in the build directory.
+λ stat -c "%n,%s" -- ./build/* | column -t -s, | grep compile_commands
+./build/compile_commands_fragment_MIOpen.json                  3831869
+./build/compile_commands_fragment_amd-comgr.json               28834
+./build/compile_commands_fragment_amd-llvm.json                7782554
+./build/compile_commands_fragment_hip-clr.json                 485956
+./build/compile_commands_fragment_hipBLAS-common.json          0
+./build/compile_commands_fragment_hipBLAS.json                 168536
+./build/compile_commands_fragment_hipBLASLt.json               282725
+./build/compile_commands_fragment_hipCUB.json                  172236
+./build/compile_commands_fragment_hipFFT.json                  1751
+./build/compile_commands_fragment_hipInfo.json                 992
+./build/compile_commands_fragment_hipRAND.json                 10136
+./build/compile_commands_fragment_hipSOLVER.json               99941
+./build/compile_commands_fragment_hipSPARSE.json               321026
+./build/compile_commands_fragment_hipcc.json                   2351
+./build/compile_commands_fragment_hipify.json                  52163
+./build/compile_commands_fragment_mxDataGenerator.json         0
+./build/compile_commands_fragment_rocBLAS.json                 1708838
+./build/compile_commands_fragment_rocFFT.json                  112420
+./build/compile_commands_fragment_rocPRIM.json                 204999
+./build/compile_commands_fragment_rocRAND.json                 129731
+./build/compile_commands_fragment_rocSOLVER.json               1179027
+./build/compile_commands_fragment_rocSPARSE.json               1719832
+./build/compile_commands_fragment_rocThrust.json               208211
+./build/compile_commands_fragment_rocm-cmake.json              0
+./build/compile_commands_fragment_rocm-core.json               1481
+./build/compile_commands_fragment_rocm-half.json               0
+./build/compile_commands_fragment_therock-FunctionalPlus.json  0
+./build/compile_commands_fragment_therock-aux-overlay.json     0
+./build/compile_commands_fragment_therock-boost.json           0
+./build/compile_commands_fragment_therock-bzip2.json           7569
+./build/compile_commands_fragment_therock-eigen.json           1205192
+./build/compile_commands_fragment_therock-fmt.json             1219
+./build/compile_commands_fragment_therock-frugally-deep.json   0
+./build/compile_commands_fragment_therock-googletest.json      7733
+./build/compile_commands_fragment_therock-host-blas.json       7801703
+./build/compile_commands_fragment_therock-msgpack-cxx.json     0
+./build/compile_commands_fragment_therock-nlohmann-json.json   0
+./build/compile_commands_fragment_therock-sqlite3.json         825
+./build/compile_commands_fragment_therock-zlib.json            0
+./build/compile_commands_fragment_therock-zstd.json            0
+./build/compile_commands_merged.json                           18599938
+```
+
+### Tips for using VSCode
+
+The [CMake Tools](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools)
+extension can be used to configure the superproject and build individual targets:
+
+![vscode_cmake_tools_project_outline](assets/vscode_cmake_tools_project_outline.jpg)
+
+Settings for CMake builds can be specified in `.vscode/settings.json` or a
+`.vscode/*.code-workspace` file, like so:
+
+```jsonc
+{
+  "cmake.generator": "Ninja",
+  "cmake.configureArgs": [
+    // General settings.
+    "-DTHEROCK_VERBOSE=ON",
+    "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+    "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+    "-DPython3_EXECUTABLE=${workspaceFolder}/.venv/Scripts/python",
+    "-DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu",  // Set to your GPU target family.
+    //
+    // You can include both option settings for easy toggling.
+    "-DBUILD_TESTING=ON",
+    // "-DBUILD_TESTING=OFF",
+    //
+    // Set build type for individual subprojects if you want.
+    "-DhipInfo_BUILD_TYPE=DEBUG",
+  ]
+}
+```
+
+A `launch.json` file can be used to debug programs. For example on Windows:
+
+```jsonc
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "hipInfo",
+      "type": "cppvsdbg",
+      "request": "launch",
+      // TODO: Have this depend on a build action?
+      "program": "${workspaceFolder}/build/dist/rocm/bin/hipInfo.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "console": "internalConsole"
+    }
+  ]
+}
+```
+
+Here is an example of debugging that hipInfo.exe:
+
+![vscode_debugger_hipinfo_windows](assets/vscode_debugger_hipinfo_windows.jpg)

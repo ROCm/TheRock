@@ -1,26 +1,26 @@
-From 7e26c6c64ba19d9a7d6dcb736aba374407df0673 Mon Sep 17 00:00:00 2001
+From 20d3866866edae3398861692e2af98f4814f8010 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
-Date: Tue, 1 Apr 2025 20:58:38 +0000
-Subject: [PATCH 13/17] Install `libhipblas_fortran.so`
+Date: Tue, 26 Aug 2025 10:15:45 +0000
+Subject: [PATCH] Install `libhipblas_fortran.so`
 
 This is required by the test and benchmark clients but was not part of
 the installation so far.
 ---
- projects/hipblas/library/src/CMakeLists.txt | 1 +
+ projects/hipblas/clients/CMakeLists.txt | 1 +
  1 file changed, 1 insertion(+)
 
-diff --git a/projects/hipblas/library/src/CMakeLists.txt b/projects/hipblas/library/src/CMakeLists.txt
-index 7318e3fd88..8846fec9d3 100755
---- a/projects/hipblas/library/src/CMakeLists.txt
-+++ b/projects/hipblas/library/src/CMakeLists.txt
-@@ -54,6 +54,7 @@ set (hipblas_f90_source
- # Create hipBLAS Fortran module
- if(NOT WIN32)
-     add_library(hipblas_fortran ${hipblas_f90_source})
-+    rocm_install(TARGETS hipblas_fortran)
- endif()
+diff --git a/projects/hipblas/clients/CMakeLists.txt b/projects/hipblas/clients/CMakeLists.txt
+index 4ba4e950c9..e17ce117d2 100644
+--- a/projects/hipblas/clients/CMakeLists.txt
++++ b/projects/hipblas/clients/CMakeLists.txt
+@@ -121,6 +121,7 @@ if( BUILD_CLIENTS_TESTS OR BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_SAMPLES )
+       # Set Fortran module output directory
+       set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/include/hipblas)
+       add_library(hipblas_fortran OBJECT ${hipblas_f90_source})
++      rocm_install(TARGETS hipblas_fortran)
+   endif()
  
- if(BUILD_ADDRESS_SANITIZER)
+   if( NOT WIN32 )
 -- 
 2.43.0
 
