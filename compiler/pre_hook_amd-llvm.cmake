@@ -29,6 +29,12 @@ else()
     set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
     set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_SOURCE_DIR}/rocm-systems/projects/rocr-runtime")
     set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
+    # There is an issue with finding the zstd config built by TheRock when zstd
+    # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
+    # found in module mode, which ultimately fails to locate the library.
+    # For now we will switch the priorty for find_package to first search in
+    # CONFIG mode.
+    set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
   endif()
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
