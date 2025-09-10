@@ -175,7 +175,24 @@ In addition, if a component is using the host toolchain, the following are mirro
 If building with the in-tree HIP compiler, `CMAKE_C_COMPILER`, `CMAKE_CXX_COMPILER`, `CMAKE_LINKER`, `AMDGPU_TARGETS`,
 `GPU_TARGETS` and `CMAKE_CXX_FLAGS_INIT` will be set accordingly.
 
-### Additional developer ergonomic flags
+### Per-project CMake flags
+
+These CMake flags allow overriding the global options for individual sub-projects:
+
+- `{project}_BUILD_TYPE`
+
+For example, this will build the "hipBLASLt" subproject in `RelWithDebInfo` and all other projects in `Release`:
+
+```bash
+  -DCMAKE_BUILD_TYPE=Release \
+  -DhipBLASLt_BUILD_TYPE=RelWithDebInfo \
+```
+
+> [!TIP]
+> See the [Tips for using VSCode](#tips-for-using-vscode) section below for an
+> example of how to debug programs built in this way.
+
+### Additional CMake developer ergonomic flags
 
 We add developer ergonomic flags as needed in order to support project-wide development activities. This currently includes:
 
@@ -286,8 +303,8 @@ extension can be used to configure the superproject and build individual targets
 
 ![vscode_cmake_tools_project_outline](assets/vscode_cmake_tools_project_outline.jpg)
 
-Settings for CMake builds can be specified in `settings.json` or
-`*.code-workspace` files, like so:
+Settings for CMake builds can be specified in `.vscode/settings.json` or a
+`.vscode/*.code-workspace` file, like so:
 
 ```jsonc
 {
