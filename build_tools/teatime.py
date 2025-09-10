@@ -203,6 +203,7 @@ def main(cl_args: list[str]):
         run(args, child_arg_list, sink)
     except SystemExit as e:
         rc = e.code
+        raise
     finally:
         sink.finish(rc)
 
