@@ -202,7 +202,13 @@ def main(cl_args: list[str]):
     try:
         run(args, child_arg_list, sink)
     except SystemExit as e:
-        rc = e.code
+        # See docs for interpretation of e.code
+        if e.code is None:
+            rc = 0
+        elif isinstance(e.code, int):
+            rc = e.code
+        else:
+            rc = 1
         raise
     finally:
         sink.finish(rc)
