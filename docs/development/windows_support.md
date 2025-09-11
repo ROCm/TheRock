@@ -137,7 +137,7 @@ These instructions mostly mirror the instructions in the root
 > [winget-cli](https://github.com/microsoft/winget-cli):
 >
 > ```bash
-> winget install --id Iterative.DVC --silent
+> winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 
 If you prefer to install tools manually, you will need:
