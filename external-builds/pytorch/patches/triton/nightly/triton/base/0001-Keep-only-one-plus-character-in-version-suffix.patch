@@ -55,8 +55,8 @@ index be40c6eb..f479e90f 100644
 +
 +
  # keep it separate for easy substitution
--TRITON_VERSION = "3.4.0" + get_git_version_suffix() + os.environ.get("TRITON_WHEEL_VERSION_SUFFIX", "")
-+TRITON_VERSION = "3.4.0" + get_triton_version_suffix()
+-TRITON_VERSION = "3.5.0" + get_git_version_suffix() + os.environ.get("TRITON_WHEEL_VERSION_SUFFIX", "")
++TRITON_VERSION = "3.5.0" + get_triton_version_suffix()
  
  # Dynamically define supported Python versions and classifiers
  MIN_PYTHON = (3, 9)
