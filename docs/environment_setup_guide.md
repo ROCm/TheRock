@@ -23,8 +23,8 @@ Different project components enforce different CMake version ranges. The `cmake_
 
 There are various, easy ways to acquire specific CMake versions. For Windows and users wanting to use CMake 3, it can be easily installed with:
 1. Be in your venv for TheRock:
-    - Linux: `source .venv/bin/activate`
-    - Windows: `.venv\Scripts\Activate.bat`
+  - Linux: `source .venv/bin/activate`
+  - Windows: `.venv\Scripts\Activate.bat`
 2. `pip install 'cmake<4'`
 3. If cmake is than not found: `hash -r` to forget the cached location of cmake
 
