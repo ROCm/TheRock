@@ -215,11 +215,21 @@ def matrix_generator(
 ):
     """Generates a matrix of "family" and "test-runs-on" parameters based on the workflow inputs."""
 
+    print("")
+    print(f"Generating build matrix")
+    print(f"  is_pull_request: {is_pull_request}")
+    print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
+    print(f"  is_push: {is_push}")
+    print(f"  is_schedule: {is_schedule}")
+    print(f"  base_args: {base_args}")
+    print(f"  families: {families}")
+    print(f"  platform: {platform}")
+
     # Select target names based on inputs. Targets will be filtered by platform afterwards.
     selected_target_names = []
 
     if is_workflow_dispatch:
-        print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
+        print(f"[WORKFLOW_DISPATCH]")
 
         # Parse inputs into a targets list.
         input_gpu_targets = families.get("amdgpu_families")
@@ -232,7 +242,7 @@ def matrix_generator(
         selected_target_names.extend(filter_known_target_names(requested_target_names))
 
     if is_pull_request:
-        print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
+        print(f"[PULL_REQUEST]")
 
         # Add presubmit targets.
         for target in amdgpu_family_info_matrix_presubmit:
@@ -250,7 +260,7 @@ def matrix_generator(
         selected_target_names.extend(filter_known_target_names(requested_target_names))
 
     if is_push and base_args.get("branch_name") == "main":
-        print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
+        print(f"[PUSH - MAIN]")
 
         # Add presubmit and postsubmit targets.
         for target in (
@@ -259,14 +269,14 @@ def matrix_generator(
             selected_target_names.append(target)
 
     if is_schedule:
-        print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
+        print(f"[SCHEDULE]")
 
         # Add _only_ nightly targets.
         for key in amdgpu_family_info_matrix_nightly:
             selected_target_names.append(key)
 
     # Ensure the targets in the list are unique
-    unique_target_names = list(set(selected_target_names))
+    unique_target_names = sorted(list(set(selected_target_names)))
 
     # Expand selected target names back to a matrix.
     matrix_output = []
@@ -276,7 +286,8 @@ def matrix_generator(
         if platform in platform_set:
             matrix_output.append(platform_set.get(platform))
 
-    print(f"Generated build matrix: {str(matrix_output)}")
+    print(f"Generated build matrix:\n  {str(matrix_output)}")
+    print("")
     return matrix_output
 
 
@@ -300,7 +311,6 @@ def main(base_args, linux_families, windows_families):
     print(f"  is_pull_request: {is_pull_request}")
     print("")
 
-    print(f"Generating build matrix for Linux: {str(linux_families)}")
     linux_target_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
@@ -312,7 +322,6 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
-    print(f"Generating build matrix for Windows: {str(windows_families)}")
     windows_target_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
