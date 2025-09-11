@@ -123,7 +123,7 @@ jobs:
         run: |
           git config --global core.symlinks true
           git config --global core.longpaths true
-          python ./build_tools/fetch_sources.py --jobs 96
+          python ./build_tools/fetch_sources.py --jobs 12
 
       - name: Configure Projects
         env:
