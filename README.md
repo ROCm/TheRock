@@ -90,6 +90,7 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # Download submodules and apply patches
+# Note that dvc is used for pulling large files
 python ./build_tools/fetch_sources.py
 ```
 

@@ -14,6 +14,10 @@ on:
         description: "Subdirectory to push the Python packages"
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging subdirectory to push the packages"
+        type: string
+        default: "v2-staging"
   # Trigger manually (typically to test the workflow or manually build a release [candidate])
   workflow_dispatch:
     inputs:
@@ -27,6 +31,10 @@ on:
         description: "Subdirectory to push the Python packages"
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging subdirectory to push the packages"
+        type: string
+        default: "v2-staging"
       families:
         description: "A comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`, or empty for the default list"
         type: string
@@ -54,6 +62,7 @@ jobs:
       release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
+      cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -83,6 +92,7 @@ jobs:
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
           echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
+          echo "cloudfront_staging_url=${cloudfront_base_url}/${{ env.S3_STAGING_SUBDIR }}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -117,6 +127,7 @@ jobs:
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
+      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
 
     steps:
       - name: "Checking out repository"
@@ -141,6 +152,10 @@ jobs:
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
           choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+
+      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
+        with:
+          version: '3.62.0'
 
       # After other installs, so MSVC get priority in the PATH.
       - name: Configure MSVC
@@ -231,10 +246,6 @@ jobs:
           echo "-------------"
           ccache -s
 
-      # Note: not uploading to GitHub releases since files are 4GB+, larger than
-      # the 2GB limit for GitHub release files:
-      # https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas
-
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
@@ -242,6 +253,23 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
 
+      - name: Upload Releases to staging S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}
+          aws s3 cp ${{ env.BUILD_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
+          --recursive --no-follow-symlinks \
+          --exclude "*" \
+          --include "*.whl" \
+          --include "*.tar.gz"
+
+      - name: (Re-)Generate Python package release index for staging
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
+
+      ## TODO: Restrict uploading to the non-staging S3 directory until sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
@@ -271,7 +299,9 @@ jobs:
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_SUBDIR }}",
+              "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
+              "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}"
             }
 

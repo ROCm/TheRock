@@ -69,7 +69,7 @@ jobs:
           echo "---"
           ccache -z
           ccache -s -v
-          echo cmake --version
+          cmake --version
           echo "Installed Python versions:"
           ls -d /opt/python
           echo "python: $(which python), python3: $(which python3)"
