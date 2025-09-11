@@ -19,16 +19,19 @@ In general, we will keep the home page updated with quick start instructions for
 ## Common Issues
 
 ### CMake
+
 Different project components enforce different CMake version ranges. The `cmake_minimum_version` in the top level CMake file (presently 3.25) should be considered the project wide minimum. As of September 2025, CMake 4 is supported on Linux - but not on Windows.
 
 There are various, easy ways to acquire specific CMake versions. For Windows and users wanting to use CMake 3, it can be easily installed with:
+
 1. Be in your venv for TheRock:
-  - Linux: `source .venv/bin/activate`
-  - Windows: `.venv\Scripts\Activate.bat`
-2. `pip install 'cmake<4'`
-3. If cmake is than not found: `hash -r` to forget the cached location of cmake
+   - Linux: `source .venv/bin/activate`
+   - Windows: `.venv\Scripts\Activate.bat`
+1. `pip install 'cmake<4'`
+1. If cmake is than not found: `hash -r` to forget the cached location of cmake
 
 ### Resource Utilization
+
 ROCm is a very resource hungry project to build. If running with high parallelism (i.e. on systems with a high core:memory ratio), it will likely use more memory than you have without special consideration. Sometimes this will result in a transient "resource exhausted" problem which clears on a restart. Sufficient swap and controlling concurrency may be necessary. TODO: Link to guide on how to control concurrency and resource utilization.
 
 ## Reference Build Environments
