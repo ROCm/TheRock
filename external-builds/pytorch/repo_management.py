@@ -211,22 +211,64 @@ def do_hipify(args: argparse.Namespace):
         exec([sys.executable, build_amd_path], cwd=repo_dir)
 
 
-def commit_hipify(args: argparse.Namespace):
-    repo_dir: Path = args.repo
-    # Iterate over the base repository and all submodules. Because we process
-    # the root repo first, it will not add submodule changes.
-    all_paths = get_all_repositories(repo_dir)
-    for module_path in all_paths:
-        status = list_status(module_path)
-        if not status:
-            continue
-        print(f"HIPIFY made changes to {module_path}: Committing")
-        exec(["git", "add", "-A"], cwd=module_path)
+def tag_hipify_diffbase(module_path: Path):
+    """Apply the HIPIFY diffbase tag to the module."""
+    try:
+        exec(
+            ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"],
+            cwd=module_path,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to apply tag {TAG_HIPIFY_DIFFBASE} in {module_path}: {e}")
+        raise
+
+
+def commit_hipify_module(module_path: Path):
+    """Handle HIPIFY commit for a single module."""
+    status = list_status(module_path)
+    if not status:
+        return
+
+    print(f"HIPIFY made changes to {module_path}: Committing")
+    exec(["git", "add", "-A"], cwd=module_path)
+
+    # Check if there are staged changes
+    try:
+        staged_result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=str(module_path),
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+        )
+        if staged_result.returncode == 0:
+            print(f"No staged changes in {module_path} after git add: Skipping commit")
+            tag_hipify_diffbase(module_path)
+            return
+    except subprocess.CalledProcessError as e:
+        print(f"Error checking staged changes in {module_path}: {e}")
+        return
+
+    # Attempt to commit changes
+    try:
         exec(
             ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
             cwd=module_path,
         )
-        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
+    except subprocess.CalledProcessError as e:
+        if e.returncode == 1:
+            print(f"No changes to commit in {module_path} (git returned exit code 1)")
+        else:
+            print(f"Commit failed in {module_path}: {e}")
+            raise
+
+    tag_hipify_diffbase(module_path)
+
+
+def commit_hipify(args: argparse.Namespace):
+    repo_dir: Path = args.repo
+    all_paths = get_all_repositories(repo_dir)
+    for module_path in all_paths:
+        commit_hipify_module(module_path)
 
 
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
