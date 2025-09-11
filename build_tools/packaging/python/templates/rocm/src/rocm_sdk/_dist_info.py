@@ -136,7 +136,6 @@ def determine_target_family() -> str:
         target_family = discover_current_target_family()
         if target_family is None:
             target_family = DEFAULT_TARGET_FAMILY
-            print(f"[INFO] Using default target family: {DEFAULT_TARGET_FAMILY}")
     assert target_family is not None
     if target_family not in AVAILABLE_TARGET_FAMILIES:
         raise ValueError(
