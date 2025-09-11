@@ -119,6 +119,7 @@ jobs:
             windows-build-packages-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           git config --global core.symlinks true
           git config --global core.longpaths true
