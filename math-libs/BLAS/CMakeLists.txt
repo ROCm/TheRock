@@ -172,6 +172,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DHIP_PLATFORM=amd
     -DROCM_PATH=
     -DROCM_DIR=
+    -Dhipblaslt_path=
     -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
