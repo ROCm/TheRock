@@ -201,6 +201,7 @@ jobs:
             windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           git config --global core.symlinks true
           git config --global core.longpaths true

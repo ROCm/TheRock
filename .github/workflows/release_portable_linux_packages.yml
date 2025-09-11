@@ -142,6 +142,7 @@ jobs:
         run: ./dockerfiles/install_awscli.sh
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           # Prefetch docker container in background.
           docker pull ${{ env.BUILD_IMAGE }} &
