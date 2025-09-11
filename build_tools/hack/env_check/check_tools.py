@@ -296,7 +296,7 @@ class CheckCMake(CheckProgram):
                 "warn",
             )
             _result = None
-        elif self.program.MAJOR_VERSION == 4:
+        elif self.program.MAJOR_VERSION == 4 and os.name == "nt":
             _stat = msg_stat(
                 "warn",
                 "CMake",
