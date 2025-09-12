@@ -40,8 +40,8 @@ on:
         type: string
   # Trigger on a schedule to build nightly release candidates.
   schedule:
-    # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
-    - cron: '0 11 * * *'
+    # Runs at 04:00 AM UTC, which is 8:00 PM PST (UTC-8)
+    - cron: '0 04 * * *'
 
 permissions:
   contents: read
@@ -142,6 +142,7 @@ jobs:
         run: ./dockerfiles/install_awscli.sh
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           # Prefetch docker container in background.
           docker pull ${{ env.BUILD_IMAGE }} &

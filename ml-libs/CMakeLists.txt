@@ -92,6 +92,13 @@ if(THEROCK_ENABLE_MIOPEN)
     else()
       message(WARNING "Unhandled MSVC_VERSION '${MSVC_VERSION}', Boost may not configure correctly")
     endif()
+
+    # TODO(#1407): re-enable MIOpen tests on Windows when they don't crash clang on CI builders
+    #   We also don't run MIOpen tests on Windows, see
+    #   build_tools/github_actions/fetch_test_configurations.py
+    set(_THEROCK_MIOPEN_ENABLE_TESTING OFF)
+  else()
+    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
   endif()
 
   therock_cmake_subproject_declare(MIOpen
@@ -102,10 +109,9 @@ if(THEROCK_ENABLE_MIOPEN)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+      "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
-      -DMIOPEN_BUILD_DRIVER=ON
       -DMIOPEN_TEST_DISCRETE=OFF
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
     CMAKE_INCLUDES

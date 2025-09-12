@@ -17,8 +17,16 @@ on:
         description: S3 subdirectory, not including the GPU-family
         required: true
         type: string
+      s3_staging_subdir:
+        description: S3 staging subdirectory, not including the GPU-family
+        required: true
+        type: string
       cloudfront_url:
         description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
         required: true
         type: string
       rocm_version:
@@ -47,10 +55,18 @@ on:
         description: S3 subdirectory, not including the GPU-family
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: S3 staging subdirectory, not including the GPU-family
+        type: string
+        default: "v2-staging"
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
@@ -71,7 +87,11 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
     outputs:
+      cp_version: ${{ env.cp_version }}
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
+      torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
+      torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
+
     defaults:
       run:
         # Note: there are mixed uses of 'bash' (this default) and 'cmd' below
@@ -88,6 +108,11 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ inputs.python_version }}
+
+      - name: Select Python version
+        run: |
+          python build_tools/github_actions/python_to_cp_version.py \
+            --python-version ${{ inputs.python_version }}
 
       # TODO(amd-justchen): share with build_windows_packages.yml. Include in VM image? Dockerfile?
       - name: Install requirements
@@ -141,6 +166,11 @@ jobs:
             ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
+      - name: Sanity Check Wheel
+        shell: cmd
+        run: |
+          python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
+
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
@@ -148,32 +178,28 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
-      # TODO(#827, #910): enable this once we build torch audio and vision on Windows
-      # - name: Sanity Check Wheel
-      #   shell: cmd
-      #   run: |
-      #     python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
-
-      - name: Upload wheels to S3
+      - name: Upload wheels to S3 staging
         if: ${{ github.repository_owner == 'ROCm' }}
         # Using 'cmd' here since PACKAGE_DIST_DIR uses \ in paths instead of /
         shell: cmd
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ ^
-            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ ^
+            s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ ^
             --recursive --exclude "*" --include "*.whl"
 
-      - name: (Re-)Generate Python package release index
+      - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
+        shell: cmd
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}
 
   generate_target_to_run:
     name: Generate target_to_run
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -196,3 +222,52 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+
+  upload_pytorch_wheels:
+    name: Release PyTorch Wheels to S3
+    needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
+    if: always()
+    runs-on: ubuntu-24.04
+    env:
+      S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+      CP_VERSION: "${{ needs.build_pytorch_wheels.outputs.cp_version }}"
+      TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
+      TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
+      TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+
+      - name: Determine upload flag
+        env:
+          BUILD_RESULT: ${{ needs.build_pytorch_wheels.result }}
+          TEST_RESULT: ${{ needs.test_pytorch_wheels.result }}
+          TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+          BYPASS_TESTS_FOR_RELEASES: ${{ needs.generate_target_to_run.outputs.bypass_tests_for_releases }}
+        run: python ./build_tools/github_actions/promote_wheels_based_on_policy.py
+
+      - name: Copy PyTorch wheels from staging to release S3
+        if: ${{ env.upload == 'true' }}
+        run: |
+          echo "Copying exact tested wheels to release S3 bucket..."
+          aws s3 cp \
+            s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
+            --recursive \
+            --exclude "*" \
+            --include "torch-${TORCH_VERSION}-${CP_VERSION}-win_amd64.whl" \
+            --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-win_amd64.whl" \
+            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-win_amd64.whl"
+
+      - name: (Re-)Generate Python package release index
+        if: ${{ env.upload == 'true' }}
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}

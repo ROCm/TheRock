@@ -113,12 +113,12 @@ def discover_current_target_family() -> str | None:
                 if arch in AVAILABLE_TARGET_FAMILIES:
                     return arch
     except subprocess.CalledProcessError as e:
-        print(f"[ERROR] amdgpu-arch failed with return code {e.returncode}")
+        print(f"[WARNING] amdgpu-arch failed with return code {e.returncode}")
         print(f"[stderr] {e.output}")
     except FileNotFoundError:
-        print(f"[ERROR] amdgpu-arch not found.")
+        print(f"[WARNING] failed to run amdgpu-arch: binary not found.")
     except Exception as e:
-        print(f"[ERROR] Unexpected error running amdgpu-arch: {e}")
+        print(f"[WARNING] Unexpected error running amdgpu-arch: {e}")
     return None
 
 

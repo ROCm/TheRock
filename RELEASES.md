@@ -113,7 +113,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx950-dcgpu
@@ -129,7 +129,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx110X-dgpu
@@ -147,7 +147,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx1151
@@ -163,7 +163,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx120X-all
@@ -180,7 +180,7 @@ Install instructions:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  rocm[libraries,devel]
+  "rocm[libraries,devel]"
 ```
 
 ### Using ROCm Python packages
@@ -241,7 +241,23 @@ framework.
 ### Installing PyTorch Python packages
 
 > [!WARNING]
-> This is under **active** development.
+> This is under **active** development. Compatibility matrix for these wheels is in progress.
+>
+> Each `torchaudio` package is compiled against a specific version of `torch`; please refer to the [PyTorch compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix) for compatible versions of torch and torchaudio.
+> The build dates for nightly wheels should also be consistent with each other.
+
+> [!NOTE]
+> These installation commands will install the latest versions, including prerelease wheels,
+> by default. Older versions can also be installed from available versions found at
+>
+> - The [nightly releases page](https://rocm.nightlies.amd.com/v2/)
+> - Documentation for [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+>
+> For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
+>
+> ```
+> torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+> ```
 
 Using the index pages [listed above](#installing-rocm-python-packages), you can install `torch`, `torchaudio`, and
 `torchvision` instead of `rocm[libraries,devel]`:
@@ -257,7 +273,7 @@ Supported devices in this family:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  torch torchaudio torchvision
+  --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx950-dcgpu
@@ -271,7 +287,7 @@ Supported devices in this family:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  torch torchaudio torchvision
+  --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx110X-dgpu
@@ -287,7 +303,7 @@ Supported devices in this family:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  torch torchaudio torchvision
+  --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx1151
@@ -301,7 +317,7 @@ Supported devices in this family:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  torch torchaudio torchvision
+  --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx120X-all
@@ -316,7 +332,7 @@ Supported devices in this family:
 ```bash
 python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  torch torchaudio torchvision
+  --pre torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages
