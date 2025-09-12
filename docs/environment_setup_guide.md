@@ -28,7 +28,7 @@ There are various, easy ways to acquire specific CMake versions. For Windows and
    - Linux: `source .venv/bin/activate`
    - Windows: `.venv\Scripts\Activate.bat`
 1. `pip install 'cmake<4'`
-1. If cmake is than not found: `hash -r` to forget the cached location of cmake
+1. For Linux: if afterwards cmake is not found anymore, run `hash -r` to forget the previously cached location of cmake
 
 ### Resource Utilization
 
