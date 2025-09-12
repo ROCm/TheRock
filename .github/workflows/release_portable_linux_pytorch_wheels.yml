@@ -71,11 +71,11 @@ permissions:
 
 jobs:
   release:
-    name: Release PyTorch | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_version }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", 3.13]
+        python_version: ["3.11", "3.12", "3.13"]
         pytorch_version: ["release/2.7", "nightly"]
         include:
           - pytorch_version: release/2.7
