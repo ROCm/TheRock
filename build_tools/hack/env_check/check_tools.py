@@ -259,6 +259,7 @@ class CheckCMake(CheckProgram):
         self.name = "CMake"
 
     def check(self):
+        device = SystemInfo()
         if self.program.exe is None:
             _stat = msg_stat("err", "CMake", f"Cannot find CMake.")
             _except = cstring(
@@ -296,7 +297,7 @@ class CheckCMake(CheckProgram):
                 "warn",
             )
             _result = None
-        elif self.program.MAJOR_VERSION == 4:
+        elif self.program.MAJOR_VERSION == 4 and device.is_windows:
             _stat = msg_stat(
                 "warn",
                 "CMake",

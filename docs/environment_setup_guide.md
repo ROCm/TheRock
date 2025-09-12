@@ -18,9 +18,21 @@ In general, we will keep the home page updated with quick start instructions for
 
 ## Common Issues
 
-- *CMake Minumum Version*: Different project components enforce different CMake version ranges. The `cmake_minimum_version` in the top level CMake file (presently 3.25) should be considered the project wide minimum. There are various, easy ways to acquire specific CMake versions. The easiest is to `pip install 'cmake<4'` once a Python venv has been activated (possibly with `hash -r` if overlapping a system install and getting errors about command not found, etc).
-- *CMake 4 Not Currently Supported*: As of April 2025, CMake 4 deprecated features that have left many dependencies broken. We expect that it could take several months to support project wide and recommend pinning to an older version. See above for installing a custom CMake version.
-- *Resource Utilization*: ROCm is a very resource hungry project to build. If running with high parallelism (i.e. on systems with a high core:memory ratio), it will likely use more memory than you have without special consideration. Sometimes this will result in a transient "resource exhausted" problem which clears on a restart. Sufficient swap and controlling concurrency may be necessary. TODO: Link to guide on how to control concurrency and resource utilization.
+### CMake
+
+Different project components enforce different CMake version ranges. The `cmake_minimum_version` in the top level CMake file (presently 3.25) should be considered the project wide minimum. As of September 2025, CMake 4 is supported on Linux - but not on Windows.
+
+There are various, easy ways to acquire specific CMake versions. For Windows and users wanting to use CMake 3, it can be easily installed with:
+
+1. Be in your venv for TheRock:
+   - Linux: `source .venv/bin/activate`
+   - Windows: `.venv\Scripts\Activate.bat`
+1. `pip install 'cmake<4'`
+1. For Linux: if afterwards cmake is not found anymore, run `hash -r` to forget the previously cached location of cmake
+
+### Resource Utilization
+
+ROCm is a very resource hungry project to build. If running with high parallelism (i.e. on systems with a high core:memory ratio), it will likely use more memory than you have without special consideration. Sometimes this will result in a transient "resource exhausted" problem which clears on a restart. Sufficient swap and controlling concurrency may be necessary. TODO: Link to guide on how to control concurrency and resource utilization.
 
 ## Reference Build Environments
 
