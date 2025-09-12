@@ -734,7 +734,7 @@ function(therock_cmake_subproject_activate target_name)
   # Detect whether the stage dir has been pre-built.
   set(_prebuilt_file "${_stage_dir}.prebuilt")
 
-  # Derive the CMAKE_BUILD_TYPE from eiether {project}_BUILD_TYPE or the global
+  # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
   if(NOT _cmake_build_type)

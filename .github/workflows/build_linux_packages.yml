@@ -69,7 +69,7 @@ jobs:
           echo "---"
           ccache -z
           ccache -s -v
-          echo cmake --version
+          cmake --version
           echo "Installed Python versions:"
           ls -d /opt/python
           echo "python: $(which python), python3: $(which python3)"
@@ -78,6 +78,7 @@ jobs:
           git config fetch.parallel 10
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           ./build_tools/fetch_sources.py --jobs 12
 

@@ -8,6 +8,7 @@ import hashlib
 from pathlib import Path
 import platform
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -68,6 +69,8 @@ def run(args):
             + submodule_paths,
             cwd=THEROCK_DIR,
         )
+    if args.dvc_projects:
+        pull_large_files(args.dvc_projects, projects)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
@@ -86,6 +89,31 @@ def run(args):
 
     if args.apply_patches:
         apply_patches(args, projects)
+
+
+def pull_large_files(dvc_projects, projects):
+    if not dvc_projects:
+        print("No DVC projects specified, skipping large file pull.")
+        return
+    if shutil.which("dvc") is None:
+        print("Could not find `dvc` on PATH so large files could not be fetched")
+        print("Visit https://dvc.org/doc/install for installation instructions.")
+        sys.exit(1)
+    for project in dvc_projects:
+        if not project in projects:
+            continue
+        submodule_path = get_submodule_path(project)
+        project_dir = THEROCK_DIR / submodule_path
+        dvc_config_file = project_dir / ".dvc" / "config"
+        if dvc_config_file.exists():
+            # check for DVC config in the submodule and run dvc pull if found.
+            # presently, only amdgpu-windows-interop in rocm-systems uses DVC, but...
+            # eventually, DVC will be rolled out to math libraries and in linux
+            print(f"dvc detected in {project_dir}, running dvc pull")
+            exec(["dvc", "pull"], cwd=project_dir)
+        else:
+            log(f"WARNING: dvc config not found in {project_dir}, when expected.")
+            continue
 
 
 def remove_smrev_files(args, projects):
@@ -332,14 +360,7 @@ def main(argv):
             "rccl-tests",
             "rocm-cmake",
             "rocprof-trace-decoder",
-        ]
-        + (
-            [
-                "amdgpu-windows-interop",
-            ]
-            if is_windows()
-            else []
-        ),
+        ],
     )
     parser.add_argument(
         "--compiler-projects",
@@ -371,6 +392,19 @@ def main(argv):
                 # Linux only projects.
                 "composable_kernel",
             ]
+        ),
+    )
+    parser.add_argument(
+        # projects that use DVC to manage large files
+        "--dvc-projects",
+        nargs="+",
+        type=str,
+        default=(
+            [
+                "rocm-systems",
+            ]
+            if is_windows()
+            else []
         ),
     )
     args = parser.parse_args(argv)

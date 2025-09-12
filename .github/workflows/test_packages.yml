@@ -36,6 +36,19 @@ jobs:
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
     steps:
+      - name: "Fetch 'build_tools' from repository"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: build_tools
+          path: "prejob"
+
+      # Checkout failure is possible on Windows, as it's the first job on a GPU test runner.
+      # Post-job cleanup isn't necessary since no executables are launched in this job.
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+
       - name: "Checking out repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
@@ -62,7 +75,7 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     runs-on: ${{ inputs.test_runs_on }}
     container:
-      image: ${{ needs.configure_test_matrix.outputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      image: ${{ needs.configure_test_matrix.outputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd
@@ -87,6 +100,17 @@ jobs:
       PLATFORM: ${{ inputs.platform }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
+      - name: "Fetch 'build_tools' from repository"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: build_tools
+          path: "prejob"
+
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -102,11 +126,14 @@ jobs:
           FETCH_ARTIFACT_ARGS: ${{ matrix.components.fetch_artifact_args }}
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      - name: Install additional packages
-        if: ${{ runner.os == 'Linux' && (matrix.components.job_name == 'rocblas' || matrix.components.job_name == 'hipblaslt') }}
-        run: sudo apt install libgfortran5 -y
-
       - name: Test
         timeout-minutes: ${{ matrix.components.timeout_minutes }}
         run: |
           ${{ matrix.components.test_script }}
+
+      # GitHub's 'Complete job' step is unaware of launched executables
+      # and will fail to clean up orphan processes.
+      - name: Post-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
