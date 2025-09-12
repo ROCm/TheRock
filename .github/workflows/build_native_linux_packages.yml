@@ -56,7 +56,7 @@ on:
       rock_build_no:
         description: ROCK build no for fetching artifacts
         type: string
-        default: "therock-artifacts.s3.amazonaws.com"
+        default: "16418185899"
       output_dest_dirt:
         description: Local folder name where the created packages will be saved
         type: string
@@ -91,13 +91,11 @@ jobs:
       optional_build_prod_arguments: ""
     outputs:
       cp_version: ${{ env.cp_version }}
-      torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
-      torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
-      torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
-      triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
     steps:
       - name: Fetch Artifacts
         # TODO: Currently fetch artifacts is part of build package itself. Need to seperate it out
+        run: |
+          echo "Fetching artifacts for build ${{ inputs.rock_build_no }}"
 
       - name: Build RPM Packages
         id: build-rpm-packages
