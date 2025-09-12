@@ -253,7 +253,6 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
-
       - name: Determine upload flag
         env:
           BUILD_RESULT: ${{ needs.build_pytorch_wheels.result }}

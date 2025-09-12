@@ -219,7 +219,7 @@ jobs:
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-      cloudfront_url: ${{ inputs.cloudfront_url }}
+      cloudfront_url: ${{ inputs.cloudfront_staging_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
 
