@@ -8,7 +8,7 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
-        default: gfx110X-dgpu
+        default: gfx1151
       expect_failure:
         type: boolean
       extra_cmake_options:
