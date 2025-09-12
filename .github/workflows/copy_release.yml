@@ -20,8 +20,7 @@ on:
           - 3.11
           - 3.12
           - 3.13
-        default:
-          - 3.12
+        default: 3.12
       include_torch:
         type: boolean
         default: false
