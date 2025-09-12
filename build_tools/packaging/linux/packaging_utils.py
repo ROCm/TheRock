@@ -16,32 +16,53 @@ def read_package_json_file():
     return data
 
 
-def is_packaging_disabled(pkg_info):
+def is_key_defined(pkg_info, key):
     """
-    Checks if packaging is disabled for a given package.
+    Verifies whether a specific key is enabled for a package.
 
     Parameters:
     pkg_info (dict): A dictionary containing package details.
+    key : A key to be searched in the dictionary.
 
     Returns:
-    bool: True if 'DisablePackaging' key exists, False otherwise.
+    bool: True if key is defined, False otherwise.
     """
-    return any(key.lower() == "disablepackaging" for key in pkg_info)
+    value = ""
+    for k in pkg_info:
+        if k.lower() == key.lower():
+            value = pkg_info[k]
 
-
-def is_composite_package(pkg_info):
-    """
-    Checks whether the package is a composite package.
-    Package that Includes multiple other package is considered composite
-    If no "Includes" and "Artifact_Subdir" tag, then the package is marked as composite
-
-    Parameters:
-    pkg_info (dict): A dictionary containing package details.
-
-    Returns:
-    bool: True if 'Composite' key exists, False otherwise.
-    """
-    return any(key.lower() == "composite" for key in pkg_info)
+    value = value.strip().lower()
+    if value in (
+        "1",
+        "true",
+        "t",
+        "yes",
+        "y",
+        "on",
+        "enable",
+        "enabled",
+        "found",
+    ):
+        return True
+    if value in (
+        "",
+        "0",
+        "false",
+        "f",
+        "no",
+        "n",
+        "off",
+        "disable",
+        "disabled",
+        "notfound",
+        "none",
+        "null",
+        "nil",
+        "undefined",
+        "n/a",
+    ):
+        return False
 
 
 def get_package_info(pkgname):
@@ -91,7 +112,9 @@ def get_package_list():
 
     data = read_package_json_file()
 
-    pkg_list = [pkg["Package"] for pkg in data if not is_packaging_disabled(pkg)]
+    pkg_list = [
+        pkg["Package"] for pkg in data if not is_key_defined(pkg, "disablepackaging")
+    ]
     return pkg_list
 
 
