@@ -181,7 +181,7 @@
     ],
     "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
     "Description_Short": "ROCm llvm compiler",
-    "Description_Long": "ROCm llvm compiler based on LLVM 20.0.0",
+    "Description_Long": "ROCm llvm compiler optimized for high-performance computing on AMD GPUs and CPUs ",
     "Section": "devel",
     "Priority": "optional",
     "Group": "System Environment/Libraries",
@@ -303,7 +303,7 @@
     "Artifact": "base",
     "Artifact_Subdir": "amd-smi-lib",
     "Gfxarch": "False",
-    "DisablePackaging": ""
+    "DisablePackaging": "True"
 
   },
   {
@@ -407,7 +407,7 @@
     "Artifact": "amd-llvm",
     "Artifact_Subdir": "hipcc",
     "Gfxarch": "False",
-    "DisablePackaging": ""
+    "DisablePackaging": "True"
 
   },
   {
@@ -527,7 +527,7 @@
     "Artifact": "core-hip",
     "Artifact_Subdir": "clr",
     "Gfxarch": "False",
-    "DisablePackaging": ""
+    "DisablePackaging": "True"
 
   },
   {
@@ -560,7 +560,7 @@
     "Artifact": "core-hip",
     "Artifact_Subdir": "clr",
     "Gfxarch": "False",
-    "DisablePackaging": ""
+    "DisablePackaging": "True"
 
   },
   {
@@ -1853,7 +1853,7 @@
     ],
     "Artifact": "base",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "yes"
   },
   {
     "Package": "amd-llvm",
@@ -1891,7 +1891,7 @@
     "Artifact": "amd-llvm",
     "Gfxarch": "False",
     "Disable_DWZ": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "amd-llvm-devel",
@@ -1925,7 +1925,7 @@
     ],
     "Artifact": "amd-llvm",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-hsa-runtime",
@@ -1959,7 +1959,7 @@
     ],
     "Artifact": "core-runtime",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
 
   },
   {
@@ -1995,7 +1995,7 @@
     ],
     "Artifact": "core-runtime",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
 
   },
 
@@ -2036,7 +2036,7 @@
 
     "Artifact": "core-hip",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
 
   },
 
@@ -2074,7 +2074,7 @@
     ],
     "Artifact": "core-hip",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
 
   },
 
@@ -2116,7 +2116,7 @@
     ],
     "Artifact": "blas",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
 
   {
@@ -2157,7 +2157,7 @@
     ],
     "Artifact": "blas",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-fft",
@@ -2192,7 +2192,7 @@
     ],
     "Artifact": "base",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-fft-devel",
@@ -2227,7 +2227,7 @@
     ],
     "Artifact": "fft",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
 
   {
@@ -2263,7 +2263,7 @@
     ],
     "Artifact": "rand",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
 
   {
@@ -2299,7 +2299,7 @@
     ],
     "Artifact": "rand",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-composablekernel",
@@ -2322,7 +2322,7 @@
     ],
     "Artifact": "composable-kernel",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-composablekernel-devel",
@@ -2350,7 +2350,7 @@
     ],
     "Artifact": "composable-kernel",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
 
   {
@@ -2385,7 +2385,7 @@
     ],
     "Artifact": "rccl",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
 
   {
@@ -2420,7 +2420,7 @@
     ],
     "Artifact": "rccl",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-miopen",
@@ -2445,7 +2445,7 @@
     ],
     "Artifact": "miopen",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
 
   {
@@ -2473,7 +2473,7 @@
     ],
     "Artifact": "miopen",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
 
   {
@@ -2508,7 +2508,7 @@
     ],
     "Artifact": "prim",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-profiler-sdk",
@@ -2539,7 +2539,7 @@
     ],
     "Artifact": "prim",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-hipify",
@@ -2562,7 +2562,7 @@
     ],
     "Artifact": "hipify",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
 
   },
 
@@ -2598,7 +2598,7 @@
     "Gfxarch": "False",
     "Disable_DWZ": "True",
     "Disable_DH_STRIP": "True",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-host-blas",
@@ -2630,7 +2630,7 @@
     ],
     "Artifact": "host-blas",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-host-suite-sparse",
@@ -2662,7 +2662,7 @@
     ],
     "Artifact": "host-suite-sparse",
     "Gfxarch": "False",
-    "Composite": ""
+    "Composite": "Yes"
   },
   {
     "Package": "rocm-support-devel",
@@ -2692,7 +2692,7 @@
     ],
     "Artifact": "support",
     "Gfxarch": "True",
-    "Composite": ""
+    "Composite": "yes"
   }
 
 ]

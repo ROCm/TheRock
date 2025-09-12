@@ -69,7 +69,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print("create_deb_package {}".format(pkg_name))
+    print(f"Create_deb_package: {pkg_name}")
     # Create package contents in DEB/pkg_name/install_prefix folder
     package_dir = Path(DEBIAN_CONTENTS_DIR) / pkg_name
     deb_dir = package_dir / "debian"
@@ -92,13 +92,12 @@ def create_deb_package(pkg_name, config: PackageConfig):
         dir_list = filter_components_fromartifactory(pkg, config.gfx_arch)
         sourcedir_list.extend(dir_list)
 
-    print(sourcedir_list)
+    print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list:
-        sys.exit("Empty source directory")
+        sys.exit("Empty sourcedir_list, exiting")
 
     dest_dir = package_dir / Path(config.install_prefix).relative_to("/")
     for source_path in sourcedir_list:
-        print(source_path)
         copy_package_contents(source_path, dest_dir)
 
     if config.enable_rpath:
@@ -206,15 +205,8 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """
     print("Generate rules file")
     rules_file = Path(deb_dir) / "rules"
-    disable_dh_strip = (
-        None
-        if pkg_info.get("Disable_DH_STRIP") in (None, False, "False", "false")
-        else True
-    )
-
-    disable_dwz = (
-        None if pkg_info.get("Disable_DWZ") in (None, False, "False", "false") else True
-    )
+    disable_dh_strip = is_key_defined(pkg_info, "Disable_DH_STRIP")
+    disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
     env = Environment(loader=FileSystemLoader("."))
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
@@ -547,12 +539,12 @@ def filter_components_fromartifactory(pkg, gfx_arch):
     """
 
     pkg_info = get_package_info(pkg)
-    is_composite = is_composite_package(pkg_info)
+    is_composite = is_key_defined(pkg_info, "composite")
     sourcedir_list = []
     component_list = pkg_info.get("Components", [])
     artifact_prefix = pkg_info.get("Artifact")
     artifact_subdir = pkg_info.get("Artifact_Subdir")
-    if str(pkg_info.get("Gfxarch", "False")).strip().lower() == "true":
+    if is_key_defined(pkg_info, "Gfxarch"):
         artifact_suffix = gfx_arch + "-dcgpu"
     else:
         artifact_suffix = "generic"
@@ -630,11 +622,11 @@ def parse_input_package_list(pkg_name):
 
     for entry in data:
         # Skip if packaging is disabled
-        if is_packaging_disabled(entry):
+        if is_key_defined(entry, "disablepackaging"):
             continue
 
         name = entry.get("Package")
-        is_composite = is_composite_package(entry)
+        is_composite = is_key_defined(entry, "composite")
 
         # Loop through each type in pkg_type
         for pkg in pkg_name:
@@ -648,7 +640,7 @@ def parse_input_package_list(pkg_name):
                 pkg_list.append(name)
                 break
 
-    print(pkg_list)
+    print(f"pkg_list:\n  {pkg_list}")
     return pkg_list
 
 
