@@ -1,0 +1,77 @@
+From 2e4295e902270cf376ff0e6ff5163d68de7c60f3 Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Wed, 3 Sep 2025 08:29:35 -0700
+Subject: [PATCH 24/24] hipFFT and rocFFT  test integration with fftw3
+
+---
+ projects/hipfft/clients/tests/CMakeLists.txt |  4 ++--
+ projects/rocfft/clients/tests/CMakeLists.txt | 10 ++++++----
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/projects/hipfft/clients/tests/CMakeLists.txt b/projects/hipfft/clients/tests/CMakeLists.txt
+index 7ce9b49987..0d73f984a7 100644
+--- a/projects/hipfft/clients/tests/CMakeLists.txt
++++ b/projects/hipfft/clients/tests/CMakeLists.txt
+@@ -181,7 +181,6 @@ foreach( target ${TEST_TARGETS} )
+   target_include_directories( ${target}
+     PRIVATE
+     $<BUILD_INTERFACE:${Boost_INCLUDE_DIRS}>
+-    $<BUILD_INTERFACE:${FFTW_INCLUDE_DIRS}>
+     $<BUILD_INTERFACE:${hip_INCLUDE_DIRS}>
+     if( HIPFFT_BUILD_SCOPE )
+       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../library/include>
+@@ -191,7 +190,8 @@ foreach( target ${TEST_TARGETS} )
+   target_link_libraries( ${target}
+     PRIVATE
+     hip::hipfft
+-    ${FFTW_LIBRARIES}
++    FFTW3::fftw3
++    FFTW3::fftw3f
+   )
+   
+   if( BUILD_CLIENTS_TESTS_OPENMP )
+diff --git a/projects/rocfft/clients/tests/CMakeLists.txt b/projects/rocfft/clients/tests/CMakeLists.txt
+index 3e49f2345a..b39e1476f3 100644
+--- a/projects/rocfft/clients/tests/CMakeLists.txt
++++ b/projects/rocfft/clients/tests/CMakeLists.txt
+@@ -175,7 +175,7 @@ if( BUILD_FFTW OR NOT FFTW_FOUND )
+     COMPONENT clients-common
+   )
+ else()
+-  include_directories(${FFTW_INCLUDE_DIRS})
++  include_directories(${FFTW3_INCLUDE_DIRS})
+ endif()
+ 
+ set( rocfft-test_include_dirs
+@@ -186,7 +186,7 @@ set( rocfft-test_include_dirs
+   )
+ 
+ set( rocfft-test_link_libs
+-  ${FFTW_LIBRARIES}
++  FFTW3::fftw3 FFTW3::fftw3f
+   )
+ 
+ option( BUILD_CLIENTS_TESTS_OPENMP "Build tests with OpenMP" ON )
+@@ -375,7 +375,8 @@ if( ROCFFT_MPI_ENABLE )
+       hip::hiprand
+       hip::device
+       MPI::MPI_CXX
+-      ${FFTW_LIBRARIES}
++      FFTW3::fftw3
++      FFTW3::fftw3f
+       "mpi_gtl_hsa"
+     )
+       get_filename_component( MPI_LIBDIR ${MPI_LIBRARY} DIRECTORY )
+@@ -388,7 +389,8 @@ if( ROCFFT_MPI_ENABLE )
+       hip::hiprand
+       hip::device
+       MPI::MPI_CXX
+-      ${FFTW_LIBRARIES}
++      FFTW3::fftw3
++      FFTW3::fftw3f
+     )    
+     endif()
+     set_target_properties(${worker}
+-- 
+2.47.1.windows.2
+

@@ -1,0 +1,47 @@
+From 563175d738cc43832d7d7b5c45a16699f2b3f3d0 Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Wed, 3 Sep 2025 08:55:45 -0700
+Subject: [PATCH 26/26] Fixing gtest check for TheRock
+
+---
+ projects/hipfft/clients/CMakeLists.txt       | 4 ++--
+ projects/hipfft/clients/tests/CMakeLists.txt | 5 +++--
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/projects/hipfft/clients/CMakeLists.txt b/projects/hipfft/clients/CMakeLists.txt
+index 739ef036a2..67de6e8830 100644
+--- a/projects/hipfft/clients/CMakeLists.txt
++++ b/projects/hipfft/clients/CMakeLists.txt
+@@ -88,9 +88,9 @@ if( BUILD_CLIENTS_SAMPLES )
+ endif( )
+ 
+ if( BUILD_CLIENTS_TESTS )
+-  find_package( GTest 1.11.0 )
++  find_package( GTest QUIET )
+   include( ExternalProject )
+-  if( NOT GTEST_FOUND )
++  if( NOT GTest_FOUND )
+     set( GTEST_INCLUDE_DIRS
+       ${CMAKE_CURRENT_BINARY_DIR}/src/gtest/googletest/include
+       )
+diff --git a/projects/hipfft/clients/tests/CMakeLists.txt b/projects/hipfft/clients/tests/CMakeLists.txt
+index 7ce9b49987..f723a914f3 100644
+--- a/projects/hipfft/clients/tests/CMakeLists.txt
++++ b/projects/hipfft/clients/tests/CMakeLists.txt
+@@ -223,10 +223,11 @@ endforeach()
+ 
+ find_package( GTest 1.11.0 )
+ 
+-if( GTEST_FOUND )
++if( GTest_FOUND )
+   target_include_directories( hipfft-test PRIVATE $<BUILD_INTERFACE:${GTEST_INCLUDE_DIRS}> )
+-  target_link_libraries( hipfft-test PRIVATE ${GTEST_LIBRARIES} )
++  target_link_libraries( hipfft-test PRIVATE GTest::gtest )
+ else()
++  # gtest build by the hipFFT
+   add_dependencies( hipfft-test gtest )
+   target_include_directories( hipfft-test PRIVATE hipfft-test_include_dirs ${GTEST_INCLUDE_DIRS} )
+   target_link_libraries( hipfft-test PRIVATE ${GTEST_LIBRARIES} )
+-- 
+2.47.1.windows.2
+
