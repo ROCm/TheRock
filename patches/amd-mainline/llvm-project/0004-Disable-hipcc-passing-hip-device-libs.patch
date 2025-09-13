@@ -1,7 +1,7 @@
-From 0dd361bc6ae2e9ab9e19b9eeed808d719e58ad71 Mon Sep 17 00:00:00 2001
+From 0c49dff21a4552035f38d9eaa5100fa024707678 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Thu, 13 Feb 2025 19:07:07 -0800
-Subject: [PATCH 4/5] Disable hipcc passing hip-device-libs.
+Subject: [PATCH 4/8] Disable hipcc passing hip-device-libs.
 
 In modern times, the clang driver is far more knowledgable about this stuff and can operate without instruction.
 ---
@@ -39,5 +39,5 @@ index c74b43ff598f..cb70026f6abf 100644
    // to avoid using dk linker or MSVC linker
    if (isWindows()) {
 -- 
-2.47.1.windows.2
+2.48.1
 

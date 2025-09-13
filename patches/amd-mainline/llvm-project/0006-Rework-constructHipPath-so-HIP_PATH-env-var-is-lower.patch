@@ -1,7 +1,7 @@
-From cac004dd1df8e7db1bac39859aca6c2a271e906c Mon Sep 17 00:00:00 2001
+From 767cd4083eaacf7a6da1f8ca62966766767cfd41 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Tue, 5 Aug 2025 12:40:12 -0700
-Subject: [PATCH 5/5] Rework constructHipPath so HIP_PATH env var is lower
+Subject: [PATCH 6/8] Rework constructHipPath so HIP_PATH env var is lower
  priority.
 
 ---
@@ -53,5 +53,5 @@ index ea37e6fd12fc..4aa7431fdba6 100644
  
  
 -- 
-2.47.1.windows.2
+2.48.1
 

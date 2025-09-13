@@ -1,7 +1,7 @@
-From 86c6b4964766089d13137fff660f545f25ee5bb7 Mon Sep 17 00:00:00 2001
+From 9045d0fce9eff0fc910a623a14b43e8000ad2bb6 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Tue, 5 Aug 2025 21:41:09 +0000
-Subject: [PATCH] Ensure to use libamdhip64 with major version
+Subject: [PATCH 5/8] Ensure to use libamdhip64 with major version
 
 ---
  clang/lib/Driver/ToolChains/Linux.cpp       | 2 +-
@@ -44,5 +44,5 @@ index 0ae4cbe34e93..db7b8a4f86eb 100644
  }
  
 -- 
-2.43.0
+2.48.1
 
