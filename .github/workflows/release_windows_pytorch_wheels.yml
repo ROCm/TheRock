@@ -70,7 +70,7 @@ permissions:
 
 jobs:
   release:
-    name: Release PyTorch | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }}
     strategy:
       fail-fast: false
       matrix:

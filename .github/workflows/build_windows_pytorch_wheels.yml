@@ -77,7 +77,7 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build Windows PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
+    name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
       CHECKOUT_ROOT: B:/src
@@ -218,7 +218,7 @@ jobs:
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-      cloudfront_url: ${{ inputs.cloudfront_staging_url }}
+      package_index_url: ${{ inputs.cloudfront_staging_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
 
