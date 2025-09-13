@@ -1,6 +1,7 @@
 import logging
 import os
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 import pytest
@@ -9,6 +10,12 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
+
+amd_smi_exists = shutil.which("amd-smi") is not None
+
+pytestmark = pytest.mark.skipif(
+    not amd_smi_exists, reason="amd-smi not available, skipping RCCL tests"
+)
 
 
 class TestRCCL:
