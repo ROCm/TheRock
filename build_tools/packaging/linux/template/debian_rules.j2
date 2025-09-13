@@ -17,6 +17,15 @@ override_dh_dwz:
 
 
 
+{% if disable_dh_strip %}
+override_dh_strip:
+	:
+{% else %}
+override_dh_strip:
+	dh_strip -X.hsaco -X.co
+{% endif %}
+
+
 override_dh_shlibdeps:
 	@echo "Skipping dh_shlibdeps"
 
