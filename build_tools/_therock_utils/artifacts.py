@@ -1,5 +1,7 @@
 """Manipulates artifact directories.
 
+See `artifact_builder` for tools to construct artifacts from descriptors.
+
 Artifacts are the primary way that build outputs are broken down in the
 project. See cmake/therock_artifacts.cmake.
 
