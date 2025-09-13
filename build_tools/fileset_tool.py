@@ -81,46 +81,14 @@ def do_artifact(args):
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get metadata for the component we are merging.
+    scanner = artifact_builder.ComponentScanner(args.root_dir, descriptor)
+    print("UMATCHED:", scanner.unmatched_files)
+
     try:
-        component = descriptor.components[component_name]
+        contents = scanner.components[component_name]
     except KeyError:
-        # No components.
-        component = artifact_builder.ComponentDescriptor.empty(component_name)
-
-    all_basedir_relpaths = []
-
-    for basedir_relpath, basedir_record in component.basedirs.items():
-        basedir = args.root_dir / Path(basedir_relpath)
-        if basedir_record.optional and not basedir.exists():
-            continue
-        all_basedir_relpaths.append(basedir_relpath)
-
-        # Includes.
-        includes = list(basedir_record.includes)
-        if basedir_record.use_default_patterns:
-            includes.extend(component.defaults.includes)
-
-        # Excludes.
-        excludes = list(basedir_record.excludes)
-        if basedir_record.use_default_patterns:
-            excludes.extend(component.defaults.excludes)
-
-        pm = PatternMatcher(
-            includes=includes,
-            excludes=excludes,
-            force_includes=basedir_record.force_includes,
-        )
-        pm.add_basedir(basedir)
-        pm.copy_to(
-            destdir=output_dir,
-            destprefix=basedir_relpath + "/",
-            remove_dest=False,
-        )
-
-    # Write a manifest containing relative paths of all base directories.
-    manifest_path = output_dir / "artifact_manifest.txt"
-    manifest_path.write_text("\n".join(all_basedir_relpaths) + "\n")
+        return
+    contents.write_artifact(output_dir)
 
 
 def do_artifact_archive(args):

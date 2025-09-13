@@ -93,6 +93,9 @@ class PatternMatcher:
 
         scan_children(basedir, "")
 
+    def add_entry(self, relpath: str, direntry: os.DirEntry):
+        self.all[relpath] = direntry
+
     def matches(self) -> Generator[tuple[str, os.DirEntry[str]], None, None]:
         for match_path, direntry in self.all.items():
             if self.predicate.matches(match_path, direntry):
