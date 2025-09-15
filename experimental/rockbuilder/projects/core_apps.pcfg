@@ -4,3 +4,4 @@ project_list=
     pytorch_vision
     pytorch_audio
     torch_migraphx
+    comfyui
