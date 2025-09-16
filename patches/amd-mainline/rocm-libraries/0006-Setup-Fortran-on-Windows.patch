@@ -1,7 +1,7 @@
 From 6d850c017899813d985d8e2038a8d6237078af28 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Thu, 1 May 2025 11:29:42 -0700
-Subject: [PATCH 06/11] Setup Fortran on Windows.
+Subject: [PATCH 06/12] Setup Fortran on Windows.
 
 ---
  projects/hipblas/CMakeLists.txt | 11 +++++------

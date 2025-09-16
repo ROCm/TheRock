@@ -1,7 +1,7 @@
 From 368062f5a23460955ef62ebd6d169d11cbffa331 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 14:26:45 +0000
-Subject: [PATCH 03/11] Find `rocm_smi` via config files
+Subject: [PATCH 03/12] Find `rocm_smi` via config files
 
 Use the config files provided by upstream instead of a custom finder.
 ---

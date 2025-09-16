@@ -1,7 +1,7 @@
 From 09c7ea7e00de961ce35653b5dd4924904990f7ac Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 6 Aug 2025 16:08:22 +0000
-Subject: [PATCH 08/11] Revert "remove options --no-enumerate (#966)"
+Subject: [PATCH 08/12] Revert "remove options --no-enumerate (#966)"
 
 This reverts commit 68a380c7dd5498a744d5d63892d7431a5aa31367.
 

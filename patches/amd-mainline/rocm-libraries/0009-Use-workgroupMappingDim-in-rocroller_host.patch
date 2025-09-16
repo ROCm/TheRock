@@ -1,7 +1,7 @@
 From 02348e224b5e7a0023178ffbc5811f6153566072 Mon Sep 17 00:00:00 2001
 From: David Dixon <david.dixon@amd.com>
 Date: Wed, 20 Aug 2025 20:59:07 +0000
-Subject: [PATCH 09/11] Use workgroupMappingDim in rocroller_host
+Subject: [PATCH 09/12] Use workgroupMappingDim in rocroller_host
 
 The api for command solution changed so
 use the workgroupMappingDim rather than workgroupMapping
