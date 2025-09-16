@@ -80,7 +80,7 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      - name: Runner Health Status
+      - name: Runner health status
         run: |
           df -h
           echo "CCACHE_DIR=${CCACHE_DIR}"

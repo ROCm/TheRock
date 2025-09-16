@@ -67,7 +67,7 @@ jobs:
             --local-path "$CACHE_DIR/ccache"
           ccache -z
 
-      - name: Runner Health Status
+      - name: Runner health status
         run: |
           df -h
           echo "ccache version: $(ccache --version)"
