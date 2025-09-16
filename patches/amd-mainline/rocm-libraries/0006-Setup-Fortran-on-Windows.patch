@@ -1,14 +1,14 @@
-From a7e8c062e1c8828b2fce7c44e5243e03e6920ba6 Mon Sep 17 00:00:00 2001
+From 6d850c017899813d985d8e2038a8d6237078af28 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Thu, 1 May 2025 11:29:42 -0700
-Subject: [PATCH 15/17] Setup Fortran on Windows.
+Subject: [PATCH 06/11] Setup Fortran on Windows.
 
 ---
  projects/hipblas/CMakeLists.txt | 11 +++++------
  1 file changed, 5 insertions(+), 6 deletions(-)
 
 diff --git a/projects/hipblas/CMakeLists.txt b/projects/hipblas/CMakeLists.txt
-index 56ec2fd5b4..58f33dda67 100644
+index 383785e257..6b3d0b02a0 100644
 --- a/projects/hipblas/CMakeLists.txt
 +++ b/projects/hipblas/CMakeLists.txt
 @@ -42,12 +42,11 @@ if( NOT DEFINED CMAKE_CONFIGURATION_TYPES AND NOT DEFINED CMAKE_BUILD_TYPE )
@@ -30,5 +30,5 @@ index 56ec2fd5b4..58f33dda67 100644
  project( hipblas LANGUAGES CXX ${fortran_language} )
  
 -- 
-2.43.0
+2.47.1.windows.2
 

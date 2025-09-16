@@ -1,0 +1,32 @@
+From 4c9f299e3a5a0cc8e36bb9460ab80d9f59c1bf66 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Tue, 16 Sep 2025 10:56:37 -0700
+Subject: [PATCH 11/11] Initialize CMAKE_Fortran_COMPILER for hipblaslt
+
+---
+ projects/hipblaslt/CMakeLists.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/projects/hipblaslt/CMakeLists.txt b/projects/hipblaslt/CMakeLists.txt
+index 708a46d390..021aada5d8 100644
+--- a/projects/hipblaslt/CMakeLists.txt
++++ b/projects/hipblaslt/CMakeLists.txt
+@@ -114,10 +114,15 @@ else()
+ endif()
+ 
+ if(HIPBLASLT_ENABLE_CLIENT)
++    if (NOT DEFINED CMAKE_Fortran_COMPILER AND NOT DEFINED ENV{FC})
++        set(CMAKE_Fortran_COMPILER  "gfortran")
++    endif()
+     enable_language(Fortran)
++
+     if(HIPBLASLT_ENABLE_BLIS)
+         find_package(BLIS REQUIRED)
+     endif()
++
+     # There is an implicit find_package(BLAS) when finding lapack
+     find_package(LAPACK REQUIRED)
+ endif()
+-- 
+2.47.1.windows.2
+
