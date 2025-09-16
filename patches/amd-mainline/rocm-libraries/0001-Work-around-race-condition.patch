@@ -1,7 +1,7 @@
 From f4040e8e880da0bcf996df8a9a16209538256fb9 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Mon, 31 Mar 2025 22:24:41 +0000
-Subject: [PATCH 01/11] Work around race condition
+Subject: [PATCH 01/12] Work around race condition
 
 With `add_dependency`, compiling the `hipsolver_fortran_client` target
 fails as `hipsolver.mod` is not created in time for the first build

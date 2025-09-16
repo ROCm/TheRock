@@ -1,7 +1,7 @@
 From 4c9f299e3a5a0cc8e36bb9460ab80d9f59c1bf66 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Tue, 16 Sep 2025 10:56:37 -0700
-Subject: [PATCH 11/11] Initialize CMAKE_Fortran_COMPILER for hipblaslt
+Subject: [PATCH 11/12] Initialize CMAKE_Fortran_COMPILER for hipblaslt
 
 ---
  projects/hipblaslt/CMakeLists.txt | 5 +++++
