@@ -1,7 +1,7 @@
-From 4d57c0ccfd87ca370a948bceed04299a0a772ac1 Mon Sep 17 00:00:00 2001
+From 74bd593aca84c33978a73981fb97a054ede7d405 Mon Sep 17 00:00:00 2001
 From: Scott Todd <scott.todd0@gmail.com>
 Date: Wed, 3 Sep 2025 13:06:42 -0700
-Subject: [PATCH 23/23] Run gentest.py with 'python' on Windows across
+Subject: [PATCH 10/11] Run gentest.py with 'python' on Windows across
  `_parse_data.cpp` files.
 
 ---

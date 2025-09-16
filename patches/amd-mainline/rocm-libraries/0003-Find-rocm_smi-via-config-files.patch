@@ -1,7 +1,7 @@
-From 66e663065ffbb12beb725bbeb39c76d169c68bf6 Mon Sep 17 00:00:00 2001
+From 368062f5a23460955ef62ebd6d169d11cbffa331 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 12 Mar 2025 14:26:45 +0000
-Subject: [PATCH 06/17] Find `rocm_smi` via config files
+Subject: [PATCH 03/11] Find `rocm_smi` via config files
 
 Use the config files provided by upstream instead of a custom finder.
 ---
@@ -11,10 +11,10 @@ Use the config files provided by upstream instead of a custom finder.
  delete mode 100644 projects/rocblas/clients/cmake/FindROCmSMI.cmake
 
 diff --git a/projects/rocblas/clients/CMakeLists.txt b/projects/rocblas/clients/CMakeLists.txt
-index 3abff7ffa7..16ccedd3da 100644
+index b9e1dc4816..0f326755a0 100644
 --- a/projects/rocblas/clients/CMakeLists.txt
 +++ b/projects/rocblas/clients/CMakeLists.txt
-@@ -212,8 +212,8 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
+@@ -210,8 +210,8 @@ if( BUILD_CLIENTS_BENCHMARKS OR BUILD_CLIENTS_TESTS)
  
    # Find the package ROCmSMI
    if(NOT WIN32)
@@ -83,5 +83,5 @@ index 698f6884a6..0000000000
 -    IMPORTED_LOCATION "${ROCM_SMI_LIBRARY}"
 -    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ROCM_SMI_ROOT}/include")
 -- 
-2.43.0
+2.47.1.windows.2
 
