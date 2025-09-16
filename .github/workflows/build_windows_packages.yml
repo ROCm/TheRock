@@ -85,6 +85,7 @@ jobs:
           df -h
           echo "CCACHE_DIR=${CCACHE_DIR}"
           mkdir -p $CCACHE_DIR
+          ccache --zero-stats
           ccache -s -v
 
           echo "cmake: $(which cmake)"
