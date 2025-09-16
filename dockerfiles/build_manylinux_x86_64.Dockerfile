@@ -68,8 +68,18 @@ RUN yum install -y epel-release && \
       patchelf \
       vim-common \
       git-lfs && \
-    yum clean all && \
+      # OMPI build deps
+      wget \
+      m4 \
+      flex \
+      libevent-devel \
+      hwloc-devel \
+      numactl-devel \
+      pkgconfig \
+      zip unzip \
+    && yum clean all && \
     rm -rf /var/cache/yum
+
 
 ######## Enable GCC Toolset and verify ########
 # This is a subset of what is typically sourced in the gcc-toolset enable
@@ -95,22 +105,23 @@ RUN which gcc && gcc --version && \
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
 
-######## vcpkg ########
-# vcpkg is used to install OpenMPI and can be dropped once the latter
-# is vendored into TheRock.
-WORKDIR /opt
-ENV VCPKG_HASH="3f5ad7be7693ce6ac5599ddb7cc24f260b9d44f9"
-COPY install_vcpkg.sh ./
-RUN yum install -y zip unzip
-RUN ./install_vcpkg.sh "${VCPKG_HASH}"
+######## Open MPI 5.0.8 (from source) ########
+ENV OMPI_VER=5.0.8
+ENV OMPI_PREFIX=/opt/openmpi-${OMPI_VER}
+WORKDIR /tmp/build-openmpi
+RUN wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-${OMPI_VER}.tar.gz && \
+    tar xzf openmpi-${OMPI_VER}.tar.gz && \
+    cd openmpi-${OMPI_VER} && \
+    ./configure --prefix="${OMPI_PREFIX}" --enable-wrapper-rpath && \
+    make -j"$(nproc)" && \
+    make install && \
+    cd / && rm -rf /tmp/build-openmpi
 
-######## OpenMPI ########
-# OpenMPI is currently not vendored into TheRock and temorarily installed
-# via vcpkg: https://github.com/ROCm/TheRock/issues/1284
-RUN /opt/vcpkg/vcpkg install openmpi:x64-linux
-ENV PATH="/opt/vcpkg/installed/x64-linux/tools/openmpi/bin:${PATH}"
-ENV PKG_CONFIG_PATH="/opt/vcpkg/installed/x64-linux/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-ENV LD_LIBRARY_PATH="/opt/vcpkg/installed/x64-linux/lib:${LD_LIBRARY_PATH}"
+# Expose Open MPI by default (ahead of any other MPI on PATH)
+ENV PATH="/opt/openmpi-5.0.8/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/openmpi-5.0.8/lib:${LD_LIBRARY_PATH}"
+ENV PKG_CONFIG_PATH="/opt/openmpi-5.0.8/lib/pkgconfig:${PKG_CONFIG_PATH}"
+
 
 RUN which mpicc && mpirun && \
     mpirun --version || true
