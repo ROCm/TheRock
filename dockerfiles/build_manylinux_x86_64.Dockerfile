@@ -111,7 +111,7 @@ ENV OMPI_PREFIX=/opt/openmpi-${OMPI_VER}
 
 # Copy and execute the build/install portion
 COPY install_openmpi.sh /tmp/install_openmpi.sh
-RUN chmod +x /tmp/install_openmpi.sh && /tmp/install_openmpi.sh && rm -f /tmp/install_openmpi.sh
+RUN /tmp/install_openmpi.sh && /tmp/install_openmpi.sh && rm -f /tmp/install_openmpi.sh
 
 # Expose Open MPI by default
 ENV PATH="${OMPI_PREFIX}/bin:${PATH}"
