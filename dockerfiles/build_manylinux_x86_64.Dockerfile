@@ -105,6 +105,7 @@ RUN which gcc && gcc --version && \
 RUN git config --global --add safe.directory '*'
 
 ######## Open MPI 5.0.8 (from source) ########
+# OpenMPI is currently not vendored into TheRock and temorarily installed
 ENV OMPI_VER=5.0.8
 ENV OMPI_PREFIX=/opt/openmpi-${OMPI_VER}
 WORKDIR /tmp/build-openmpi
