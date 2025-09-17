@@ -31,7 +31,7 @@ RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
 
 ######## CMake ########
 WORKDIR /install-cmake
-ENV CMAKE_VERSION="3.25.2"
+ENV CMAKE_VERSION="3.27.9"
 COPY install_cmake.sh ./
 RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
