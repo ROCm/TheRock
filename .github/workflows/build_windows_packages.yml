@@ -80,11 +80,13 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      - name: Runner Health Settings
+      - name: Runner health status
         run: |
-          echo "CCACHE_DIR=${CCACHE_DIR}"
           df -h
+          echo "CCACHE_DIR=${CCACHE_DIR}"
           mkdir -p $CCACHE_DIR
+          ccache --zero-stats
+          ccache -s -v
 
           echo "cmake: $(which cmake)"
           cmake --version
@@ -93,8 +95,10 @@ jobs:
           echo "CC: $CC"
           echo "CXX: $CXX"
 
+          echo "Installed Python versions:"
           echo "python: $(which python), python3: $(which python3)"
           python --version
+          pip list --format=freeze
 
           echo "gcc: $(which gcc)"
           gcc --version
@@ -104,9 +108,7 @@ jobs:
           gfortran --version
 
           echo "Git version: $(git --version)"
-          git config fetch.parallel 10
-          nthreads=$(nproc --all)
-          echo [*] Logical Processors available: $nthreads...
+          echo "Logical Processors available: $(nproc --all)"
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -121,6 +123,7 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: |
+          git config fetch.parallel 10
           git config --global core.symlinks true
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12

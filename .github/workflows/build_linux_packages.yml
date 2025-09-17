@@ -53,38 +53,49 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
-      - name: Runner Health Settings
+      - name: Setup ccache
         run: |
           ./build_tools/setup_ccache.py \
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
+          ccache -z
+
+      - name: Runner health status
+        run: |
           df -h
           echo "ccache version: $(ccache --version)"
           echo "ccache config:"
           echo "---"
           cat "$CCACHE_CONFIGPATH"
           echo "---"
-          ccache -z
           ccache -s -v
+
+          echo "cmake: $(which cmake)"
           cmake --version
+          echo "gcc: $(which gcc)"
+          gcc --version
+
           echo "Installed Python versions:"
           ls -d /opt/python
           echo "python: $(which python), python3: $(which python3)"
+          pip list --format=freeze
+
           echo "Git version: $(git --version)"
-          git config --global --add safe.directory $PWD
-          git config fetch.parallel 10
+          echo "Logical Processors available: $(nproc --all)"
 
       - name: Fetch sources
         timeout-minutes: 30
         run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
           ./build_tools/fetch_sources.py --jobs 12
-
-      - name: Install python deps
-        run: |
-          pip install -r requirements.txt
 
       - name: Configure Projects
         env:
