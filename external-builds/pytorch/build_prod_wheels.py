@@ -568,6 +568,7 @@ def do_build_pytorch(
         f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
     )
     env["USE_ROCM"] = "ON"
+    env["USE_CUDA"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 

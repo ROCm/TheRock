@@ -130,7 +130,14 @@ These instructions mostly mirror the instructions in the root
 > choco install ccache -y
 > choco install python -y
 > choco install strawberryperl -y
-> choco install dvc -y
+> ```
+
+> [!TIP]
+> winget installation is recommended for dvc
+> [winget-cli](https://github.com/microsoft/winget-cli):
+>
+> ```bash
+> winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 
 If you prefer to install tools manually, you will need:

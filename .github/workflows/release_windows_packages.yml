@@ -44,8 +44,8 @@ on:
 
   # Trigger on a schedule to build nightly release candidates.
   schedule:
-    # Runs at 11:00 AM UTC, which is 3:00 AM PST (UTC-8)
-    - cron: '0 11 * * *'
+    # Runs at 04:00 AM UTC, which is 8:00 PM PST (UTC-8)
+    - cron: '0 04 * * *'
 
 permissions:
   contents: read
@@ -201,10 +201,11 @@ jobs:
             windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           git config --global core.symlinks true
           git config --global core.longpaths true
-          python ./build_tools/fetch_sources.py --jobs 96
+          python ./build_tools/fetch_sources.py --jobs 12
 
       - name: Configure Projects
         env:

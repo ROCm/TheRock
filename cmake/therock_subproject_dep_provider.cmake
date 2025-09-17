@@ -13,22 +13,28 @@
 #     proper declared dependency, it will error.
 # See: _therock_cmake_subproject_setup_deps which assembles these variables
 
-block()
+block(PROPAGATE CMAKE_PREFIX_PATH)
+  set(prefix_extensions)
   if(THEROCK_PKG_CONFIG_DIRS)
-    if(WIN32)
-      set(_sep ";")
-    else()
-      set(_sep ":")
-    endif()
-    set(_accum)
     foreach(_dir ${THEROCK_PKG_CONFIG_DIRS})
-      if(_accum)
-        string(APPEND _accum "${_sep}")
-      endif()
-      string(APPEND _accum "${_dir}")
+      # There is a mismatch between THEROCK_PKG_CONFIG_DIRS, which specifies
+      # a full path to the .pc file (i.e. /some/path/lib/pkgconfig) versus
+      # how CMAKE_PREFIX_PATH is parsed for the same. The latter expects each
+      # path to be to the prefix and it will probe sub-directory 'lib/pkgconfig'
+      # (actually from an allow list of suitable prefix extensions) to determine
+      # if the path will be extended and propagated to pkg-config. Therefore,
+      # we need to back up to the actual prefix path. For super-project
+      # pkg-config dirs (which is what we are dealing with here), this will
+      # always be two levels up (i.e. lib/pkgdata). We could add more validation
+      # of this, but it is actually somewhat open ended to determine *which*
+      # two levels it is (i.e. lib32 vs lib, share vs lib, etc). But is is
+      # always two.
+      cmake_path(GET _dir PARENT_PATH _dir)
+      cmake_path(GET _dir PARENT_PATH _dir)
+      list(APPEND prefix_extensions "${_dir}")
     endforeach()
-    set(ENV{PKG_CONFIG_PATH} "${_accum}${_sep}$ENV{PKG_CONFIG_PATH}")
-    message(STATUS "Sub-project PKG_CONFIG_PATH: $ENV{PKG_CONFIG_PATH}")
+    message(STATUS "Sub-project pkg-config prefixes: ${prefix_extensions}")
+    list(APPEND CMAKE_PREFIX_PATH ${prefix_extensions})
   endif()
 endblock()
 

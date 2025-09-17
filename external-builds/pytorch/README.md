@@ -28,12 +28,12 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature        | Linux support | Windows support                                                       |
-| ------------------------ | ------------- | --------------------------------------------------------------------- |
-| torch                    | ✅ Supported  | ✅ Supported                                                          |
-| torchaudio               | ✅ Supported  | ✅ Supported                                                          |
-| torchvision              | ✅ Supported  | ✅ Supported                                                          |
-| Flash attention (Triton) | ✅ Supported  | 🟡 In progress ([#1040](https://github.com/ROCm/TheRock/issues/1040)) |
+| Project / feature              | Linux support | Windows support |
+| ------------------------------ | ------------- | --------------- |
+| torch                          | ✅ Supported  | ✅ Supported    |
+| torchaudio                     | ✅ Supported  | ✅ Supported    |
+| torchvision                    | ✅ Supported  | ✅ Supported    |
+| Flash attention via [ao]triton | ✅ Supported  | ✅ Supported    |
 
 ### Supported PyTorch versions
 
@@ -94,22 +94,6 @@ for more background on these `rocm` packages.
 > [!WARNING]
 > On Windows, when building with "--enable-pytorch-flash-attention-windows",
 > Make sure to use [ninja 1.13.1](https://github.com/ninja-build/ninja/releases/tag/v1.13.1) or above.
->
-> PyTorch builds aotriton locally, but without the kernel images.
-> Make sure to copy the `aotriton.images` folder from an existing
-> aotriton linux build (`<aotriton_build_dir>/lib/aotriton.images`) and copy
-> that folder into your local pytorch lib directory: `<pytorch_dir>/torch/lib/`.
-> This is a temporary measure for manually producing aotriton builds.
-> NOTE: This will not work without the [corresponding patch](./patches/pytorch/main/pytorch/hipified/0004-Support-FLASH_ATTENTION-MEM_EFF_ATTENTION-via.-aotri.patch) for the main branch.
->
-> On Windows, aotriton uses `dladdr`, which is implemented through
-> [dlfcn-win32](https://github.com/dlfcn-win32/dlfcn-win32), which unfortunately
-> uses `GetModuleFileNameA` (ANSI version) to get the base directory of
-> `libaotriton.so`. This means, if `libaotriton.so` is put under a path with
-> characters that cannot represented in current code page, the loading of GPU
-> kernels will fail.
-> See https://github.com/ROCm/aotriton/commit/e1be21d80b25f46139c2e3b4b0615e0279feccac
-> For possible fixes. A proper fix is planned and will eventually be added.
 >
 > NOTE: If you use ccache and face "invalid argument" errors during the aotriton build,
 > disable ccache and try again.

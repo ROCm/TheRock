@@ -14,12 +14,29 @@ if(WIN32)
   #     Should they be supported? What depends on them?
   set(LLVM_ENABLE_LIBCXX OFF)
   set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp" CACHE STRING "Enabled runtimes" FORCE)
-  # Settinng "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
+  if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
+    set(OPENMP_ENABLE_LIBOMPTARGET ON)
+    set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
+    set(LIBOMPTARGET_ENABLE_DEBUG ON)
+    set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
+    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
+    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_SOURCE_DIR}/rocm-systems/projects/rocr-runtime")
+    set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
+    # There is an issue with finding the zstd config built by TheRock when zstd
+    # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
+    # found in module mode, which ultimately fails to locate the library.
+    # For now we will switch the priorty for find_package to first search in
+    # CONFIG mode.
+    set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
+  endif()
+  # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
   # source otherwise. Defaults to `ON`.
   set(LIBOMP_COPY_EXPORTS OFF)
@@ -27,7 +44,6 @@ endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
-set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
 set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
 
 # Packaging.
@@ -35,8 +51,8 @@ set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
 
 # Build the device-libs as part of the core compiler so that clang works by
 # default (as opposed to other components that are *users* of the compiler).
-set(LLVM_EXTERNAL_AMDDEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
-set(LLVM_EXTERNAL_PROJECTS "amddevice-libs" CACHE STRING "Enable extra projects" FORCE)
+set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
+set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.

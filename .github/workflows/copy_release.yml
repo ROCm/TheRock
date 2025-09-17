@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rocm_version:
-        description: ROCm version to copy
+        description: ROCm version to copy, e.g. 7.0.0rc20250912
         type: string
       amdgpu_family:
         type: choice
@@ -20,6 +20,7 @@ on:
           - 3.11
           - 3.12
           - 3.13
+        default: 3.12
       include_torch:
         type: boolean
         default: false
@@ -36,7 +37,7 @@ permissions:
 
 jobs:
   copy_python_packages:
-    name: Copy release | ${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }} | ${{ inputs.rocm_version }} | Python ${{ inputs.python_version }}
+    name: Copy nightly ${{ inputs.sourcesubdir }} -> dev ${{ inputs.destsubdir }} | ${{ inputs.amdgpu_family }} | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
     runs-on: ubuntu-24.04
     permissions:
       id-token: write

@@ -1,7 +1,7 @@
-From d70e7d2166d478ead5d9bd3f6e4b1408190ea666 Mon Sep 17 00:00:00 2001
+From f2b6842a134c57526bb2a304d2f85c473be3c957 Mon Sep 17 00:00:00 2001
 From: Scott Tsai <scottt.tw@gmail.com>
 Date: Tue, 15 Apr 2025 09:30:13 +0800
-Subject: [PATCH 2/5] hipcc: fix default include path on Windows and adapt to
+Subject: [PATCH 2/8] hipcc: fix default include path on Windows and adapt to
  TheRock rocm layout
 
 getCppConfig in the orignial code did not add the content of
@@ -120,5 +120,5 @@ index ecea39e071b4..c74b43ff598f 100644
  
    if (!compileOnly) {
 -- 
-2.47.1.windows.2
+2.48.1
 

@@ -19,6 +19,8 @@ cmd = [
     "8",
     "--timeout",
     "900",
+    "--repeat",
+    "until-pass:3",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 

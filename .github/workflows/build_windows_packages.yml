@@ -8,7 +8,7 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
-        default: gfx110X-dgpu
+        default: gfx1151
       expect_failure:
         type: boolean
       extra_cmake_options:
@@ -119,10 +119,11 @@ jobs:
             windows-build-packages-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           git config --global core.symlinks true
           git config --global core.longpaths true
-          python ./build_tools/fetch_sources.py --jobs 96
+          python ./build_tools/fetch_sources.py --jobs 12
 
       - name: Configure Projects
         env:
@@ -183,7 +184,7 @@ jobs:
 
       - name: Save cache
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           path: ${{ env.CACHE_DIR }}
           key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}

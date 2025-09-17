@@ -78,6 +78,7 @@ jobs:
           git config fetch.parallel 10
 
       - name: Fetch sources
+        timeout-minutes: 30
         run: |
           ./build_tools/fetch_sources.py --jobs 12
 

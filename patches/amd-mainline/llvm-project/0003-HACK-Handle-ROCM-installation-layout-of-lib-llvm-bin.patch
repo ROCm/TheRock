@@ -1,7 +1,7 @@
-From 7dab0ed787cbde9d4aaaf99e24b7f33efda8f2a5 Mon Sep 17 00:00:00 2001
+From 926d3aec2cb96b615f70e29c7c8ea3a99c97d136 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Thu, 13 Feb 2025 17:58:53 -0800
-Subject: [PATCH 3/5] HACK: Handle ROCM installation layout of
+Subject: [PATCH 3/8] HACK: Handle ROCM installation layout of
  lib/llvm/bin/clang++.
 
 ---
@@ -32,5 +32,5 @@ index 798ea8aad6de..c45f07a6e285 100644
      // and it seems ParentDir is already pointing to correct place.
      return Candidate(ParentDir.str(), /*StrictChecking=*/true);
 -- 
-2.47.1.windows.2
+2.48.1
 

@@ -1,7 +1,7 @@
-From bcdc455a08df8527e8946eb33fee714c28e30836 Mon Sep 17 00:00:00 2001
+From 3b4c18a7f9c6deaebebb957edf171fb65f462c72 Mon Sep 17 00:00:00 2001
 From: Scott <scott.todd0@gmail.com>
 Date: Fri, 14 Feb 2025 15:22:48 -0800
-Subject: [PATCH 1/5] Enable MSVC support in comgr.
+Subject: [PATCH 1/8] Enable MSVC support in comgr.
 
 ---
  amd/comgr/CMakeLists.txt | 7 ++++++-
@@ -26,5 +26,5 @@ index 2eeb8c2ac6ac..8b16fb9377e1 100644
  endif()
  
 -- 
-2.47.1.windows.2
+2.48.1
 
