@@ -8,7 +8,7 @@ include = [
 ]
 [components.run."math-libs/rocFFT/stage"]
 include = [
-  "**/rocfft_rtc_helper",
+  "**/rocfft_rtc_helper*",
 ]
 
 # hipFFT
