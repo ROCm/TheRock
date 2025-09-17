@@ -82,33 +82,8 @@ jobs:
 
       - name: Runner health status
         run: |
-          df -h
-          echo "CCACHE_DIR=${CCACHE_DIR}"
-          mkdir -p $CCACHE_DIR
           ccache --zero-stats
-          ccache -s -v
-
-          echo "cmake: $(which cmake)"
-          cmake --version
-          echo "ninja: $(which ninja)"
-          ninja --version
-          echo "CC: $CC"
-          echo "CXX: $CXX"
-
-          echo "Installed Python versions:"
-          echo "python: $(which python), python3: $(which python3)"
-          python --version
-          pip list --format=freeze
-
-          echo "gcc: $(which gcc)"
-          gcc --version
-          echo "perl: $(which perl)"
-          perl --version
-          echo "gfortran: $(which gfortran)"
-          gfortran --version
-
-          echo "Git version: $(git --version)"
-          echo "Logical Processors available: $(nproc --all)"
+          ./build_tools/health_status.py
 
       - name: Test build_tools
         run: |

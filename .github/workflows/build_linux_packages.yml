@@ -65,30 +65,10 @@ jobs:
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
-          ccache -z
 
       - name: Runner health status
         run: |
-          df -h
-          echo "ccache version: $(ccache --version)"
-          echo "ccache config:"
-          echo "---"
-          cat "$CCACHE_CONFIGPATH"
-          echo "---"
-          ccache -s -v
-
-          echo "cmake: $(which cmake)"
-          cmake --version
-          echo "gcc: $(which gcc)"
-          gcc --version
-
-          echo "Installed Python versions:"
-          ls -d /opt/python
-          echo "python: $(which python), python3: $(which python3)"
-          pip list --format=freeze
-
-          echo "Git version: $(git --version)"
-          echo "Logical Processors available: $(nproc --all)"
+          ./build_tools/health_status.py
 
       - name: Test build_tools
         run: |
