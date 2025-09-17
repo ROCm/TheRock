@@ -44,6 +44,9 @@ instructions and configurations for alternatives.
 > [installing from releases](#installing-from-releases) in supported
 > configurations is often faster and easier.
 
+> [!IMPORTANT]
+> Common issues during setup and building and their solutions are listed [here](docs/environment_setup_guide.md#common-issues).
+
 ### Setup - Ubuntu (24.04)
 
 > [!TIP]
@@ -184,12 +187,15 @@ Further flags allow to build components with specific features enabled.
 
 ### CMake build usage
 
-To build ROCm/HIP:
+Due to the size of the project, it is **recommended to build it with ccache** enabled to speed up the build. See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Windows](#ccache-usage-on-windows).
+
+Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
 ```bash
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 cmake --build build
 ```
+
 
 #### CCache usage on Linux
 
