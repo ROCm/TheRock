@@ -6,6 +6,7 @@
 include = [
   "bin/test_*",
   "bin/rocprim/CTestTestfile.cmake",
+  "lib/libtest_linking_*.*",
 ]
 
 # hipCUB
