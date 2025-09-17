@@ -123,7 +123,7 @@ Now checkout repositories using their default branches:
 
 - On Windows, use shorter paths to avoid command length limits:
 
-  ```cmd
+  ```batch
   python pytorch_torch_repo.py checkout --repo C:/b/pytorch
   python pytorch_audio_repo.py checkout --repo C:/b/audio
   python pytorch_vision_repo.py checkout --repo C:/b/vision
@@ -149,7 +149,7 @@ mix/match build steps.
 
 - On Windows:
 
-  ```cmd
+  ```batch
   python build_prod_wheels.py build ^
     --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ ^
     --pytorch-dir C:/b/pytorch ^
