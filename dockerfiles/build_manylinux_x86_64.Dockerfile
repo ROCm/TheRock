@@ -108,20 +108,15 @@ RUN git config --global --add safe.directory '*'
 # OpenMPI is currently not vendored into TheRock and temorarily installed
 ENV OMPI_VER=5.0.8
 ENV OMPI_PREFIX=/opt/openmpi-${OMPI_VER}
-WORKDIR /tmp/build-openmpi
-RUN wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-${OMPI_VER}.tar.gz && \
-    tar xzf openmpi-${OMPI_VER}.tar.gz && \
-    cd openmpi-${OMPI_VER} && \
-    ./configure --prefix="${OMPI_PREFIX}" --enable-wrapper-rpath && \
-    make -j"$(nproc)" && \
-    make install && \
-    cd / && rm -rf /tmp/build-openmpi
 
-# Expose Open MPI by default (ahead of any other MPI on PATH)
-ENV PATH="/opt/openmpi-5.0.8/bin:${PATH}"
-ENV LD_LIBRARY_PATH="/opt/openmpi-5.0.8/lib:${LD_LIBRARY_PATH}"
-ENV PKG_CONFIG_PATH="/opt/openmpi-5.0.8/lib/pkgconfig:${PKG_CONFIG_PATH}"
+# Copy and execute the build/install portion
+COPY install_openmpi.sh /tmp/install_openmpi.sh
+RUN chmod +x /tmp/install_openmpi.sh && /tmp/install_openmpi.sh && rm -f /tmp/install_openmpi.sh
 
+# Expose Open MPI by default
+ENV PATH="${OMPI_PREFIX}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${OMPI_PREFIX}/lib:${LD_LIBRARY_PATH}"
+ENV PKG_CONFIG_PATH="${OMPI_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
 
 RUN which mpicc && mpirun && \
     mpirun --version || true
