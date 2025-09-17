@@ -474,7 +474,9 @@ class SystemInfo:
     # Define CPU status.
     @property
     def CPU_STATUS(self):
-        return f"{self.CPU_NAME} {self.CPU_CORE} Cores ({self.CPU_ARCH})"
+        return f"""{self.CPU_NAME} ({self.CPU_ARCH})
+                    Logical cores: {self.CPU_CORE}
+        """
 
     # Define GPU list status.
     @property
@@ -500,8 +502,8 @@ class SystemInfo:
             """
         elif self.is_linux:
             return f"""Total Physical Memory: {self._device_dram_stat[0]:.2f} GB
-                Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
-                Avail Swap Memory: {self._device_dram_stat[2]:.2f} GB
+                    Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
+                    Avail Swap Memory: {self._device_dram_stat[2]:.2f} GB
             """
         else:
             pass
@@ -510,10 +512,10 @@ class SystemInfo:
     @property
     def DISK_STATUS(self):
         return f"""Disk Total Space: {self._device_disk_stat[2]} GB
-                Disk Avail Space: {self._device_disk_stat[4]} GB
-                Disk Used  Space: {self._device_disk_stat[3]} GB
-                Disk Usage: {self._device_disk_stat[5]} %
-                Current Repo path: {self._device_disk_stat[0]}, Disk Device: {self._device_disk_stat[1]}
+                    Disk Avail Space: {self._device_disk_stat[4]} GB
+                    Disk Used  Space: {self._device_disk_stat[3]} GB
+                    Disk Usage: {self._device_disk_stat[5]} %
+                    Current Repo path: {self._device_disk_stat[0]}, Disk Device: {self._device_disk_stat[1]}
         """
 
     @property
@@ -552,17 +554,17 @@ class SystemInfo:
                 f"""
         ===================\t\tBuild Environment Summary\t\t===================
 
-    OS:         {self.OS_STATUS}
-    CPU:        {self.CPU_STATUS}
-    {self.GPU_STATUS}
-    RAM:        {self.MEM_STATUS}
-    STORAGE:    {self.DISK_STATUS}
+        OS:         {self.OS_STATUS}
+        CPU:        {self.CPU_STATUS}
+        {self.GPU_STATUS}
+        RAM:        {self.MEM_STATUS}
+        STORAGE:    {self.DISK_STATUS}
 
-    ENV:        {self.ENV_STATUS}
+        ENV:        {self.ENV_STATUS}
 
-    SDK:        {self.SDK_STATUS}
+        SDK:        {self.SDK_STATUS}
 
-    MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
+        MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
     """
             )
 
@@ -571,10 +573,10 @@ class SystemInfo:
                 f"""
         ===================\t\tBuild Environment Summary\t\t===================
 
-    OS:         {self.OS_STATUS}
-    CPU:        {self.CPU_STATUS}
-    GPU:        {self.GPU_STATUS}
-    RAM:        {self.MEM_STATUS}
-    STORAGE:    {self.DISK_STATUS}
+        OS:         {self.OS_STATUS}
+        CPU:        {self.CPU_STATUS}
+        GPU:        {self.GPU_STATUS}
+        RAM:        {self.MEM_STATUS}
+        STORAGE:    {self.DISK_STATUS}
     """
             )

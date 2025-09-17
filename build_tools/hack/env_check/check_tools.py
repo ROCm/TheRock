@@ -89,7 +89,9 @@ class CheckProgram(ABC):
             )
             _result = ...
         elif program.exe:
-            _stat = msg_stat("pass", name, f"Found {name} at {program.exe}")
+            _stat = msg_stat(
+                "pass", name, f"Found {name} {program.version} at {program.exe}"
+            )
             _except = ""
             _result = True
 
