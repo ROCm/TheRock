@@ -569,6 +569,7 @@ def do_build_pytorch(
     )
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
+    env["USE_MPI"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
