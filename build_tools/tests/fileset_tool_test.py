@@ -14,6 +14,9 @@ from _therock_utils.hash_util import calculate_hash
 FILESET_TOOL = Path(__file__).parent.parent / "fileset_tool.py"
 
 ARTIFACT_DESCRIPTOR_1 = r"""
+[options]
+unmatched_exclude = "include/foobar.h"
+
 [components.doc]
 
 [components.doc."example/stage"]
