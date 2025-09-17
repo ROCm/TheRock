@@ -74,10 +74,10 @@ python build_prod_wheels.py build \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
-python build_prod_wheels.py build \
-    --output-dir %HOME%/tmp/pyout \
-    --pytorch-dir C:/b/pytorch \
-    --pytorch-audio-dir C:/b/audio \
+python build_prod_wheels.py build ^
+    --output-dir %HOME%/tmp/pyout ^
+    --pytorch-dir C:/b/pytorch ^
+    --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision
 ```
 
