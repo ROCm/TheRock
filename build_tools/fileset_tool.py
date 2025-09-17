@@ -50,6 +50,7 @@ def do_artifact(args):
     scanner = artifact_builder.ComponentScanner(args.root_dir, descriptor)
     scanner.verify()
     component_dirs = args.component_dirs
+    # It is an alternating list of <component> <dir> so must be divisible by 2.
     if len(component_dirs) % 2:
         raise SystemExit(
             "Expected component dirs to be alternating list of component names and directories"

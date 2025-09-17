@@ -15,7 +15,6 @@ FILESET_TOOL = Path(__file__).parent.parent / "fileset_tool.py"
 
 ARTIFACT_DESCRIPTOR_1 = r"""
 [components.doc]
-#extends = "lib"
 
 [components.doc."example/stage"]
 include = [
