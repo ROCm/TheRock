@@ -102,7 +102,7 @@ def pull_large_files(dvc_projects, projects):
             print("Visit https://dvc.org/doc/install for installation instructions.")
             sys.exit(1)
         else:
-            print("`dvc` not found, skipping large file pull on non-Windows.")
+            print("`dvc` not found, skipping large file pull on Linux.")
             return
     for project in dvc_projects:
         if not project in projects:
