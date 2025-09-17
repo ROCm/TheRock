@@ -148,7 +148,7 @@ class RepoInfo:
     @staticmethod
     def amdgpu_llvm_target(GPU):
         # Information from https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html
-        from env_check import AMDGPU_LLVM_TARGET
+        from . import AMDGPU_LLVM_TARGET
 
         name_to_gfx = {}
         for gfx, names in AMDGPU_LLVM_TARGET._amdgpu.items():
