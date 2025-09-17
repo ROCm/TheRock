@@ -20,4 +20,3 @@ make install
 # cleanup
 cd /
 rm -rf "$builddir"
-
