@@ -67,8 +67,7 @@ RUN yum install -y epel-release && \
       gcc-toolset-12-libstdc++-devel \
       patchelf \
       vim-common \
-      git-lfs && \
-      # OMPI build deps
+      git-lfs \
       wget \
       m4 \
       flex \
