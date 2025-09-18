@@ -47,7 +47,7 @@ def cstring(
             case "warn":
                 r, g, b = (184, 166, 48)
             case "hint":
-                r, g, b = (150, 255, 255)
+                r, g, b = (115, 201, 201)
             case "pass":
                 r, g, b = (6, 161, 60)
             case _:
