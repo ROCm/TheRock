@@ -130,7 +130,7 @@ jobs:
       - name: Test
         timeout-minutes: ${{ matrix.components.timeout_minutes }}
         env:
-          SHARD_INDEX: ${{ matrix.components.shards }}
+          SHARD_INDEX: ${{ matrix.shards }}
           TOTAL_SHARDS: ${{ matrix.components.total_shards }}
         run: |
           ${{ matrix.components.test_script }}
