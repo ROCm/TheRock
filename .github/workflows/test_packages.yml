@@ -35,6 +35,7 @@ jobs:
     outputs:
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
+      shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -89,7 +90,7 @@ jobs:
       fail-fast: false
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
-        shards: ${{ fromJSON(needs.configure_test_matrix.outputs.components).shard_arr }}
+        shards: ${{ fromJSON(needs.configure_test_matrix.outputs.shard_arr) }}
     defaults:
       run:
         shell: bash
