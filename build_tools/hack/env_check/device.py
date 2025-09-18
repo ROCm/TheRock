@@ -206,27 +206,22 @@ class SystemInfo:
                     get_regedit("HKLM", _GPU_REG_KEY, "DriverDesc")
                 )
                 if _GPU_CORE_NAME != "Microsoft Basic Display Adapter":
-                    _GPU_VRAM = get_regedit(
+                    gpu_vram = get_regedit(
                         "HKLM", _GPU_REG_KEY, "HardwareInformation.qwMemorySize"
                     )
 
-                    if _GPU_VRAM == None:
+                    if gpu_vram == None:
                         gpu_vram = get_regedit(
                             "HKLM",
                             _GPU_REG_KEY_ALTERNATIVE,
                             "HardwareInformation.qwMemorySize",
                         )
-                        print(
-                            "REMOVE ME AFTER TESTING: GPU VRAM found in alternative",
-                            gpu_vram,
-                        )
-                        _GPU_VRAM = gpu_vram
 
-                    if _GPU_VRAM == None:
+                    if gpu_vram == None:
                         gpu_status_list.append((i, f"{_GPU_CORE_NAME}", None))
                     else:
                         gpu_status_list.append(
-                            (i, f"{_GPU_CORE_NAME}", float(_GPU_VRAM / (1024**3)))
+                            (i, f"{_GPU_CORE_NAME}", float(gpu_vram / (1024**3)))
                         )
             return gpu_status_list
         else:
@@ -507,7 +502,7 @@ class SystemInfo:
             for _gpu_info in self._device_gpu_list:
                 _gpu_num, _gpu_name, _gpu_vram = _gpu_info
                 if _gpu_vram == None:
-                    _gpulist += f"GPU {_gpu_num}: \t{_gpu_name} (<Unknown amount> VRAM)"
+                    _gpulist += f"GPU {_gpu_num}: \t{_gpu_name}"
                 else:
                     _gpulist += f"""GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)
     """
@@ -521,8 +516,8 @@ class SystemInfo:
     def MEM_STATUS(self):
         if self.is_windows:
             return f"""Total Physical Memory: {self._device_dram_stat[0]:.2f} GB
-                Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
-                Avail Virtual  Memory: {self._device_dram_stat[2]:.2f} GB
+                    Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
+                    Avail Virtual  Memory: {self._device_dram_stat[2]:.2f} GB
             """
         elif self.is_linux:
             return f"""Total Physical Memory: {self._device_dram_stat[0]:.2f} GB
@@ -546,9 +541,9 @@ class SystemInfo:
     def ENV_STATUS(self):
         if self.is_windows:
             return f"""Python ENV: {self.python.exe} ({self.python.ENV_TYPE})
-                Visual Studio: {self.VS20XX}
-                Cygwin: {self.is_cygwin}
-                MSYS2: {self.is_msys2}"""
+                    Visual Studio: {self.VS20XX}
+                    Cygwin: {self.is_cygwin}
+                    MSYS2: {self.is_msys2}"""
         elif self.is_linux:
             return f"""Python3 VENV: {self.python.exe} ({self.python.ENV_TYPE}) | WSL2: {self.is_WSL2}"""
         else:
@@ -565,10 +560,10 @@ class SystemInfo:
             _rocm_stat = self.ROCM_HOME if self.ROCM_HOME else "Not Detected"
 
             return f"""Visual Studio:  {_vs20xx_stat} | Host/Target: {self.VC_HOST} --> {self.VC_TARGET}
-                VC++ Compiler:  {self.cl.version}
-                VC++ UCRT:      {_vs20xx_sdk}
-                AMD HIP SDK:    {_hipcc_stat}
-                AMD ROCm:       {_rocm_stat}
+                    VC++ Compiler:  {self.cl.version}
+                    VC++ UCRT:      {_vs20xx_sdk}
+                    AMD HIP SDK:    {_hipcc_stat}
+                    AMD ROCm:       {_rocm_stat}
             """
 
     @property
@@ -580,7 +575,7 @@ class SystemInfo:
 
         OS:         {self.OS_STATUS}
         CPU:        {self.CPU_STATUS}
-        {self.GPU_STATUS}
+        GPU:        {self.GPU_STATUS}
         RAM:        {self.MEM_STATUS}
         STORAGE:    {self.DISK_STATUS}
 
