@@ -45,11 +45,11 @@ def cstring(
             case "err":
                 r, g, b = (255, 61, 61)
             case "warn":
-                r, g, b = (255, 230, 66)
+                r, g, b = (184, 166, 48)
             case "hint":
                 r, g, b = (150, 255, 255)
             case "pass":
-                r, g, b = (55, 255, 125)
+                r, g, b = (6, 161, 60)
             case _:
                 r, g, b = (255, 255, 255)
 
