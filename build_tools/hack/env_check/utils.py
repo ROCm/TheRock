@@ -135,16 +135,16 @@ class RepoInfo:
 
 
 
-    {cstring("   ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
-    {cstring("     ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
-    {cstring("       ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
-    {cstring("                   ◼ ◼ ◼","err")}
-    {cstring("       ◼           ◼ ◼ ◼","err")}\t  Build Environment diagnosis script
-    {cstring("     ◼ ◼           ◼ ◼ ◼","err")}
-    {cstring("   ◼ ◼ ◼           ◼ ◼ ◼","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
-    {cstring("   ◼ ◼ ◼ ◼ ◼ ◼ ◼   ◼ ◼ ◼","err")}
-    {cstring("   ◼ ◼ ◼ ◼ ◼ ◼       ◼ ◼","err")}
-    {cstring("   ◼ ◼ ◼ ◼ ◼           ◼","err")}
+    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
+    {cstring("\t\t\t      ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
+    {cstring("\t\t\t        ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
+    {cstring("\t\t\t                    ◼ ◼ ◼","err")}
+    {cstring("\t\t\t        ◼           ◼ ◼ ◼","err")}\t  Build Environment diagnosis script
+    {cstring("\t\t\t      ◼ ◼           ◼ ◼ ◼","err")}
+    {cstring("\t\t\t    ◼ ◼ ◼           ◼ ◼ ◼","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
+    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼   ◼ ◼ ◼","err")}
+    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼       ◼ ◼","err")}
+    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼           ◼","err")}
 
 
     """

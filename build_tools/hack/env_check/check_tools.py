@@ -18,7 +18,7 @@ def msg_stat(status: Literal["pass", "warn", "err"], program: str, message: str)
             case "err":
                 _emoji = Emoji.Err
 
-        return f"[{_emoji}][{program}] {message}"
+        return f"        [{_emoji}][{program}] {message}"
 
     elif isinstance(program, str):
         match status:
@@ -29,7 +29,7 @@ def msg_stat(status: Literal["pass", "warn", "err"], program: str, message: str)
             case "err":
                 _emoji = Emoji.Err
 
-        return f"[{_emoji}][{cstring(program, status)}] {message}"
+        return f"        [{_emoji}][{cstring(program, status)}] {message}"
 
 
 class Check_List:
@@ -76,7 +76,7 @@ class CheckProgram(ABC):
             _stat = msg_stat("err", name, f"Cannot Find {name}.")
             _except = cstring(
                 f"""
-    Program {self.name} not found. Please Install it.""",
+            Program {self.name} not found. Please Install it.""",
                 "err",
             )
             _result = None
@@ -84,7 +84,7 @@ class CheckProgram(ABC):
             _stat = msg_stat("warn", name, f"Cannot Find {name}.")
             _except = cstring(
                 f"""
-    Optional {name} not found.""",
+            Optional {name} not found.""",
                 "warn",
             )
             _result = ...

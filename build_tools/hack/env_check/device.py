@@ -590,7 +590,7 @@ class SystemInfo:
         elif self.is_linux:
             print(
                 f"""
-        ===================\t\tBuild Environment Summary\t\t===================
+        ===================\t\t\tBuild Environment Summary\t\t\t===================
 
         OS:         {self.OS_STATUS}
         CPU:        {self.CPU_STATUS}
