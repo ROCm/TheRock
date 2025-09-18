@@ -72,7 +72,7 @@ jobs:
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
 
   test_components:
-    name: 'Test ${{ matrix.components.job_name }}'
+    name: 'Test ${{ matrix.components.job_name }} | shard ${{ matrix.shards }} / ${{ matrix.components.total_shards }}'
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ${{ needs.configure_test_matrix.outputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
@@ -89,6 +89,7 @@ jobs:
       fail-fast: false
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
+        shards: ${{ fromJSON(needs.configure_test_matrix.outputs.components.shard_arr) }}
     defaults:
       run:
         shell: bash
@@ -97,7 +98,6 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
-      PLATFORM: ${{ inputs.platform }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
       - name: "Fetch 'build_tools' from repository"
@@ -128,6 +128,9 @@ jobs:
 
       - name: Test
         timeout-minutes: ${{ matrix.components.timeout_minutes }}
+        env:
+          SHARD_INDEX: ${{ matrix.components.shards }}
+          TOTAL_SHARDS: ${{ matrix.components.total_shards }}
         run: |
           ${{ matrix.components.test_script }}
 
