@@ -102,7 +102,51 @@ def main():
     """
     )
 
-    diag_check = check_therock.test_list().summary
+    check_list = [
+        check
+        for check in [
+            CheckOS(device_info=device),
+            CheckCPU(device_info=device),
+            CheckDisk(device_info=device),
+            Check_Max_PATH_LIMIT(device_info=device) if device.is_windows else None,
+            CheckGit(),
+            CheckGitLFS(required=False)
+            if device.is_windows
+            else CheckGitLFS(required=True),
+            CheckCMake(),
+            CheckCCache(required=False),
+            CheckNinja(),
+            CheckGFortran(),
+            CheckPython(isGlobalEnvOK=True),
+            CheckUV(required=False),
+        ]
+        if check is not None
+    ]
+
+    win_only_list = [
+        CheckVS20XX(),
+        CheckMSVC(),
+        CheckATL(),
+        CheckML64(),
+        CheckLIB(),
+        CheckLINK(),
+        CheckRC(),
+    ]
+
+    linux_only_list = [
+        CheckGCC(),
+        CheckGXX(),
+        CheckGCC_AS(),
+        CheckGCC_AR(),
+        CheckLD(),
+    ]
+
+    if device.is_windows:
+        check_list += win_only_list
+    if device.is_linux:
+        check_list += linux_only_list
+
+    diag_check = check_therock.test_list(check_list).summary
 
     print(
         f"""
