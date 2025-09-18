@@ -1,0 +1,92 @@
+From fe7bfd29c4b866d380e1ea6cf11a18e0ff626403 Mon Sep 17 00:00:00 2001
+From: Steve Leung <Steve.Leung@amd.com>
+Date: Tue, 16 Sep 2025 10:05:11 -0600
+Subject: [PATCH 12/12] cmake: move USE_HIPRAND to target-specific definitions
+
+---
+ projects/rocfft/CMakeLists.txt                           | 4 ----
+ projects/rocfft/clients/bench/CMakeLists.txt             | 1 +
+ projects/rocfft/clients/samples/mpi/CMakeLists.txt       | 1 +
+ projects/rocfft/clients/samples/multi_gpu/CMakeLists.txt | 1 +
+ projects/rocfft/clients/samples/rocfft/CMakeLists.txt    | 1 +
+ projects/rocfft/clients/tests/CMakeLists.txt             | 1 +
+ 6 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/projects/rocfft/CMakeLists.txt b/projects/rocfft/CMakeLists.txt
+index a4aaca1686..c724affcb5 100644
+--- a/projects/rocfft/CMakeLists.txt
++++ b/projects/rocfft/CMakeLists.txt
+@@ -113,10 +113,6 @@ option(ROCFFT_BUILD_OFFLINE_TUNER "Build with offline tuner executable rocfft_of
+ # Provide ability to disable hipRAND dependency
+ option(USE_HIPRAND "Use hipRAND to provide device-side input generation" ON)
+ 
+-if( USE_HIPRAND )
+-  add_compile_definitions(USE_HIPRAND)
+-endif( )
+-
+ # Split up function pool compilation across N files to parallelize its build
+ set(ROCFFT_FUNCTION_POOL_N 8 CACHE STRING "Number of files to split function_pool into for compilation")
+ 
+diff --git a/projects/rocfft/clients/bench/CMakeLists.txt b/projects/rocfft/clients/bench/CMakeLists.txt
+index 9e6561ef43..f792c0f766 100644
+--- a/projects/rocfft/clients/bench/CMakeLists.txt
++++ b/projects/rocfft/clients/bench/CMakeLists.txt
+@@ -105,6 +105,7 @@ foreach( bench ${bench_list})
+     PRIVATE
+     hip::hiprand
+     )
++    target_compile_definitions( ${bench} PRIVATE USE_HIPRAND )
+   endif()
+ 
+   # We need to include both rocfft.h and rocfft-export.h
+diff --git a/projects/rocfft/clients/samples/mpi/CMakeLists.txt b/projects/rocfft/clients/samples/mpi/CMakeLists.txt
+index 43a912882f..e4122bcbba 100644
+--- a/projects/rocfft/clients/samples/mpi/CMakeLists.txt
++++ b/projects/rocfft/clients/samples/mpi/CMakeLists.txt
+@@ -97,6 +97,7 @@ foreach( sample ${sample_list} )
+     PRIVATE
+     hip::hiprand
+     )
++    target_compile_definitions( ${sample} PRIVATE USE_HIPRAND )
+   endif()
+ 
+   target_compile_options( ${sample} PRIVATE ${WARNING_FLAGS} -Wno-cpp )
+diff --git a/projects/rocfft/clients/samples/multi_gpu/CMakeLists.txt b/projects/rocfft/clients/samples/multi_gpu/CMakeLists.txt
+index 44660e2bba..f4b1b2722c 100644
+--- a/projects/rocfft/clients/samples/multi_gpu/CMakeLists.txt
++++ b/projects/rocfft/clients/samples/multi_gpu/CMakeLists.txt
+@@ -79,6 +79,7 @@ foreach( sample ${sample_list} )
+       PRIVATE
+       hip::hiprand
+     )
++    target_compile_definitions( ${sample} PRIVATE USE_HIPRAND )
+   endif()
+ 
+   target_compile_options( ${sample} PRIVATE ${WARNING_FLAGS} -Wno-cpp )
+diff --git a/projects/rocfft/clients/samples/rocfft/CMakeLists.txt b/projects/rocfft/clients/samples/rocfft/CMakeLists.txt
+index 39944b4654..01d47d687c 100644
+--- a/projects/rocfft/clients/samples/rocfft/CMakeLists.txt
++++ b/projects/rocfft/clients/samples/rocfft/CMakeLists.txt
+@@ -80,6 +80,7 @@ foreach( sample ${sample_list} )
+       PRIVATE
+       hip::hiprand
+       )
++    target_compile_definitions( ${sample} PRIVATE USE_HIPRAND )
+   endif()
+ 
+   target_compile_options( ${sample} PRIVATE ${WARNING_FLAGS} -Wno-cpp )
+diff --git a/projects/rocfft/clients/tests/CMakeLists.txt b/projects/rocfft/clients/tests/CMakeLists.txt
+index efd406d5ac..872512ba2b 100644
+--- a/projects/rocfft/clients/tests/CMakeLists.txt
++++ b/projects/rocfft/clients/tests/CMakeLists.txt
+@@ -259,6 +259,7 @@ if ( USE_HIPRAND )
+   PRIVATE
+   hip::hiprand
+   )
++  target_compile_definitions( rocfft-test PRIVATE USE_HIPRAND )
+ endif()
+ 
+ if( ROCFFT_MPI_ENABLE )
+-- 
+2.47.1.windows.2
+
