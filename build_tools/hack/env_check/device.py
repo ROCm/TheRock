@@ -211,12 +211,16 @@ class SystemInfo:
                     )
 
                     if _GPU_VRAM == None:
-                        _GPU_VRAM = get_regedit(
+                        gpu_vram = get_regedit(
                             "HKLM",
                             _GPU_REG_KEY_ALTERNATIVE,
                             "HardwareInformation.qwMemorySize",
                         )
-                        print("REMOVE ME AFTER TESTING: GPU VRAM found in alternative")
+                        print(
+                            "REMOVE ME AFTER TESTING: GPU VRAM found in alternative",
+                            gpu_vram,
+                        )
+                        _GPU_VRAM = gpu_vram
 
                     if _GPU_VRAM == None:
                         gpu_status_list.append((i, f"{_GPU_CORE_NAME}", None))
