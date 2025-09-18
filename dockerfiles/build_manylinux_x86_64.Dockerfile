@@ -68,7 +68,6 @@ RUN yum install -y epel-release && \
       patchelf \
       vim-common \
       git-lfs \
-      wget \
       m4 \
       flex \
       libevent-devel \

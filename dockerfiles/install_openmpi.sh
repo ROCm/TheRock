@@ -9,7 +9,7 @@ builddir="/tmp/build-openmpi"
 mkdir -p "$builddir"
 cd "$builddir"
 
-wget "https://download.open-mpi.org/release/open-mpi/v${OMPI_VER%.*}/openmpi-${OMPI_VER}.tar.gz"
+curl "https://download.open-mpi.org/release/open-mpi/v${OMPI_VER%.*}/openmpi-${OMPI_VER}.tar.gz" -o openmpi-${OMPI_VER}.tar.gz
 tar xzf "openmpi-${OMPI_VER}.tar.gz"
 cd "openmpi-${OMPI_VER}"
 
