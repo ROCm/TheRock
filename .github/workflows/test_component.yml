@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 jobs:
-  test_components:
+  test_component:
     name: 'Test ${{ fromJSON(inputs.component).job_name }} (shard ${{ matrix.shard }} / ${{ fromJSON(inputs.component).total_shards }})'
     runs-on: ${{ inputs.test_runs_on }}
     container:
