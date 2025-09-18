@@ -132,7 +132,6 @@ def run():
     logging.info(f"Selecting projects: {project_to_test}")
 
     output_matrix = []
-    shard_arr_matrix = []
     for key in test_matrix:
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
         if platform in test_matrix[key]["platform"] and (
@@ -143,13 +142,12 @@ def run():
             job_config_data = test_matrix[key]
             # For the GitHub Action matrix, we construct array of gtest shards
             # For display purposes, we add "i + 1". During the actual test sharding in `fetch_test_configurations.py`, this will become 0th index
-            shard_arr_matrix.append([i + 1 for i in range(job_config_data["total_shards"])])
+            job_config_data['shard_arr'] = [i + 1 for i in range(job_config_data["total_shards"])]
             output_matrix.append(job_config_data)
 
     gha_set_output({
         "components": json.dumps(output_matrix), 
         "platform": platform,
-        "shard_arr": json.dumps(shard_arr_matrix)
     })
 
 
