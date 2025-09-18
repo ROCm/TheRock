@@ -100,20 +100,27 @@ jobs:
 
       - name: Report
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          echo "Full SDK du:"
-          echo "------------"
-          du -h -d 1 build/dist/rocm
-          echo "Artifact Archives:"
-          echo "------------------"
-          ls -lh build/artifacts/*.tar.xz
-          echo "Artifacts:"
-          echo "----------"
-          du -h -d 1 build/artifacts
-          echo "CCache Stats:"
-          echo "-------------"
-          ccache -s -v
-          tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+          if [ -d "./build" ]; then
+            echo "Full SDK du:"
+            echo "------------"
+            du -h -d 1 build/dist/rocm
+            echo "Artifact Archives:"
+            echo "------------------"
+            ls -lh build/artifacts/*.tar.xz
+            echo "Artifacts:"
+            echo "----------"
+            du -h -d 1 build/artifacts
+            echo "CCache Stats:"
+            echo "-------------"
+            ccache -s -v
+            tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+          else
+            echo "[ERROR] Build directory ./build does not exist. Skipping report!"
+            echo "        This should only happen if the CI is cancelled before the build step."
+            exit 1
+          fi
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}

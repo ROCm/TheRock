@@ -218,13 +218,20 @@ jobs:
 
       - name: Build report
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          echo "Build dir:"
-          echo "------------"
-          ls -lh "${{ env.BUILD_DIR }}"
-          echo "CCache Stats:"
-          echo "-------------"
-          ccache -s
+          if [ -d "${{ env.BUILD_DIR }}" ]; then
+            echo "Build dir:"
+            echo "------------"
+            ls -lh "${{ env.BUILD_DIR }}"
+            echo "CCache Stats:"
+            echo "-------------"
+            ccache -s
+          else
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
+            echo "        This should only happen if the CI is cancelled before the build step."
+            exit 1  # Stop the CI as build did not happen
+          fi
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}

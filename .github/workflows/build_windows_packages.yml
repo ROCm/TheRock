@@ -122,19 +122,26 @@ jobs:
 
       - name: Report
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          echo "Build dir:"
-          echo "------------"
-          ls -lh "${{ env.BUILD_DIR }}"
-          echo "Artifact Archives:"
-          echo "------------------"
-          ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
-          echo "Artifacts:"
-          echo "----------"
-          du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
-          echo "CCache Stats:"
-          echo "-------------"
-          ccache -s
+          if [ -d "${{ env.BUILD_DIR }}" ]; then
+            echo "Build dir:"
+            echo "------------"
+            ls -lh "${{ env.BUILD_DIR }}"
+            echo "Artifact Archives:"
+            echo "------------------"
+            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
+            echo "Artifacts:"
+            echo "----------"
+            du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
+            echo "CCache Stats:"
+            echo "-------------"
+            ccache -s
+          else
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
+            echo "        This should only happen if the CI is cancelled before the build step."
+            exit 1
+          fi
 
       - name: "Build size report"
         if: always()
