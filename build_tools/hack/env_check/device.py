@@ -197,6 +197,11 @@ class SystemInfo:
                     r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
                     + f"\\000{i}\\"
                 )
+                _GPU_REG_KEY_ALTERNATIVE = str(
+                    r"SYSTEM\CurrentControlSet\ControlSet001\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+                    + f"\\000{i}\\"
+                )
+
                 _GPU_CORE_NAME = RepoInfo.amdgpu_llvm_target(
                     get_regedit("HKLM", _GPU_REG_KEY, "DriverDesc")
                 )
@@ -204,9 +209,21 @@ class SystemInfo:
                     _GPU_VRAM = get_regedit(
                         "HKLM", _GPU_REG_KEY, "HardwareInformation.qwMemorySize"
                     )
-                    gpu_status_list.append(
-                        (i, f"{_GPU_CORE_NAME}", float(_GPU_VRAM / (1024**3)))
-                    )
+
+                    if _GPU_VRAM == None:
+                        _GPU_VRAM = get_regedit(
+                            "HKLM",
+                            _GPU_REG_KEY_ALTERNATIVE,
+                            "HardwareInformation.qwMemorySize",
+                        )
+                        print("REMOVE ME AFTER TESTING: GPU VRAM found in alternative")
+
+                    if _GPU_VRAM == None:
+                        gpu_status_list.append((i, f"{_GPU_CORE_NAME}", None))
+                    else:
+                        gpu_status_list.append(
+                            (i, f"{_GPU_CORE_NAME}", float(_GPU_VRAM / (1024**3)))
+                        )
             return gpu_status_list
         else:
             return None
@@ -485,7 +502,10 @@ class SystemInfo:
             _gpulist = ""
             for _gpu_info in self._device_gpu_list:
                 _gpu_num, _gpu_name, _gpu_vram = _gpu_info
-                _gpulist += f"""GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)
+                if _gpu_vram == None:
+                    _gpulist += f"GPU {_gpu_num}: \t{_gpu_name} (<Unknown amount> VRAM)"
+                else:
+                    _gpulist += f"""GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)
     """
             return _gpulist
 
