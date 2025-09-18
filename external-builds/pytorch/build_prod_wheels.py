@@ -569,23 +569,21 @@ def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
     # multiple choices for where to source an implementation, we handle it here.
     #
     # If we wanted to switch to Intel OpenMP, we could:
-    #   1. Install Intel OpenMP (and MKL?)
+    #   1. Install Intel OpenMP (and/or MKL?)
     #   2. Set CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH (?) so `FindOpenMP.cmake` finds them
     #   3. Copy `libiomp5md.dll` to torch/lib
     # Then remove the rest of the code from this function.
 
     vc_tools_redist_dir = os.environ.get("VCToolsRedistDir", "")
     if not vc_tools_redist_dir:
-        print("Warning: VCToolsRedistDir not set, can't copy libomp to torch lib")
-        return
+        raise RuntimeError("VCToolsRedistDir not set, can't copy libomp to torch lib")
 
     omp_name = "libomp140.x86_64.dll"
     dll_paths = sorted(Path(vc_tools_redist_dir).rglob(omp_name))
     if not dll_paths:
-        print(
-            f"Warning: did not find '{omp_name}' under '{vc_tools_redist_dir}', can't copy libomp to torch lib"
+        raise RuntimeError(
+            f"Did not find '{omp_name}' under '{vc_tools_redist_dir}', can't copy libomp to torch lib"
         )
-        return
 
     omp_path = dll_paths[0]
     target_lib = pytorch_dir / "torch" / "lib"
