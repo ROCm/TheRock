@@ -384,6 +384,8 @@ if(THEROCK_BUILD_TESTING)
   list(APPEND hipBLAS_optional_deps therock-host-blas)
 endif()
 
+# TODO: enable tests once hipBLAS configures successfully on Windows with them enabled
+# see https://github.com/ROCm/rocm-libraries/pull/809
 therock_cmake_subproject_declare(hipBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblas"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLAS"
@@ -393,8 +395,8 @@ therock_cmake_subproject_declare(hipBLAS
     -DROCM_PATH=
     -DROCM_DIR=
     "-DBUILD_WITH_SOLVER=${THEROCK_ENABLE_SOLVER}"
-    -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
-    -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
+    -DBUILD_CLIENTS_TESTS=OFF
+    -DBUILD_CLIENTS_BENCHMARKS=OFF
     -DBUILD_CLIENTS_SAMPLES=OFF
     -DLINK_BLIS=OFF
   COMPILER_TOOLCHAIN
