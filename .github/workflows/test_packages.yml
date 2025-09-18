@@ -89,7 +89,7 @@ jobs:
       fail-fast: false
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
-        shards: ${{ fromJSON(needs.configure_test_matrix.outputs.components.shard_arr) }}
+        shards: ${{ fromJSON(needs.configure_test_matrix.outputs.components).shard_arr }}
     defaults:
       run:
         shell: bash
