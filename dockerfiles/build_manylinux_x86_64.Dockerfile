@@ -74,7 +74,8 @@ RUN yum install -y epel-release && \
       hwloc-devel \
       numactl-devel \
       pkgconfig \
-      zip unzip \
+      zip \
+      unzip \
     && yum clean all && \
     rm -rf /var/cache/yum
 
