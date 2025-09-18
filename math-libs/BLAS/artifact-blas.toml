@@ -65,8 +65,8 @@ include = [
   # Clients benchmarks
   "bin/hipblaslt-bench*",
   "bin/hipblaslt-bench-*",
-  "bin/hipblaslt-sequence",
-  "bin/hipblaslt-api-overhead",
+  "bin/hipblaslt-sequence*",
+  "bin/hipblaslt-api-overhead*",
   "bin/sequence.yaml",
   # Clients tests
   "bin/hipblaslt-test*",
@@ -114,8 +114,8 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSOLVER/stage"]
 include = [
-  "bin/rocsolver-bench",
-  "bin/rocsolver-test",
+  "bin/rocsolver-bench*",
+  "bin/rocsolver-test*",
   "share/rocsolver/test/**",
 ]
 optional = true
@@ -152,12 +152,14 @@ optional = true
 optional = true
 include = [
   "lib/rocsparse/rocsparseio-info*",
+  "bin/rocsparseio-info.exe",
 ]
 [components.run."math-libs/BLAS/rocSPARSE/stage"]
 optional = true
 include = [
   "bin/rocsparse_mtx2csr",
   "lib/rocsparse/rocsparseio-convert",
+  "bin/rocsparseio-convert.exe",
 ]
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
