@@ -14,7 +14,7 @@ on:
         type: string
       component:
         type: string
-        
+
 
 permissions:
   contents: read

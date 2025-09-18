@@ -67,9 +67,4 @@ gtest_final_filter_cmd = (
 
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", gtest_final_filter_cmd]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-    env=envion_vars
-)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)

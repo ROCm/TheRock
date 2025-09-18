@@ -19,7 +19,9 @@ envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
-envion_vars["HIPSPARSE_CLIENTS_MATRICES_DIR"] = f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
+envion_vars[
+    "HIPSPARSE_CLIENTS_MATRICES_DIR"
+] = f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
 
 cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
