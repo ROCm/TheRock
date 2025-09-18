@@ -51,7 +51,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
     CMAKE_ARGS
-      -DHIP_PLATFORM=amd
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     RUNTIME_DEPS
@@ -88,7 +87,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       # Must build with the HIP compiler.
       amd-hip
     CMAKE_ARGS
-      -DHIP_PLATFORM=amd
     INTERFACE_INCLUDE_DIRS
       # All old clients of roctx64 expect to just be able to find its include
       # with no further qualification. Bad design, but also deprecated, so meh.
