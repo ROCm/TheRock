@@ -1,10 +1,15 @@
 from __future__ import annotations
 from typing import Literal, Optional, Union, Tuple
 import subprocess
+import sys
+import io
+import platform
+
+# Needed to be able to print the AMD logo (RepoInfo.__logo__())
+if platform.system() == "Windows":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 # Define Color string print.
-
-
 def cstring(
     msg: Union[str],
     color: Union[
