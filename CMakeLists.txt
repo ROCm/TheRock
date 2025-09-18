@@ -401,8 +401,6 @@ endif()
 # External project setup
 ################################################################################
 
-add_subdirectory(build_tools)
-
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
 add_subdirectory(third-party)

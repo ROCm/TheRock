@@ -110,6 +110,10 @@ jobs:
           echo "Git version: $(git --version)"
           echo "Logical Processors available: $(nproc --all)"
 
+      - name: Test build_tools
+        run: |
+          python -m pytest build_tools/tests build_tools/github_actions/tests
+
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache

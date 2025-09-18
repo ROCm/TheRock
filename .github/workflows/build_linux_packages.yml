@@ -90,6 +90,10 @@ jobs:
           echo "Git version: $(git --version)"
           echo "Logical Processors available: $(nproc --all)"
 
+      - name: Test build_tools
+        run: |
+          python -m pytest build_tools/tests build_tools/github_actions/tests
+
       - name: Fetch sources
         timeout-minutes: 30
         run: |
