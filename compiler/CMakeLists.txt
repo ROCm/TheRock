@@ -129,6 +129,27 @@ if(THEROCK_ENABLE_COMPILER)
   )
 
   ##############################################################################
+  # comgr_stub
+  # Generates a stub that is used for dynamically loading amd-comgr in an
+  # appropriately private namespace. Since all uses of LLVM are hidden behind
+  # the comgr interface, this allows us to completely hide our LLVM and make it
+  # impossible to conflict.
+  ##############################################################################
+
+  therock_cmake_subproject_declare(amd-comgr-stub
+    USE_DIST_AMDGPU_TARGETS
+    NO_INSTALL_RPATH
+    EXTERNAL_SOURCE_DIR "amd-comgr-stub"
+    #BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
+    RUNTIME_DEPS
+      amd-comgr
+  )
+  therock_cmake_subproject_glob_c_sources(amd-comgr-stub SUBDIRS src)
+  therock_cmake_subproject_activate(amd-comgr-stub)
+
+  ##############################################################################
   # hipcc
   # Provides hipcc and hipconfig
   ##############################################################################
