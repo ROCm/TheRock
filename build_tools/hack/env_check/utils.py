@@ -108,47 +108,77 @@ class RepoInfo:
 
     @staticmethod
     def head():
-        _head = subprocess.run(
+        proc_head = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
-        ).stdout.strip()
+        )
+
+        # TODO TODO REMOVE
+        print(proc_head.stderr, proc_head.stdout)
+
+        _head = proc_head.stdout.strip()
         return _head
 
     @staticmethod
     def repo():
 
-        finder = subprocess.run(
+        proc_finder = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
-        ).stdout.strip()
+        )
+
+        # TODO TODO REMOVE
+        print(proc_finder.stderr, proc_finder.stdout)
+        finder = proc_finder.stdout.strip()
         return finder
 
     @staticmethod
-    def __logo__():
+    def __logo__(monospace=False):
 
         """
         ![image](https://upload.wikimedia.org/wikipedia/commons/6/6a/AMD_Logo.png)
         # Advanced Micro Devices Inc.
         """
-
-        print(
-            f"""
-
-
+        if monospace == True:
+            print(
+                f"""
 
 
-    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
-    {cstring("\t\t\t      ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
-    {cstring("\t\t\t        ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
-    {cstring("\t\t\t                    ◼ ◼ ◼","err")}
-    {cstring("\t\t\t        ◼           ◼ ◼ ◼","err")}\t  Build Environment diagnosis script
-    {cstring("\t\t\t      ◼ ◼           ◼ ◼ ◼","err")}
-    {cstring("\t\t\t    ◼ ◼ ◼           ◼ ◼ ◼","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
-    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼   ◼ ◼ ◼","err")}
-    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼       ◼ ◼","err")}
-    {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼           ◼","err")}
 
 
-    """
-        )
+        {cstring("\t\t\t    # # # # # # # # # # #","err")}
+        {cstring("\t\t\t      # # # # # # # # # #","err")}
+        {cstring("\t\t\t        # # # # # # # # #","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
+        {cstring("\t\t\t                    # # #","err")}
+        {cstring("\t\t\t        #           # # #","err")}\t  Build Environment diagnosis script
+        {cstring("\t\t\t      # #           # # #","err")}
+        {cstring("\t\t\t    # # #           # # #","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
+        {cstring("\t\t\t    # # # # # # #   # # #","err")}
+        {cstring("\t\t\t    # # # # # #       # #","err")}
+        {cstring("\t\t\t    # # # # #           #","err")}
+
+
+        """
+            )
+        else:
+            print(
+                f"""
+
+
+
+
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
+        {cstring("\t\t\t      ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
+        {cstring("\t\t\t        ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
+        {cstring("\t\t\t                       ◼ ◼ ◼","err")}
+        {cstring("\t\t\t        ◼             ◼ ◼ ◼","err")}\t  Build Environment diagnosis script
+        {cstring("\t\t\t      ◼ ◼            ◼ ◼ ◼","err")}
+        {cstring("\t\t\t    ◼ ◼ ◼           ◼ ◼ ◼","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼  ◼ ◼ ◼","err")}
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼      ◼ ◼","err")}
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼          ◼","err")}
+
+
+        """
+            )
 
     @staticmethod
     def amdgpu_llvm_target(GPU):

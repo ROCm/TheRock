@@ -18,18 +18,34 @@ from hack.env_check.device import SystemInfo
 from hack.env_check.check_tools import *
 from hack.env_check import check_therock
 import subprocess
-from tabulate import tabulate
+
+
+def printFilesystemUsage():
+    print("       FILE SYSTEM:", end="")
+    proc_ccache = subprocess.run(["df", "-h"], capture_output=True, text=True)
+    proc_ccache.check_returncode()
+
+    # prettify formatting to match rest of output
+    for idx, line in enumerate(proc_ccache.stdout.split("\n")):
+        if idx == 0:
+            print(" " + line)
+        else:
+            print("                    " + line)
 
 
 def printCaccheConfig():
+    print("     CCACHE CONFIG:", end="")
     try:
+        configpath = os.getenv("CCACHE_CONFIGPATH")
+        if configpath == None:
+            print(cstring(" Env $CCACHE_CONFIGPATH not defined!", "warn"))
+            return
         proc_ccache = subprocess.run(
-            ["cat", "$CCACHE_CONFIGPATH"], capture_output=True, text=True
+            ["echo", configpath], capture_output=True, text=True
         )
         proc_ccache.check_returncode()
 
         # prettify formatting to match rest of output
-        print("        CCACHE CONFIG:", end="")
         for idx, line in enumerate(proc_ccache.stdout.split("\n")):
             if idx == 0:
                 print("     " + line)
@@ -37,6 +53,7 @@ def printCaccheConfig():
                 print("                    " + line)
 
     except subprocess.CalledProcessError:
+        print(proc_ccache.stderr)
         pass
 
 
@@ -66,21 +83,11 @@ def printPythonList():
         )
         proc_python.check_returncode()
 
-        rows = []
-        row = []
-
         for idx, line in enumerate(proc_python.stdout.split("\n")):
-            row.append(line)
-
-            if (idx + 1) % 3 == 0:
-                rows.append(row)
-                row = []
-
-        if len(row) > 0:
-            rows.append(row)
-
-        for line in tabulate(rows).split("\n"):
-            print("\t\t" + line)
+            if idx == 0:
+                print("\t\t\t\t\t\t  " + line)
+            else:
+                print("\t\t\t\t\t\t  " + line)
 
     except subprocess.CalledProcessError:
         print("ERROR when listing python packages!")
@@ -89,13 +96,15 @@ def printPythonList():
 def main():
     therock_detect_start = time.perf_counter()
     device = SystemInfo()
-    RepoInfo.__logo__()
+    RepoInfo.__logo__(monospace=True)
     build_type = cstring(check_therock.build_project, "hint")
 
     device.summary
 
-    printCaccheConfig()
+    printFilesystemUsage()
+
     printCcacheStats()
+    printCaccheConfig()
     print(
         f"""
         ===================\t\tStart detect compoments on: {build_type}\t\t===================
