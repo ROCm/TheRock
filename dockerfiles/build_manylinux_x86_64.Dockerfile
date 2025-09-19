@@ -79,7 +79,7 @@ RUN ./install_dvc.sh "${DVC_VERSION}" && \
     yum install -y ./dvc.rpm && \
     rm -rf /install-dvc && \
     which dvc && \
-    dvc --version || true
+    dvc --version
 
 ######## Enable GCC Toolset and verify ########
 # This is a subset of what is typically sourced in the gcc-toolset enable
