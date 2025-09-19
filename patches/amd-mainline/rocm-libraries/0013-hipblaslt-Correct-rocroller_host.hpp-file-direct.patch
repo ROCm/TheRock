@@ -1,0 +1,21 @@
+From 97d83cf16b972a606b95e35b61eb21b1fc87782b Mon Sep 17 00:00:00 2001
+From: geomin12 <geomin12@amd.com>
+Date: Thu, 18 Sep 2025 23:58:42 +0000
+Subject: [PATCH] [hipblaslt] Correct rocroller_host.hpp file direct
+
+---
+ .../rocblaslt/src/include/rocblaslt/rocroller_host.hpp          | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/include/rocblaslt/rocroller_host.hpp b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/include/rocblaslt/rocroller_host.hpp
+index 175b18e1dd..bd15f64344 120000
+--- a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/include/rocblaslt/rocroller_host.hpp
++++ b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/include/rocblaslt/rocroller_host.hpp
+@@ -1 +1 @@
+-../rocroller_host.hpp
+\ No newline at end of file
++../../rocroller/include/rocroller_host.hpp
+\ No newline at end of file
+-- 
+2.43.0
+

@@ -1,0 +1,29 @@
+From 59a6171c51ad61936f695b07b8fb0f3f87004e31 Mon Sep 17 00:00:00 2001
+From: David Dixon <david.dixon@amd.com>
+Date: Thu, 18 Sep 2025 22:58:47 +0000
+Subject: [PATCH] Use workgroupMappingDim in rocroller_host
+
+The api for command solution changed so
+use the workgroupMappingDim rather than workgroupMapping
+
+Co-authored-by: Marius Brehler <marius.brehler@amd.com>
+---
+ .../library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp
+index 506847172b..c2b7ad900b 100644
+--- a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp
++++ b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp
+@@ -449,7 +449,7 @@ std::shared_ptr<GemmKernel> genGemmKernel(std::shared_ptr<SolutionParameters> ge
+             "Only 0 (M) or 1 (N) are supported dimensions for workgroup mapping.",
+             ShowValue(dim));
+ 
+-        params->workgroupMapping = {dim, nullptr};
++        params->workgroupMappingDim = dim;
+     }
+ 
+     if(gemm->workgroupRemapXCC)
+-- 
+2.43.0
+
