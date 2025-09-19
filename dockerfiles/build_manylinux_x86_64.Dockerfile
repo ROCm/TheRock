@@ -52,12 +52,6 @@ ENV GOOGLE_TEST_VERSION="1.16.0"
 COPY install_googletest.sh ./
 RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googletest
 
-######## DVC ######
-WORKDIR /install-dvc
-ENV DVC_VERSION="3.62.0"
-COPY install_dvc.sh ./
-RUN ./install_dvc.sh "${DVC_VERSION}" && rm -rf /install-dvc
-
 ######## Yum Packages #######
 # We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest
 # manylinux containers use gcc-toolset-14 or later, which is not yet compatible
@@ -76,6 +70,16 @@ RUN yum install -y epel-release && \
       git-lfs && \
     yum clean all && \
     rm -rf /var/cache/yum
+
+######## DVC via yum ######
+WORKDIR /install-dvc
+ENV DVC_VERSION="3.62.0"
+COPY install_dvc.sh ./
+RUN ./install_dvc.sh "${DVC_VERSION}" && \
+    yum install -y ./dvc.rpm && \
+    rm -rf /install-dvc && \
+    which dvc && \
+    dvc --version || true
 
 ######## Enable GCC Toolset and verify ########
 # This is a subset of what is typically sourced in the gcc-toolset enable

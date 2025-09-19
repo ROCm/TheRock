@@ -10,9 +10,3 @@ DVC_VERSION="$1"
 curl --silent --fail --show-error --location \
     "https://dvc.org/download/linux-rpm/dvc-${DVC_VERSION}" \
     --output dvc.rpm
-
-if [ "$EUID" -ne 0 ]; then
-    sudo yum install dvc.rpm
-else
-    yum install dvc.rpm
-fi
