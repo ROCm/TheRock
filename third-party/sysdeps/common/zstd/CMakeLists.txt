@@ -86,6 +86,8 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}"
+  COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"
       "-S${SOURCE_DIR}/build/cmake"
