@@ -205,15 +205,11 @@ class SystemInfo:
                         "HKLM", _GPU_REG_KEY, "HardwareInformation.qwMemorySize"
                     )
 
-                    if _GPU_CORE_NAME == None:
-                        gpu_status_list.append((i, f"{_GPU_CORE_NAME}", None))
+                    if _GPU_VRAM == None:
+                        gpu_status_list.append((i, f"{_GPU_VRAM}", None))
                     else:
                         gpu_status_list.append(
-                            (
-                                i,
-                                f"{_GPU_CORE_NAME}",
-                                float(_GPU_CORE_NAME / (1024**3)),
-                            )
+                            (i, f"{_GPU_CORE_NAME}", float(_GPU_VRAM / (1024**3)))
                         )
             return gpu_status_list
         else:
