@@ -48,7 +48,7 @@ def printCaccheConfig():
         # prettify formatting to match rest of output
         for idx, line in enumerate(proc_ccache.stdout.split("\n")):
             if idx == 0:
-                print("     " + line)
+                print(" " + line)
             else:
                 print("                    " + line)
 
