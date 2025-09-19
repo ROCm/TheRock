@@ -5,9 +5,9 @@
 These scripts are forked from https://github.com/pytorch/test-infra/tree/main/s3_management.
 
 * [`update_dependencies.py`](./update_dependencies.py) mirrors dependency
-  packages from pypi to our S3 buckets
+  packages from PyPI to our S3 buckets
 * [`manage.py`](./manage.py) generates
-  [pep 503](https://peps.python.org/pep-0503/)-compliant index.html files for
+  [PEP 503](https://peps.python.org/pep-0503/)-compliant index.html files for
   each subdirectory in our S3 buckets, including packages we build
   (e.g. `rocm`, `torch`) and dependencies (uploaded by `update_dependencies.py`)
 
@@ -48,7 +48,7 @@ still need to be run manually by developers under certain conditions.
 
 You will need credentials to be able to upload to our S3 buckets.
 
-The manual way to do this is to create a user account in our S3 project and
+The manual way to do this is to create a user account in our IAM and
 grant it these policies:
 
 * `therock-dev-releases-access`
@@ -117,7 +117,7 @@ Finally, repeat those steps for the nightly bucket:
 1. Visit the URL to check that the index pages look as expected and include the
   new dep. For example: https://rocm.nightlies.amd.com/v2/gfx120X-all/.
 
-1. If no longer needed, revoke your access to `therock-nightly-releases-access`
+1. If no longer needed, revoke your access to `therock-nightly-releases-access`.
 
 ### If something goes wrong
 
