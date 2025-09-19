@@ -42,7 +42,7 @@ function Wait-Process-Filter ([String]$RegexStr, [int] $Tries, [int] $Seconds = 
             Write-Host "    > Waiting for $ps_list_len processes..."
             $ps_list | % {
                 Write-Host "      $(Get-Process-Info $_)"
-            } 
+            }
         } else {
             Write-Host "    > Found no processes after waiting $(($i+1) * $Seconds) second(s)"
             return $true;
