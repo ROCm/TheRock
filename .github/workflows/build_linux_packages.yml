@@ -57,6 +57,12 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      # safe.directory must be done before Runner Health Status
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Setup ccache
@@ -77,8 +83,6 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: |
-          git config --global --add safe.directory $PWD
-          git config fetch.parallel 10
           ./build_tools/fetch_sources.py --jobs 12
 
       - name: Configure Projects

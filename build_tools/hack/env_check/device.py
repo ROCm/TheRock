@@ -197,31 +197,23 @@ class SystemInfo:
                     r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
                     + f"\\000{i}\\"
                 )
-                _GPU_REG_KEY_ALTERNATIVE = str(
-                    r"SYSTEM\CurrentControlSet\ControlSet001\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
-                    + f"\\000{i}\\"
-                )
-
                 _GPU_CORE_NAME = RepoInfo.amdgpu_llvm_target(
                     get_regedit("HKLM", _GPU_REG_KEY, "DriverDesc")
                 )
                 if _GPU_CORE_NAME != "Microsoft Basic Display Adapter":
-                    gpu_vram = get_regedit(
+                    _GPU_VRAM = get_regedit(
                         "HKLM", _GPU_REG_KEY, "HardwareInformation.qwMemorySize"
                     )
 
-                    if gpu_vram == None:
-                        gpu_vram = get_regedit(
-                            "HKLM",
-                            _GPU_REG_KEY_ALTERNATIVE,
-                            "HardwareInformation.qwMemorySize",
-                        )
-
-                    if gpu_vram == None:
+                    if _GPU_CORE_NAME == None:
                         gpu_status_list.append((i, f"{_GPU_CORE_NAME}", None))
                     else:
                         gpu_status_list.append(
-                            (i, f"{_GPU_CORE_NAME}", float(gpu_vram / (1024**3)))
+                            (
+                                i,
+                                f"{_GPU_CORE_NAME}",
+                                float(_GPU_CORE_NAME / (1024**3)),
+                            )
                         )
             return gpu_status_list
         else:

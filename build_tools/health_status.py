@@ -41,7 +41,7 @@ def printCaccheConfig():
             print(cstring(" Env $CCACHE_CONFIGPATH not defined!", "warn"))
             return
         proc_ccache = subprocess.run(
-            ["echo", configpath], capture_output=True, text=True
+            ["cat", configpath], capture_output=True, text=True
         )
         proc_ccache.check_returncode()
 

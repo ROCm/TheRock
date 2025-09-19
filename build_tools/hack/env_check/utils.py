@@ -108,26 +108,17 @@ class RepoInfo:
 
     @staticmethod
     def head():
-        proc_head = subprocess.run(
+        _head = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
-        )
-
-        # TODO TODO REMOVE
-        print(proc_head.stderr, proc_head.stdout)
-
-        _head = proc_head.stdout.strip()
+        ).stdout.strip()
         return _head
 
     @staticmethod
     def repo():
 
-        proc_finder = subprocess.run(
+        finder = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
-        )
-
-        # TODO TODO REMOVE
-        print(proc_finder.stderr, proc_finder.stdout)
-        finder = proc_finder.stdout.strip()
+        ).stdout.strip()
         return finder
 
     @staticmethod
