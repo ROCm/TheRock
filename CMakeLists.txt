@@ -132,6 +132,15 @@ block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_
 endblock()
 
 ################################################################################
+# Feature flags
+# Project wide flags for controlling the build system.
+################################################################################
+cmake_dependent_option(
+  THEROCK_FLAG_COMGR_DELAY_LOAD
+  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
+  OFF "LINUX" OFF)
+
+################################################################################
 # Debug Options
 ################################################################################
 

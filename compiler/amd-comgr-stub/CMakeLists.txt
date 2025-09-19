@@ -7,8 +7,11 @@ project(amd-comgr-stub
   LANGUAGES C CXX ASM
   VERSION 1.0)
 
+include(CMakePackageConfigHelpers)
+
 set(AMD_COMGR_STAGE_PATH "" CACHE PATH "Path to the dist directory containing the amd-comgr project")
 set(IMPLIB_SCRIPT "${THEROCK_SOURCE_DIR}/build_tools/third_party/implib/implib-gen.py" CACHE PATH "Path to implib-gen.py")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(Threads REQUIRED)
 find_package(Python3 COMPONENTS Interpreter)
@@ -46,7 +49,8 @@ add_library(
 )
 set_target_properties(amd_comgr PROPERTIES OUTPUT_NAME "amd_comgr_stub")
 target_include_directories(amd_comgr PUBLIC
-  "$<BUILD_INTERFACE:${AMD_COMGR_STAGE_PATH}>/include"
+  "$<BUILD_INTERFACE:${AMD_COMGR_STAGE_PATH}/include>"
+  "$<INSTALL_INTERFACE:include>"
 )
 target_link_libraries(amd_comgr PRIVATE
   amd_comgr_loader
@@ -73,4 +77,32 @@ set_target_properties(test_amd_comgr_stub PROPERTIES INSTALL_RPATH "$ORIGIN/../l
 target_link_libraries(test_amd_comgr_stub PRIVATE amd_comgr)
 
 # Install and exports.
-install(TARGETS amd_comgr amd_comgr_loader test_amd_comgr_stub)
+install(
+  TARGETS amd_comgr amd_comgr_loader test_amd_comgr_stub
+  EXPORT amd_comgr_targets
+)
+install(
+  EXPORT amd_comgr_targets
+  FILE amd_comgr-targets.cmake
+  DESTINATION "lib/cmake/amd_comgr_stub"
+)
+configure_package_config_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/config.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/amd_comgr-config.cmake"
+  INSTALL_DESTINATION "lib/cmake/amd_comgr_stub"
+  NO_SET_AND_CHECK_MACRO
+  NO_CHECK_REQUIRED_COMPONENTS_MACRO
+)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/amd_comgr-config-version.cmake"
+  # We advertise a very high version number so that we always satisfy version
+  # checks, given that this is a shared library that is a drop-in for the
+  # in-tree comgr.
+  VERSION "999.99"
+  COMPATIBILITY AnyNewerVersion
+)
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/amd_comgr-config.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/amd_comgr-config-version.cmake"
+  DESTINATION lib/cmake/amd_comgr_stub
+)
