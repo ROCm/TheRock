@@ -74,10 +74,10 @@ python build_prod_wheels.py build \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
-python build_prod_wheels.py build \
-    --output-dir %HOME%/tmp/pyout \
-    --pytorch-dir C:/b/pytorch \
-    --pytorch-audio-dir C:/b/audio \
+python build_prod_wheels.py build ^
+    --output-dir %HOME%/tmp/pyout ^
+    --pytorch-dir C:/b/pytorch ^
+    --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision
 ```
 
@@ -553,6 +553,44 @@ def do_build_triton(
     return f"{triton_wheel_name}=={installed_triton_version}"
 
 
+def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
+    # When USE_OPENMP is set (it is by default), torch_cpu.dll depends on OpenMP.
+    #
+    # Typically implementations of OpenMP are:
+    #   * Intel OpenMP, `libiomp`, which PyTorch upstream uses
+    #   * MSVC OpenMP, `libomp140`, which we'll use here since we have MSVC already
+    #   * (?) LLVM OpenMP (https://openmp.llvm.org/)?
+    #
+    # Torch's CMake build selects which OpenMP to use in `FindOpenMP.cmake`,
+    # then the relevant .dll files must be copied into the torch/lib/ folder or
+    # torch will fail to initialize. This feels like something that could be
+    # handled upstream as part of the centralized setup.py and/or CMake build
+    # processes, but given the varied scripts and build workflows upstream and
+    # multiple choices for where to source an implementation, we handle it here.
+    #
+    # If we wanted to switch to Intel OpenMP, we could:
+    #   1. Install Intel OpenMP (and/or MKL?)
+    #   2. Set CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH (?) so `FindOpenMP.cmake` finds them
+    #   3. Copy `libiomp5md.dll` to torch/lib
+    # Then remove the rest of the code from this function.
+
+    vc_tools_redist_dir = os.environ.get("VCToolsRedistDir", "")
+    if not vc_tools_redist_dir:
+        raise RuntimeError("VCToolsRedistDir not set, can't copy libomp to torch lib")
+
+    omp_name = "libomp140.x86_64.dll"
+    dll_paths = sorted(Path(vc_tools_redist_dir).rglob(omp_name))
+    if not dll_paths:
+        raise RuntimeError(
+            f"Did not find '{omp_name}' under '{vc_tools_redist_dir}', can't copy libomp to torch lib"
+        )
+
+    omp_path = dll_paths[0]
+    target_lib = pytorch_dir / "torch" / "lib"
+    print(f"Copying libomp from '{omp_path}' to '{target_lib}'")
+    shutil.copy2(omp_path, target_lib)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -569,6 +607,7 @@ def do_build_pytorch(
     )
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
+    env["USE_MPI"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -586,8 +625,10 @@ def do_build_pytorch(
     # Add the _rocm_init.py file.
     (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
 
-    # Windows-specific options.
+    # Windows-specific settings.
     if is_windows:
+        copy_msvc_libomp_to_torch_lib(pytorch_dir)
+
         use_flash_attention = (
             "1" if args.enable_pytorch_flash_attention_windows else "0"
         )

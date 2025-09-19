@@ -90,6 +90,6 @@ jobs:
           pytest tests/ --log-cli-level=info --timeout=60
 
       - name: Post-job cleanup processes on Windows
-        if: ${{ runner.os == 'Windows' }}
+        if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
         run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'

@@ -96,6 +96,7 @@ def main(cl_args: list[str]):
     add_common(checkout_p)
     checkout_p.add_argument(
         "--torch-dir",
+        type=Path,
         default=THIS_DIR / "pytorch",
         help="Directory of the torch checkout",
     )

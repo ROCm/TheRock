@@ -3,6 +3,13 @@
 [components.dev."math-libs/rocFFT/stage"]
 [components.doc."math-libs/rocFFT/stage"]
 [components.lib."math-libs/rocFFT/stage"]
+include = [
+  "**/rocfft_kernel_cache.db",
+]
+[components.run."math-libs/rocFFT/stage"]
+include = [
+  "**/rocfft_rtc_helper*",
+]
 
 # hipFFT
 [components.dbg."math-libs/hipFFT/stage"]
