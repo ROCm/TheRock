@@ -291,7 +291,8 @@ if(THEROCK_ENABLE_SOLVER)
   endif()
 
   therock_cmake_subproject_declare(rocSOLVER
-      EXTERNAL_SOURCE_DIR "rocSOLVER"
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocsolver"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocSOLVER"
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
@@ -339,7 +340,8 @@ if(THEROCK_ENABLE_SOLVER)
   endif()
 
   therock_cmake_subproject_declare(hipSOLVER
-      EXTERNAL_SOURCE_DIR "hipSOLVER"
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsolver"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSOLVER"
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd

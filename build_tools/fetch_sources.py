@@ -43,8 +43,6 @@ def get_enabled_projects(args) -> list[str]:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
         projects.extend(["rocm-systems"])
-    if args.include_math_libs:
-        projects.extend(args.math_lib_projects)
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
     return projects
@@ -339,12 +337,6 @@ def main(argv):
         help="Include supported rocm-systems projects",
     )
     parser.add_argument(
-        "--include-math-libs",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="Include supported math libraries",
-    )
-    parser.add_argument(
         "--include-ml-frameworks",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -370,15 +362,6 @@ def main(argv):
             "HIPIFY",
             "llvm-project",
             "spirv-llvm-translator",
-        ],
-    )
-    parser.add_argument(
-        "--math-lib-projects",
-        nargs="+",
-        type=str,
-        default=[
-            "hipSOLVER",
-            "rocSOLVER",
         ],
     )
     parser.add_argument(

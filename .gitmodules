@@ -18,14 +18,6 @@
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
 	branch = mainline
-[submodule "hipSOLVER"]
-	path = math-libs/BLAS/hipSOLVER
-	url = https://github.com/ROCm/hipSOLVER.git
-	branch = develop
-[submodule "rocSOLVER"]
-	path = math-libs/BLAS/rocSOLVER
-	url = https://github.com/ROCm/rocSOLVER.git
-	branch = develop
 [submodule "rccl-tests"]
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
