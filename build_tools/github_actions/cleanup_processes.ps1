@@ -44,10 +44,11 @@ function Wait-Process-Filter ([String]$RegexStr, [int] $Tries, [int] $Seconds = 
                 Write-Host "      $(Get-Process-Info $_)"
             } 
         } else {
+            Write-Host "    > Found no processes after waiting $(($i+1) * $Seconds) second(s)"
             return $true;
         }
     }
-    Write-Host "[*] $ps_list_len Processes still exists"
+    Write-Host "    > Found $ps_list_len processes after waiting $($i * $Seconds) second(s)"
     return $false;
 }
 
@@ -89,10 +90,11 @@ if($ps_list_begin_len -eq 0) {
 echo "[*] Found $ps_list_begin_len running build executable(s):"
 $ps_list | % { echo "    > $($_.MainModule.FileName)"}
 
-echo "[*] Attempting to stop executable(s) forcefully with 'Stop-Process' ..."
+echo "[*] Attempting to stop executable(s) with WMI: "
 $ps_list | ForEach-Object {
+    #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
     echo "    > $(Get-Process-Info $_)"
-    Stop-Process $_ -Force
+    (Get-WmiObject win32_process -Filter "ProcessId = '$($_.id)'").Terminate() | Out-Null
 }
 $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
 
@@ -101,11 +103,11 @@ $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
 if(!$IsAllStopped) {
     $ps_list = Get-Process-Filter -RegexStr $regex_build_exe
     if($ps_list.Count -gt 0) {
-        echo "[*] Attemping to stop any remaining executable(s) with WMI: "
+        echo "[*] Attemping to stop any remaining executable(s) forcefully with 'Stop-Process':"
         $ps_list | ForEach-Object {
             #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
             echo "    > $(Get-Process-Info $_)"
-            (Get-WmiObject win32_process -Filter "ProcessId = '$($_.id)'").Terminate() | Out-Null
+            Stop-Process $_ -Force
         }
     }
     $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
