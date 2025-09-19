@@ -140,8 +140,9 @@ def run():
             job_name = test_matrix[key]["job_name"]
             logging.info(f"Including job {job_name}")
             job_config_data = test_matrix[key]
-            # For the GitHub Action matrix, we construct array of gtest shards
-            # For display purposes, we add "i + 1". During the actual test sharding in `fetch_test_configurations.py`, this will become 0th index
+            # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
+            # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
+            # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
             job_config_data["shard_arr"] = [
                 i + 1 for i in range(job_config_data["total_shards"])
             ]
