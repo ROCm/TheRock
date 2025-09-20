@@ -46,6 +46,12 @@ instructions and configurations for alternatives.
 
 ### Setup - Ubuntu (24.04)
 
+> [!TIP]
+> `dvc` is used for version control of pre-compiled MIOpen kernels.
+> `dvc` is not a hard requirement, but it does reduce compile time.
+> `snap install --classic dvc` can be used to install on Ubuntu.
+> Visit the [DVC website](https://dvc.org/doc/install/linux) for other installation methods.
+
 ```bash
 # Install Ubuntu dependencies
 sudo apt update

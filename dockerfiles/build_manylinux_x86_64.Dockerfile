@@ -79,6 +79,12 @@ RUN yum install -y epel-release && \
     && yum clean all && \
     rm -rf /var/cache/yum
 
+######## DVC via pip ######
+# dvc's rpm package includes .so dependencies built against glib 2.29
+# settling for pip install for now, but it installs modules not needed for dvc pull
+# more dvc features may be used in upcoming sequenced builds
+RUN pip install dvc[s3]==3.62.0 && \
+    which dvc && dvc --version || true
 
 ######## Enable GCC Toolset and verify ########
 # This is a subset of what is typically sourced in the gcc-toolset enable
