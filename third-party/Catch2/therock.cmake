@@ -10,7 +10,7 @@ therock_cmake_subproject_declare(therock-catch2
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
-  EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  EXTERNAL_SOURCE_DIR "${THEROCK_CURRENT_BINARY_DIR}/source"
 )
 therock_cmake_subproject_provide_package(therock-catch2 Catch2 lib/cmake)
 therock_cmake_subproject_activate(therock-catch2)

@@ -37,7 +37,7 @@ endif()
 
 therock_cmake_subproject_declare(rocm-core
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocm-core"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-core"
+  BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocm-core"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
@@ -59,7 +59,7 @@ if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion g
 
 therock_cmake_subproject_declare(rocm_smi_lib
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocm-smi-lib"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm_smi_lib"
+  BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocm_smi_lib"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
@@ -97,7 +97,7 @@ if(NOT WIN32)  # TODO(#36): Enable on Windows?
 
 therock_cmake_subproject_declare(rocprofiler-register
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-register"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-register"
+  BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocprofiler-register"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   INTERFACE_LINK_DIRS
