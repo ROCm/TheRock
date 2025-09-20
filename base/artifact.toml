@@ -23,6 +23,7 @@ include = [
 [components.doc."base/rocm-cmake/stage"]
 
 # rocm-core
+[components.dbg."base/rocm-core/stage"]
 [components.dev."base/rocm-core/stage"]
 include = "lib/rocmmod"
 [components.doc."base/rocm-core/stage"]
