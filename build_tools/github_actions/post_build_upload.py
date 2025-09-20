@@ -81,6 +81,10 @@ def create_ninja_log_archive(build_dir: Path):
     log(f"[*] Path glob: {glob_pattern_ninja}")
     found_files = list(build_dir.glob(glob_pattern_ninja))
 
+    if len(found_files) == 0:
+        print("No ninja log files found to archive... Skipping", file=sys.stderr)
+        return
+
     files_to_archive = found_files
     archive_name = log_dir / "ninja_logs.tar.gz"
     if archive_name.exists():
@@ -226,6 +230,15 @@ def upload_build_summary(args):
 
 
 def run(args):
+    if os.path.isdir(args.build_dir) == False:
+        log(
+            f"""
+[ERROR] No build directory ({str(args.build_dir)}) found. Skipping upload of log files!
+        This can be due to the CI job being cancelled before the build was started.
+            """
+        )
+        exit(1)
+
     log("Creating Ninja log archive")
     log("--------------------------")
     create_ninja_log_archive(args.build_dir)

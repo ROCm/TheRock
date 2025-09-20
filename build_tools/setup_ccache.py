@@ -24,6 +24,7 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 import argparse
 from pathlib import Path
 import sys
+import subprocess
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
@@ -114,6 +115,7 @@ def run(args: argparse.Namespace):
         dir.mkdir(parents=True, exist_ok=True)
         config_file.write_text(config_contents)
         compiler_check_file.write_text(compiler_check_script)
+
     else:
         # Check to see if updated.
         if config_file.read_text() != config_contents:
@@ -130,6 +132,21 @@ def run(args: argparse.Namespace):
                 file=sys.stderr,
             )
 
+    # Reset statistic counters
+    if args.no_reset_stats == False:
+        try:
+            proc_ccache = subprocess.run(
+                ["ccache", "--zero-stats"], capture_output=True, text=True
+            )
+            proc_ccache.check_returncode()
+
+            print(proc_ccache.stdout, end="")
+
+        except subprocess.CalledProcessError:
+            print(
+                f"ERROR! Zeroing statistic counters failed. Message: {proc_ccache.stderr}",
+                file=sys.stderr,
+            )
     # Output options.
     print(f"export CCACHE_CONFIGPATH={config_file}")
 
@@ -141,6 +158,12 @@ def main(argv: list[str]):
         type=Path,
         default=REPO_ROOT / ".ccache",
         help="Location of the .ccache directory (defaults to ../.ccache)",
+    )
+    p.add_argument(
+        "--no-reset-stats",
+        type=bool,
+        default=False,
+        help="If true, prevents zeroing the statistic counters. (default: False)",
     )
     command_group = p.add_mutually_exclusive_group()
     command_group.add_argument(

@@ -204,9 +204,13 @@ class SystemInfo:
                     _GPU_VRAM = get_regedit(
                         "HKLM", _GPU_REG_KEY, "HardwareInformation.qwMemorySize"
                     )
-                    gpu_status_list.append(
-                        (i, f"{_GPU_CORE_NAME}", float(_GPU_VRAM / (1024**3)))
-                    )
+
+                    if _GPU_VRAM == None:
+                        gpu_status_list.append((i, f"{_GPU_VRAM}", None))
+                    else:
+                        gpu_status_list.append(
+                            (i, f"{_GPU_CORE_NAME}", float(_GPU_VRAM / (1024**3)))
+                        )
             return gpu_status_list
         else:
             return None
@@ -474,7 +478,9 @@ class SystemInfo:
     # Define CPU status.
     @property
     def CPU_STATUS(self):
-        return f"{self.CPU_NAME} {self.CPU_CORE} Cores ({self.CPU_ARCH})"
+        return f"""{self.CPU_NAME} ({self.CPU_ARCH})
+                    Logical cores: {self.CPU_CORE}
+        """
 
     # Define GPU list status.
     @property
@@ -483,7 +489,10 @@ class SystemInfo:
             _gpulist = ""
             for _gpu_info in self._device_gpu_list:
                 _gpu_num, _gpu_name, _gpu_vram = _gpu_info
-                _gpulist += f"""GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)
+                if _gpu_vram == None:
+                    _gpulist += f"GPU {_gpu_num}: \t{_gpu_name}"
+                else:
+                    _gpulist += f"""GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)
     """
             return _gpulist
 
@@ -495,13 +504,13 @@ class SystemInfo:
     def MEM_STATUS(self):
         if self.is_windows:
             return f"""Total Physical Memory: {self._device_dram_stat[0]:.2f} GB
-                Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
-                Avail Virtual  Memory: {self._device_dram_stat[2]:.2f} GB
+                    Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
+                    Avail Virtual  Memory: {self._device_dram_stat[2]:.2f} GB
             """
         elif self.is_linux:
             return f"""Total Physical Memory: {self._device_dram_stat[0]:.2f} GB
-                Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
-                Avail Swap Memory: {self._device_dram_stat[2]:.2f} GB
+                    Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
+                    Avail Swap Memory: {self._device_dram_stat[2]:.2f} GB
             """
         else:
             pass
@@ -510,19 +519,19 @@ class SystemInfo:
     @property
     def DISK_STATUS(self):
         return f"""Disk Total Space: {self._device_disk_stat[2]} GB
-                Disk Avail Space: {self._device_disk_stat[4]} GB
-                Disk Used  Space: {self._device_disk_stat[3]} GB
-                Disk Usage: {self._device_disk_stat[5]} %
-                Current Repo path: {self._device_disk_stat[0]}, Disk Device: {self._device_disk_stat[1]}
+                    Disk Avail Space: {self._device_disk_stat[4]} GB
+                    Disk Used  Space: {self._device_disk_stat[3]} GB
+                    Disk Usage: {self._device_disk_stat[5]} %
+                    Current Repo path: {self._device_disk_stat[0]}, Disk Device: {self._device_disk_stat[1]}
         """
 
     @property
     def ENV_STATUS(self):
         if self.is_windows:
             return f"""Python ENV: {self.python.exe} ({self.python.ENV_TYPE})
-                Visual Studio: {self.VS20XX}
-                Cygwin: {self.is_cygwin}
-                MSYS2: {self.is_msys2}"""
+                    Visual Studio: {self.VS20XX}
+                    Cygwin: {self.is_cygwin}
+                    MSYS2: {self.is_msys2}"""
         elif self.is_linux:
             return f"""Python3 VENV: {self.python.exe} ({self.python.ENV_TYPE}) | WSL2: {self.is_WSL2}"""
         else:
@@ -539,10 +548,10 @@ class SystemInfo:
             _rocm_stat = self.ROCM_HOME if self.ROCM_HOME else "Not Detected"
 
             return f"""Visual Studio:  {_vs20xx_stat} | Host/Target: {self.VC_HOST} --> {self.VC_TARGET}
-                VC++ Compiler:  {self.cl.version}
-                VC++ UCRT:      {_vs20xx_sdk}
-                AMD HIP SDK:    {_hipcc_stat}
-                AMD ROCm:       {_rocm_stat}
+                    VC++ Compiler:  {self.cl.version}
+                    VC++ UCRT:      {_vs20xx_sdk}
+                    AMD HIP SDK:    {_hipcc_stat}
+                    AMD ROCm:       {_rocm_stat}
             """
 
     @property
@@ -552,29 +561,29 @@ class SystemInfo:
                 f"""
         ===================\t\tBuild Environment Summary\t\t===================
 
-    OS:         {self.OS_STATUS}
-    CPU:        {self.CPU_STATUS}
-    {self.GPU_STATUS}
-    RAM:        {self.MEM_STATUS}
-    STORAGE:    {self.DISK_STATUS}
+        OS:         {self.OS_STATUS}
+        CPU:        {self.CPU_STATUS}
+        GPU:        {self.GPU_STATUS}
+        RAM:        {self.MEM_STATUS}
+        STORAGE:    {self.DISK_STATUS}
 
-    ENV:        {self.ENV_STATUS}
+        ENV:        {self.ENV_STATUS}
 
-    SDK:        {self.SDK_STATUS}
+        SDK:        {self.SDK_STATUS}
 
-    MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
+        MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
     """
             )
 
         elif self.is_linux:
             print(
                 f"""
-        ===================\t\tBuild Environment Summary\t\t===================
+        ===================\t\t\tBuild Environment Summary\t\t\t===================
 
-    OS:         {self.OS_STATUS}
-    CPU:        {self.CPU_STATUS}
-    GPU:        {self.GPU_STATUS}
-    RAM:        {self.MEM_STATUS}
-    STORAGE:    {self.DISK_STATUS}
+        OS:         {self.OS_STATUS}
+        CPU:        {self.CPU_STATUS}
+        GPU:        {self.GPU_STATUS}
+        RAM:        {self.MEM_STATUS}
+        STORAGE:    {self.DISK_STATUS}
     """
             )
