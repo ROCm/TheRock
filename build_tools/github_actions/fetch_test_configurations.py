@@ -35,6 +35,7 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
@@ -42,6 +43,7 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 4,
     },
     # PRIM tests
     "rocprim": {
@@ -50,6 +52,7 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -57,6 +60,7 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     "rocthrust": {
         "job_name": "rocthrust",
@@ -64,6 +68,7 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux"],
+        "total_shards": 1,
     },
     # SPARSE tests
     "hipsparse": {
@@ -72,6 +77,7 @@ test_matrix = {
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux"],
+        "total_shards": 2,
     },
     "rocsparse": {
         "job_name": "rocsparse",
@@ -79,6 +85,7 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 6,
     },
     # RAND tests
     "rocrand": {
@@ -87,6 +94,7 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     "hiprand": {
         "job_name": "hiprand",
@@ -94,6 +102,7 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     # MIOpen tests
     "miopen": {
@@ -102,6 +111,7 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
+        "total_shards": 4,
     },
     # RCCL tests
     "rccl": {
@@ -110,6 +120,7 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
+        "total_shards": 1,
     },
 }
 
@@ -128,9 +139,21 @@ def run():
         ):
             job_name = test_matrix[key]["job_name"]
             logging.info(f"Including job {job_name}")
-            output_matrix.append(test_matrix[key])
+            job_config_data = test_matrix[key]
+            # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
+            # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
+            # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
+            job_config_data["shard_arr"] = [
+                i + 1 for i in range(job_config_data["total_shards"])
+            ]
+            output_matrix.append(job_config_data)
 
-    gha_set_output({"components": json.dumps(output_matrix), "platform": platform})
+    gha_set_output(
+        {
+            "components": json.dumps(output_matrix),
+            "platform": platform,
+        }
+    )
 
 
 if __name__ == "__main__":
