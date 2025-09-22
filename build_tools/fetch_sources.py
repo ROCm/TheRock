@@ -43,8 +43,6 @@ def get_enabled_projects(args) -> list[str]:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
         projects.extend(["rocm-systems"])
-    if args.include_math_libs:
-        projects.extend(args.math_lib_projects)
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
     return projects
@@ -95,10 +93,15 @@ def pull_large_files(dvc_projects, projects):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
         return
-    if shutil.which("dvc") is None:
-        print("Could not find `dvc` on PATH so large files could not be fetched")
-        print("Visit https://dvc.org/doc/install for installation instructions.")
-        sys.exit(1)
+    dvc_missing = shutil.which("dvc") is None
+    if dvc_missing:
+        if is_windows():
+            print("Could not find `dvc` on PATH so large files could not be fetched")
+            print("Visit https://dvc.org/doc/install for installation instructions.")
+            sys.exit(1)
+        else:
+            print("`dvc` not found, skipping large file pull on Linux.")
+            return
     for project in dvc_projects:
         if not project in projects:
             continue
@@ -106,14 +109,10 @@ def pull_large_files(dvc_projects, projects):
         project_dir = THEROCK_DIR / submodule_path
         dvc_config_file = project_dir / ".dvc" / "config"
         if dvc_config_file.exists():
-            # check for DVC config in the submodule and run dvc pull if found.
-            # presently, only amdgpu-windows-interop in rocm-systems uses DVC, but...
-            # eventually, DVC will be rolled out to math libraries and in linux
             print(f"dvc detected in {project_dir}, running dvc pull")
             exec(["dvc", "pull"], cwd=project_dir)
         else:
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
-            continue
 
 
 def remove_smrev_files(args, projects):
@@ -339,12 +338,6 @@ def main(argv):
         help="Include supported rocm-systems projects",
     )
     parser.add_argument(
-        "--include-math-libs",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="Include supported math libraries",
-    )
-    parser.add_argument(
         "--include-ml-frameworks",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -373,15 +366,6 @@ def main(argv):
         ],
     )
     parser.add_argument(
-        "--math-lib-projects",
-        nargs="+",
-        type=str,
-        default=[
-            "hipSOLVER",
-            "rocSOLVER",
-        ],
-    )
-    parser.add_argument(
         "--ml-framework-projects",
         nargs="+",
         type=str,
@@ -401,10 +385,13 @@ def main(argv):
         type=str,
         default=(
             [
+                "rocm-libraries",
                 "rocm-systems",
             ]
             if is_windows()
-            else []
+            else [
+                "rocm-libraries",
+            ]
         ),
     )
     args = parser.parse_args(argv)

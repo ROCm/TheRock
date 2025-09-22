@@ -104,7 +104,11 @@ function(therock_provide_artifact slice_name)
 
   # Populate commands.
   set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
-  set(_command_list)
+  set(_artifact_command
+    COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact
+          --root-dir "${THEROCK_BINARY_DIR}" --descriptor "${ARG_DESCRIPTOR}"
+  )
+  set(_flatten_command_list)
   set(_manifest_files)
   set(_component_dirs)
   foreach(_component ${ARG_COMPONENTS})
@@ -112,25 +116,25 @@ function(therock_provide_artifact slice_name)
     list(APPEND _component_dirs "${_component_dir}")
     set(_manifest_file "${_component_dir}/artifact_manifest.txt")
     list(APPEND _manifest_files "${_manifest_file}")
-    # Populate the artifact directory.
-    list(APPEND _command_list
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact
-        --output-dir "${_component_dir}"
-        --root-dir "${THEROCK_BINARY_DIR}" --descriptor "${ARG_DESCRIPTOR}"
-        --component "${_component}"
+    # The 'artifact' command takes an alternating list of component name and
+    # directory to populate.
+    list(APPEND _artifact_command
+      "${_component}"
+      "${_component_dir}"
     )
-    # Populate the corresponding build/dist/DISTRIBUTION directory.
-    if(ARG_DISTRIBUTION)
-      list(APPEND _command_list
-        COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten
-          -o "${_dist_dir}" ${_component_dirs}
-      )
-    endif()
   endforeach()
+  # Populate the corresponding build/dist/DISTRIBUTION directory.
+  if(ARG_DISTRIBUTION)
+    list(APPEND _flatten_command_list
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten
+        -o "${_dist_dir}" ${_component_dirs}
+    )
+  endif()
   add_custom_command(
     OUTPUT ${_manifest_files}
     COMMENT "Populate artifact ${slice_name}"
-    ${_command_list}
+    ${_artifact_command}
+    ${_flatten_command_list}
     DEPENDS
       ${_stamp_file_deps}
       "${ARG_DESCRIPTOR}"

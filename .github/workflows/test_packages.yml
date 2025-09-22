@@ -134,6 +134,6 @@ jobs:
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.
       - name: Post-job cleanup processes on Windows
-        if: ${{ runner.os == 'Windows' }}
+        if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
         run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
