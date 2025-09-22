@@ -197,7 +197,7 @@ LibraryEntry("hiprand", "libraries", "libhiprand.so.1", "hiprand.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4", "hipsparse.dll")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1", "hipsolver.dll")
 LibraryEntry("rccl", "libraries", "librccl.so.1", "")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "hipblaslt.dll")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "libhipblaslt.dll")
 LibraryEntry("miopen", "libraries", "libMIOpen.so.1", "MIOpen.dll")
 
 # Overall ROCM package version.
