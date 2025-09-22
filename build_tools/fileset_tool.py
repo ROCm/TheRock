@@ -16,112 +16,14 @@ with the following changes:
 from typing import Callable
 import argparse
 from pathlib import Path
-import platform
 import sys
 import shutil
 import tarfile
 
 from _therock_utils.artifacts import ArtifactPopulator
+import _therock_utils.artifact_builder as artifact_builder
 from _therock_utils.hash_util import calculate_hash, write_hash
 from _therock_utils.pattern_match import PatternMatcher
-
-
-def evaluate_optional(optional_value) -> bool:
-    """Returns true if the given value should be considered optional on this platform.
-
-    It can be either a str, list of str, or a truthy value. If a str/list, then it will
-    return true if any of the strings match the case insensitive
-    `platform.system()`.
-    """
-    if optional_value is None:
-        return False
-    if isinstance(optional_value, str):
-        optional_value = [optional_value]
-    if isinstance(optional_value, list):
-        system_name = platform.system().lower()
-        for v in optional_value:
-            if str(v).lower() == system_name:
-                return True
-        return False
-    return bool(optional_value)
-
-
-class ComponentDefaults:
-    """Defaults for to apply to artifact merging by component name."""
-
-    ALL: dict[str, "ComponentDefaults"] = {}
-
-    def __init__(self, name: str = "", includes=(), excludes=()):
-        self.includes = list(includes)
-        self.excludes = list(excludes)
-        if name:
-            if name in ComponentDefaults.ALL:
-                raise KeyError(f"ComponentDefaults {name} already defined")
-            ComponentDefaults.ALL[name] = self
-
-    @staticmethod
-    def get(name: str) -> "ComponentDefaults":
-        return ComponentDefaults.ALL.get(name) or ComponentDefaults(name)
-
-
-# Debug components collect all platform specific dbg file patterns.
-ComponentDefaults(
-    "dbg",
-    includes=[
-        # Linux build-id based debug files.
-        ".build-id/**/*.debug",
-    ],
-)
-
-# Dev components include all static library based file patterns and
-# exclude file name patterns implicitly included for "run" and "lib".
-# Descriptors should explicitly include header file any package file
-# sub-trees that do not have an explicit "cmake" or "include" path components
-# in them.
-ComponentDefaults(
-    "dev",
-    includes=[
-        "**/*.a",
-        "**/*.lib",
-        "**/cmake/**",
-        "**/include/**",
-        "**/share/modulefiles/**",
-        "**/pkgconfig/**",
-    ],
-    excludes=[],
-)
-# Lib components include shared libraries, dlls and any assets needed for use
-# of shared libraries at runtime. Files are included by name pattern and
-# descriptors should include/exclude non-standard variations.
-ComponentDefaults(
-    "lib",
-    includes=[
-        "**/*.dll",
-        "**/*.dylib",
-        "**/*.dylib.*",
-        "**/*.so",
-        "**/*.so.*",
-    ],
-    excludes=[],
-)
-# Run components layer on top of 'lib' components and also include executables
-# and tools that are not needed by library consumers. Descriptors should
-# explicitly include "bin" directory contents as needed.
-ComponentDefaults("run")
-ComponentDefaults("doc", includes=["**/share/doc/**"])
-
-# To help layering, we make lib/dev/run default patterns exclude patterns
-# that the others define. This makes it easier for one of these to do directory
-# level includes and have the files sorted into the proper component.
-ComponentDefaults.get("dev").excludes.extend(ComponentDefaults.get("lib").includes)
-ComponentDefaults.get("dev").excludes.extend(ComponentDefaults.get("run").includes)
-ComponentDefaults.get("dev").excludes.extend(ComponentDefaults.get("doc").includes)
-ComponentDefaults.get("lib").excludes.extend(ComponentDefaults.get("dev").includes)
-ComponentDefaults.get("lib").excludes.extend(ComponentDefaults.get("run").includes)
-ComponentDefaults.get("lib").excludes.extend(ComponentDefaults.get("doc").includes)
-ComponentDefaults.get("run").excludes.extend(ComponentDefaults.get("dev").includes)
-ComponentDefaults.get("run").excludes.extend(ComponentDefaults.get("lib").includes)
-ComponentDefaults.get("run").excludes.extend(ComponentDefaults.get("doc").includes)
 
 
 def do_list(args: argparse.Namespace, pm: PatternMatcher):
@@ -143,90 +45,32 @@ def do_copy(args: argparse.Namespace, pm: PatternMatcher):
 def do_artifact(args):
     """Produces an 'artifact directory', which is a slice of installed stage/
     directories, split into components (i.e. run, dev, dbg, doc, test).
-
-    The primary input is the artifact.toml file, which defines records like:
-
-        "components" : dict of covered component names
-            "{component_name}": dict of build/ relative paths to materialize
-                "{stage_directory}":
-                    "default_patterns": bool (default True) whether component default
-                        patterns are used
-                    "include": str or list[str] of include patterns
-                    "exclude": str or list[str] of exclude patterns
-                    "force_include": str or list[str] of include patterns that if
-                        matched, force inclusion, regardless of whether they match
-                        an exclude pattern.
-                    "optional": if true and the directory does not exist, it
-                      is not an error. Use for optionally built projects. This
-                      can also be either a string or array of strings, which
-                      are interpreted as a platform name. If the case-insensitive
-                      `platform.system()` equals one of them, then it is
-                      considered optional.
-
-    Most sections can typically be blank because by default they use
-    component specific include/exclude patterns (see `COMPONENT_DEFAULTS` above)
-    that cover most common cases. Local deviations must be added explicitly
-    in the descriptor.
-
-    This is called once per component and will create a directory for that
-    component.
     """
-    descriptor = load_toml_file(args.descriptor) or {}
-    component_name = args.component
-    # Set up output dir.
-    output_dir: Path = args.output_dir
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Get metadata for the component we are merging.
-    try:
-        component_record = descriptor["components"][component_name]
-    except KeyError:
-        # No components.
-        component_record = {}
-
-    all_basedir_relpaths = []
-    for basedir_relpath, basedir_record in component_record.items():
-        use_default_patterns = basedir_record.get("default_patterns", True)
-        basedir = args.root_dir / Path(basedir_relpath)
-        optional = evaluate_optional(basedir_record.get("optional"))
-        if optional and not basedir.exists():
-            continue
-        all_basedir_relpaths.append(basedir_relpath)
-
-        # Force includes.
-        force_includes = _dup_list_or_str(basedir_record.get("force_include"))
-
-        # Includes.
-        includes = _dup_list_or_str(basedir_record.get("include"))
-        if use_default_patterns:
-            includes.extend(
-                ComponentDefaults.ALL.get(component_name, ComponentDefaults()).includes
-            )
-
-        # Excludes.
-        excludes = _dup_list_or_str(basedir_record.get("exclude"))
-        if use_default_patterns:
-            excludes.extend(
-                ComponentDefaults.ALL.get(component_name, ComponentDefaults()).excludes
-            )
-
-        pm = PatternMatcher(
-            includes=includes,
-            excludes=excludes,
-            force_includes=force_includes,
-        )
-        pm.add_basedir(basedir)
-        pm.copy_to(
-            destdir=output_dir,
-            destprefix=basedir_relpath + "/",
-            remove_dest=False,
+    descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(args.descriptor)
+    scanner = artifact_builder.ComponentScanner(args.root_dir, descriptor)
+    # Disable strict verification temporarily until debug builds are tested/fixed.
+    # scanner.verify()
+    component_dirs = args.component_dirs
+    # It is an alternating list of <component> <dir> so must be divisible by 2.
+    if len(component_dirs) % 2:
+        raise SystemExit(
+            "Expected component dirs to be alternating list of component names and directories"
         )
 
-    # Write a manifest containing relative paths of all base directories.
-    manifest_path = output_dir / "artifact_manifest.txt"
-    manifest_path.write_text("\n".join(all_basedir_relpaths) + "\n")
+    for i in range(len(component_dirs) // 2):
+        component_name = component_dirs[i * 2]
+        output_dir = Path(component_dirs[i * 2 + 1])
+
+        # Setup output dir.
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            contents = scanner.components[component_name]
+        except KeyError:
+            return
+        contents.write_artifact(output_dir)
 
 
 def do_artifact_archive(args):
@@ -272,24 +116,6 @@ def _do_artifact_flatten(args):
     if args.verbose:
         for relpath in relpaths:
             print(relpath)
-
-
-def _dup_list_or_str(v: list[str] | str) -> list[str]:
-    if not v:
-        return []
-    if isinstance(v, str):
-        return [v]
-    return list(v)
-
-
-def load_toml_file(p: Path):
-    try:
-        import tomllib
-    except ModuleNotFoundError:
-        # Python <= 3.10 compatibility (requires install of 'tomli' package)
-        import tomli as tomllib
-    with open(p, "rb") as f:
-        return tomllib.load(f)
 
 
 def main(cl_args: list[str]):
@@ -342,9 +168,6 @@ def main(cl_args: list[str]):
         "artifact", help="Merge artifacts based on a descriptor"
     )
     artifact_p.add_argument(
-        "--output-dir", type=Path, required=True, help="Artifact output directory"
-    )
-    artifact_p.add_argument(
         "--root-dir",
         type=Path,
         required=True,
@@ -357,7 +180,9 @@ def main(cl_args: list[str]):
         help="TOML file describing the artifact",
     )
     artifact_p.add_argument(
-        "--component", required=True, help="Component within the descriptor to merge"
+        "component_dirs",
+        nargs="+",
+        help="Alternating list of component name and directory to write it to",
     )
     artifact_p.set_defaults(func=do_artifact)
 

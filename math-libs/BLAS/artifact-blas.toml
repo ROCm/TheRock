@@ -23,6 +23,9 @@ optional = true
 [components.dbg."math-libs/BLAS/hipBLAS/stage"]
 [components.dev."math-libs/BLAS/hipBLAS/stage"]
 [components.doc."math-libs/BLAS/hipBLAS/stage"]
+include = [
+  "**/hipblas_clients_readme.txt",
+]
 [components.lib."math-libs/BLAS/hipBLAS/stage"]
 exclude = [
   "lib/libhipblas_fortran.so",
@@ -49,6 +52,9 @@ include = [
   "bin/sample_*",
 ]
 [components.doc."math-libs/BLAS/hipBLASLt/stage"]
+include = [
+  "share/hipblaslt/samples/**",
+]
 [components.lib."math-libs/BLAS/hipBLASLt/stage"]
 include = [
   "bin/hipblaslt/library/**",
@@ -59,19 +65,25 @@ include = [
   # Clients benchmarks
   "bin/hipblaslt-bench*",
   "bin/hipblaslt-bench-*",
-  "bin/hipblaslt-sequence",
+  "bin/hipblaslt-sequence*",
+  "bin/hipblaslt-api-overhead*",
   "bin/sequence.yaml",
   # Clients tests
   "bin/hipblaslt-test*",
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
+  # Built samples (may want these in a samples component at some point).
+  "libexec/hipblaslt-samples/**",
 ]
 
 # rocBLAS
 [components.dbg."math-libs/BLAS/rocBLAS/stage"]
 [components.dev."math-libs/BLAS/rocBLAS/stage"]
 [components.doc."math-libs/BLAS/rocBLAS/stage"]
+include = [
+  "**/rocblas_clients_readme.txt",
+]
 [components.lib."math-libs/BLAS/rocBLAS/stage"]
 include = [
   "bin/rocblas/library/**",
@@ -87,6 +99,8 @@ include = [
   "bin/rocblas_gentest.py",
   "bin/rocblas_gtest.data",
   "bin/rocblas_*.yaml",
+  "bin/*_rtest.xml",
+  "bin/*_rtest.py",
 ]
 
 # rocSOLVER
@@ -100,8 +114,8 @@ optional = true
 optional = true
 [components.test."math-libs/BLAS/rocSOLVER/stage"]
 include = [
-  "bin/rocsolver-bench",
-  "bin/rocsolver-test",
+  "bin/rocsolver-bench*",
+  "bin/rocsolver-test*",
   "share/rocsolver/test/**",
 ]
 optional = true
@@ -115,14 +129,14 @@ optional = true
 optional = true
 [components.lib."math-libs/BLAS/hipSOLVER/stage"]
 exclude = [
-  "lib/libhipsolver_fortran.so",
+  "lib/libhipsolver_fortran.so*",
 ]
 optional = true
 [components.test."math-libs/BLAS/hipSOLVER/stage"]
 include = [
   "bin/hipsolver-bench*",
   "bin/hipsolver-test*",
-  "lib/libhipsolver_fortran.so",
+  "lib/libhipsolver_fortran.so*",
   "share/hipsolver/test/**",
 ]
 optional = true
@@ -136,15 +150,23 @@ optional = true
 optional = true
 [components.lib."math-libs/BLAS/rocSPARSE/stage"]
 optional = true
+include = [
+  "lib/rocsparse/rocsparseio-info*",
+  "bin/rocsparseio-info.exe",
+]
+[components.run."math-libs/BLAS/rocSPARSE/stage"]
+optional = true
+include = [
+  "bin/rocsparse_mtx2csr",
+  "lib/rocsparse/rocsparseio-convert",
+  "bin/rocsparseio-convert.exe",
+]
 [components.test."math-libs/BLAS/rocSPARSE/stage"]
 include = [
+  "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
   "share/rocsparse/test/**",
-]
-optional = true
-[components.test."math-libs/BLAS/rocSPARSE/build"]
-include = [
   "clients/matrices/**"
 ]
 optional = true
@@ -154,18 +176,23 @@ optional = true
 optional = true
 [components.dev."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
+include = [
+  "**/*.cmake"
+]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.lib."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
+[components.run."math-libs/BLAS/hipSPARSE/stage"]
+optional = true
+include = [
+  "bin/hipsparse_mtx2csr",
+]
 [components.test."math-libs/BLAS/hipSPARSE/stage"]
 include = [
+  "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
-]
-optional = true
-[components.test."math-libs/BLAS/hipSPARSE/build"]
-include = [
   "clients/matrices/**"
 ]
 optional = true

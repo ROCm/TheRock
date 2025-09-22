@@ -254,6 +254,10 @@ endfunction()
 #   it fails (logs will still be written). While generally not good to squelch a
 #   "chatty" build, some third party libraries are hopeless and provide little
 #   signal.
+# LOGICAL_TARGET_NAME: If conditional coding is used to alias the actual target
+#   name (i.e. foobar-old) but configuration files and directories should be
+#   named relative to some other name, then that can be specified here. This
+#   affects hooks and default choices of source and binary directories.
 #
 # RPATH handling:
 # Each subproject has default logic injected which configures the INSTALL_RPATH
@@ -294,11 +298,14 @@ function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TAGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
+  endif()
+  if(NOT ARG_LOGICAL_TARGET_NAME)
+    set(ARG_LOGICAL_TARGET_NAME "${target_name}")
   endif()
 
   cmake_path(IS_ABSOLUTE ARG_EXTERNAL_SOURCE_DIR _source_is_absolute)
@@ -429,6 +436,7 @@ function(therock_cmake_subproject_declare target_name)
   endif()
 
   set_target_properties("${target_name}" PROPERTIES
+    THEROCK_LOGICAL_TARGET_NAME "${ARG_LOGICAL_TARGET_NAME}"
     THEROCK_SUBPROJECT cmake
     THEROCK_BUILD_POOL "${_build_pool}"
     THEROCK_AMDGPU_TARGETS "${_gpu_targets}"
@@ -545,6 +553,8 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
   get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  get_target_property(_logical_target_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+
   # RPATH properties: just mirror these to same named variables because we just
   # mirror them syntactically into the subprojet..
   get_target_property(THEROCK_NO_INSTALL_RPATH "${target_name}" THEROCK_NO_INSTALL_RPATH)
@@ -568,11 +578,11 @@ function(therock_cmake_subproject_activate target_name)
   set(_build_comment_suffix)
 
   # Detect pre/post hooks.
-  set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${target_name}.cmake")
+  set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${_logical_target_name}.cmake")
   if(NOT EXISTS "${_pre_hook_path}")
     set(_pre_hook_path)
   endif()
-  set(_post_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/post_hook_${target_name}.cmake")
+  set(_post_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/post_hook_${_logical_target_name}.cmake")
   if(NOT EXISTS "${_post_hook_path}")
     set(_post_hook_path)
   endif()
@@ -734,7 +744,7 @@ function(therock_cmake_subproject_activate target_name)
   # Detect whether the stage dir has been pre-built.
   set(_prebuilt_file "${_stage_dir}.prebuilt")
 
-  # Derive the CMAKE_BUILD_TYPE from eiether {project}_BUILD_TYPE or the global
+  # Derive the CMAKE_BUILD_TYPE from either {project}_BUILD_TYPE or the global
   # CMAKE_BUILD_TYPE.
   set(_cmake_build_type "${${target_name}_BUILD_TYPE}")
   if(NOT _cmake_build_type)

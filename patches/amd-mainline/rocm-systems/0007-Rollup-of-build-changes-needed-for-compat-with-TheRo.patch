@@ -1,0 +1,134 @@
+From aa1d0322791804e3d6a2c299ca063783e796b5fd Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Mon, 23 Jun 2025 21:38:53 +0000
+Subject: [PATCH 7/9] Rollup of build changes needed for compat with TheRock.
+
+* When built for a non-default ROCM location, the HIP headers can't be found by a few targets.
+* Uses pkg_check for DRM libraries like ROCR-Runtime does (which avoids accidental fallback to system versions).
+
+Co-authored-by: Marius Brehler <marius.brehler@amd.com>
+---
+ .../cmake/rocprofiler_config_interfaces.cmake | 75 +++++++++++--------
+ .../lib/common/container/CMakeLists.txt       |  1 +
+ .../source/lib/output/CMakeLists.txt          |  3 +-
+ 3 files changed, 48 insertions(+), 31 deletions(-)
+
+diff --git a/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake b/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake
+index 4d67246bda..b41780f63a 100644
+--- a/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake
++++ b/projects/rocprofiler-sdk/cmake/rocprofiler_config_interfaces.cmake
+@@ -131,7 +131,13 @@ if(hip_VERSION VERSION_LESS "6.2")
+ endif()
+ 
+ target_link_libraries(rocprofiler-sdk-hip INTERFACE hip::host)
+-rocprofiler_config_nolink_target(rocprofiler-sdk-hip-nolink hip::host)
++# TODO: As of 2025/5/29, the hip::host target does not advertise its
++# include directory but amdhip64 does. This ordinarily wouldn't be an issue
++# because most folks just get it transitively, but here this is doing direct
++# property copying to get usage requirements.
++# The proper fix is for hip to export a hip::headers target with only usage
++# requirements and depend on that.
++rocprofiler_config_nolink_target(rocprofiler-sdk-hip-nolink hip::amdhip64)
+ 
+ # ----------------------------------------------------------------------------------------#
+ #
+@@ -252,35 +258,44 @@ rocprofiler_config_nolink_target(rocprofiler-sdk-hsakmt-nolink hsakmt::hsakmt)
+ #
+ # ----------------------------------------------------------------------------------------#
+ 
+-find_path(
+-    drm_INCLUDE_DIR
+-    NAMES drm.h
+-    HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
+-    PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
+-    PATH_SUFFIXES include/drm include/libdrm include REQUIRED)
+-
+-find_path(
+-    xf86drm_INCLUDE_DIR
+-    NAMES xf86drm.h
+-    HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
+-    PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
+-    PATH_SUFFIXES include/drm include/libdrm include REQUIRED)
+-
+-find_library(
+-    drm_LIBRARY
+-    NAMES drm
+-    HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
+-    PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu REQUIRED)
+-
+-find_library(
+-    drm_amdgpu_LIBRARY
+-    NAMES drm_amdgpu
+-    HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
+-    PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu REQUIRED)
+-
+-target_include_directories(rocprofiler-sdk-drm SYSTEM INTERFACE ${drm_INCLUDE_DIR}
+-                                                                ${xf86drm_INCLUDE_DIR})
+-target_link_libraries(rocprofiler-sdk-drm INTERFACE ${drm_LIBRARY} ${drm_amdgpu_LIBRARY})
++# TODO: Work with rocprof team to determine when xf86drm is needed and transition
++# to using pkg_check (like ROCR) vs loose find_library and find_path.
++find_package(PkgConfig)
++pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
++pkg_check_modules(DRM_AMDGPU REQUIRED IMPORTED_TARGET libdrm_amdgpu)
++target_include_directories(rocprofiler-sdk-drm SYSTEM INTERFACE ${DRM_INCLUDE_DIRS}
++                                                                ${DRM_AMDGPU_INCLUDE_DIRS})
++target_link_libraries(rocprofiler-sdk-drm INTERFACE PkgConfig::DRM PkgConfig::DRM_AMDGPU)
++
++# find_path(
++#     drm_INCLUDE_DIR
++#     NAMES drm.h
++#     HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
++#     PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
++#     PATH_SUFFIXES include/drm include/libdrm include REQUIRED)
++
++# find_path(
++#     xf86drm_INCLUDE_DIR
++#     NAMES xf86drm.h
++#     HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
++#     PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
++#     PATH_SUFFIXES include/drm include/libdrm include REQUIRED)
++
++# find_library(
++#     drm_LIBRARY
++#     NAMES drm
++#     HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
++#     PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu REQUIRED)
++
++# find_library(
++#     drm_amdgpu_LIBRARY
++#     NAMES drm_amdgpu
++#     HINTS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu
++#     PATHS ${rocm_version_DIR} ${ROCM_PATH} /opt/amdgpu REQUIRED)
++
++# target_include_directories(rocprofiler-sdk-drm SYSTEM INTERFACE ${drm_INCLUDE_DIR}
++#                                                                 ${xf86drm_INCLUDE_DIR})
++# target_link_libraries(rocprofiler-sdk-drm INTERFACE ${drm_LIBRARY} ${drm_amdgpu_LIBRARY})
+ 
+ # ----------------------------------------------------------------------------------------#
+ #
+diff --git a/projects/rocprofiler-sdk/source/lib/common/container/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/common/container/CMakeLists.txt
+index f1ab95775f..b152ebd35f 100644
+--- a/projects/rocprofiler-sdk/source/lib/common/container/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/common/container/CMakeLists.txt
+@@ -9,3 +9,4 @@ set(containers_sources ring_buffer.cpp record_header_buffer.cpp ring_buffer.cpp
+ 
+ target_sources(rocprofiler-sdk-common-library PRIVATE ${containers_sources}
+                                                       ${containers_headers})
++target_link_libraries(rocprofiler-sdk-common-library PRIVATE rocprofiler-sdk-hip-nolink)
+diff --git a/projects/rocprofiler-sdk/source/lib/output/CMakeLists.txt b/projects/rocprofiler-sdk/source/lib/output/CMakeLists.txt
+index 2a3505a562..cf72cf9c3a 100644
+--- a/projects/rocprofiler-sdk/source/lib/output/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/source/lib/output/CMakeLists.txt
+@@ -70,7 +70,8 @@ target_link_libraries(
+             rocprofiler-sdk::rocprofiler-sdk-amd-comgr
+             rocprofiler-sdk::rocprofiler-sdk-dw
+             rocprofiler-sdk::rocprofiler-sdk-elf
+-            rocprofiler-sdk::rocprofiler-sdk-sqlite3)
++            rocprofiler-sdk::rocprofiler-sdk-sqlite3
++            rocprofiler-sdk-hip-nolink)
+ 
+ target_compile_definitions(rocprofiler-sdk-output-library
+                            PRIVATE PROJECT_BINARY_DIR="${PROJECT_BINARY_DIR}")
+-- 
+2.43.0
+

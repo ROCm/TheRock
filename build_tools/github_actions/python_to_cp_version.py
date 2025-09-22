@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Determines part of the path to the Python interpreter in a manylinux image.
+"""Determines part of the path to the Python interpreter in a manylinux image, along
+   with being used in populating the wheel names for Linux and Windows
 
 Example usage:
 

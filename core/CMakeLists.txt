@@ -79,7 +79,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   set(HIP_CLR_RUNTIME_DEPS)
   if(WIN32)
     # Windows CLR options
-    set(_compute_pal_dir "${CMAKE_CURRENT_SOURCE_DIR}/amdgpu-windows-interop/20250820a")
+    set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
     cmake_path(NORMAL_PATH _compute_pal_dir)
     list(APPEND HIP_CLR_CMAKE_ARGS
       "-DUSE_PROF_API=OFF"

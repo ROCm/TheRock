@@ -1,3 +1,9 @@
+[options]
+unmatched_exclude = [
+  # Seems to be some test artifacts only on Windows.
+  "bin/*.hip.exe",
+]
+
 # rocPRIM
 [components.dbg."math-libs/rocPRIM/stage"]
 [components.dev."math-libs/rocPRIM/stage"]
@@ -6,6 +12,7 @@
 include = [
   "bin/test_*",
   "bin/rocprim/CTestTestfile.cmake",
+  "lib/libtest_linking_*.*",
 ]
 
 # hipCUB

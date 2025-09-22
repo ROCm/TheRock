@@ -13,7 +13,8 @@
       "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description": "ROCM-CORE package helps to get ROCm release version and install path",
+    "Description_Short": "ROCm Runtime software stack",
+    "Description_Long": "The ROCm-core package provides essential utilities for querying the ROCm release version and installation path. It functions as a foundational dependency for the entire ROCm software stack. ROCm-core facilitates streamlined uninstallation of all ROCm-related packages.",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -26,6 +27,7 @@
       "doc"
     ],
     "Artifact": "base",
+    "Artifact_Subdir": "rocm-core",
     "Gfxarch": "False"
   },
   {
@@ -33,10 +35,15 @@
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [],
-    "RPMRequires": [],
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description": "rocm-cmake built using CMake",
+    "Description_Short": "ROCm CMake build tools",
+    "Description_Long": "rocm-cmake is a collection of CMake modules for common build and development tasks within the ROCm project",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -44,13 +51,40 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-cmake",
     "Components": [
-      "lib",
-      "dev",
-      "doc"
+      "dev"
     ],
     "Artifact": "base",
+    "Artifact_Subdir": "rocm-cmake",
     "Gfxarch": "False"
   },
+  {
+    "Package": "half",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "Half -Precision flaoting point library",
+    "Description_Long": "Header-only library to provide half-precision floating point type along with corresponding arithmetic operators, type conversions and common mathematical functions",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "base",
+    "Artifact_Subdir": "half",
+    "Gfxarch": "False"
+  },
+
   {
     "Package": "rocm-smi-lib",
     "Version": "",
@@ -58,14 +92,17 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "python3",
-      "libc6"
+      "libc6",
+      "rocm-core"
     ],
     "RPMRequires": [
       "python3",
-      "glibc"
+      "glibc",
+      "rocm-core"
     ],
     "Maintainer": "RocmSMILib Support <rocm-smi.support@amd.com>",
-    "Description": "AMD System Management libraries",
+    "Description_Short": "AMD System Management libraries",
+    "Description_Long": "Library for Linux that provides a user space interface for applications to monitor and control GPU applications",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -83,6 +120,7 @@
       "doc"
     ],
     "Artifact": "base",
+    "Artifact_Subdir": "rocm_smi_lib",
     "Gfxarch": "False"
   },
   {
@@ -91,17 +129,20 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "rocm-core",
       "libc6",
       "libgcc-s1",
       "libstdc++6"
     ],
     "RPMRequires": [
+      "rocm-core",
       "glibc",
       "libgcc",
       "libstdc++"
     ],
     "Maintainer": "ROCm Profiler Support <dl.ROCm-Profiler.support@amd.com>",
-    "Description": "Registration library for rocprofiler",
+    "Description_Short": "Registration library for rocprofiler",
+    "Description_Long": "Provide a mechanism of enabling performance analysis in the ROCm runtimes",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -114,15 +155,17 @@
       "doc"
     ],
     "Artifact": "base",
+    "Artifact_Subdir": "rocprofiler-register",
     "Gfxarch": "False"
 
   },
   {
-    "Package": "amd-llvm",
+    "Package": "rocm-llvm",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "rocm-core",
       "python3",
       "libc6",
       "libstdc++6|libstdc++8",
@@ -130,13 +173,15 @@
       "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev"
     ],
     "RPMRequires": [
+      "rocm-core",
       "python3",
       "glibc",
       "libstdc++",
       "libgcc"
     ],
     "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
-    "Description": "ROCm llvm compiler based on LLVM 20.0.0",
+    "Description_Short": "ROCm LLVM compiler",
+    "Description_Long": "ROCm LLVM compiler optimized for high-performance computing on AMD GPUs and CPUs ",
     "Section": "devel",
     "Priority": "optional",
     "Group": "System Environment/Libraries",
@@ -160,17 +205,19 @@
       "devtoolset-7-gcc-c++"
     ],
     "Artifact": "amd-llvm",
+    "Artifact_Subdir": "amd-llvm",
     "Gfxarch": "False",
     "Disable_DWZ": "True"
 
   },
   {
-    "Package": "amd-llvm-devel",
+    "Package": "rocm-llvm-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amd-llvm",
+      "rocm-core",
+      "rocm-llvm",
       "python3",
       "libc6",
       "libstdc++6|libstdc++8",
@@ -178,14 +225,16 @@
       "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev"
     ],
     "RPMRequires": [
-      "amd-llvm",
+      "rocm-core",
+      "rocm-llvm",
       "python3",
       "glibc",
       "libstdc++",
       "libgcc"
     ],
     "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
-    "Description": "ROCm compiler dev tool",
+    "Description_Short": "ROCm compiler dev tools",
+    "Description_Long": "ROCm compiler dev tools and documentation, based on LLVM",
     "Section": "devel",
     "Priority": "optional",
     "Group": "System Environment/Libraries",
@@ -207,7 +256,1493 @@
       "devtoolset-7-gcc-c++"
     ],
     "Artifact": "amd-llvm",
+    "Artifact_Subdir": "amd-llvm",
     "Gfxarch": "False"
+  },
+  {
+    "Package": "amd-smi-lib",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "sudo",
+      "libc6",
+      "python3 (>= 3.6.8)",
+      "python3-pip",
+      "python3-setuptools",
+      "python3-wheel",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "sudo",
+      "python3 (>= 3.6.8)",
+      "python3-pip",
+      "python3-setuptools",
+      "python3-wheel",
+      "rocm-core"
+    ],
+    "Recommends": [
+      "python3-argcomplete",
+      "libdrm-dev",
+      "libdrm-amdgpu-dev"
+    ],
+    "Maintainer": "AMD-SMILib Support <amd-smi.support@amd.com>",
+    "Description_Short": "AMD System Management libraries",
+    "Description_Long": "Runtime components of the library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "base",
+    "Artifact_Subdir": "amd-smi-lib",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
+
+  },
+  {
+    "Package": "comgr",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libtinfo-dev",
+      "rocm-core",
+      "libzstd1",
+      "zlib1g",
+      "libc6",
+      "libstdc++6",
+      "libgcc-s1 | libgcc1"
+    ],
+    "RPMRequires": [
+      "rocm-core",
+      "(zlib or libz1)",
+      "(libzstd or libzstd1)",
+      "glibc",
+      "(libstdc++ or libstdc++6)",
+      "(libgcc or libgcc_s1)"
+    ],
+    "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
+    "Description_Short": "Library to provide support functions for ROCm code objects",
+    "Description_Long": "The Comgr library provides APIs for compiling and inspecting AMDGPU code objects",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "amd-llvm",
+    "Artifact_Subdir": "amd-comgr",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "hipcc",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core",
+      "rocm-llvm"
+    ],
+    "RPMRequires": [
+      "rocm-core",
+      "rocm-llvm"
+    ],
+    "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
+    "Description_Short": "hipcc built using CMakei for AMD platforms",
+    "Description_Long": "A compiler driver utility that wraps clang and passes the appropriate include and library options for the target compiler and HIP infrastructure",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "amd-llvm",
+    "Artifact_Subdir": "hipcc",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "hipcc-nvidia",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
+    "Description_Short": "hipcc built using CMake for Nvidia platforms",
+    "Description_Long": "A compiler driver utility that wraps clang and passes the appropriate include and library options for the target compiler and HIP infrastructure",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Components": [
+      "lib",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "amd-llvm",
+    "Artifact_Subdir": "hipcc",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
+
+  },
+  {
+    "Package": "hip-runtime-amd",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hsa-rocr",
+      "rocminfo",
+      "comgr",
+      "rocm-core",
+      "rocprofiler-register",
+      "libnuma1",
+      "libc6",
+      "libgcc-s1",
+      "libstdc++6"
+    ],
+    "RPMRequires": [
+      "hsa-rocr",
+      "rocminfo",
+      "comgr",
+      "rocm-core",
+      "rocprofiler-register",
+      "libnuma1",
+      "glibc",
+      "libgcc",
+      "libstdc++"
+    ],
+    "Maintainer": "HIP Support <hip.support@amd.com>",
+    "Description_Short": "HIP:Heterogenous-computing Interface for Portability",
+    "Description_Long": "HIP:Heterogenous-computing Interface for Portability [RUNTIME - AMD]",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Provides": "hip-rocclr",
+    "Replaces": "hip-rocclr",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "core-hip",
+    "Artifact_Subdir": "clr",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "hip-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "file",
+      "hip-runtime-amd",
+      "rocm-llvm",
+      "rocm-core",
+      "hsa-rocr-dev",
+      "hipcc"
+    ],
+    "RPMRequires": [
+      "glibc",
+      "file",
+      "hip-runtime-amd",
+      "rocm-llvm",
+      "rocm-core",
+      "hsa-rocr-devel",
+      "hipcc"
+    ],
+    "Maintainer": "HIP Support <hip.support@amd.com>",
+    "Description_Short": "Heterogenous-computing Interface for Portability",
+    "Description_Long": "Heterogenous-computing Interface for Portability [DEVELOPMENT]",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Provides": "hip-base",
+    "Replaces": "hip-base",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "core-hip",
+    "Artifact_Subdir": "clr",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "hip-doc",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core",
+      "hip-dev"
+    ],
+    "RPMRequires": [
+      "rocm-core",
+      "hip-devel"
+    ],
+    "Maintainer": "HIP Support <hip.support@amd.com>",
+    "Description_Short": "HIP:Heterogenous-computing Interface for Portability",
+    "Description_Long": "HIP: Heterogenous-computing Interface for Portability [DOCUMENTATION]",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "doc"
+    ],
+    "Artifact": "core-hip",
+    "Artifact_Subdir": "clr",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
+
+  },
+  {
+    "Package": "hip-samples",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core",
+      "hip-dev",
+      "hipcc"
+    ],
+    "RPMRequires": [
+      "rocm-core",
+      "hip-devel",
+      "hipcc"
+    ],
+    "Maintainer": "HIP Support <hip.support@amd.com>",
+    "Description_Short": "Heterogenous-computing Interface for Portability [HIP SAMPLES]",
+    "Description_Long": "Heterogenous-computing Interface for Portability [HIP SAMPLES]",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "doc"
+    ],
+    "Artifact": "core-hip",
+    "Artifact_Subdir": "clr",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
+
+  },
+  {
+    "Package": "hipify-clang",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
+    "Description_Short": "Hipify CUDA source",
+    "Description_Long": "This tool translates CUDA source code into portable HIP C++ automatically",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/HIPIFY",
+    "Components": [
+      "run"
+    ],
+    "Artifact": "hipify",
+    "Artifact_Subdir": "hipify",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "hsa-rocr",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1",
+      "libnuma1",
+      "libelf1",
+      "rocm-core",
+      "rocprofiler-register"
+    ],
+    "RPMRequires": [
+      "(libdrm-amdgpu or libdrm or libdrm_amdgpu1)",
+      "(libnuma1 or numactl-libs)",
+      "rocm-core",
+      "rocprofiler-register"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for ROCm platforms",
+    "Description_Long": "The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the ROCK kernel driver.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "doc"
+    ],
+    "Artifact": "core-runtime",
+    "Artifact_Subdir": "ROCR-Runtime",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "hsa-rocr-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libdrm-amdgpu-dev | libdrm-dev",
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "(libdrm-amdgpu-devel or libdrm-devel)",
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "Provides": [
+      "hsakmt-roct",
+      "hsakmt-roct-devel",
+      "hsa-ext-rocr-devel"
+    ],
+    "Recommends": [
+      "libdrm-amdgpu-dev"
+    ],
+    "Replaces": [
+      "hsakmt-roct",
+      "hsakmt-roct-dev",
+      "hsa-ext-rocr-dev"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD Heterogeneous System Architecture HSA development package",
+    "Description_Long": "This package contains the headers and cmake files for HSA runtime package",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "core-runtime",
+    "Artifact_Subdir": "ROCR-Runtime",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "rocminfo",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "pciutils",
+      "python3",
+      "libc6",
+      "libgcc-s1 | libgcc1",
+      "libstdc++6",
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "pciutils",
+      "python3",
+      "libc6",
+      "(libgcc-s1 or libgcc1)",
+      "libstdc++6",
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "Maintainer": "AMD Rocminfo Support <rocminfo.support@amd.com>",
+    "Description_Short": "ROCm Application for Reporting System Info",
+    "Description_Long": "Radeon Open Compute (ROCm) Runtime rocminfo tool",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "run",
+      "doc"
+    ],
+    "Artifact": "core-runtime",
+    "Artifact_Subdir": "rocminfo",
+    "Gfxarch": "False"
+
+  },
+  {
+    "Package": "hsa-amd-aqlprofile",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "Maintainer": "ROCm Profiler Support <dl.rocm-profiler.support@amd.com>",
+    "Description_Short": "AQLPROFILE library for AMD HSA runtime API extension support",
+    "Description_Long": "Library that enables advanced GPU profiling and tracing on AMD platforms",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "run",
+      "dev",
+      "doc"
+    ],
+    "Artifact": "rocprofiler-sdk",
+    "Artifact_Subdir": "aqlprofile",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "rocprofiler-sdk",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "ROCm Profiler Support <dl.ROCm-Profiler.support@amd.com>",
+    "Description_Short": "ROCm GPU performance analysis SDK",
+    "Description_Long": "Hardware-specific low-level performance analysis interface for profiling and tracing GPU compute applications.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "rocprofiler-sdk",
+    "Artifact_Subdir": "rocprofiler-sdk",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "roctracer",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "ROCm Profiler Support <dl.ROCm-Profiler.support@amd.com>",
+    "Description_Short": "AMD ROCTRACER library",
+    "Description_Long": "Dynamic libraries for the ROCtracer",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "rocprofiler-sdk",
+    "Artifact_Subdir": "roctracer",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "roctracer-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "roctracer",
+      "hsa-rocr-dev",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "roctracer",
+      "hsa-rocr-devel",
+      "rocm-core"
+    ],
+    "Maintainer": "ROCm Profiler Support <dl.ROCm-Profiler.support@amd.com>",
+    "Description_Short": "AMD ROCTRACER library",
+    "Description_Long": "Header files and documentation for ROCtracer",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "rocprofiler-sdk",
+    "Artifact_Subdir": "roctracer",
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "rocfft",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "rocFFT Maintainer <rocfft-maintainer@amd.com>",
+    "Description_Short": "ROCm FFT library",
+    "Description_Long": "Library for computing fast Fourier transforms (FFTs) written in the HIP programming language",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "fft",
+    "Artifact_Subdir": "rocFFT",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocfft-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocfft",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocfft",
+      "rocm-core"
+    ],
+    "Maintainer": "rocFFT Maintainer <rocfft-maintainer@amd.com>",
+    "Description_Short": "ROCm FFT library",
+    "Description_Long": "Provides development files for rocfft library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "fft",
+    "Artifact_Subdir": "rocFFT",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipfft",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocfft",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocfft",
+      "rocm-core"
+    ],
+    "Maintainer": "HIPFFT Maintainer <hipfft-maintainer@amd.com>",
+    "Description_Short": "ROCm FFT marshalling library",
+    "Description_Long": "Hipfft sits between application and the backend FFT library, where it marshals inputs to the backend and marshals results back to application",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "fft",
+    "Artifact_Subdir": "hipFFT",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipfft-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipfft",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipfft",
+      "rocm-core"
+    ],
+    "Maintainer": "HIPFFT Maintainer <hipfft-maintainer@amd.com>",
+    "Description_Short": "ROCm FFT marshalling library",
+    "Description_Long": "Provides development files for hipfft library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "fft",
+    "Artifact_Subdir": "hipFFT",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocrand",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "rocRAND Maintainer <hiprand-maintainer@amd.com>",
+    "Description_Short": "ROCm random number generation library",
+    "Description_Long": "Generates pseudorandom and quasirandom numbers",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "rand",
+    "Artifact_Subdir": "rocRAND",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocrand-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocrand",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocrand",
+      "rocm-core"
+    ],
+    "Maintainer": "rocRAND Maintainer <hiprand-maintainer@amd.com>",
+    "Description_Short": "ROCm random number generation library",
+    "Description_Long": "Provides development files for rocRAND library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "rand",
+    "Artifact_Subdir": "rocRAND",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hiprand",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "hipRAND Maintainer <hiprand-maintainer@amd.com>",
+    "Description_Short": "A GPU-based random number generation library, written in HIP",
+    "Description_Long": "hipRAND is a RAND marshalling library with multiple supported backends",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "rand",
+    "Artifact_Subdir": "hipRAND",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hiprand-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hiprand",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hiprand",
+      "rocm-core"
+    ],
+    "Maintainer": "hipRAND Maintainer <hiprand-maintainer@amd.com>",
+    "Description_Short": "A GPU-based random number generation library, written in HIP",
+    "Description_Long": "Provides development files for hiprand library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "rand",
+    "Artifact_Subdir": "hipRAND",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocblas",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipblaslt",
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipblaslt",
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "Maintainer": "rocBLAS Maintainer <rocblas-maintainer@amd.com>",
+    "Description_Short": "rocBLAS is the AMD library for Basic Linear Algebra Subprograms(BLAS) in ROCm.",
+    "Description_Long": "rocBLAS is implemented in the HIP programming language and optimized for AMD GPUs",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "rocBLAS",
+    "Gfxarch": "True",
+    "Disable_DWZ": "True"
+  },
+  {
+    "Package": "rocblas-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocrand",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocblas",
+      "rocm-core"
+    ],
+    "Maintainer": "rocBLAS Maintainer <rocblas-maintainer@amd.com>",
+    "Description_Short": "rocBLAS is the AMD library for BLAS in ROCm",
+    "Description_Long": "Provides development files for rocBLAS library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "rocBLAS",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipblas",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocblas",
+      "rocsolver",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocblas",
+      "rocsolver",
+      "rocm-core"
+    ],
+    "Maintainer": "hipBLAS Maintainer <hipblas-maintainer@amd.com>",
+    "Description_Short": "ROCm BLAS marshalling library",
+    "Description_Long": "hipBLAS is BLAS marshalling library with multiple supported backends.Sits between application and a 'worker' BLAS library, where it marshals inputs to the backend library and marshals results to application",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipBLAS",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipblas-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipblas",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipblas",
+      "rocm-core"
+    ],
+    "Maintainer": "hipBLAS Maintainer <hipblas-maintainer@amd.com>",
+    "Description_Short": "ROCm BLAS marshalling library",
+    "Description_Long": "Provides development files for hipblas library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipBLAS",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipblaslt",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "roctracer",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "roctracer",
+      "rocm-core"
+    ],
+    "Maintainer": "hipBLASLt Maintainer <hipblaslt-maintainer@amd.com>",
+    "Description_Short": "HIP library for GEMM operations with extended functionality",
+    "Description_Long": "HIP library for GEMM operations with extended functionality",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipBLASLt",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "hipblaslt-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipblaslt",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipblaslt",
+      "rocm-core"
+    ],
+    "Maintainer": "hipBLASLt Maintainer <hipblaslt-maintainer@amd.com>",
+    "Description_Short": "HIP library for GEMM operations with extended functionality",
+    "Description_Long": "Provides development files for hipblaslt library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipBLASLt",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "hipblas-common-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "hipBLAS Maintainer <hipblas-maintainer@amd.com>",
+    "Description_Short": "Common files for hipBLAS libraries",
+    "Description_Long": "hipBLAS-common is a header-only library that provides common files for hipBLAS and hipBLASLt",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipBLAS-common",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "composablekernel-ckprofiler",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
+    "Description_Short": "High Performance Composable Kernel for AMD GPUs",
+    "Description_Long": "The Composable Kernel (CK) library provides a programming model for writing performance-critical kernels for machine learning workloads across multiple architectures.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "run"
+    ],
+    "Artifact": "composable-kernel",
+    "Artifact_Subdir": "composable_kernel",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "composablekernel-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocm-core"
+    ],
+    "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
+    "Description_Short": "High Performance Composable Kernel for AMD GPUs",
+    "Description_Long": "Provides development files for CK library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev",
+      "doc"
+    ],
+    "Artifact": "composable-kernel",
+    "Artifact_Subdir": "composable_kernel",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "rocsparse",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "Maintainer": "rocSPARSE Maintainer <rocsparse-maintainer@amd.com>",
+    "Description_Short": "ROCm SPARSE library",
+    "Description_Long": "rocSPARSE exposes a common interface that provides Basic Linear Algebra Subroutines (BLAS) for sparse computation",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "rocSPARSE",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocsparse-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocsparse",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocsparse",
+      "rocm-core"
+    ],
+    "Maintainer": "rocSPARSE Maintainer <rocsparse-maintainer@amd.com>",
+    "Description_Short": "ROCm SPARSE library",
+    "Description_Long": "Provides development files for rocSPARSE library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "rocSPARSE",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "hipsparse",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocsparse",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocsparse",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSPARSE Maintainer <hipsparse-maintainer@amd.com>",
+    "Description_Short": "hipSPARSE is a SPARSE marshalling library with multiple supported backends",
+    "Description_Long": "hipSPARSE sits between application and a 'worker' SPARSE library, where it marshals inputs to the backend library and marshals results to application",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSPARSE",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipsparse-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipsparse",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipsparse",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSPARSE Maintainer <hipsparse-maintainer@amd.com>",
+    "Description_Short": "hipSPARSE is a SPARSE marshalling library with multiple supported backends",
+    "Description_Long": "Provides development files for hipSPARSE library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSPARSE",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocsolver",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocblas",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocblas",
+      "rocm-core"
+    ],
+    "Maintainer": "RocSOLVER maintainer <rocsolver-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm SOLVER library",
+    "Description_Long": "rocSOLVER is an implementation of a subset of LAPACK functionality on the ROCm platform.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "rocSOLVER",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "rocsolver-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocsolver",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocsolver",
+      "rocm-core"
+    ],
+    "Maintainer": "RocSOLVER maintainer <rocsolver-maintainer@amd.com>",
+    "Description_Short": "AMD ROCm SOLVER library",
+    "Description_Long": "Provides development files for rocSOLVER library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "rocSOLVER",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipsolver",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocblas",
+      "rocsolver",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocblas",
+      "rocsolver",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSOLVER Maintainer <hipsolver-maintainer@amd.com>",
+    "Description_Short": "hipSOLVER is a LAPACK marshalling library, with multiple supported backends",
+    "Description_Long": "hipSOLVER sits between the application and a 'worker' LAPACK library, marshalling inputs into the backend library and marshalling results back to the application",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSOLVER",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipsolver-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipsolver",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipsolver",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSOLVER Maintainer <hipsolver-maintainer@amd.com>",
+    "Description_Short": "hipSOLVER is a LAPACK marshalling library, with multiple supported backends",
+    "Description_Long": "Provides development files for hipsolver library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSOLVER",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "miopen-hip",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hip-runtime-amd",
+      "comgr",
+      "roctracer",
+      "rocblas",
+      "hipblaslt",
+      "rocrand",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hip-runtime-amd",
+      "comgr",
+      "roctracer",
+      "rocblas",
+      "hipblaslt",
+      "rocrand",
+      "rocm-core"
+    ],
+    "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
+    "Description_Short": "AMD DNN Library",
+    "Description_Long": "MIOpen is AMD's library for high-performance machine learning primitives",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Conflicts": "miopen-opencl",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "miopen",
+    "Artifact_Subdir": "MIOpen",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "miopen-hip-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "miopen-hip",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "miopen-hip",
+      "rocm-core"
+    ],
+    "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
+    "Description_Short": "AMD DNN Library",
+    "Description_Long": "Provides development files for miopen library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Conflicts": "miopen-opencl",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "miopen",
+    "Artifact_Subdir": "MIOpen",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "rocprim-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "Maintainer": "rocPRIM Maintainer <rocprim-maintainer@amd.com>",
+    "Description_Short": "rocPRIM is a header-only library that provides HIP parallel primitives.",
+    "Description_Long": "rocPRIM is a header-only library that provides HIP parallel primitives.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "prim",
+    "Artifact_Subdir": "rocPRIM",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipcub-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocprim-dev",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocprim-devel",
+      "rocm-core"
+    ],
+    "Maintainer": "hipCUB Maintainer <hipcub-maintainer@amd.com>",
+    "Description_Short": "hipCUB (rocPRIM backend)",
+    "Description_Long": "hipCUB is a thin wrapper library on top of rocPRIM or CUB.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "prim",
+    "Artifact_Subdir": "hipCUB",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "rocthrust-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocprim-dev",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "rocprim-devel",
+      "rocm-core"
+    ],
+    "Maintainer": "rocThrust Maintainer <rocthrust-maintainer@amd.com>",
+    "Description_Short": "rocThrust is a ROCm port of the Thrust library, written in HIP",
+    "Description_Long": "rocThrust is a ROCm port of the Thrust library, written in HIP",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "prim",
+    "Artifact_Subdir": "rocThrust",
+    "Gfxarch": "True"
   },
   {
     "Package": "rccl",
@@ -215,6 +1750,7 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "hip-runtime-amd",
       "rocm-smi-lib",
       "rocm-core",
       "libc6",
@@ -222,6 +1758,7 @@
       "libstdc++6"
     ],
     "RPMRequires": [
+      "hip-runtime-amd",
       "rocm-smi-lib",
       "rocm-core",
       "glibc",
@@ -229,7 +1766,8 @@
       "libstdc++"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
-    "Description": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Description_Long": "Stand-alone library of standard collective communication routines for GPUs",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -242,6 +1780,7 @@
       "doc"
     ],
     "Artifact": "rccl",
+    "Artifact_Subdir": "rccl",
     "Gfxarch": "True"
   },
   {
@@ -250,13 +1789,16 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "rocm-core",
       "rccl"
     ],
     "RPMRequires": [
+      "rocm-core",
       "rccl"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
-    "Description": "ROCm Communication Collectives Library development package",
+    "Description_Short": "ROCm Communication Collectives Library development package",
+    "Description_Long": "Provides development files for RCCL library",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -267,10 +1809,54 @@
       "dev"
     ],
     "Artifact": "rccl",
+    "Artifact_Subdir": "rccl",
     "Gfxarch": "True"
   },
   {
+    "_comment": "Composite package metadata starts from here. Artifact_Subdir tag is not requires. If Includes tag is present, then the package is created by combining the individual packages, else use the component tag for populating package contents",
     "Package": "rocm-base",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libgcc-s1",
+      "libstdc++6",
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "libgcc",
+      "libstdc++",
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "The ROCm-base package contains essential ROCm utilities",
+    "Description_Long": "ROCm base contains components like rocm-core, rocm-cmake, half and rocprofiler-register",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "run",
+      "dev",
+      "doc"
+    ],
+    "Includes": [
+      "rocm-core",
+      "rocm-smi-lib",
+      "rocprofiler-register",
+      "half"
+    ],
+    "Artifact": "base",
+    "Gfxarch": "False",
+    "Composite": "yes"
+  },
+  {
+    "Package": "amd-llvm",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -283,7 +1869,663 @@
       "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description": "ROCM-base package contains the basic ROCm components like rocm-core, rocm-cmake and rocprofiler-register",
+    "Description_Short": "ROCm LLVM compiler",
+    "Description_Long": "ROCm LLVM compiler with rocm-llvm, comgr and hipcc",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "ASL 2.0 with exceptions",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+
+    "Includes": [
+      "rocm-llvm",
+      "comgr",
+      "hipcc"
+    ],
+    "Artifact": "amd-llvm",
+    "Gfxarch": "False",
+    "Disable_DWZ": "True",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "amd-llvm-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "amd-llvm"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc",
+      "amd-llvm"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD LLVM compiler libraries",
+    "Description_Long": "Contains rocm-llvm, comgr and hipcc development files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "ASL 2.0 with exceptions",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "rocm-llvm-devel"
+    ],
+    "Artifact": "amd-llvm",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-hsa-runtime",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1",
+      "libnuma1",
+      "libelf1"
+    ],
+    "RPMRequires": [
+      "(libdrm-amdgpu or libdrm or libdrm_amdgpu1)",
+      "(libnuma1 or numactl-libs)"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for ROCm platforms",
+    "Description_Long": "The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the ROCK kernel driver.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "doc"
+    ],
+    "Includes": [
+      "hsa-rocr"
+    ],
+    "Artifact": "core-runtime",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+
+  },
+  {
+    "Package": "rocm-hsa-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libdrm-amdgpu-dev | libdrm-dev",
+      "rocm-hsa-runtime"
+    ],
+    "RPMRequires": [
+      "(libdrm-amdgpu-devel or libdrm-devel)",
+      "rocm-hsa-runtime"
+    ],
+    "Recommends": [
+      "libdrm-amdgpu-dev"
+    ],
+    "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
+    "Description_Short": "AMD Heterogeneous System Architecture HSA development package",
+    "Description_Long": "This package contains the headers and cmake files for HSA runtime package",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "hsa-rocr-devel"
+    ],
+    "Artifact": "core-runtime",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+
+  },
+
+  {
+    "Package": "rocm-hip-runtime",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libnuma1",
+      "libc6",
+      "libgcc-s1",
+      "libstdc++6"
+    ],
+    "RPMRequires": [
+      "libnuma1",
+      "glibc",
+      "libgcc",
+      "libstdc++"
+    ],
+    "Maintainer": "HIP Support <hip.support@amd.com>",
+    "Description_Short": "HIP:Heterogenous-computing Interface for Portability",
+    "Description_Long": "HIP:Heterogenous-computing Interface for Portability [RUNTIME - AMD]",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Includes": [
+      "hip-runtime-amd"
+    ],
+
+    "Artifact": "core-hip",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+
+  },
+
+  {
+    "Package": "rocm-hip-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "file",
+      "rocm-hip-runtime",
+      "amd-llvm"
+    ],
+    "RPMRequires": [
+      "glibc",
+      "file",
+      "rocm-hip-runtime",
+      "amd-llvm"
+    ],
+    "Maintainer": "HIP Support <hip.support@amd.com>",
+    "Description_Short": "Heterogenous-computing Interface for Portability",
+    "Description_Long": "Heterogenous-computing Interface for Portability [DEVELOPMENT]",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "hip-devel"
+    ],
+    "Artifact": "core-hip",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+
+  },
+
+  {
+    "Package": "rocm-blas",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD library for BLAS, sparse and solver in ROCm",
+    "Description_Long": "BLAS, sparse and solver libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Includes": [
+      "rocsparse",
+      "hipsparse",
+      "hipsolver",
+      "rocsolver",
+      "hipblas",
+      "rocblas",
+      "hipblaslt"
+    ],
+    "Artifact": "blas",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+
+  {
+    "Package": "rocm-blas-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "rocm-blas"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc",
+      "rocm-blas"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD library for BLAS, sparse and solver in ROCm",
+    "Description_Long": "BLAS, sparse and solver development files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "rocsparse-devel",
+      "hipsparse-devel",
+      "hipsolver-devel",
+      "rocsolver-devel",
+      "hipblas-devel",
+      "rocblas-devel",
+      "hipblaslt-devel"
+    ],
+    "Artifact": "blas",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-fft",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm FFT library",
+    "Description_Long": "rocfft and hipfft library files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Includes": [
+      "rocfft",
+      "hipfft"
+    ],
+    "Artifact": "base",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-fft-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "rocm-fft"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc",
+      "rocm-fft"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm FFT library",
+    "Description_Long": "rocfft and hipfft developement header files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "rocfft-devel",
+      "hipfft-devel"
+    ],
+    "Artifact": "fft",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+
+  {
+    "Package": "rocm-rand",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": " ROCm random number generation library",
+    "Description_Long": "Contains rocrand and hiprand libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Includes": [
+      "rocrand",
+      "hiprand"
+    ],
+    "Artifact": "rand",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+
+  {
+    "Package": "rocm-rand-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "rocm-rand"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc",
+      "rocm-rand"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm random number generation library",
+    "Description_Long": "Contains rocrand and hiprand developement header files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "rocrand-devel",
+      "hiprand-devel"
+    ],
+    "Artifact": "rand",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-composablekernel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [],
+    "RPMRequires": [],
+    "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
+    "Description_Short": "High Performance Composable Kernel for AMD GPUs",
+    "Description_Long": "The Composable Kernel (CK) library provides a programming model for writing performance-critical kernels for machine learning workloads across multiple architectures.",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "run"
+    ],
+    "Artifact": "composable-kernel",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-composablekernel-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-composablekernel"
+    ],
+    "RPMRequires": [
+      "rocm-composablekernel"
+    ],
+    "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
+    "Description_Short": "High Performance Composable Kernel for AMD GPUs",
+    "Description_Long": "Provides development files for CK library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev",
+      "doc"
+    ],
+    "Artifact": "composable-kernel",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+
+  {
+    "Package": "rocm-rccl",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
+    "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Description_Long": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rccl",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Includes": [
+      "rccl"
+    ],
+    "Artifact": "rccl",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+
+  {
+    "Package": "rocm-rccl-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "rocm-rccl"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc",
+      "rocm-rccl"
+    ],
+    "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
+    "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Description_Long": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rccl",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "rccl-devel"
+    ],
+    "Artifact": "rccl",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-miopen",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [],
+    "RPMRequires": [],
+    "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
+    "Description_Short": "AMD DNN Library",
+    "Description_Long": "MIOpen is AMD's library for high-performance machine learning primitives",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "miopen",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+
+  {
+    "Package": "rocm-miopen-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "rocm-miopen"
+    ],
+    "RPMRequires": [
+      "rocm-miopen"
+    ],
+    "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
+    "Description_Short": "AMD DNN Library",
+    "Description_Long": "Provides development files for miopen library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "miopen",
+    "Gfxarch": "True",
+    "Composite": "Yes"
+  },
+
+  {
+    "Package": "rocm-prim",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm primitive header files",
+    "Description_Long": "Contains rocprim, hipcub and rocthrust developement files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Includes": [
+      "rocprim-devel",
+      "hipcub-devel",
+      "rocthrust-devel"
+    ],
+    "Artifact": "prim",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-profiler-sdk",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm profiler tools ",
+    "Description_Long": "Contains rocprofiler-sdk, aqlprofile and roctracer",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -291,19 +2533,166 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Includes": [
-      "rocm-core",
-      "rocm-smi-lib",
-      "rocprofiler-register"
+      "hsa-amd-aqlprofile",
+      "rocprofiler-sdk",
+      "roctracer"
     ],
+    "Artifact": "prim",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-hipify",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [],
+    "RPMRequires": [],
+    "Maintainer": "ROCm Compiler Support <rocm.compiler.support@amd.com>",
+    "Description_Short": "Hipify CUDA source",
+    "Description_Long": "This tool translates CUDA source code into portable HIP C++ automatically",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/HIPIFY",
+    "Components": [
+      "run"
+    ],
+    "Artifact": "hipify",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+
+  },
+
+  {
+    "Package": "rocm-sysdeps",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm system dependencies ",
+    "Description_Long": "ROCm system dependencies ",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
     "Components": [
       "lib",
       "dev",
-      "run",
+      "doc",
+      "run"
+    ],
+    "Artifact": "sysdeps",
+    "Gfxarch": "False",
+    "Disable_DWZ": "True",
+    "Disable_DH_STRIP": "True",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-host-blas",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm host BLAS libraries",
+    "Description_Long": "ROCm host BLAS libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "dev",
+      "doc",
+      "run"
+    ],
+    "Artifact": "host-blas",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-host-suite-sparse",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm host suite sparse libraries",
+    "Description_Long": "ROCm host suite sparse libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "dev",
+      "doc",
+      "run"
+    ],
+    "Artifact": "host-suite-sparse",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+  },
+  {
+    "Package": "rocm-support-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm development support header files",
+    "Description_Long": "ROCm development support header files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "dev",
       "doc"
     ],
-    "Artifact": "base",
-    "Gfxarch": "False",
-    "Composite": ""
+    "Artifact": "support",
+    "Gfxarch": "True",
+    "Composite": "yes"
   }
 
 ]

@@ -89,12 +89,6 @@ def parse_components(components: list[str]) -> list[list]:
             "rccl-tests",
         ]
 
-    # if "core" in components:
-    #     # amdgpu-windows-interop is Windows only and is updated manually.
-    #     # hip-tests is Windows only and is updated manually.
-    #     system_projects += [
-    #     ]
-
     if "profiler" in components:
         system_projects += [
             "rocprof-trace-decoder",
@@ -102,15 +96,9 @@ def parse_components(components: list[str]) -> list[list]:
 
     if "rocm-libraries" in components:
         arguments.append("--include-rocm-libraries")
-        arguments.append("--include-math-libs")
         arguments.append("--include-ml-frameworks")
     else:
         arguments.append("--no-include-rocm-libraries")
-
-        if "math-libs" in components:
-            arguments.append("--include-math-libs")
-        else:
-            arguments.append("--no-include-math-libs")
 
         if "ml-libs" in components:
             arguments.append("--include-ml-frameworks")
@@ -220,7 +208,6 @@ def main(argv):
                   base,
                   comm-libs,
                   compiler,
-                  math-libs,
                   ml-libs,
                   rocm-libraries,
                   rocm-systems,

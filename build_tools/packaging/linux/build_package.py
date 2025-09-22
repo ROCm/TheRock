@@ -69,7 +69,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-
+    print(f"Create_deb_package: {pkg_name}")
     # Create package contents in DEB/pkg_name/install_prefix folder
     package_dir = Path(DEBIAN_CONTENTS_DIR) / pkg_name
     deb_dir = package_dir / "debian"
@@ -87,15 +87,17 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     if pkg_list is None:
         pkg_list = [pkg_info.get("Package")]
-
     sourcedir_list = []
     for pkg in pkg_list:
         dir_list = filter_components_fromartifactory(pkg, config.gfx_arch)
         sourcedir_list.extend(dir_list)
 
+    print(f"sourcedir_list:\n  {sourcedir_list}")
+    if not sourcedir_list:
+        sys.exit("Empty sourcedir_list, exiting")
+
     dest_dir = package_dir / Path(config.install_prefix).relative_to("/")
     for source_path in sourcedir_list:
-        print(source_path)
         copy_package_contents(source_path, dest_dir)
 
     if config.enable_rpath:
@@ -203,15 +205,14 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """
     print("Generate rules file")
     rules_file = Path(deb_dir) / "rules"
-
-    disable_dwz = (
-        None if pkg_info.get("Disable_DWZ") in (None, False, "False", "false") else True
-    )
+    disable_dh_strip = is_key_defined(pkg_info, "Disable_DH_STRIP")
+    disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
     env = Environment(loader=FileSystemLoader("."))
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
     context = {
         "disable_dwz": disable_dwz,
+        "disable_dh_strip": disable_dh_strip,
     }
 
     with rules_file.open("w", encoding="utf-8") as f:
@@ -251,8 +252,8 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         "depends": depends,
         "pkg_name": pkg_name,
         "arch": pkg_info.get("Architecture"),
-        "description_short": pkg_info.get("Description"),
-        "description_long": pkg_info.get("Description"),
+        "description_short": pkg_info.get("Description_Short"),
+        "description_long": pkg_info.get("Description_Long"),
         "homepage": pkg_info.get("Homepage"),
         "maintainer": pkg_info.get("Maintainer"),
         "priority": pkg_info.get("Priority"),
@@ -309,9 +310,9 @@ def package_with_dpkg_deb(pkg_dir):
     # Execute the command
     try:
         subprocess.run(cmd, check=True)
-        print("Package built successfully.")
+        print(f"Deb Package built successfully: {os.path.basename(pkg_dir)}")
     except subprocess.CalledProcessError as e:
-        print("Error building package:", e)
+        print(f"Error building deb package{os.path.basename(pkg_dir)}: {e}")
         sys.exit(e.returncode)
 
     os.chdir(current_dir)
@@ -374,7 +375,7 @@ def generate_spec_file(pkginfo, specfile, config: PackageConfig):
     requires_list = pkginfo.get("RPMRequires", [])
     requires = convert_to_versiondependency(requires_list, config)
 
-    # check the package is group of basic package or not
+    # Get the packages included by the composite package
     pkg_list = pkginfo.get("Includes")
 
     if pkg_list is None:
@@ -430,9 +431,9 @@ def package_with_rpmbuild(spec_file):
             ["rpmbuild", "--define", f"_topdir {package_rpm}", "-ba", spec_file],
             check=True,
         )
-        print("RPM build completed successfully.")
+        print(f"RPM build completed successfully: {os.path.basename(package_rpm)}")
     except subprocess.CalledProcessError as e:
-        print("RPM build failed:", e)
+        print(f"RPM build failed for {os.path.basename(package_rpm)}: {e}")
         sys.exit(e.returncode)
 
 
@@ -532,15 +533,18 @@ def filter_components_fromartifactory(pkg, gfx_arch):
 
     Parameters:
     pkg : package name
+    gfx_arch : graphics architecture
 
     Returns: List of directories
     """
 
     pkg_info = get_package_info(pkg)
+    is_composite = is_key_defined(pkg_info, "composite")
     sourcedir_list = []
     component_list = pkg_info.get("Components", [])
     artifact_prefix = pkg_info.get("Artifact")
-    if str(pkg_info.get("Gfxarch", "False")).strip().lower() == "true":
+    artifact_subdir = pkg_info.get("Artifact_Subdir")
+    if is_key_defined(pkg_info, "Gfxarch"):
         artifact_suffix = gfx_arch + "-dcgpu"
     else:
         artifact_suffix = "generic"
@@ -550,20 +554,19 @@ def filter_components_fromartifactory(pkg, gfx_arch):
             Path(ARTIFACTS_DIR) / f"{artifact_prefix}_{component}_{artifact_suffix}"
         )
         filename = source_dir / "artifact_manifest.txt"
-
-        with open(filename, "r") as file:
+        with open(filename, "r", encoding="utf-8") as file:
             for line in file:
-                if (
-                    pkg in line
-                    or pkg.replace("-", "_") in line
-                    or pkg.replace("-devel", "") in line
-                    or pkg.replace("-dev", "") in line
-                ):
+
+                match_found = (
+                    isinstance(artifact_subdir, str)
+                    and (artifact_subdir.lower() + "/") in line.lower()
+                ) or is_composite
+
+                if match_found and line.strip():
                     print("Matching line:", line.strip())
                     source_path = source_dir / line.strip()
                     sourcedir_list.append(source_path)
 
-    print(sourcedir_list)
     return sourcedir_list
 
 
@@ -619,11 +622,11 @@ def parse_input_package_list(pkg_name):
 
     for entry in data:
         # Skip if packaging is disabled
-        if is_packaging_disabled(entry):
+        if is_key_defined(entry, "disablepackaging"):
             continue
 
         name = entry.get("Package")
-        is_composite = any(key.lower() == "composite" for key in entry)
+        is_composite = is_key_defined(entry, "composite")
 
         # Loop through each type in pkg_type
         for pkg in pkg_name:
@@ -637,7 +640,7 @@ def parse_input_package_list(pkg_name):
                 pkg_list.append(name)
                 break
 
-    print(pkg_list)
+    print(f"pkg_list:\n  {pkg_list}")
     return pkg_list
 
 
@@ -741,7 +744,7 @@ def run(args: argparse.Namespace):
     package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
     for pkg_name in pkg_list:
         if pkg_type and pkg_type.lower() in package_creators:
-            print(f"Create pkg_type.upper() package.")
+            print(f"Create {pkg_type.upper()} package.")
             package_creators[pkg_type.lower()](pkg_name, config)
         else:
             print("Create both DEB and RPM packages.")

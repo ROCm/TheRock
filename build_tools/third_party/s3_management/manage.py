@@ -27,7 +27,8 @@ S3 = boto3.resource('s3')
 CLIENT = boto3.client('s3')
 
 # bucket for TheRock
-BUCKET_NAME = getenv("S3_BUCKET_PY", "therock-nightly-python")
+# We also manage `therock-nightly-python` (not the default to make the script safer to test)
+BUCKET_NAME = getenv("S3_BUCKET_PY", "therock-dev-python")
 BUCKET = S3.Bucket(BUCKET_NAME)
 # TODO: bucket mirror just to hold index used with CDN
 # BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
@@ -35,16 +36,18 @@ INDEX_BUCKETS = {BUCKET} #, BUCKET_CDN}
 
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
+    # Note: v2-staging first, in case issues are observed while the script runs
+    # and the developer wants to more safely cancel the script.
+    "v2-staging/gfx110X-dgpu",
+    "v2-staging/gfx1151",
+    "v2-staging/gfx120X-all",
+    "v2-staging/gfx94X-dcgpu",
+    "v2-staging/gfx950-dcgpu",
     "v2/gfx110X-dgpu",
     "v2/gfx1151",
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
     "v2/gfx950-dcgpu",
-    "v2-staging/gfx110X-dgpu",
-    "v2-staging/gfx1151",
-    "v2-staging/gfx120X-all",
-    "v2-staging/gfx94X-dcgpu",
-    "v2-staging/gfx950-dcgpu"
 ]
 
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
@@ -132,6 +135,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "xformers",
     "executorch",
     "setuptools",
+    "setuptools_scm",
     "wheel",
     # ---- JAX ----
     "jax",
