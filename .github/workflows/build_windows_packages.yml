@@ -32,7 +32,7 @@ permissions:
 jobs:
   build_windows_packages:
     name: Build Windows Packages (xfail ${{ inputs.expect_failure }})
-    runs-on: azure-windows-scale-rocm
+    runs-on: azure-windows-scale-rocm-test
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
       id-token: write
