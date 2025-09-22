@@ -24,7 +24,16 @@ class SystemInfo:
         # Define Device Storage status.
         self._device_disk_stat = self.device_disk_status()
 
+        # Define file system overview.
+        self._device_file_system_list = self.device_file_system()
+
+        # Define ccache status.
+        self._device_ccache_stat = self.device_ccache_system()
+
         self._py = FindPython()
+
+        # Define pyhthon package list
+        self._py_list = self.device_python_list()
 
         if self.is_windows:
             self._cl = FindMSVC()
@@ -344,6 +353,73 @@ class SystemInfo:
                 round(DISK_USAGE_RATIO, 2),
             )
 
+    def device_file_system(self):
+        """
+        Return a list of strings containing the output of `df -h`.
+        `df -h` shows information about all file systems of the systems, including
+        filesystem name, size, available and used storage, and where it is mounted
+        """
+
+        import subprocess
+
+        proc = subprocess.run(["df", "-h"], capture_output=True, text=True, check=True)
+
+        return proc.stdout.splitlines(keepends=True)
+
+    def device_ccache_system(self):
+        """
+        Returns a pair of string lists that contain information about the ccache on
+        the system. If ccache is not installed, strings stating this are returned.
+
+        CCACHE_STAT (= [0]) contains general status about ccache
+        CCACHE_CONFIG ( = [1]) contains the ccache config
+        """
+        import subprocess
+
+        ccache = []
+        try:
+            proc = subprocess.run(
+                ["ccache", "-s", "-v"], capture_output=True, text=True, check=True
+            )
+
+            ccache.append([proc.stdout.splitlines(keepends=True)])
+        except subprocess.CalledProcessError:
+            ccache.append(["Ccache not detected!"])
+            ccache.append([""])
+            return ccache
+
+        proc = subprocess.run(
+            ["ccache", "--show-config"], capture_output=True, text=True, check=True
+        )
+        ccache.append([proc.stdout.splitlines(keepends=True)])
+
+        return ccache
+
+    def device_python_list(self):
+        """
+        Return a list of strings containing the output of `df -h`.
+        `df -h` shows information about all file systems of the systems, including
+        filesystem name, size, available and used storage, and where it is mounted
+        """
+        import subprocess
+
+        proc = subprocess.run(
+            ["pip", "list", "--format=freeze"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        return proc.stdout.splitlines(keepends=True)
+
+    @property
+    def CCACHE_STAT(self):
+        return self._device_ccache_stat[0]
+
+    @property
+    def CCACHE_CONFIG(self):
+        return self._device_ccache_stat[1]
+
     @property
     def python(self):
         return self._py
@@ -526,6 +602,16 @@ class SystemInfo:
         """
 
     @property
+    def FILE_SYSTEM_STATUS(self):
+        fs_list = ""
+        for idx, line in enumerate(self._device_file_system_list):
+            if idx == 0:
+                fs_list += line
+            else:
+                fs_list += "                    " + line
+        return fs_list
+
+    @property
     def ENV_STATUS(self):
         if self.is_windows:
             return f"""Python ENV: {self.python.exe} ({self.python.ENV_TYPE})
@@ -555,6 +641,34 @@ class SystemInfo:
             """
 
     @property
+    def CCACHE_STATUS(self):
+        ccache_stats_cfg_list = ""
+        for idx, line in enumerate(self.CCACHE_STAT[0]):
+            if idx == 0:
+                ccache_stats_cfg_list += line
+            else:
+                ccache_stats_cfg_list += "                    " + line
+
+        ccache_stats_cfg_list += f"""
+                    -------------
+                    Config:
+                    -------------
+"""
+
+        for idx, line in enumerate(self.CCACHE_CONFIG[0]):
+            ccache_stats_cfg_list += "                    " + line
+
+        return ccache_stats_cfg_list
+
+    @property
+    def PYTHON_LIST(self):
+        python_list = ""
+        for idx, line in enumerate(self._py_list):
+            python_list += "\t\t\t\t\t\t  " + line
+
+        return python_list
+
+    @property
     def summary(self):
         if self.is_windows:
             print(
@@ -566,12 +680,15 @@ class SystemInfo:
         GPU:        {self.GPU_STATUS}
         RAM:        {self.MEM_STATUS}
         STORAGE:    {self.DISK_STATUS}
+        FILE SYSTEM:{self.FILE_SYSTEM_STATUS}
 
         ENV:        {self.ENV_STATUS}
 
         SDK:        {self.SDK_STATUS}
 
         MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
+
+        CCACHE:     {self.CCACHE_STATUS}
     """
             )
 
@@ -585,5 +702,24 @@ class SystemInfo:
         GPU:        {self.GPU_STATUS}
         RAM:        {self.MEM_STATUS}
         STORAGE:    {self.DISK_STATUS}
+        FILE SYSTEM:{self.FILE_SYSTEM_STATUS}
+
+        CCACHE:     {self.CCACHE_STATUS}
     """
             )
+
+    @property
+    def python_list(self):
+        print(
+            f"""
+        ===================\t\t\t\tPython List \t\t\t\t===================
+        """
+        )
+
+        print(f"{self.PYTHON_LIST}")
+
+        print(
+            f"""
+            ===================\t\t\t    End Python List   \t\t\t\t===================
+        """
+        )
