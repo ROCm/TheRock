@@ -50,10 +50,10 @@ on:
         type: string
         default: "release/2.7"
       repository:
-        description: "Repository to chechout. Otherwise, defaults to `github.repository`."
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
       ref:
-        description: "Branch, tag or SHA to checkout. Otherwise, uses the default branch."
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
 
 permissions:

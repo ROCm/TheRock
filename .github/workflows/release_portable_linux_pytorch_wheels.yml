@@ -30,7 +30,7 @@ on:
         description: ROCm version to pip install
         type: string
       ref:
-        description: "Branch, tag or SHA to checkout. Otherwise, uses the default branch."
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
   workflow_dispatch:
     inputs:
@@ -67,7 +67,7 @@ on:
         description: ROCm version to pip install
         type: string
       ref:
-        description: "Branch, tag or SHA to checkout. Otherwise, uses the default branch."
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
         default: ''
 
