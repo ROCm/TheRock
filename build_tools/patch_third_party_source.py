@@ -54,7 +54,7 @@ def main(args):
     patches_dir = Path(patches_dir)
     for i in patches:
         p = patches_dir / i
-        run_command(["git", "apply", p])
+        run_command(["patch", "-p1", "-i", p])
     create_stamp_file(stamp_filename)
 
 
