@@ -106,4 +106,3 @@ jobs:
             --rocm-version  "${{ inputs.rocm_version }}\
             --pkg-type "${{ inputs.pkg_type }}
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
-
