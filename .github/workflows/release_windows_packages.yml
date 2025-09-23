@@ -306,8 +306,6 @@ jobs:
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
 
-      # TODO(scotttodd): trigger tests
-
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4

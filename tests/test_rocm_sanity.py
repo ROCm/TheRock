@@ -1,11 +1,13 @@
-import pytest
-import subprocess
-import re
 from pathlib import Path
-import platform
 from pytest_check import check
 import logging
 import os
+import platform
+import pytest
+import re
+import shlex
+import subprocess
+import sys
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -18,10 +20,20 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command, cwd=None):
-    process = subprocess.run(command, capture_output=True, cwd=cwd, shell=is_windows())
+def run_command(command: list[str], cwd=None):
+    logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
+    process = subprocess.run(
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+    )
     if process.returncode != 0:
-        raise Exception(str(process.stderr))
+        logger.error(f"Command failed!")
+        logger.error("command stdout:")
+        for line in process.stdout.splitlines():
+            logger.error(line)
+        logger.error("command stderr:")
+        for line in process.stderr.splitlines():
+            logger.error(line)
+        raise Exception(f"Command failed: `{shlex.join(command)}`, see output above")
     return process
 
 
