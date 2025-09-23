@@ -590,7 +590,9 @@ class SystemInfo:
                 if _gpu_vram == None:
                     _gpulist += [f"GPU {_gpu_num}: \t{_gpu_name}"]
                 else:
-                    _gpulist += [f"GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)"]
+                    _gpulist += [
+                        f"GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)"
+                    ]
             return _gpulist
 
         elif self.is_linux:
