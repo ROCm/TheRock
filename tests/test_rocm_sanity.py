@@ -58,8 +58,16 @@ class TestROCmSanity:
         )
 
     def test_hip_printf(self):
-        # Compiling .cpp file using hipcc
         platform_executable_suffix = ".exe" if is_windows() else ""
+
+        # Look up amdgpu arch, e.g. gfx1100, for explicit `--offload-arch`.
+        # This is currently required on Windows. On Linux, hipcc looks it up.
+        amdgpu_arch_path = (THEROCK_BIN_DIR / ".." / "lib" / "llvm" / "bin").resolve()
+        amdgpu_arch_executable_file = f"amdgpu-arch{platform_executable_suffix}"
+        process = run_command([amdgpu_arch_executable_file], cwd=str(amdgpu_arch_path))
+        amdgpu_arch = process.stdout.splitlines()[0]
+
+        # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
         run_command(
             [
@@ -67,6 +75,7 @@ class TestROCmSanity:
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-Xlinker",
                 f"-rpath={THEROCK_BIN_DIR}/../lib/",
+                f"--offload-arch={amdgpu_arch}",
                 "-o",
                 hipcc_check_executable_file,
             ],
