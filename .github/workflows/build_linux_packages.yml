@@ -57,7 +57,7 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      # safe.directory must be done before Runner Health Status
+      # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
           git config --global --add safe.directory $PWD

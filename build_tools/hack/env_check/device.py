@@ -430,7 +430,7 @@ class SystemInfo:
             check=True,
         )
 
-        return proc.stdout.splitlines(keepends=True)
+        return proc.stdout.splitlines()
 
     @property
     def CCACHE_STAT(self):
@@ -588,10 +588,9 @@ class SystemInfo:
             for _gpu_info in self._device_gpu_list:
                 _gpu_num, _gpu_name, _gpu_vram = _gpu_info
                 if _gpu_vram == None:
-                    _gpulist += f"GPU {_gpu_num}: \t{_gpu_name}"
+                    _gpulist += [f"GPU {_gpu_num}: \t{_gpu_name}"]
                 else:
-                    _gpulist += f"""GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)
-    """
+                    _gpulist += [f"GPU {_gpu_num}: \t{_gpu_name} ({_gpu_vram:.2f}GB VRAM)"]
             return _gpulist
 
         elif self.is_linux:
@@ -677,11 +676,7 @@ class SystemInfo:
 
     @property
     def PYTHON_LIST(self):
-        python_list = ""
-        for idx, line in enumerate(self._py_list):
-            python_list += "\t\t\t\t\t\t  " + line
-
-        return python_list
+        return self._py_list
 
     def format_status(self, title: str, content: List[str], longest_status=14) -> str:
         indent_title = lambda x: f"{' ':8}" + x.ljust(longest_status + 1)
@@ -690,9 +685,9 @@ class SystemInfo:
 
         for idx, line in enumerate(content):
             if idx == 0:
-                indent_str += indent_title(title) + f" {line}\n"
+                indent_str += indent_title(title) + f"{line}\n"
             else:
-                indent_str += indent_title("") + f" {line}\n"
+                indent_str += indent_title("") + f"{line}\n"
 
         return indent_str
 
@@ -725,7 +720,7 @@ class SystemInfo:
             states_win = [
                 ("ENV:", self.ENV_STATUS),
                 ("SDK:", self.SDK_STATUS),
-                ("MAX_PATH_ENABLED:", self.MAX_PATH_LENGTH),
+                ("MAX_PATH_ENABLED:", "True" if self.MAX_PATH_LENGTH else "False"),
             ]
 
             states += states_win
@@ -755,5 +750,7 @@ class SystemInfo:
     @property
     def python_list(self):
         print(self.section_bar("Python List"))
-        print(f"\n{self.PYTHON_LIST}")
+        print()
+        print(self.format_status("", self.PYTHON_LIST, longest_status=-1))
+        print()
         print(self.section_bar("End Python List"))
