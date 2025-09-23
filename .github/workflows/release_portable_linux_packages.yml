@@ -236,18 +236,6 @@ jobs:
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
 
-      - name: Trigger testing nightly tarball
-        if: ${{ env.RELEASE_TYPE == 'nightly' }}
-        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
-        with:
-          workflow: test_release_packages.yml
-          inputs: |
-            { "version": "${{ needs.setup_metadata.outputs.version }}",
-              "tag": "nightly-tarball",
-              "file_name": "${{ env.FILE_NAME }}",
-              "target": "${{ matrix.target_bundle.amdgpu_family }}"
-            }
-
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
