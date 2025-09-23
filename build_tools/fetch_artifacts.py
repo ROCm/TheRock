@@ -252,7 +252,7 @@ def filter_base_artifacts(
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
-    if args.blas or args.all:
+    if args.blas:
         base_artifacts.append("host-blas_lib")
 
     artifacts_to_retrieve = collect_artifacts_download_requests(

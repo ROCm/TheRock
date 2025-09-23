@@ -114,7 +114,7 @@ def retrieve_artifacts_by_run_id(args):
     ]
     if args.base_only:
         argv.append("--base-only")
-    elif args.blas or args.fft or args.miopen or args.prim or args.rand or args.rccl:
+    elif any([args.blas, args.fft, args.miopen, args.prim, args.rand, args.rccl]):
         if args.blas:
             argv.append("--blas")
         if args.fft:
@@ -299,6 +299,12 @@ def main(argv):
     )
 
     args = parser.parse_args(argv)
+
+    if not args.amdgpu_family:
+        raise argparse.ArgumentTypeError(
+            "AMD GPU family argument is required and cannot be empty"
+        )
+
     run(args)
 
 
