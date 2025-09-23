@@ -223,6 +223,7 @@ def main(argv):
     parser.add_argument(
         "--amdgpu-family",
         type=str,
+        required=True,
         default="gfx94X-dcgpu",
         help="AMD GPU family to install (please refer to this: https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81 for family choices)",
     )
