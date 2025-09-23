@@ -196,7 +196,6 @@ cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 cmake --build build
 ```
 
-
 #### CCache usage on Linux
 
 To build with the [ccache](https://ccache.dev/) compiler cache:
