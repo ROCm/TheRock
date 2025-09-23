@@ -29,6 +29,9 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -63,6 +66,11 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+        default: ''
+
 
 permissions:
   id-token: write
@@ -86,3 +94,4 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
+      ref: ${{ inputs.ref || '' }}

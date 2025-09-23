@@ -18,6 +18,12 @@ on:
         description: "Staging subdirectory to push the packages"
         type: string
         default: "v2-staging"
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   # Trigger manually (typically to test the workflow or manually build a release [candidate])
   workflow_dispatch:
     inputs:
@@ -63,6 +69,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
       - name: Setup Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -125,9 +135,14 @@ jobs:
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.10'
+
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
@@ -245,7 +260,8 @@ jobs:
               "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
               "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
-              "rocm_version": "${{ needs.setup_metadata.outputs.version }}"
+              "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
+              "ref": "${{ inputs.ref || '' }}"
             }
 
       - name: Save cache
