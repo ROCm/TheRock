@@ -56,16 +56,16 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
     cl.extend(
         [
             "--mount",
-            f"type=bind,src={output_dir},dst=/therock/output",
+            f"type=bind,src={output_dir},dst=/therock/output,z",
             "--mount",
-            f"type=bind,src={args.repo_dir},dst=/therock/src",
+            f"type=bind,src={args.repo_dir},dst=/therock/src,z",
         ]
     )
     if args.build_python_only:
         cl.extend(
             [
                 "--mount",
-                f"type=bind,src={args.artifact_dir},dst=/therock/artifacts",
+                f"type=bind,src={args.artifact_dir},dst=/therock/artifacts,z",
             ]
         )
 
