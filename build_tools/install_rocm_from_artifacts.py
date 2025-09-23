@@ -114,23 +114,23 @@ def retrieve_artifacts_by_run_id(args):
     ]
     if args.base_only:
         argv.append("--base-only")
-    elif args.blas:
-        argv.append("--blas")
-    elif args.fft:
-        argv.append("--fft")
-    elif args.miopen:
-        argv.append("--miopen")
-    elif args.prim:
-        argv.append("--prim")
-    elif args.rand:
-        argv.append("--rand")
-    elif args.rccl and PLATFORM != "windows":
-        argv.append("--rccl")
+    elif args.blas or args.fft or args.miopen or args.prim or args.rand or args.rccl:
+        if args.blas:
+            argv.append("--blas")
+        if args.fft:
+            argv.append("--fft")
+        if args.miopen:
+            argv.append("--miopen")
+        if args.prim:
+            argv.append("--prim")
+        if args.rand:
+            argv.append("--rand")
+        if args.rccl and PLATFORM != "windows":
+            argv.append("--rccl")
+        if args.tests:
+            argv.append("--tests")
     else:
         argv.append("--all")
-
-    if args.tests:
-        argv.append("--tests")
 
     fetch_artifacts_main(argv)
     log(f"Retrieved artifacts for run ID {run_id}")
