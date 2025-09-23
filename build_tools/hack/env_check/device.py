@@ -720,7 +720,7 @@ class SystemInfo:
             states_win = [
                 ("ENV:", self.ENV_STATUS),
                 ("SDK:", self.SDK_STATUS),
-                ("MAX_PATH_ENABLED:", "True" if self.MAX_PATH_LENGTH else "False"),
+                ("MAX_PATH_ENABLED:", ["True"] if self.MAX_PATH_LENGTH else ["False"]),
             ]
 
             states += states_win
