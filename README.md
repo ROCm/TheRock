@@ -45,7 +45,7 @@ instructions and configurations for alternatives.
 > configurations is often faster and easier.
 
 > [!IMPORTANT]
-> Common issues during setup and building and their solutions are listed [here](docs/environment_setup_guide.md#common-issues).
+> Common issues during setup and building and their solutions are listed in the [Environment Setup Guide](docs/environment_setup_guide.md#common-issues).
 
 ### Setup - Ubuntu (24.04)
 
@@ -187,7 +187,8 @@ Further flags allow to build components with specific features enabled.
 
 ### CMake build usage
 
-Due to the size of the project, it is **recommended to build it with ccache** enabled to speed up the build. See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Windows](#ccache-usage-on-windows).
+For workflows that demand frequent rebuilds, it is **recommended to build it with ccache** enabled to speed up the build.
+See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Windows](#ccache-usage-on-windows).
 
 Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
