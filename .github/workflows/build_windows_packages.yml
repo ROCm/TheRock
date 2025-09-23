@@ -83,7 +83,7 @@ jobs:
       - name: Runner health status
         run: |
           ccache --zero-stats
-          ./build_tools/health_status.py
+          python ./build_tools/health_status.py
 
       - name: Test build_tools
         run: |

@@ -230,14 +230,14 @@ def upload_build_summary(args):
 
 
 def run(args):
-    if os.path.isdir(args.build_dir) == False:
+    if not args.build_dir.is_dir():
         log(
             f"""
 [ERROR] No build directory ({str(args.build_dir)}) found. Skipping upload of log files!
         This can be due to the CI job being cancelled before the build was started.
             """
         )
-        exit(1)
+        sys.exit(1)
 
     log("Creating Ninja log archive")
     log("--------------------------")

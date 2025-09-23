@@ -99,11 +99,11 @@ class CheckProgram(ABC):
 
 
 class CheckPython(CheckProgram):
-    def __init__(self, isGlobalEnvOK=False):
+    def __init__(self, is_global_env_ok=False):
         super().__init__()
         self.python = FindPython()
         self.name = "Python 3"
-        self.isGlobalEnvOK = isGlobalEnvOK
+        self.is_global_env_ok = is_global_env_ok
 
     def check(self):
         python = self.python
@@ -189,7 +189,7 @@ class CheckPython(CheckProgram):
             )
             _result = False
 
-        elif python.ENV_TYPE == "Global ENV" and self.isGlobalEnvOK == False:
+        elif python.ENV_TYPE == "Global ENV" and not self.is_global_env_ok:
             _stat = msg_stat(
                 "warn",
                 name,

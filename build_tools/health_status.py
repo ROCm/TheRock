@@ -27,11 +27,9 @@ def main():
 
     device.summary
 
-    print(
-        f"""
-        ===================\t\tStart detect compoments on: {build_type}\t\t===================
-    """
-    )
+    print("")
+    print(device.section_bar(f"Start detect compoments on: {build_type}"))
+    print("")
 
     check_list = [
         check
@@ -48,7 +46,7 @@ def main():
             CheckCCache(required=False),
             CheckNinja(),
             CheckGFortran(),
-            CheckPython(isGlobalEnvOK=True),
+            CheckPython(is_global_env_ok=True),
             CheckUV(required=False),
         ]
         if check is not None
@@ -79,21 +77,21 @@ def main():
 
     diag_check = check_therock.test_list(check_list).summary
 
-    print(
-        f"""
-        ===================\t    {diag_check}\t===================
-    """
-    )
+    print("")
+    print(device.section_bar(diag_check))
+    print("\n")
 
     device.python_list
 
     therock_detect_terminate = time.perf_counter()
     therock_detect_time = float(therock_detect_terminate - therock_detect_start)
     therock_detect_runtime = cstring(f"{therock_detect_time:.2f}", "hint")
+
+    print("\n")
     print(
-        f"""
-        ===================\tTheRock build pre-diagnosis script completed in {therock_detect_runtime} seconds\t===================
-    """
+        device.section_bar(
+            f"  TheRock build pre-diagnosis script completed in {therock_detect_runtime} seconds  "
+        )
     )
 
 

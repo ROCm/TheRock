@@ -3,9 +3,28 @@ from .find_tools import FindPython, FindMSVC
 from .utils import *
 import platform, re, sys, os
 from pathlib import PureWindowsPath
+import subprocess
+from typing import List
 
 
 class SystemInfo:
+    """
+    Provides system information in a nicely formatted output.
+
+    Workflow:
+    1. Have a function extracting the system information <X> you need
+    2. Assign it in SystemInfo.__init__(self)
+    3. Provide a property <X>_STATUS(self), that provides a list of strings,
+       containing the lines of content stripped of whitespace.
+    4. Add it to "states" in summary(self):
+        ("<X>:", self.<X>_STATUS)
+
+    Using it:
+        summary: Print system info
+        python_list: Print python list
+        section_bar(<section>): Prints <section> centered with "==" surrounding it
+    """
+
     def __init__(self):
 
         self._os = platform.system().capitalize()
@@ -32,7 +51,7 @@ class SystemInfo:
 
         self._py = FindPython()
 
-        # Define pyhthon package list
+        # Define python package list
         self._py_list = self.device_python_list()
 
         if self.is_windows:
@@ -360,11 +379,14 @@ class SystemInfo:
         filesystem name, size, available and used storage, and where it is mounted
         """
 
-        import subprocess
+        try:
+            proc = subprocess.run(
+                ["df", "-h"], capture_output=True, text=True, check=True
+            )
+        except subprocess.CalledProcessError:
+            return [cstring(f"[!] Command 'df' not found.", "warn")]
 
-        proc = subprocess.run(["df", "-h"], capture_output=True, text=True, check=True)
-
-        return proc.stdout.splitlines(keepends=True)
+        return proc.stdout.splitlines()
 
     def device_ccache_system(self):
         """
@@ -374,7 +396,6 @@ class SystemInfo:
         CCACHE_STAT (= [0]) contains general status about ccache
         CCACHE_CONFIG ( = [1]) contains the ccache config
         """
-        import subprocess
 
         ccache = []
         try:
@@ -382,7 +403,7 @@ class SystemInfo:
                 ["ccache", "-s", "-v"], capture_output=True, text=True, check=True
             )
 
-            ccache.append([proc.stdout.splitlines(keepends=True)])
+            ccache.append([proc.stdout.splitlines()])
         except subprocess.CalledProcessError:
             ccache.append(["Ccache not detected!"])
             ccache.append([""])
@@ -391,7 +412,7 @@ class SystemInfo:
         proc = subprocess.run(
             ["ccache", "--show-config"], capture_output=True, text=True, check=True
         )
-        ccache.append([proc.stdout.splitlines(keepends=True)])
+        ccache.append([proc.stdout.splitlines()])
 
         return ccache
 
@@ -401,7 +422,6 @@ class SystemInfo:
         `df -h` shows information about all file systems of the systems, including
         filesystem name, size, available and used storage, and where it is mounted
         """
-        import subprocess
 
         proc = subprocess.run(
             ["pip", "list", "--format=freeze"],
@@ -537,16 +557,20 @@ class SystemInfo:
     def HIP_PATH(self):
         return os.getenv("HIP_PATH")
 
+    #
+    # All _STATUS should return List[str]
+    #
+
     # Define OS configuration.
     @property
     def OS_STATUS(self):
         if self.is_windows:
-            return self.OS_NAME
+            return [self.OS_NAME]
         elif self.is_linux:
             return (
-                f"{self.OS_NAME}, GNU/Linux {self.OS_KERNEL} (WSL2)"
+                [f"{self.OS_NAME}, GNU/Linux {self.OS_KERNEL} (WSL2)"]
                 if self.is_WSL2
-                else f"{self.OS_NAME}, GNU/Linux {self.OS_KERNEL}"
+                else [f"{self.OS_NAME}, GNU/Linux {self.OS_KERNEL}"]
             )
         else:
             pass
@@ -554,15 +578,13 @@ class SystemInfo:
     # Define CPU status.
     @property
     def CPU_STATUS(self):
-        return f"""{self.CPU_NAME} ({self.CPU_ARCH})
-                    Logical cores: {self.CPU_CORE}
-        """
+        return [f"{self.CPU_NAME} ({self.CPU_ARCH})", f"Logical cores: {self.CPU_CORE}"]
 
     # Define GPU list status.
     @property
     def GPU_STATUS(self):
         if self._device_gpu_list is not None:
-            _gpulist = ""
+            _gpulist = []
             for _gpu_info in self._device_gpu_list:
                 _gpu_num, _gpu_name, _gpu_vram = _gpu_info
                 if _gpu_vram == None:
@@ -573,55 +595,56 @@ class SystemInfo:
             return _gpulist
 
         elif self.is_linux:
-            return cstring(f"[!] Skip GPU detection on Linux.", "warn")
+            return [cstring(f"[!] Skip GPU detection on Linux.", "warn")]
 
     # Define Memory Device status.
     @property
     def MEM_STATUS(self):
         if self.is_windows:
-            return f"""Total Physical Memory: {self._device_dram_stat[0]:.2f} GB
-                    Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
-                    Avail Virtual  Memory: {self._device_dram_stat[2]:.2f} GB
-            """
+            return [
+                f"Total Physical Memory: {self._device_dram_stat[0]:.2f} GB",
+                f"Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB",
+                f"Avail Virtual  Memory: {self._device_dram_stat[2]:.2f} GB",
+            ]
         elif self.is_linux:
-            return f"""Total Physical Memory: {self._device_dram_stat[0]:.2f} GB
-                    Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB
-                    Avail Swap Memory: {self._device_dram_stat[2]:.2f} GB
-            """
+            return [
+                f"Total Physical Memory: {self._device_dram_stat[0]:.2f} GB",
+                f"Avail Physical Memory: {self._device_dram_stat[1]:.2f} GB",
+                f"Avail   Swap   Memory: {self._device_dram_stat[2]:.2f} GB",
+            ]
         else:
             pass
 
     # Define Disk Device status.
     @property
     def DISK_STATUS(self):
-        return f"""Disk Total Space: {self._device_disk_stat[2]} GB
-                    Disk Avail Space: {self._device_disk_stat[4]} GB
-                    Disk Used  Space: {self._device_disk_stat[3]} GB
-                    Disk Usage: {self._device_disk_stat[5]} %
-                    Current Repo path: {self._device_disk_stat[0]}, Disk Device: {self._device_disk_stat[1]}
-        """
+        return [
+            f"Disk Total Space: {self._device_disk_stat[2]} GB",
+            f"Disk Avail Space: {self._device_disk_stat[4]} GB",
+            f"Disk Used  Space: {self._device_disk_stat[3]} GB",
+            f"Disk Usage: {self._device_disk_stat[5]} %",
+            f"Current Repo path: {self._device_disk_stat[0]}, Disk Device: {self._device_disk_stat[1]}",
+        ]
 
     @property
     def FILE_SYSTEM_STATUS(self):
-        fs_list = ""
-        for idx, line in enumerate(self._device_file_system_list):
-            if idx == 0:
-                fs_list += line
-            else:
-                fs_list += "                    " + line
-        return fs_list
+        return self._device_file_system_list
 
     @property
     def ENV_STATUS(self):
         if self.is_windows:
-            return f"""Python ENV: {self.python.exe} ({self.python.ENV_TYPE})
-                    Visual Studio: {self.VS20XX}
-                    Cygwin: {self.is_cygwin}
-                    MSYS2: {self.is_msys2}"""
+            return [
+                f"Python ENV: {self.python.exe} ({self.python.ENV_TYPE})",
+                f"Visual Studio: {self.VS20XX}",
+                f"Cygwin: {self.is_cygwin}",
+                f"MSYS2: {self.is_msys2}",
+            ]
         elif self.is_linux:
-            return f"""Python3 VENV: {self.python.exe} ({self.python.ENV_TYPE}) | WSL2: {self.is_WSL2}"""
+            return [
+                f"Python3 VENV: {self.python.exe} ({self.python.ENV_TYPE}) | WSL2: {self.is_WSL2}"
+            ]
         else:
-            return f"""Python3 VENV: {self.python.exe} ({self.python.ENV_TYPE}) """
+            return [f"Python3 VENV: {self.python.exe} ({self.python.ENV_TYPE}) "]
 
     @property
     def SDK_STATUS(self):
@@ -633,31 +656,23 @@ class SystemInfo:
             _hipcc_stat = self.HIP_PATH if self.HIP_PATH else "Not Detected"
             _rocm_stat = self.ROCM_HOME if self.ROCM_HOME else "Not Detected"
 
-            return f"""Visual Studio:  {_vs20xx_stat} | Host/Target: {self.VC_HOST} --> {self.VC_TARGET}
-                    VC++ Compiler:  {self.cl.version}
-                    VC++ UCRT:      {_vs20xx_sdk}
-                    AMD HIP SDK:    {_hipcc_stat}
-                    AMD ROCm:       {_rocm_stat}
-            """
+            return [
+                f"Visual Studio:  {_vs20xx_stat} | Host/Target: {self.VC_HOST} --> {self.VC_TARGET}",
+                f"VC++ Compiler:  {self.cl.version}",
+                f"VC++ UCRT:      {_vs20xx_sdk}",
+                f"AMD HIP SDK:    {_hipcc_stat}",
+                f"AMD ROCm:       {_rocm_stat}",
+            ]
 
     @property
     def CCACHE_STATUS(self):
-        ccache_stats_cfg_list = ""
-        for idx, line in enumerate(self.CCACHE_STAT[0]):
-            if idx == 0:
-                ccache_stats_cfg_list += line
-            else:
-                ccache_stats_cfg_list += "                    " + line
-
-        ccache_stats_cfg_list += f"""
-                    -------------
-                    Config:
-                    -------------
-"""
-
-        for idx, line in enumerate(self.CCACHE_CONFIG[0]):
-            ccache_stats_cfg_list += "                    " + line
-
+        ccache_stats_cfg_list = [
+            *self.CCACHE_STAT[0],
+            f"-------------",
+            f"Config:",
+            f"-------------",
+            *self.CCACHE_CONFIG[0],
+        ]
         return ccache_stats_cfg_list
 
     @property
@@ -668,58 +683,77 @@ class SystemInfo:
 
         return python_list
 
+    def format_status(self, title: str, content: List[str], longest_status=14) -> str:
+        indent_title = lambda x: f"{' ':8}" + x.ljust(longest_status + 1)
+
+        indent_str = ""
+
+        for idx, line in enumerate(content):
+            if idx == 0:
+                indent_str += indent_title(title) + f" {line}\n"
+            else:
+                indent_str += indent_title("") + f" {line}\n"
+
+        return indent_str
+
+    def section_bar(self, title: str):
+        longest_word = "TheRock build pre-diagnosis script completed in xxxx seconds"
+        tabs = 3 * 4  # original amount of tabs in the center section
+
+        # colored font needs extra treatement as len() returns length including ansi chars
+        uncolored_string = cstring_strip_color(title)
+        tabs += len(title) - len(uncolored_string)
+
+        return (
+            f"{' ':8}==================="
+            + f"{title}".center(len(longest_word) + tabs)
+            + "==================="
+        )
+
     @property
     def summary(self):
+        states = [
+            ("OS:", self.OS_STATUS),
+            ("CPU:", self.CPU_STATUS),
+            ("GPU:", self.GPU_STATUS),
+            ("RAM:", self.MEM_STATUS),
+            ("STORAGE:", self.DISK_STATUS),
+            ("FILE SYSTEM:", self.FILE_SYSTEM_STATUS),
+        ]
+
         if self.is_windows:
+            states_win = [
+                ("ENV:", self.ENV_STATUS),
+                ("SDK:", self.SDK_STATUS),
+                ("MAX_PATH_ENABLED:", self.MAX_PATH_LENGTH),
+            ]
+
+            states += states_win
+
+        # have ccache at the end as it has many lines of output
+        states += [("CCACHE:", self.CCACHE_STATUS)]
+
+        print(self.section_bar("Build Environment Summary"))
+        print("")
+
+        longest_state = 0
+
+        for state, content in states:
+            if len(state) > longest_state:
+                longest_state = len(state)
+
+        for state, content in states:
+            line_end = "\n"
+            if state == "OS:" or state == "GPU:":
+                line_end = ""
+
             print(
-                f"""
-        ===================\t\tBuild Environment Summary\t\t===================
-
-        OS:         {self.OS_STATUS}
-        CPU:        {self.CPU_STATUS}
-        GPU:        {self.GPU_STATUS}
-        RAM:        {self.MEM_STATUS}
-        STORAGE:    {self.DISK_STATUS}
-        FILE SYSTEM:{self.FILE_SYSTEM_STATUS}
-
-        ENV:        {self.ENV_STATUS}
-
-        SDK:        {self.SDK_STATUS}
-
-        MAX_PATH_ENABLED: {self.MAX_PATH_LENGTH}
-
-        CCACHE:     {self.CCACHE_STATUS}
-    """
-            )
-
-        elif self.is_linux:
-            print(
-                f"""
-        ===================\t\t\tBuild Environment Summary\t\t\t===================
-
-        OS:         {self.OS_STATUS}
-        CPU:        {self.CPU_STATUS}
-        GPU:        {self.GPU_STATUS}
-        RAM:        {self.MEM_STATUS}
-        STORAGE:    {self.DISK_STATUS}
-        FILE SYSTEM:{self.FILE_SYSTEM_STATUS}
-
-        CCACHE:     {self.CCACHE_STATUS}
-    """
+                self.format_status(state, content, longest_status=longest_state),
+                end=line_end,
             )
 
     @property
     def python_list(self):
-        print(
-            f"""
-        ===================\t\t\t\tPython List \t\t\t\t===================
-        """
-        )
-
-        print(f"{self.PYTHON_LIST}")
-
-        print(
-            f"""
-            ===================\t\t\t    End Python List   \t\t\t\t===================
-        """
-        )
+        print(self.section_bar("Python List"))
+        print(f"\n{self.PYTHON_LIST}")
+        print(self.section_bar("End Python List"))

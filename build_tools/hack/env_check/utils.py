@@ -56,6 +56,25 @@ def cstring(
     return f"\033[38;2;{r};{g};{b}m{msg}\033[0m"
 
 
+def cstring_strip_color(colored_string: str) -> str:
+    """
+    Strips color from a string and returns it.
+    Immediately returns the string if no color is found.
+
+    This is needed if one wants to know the correct length of a colored string,
+    as len(colored_string) also counts the ansi characters describing the color.
+    """
+    import re
+
+    while "\033[38" in colored_string:
+        colored_string = re.sub(
+            r"\033\[38;2;[0-9;]*;[0-9;]*;[0-9;]*m", "", colored_string
+        )
+        colored_string = re.sub(r"\033\[0m", "", colored_string)
+
+    return colored_string
+
+
 def get_regedit(
     root_key: Literal[
         "HKEY_LOCAL_MACHINE", "HKLM", "HKEY_CURRENT_USER", "HKCU"
