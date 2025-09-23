@@ -263,7 +263,7 @@ jobs:
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_SUBDIR }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
-              "tar_url": "${{ steps.url-encode-tar.tar_url }}",
+              "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}",
             }
 
       - name: Save cache
