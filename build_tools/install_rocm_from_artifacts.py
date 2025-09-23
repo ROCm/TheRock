@@ -113,7 +113,7 @@ def retrieve_artifacts_by_run_id(args):
         "--flatten",
     ]
     if args.base_only:
-        argv.append("--base")
+        argv.append("--base-only")
     elif args.blas:
         argv.append("--blas")
     elif args.fft:
@@ -128,7 +128,7 @@ def retrieve_artifacts_by_run_id(args):
         argv.append("--rccl")
     else:
         argv.append("--all")
-    
+
     if args.tests:
         argv.append("--tests")
 
@@ -238,24 +238,6 @@ def main(argv):
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
-    artifacts_group.add_argument(
-        "--all",
-        default=False,
-        help="Include all artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    parser.add_argument(
-        "include",
-        nargs="*",
-        help="Regular expression patterns of artifacts to include (implies --all): "
-        "if supplied one pattern must match for an artifact to be included",
-    )
-    parser.add_argument(
-        "--exclude",
-        nargs="*",
-        help="Regular expression patterns of artifacts to exclude",
-    )
-
     artifacts_group.add_argument(
         "--blas",
         default=False,
