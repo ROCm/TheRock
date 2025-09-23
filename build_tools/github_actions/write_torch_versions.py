@@ -95,7 +95,11 @@ def main(argv: list[str]):
     p.add_argument(
         "--dist-dir",
         type=Path,
-        default=Path(os.getenv("PACKAGE_DIST_DIR") if not os.getenv("PACKAGE_DIST_DIR") == None else "/no/dist-dir/or/env/PACKAGE_DIST_DIR/given"),
+        default=Path(
+            os.getenv("PACKAGE_DIST_DIR")
+            if not os.getenv("PACKAGE_DIST_DIR") == None
+            else "/no/dist-dir/or/env/PACKAGE_DIST_DIR/given"
+        ),
         help="Path where wheels are located",
     )
     args = p.parse_args(argv)
