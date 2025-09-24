@@ -73,7 +73,10 @@ class TestROCmSanity:
         platform_executable_suffix = ".exe" if is_windows() else ""
 
         # Look up amdgpu arch, e.g. gfx1100, for explicit `--offload-arch`.
-        # This is currently required on Windows. On Linux, hipcc looks it up.
+        # See https://github.com/ROCm/llvm-project/issues/302:
+        #   * If this is omitted on Linux, hipcc uses rocm_agent_enumerator.
+        #   * If this is omitted on Windows, hipcc uses a default (e.g. gfx906).
+        # We include it on both platforms for consistency.
         amdgpu_arch_executable_file = f"amdgpu-arch{platform_executable_suffix}"
         amdgpu_arch_path = (
             THEROCK_BIN_DIR
