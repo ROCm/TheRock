@@ -31,13 +31,17 @@ def determine_upload_flag(
             "::warning::Tests failed, skipped or were cancelled (runner present). Skipping upload."
         )
 
-    # 3) Else if BYPASS_TESTS_FOR_RELEASES is not set and there was no test runner → upload=false
+    # 3) Else if there was a test runner AND tests did not succeed -> upload=false
+    elif test_runs_on and (test_result != "success"):
+        print("::warning::Tests did not succeed (runner present). Skipping upload.")
+
+    # 4) Else if BYPASS_TESTS_FOR_RELEASES is not set and there was no test runner → upload=false
     elif not bypass_tests_for_releases and not test_runs_on:
         print(
             "::warning::No test runner and BYPASS_TESTS_FOR_RELEASES not set. Skipping upload."
         )
 
-    # 4) Otherwise → upload=true
+    # 5) Otherwise → upload=true
     else:
         upload = "true"
 
