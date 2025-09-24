@@ -187,7 +187,7 @@ Further flags allow to build components with specific features enabled.
 
 ### CMake build usage
 
-For workflows that demand frequent rebuilds, it is **recommended to build it with ccache** enabled to speed up the build.
+For workflows that demand frequent rebuilds, it is _recommended to build it with ccache_ enabled to speed up the build.
 See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Windows](#ccache-usage-on-windows).
 
 Otherwise, ROCm/HIP can be configured and build with just the following commands:
