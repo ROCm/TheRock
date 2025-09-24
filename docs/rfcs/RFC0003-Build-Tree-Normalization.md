@@ -279,8 +279,7 @@ The idea is that `therock.cmake` does the following:
 - Issues calls to `therock_add_subdirectory()` as needed to populate the directory tree.
 - Declares super-project options relevant to the subtree.
 - Calls other `therock_*` configuration time functions (i.e. declare components, query gfx arches, etc).
-
-Then, once the directory tree is traversed, and sub-directories that contain a `therock_subprojects.cmake` will be invoked in new scopes as the super-project `CMakeLists.txt` are today.
+- Declare subprojects.
 
 This will reduce the add_subdirectory block in TheRock's top-level `CMakeLists.txt` to something like:
 
@@ -299,7 +298,6 @@ base/
   [rocm-smi-lib] -> projects/rocm-smi-lib
   [rocprofiler-register] -> projects/rocprofiler-register.cmake
   therock.cmake
-  therock_subprojects.cmake
   therock_artifact_base.toml
 runtime/
   [rocr-runtime] -> projects/rocr-runtime
@@ -309,7 +307,6 @@ runtime/
   [hip-tests] -> projects/hip-tests
   [hipother] -> projects/hipother
   therock.cmake
-  therock_subprojects.cmake
   therock_artifact_rocr.toml
   therock_artifact_hip.toml
 profiler/
@@ -320,7 +317,6 @@ profiler/
   [tracer/] -> projects/roctracer
   therock_artifact_rocprofiler-sdk.toml
   therock.cmake
-  therock_subprojects.cmake
 ```
 
 ### `rocm-libraries` directory layout
@@ -333,37 +329,31 @@ shared/
   rocroller/
   tensile/
   therock.cmake
-  therock_subprojects.cmake
 
 gemmla/
   common/
     [hipblas-common] -> project/hipblas-common
     therock.cmake
-    therock_subprojects.cmake
     therock_artifact_gemmla-common.toml
   gemm-dense/
     [rocblas] -> projects/rocblas
     [hipblaslt] -> projects/hipblaslt
     therock.cmake
-    therock_subprojects.cmake
     therock_artifact_gemm-dense.toml
   gemm-sparse/
     [rocsparse] -> projects/rocsparse
     [hipsparselt] -> projects/hipsparselt
     [hipsparse] -> projects/hipsparse
     therock.cmake
-    therock_subprojects.cmake
     therock_artifact_gemm-sparse.toml
   la/
     [rocsolver] -> projects/rocsolver
     [hipsolver] -> projects/hipsolver
     therock.cmake
-    therock_subprojects.cmake
     therock_artifact_la.toml
   gemm-api/
     [hipblas] -> projects/hipblas
     therock.cmake
-    therock_subprojects.cmake
     therock_artifact_gemm-api.toml
 
 kernel-libs/
@@ -372,7 +362,6 @@ kernel-libs/
   [rocfft] -> projects/rocfft
   [hipfft] -> projects/hipfft
   therock.cmake
-  therock_subprojects.cmake
   therock_artifact_fft.toml
   therock_artifact_rand.toml
 
@@ -382,21 +371,18 @@ compute-libs/
   [rocthrust] -> projects/rocthrust
   [composable-kernel] -> projects/composable-kernel (plan TBD, shown for illustration)
   therock.cmake
-  therock_subprojects.cmake
   therock_artifact_prim.toml
   therock_artifact_composable-kernel.toml
 
 dnn-api/
   [hipdnn] -> projects/hipdnn
   therock.cmake
-  therock_subprojects.cmake
   therock_artifact_dnn.toml
 
 dnn-providers/
   miopen-provider/
     [miopen/] -> projects/miopen
     therock.cmake
-    therock_subprojects.cmake
     therock_artifact_miopen.toml
   hipblaslt-provider/
     ...
@@ -440,3 +426,4 @@ As mentioned above, miopen is being expanded into a suite. This layout reflects 
 ## Revision History
 
 - 2025-09-08: stellaraccident: Initial version
+- 2025-09-19: Adapt to macro names chosen at impl time

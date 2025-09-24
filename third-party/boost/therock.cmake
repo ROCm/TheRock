@@ -8,7 +8,7 @@
 #   Release build
 #   Multithreaded
 # See cmake_project/CMakeLists.txt for details.
-set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
+set(_source_dir "${THEROCK_CURRENT_BINARY_DIR}/source")
 set(_download_stamp "${_source_dir}/download.stamp")
 
 therock_subproject_fetch(boost-sources

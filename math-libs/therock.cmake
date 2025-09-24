@@ -6,7 +6,7 @@ if(THEROCK_ENABLE_RAND)
 
   therock_cmake_subproject_declare(rocRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocrand"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocRAND"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -35,7 +35,7 @@ if(THEROCK_ENABLE_RAND)
 
   therock_cmake_subproject_declare(hipRAND
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiprand"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipRAND"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/hipRAND"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -83,7 +83,7 @@ if(THEROCK_ENABLE_PRIM)
 
   therock_cmake_subproject_declare(rocPRIM
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocPRIM"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -107,7 +107,7 @@ if(THEROCK_ENABLE_PRIM)
 
   therock_cmake_subproject_declare(hipCUB
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipCUB"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/hipCUB"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -132,7 +132,7 @@ if(THEROCK_ENABLE_PRIM)
 
   therock_cmake_subproject_declare(rocThrust
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocthrust"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocThrust"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocThrust"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -182,7 +182,7 @@ if(THEROCK_ENABLE_FFT)
 
   therock_cmake_subproject_declare(rocFFT
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocfft"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocFFT"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -214,7 +214,7 @@ if(THEROCK_ENABLE_FFT)
 
   therock_cmake_subproject_declare(hipFFT
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipfft"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipFFT"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/hipFFT"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -254,6 +254,6 @@ if(THEROCK_ENABLE_FFT)
 endif(THEROCK_ENABLE_FFT)
 
 if(THEROCK_ENABLE_BLAS)
-  add_subdirectory(support)
-  add_subdirectory(BLAS)
+  therock_add_subdirectory(support)
+  therock_add_subdirectory(BLAS)
 endif()

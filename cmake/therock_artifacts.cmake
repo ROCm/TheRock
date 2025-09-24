@@ -23,6 +23,7 @@
 # Convenience targets with a "+expunge" suffix are created to remove corresponding
 # files. Invoking the project level "expunge" will depend on all of them.
 function(therock_provide_artifact slice_name)
+  _therock_assert_is_our_directory()
   cmake_parse_arguments(PARSE_ARGV 1 ARG
     "TARGET_NEUTRAL"
     "DESCRIPTOR;DISTRIBUTION"
@@ -49,7 +50,7 @@ function(therock_provide_artifact slice_name)
   if(NOT ARG_DESCRIPTOR)
     set(ARG_DESCRIPTOR "artifact.toml")
   endif()
-  cmake_path(ABSOLUTE_PATH ARG_DESCRIPTOR BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  cmake_path(ABSOLUTE_PATH ARG_DESCRIPTOR BASE_DIRECTORY "${THEROCK_CURRENT_SOURCE_DIR}")
 
   if(NOT DEFINED ARG_DISTRIBUTION)
     set(ARG_DISTRIBUTION "rocm")

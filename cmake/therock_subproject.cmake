@@ -138,6 +138,7 @@ endfunction()
 # to CMake (which the subproject depends on). Additional touch byproducts
 # can be generated with TOUCH.
 function(therock_subproject_fetch target_name)
+  _therock_assert_is_our_directory()
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "CMAKE_PROJECT"
@@ -149,10 +150,10 @@ function(therock_subproject_fetch target_name)
     set(ARG_EXCLUDE_FROM_ALL TRUE)
   endif()
   if(NOT DEFINED ARG_PREFIX)
-    set(ARG_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/${target_name}_fetch")
+    set(ARG_PREFIX "${THEROCK_CURRENT_BINARY_DIR}/${target_name}_fetch")
   endif()
   if(NOT DEFINED ARG_SOURCE_DIR)
-    set(ARG_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source")
+    set(ARG_SOURCE_DIR "${THEROCK_CURRENT_BINARY_DIR}/source")
   endif()
 
   set(_extra)
@@ -295,6 +296,7 @@ endfunction()
 # Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
 # transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
 function(therock_cmake_subproject_declare target_name)
+  _therock_assert_is_our_directory()
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TAGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
@@ -312,15 +314,15 @@ function(therock_cmake_subproject_declare target_name)
   if(_source_is_absolute)
     if(NOT ARG_BINARY_DIR)
       # TODO: Swap these lines once moved.
-      set(ARG_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+      set(ARG_BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}")
       # message(FATAL_ERROR "If specifying an absolute SOURCE_DIR, BINARY_DIR must be specified")
     endif()
   else()
     if(NOT ARG_BINARY_DIR)
       set(ARG_BINARY_DIR "${ARG_EXTERNAL_SOURCE_DIR}")
     endif()
-    cmake_path(ABSOLUTE_PATH ARG_EXTERNAL_SOURCE_DIR)
-    cmake_path(ABSOLUTE_PATH ARG_BINARY_DIR BASE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    cmake_path(ABSOLUTE_PATH ARG_EXTERNAL_SOURCE_DIR BASE_DIRECTORY "${THEROCK_CURRENT_SOURCE_DIR}")
+    cmake_path(ABSOLUTE_PATH ARG_BINARY_DIR BASE_DIRECTORY "${THEROCK_CURRENT_BINARY_DIR}")
   endif()
 
   set(_cmake_source_dir "${ARG_EXTERNAL_SOURCE_DIR}")
@@ -500,8 +502,9 @@ endfunction()
 # with `find_package(package_name)` at the given path relative to its install
 # directory.
 function(therock_cmake_subproject_provide_package target_name package_name relative_path)
-string(APPEND CMAKE_MESSAGE_INDENT "  ")
-get_property(existing_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
+  _therock_assert_is_our_directory()
+  string(APPEND CMAKE_MESSAGE_INDENT "  ")
+  get_property(existing_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   if("${package_name}" IN_LIST existing_packages)
     message(SEND_ERROR "Duplicate package provided by ${target_name}: ${package_name}")
   endif()
@@ -523,6 +526,7 @@ endfunction()
 # If using multi-step setup (i.e. without 'ACTIVATE' on the declare), then this
 # must be called once all configuration is complete.
 function(therock_cmake_subproject_activate target_name)
+  _therock_assert_is_our_directory()
   _therock_assert_is_cmake_subproject("${target_name}")
 
   # Get properties.
@@ -578,11 +582,11 @@ function(therock_cmake_subproject_activate target_name)
   set(_build_comment_suffix)
 
   # Detect pre/post hooks.
-  set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${_logical_target_name}.cmake")
+  set(_pre_hook_path "${THEROCK_CURRENT_SOURCE_DIR}/${_logical_target_name}_pre.cmake")
   if(NOT EXISTS "${_pre_hook_path}")
     set(_pre_hook_path)
   endif()
-  set(_post_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/post_hook_${_logical_target_name}.cmake")
+  set(_post_hook_path "${THEROCK_CURRENT_SOURCE_DIR}/${_logical_target_name}_post.cmake")
   if(NOT EXISTS "${_post_hook_path}")
     set(_post_hook_path)
   endif()

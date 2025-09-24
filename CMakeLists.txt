@@ -20,6 +20,7 @@ include(therock_default_targets)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
+include(therock_directories)
 include(therock_external_source)
 include(therock_features)
 include(therock_subproject)
@@ -412,24 +413,24 @@ endif()
 
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
-add_subdirectory(third-party)
-add_subdirectory(base)
-add_subdirectory(compiler)
-add_subdirectory(core)
+therock_add_subdirectory(third-party)
+therock_add_subdirectory(base)
+therock_add_subdirectory(compiler)
+therock_add_subdirectory(core)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
-add_subdirectory(profiler)
-add_subdirectory(comm-libs)
-add_subdirectory(math-libs)
-add_subdirectory(ml-libs)
-
-if(THEROCK_BUILD_TESTING)
-  add_subdirectory(examples)
-endif()
+therock_add_subdirectory(profiler)
+therock_add_subdirectory(comm-libs)
+therock_add_subdirectory(math-libs)
+therock_add_subdirectory(ml-libs)
 
 ################################################################################
 # Testing
 ################################################################################
+
+if(THEROCK_BUILD_TESTING)
+  add_subdirectory(examples)
+endif()
 
 if(THEROCK_BUILD_TESTING)
   if(NOT WIN32)

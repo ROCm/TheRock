@@ -6,7 +6,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   therock_cmake_subproject_declare(ROCR-Runtime
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ROCR-Runtime"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/ROCR-Runtime"
     BACKGROUND_BUILD
     CMAKE_ARGS
       "-DBUILD_SHARED_LIBS=ON"
@@ -43,7 +43,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   therock_cmake_subproject_declare(rocminfo
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocminfo"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocminfo"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/rocminfo"
     BACKGROUND_BUILD
     RUNTIME_DEPS
       ROCR-Runtime
@@ -100,7 +100,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/clr"
+    BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/clr"
     INTERFACE_PROGRAM_DIRS
       bin
     BACKGROUND_BUILD
@@ -160,7 +160,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     ##############################################################################
     therock_cmake_subproject_declare(hipInfo
       EXTERNAL_SOURCE_DIR "hipInfo"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
+      BINARY_DIR "${THEROCK_CURRENT_BINARY_DIR}/hipInfo"
       BACKGROUND_BUILD
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"

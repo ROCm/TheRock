@@ -16,7 +16,7 @@ if(THEROCK_ENABLE_COMPILER)
   # computed git revision. If present, this will have a stable hash of
   # revision plus applied patches suitable for run to run compiler
   # fingerprinting.
-  set(LLVM_SMREV_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.amd-llvm.smrev")
+  set(LLVM_SMREV_FILE "${THEROCK_CURRENT_SOURCE_DIR}/.amd-llvm.smrev")
   if(EXISTS "${LLVM_SMREV_FILE}")
     file(STRINGS "${LLVM_SMREV_FILE}" LLVM_SMREV_LINES)
     list(GET LLVM_SMREV_LINES 0 LLVM_SMREV_REPO)
