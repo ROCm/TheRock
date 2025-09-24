@@ -32,7 +32,7 @@ def determine_upload_flag(
     # 3) Else if BYPASS_TESTS_FOR_RELEASES is not set and there was no test runner → upload=false
     elif not bypass_tests_for_releases and not test_runs_on:
         print(
-            "::warning::No test runner and BYPASS_TESTS_FOR_RELEASES not set. Skipping upload."
+            f"::warning::Runner present and tests were not successful (test_result: {test_result}). Skipping upload."
         )
 
     # 4) Otherwise → upload=true
