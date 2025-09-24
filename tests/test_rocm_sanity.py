@@ -74,9 +74,16 @@ class TestROCmSanity:
 
         # Look up amdgpu arch, e.g. gfx1100, for explicit `--offload-arch`.
         # This is currently required on Windows. On Linux, hipcc looks it up.
-        amdgpu_arch_path = (THEROCK_BIN_DIR / ".." / "lib" / "llvm" / "bin").resolve()
         amdgpu_arch_executable_file = f"amdgpu-arch{platform_executable_suffix}"
-        process = run_command([amdgpu_arch_executable_file], cwd=str(amdgpu_arch_path))
+        amdgpu_arch_path = (
+            THEROCK_BIN_DIR
+            / ".."
+            / "lib"
+            / "llvm"
+            / "bin"
+            / amdgpu_arch_executable_file
+        ).resolve()
+        process = run_command([str(amdgpu_arch_path)])
         amdgpu_arch = process.stdout.splitlines()[0]
 
         # Compiling .cpp file using hipcc
