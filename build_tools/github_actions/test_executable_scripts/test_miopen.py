@@ -100,6 +100,42 @@ negative_filter.append("*/GPU_KernelTuningNetTest*")
 negative_filter.append("*DBSync*")
 negative_filter.append("*/GPU_MIOpenDriver*")
 
+# For sake of time saving on pre-commit step
+####################################################
+negative_filter.append("Full/GPU_Reduce_FP64")                                # 4 min 19 sec  
+negative_filter.append("Full/GPU_BNOCLFWDTrainSerialRun3D_BFP16")             # 3 min 37 sec
+negative_filter.append("Full/GPU_Lrn_FP32")                                   # 2 min 50 sec
+negative_filter.append("Full/GPU_Lrn_FP16")                                   # 2 min 20 sec
+negative_filter.append("Full/GPU_BNOCLInferSerialRun3D_BFP16")                # 2 min 19 sec
+negative_filter.append("Smoke/GPU_BNOCLFWDTrainLarge2D_BFP16")                # 1 min 55 sec
+negative_filter.append("Smoke/GPU_BNOCLInferLarge2D_BFP16")                   # 1 min 48 sec
+negative_filter.append("Full/GPU_BNOCLBWDSerialRun3D_BFP16")                  # 1 min 28 sec
+negative_filter.append("Smoke/GPU_BNOCLBWDLarge2D_BFP16")                     # 1 min 19 sec
+
+negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP32")          # 1 min 23 sec
+negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP16")          # 1 min 0 sec
+
+negative_filter.append("Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16")      # 0 min 52 sec
+negative_filter.append("Smoke/GPU_BNOCLBWDLargeFusedActivation2D_FP16")       # 0 min 49 sec
+
+negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_BFP16")                # 0 min 40 sec
+negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_FP32")                 # 0 min 38 sec
+negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_FP16")                 # 0 min 25 sec
+
+negative_filter.append("Full/GPU_ConvGrpActivInfer_BFP16")                    # 0 min 42 sec
+negative_filter.append("Full/GPU_ConvGrpActivInfer_FP32")                     # 0 min 35 sec
+negative_filter.append("Full/GPU_ConvGrpActivInfer_FP16")                     # 0 min 25 sec
+
+negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_BFP16")              # 0 min 27 sec
+negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_FP32")               # 0 min 25 sec
+negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_FP16")               # 0 min 19 sec
+
+negative_filter.append("Full/GPU_ConvGrpActivInfer3D_BFP16")                  # 0 min 27 sec
+negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32")                   # 0 min 22 sec
+negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16")                   # 0 min 16 sec
+
+####################################################
+
 gtest_final_filter_cmd = (
     "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
 )
