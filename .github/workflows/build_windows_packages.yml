@@ -82,33 +82,8 @@ jobs:
 
       - name: Runner health status
         run: |
-          df -h
-          echo "CCACHE_DIR=${CCACHE_DIR}"
-          mkdir -p $CCACHE_DIR
           ccache --zero-stats
-          ccache -s -v
-
-          echo "cmake: $(which cmake)"
-          cmake --version
-          echo "ninja: $(which ninja)"
-          ninja --version
-          echo "CC: $CC"
-          echo "CXX: $CXX"
-
-          echo "Installed Python versions:"
-          echo "python: $(which python), python3: $(which python3)"
-          python --version
-          pip list --format=freeze
-
-          echo "gcc: $(which gcc)"
-          gcc --version
-          echo "perl: $(which perl)"
-          perl --version
-          echo "gfortran: $(which gfortran)"
-          gfortran --version
-
-          echo "Git version: $(git --version)"
-          echo "Logical Processors available: $(nproc --all)"
+          python ./build_tools/health_status.py
 
       - name: Test build_tools
         run: |
@@ -147,19 +122,26 @@ jobs:
 
       - name: Report
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          echo "Build dir:"
-          echo "------------"
-          ls -lh "${{ env.BUILD_DIR }}"
-          echo "Artifact Archives:"
-          echo "------------------"
-          ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
-          echo "Artifacts:"
-          echo "----------"
-          du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
-          echo "CCache Stats:"
-          echo "-------------"
-          ccache -s
+          if [ -d "${{ env.BUILD_DIR }}" ]; then
+            echo "Build dir:"
+            echo "------------"
+            ls -lh "${{ env.BUILD_DIR }}"
+            echo "Artifact Archives:"
+            echo "------------------"
+            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
+            echo "Artifacts:"
+            echo "----------"
+            du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
+            echo "CCache Stats:"
+            echo "-------------"
+            ccache -s
+          else
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
+            echo "        This should only happen if the CI is cancelled before the build step."
+            exit 1
+          fi
 
       - name: "Build size report"
         if: always()
