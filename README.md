@@ -45,7 +45,7 @@ instructions and configurations for alternatives.
 > configurations is often faster and easier.
 
 > [!IMPORTANT]
-> Common issues during setup and building and their solutions are listed in the [Environment Setup Guide](docs/environment_setup_guide.md#common-issues).
+> Frequent setup and building problems and their solutions can be found in section [Common Issues](docs/environment_setup_guide.md#common-issues).
 
 ### Setup - Ubuntu (24.04)
 
