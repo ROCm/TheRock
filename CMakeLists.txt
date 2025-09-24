@@ -138,7 +138,7 @@ endblock()
 cmake_dependent_option(
   THEROCK_FLAG_COMGR_DELAY_LOAD
   "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
-  OFF "LINUX" OFF)
+  ON "LINUX" OFF)
 
 ################################################################################
 # Debug Options

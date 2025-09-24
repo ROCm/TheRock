@@ -113,11 +113,26 @@ def retrieve_artifacts_by_run_id(args):
         "--flatten",
     ]
     if args.base_only:
-        argv.append("--base")
+        argv.append("--base-only")
+    elif any([args.blas, args.fft, args.miopen, args.prim, args.rand, args.rccl]):
+        if args.blas:
+            argv.append("--blas")
+        if args.fft:
+            argv.append("--fft")
+        if args.miopen:
+            argv.append("--miopen")
+        if args.prim:
+            argv.append("--prim")
+        if args.rand:
+            argv.append("--rand")
+        if args.rccl and PLATFORM != "windows":
+            argv.append("--rccl")
+        if args.tests:
+            argv.append("--tests")
     else:
         argv.append("--all")
-    fetch_artifacts_main(argv)
 
+    fetch_artifacts_main(argv)
     log(f"Retrieved artifacts for run ID {run_id}")
 
 
@@ -208,6 +223,7 @@ def main(argv):
     parser.add_argument(
         "--amdgpu-family",
         type=str,
+        required=True,
         default="gfx94X-dcgpu",
         help="AMD GPU family to install (please refer to this: https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81 for family choices)",
     )
@@ -283,6 +299,12 @@ def main(argv):
     )
 
     args = parser.parse_args(argv)
+
+    if not args.amdgpu_family:
+        raise argparse.ArgumentTypeError(
+            "AMD GPU family argument is required and cannot be empty"
+        )
+
     run(args)
 
 
