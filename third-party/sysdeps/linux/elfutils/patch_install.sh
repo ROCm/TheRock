@@ -4,6 +4,20 @@ set -e
 PREFIX="${1:?Expected install prefix argument}"
 PATCHELF="${PATCHELF:-patchelf}"
 
+# update_library_links
+# ---------------------
+# Purpose:
+#   Normalize a shared library so that its real file is named exactly as its ELF SONAME,
+#   and rename the input file (usually a symlink) to a desired linker name (e.g., libfoo.so).
+#
+# Synopsis:
+#   update_library_links <libfile> <linker_name>
+#
+# Arguments:
+#   libfile      Path to the library file or symlink.
+#                Example: $PREFIX/lib/librocm_sysdeps_elf.so
+#   linker_name  Desired linker-name filename to exist in the same directory.
+#                Example: libelf.so
 update_library_links() {
     local libfile="$1"        # e.g. $PREFIX/lib/librocm_sysdeps_elf.so
     local linker_name="$2"    # e.g. libelf.so
@@ -30,11 +44,8 @@ update_library_links() {
     fi
     # Rename symlink in the same directory
     mv "$libfile" "$dir/$linker_name"
-
 }
 
-#Update library links:
-#Ex: Create linker name as libelf.so and actual library in soname librocm_sysdeps_elf.so.1
 update_library_links "$PREFIX/lib/librocm_sysdeps_elf.so" "libelf.so"
 update_library_links "$PREFIX/lib/librocm_sysdeps_asm.so" "libasm.so"
 update_library_links "$PREFIX/lib/librocm_sysdeps_dw.so" "libdw.so"
