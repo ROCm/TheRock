@@ -121,6 +121,7 @@ block()
     LLVM_OBJDUMP
     OPT
     YAML2OBJ
+    LLC
   )
   if(WIN32)
     # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
