@@ -16,7 +16,6 @@ int main() {
 
   // Check results.
   int mismatches_count = 0;
-  bool failed = false;
   for (int i = 0; i < size; ++i) {
     int square = i * i;
     if (d_buf[i] != square) {
