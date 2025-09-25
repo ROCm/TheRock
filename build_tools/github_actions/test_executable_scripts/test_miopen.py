@@ -74,7 +74,6 @@ positive_filter.append("*/GPU_LayoutTransposeTest_*")
 positive_filter.append("*/GPU_Lrn*")
 positive_filter.append("*/GPU_lstm_extra*")
 
-positive_filter.append("*GPU_TestMhaFind20*")
 positive_filter.append("*/GPU_MultiMarginLoss_*")
 positive_filter.append("*/GPU_ConvNonpack*")
 positive_filter.append("*/GPU_PerfConfig_HipImplicitGemm*")
@@ -107,6 +106,7 @@ negative_filter.append("*MIOpenTestConv*")
 negative_filter.append("*/GPU_KernelTuningNetTest*")
 negative_filter.append("*DBSync*")
 negative_filter.append("*/GPU_MIOpenDriver*")
+positive_filter.append("*GPU_TestMhaFind20*")
 
 # For sake of time saving on pre-commit step
 ####################################################
