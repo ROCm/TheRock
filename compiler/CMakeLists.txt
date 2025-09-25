@@ -75,6 +75,8 @@ if(THEROCK_ENABLE_COMPILER)
       "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
       "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
       "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
+      # TheRock features.
+      "-DTHEROCK_ENABLE_FLANG=${THEROCK_ENABLE_FLANG}"
 
       ${_extra_llvm_cmake_args}
     BUILD_DEPS
