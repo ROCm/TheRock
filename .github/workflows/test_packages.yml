@@ -35,6 +35,7 @@ jobs:
     outputs:
       components: ${{ steps.configure.outputs.components }}
       platform: ${{ steps.configure.outputs.platform }}
+      shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -73,15 +74,6 @@ jobs:
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
-    runs-on: ${{ inputs.test_runs_on }}
-    container:
-      image: ${{ needs.configure_test_matrix.outputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
-      options: --ipc host
-        --group-add video
-        --device /dev/kfd
-        --device /dev/dri
-        --group-add 992
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
     needs: [test_sanity_check, configure_test_matrix]
     # skip tests if no test matrix to run
     if: ${{ needs.configure_test_matrix.outputs.components != '[]' }}
@@ -89,51 +81,10 @@ jobs:
       fail-fast: false
       matrix:
         components: ${{ fromJSON(needs.configure_test_matrix.outputs.components) }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      VENV_DIR: ${{ github.workspace }}/.venv
-      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      OUTPUT_ARTIFACTS_DIR: "./build"
-      THEROCK_BIN_DIR: "./build/bin"
-      PLATFORM: ${{ inputs.platform }}
-      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-    steps:
-      - name: "Fetch 'build_tools' from repository"
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          sparse-checkout: build_tools
-          path: "prejob"
-
-      - name: Pre-job cleanup processes on Windows
-        if: ${{ runner.os == 'Windows' }}
-        shell: powershell
-        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
-
-      - name: Checkout Repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          repository: "ROCm/TheRock"
-
-      - name: Run setup test environment workflow
-        uses: './.github/actions/setup_test_environment'
-        with:
-          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
-          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
-          VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: ${{ matrix.components.fetch_artifact_args }}
-          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-
-      - name: Test
-        timeout-minutes: ${{ matrix.components.timeout_minutes }}
-        run: |
-          ${{ matrix.components.test_script }}
-
-      # GitHub's 'Complete job' step is unaware of launched executables
-      # and will fail to clean up orphan processes.
-      - name: Post-job cleanup processes on Windows
-        if: ${{ always() && runner.os == 'Windows' }}
-        shell: powershell
-        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+    uses: './.github/workflows/test_component.yml'
+    with:
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      platform: ${{ needs.configure_test_matrix.outputs.platform }}
+      component: ${{ toJSON(matrix.components) }}

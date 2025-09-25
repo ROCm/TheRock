@@ -57,6 +57,12 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      # safe.directory must be set before Runner Health Status
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Setup ccache
@@ -65,30 +71,10 @@ jobs:
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
-          ccache -z
 
       - name: Runner health status
         run: |
-          df -h
-          echo "ccache version: $(ccache --version)"
-          echo "ccache config:"
-          echo "---"
-          cat "$CCACHE_CONFIGPATH"
-          echo "---"
-          ccache -s -v
-
-          echo "cmake: $(which cmake)"
-          cmake --version
-          echo "gcc: $(which gcc)"
-          gcc --version
-
-          echo "Installed Python versions:"
-          ls -d /opt/python
-          echo "python: $(which python), python3: $(which python3)"
-          pip list --format=freeze
-
-          echo "Git version: $(git --version)"
-          echo "Logical Processors available: $(nproc --all)"
+          ./build_tools/health_status.py
 
       - name: Test build_tools
         run: |
@@ -97,8 +83,6 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: |
-          git config --global --add safe.directory $PWD
-          git config fetch.parallel 10
           ./build_tools/fetch_sources.py --jobs 12
 
       - name: Configure Projects
@@ -120,20 +104,27 @@ jobs:
 
       - name: Report
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          echo "Full SDK du:"
-          echo "------------"
-          du -h -d 1 build/dist/rocm
-          echo "Artifact Archives:"
-          echo "------------------"
-          ls -lh build/artifacts/*.tar.xz
-          echo "Artifacts:"
-          echo "----------"
-          du -h -d 1 build/artifacts
-          echo "CCache Stats:"
-          echo "-------------"
-          ccache -s -v
-          tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+          if [ -d "./build" ]; then
+            echo "Full SDK du:"
+            echo "------------"
+            du -h -d 1 build/dist/rocm
+            echo "Artifact Archives:"
+            echo "------------------"
+            ls -lh build/artifacts/*.tar.xz
+            echo "Artifacts:"
+            echo "----------"
+            du -h -d 1 build/artifacts
+            echo "CCache Stats:"
+            echo "-------------"
+            ccache -s -v
+            tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+          else
+            echo "[ERROR] Build directory ./build does not exist. Skipping report!"
+            echo "        This should only happen if the CI is cancelled before the build step."
+            exit 1
+          fi
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
