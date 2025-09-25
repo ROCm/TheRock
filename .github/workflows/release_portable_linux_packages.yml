@@ -250,7 +250,7 @@ jobs:
 
       - name: URL-encode .tar URL
         id: url-encode-tar
-        run: python -c "from urllib.parse import quote; print('tar_url=https://therock-nightly-tarball.s3.amazonaws.com/' + quote('therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz'))" >> ${GITHUB_OUTPUT}
+        run: python -c "from urllib.parse import quote; print('tar_url=https://therock-${{ env.RELEASE_TYPE }}-tarball.s3.amazonaws.com/' + quote('therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz'))" >> ${GITHUB_OUTPUT}
 
       - name: Trigger build JAX wheels
         if: ${{ github.repository_owner == 'ROCm' }}
