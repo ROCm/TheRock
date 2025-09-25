@@ -6,7 +6,7 @@
 #
 # SYNOPSIS: patch_third_party_source.py PATCHES_DIR
 #
-# Uses `git apply PATCH` for the actual patching.
+# Uses `patch -p1 -i PATCH` for the actual patching.
 # Assumes the current working directory is the source directory of the extracted tarball.
 
 import sys
@@ -54,7 +54,7 @@ def main(args):
     patches_dir = Path(patches_dir)
     for i in patches:
         p = patches_dir / i
-        run_command(["git", "apply", p])
+        run_command(["patch", "-p1", "-i", p])
     create_stamp_file(stamp_filename)
 
 

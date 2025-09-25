@@ -165,6 +165,8 @@ If you prefer to install tools manually, you will need:
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
 
+- patch, available in Strawberry Perl or Git.
+
 - dvc: https://dvc.org/doc/install/windows
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
