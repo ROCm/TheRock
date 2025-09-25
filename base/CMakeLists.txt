@@ -72,8 +72,6 @@ therock_cmake_subproject_declare(amdsmi
 )
 therock_cmake_subproject_provide_package(amdsmi
   amd_smi lib/cmake)
-# therock_cmake_subproject_provide_package(amdsmi
-#   ROCM share/rocm/amdsmi)
 therock_cmake_subproject_activate(amdsmi)
 
 endif()
