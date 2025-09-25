@@ -69,6 +69,7 @@ therock_cmake_subproject_declare(amdsmi
     therock-googletest
   RUNTIME_DEPS
     rocm-core
+    ${THEROCK_BUNDLED_LIBDRM}
 )
 therock_cmake_subproject_provide_package(amdsmi
   amd_smi lib/cmake)
