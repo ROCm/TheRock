@@ -60,6 +60,8 @@ jobs:
 
       - name: "Configuring CI options"
         id: configure
+        env:
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
