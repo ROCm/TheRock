@@ -1,0 +1,35 @@
+From e7685d3f22c6b0654b45e50b7346a4c460b80c9c Mon Sep 17 00:00:00 2001
+From: Maisam Arif <Maisam.Arif@amd.com>
+Date: Thu, 25 Sep 2025 17:32:45 -0500
+Subject: [PATCH] Changed amd_smi_drm.cc to depend on dynamic libdrm
+
+Signed-off-by: Maisam Arif <Maisam.Arif@amd.com>
+Change-Id: Ie8a794578da1a3ad8893d436e54bbfb67857a7ae
+---
+ src/amd_smi/amd_smi_drm.cc | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/amd_smi/amd_smi_drm.cc b/src/amd_smi/amd_smi_drm.cc
+index f7ad1847..63e554ce 100644
+--- a/src/amd_smi/amd_smi_drm.cc
++++ b/src/amd_smi/amd_smi_drm.cc
+@@ -27,6 +27,7 @@
+ #include <cstring>
+ #include <memory>
+ #include <regex>
++#include "config/amd_smi_config.h"
+ #include "amd_smi/impl/amd_smi_drm.h"
+ #include "impl/scoped_fd.h"
+ #include "rocm_smi/rocm_smi.h"
+@@ -55,7 +56,7 @@ std::string AMDSmiDrm::find_file_in_folder(const std::string& folder,
+ }
+ 
+ amdsmi_status_t AMDSmiDrm::init() {
+-    amdsmi_status_t status = lib_loader_.load("libdrm.so.2");
++    amdsmi_status_t status = lib_loader_.load(LIBDRM_AMDGPU_SONAME);
+     if (status != AMDSMI_STATUS_SUCCESS) {
+         return status;
+     }
+-- 
+2.43.0
+
