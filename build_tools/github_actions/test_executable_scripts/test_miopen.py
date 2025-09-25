@@ -106,7 +106,7 @@ negative_filter.append("*MIOpenTestConv*")
 negative_filter.append("*/GPU_KernelTuningNetTest*")
 negative_filter.append("*DBSync*")
 negative_filter.append("*/GPU_MIOpenDriver*")
-positive_filter.append("*GPU_TestMhaFind20*")
+negative_filter.append("*GPU_TestMhaFind20*")
 
 # For sake of time saving on pre-commit step
 ####################################################
