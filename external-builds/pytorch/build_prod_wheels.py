@@ -609,6 +609,7 @@ def do_build_pytorch(
     env["USE_CUDA"] = "OFF"
     env["USE_MPI"] = "OFF"
     env["USE_NUMA"] = "OFF"
+    env["USE_FBGEMM_GENAI"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -664,6 +665,15 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+
+        # Explicitly set Linux default to 0 unless overridden
+        use_flash_attention = "1" if args.enable_pytorch_flash_attention_linux else "0"
+        env.update(
+            {
+                "USE_FLASH_ATTENTION": use_flash_attention,
+                "USE_MEM_EFF_ATTENTION": use_flash_attention,
+            }
+        )
 
     print("+++ Uninstalling pytorch:")
     exec(
@@ -896,6 +906,12 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch flash attention on Windows (enabled by default for Linux)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-flash-attention-linux",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable building of torch flash attention on Linux (disabled by default, sets USE_FLASH_ATTENTION=0)",
     )
 
     today = date.today()
