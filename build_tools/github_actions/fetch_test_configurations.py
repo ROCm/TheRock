@@ -86,7 +86,9 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 6,
-        "exclude_family": {"windows": ["gfx1151"]}, # issue: https://ontrack-internal.amd.com/browse/SWDEV-557164
+        "exclude_family": {
+            "windows": ["gfx1151"]
+        },  # issue: https://ontrack-internal.amd.com/browse/SWDEV-557164
     },
     # RAND tests
     "rocrand": {
