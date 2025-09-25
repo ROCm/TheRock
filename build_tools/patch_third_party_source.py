@@ -6,7 +6,7 @@
 #
 # SYNOPSIS: patch_third_party_source.py PATCHES_DIR
 #
-# Uses `git apply PATCH` for the actual patching.
+# Uses `patch -p1 -i PATCH` for the actual patching.
 # Assumes the current working directory is the source directory of the extracted tarball.
 
 import sys
