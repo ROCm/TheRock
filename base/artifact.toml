@@ -16,6 +16,7 @@ optional = "windows"
 include = [
   "bin/**",
   "libexec/**",
+  "share/amd_smi/**",
 ]
 
 # rocm_smi_lib
