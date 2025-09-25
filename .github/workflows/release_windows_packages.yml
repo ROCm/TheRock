@@ -306,7 +306,7 @@ jobs:
 
       - name: Save cache
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           path: ${{ env.CACHE_DIR }}
           key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
