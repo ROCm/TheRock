@@ -1,0 +1,90 @@
+name: Build Native Linux Packages
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        description: gfx arch for creating the artifact fetch url
+        required: true
+        type: string
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
+        type: string
+      rocm_version:
+        description: ROCm version to append to the package( Like 7.0.0 or 7.1.0).
+        required: true
+        type: string
+      package_type:
+        description: Specify whether debian or rpm packages are needed (deb or rpm).
+        required: true
+        type: string
+      package_suffix:
+        description: The suffix to be added to package name(build_no or master or rc or combiantion).
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
+        type: string
+        default: "16418185899"
+      rocm_version:
+        description: ROCm version to append to the package( Like 7.0.0 or 7.1.0)
+        type: string
+        default: "7.9.0"
+      package_type:
+        description: Specify whether debian or rpm packages are needed (deb or rpm).
+        required: true
+        type: choice
+        options:
+          - rpm
+          - deb
+        default: "rpm"
+      package_suffix:
+        description: The suffix to be added to package name(build_no or master or rc or combiantion).
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build_deb_packages:
+    name: Build Linux rpm Packages (xfail ${{ inputs.expect_failure }})
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
+    env:
+      OUTPUT_DIR: ${{ github.workspace }}/output
+      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
+    steps:
+      - name: Fetch Artifacts
+        # TODO: Currently fetch artifacts is part of build package itself. Need to seperate it out
+        run: |
+          echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
+          python ./build_tools/fetch_artifacts.py \
+            --run-id=${{ inputs.artifact_run_id }} \
+            --target=${{ inputs.amdgpu_family }} \
+            --all \
+            --output-dir=${{ env.ARTIFACTS_DIR }}
+
+      - name: Build RPM Packages
+        id: build-rpm-packages
+        run: |
+          echo "Building RPM packages for ${{ inputs.amdgpu_family }}"
+          python ./build_tools/packaging/linux/build_package.py \
+            --gfx-arch ${{ inputs.amdgpu_family }} \
+            --run-id  ${{ inputs.artifact_run_id }} \
+            --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
+            --rocm-version  "${{ inputs.rocm_version }}\
+            --pkg-type "${{ inputs.pkg_type }}
