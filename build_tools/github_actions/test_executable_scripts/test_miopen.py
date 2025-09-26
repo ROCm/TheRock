@@ -53,12 +53,8 @@ positive_filter.append("*/GPU_UnitTestConv*")
 
 # Misc
 
-positive_filter.append("*/GPU_Dropout*")
 positive_filter.append("*/GPU_GetitemBwd*")
 positive_filter.append("*/GPU_GLU_*")
-
-positive_filter.append("*/GPU_Bwd_Mha_*")
-positive_filter.append("*/GPU_Fwd_Mha_*")
 
 positive_filter.append("*/GPU_MhaBackward_*")
 positive_filter.append("*/GPU_MhaForward_*")
@@ -85,7 +81,6 @@ positive_filter.append("*/GPU_reduce_custom_*")
 positive_filter.append("*/GPU_regression_issue_*")
 positive_filter.append("*/GPU_RNNExtra_*")
 positive_filter.append("*/GPU_RoPE*")
-positive_filter.append("*/GPU_Softmax*")
 positive_filter.append("*/GPU_SoftMarginLoss*")
 positive_filter.append("*/GPU_T5LayerNormTest_*")
 positive_filter.append("*/GPU_Op4dTensorGenericTest_*")
@@ -107,6 +102,12 @@ negative_filter.append("*/GPU_KernelTuningNetTest*")
 negative_filter.append("*DBSync*")
 negative_filter.append("*/GPU_MIOpenDriver*")
 negative_filter.append("*GPU_TestMhaFind20*")
+
+# Failing because of  fatal error: 'rocrand/rocrand_xorwow.h' file not found
+negative_filter.append("*/GPU_Bwd_Mha_*")
+negative_filter.append("*/GPU_Fwd_Mha_*")
+negative_filter.append("*/GPU_Softmax*")
+negative_filter.append("*/GPU_Dropout*")
 
 # For sake of time saving on pre-commit step
 ####################################################
