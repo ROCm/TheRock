@@ -56,8 +56,6 @@ positive_filter.append("*/GPU_UnitTestConv*")
 positive_filter.append("*/GPU_GetitemBwd*")
 positive_filter.append("*/GPU_GLU_*")
 
-positive_filter.append("*/GPU_MhaBackward_*")
-positive_filter.append("*/GPU_MhaForward_*")
 positive_filter.append("*/GPU_GroupConv*")
 positive_filter.append("*/GPU_GroupNorm_*")
 positive_filter.append("*/GPU_GRUExtra_*")
@@ -108,6 +106,9 @@ negative_filter.append("*/GPU_Bwd_Mha_*")
 negative_filter.append("*/GPU_Fwd_Mha_*")
 negative_filter.append("*/GPU_Softmax*")
 negative_filter.append("*/GPU_Dropout*")
+negative_filter.append("*/GPU_MhaBackward_*")
+negative_filter.append("*/GPU_MhaForward_*")
+
 
 # For sake of time saving on pre-commit step
 ####################################################
