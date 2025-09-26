@@ -602,9 +602,31 @@ def do_build_pytorch(
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
-    print(
-        f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
-    )
+
+    # Enable/disable only for non-Windows
+    if not is_windows:
+        if "2.7" in str(pytorch_build_version):
+            env["USE_FBGEMM_GENAI"] = "ON"
+            use_flash_attention = (
+                "1" if args.enable_pytorch_flash_attention_linux else "0"
+            )
+            env.update(
+                {
+                    "USE_FLASH_ATTENTION": use_flash_attention,
+                    "USE_MEM_EFF_ATTENTION": use_flash_attention,
+                }
+            )
+            print("FBGEMM_GENAI and Flash Attention enabled (PyTorch 2.7, Linux)")
+        else:
+            env["USE_FBGEMM_GENAI"] = "OFF"
+            env.update(
+                {
+                    "USE_FLASH_ATTENTION": "0",
+                    "USE_MEM_EFF_ATTENTION": "0",
+                }
+            )
+            print("FBGEMM_GENAI and Flash Attention disabled (PyTorch != 2.7, Linux)")
+
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
     env["USE_MPI"] = "OFF"
@@ -896,6 +918,12 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch flash attention on Windows (enabled by default for Linux)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-flash-attention-linux",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable building of torch flash attention on Linux (disabled by default, sets USE_FLASH_ATTENTION=0)",
     )
 
     today = date.today()
