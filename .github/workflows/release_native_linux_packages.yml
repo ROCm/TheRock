@@ -1,4 +1,4 @@
-name: Release portable Linux PyTorch Wheels
+name: Release native Linux Packages
 
 on:
   workflow_call:
@@ -7,16 +7,8 @@ on:
         description: gfx arch for creating the s3 bucket url
         required: true
         type: string
-      python_version:
-        description: Python command to use
-        required: true
-        type: string
-      s3_bucket:
-        description: S3 bucket for downloading arttifact
-        required: true
-        type: string
-      rock_build_no:
-        description: ROCK build no for the artifact download
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
         type: string
       output_dest_dirt:
         description: Local folder name where the created packages will be saved
@@ -45,16 +37,8 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
-      python_version:
-        required: true
-        type: string
-        default: "3.12"
-      s3_bucket:
-        description: S3 bucket for fetching artifact
-        type: string
-        default: "therock-artifacts.s3.amazonaws.com"
-      rock_build_no:
-        description: ROCK build no for fetching artifacts
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
         type: string
         default: "16418185899"
       output_dest_dirt:
@@ -64,11 +48,14 @@ on:
       rocm_version:
         description: ROCm version to append to the package( Like 7.0.0 or 7.1.0)
         type: string
-        default: "7.0"
+        default: "7.9.0"
       package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
-        type: string
+        type: choice
+        options:
+          - rpm
+          - deb
         default: "rpm"
       package_suffix:
         description: The suffix to be added to package name(build_no or master or rc or combiantion).
@@ -80,19 +67,15 @@ permissions:
 
 jobs:
   release:
-    name: Release Native Linux Package | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
+    name: Release Native Linux Package (xfail ${{ inputs.expect_failure }}) 
     strategy:
       fail-fast: false
-      matrix:
-        python_version: ["3.12"]
 
     uses: ./.github/workflows/build_native_linux_packages.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
-      python_version: ${{ matrix.python_version }}
-      s3_bucket: ${{ inputs.s3_bucket }}
-      rock_build_no: ${{ inputs.rock_build_no }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
       output_dest_dirt: ${{ inputs.output_dest_dirt }}
       rocm_version: ${{ inputs.rocm_version }}
       package_type: ${{ inputs.package_type }}
-      package_suffix: ${{ inputs.package_suffix }}
+      pgithub/workflowsackage_suffix: ${{ inputs.package_suffix }}

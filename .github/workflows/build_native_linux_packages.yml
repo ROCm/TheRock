@@ -1,26 +1,14 @@
-name: Build Portable Linux PyTorch Wheels
+name: Build Native Linux Packages
 
 on:
   workflow_call:
     inputs:
       amdgpu_family:
-        description: gfx arch for creating the s3 bucket url
+        description: gfx arch for creating the artifact fetch url
         required: true
         type: string
-      python_version:
-        description: Python command to use
-        required: true
-        type: string
-      s3_bucket:
-        description: S3 bucket for downloading arttifact
-        required: true
-        type: string
-      rock_build_no:
-        description: ROCK build no for the artifact download
-        type: string
-      output_dest_dirt:
-        description: Local folder name where the created packages will be saved
-        required: true
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
         type: string
       rocm_version:
         description: ROCm version to append to the package( Like 7.0.0 or 7.1.0).
@@ -45,30 +33,21 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
-      python_version:
-        required: true
-        type: string
-        default: "3.12"
-      s3_bucket:
-        description: S3 bucket for fetching artifact
-        type: string
-        default: "therock-artifacts.s3.amazonaws.com"
-      rock_build_no:
-        description: ROCK build no for fetching artifacts
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
         type: string
         default: "16418185899"
-      output_dest_dirt:
-        description: Local folder name where the created packages will be saved
-        type: string
-        default: "PACKAGE_DIST_DIR"
       rocm_version:
         description: ROCm version to append to the package( Like 7.0.0 or 7.1.0)
         type: string
-        default: "7.0"
+        default: "7.9.0"
       package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
-        type: string
+        type: choice
+        options:
+          - rpm
+          - deb
         default: "rpm"
       package_suffix:
         description: The suffix to be added to package name(build_no or master or rc or combiantion).
@@ -80,29 +59,33 @@ permissions:
 
 jobs:
   build_deb_packages:
-    name: Build Linux rpm Packages | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
+    name: Build Linux rpm Packages (xfail ${{ inputs.expect_failure }})
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
-      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/${{ inputs.output_dest_dirt }}
-      S3_ARTIFACT_BUCKET: "${{ inputs.s3_bucket }}/${{ inputs.rock_build_no }}-linux/index-${{ inputs.amdgpu_family }}.html"
-      optional_build_prod_arguments: ""
-    outputs:
-      cp_version: ${{ env.cp_version }}
+      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
     steps:
       - name: Fetch Artifacts
         # TODO: Currently fetch artifacts is part of build package itself. Need to seperate it out
         run: |
-          echo "Fetching artifacts for build ${{ inputs.rock_build_no }}"
+          echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
+        run: |
+          python ./build_tools/fetch_artifacts.py \
+            --run-id=${{ inputs.artifact_run_id }} \
+            --target=${{ inputs.amdgpu_family }} \
+            --all \
+            --output-dir=${{ env.ARTIFACTS_DIR }}
 
       - name: Build RPM Packages
         id: build-rpm-packages
         run: |
           echo "Building RPM packages for ${{ inputs.amdgpu_family }}"
-          ./build_tools/packaging/linux/build_package.py \
+          python ./build_tools/packaging/linux/build_package.py \
+            --gfx-arch ${{ inputs.amdgpu_family }} \
+            --run-id  ${{ inputs.artifact_run_id }} \
             --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
             --rocm-version  "${{ inputs.rocm_version }}\
             --pkg-type "${{ inputs.pkg_type }}
-            --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
