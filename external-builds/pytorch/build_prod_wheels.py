@@ -605,7 +605,7 @@ def do_build_pytorch(
 
     # Enable/disable only for non-Windows
     if not is_windows:
-        if "2.7" in str(args.pytorch_version):
+        if "2.7" in str(pytorch_build_version):
             env["USE_FBGEMM_GENAI"] = "ON"
             use_flash_attention = (
                 "1" if args.enable_pytorch_flash_attention_linux else "0"
