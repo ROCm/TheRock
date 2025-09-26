@@ -16,6 +16,7 @@ include = [
 ]
 
 # rccl-tests
+[components.dbg."comm-libs/rccl-tests/stage"]
 [components.doc."comm-libs/rccl-tests/stage"]
 optional = true
 [components.test."comm-libs/rccl-tests/stage"]
