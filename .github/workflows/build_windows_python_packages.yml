@@ -3,7 +3,12 @@ name: Build Windows Python Packages
 on:
   workflow_dispatch:
     inputs:
+      artifact_github_repo:
+        description: GitHub repository for artifact_run_id
+        type: string
+        default: ROCm/TheRock
       artifact_run_id:
+        description: Workflow run ID to download artifacts from
         type: string
         default: "17865324892" # TODO: default to the most recent successful run (using a script)
       amdgpu_family:
@@ -21,6 +26,8 @@ on:
         default: "7.0.0.dev0"
   workflow_call:
     inputs:
+      artifact_github_repo:
+        type: string
       artifact_run_id:
         type: string
         default: ""
@@ -58,6 +65,7 @@ jobs:
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           python ./build_tools/fetch_artifacts.py \
+            --run-github-repo=${{ inputs.artifact_github_repo }} \
             --run-id=${{ env.ARTIFACT_RUN_ID }} \
             --target=${{ inputs.amdgpu_family }} \
             --output-dir="${{ env.ARTIFACTS_DIR }}" \
