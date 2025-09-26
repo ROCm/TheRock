@@ -72,7 +72,6 @@ jobs:
         # TODO: Currently fetch artifacts is part of build package itself. Need to seperate it out
         run: |
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
-        run: |
           python ./build_tools/fetch_artifacts.py \
             --run-id=${{ inputs.artifact_run_id }} \
             --target=${{ inputs.amdgpu_family }} \
