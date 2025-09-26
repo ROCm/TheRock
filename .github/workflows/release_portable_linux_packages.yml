@@ -261,7 +261,7 @@ jobs:
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "python_versions": "3.12",
               "release_type": "${{ env.RELEASE_TYPE }}",
-              "s3_subdir": "${{ env.S3_SUBDIR }}",
+              "s3_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
               "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}"
             }
