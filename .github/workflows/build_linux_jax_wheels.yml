@@ -26,12 +26,18 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
       python_versions:
         required: true
         type: string
-        default:
+        default: "3.12"
       release_type:
         description: The type of release to build ("nightly", or "dev")
         required: true
@@ -60,7 +66,7 @@ jobs:
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
-      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax_rocm_plugin/wheelhouse
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
     steps:
       - name: Checkout TheRock
@@ -71,22 +77,34 @@ jobs:
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ matrix.jax_ref }}
 
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
+      - name: "Setting up Python"
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: ${{ inputs.python_versions }}
+
       - name: Build JAX Wheels
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
         run: |
-          pushd rocm-jax
+          ls -lah
+          pushd jax
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_versions }}" \
-            --rocm-version="${{ inputs.rocm_version }}" \
+            --rocm-version="${ROCM_VERSION:0:5}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
+
+      - name: Install AWS CLI
+        if: always()
+        run: bash ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials
         if: always()
@@ -104,5 +122,7 @@ jobs:
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip3 install boto3 packaging
+          python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
