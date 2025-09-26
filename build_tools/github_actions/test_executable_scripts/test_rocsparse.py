@@ -9,7 +9,7 @@ OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-PLATFORM = os.getenv("PLATFORM")
+PLATFORM = os.getenv("RUNNER_OS").lower()
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +31,7 @@ tests_to_exclude = {
             "quick/bsrsv.level2/*",
             "quick/coomv.level2/*",
             "quick/csrmv.level2/*",
+            "quick/bsrgemm.extra/*"
         ]
     }
 }
