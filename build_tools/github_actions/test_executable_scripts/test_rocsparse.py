@@ -43,7 +43,7 @@ if (
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",
-    "--gtest_filter=*quick*" + exclude_tests_filter,
+    f"--gtest_filter=*quick*{exclude_tests_filter}",
     "--matrices-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
 ]
