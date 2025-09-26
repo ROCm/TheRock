@@ -81,6 +81,8 @@ else:
         config=Config(max_pool_connections=100, signature_version=UNSIGNED),
     )
 
+paginator = s3_client.get_paginator("list_objects_v2")
+
 # TODO: allow downloading artifacts for other platforms (e.g. Linux artifacts on Windows)
 PLATFORM = platform.system().lower()
 
@@ -112,7 +114,6 @@ def retrieve_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str):
         f"Retrieving S3 artifacts for {bucket_info.workflow_run_id} in '{bucket_info.bucket}' at '{s3_directory_path}'"
     )
 
-    paginator = s3_client.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(
         Bucket=bucket_info.bucket, Prefix=s3_directory_path
     )
