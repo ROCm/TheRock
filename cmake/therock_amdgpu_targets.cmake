@@ -74,6 +74,10 @@ therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx1
 )
 
 # gfx103X family
+# TODO: add gfx1031, gfx1033, gfx1034
+#       https://llvm.org/docs/AMDGPUUsage.html#processors
+# TODO: OR replace with gfx10-3-generic?
+#       https://llvm.org/docs/AMDGPUUsage.html#amdgpu-generic-processor-table
 therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
@@ -81,14 +85,17 @@ therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all
 therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    rocBLAS   # https://github.com/ROCm/TheRock/issues/1564
 )
 therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" igpu-all FAMILY gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    rocBLAS   # https://github.com/ROCm/TheRock/issues/1564
 )
 therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    rocBLAS   # https://github.com/ROCm/TheRock/issues/1564
 )
 
 # gfx110X family

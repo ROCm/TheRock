@@ -90,12 +90,12 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
-            "expect_failure": True,
+            "expect_failure": False,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
-            "expect_failure": True,
+            "expect_failure": False,
         },
     },
 }
