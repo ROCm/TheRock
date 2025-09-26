@@ -80,11 +80,20 @@ else()
   message(FATAL_ERROR "System not recognized")
 endif()
 
+# Apply patch source only on Linux
+set(patch_source_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+       bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"
