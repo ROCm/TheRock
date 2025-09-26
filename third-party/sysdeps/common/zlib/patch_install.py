@@ -1,7 +1,6 @@
-import os
 from pathlib import Path
 import platform
-import subprocess
+import shutil
 import sys
 
 PREFIX = sys.argv[1]
@@ -9,7 +8,7 @@ PREFIX = sys.argv[1]
 if platform.system() == "Linux":
     source = str(Path(PREFIX) / "lib" / "librocm_sysdeps_z.so")
     destination = str(Path(PREFIX) / "lib" / "libz.so")
-    subprocess.run(["mv", source, destination], check=True)
+    shutil.move(source, destination)
     # We don't want the static lib on Linux.
     (Path(PREFIX) / "lib" / "librocm_sysdeps_z.a").unlink()
 elif platform.system() == "Windows":
