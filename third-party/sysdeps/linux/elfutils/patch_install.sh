@@ -27,10 +27,10 @@ update_library_links() {
         return 1
     fi
 
-    local dir=$(dirname -- "$libfile")
+    local dir="$(dirname -- "$libfile")"
     # Get the soname and realname
-    local lib_soname=$("$PATCHELF" --print-soname "$libfile" 2>/dev/null || true)
-    local realname=$(readlink -f -- "$libfile" 2>/dev/null || true)
+    local lib_soname="$("$PATCHELF" --print-soname "$libfile" 2>/dev/null || true)"
+    local realname="$(readlink -f -- "$libfile" 2>/dev/null || true)"
 
     if [[ -z "$lib_soname" || -z "$realname" ]]; then
         [[ -z "$lib_soname" ]] && echo "Error: No SONAME found in '$libfile'" >&2
