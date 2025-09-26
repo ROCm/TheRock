@@ -31,7 +31,7 @@ tests_to_exclude = {
             "quick/bsrsv.level2/*",
             "quick/coomv.level2/*",
             "quick/csrmv.level2/*",
-            "quick/bsrgemm.extra/*"
+            "quick/bsrgemm.extra/*",
         ]
     }
 }
