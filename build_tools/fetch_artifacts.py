@@ -244,6 +244,7 @@ def filter_base_artifacts(
         "core-runtime_run",
         "core-runtime_lib",
         "sysdeps_lib",
+        "base_run",
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",

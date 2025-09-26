@@ -26,6 +26,7 @@ mainline, in open source, using MSVC, etc.).
 | Component subset    | Subproject                                                                   | Supported | Notes                                         |
 | ------------------- | ---------------------------------------------------------------------------- | --------- | --------------------------------------------- |
 | base                | aux-overlay                                                                  | ✅        |                                               |
+| base                | [amdsmi](https://github.com/ROCm/amdsmi)                                     | ❌        | Unsupported                                   |
 | base                | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                             | ✅        |                                               |
 | base                | [rocm-core](https://github.com/ROCm/rocm-core)                               | ✅        |                                               |
 | base                | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                         | ❌        | Unsupported                                   |
