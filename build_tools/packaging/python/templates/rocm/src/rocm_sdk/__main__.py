@@ -34,6 +34,22 @@ def _do_path(args: argparse.Namespace):
         sys.exit(1)
 
 
+def _do_init(args: argparse.Namespace):
+    from . import _devel
+
+    try:
+        root_path = _devel.get_devel_root()
+    except ModuleNotFoundError as e:
+        print(
+            "ERROR: Could not load the `rocm[devel]` package, which is required. "
+            "Please install it with your package manager (pip, uv, etc)",
+            file=sys.stderr,
+        )
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Devel contents expanded to '{root_path}'.")
+
+
 def _do_test(args: argparse.Namespace):
     import unittest
 
@@ -126,6 +142,12 @@ def main(argv: list[str] | None = None):
         "targets", help="Print information about the GPU targets that are supported"
     )
     targets_p.set_defaults(func=_do_targets)
+
+    # 'init' subcommand.
+    init_p = sub_p.add_parser(
+        "init", help="Expand devel contents to initialize rocm[dev]"
+    )
+    init_p.set_defaults(func=_do_init)
 
     args = p.parse_args(argv)
     args.func(args)
