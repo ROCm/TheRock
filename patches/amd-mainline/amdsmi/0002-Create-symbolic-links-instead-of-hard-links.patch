@@ -1,0 +1,86 @@
+From e3b15d54dcd9f8dc49e0c48528b6e4fc6f71d2d4 Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Fri, 26 Sep 2025 16:13:34 +0000
+Subject: [PATCH 2/2] Create symbolic links instead of hard links
+
+This unbreaks having sources on one mount point and builds at another.
+---
+ amdsmi_cli/CMakeLists.txt   | 22 +++++++++++-----------
+ py-interface/CMakeLists.txt | 14 +++++++-------
+ 2 files changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/amdsmi_cli/CMakeLists.txt b/amdsmi_cli/CMakeLists.txt
+index b324014c..bb19a0fc 100644
+--- a/amdsmi_cli/CMakeLists.txt
++++ b/amdsmi_cli/CMakeLists.txt
+@@ -24,17 +24,17 @@ add_custom_command(
+            ${PY_PACKAGE_DIR}/Release_Notes.md
+     DEPENDS amdsmi_cli
+     COMMAND mkdir -p ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/__init__.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_cli.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_commands.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_helpers.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_init.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_logger.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_parser.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_cli_exceptions.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/BDF.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/README.md ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/Release_Notes.md ${PY_PACKAGE_DIR}/)
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/__init__.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_cli.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_commands.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_helpers.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_init.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_logger.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_parser.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_cli_exceptions.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/BDF.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/README.md ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/Release_Notes.md ${PY_PACKAGE_DIR}/)
+ 
+ # The CLI requires the python amdsmi wrapper to be installed
+ add_custom_target(
+diff --git a/py-interface/CMakeLists.txt b/py-interface/CMakeLists.txt
+index 6aaa5056..016d7ade 100644
+--- a/py-interface/CMakeLists.txt
++++ b/py-interface/CMakeLists.txt
+@@ -39,7 +39,7 @@ if(NOT GOOD_CLANG_FOUND)
+         OUTPUT amdsmi_wrapper.py ${PY_PACKAGE_DIR}/amdsmi_wrapper.py
+         DEPENDS ${AMD_SMI} ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_wrapper.py
+         COMMAND mkdir -p ${PY_PACKAGE_DIR}
+-        COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_wrapper.py ${PY_PACKAGE_DIR}/)
++        COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_wrapper.py ${PY_PACKAGE_DIR}/)
+ else()
+     find_package(Python3 3.6 COMPONENTS Interpreter Development REQUIRED)
+     # --break-system-packages is needed for python 3.11
+@@ -59,7 +59,7 @@ else()
+         COMMAND ${Python3_EXECUTABLE} generator.py "$<$<BOOL:${ENABLE_ESMI_LIB}>:-e -DENABLE_ESMI_LIB>" -i amdsmi.h -l
+                 ${PROJECT_BINARY_DIR}/src/libamd_smi.so -o ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_wrapper.py
+         COMMAND mkdir -p ${PY_PACKAGE_DIR}
+-        COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_wrapper.py ${PY_PACKAGE_DIR}/)
++        COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_wrapper.py ${PY_PACKAGE_DIR}/)
+ endif()
+ 
+ # populate version string
+@@ -74,11 +74,11 @@ add_custom_command(
+     OUTPUT ${PY_PACKAGE_DIR}/__init__.py ${PY_PACKAGE_DIR}/amdsmi_exception.py ${PY_PACKAGE_DIR}/amdsmi_interface.py
+            ${PY_PACKAGE_DIR}/README.md ${PY_PACKAGE_DIR}/LICENSE
+     DEPENDS python_wrapper
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/__init__.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_exception.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_interface.py ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${CMAKE_CURRENT_SOURCE_DIR}/README.md ${PY_PACKAGE_DIR}/
+-    COMMAND ln -Pf ${PROJECT_SOURCE_DIR}/LICENSE ${PY_PACKAGE_DIR}/)
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/__init__.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_exception.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/amdsmi_interface.py ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${CMAKE_CURRENT_SOURCE_DIR}/README.md ${PY_PACKAGE_DIR}/
++    COMMAND ln -sf ${PROJECT_SOURCE_DIR}/LICENSE ${PY_PACKAGE_DIR}/)
+ 
+ # copy libamd_smi.so to allow for a self-contained python package
+ add_custom_command(OUTPUT ${PY_PACKAGE_DIR}/libamd_smi.so DEPENDS ${PROJECT_BINARY_DIR}/src/libamd_smi.so
+-- 
+2.43.0
+

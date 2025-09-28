@@ -26,6 +26,7 @@ mainline, in open source, using MSVC, etc.).
 | Component subset    | Subproject                                                                   | Supported | Notes                                         |
 | ------------------- | ---------------------------------------------------------------------------- | --------- | --------------------------------------------- |
 | base                | aux-overlay                                                                  | ✅        |                                               |
+| base                | [amdsmi](https://github.com/ROCm/amdsmi)                                     | ❌        | Unsupported                                   |
 | base                | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                             | ✅        |                                               |
 | base                | [rocm-core](https://github.com/ROCm/rocm-core)                               | ✅        |                                               |
 | base                | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                         | ❌        | Unsupported                                   |
@@ -164,6 +165,8 @@ If you prefer to install tools manually, you will need:
   https://github.com/mozilla/sccache
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
+
+- patch, available in Strawberry Perl or Git.
 
 - dvc: https://dvc.org/doc/install/windows
 

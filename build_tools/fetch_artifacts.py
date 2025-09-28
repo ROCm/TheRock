@@ -97,10 +97,11 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def retrieve_s3_artifacts(run_id, amdgpu_family):
+def retrieve_s3_artifacts(run_id: str, amdgpu_family: str):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
     s3_directory_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}/"
+    log(f"Retrieving S3 artifacts for {run_id} in '{BUCKET}' at '{s3_directory_path}'")
     page_iterator = paginator.paginate(Bucket=BUCKET, Prefix=s3_directory_path)
     data = set()
     for page in page_iterator:
@@ -114,6 +115,8 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
                 ):
                     file_name = artifact_key.split("/")[-1]
                     data.add(file_name)
+    if not data:
+        log(f"Found no S3 artifacts for {run_id} at '{s3_directory_path}'")
     return data
 
 
@@ -244,6 +247,7 @@ def filter_base_artifacts(
         "core-runtime_run",
         "core-runtime_lib",
         "sysdeps_lib",
+        "base_run",
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",

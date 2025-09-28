@@ -63,6 +63,9 @@ add_library(
   SHARED
   src/loader.cc
 )
+target_link_libraries(amd_comgr_loader PRIVATE
+  ${CMAKE_DL_LIBS}
+)
 set_target_properties(amd_comgr_loader PROPERTIES
   VERSION "${PROJECT_VERSION}"
   SOVERSION "${PROJECT_VERSION_MAJOR}"

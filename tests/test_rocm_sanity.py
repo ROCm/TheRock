@@ -1,11 +1,13 @@
-import pytest
-import subprocess
-import re
 from pathlib import Path
-import platform
 from pytest_check import check
 import logging
 import os
+import platform
+import pytest
+import re
+import shlex
+import subprocess
+import sys
 
 THIS_DIR = Path(__file__).resolve().parent
 
@@ -18,10 +20,20 @@ def is_windows():
     return "windows" == platform.system().lower()
 
 
-def run_command(command, cwd=None):
-    process = subprocess.run(command, capture_output=True, cwd=cwd, shell=is_windows())
+def run_command(command: list[str], cwd=None):
+    logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
+    process = subprocess.run(
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+    )
     if process.returncode != 0:
-        raise Exception(str(process.stderr))
+        logger.error(f"Command failed!")
+        logger.error("command stdout:")
+        for line in process.stdout.splitlines():
+            logger.error(line)
+        logger.error("command stderr:")
+        for line in process.stderr.splitlines():
+            logger.error(line)
+        raise Exception(f"Command failed: `{shlex.join(command)}`, see output above")
     return process
 
 
@@ -58,8 +70,26 @@ class TestROCmSanity:
         )
 
     def test_hip_printf(self):
-        # Compiling .cpp file using hipcc
         platform_executable_suffix = ".exe" if is_windows() else ""
+
+        # Look up amdgpu arch, e.g. gfx1100, for explicit `--offload-arch`.
+        # See https://github.com/ROCm/llvm-project/issues/302:
+        #   * If this is omitted on Linux, hipcc uses rocm_agent_enumerator.
+        #   * If this is omitted on Windows, hipcc uses a default (e.g. gfx906).
+        # We include it on both platforms for consistency.
+        amdgpu_arch_executable_file = f"amdgpu-arch{platform_executable_suffix}"
+        amdgpu_arch_path = (
+            THEROCK_BIN_DIR
+            / ".."
+            / "lib"
+            / "llvm"
+            / "bin"
+            / amdgpu_arch_executable_file
+        ).resolve()
+        process = run_command([str(amdgpu_arch_path)])
+        amdgpu_arch = process.stdout.splitlines()[0]
+
+        # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
         run_command(
             [
@@ -67,6 +97,7 @@ class TestROCmSanity:
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-Xlinker",
                 f"-rpath={THEROCK_BIN_DIR}/../lib/",
+                f"--offload-arch={amdgpu_arch}",
                 "-o",
                 hipcc_check_executable_file,
             ],
