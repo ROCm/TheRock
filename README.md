@@ -69,7 +69,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Download submodules and apply patches
-python ./build_tools/fetch_sources.py
+python3 ./build_tools/fetch_sources.py
 ```
 
 ### Setup - Windows 11 (VS 2022)
