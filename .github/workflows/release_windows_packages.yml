@@ -155,7 +155,7 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      # TODO(amd-justchen): share with build_windows_packages.yml. Include in VM image? Dockerfile?
+      # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
           choco install --no-progress -y ccache
@@ -175,7 +175,6 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      # TODO(#762): Move to script and share with build_windows_packages.yml.
       - name: Runner health status
         run: |
           ccache --zero-stats

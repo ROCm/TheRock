@@ -123,7 +123,7 @@ jobs:
           python build_tools/github_actions/python_to_cp_version.py \
             --python-version ${{ inputs.python_version }}
 
-      # TODO(amd-justchen): share with build_windows_packages.yml. Include in VM image? Dockerfile?
+      # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
           choco install --no-progress -y ninja --version 1.13.1

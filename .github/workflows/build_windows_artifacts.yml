@@ -1,4 +1,4 @@
-name: Build Windows Packages
+name: Build Windows Artifacts
 
 on:
   workflow_dispatch:
@@ -30,8 +30,8 @@ permissions:
   contents: read
 
 jobs:
-  build_windows_packages:
-    name: Build Windows Packages (xfail ${{ inputs.expect_failure }})
+  build_windows_artifacts:
+    name: Build Artifacts (xfail ${{ inputs.expect_failure }})
     runs-on: azure-windows-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
@@ -117,8 +117,8 @@ jobs:
           ccache -z
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-dist therock-archives -- -k 0
+      - name: Build therock-archives and therock-dist
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
