@@ -96,15 +96,15 @@ def main(argv: list[str]):
         help="Path where wheels are located",
     )
 
-    if args.dist_dir == "<no-valid-dir>":
+    args = p.parse_args(argv)
+    if args.dist_dir == Path("<no-valid-dir>"):
         print(
             f"""[ERROR] No path given where to find the wheels!
-Either set environment variable 'PACKAGE_DIST_DIR' or run the command with '--dist-dir=<path-to-wheels>'""",
+        Either set environment variable 'PACKAGE_DIST_DIR' or run the command with --dist-dir=<path-to-wheels>""",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    args = p.parse_args(argv)
     if not args.dist_dir.exists():
         raise FileNotFoundError(f"Dist dir '{args.dist_dir}' does not exist")
     all_versions = get_all_wheel_versions(args.dist_dir)
