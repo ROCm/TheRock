@@ -48,6 +48,7 @@ class PackageConfig:
     enable_rpath: bool
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
 ARTIFACTS_DIR = Path.cwd() / "artifacts_tar"
 # Directory for debian and RPM packaging
 DEBIAN_CONTENTS_DIR = Path.cwd() / "DEB"
