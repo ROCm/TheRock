@@ -21,7 +21,7 @@ envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",
-    f"--gtest_filter=*quick*",
+    "--gtest_filter=*quick*",
     "--matrices-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
 ]

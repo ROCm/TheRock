@@ -87,8 +87,10 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 4,
         "exclude_family": {
-            "windows": ["gfx1151"]
-        },  # issue: https://ontrack-internal.amd.com/browse/SWDEV-557164
+            "windows": [
+                "gfx1151"
+            ]  # issue: https://ontrack-internal.amd.com/browse/SWDEV-557164
+        },
     },
     # RAND tests
     "rocrand": {
