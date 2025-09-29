@@ -109,14 +109,12 @@ class BucketMetadata:
 
 def retrieve_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
-    s3_directory_path = bucket_info.s3_key_path
+    s3_key_path = bucket_info.s3_key_path
     log(
-        f"Retrieving S3 artifacts for {bucket_info.workflow_run_id} in '{bucket_info.bucket}' at '{s3_directory_path}'"
+        f"Retrieving S3 artifacts for {bucket_info.workflow_run_id} in '{bucket_info.bucket}' at '{s3_key_path}'"
     )
 
-    page_iterator = paginator.paginate(
-        Bucket=bucket_info.bucket, Prefix=s3_directory_path
-    )
+    page_iterator = paginator.paginate(Bucket=bucket_info.bucket, Prefix=s3_key_path)
     data = set()
     for page in page_iterator:
         if "Contents" in page:
@@ -130,7 +128,7 @@ def retrieve_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str):
                     file_name = artifact_key.split("/")[-1]
                     data.add(file_name)
     if not data:
-        log(f"Found no S3 artifacts for {bucket_info.run_id} at '{s3_directory_path}'")
+        log(f"Found no S3 artifacts for {bucket_info.run_id} at '{s3_key_path}'")
     return data
 
 
@@ -161,7 +159,7 @@ def collect_artifacts_download_requests(
         if file_name in existing_artifacts:
             artifacts_to_retrieve.append(
                 ArtifactDownloadRequest(
-                    artifact_key=f"{bucket_info.s3_key_path}{file_name}",
+                    artifact_key=f"{bucket_info.s3_key_path}/{file_name}",
                     bucket=bucket_info.bucket,
                     output_path=output_dir / file_name,
                 )
