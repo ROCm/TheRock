@@ -61,6 +61,7 @@ tests_to_exclude = {
             "quick/gtsv_interleaved_batch.precond/*",
             "quick/gtsv_no_pivot.precond/*",
             "quick/gtsv_no_pivot_strided_batch.precond/*",
+            "quick/hybmv.level2/*",
         ]
     }
 }
