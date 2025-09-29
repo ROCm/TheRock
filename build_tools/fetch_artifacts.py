@@ -83,9 +83,6 @@ else:
 
 paginator = s3_client.get_paginator("list_objects_v2")
 
-# TODO: allow downloading artifacts for other platforms (e.g. Linux artifacts on Windows)
-PLATFORM = platform.system().lower()
-
 
 # TODO(geomin12): switch out logging library
 def log(*args, **kwargs):
@@ -101,10 +98,11 @@ class BucketMetadata:
     external_repo: str
     bucket: str
     workflow_run_id: str
+    platform: str
     s3_key_path: str = field(init=False)
 
     def __post_init__(self):
-        self.s3_key_path = f"{self.external_repo}{self.workflow_run_id}-{PLATFORM}"
+        self.s3_key_path = f"{self.external_repo}{self.workflow_run_id}-{self.platform}"
 
 
 def retrieve_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str):
@@ -359,7 +357,10 @@ def run(args):
         workflow_run_id=run_id,
     )
     bucket_info = BucketMetadata(
-        external_repo=external_repo, bucket=bucket, workflow_run_id=run_id
+        external_repo=external_repo,
+        bucket=bucket,
+        workflow_run_id=run_id,
+        platform=args.platform,
     )
 
     s3_artifacts = retrieve_s3_artifacts(bucket_info=bucket_info, amdgpu_family=target)
@@ -467,6 +468,14 @@ def main(argv):
         type=str,
         required=True,
         help="Target variant for specific GPU target",
+    )
+
+    parser.add_argument(
+        "--platform",
+        type=str,
+        choices=["linux", "windows"],
+        default=platform.system().lower(),
+        help="Platform to download artifacts for (matches artifact folder name suffixes in S3)",
     )
 
     parser.add_argument(
