@@ -615,13 +615,25 @@ def do_build_pytorch(
                 f"FBGEMM_GENAI enabled (PyTorch < 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
             )
         else:
-            env["USE_FBGEMM_GENAI"] = "OFF"
+            env["USE_FBGEMM_GENAI"] = (
+                "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
+            )
             print(
                 f"FBGEMM_GENAI enabled (PyTorch >= 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
             )
 
         # Enabling/Disabling Flash attention based on Pytorch version in Linux
         if pytorch_build_version_parsed.release < (2, 10):
+            env.update(
+                {
+                    "USE_FLASH_ATTENTION": "1",
+                    "USE_MEM_EFF_ATTENTION": "1",
+                }
+            )
+            print(
+                f"Flash Attention enabled (PyTorch < 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
+            )
+        else:
             use_flash_attention = (
                 "1" if args.enable_pytorch_flash_attention_linux else "0"
             )
@@ -629,16 +641,6 @@ def do_build_pytorch(
                 {
                     "USE_FLASH_ATTENTION": use_flash_attention,
                     "USE_MEM_EFF_ATTENTION": use_flash_attention,
-                }
-            )
-            print(
-                f"Flash Attention enabled (PyTorch < 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
-            )
-        else:
-            env.update(
-                {
-                    "USE_FLASH_ATTENTION": "0",
-                    "USE_MEM_EFF_ATTENTION": "0",
                 }
             )
             print(
@@ -943,8 +945,14 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--enable-pytorch-flash-attention-linux",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=None,
         help="Enable building of torch flash attention on Linux (enabled by default, sets USE_FLASH_ATTENTION=1)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-fbgemm-genai-linux",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
 
     today = date.today()
