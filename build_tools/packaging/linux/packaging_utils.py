@@ -5,6 +5,7 @@ import json
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+
 def read_package_json_file():
     """Reads a JSON file and returns the parsed data
     Parameters: None
