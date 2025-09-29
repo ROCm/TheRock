@@ -85,7 +85,7 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 6,
+        "total_shards": 4,
         "exclude_family": {
             "windows": ["gfx1151"]
         },  # issue: https://ontrack-internal.amd.com/browse/SWDEV-557164
