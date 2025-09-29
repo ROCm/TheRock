@@ -8,6 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from fetch_artifacts import (
+    BucketMetadata,
     retrieve_s3_artifacts,
 )
 
@@ -18,6 +19,9 @@ REPO_DIR = THIS_DIR.parent.parent
 class ArtifactsIndexPageTest(unittest.TestCase):
     @patch("fetch_artifacts.paginator")
     def testRetrieveS3Artifacts(self, mock_paginator):
+        bucket_info = BucketMetadata(
+            "ROCm-TheRock/", "therock-artifacts", "123", "linux"
+        )
         mock_paginator.paginate.return_value = [
             {
                 "Contents": [
@@ -30,7 +34,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
             {"Contents": [{"Key": "rocm-libraries/test/empty_4test.tar.xz"}]},
         ]
 
-        result = retrieve_s3_artifacts("123", "test")
+        result = retrieve_s3_artifacts(bucket_info, "test")
 
         self.assertEqual(len(result), 4)
         self.assertTrue("empty_1test.tar.xz" in result)
@@ -40,6 +44,9 @@ class ArtifactsIndexPageTest(unittest.TestCase):
 
     @patch("fetch_artifacts.paginator")
     def testRetrieveS3ArtifactsNotFound(self, mock_paginator):
+        bucket_info = BucketMetadata(
+            "ROCm-TheRock/", "therock-artifacts", "123", "linux"
+        )
         mock_paginator.paginate.side_effect = ClientError(
             error_response={
                 "Error": {"Code": "AccessDenied", "Message": "Access Denied"}
@@ -48,7 +55,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         )
 
         with self.assertRaises(ClientError) as context:
-            retrieve_s3_artifacts("123", "test")
+            retrieve_s3_artifacts(bucket_info, "test")
 
         self.assertEqual(context.exception.response["Error"]["Code"], "AccessDenied")
 

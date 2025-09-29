@@ -1,7 +1,10 @@
 import json
+from pathlib import Path
 
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
+
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def read_package_json_file():
@@ -10,8 +13,8 @@ def read_package_json_file():
 
     Returns: List of package details read from Json
     """
-
-    with open("package.json", "r") as file:
+    file_path = SCRIPT_DIR / "package.json"
+    with file_path.open("r", encoding="utf-8") as file:
         data = json.load(file)
     return data
 

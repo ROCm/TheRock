@@ -105,3 +105,27 @@ cmake --build "B:\build" --target MIOpen+dist
 
 - https://github.com/ROCm/TheRock/issues/840: Builds hitting 6 hour timeouts
 - https://github.com/ROCm/TheRock/issues/1407: Flaky compiler crashes during builds
+
+## Working effectively from forks
+
+The structure outlined at
+[Overall build architecture](./development_guide.md#overall-build-architecture)
+shows how [artifacts](./artifacts.md) produced by source builds can be leveraged
+for package builds such as those for [Python packaging](./../packaging/python_packaging.md).
+
+This modular and pipelined build architecture is particularly useful when
+developing and debugging packaging workflows, since the complete build/release
+pipeline can take several hours sharded across multiple types of build and test
+machines.
+
+The [`.github/workflows/build_windows_python_packages.yml`](/.github/workflows/build_windows_python_packages.yml)
+and [`.github/workflows/build_portable_linux_python_packages.yml`](.github/workflows/build_portable_linux_python_packages.yml)
+workflows are both runnable from personal repository forks. By default they
+download artifacts from a recent workflow run in the https://github.com/ROCm/TheRock
+repository. You can customize where artifacts are downloaded from by setting
+the `artifact_github_repo` and `artifact_run_id` workflow inputs.
+
+Eventually we would like for all ROCm CI and CD workflow runs to produce and
+upload artifacts in a compatible schema so that more workflows (e.g. producing
+native Linux or Windows packages, running framework tests, etc.) can extend this
+foundation.

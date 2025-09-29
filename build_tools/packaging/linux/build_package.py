@@ -48,6 +48,7 @@ class PackageConfig:
     enable_rpath: bool
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
 ARTIFACTS_DIR = Path.cwd() / "artifacts_tar"
 # Directory for debian and RPM packaging
 DEBIAN_CONTENTS_DIR = Path.cwd() / "DEB"
@@ -146,7 +147,7 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
         + config.version_suffix
     )
 
-    env = Environment(loader=FileSystemLoader("."))
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_changelog.j2")
 
     # Prepare context dictionary
@@ -182,7 +183,7 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig):
     print("Generate install file")
     install_file = Path(deb_dir) / "install"
 
-    env = Environment(loader=FileSystemLoader("."))
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_install.j2")
     # Prepare your context dictionary
     context = {
@@ -207,7 +208,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     rules_file = Path(deb_dir) / "rules"
     disable_dh_strip = is_key_defined(pkg_info, "Disable_DH_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
-    env = Environment(loader=FileSystemLoader("."))
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
     context = {
@@ -242,7 +243,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     # Package.json maintains development package name as devel
     depends = depends.replace("-devel", "-dev")
 
-    env = Environment(loader=FileSystemLoader("."))
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_control.j2")
     # Prepare your context dictionary
     # TODO: description short and long need to defined in package.json
@@ -393,7 +394,7 @@ def generate_spec_file(pkginfo, specfile, config: PackageConfig):
         for path in sourcedir_list:
             convert_runpath_to_rpath(path)
 
-    env = Environment(loader=FileSystemLoader("."))
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/rpm_specfile.j2")
 
     # Prepare your context dictionary
@@ -655,12 +656,12 @@ def download_and_extract_artifacts(run_id, gfxarch):
     Returns: None
     """
     gfxarch_params = gfxarch + "-dcgpu"
-
+    fetch_script = (SCRIPT_DIR / ".." / ".." / "fetch_artifacts.py").resolve()
     try:
         subprocess.run(
             [
                 "python3",
-                "../../fetch_artifacts.py",
+                str(fetch_script),
                 "--run-id",
                 run_id,
                 "--target",

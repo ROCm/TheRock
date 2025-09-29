@@ -40,7 +40,7 @@ import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
 import concurrent.futures
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
 import platform
@@ -49,10 +49,13 @@ import shutil
 import sys
 import tarfile
 import time
-import warnings
 from urllib3.exceptions import InsecureRequestWarning
+import warnings
 
-from _therock_utils.artifacts import ArtifactPopulator
+THEROCK_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from github_actions_utils import *
 
 
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
@@ -80,16 +83,6 @@ else:
 
 paginator = s3_client.get_paginator("list_objects_v2")
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent
-
-# Importing build_artifact_upload.py
-sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from _therock_utils.artifacts import ArtifactName
-from github_actions_utils import *
-
-GENERIC_VARIANT = "generic"
-PLATFORM = platform.system().lower()
-
 
 # TODO(geomin12): switch out logging library
 def log(*args, **kwargs):
@@ -97,11 +90,29 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def retrieve_s3_artifacts(run_id, amdgpu_family):
+# TODO: move into github_actions_utils.py?
+@dataclass
+class BucketMetadata:
+    """Metadata for a workflow run's artifacts in an AWS S3 bucket."""
+
+    external_repo: str
+    bucket: str
+    workflow_run_id: str
+    platform: str
+    s3_key_path: str = field(init=False)
+
+    def __post_init__(self):
+        self.s3_key_path = f"{self.external_repo}{self.workflow_run_id}-{self.platform}"
+
+
+def retrieve_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str):
     """Checks that the AWS S3 bucket exists and returns artifact names."""
-    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
-    s3_directory_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}/"
-    page_iterator = paginator.paginate(Bucket=BUCKET, Prefix=s3_directory_path)
+    s3_key_path = bucket_info.s3_key_path
+    log(
+        f"Retrieving S3 artifacts for {bucket_info.workflow_run_id} in '{bucket_info.bucket}' at '{s3_key_path}'"
+    )
+
+    page_iterator = paginator.paginate(Bucket=bucket_info.bucket, Prefix=s3_key_path)
     data = set()
     for page in page_iterator:
         if "Contents" in page:
@@ -114,6 +125,8 @@ def retrieve_s3_artifacts(run_id, amdgpu_family):
                 ):
                     file_name = artifact_key.split("/")[-1]
                     data.add(file_name)
+    if not data:
+        log(f"Found no S3 artifacts for {bucket_info.run_id} at '{s3_key_path}'")
     return data
 
 
@@ -129,30 +142,23 @@ class ArtifactDownloadRequest:
         return f"{self.bucket}:{self.artifact_key}"
 
 
-def get_bucket_url(run_id: str):
-    external_repo, bucket = retrieve_bucket_info()
-    return f"https://{bucket}.s3.us-east-2.amazonaws.com/{external_repo}{run_id}-{PLATFORM}"
-
-
 def collect_artifacts_download_requests(
     artifact_names: list[str],
-    run_id: str,
+    bucket_info: BucketMetadata,
     output_dir: Path,
     variant: str,
     existing_artifacts: set[str],
 ) -> list[ArtifactDownloadRequest]:
     """Collects S3 artifact URLs to execute later in parallel."""
     artifacts_to_retrieve = []
-    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
-    s3_key_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}"
     for artifact_name in artifact_names:
         file_name = f"{artifact_name}_{variant}.tar.xz"
         # If artifact does exist in s3 bucket
         if file_name in existing_artifacts:
             artifacts_to_retrieve.append(
                 ArtifactDownloadRequest(
-                    artifact_key=f"{s3_key_path}/{file_name}",
-                    bucket=BUCKET,
+                    artifact_key=f"{bucket_info.s3_key_path}/{file_name}",
+                    bucket=bucket_info.bucket,
                     output_path=output_dir / file_name,
                 )
             )
@@ -199,15 +205,13 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
 
 
 def filter_all_artifacts(
-    run_id: str,
+    bucket_info: BucketMetadata,
     target: str,
     output_dir: Path,
     s3_artifacts: set[str],
 ) -> list[ArtifactDownloadRequest]:
     """Filters to all available artifacts."""
     artifacts_to_retrieve = []
-    EXTERNAL_REPO, BUCKET = retrieve_bucket_info()
-    s3_key_path = f"{EXTERNAL_REPO}{run_id}-{PLATFORM}"
 
     for artifact in sorted(list(s3_artifacts)):
         an = ArtifactName.from_filename(artifact)
@@ -216,8 +220,8 @@ def filter_all_artifacts(
 
         artifacts_to_retrieve.append(
             ArtifactDownloadRequest(
-                artifact_key=f"{s3_key_path}/{artifact}",
-                bucket=BUCKET,
+                artifact_key=f"{bucket_info.s3_key_path}/{artifact}",
+                bucket=bucket_info.bucket,
                 output_path=output_dir / artifact,
             )
         )
@@ -235,7 +239,7 @@ def get_postprocess_mode(args) -> str | None:
 
 def filter_base_artifacts(
     args: argparse.Namespace,
-    run_id: str,
+    bucket_info: BucketMetadata,
     output_dir: Path,
     s3_artifacts: set[str],
 ) -> list[ArtifactDownloadRequest]:
@@ -244,6 +248,7 @@ def filter_base_artifacts(
         "core-runtime_run",
         "core-runtime_lib",
         "sysdeps_lib",
+        "base_run",
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
@@ -256,7 +261,7 @@ def filter_base_artifacts(
         base_artifacts.append("host-blas_lib")
 
     artifacts_to_retrieve = collect_artifacts_download_requests(
-        base_artifacts, run_id, output_dir, GENERIC_VARIANT, s3_artifacts
+        base_artifacts, bucket_info, output_dir, "generic", s3_artifacts
     )
     return artifacts_to_retrieve
 
@@ -264,7 +269,7 @@ def filter_base_artifacts(
 def filter_enabled_artifacts(
     args: argparse.Namespace,
     target: str,
-    run_id: str,
+    bucket_info: BucketMetadata,
     output_dir: Path,
     s3_artifacts: set[str],
 ) -> list[ArtifactDownloadRequest]:
@@ -304,7 +309,7 @@ def filter_enabled_artifacts(
             enabled_artifacts.append(f"{base_path}_test")
 
     artifacts_to_retrieve = collect_artifacts_download_requests(
-        enabled_artifacts, run_id, output_dir, target, s3_artifacts
+        enabled_artifacts, bucket_info, output_dir, target, s3_artifacts
     )
     return artifacts_to_retrieve
 
@@ -341,11 +346,24 @@ def extract_artifact(
 
 
 def run(args):
+    run_github_repo = args.run_github_repo
     run_id = args.run_id
     target = args.target
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
-    s3_artifacts = retrieve_s3_artifacts(run_id, target)
+
+    external_repo, bucket = retrieve_bucket_info(
+        github_repository=run_github_repo,
+        workflow_run_id=run_id,
+    )
+    bucket_info = BucketMetadata(
+        external_repo=external_repo,
+        bucket=bucket,
+        workflow_run_id=run_id,
+        platform=args.platform,
+    )
+
+    s3_artifacts = retrieve_s3_artifacts(bucket_info=bucket_info, amdgpu_family=target)
     if not s3_artifacts:
         log(f"S3 artifacts for {run_id} does not exist. Exiting...")
         sys.exit(1)
@@ -356,15 +374,17 @@ def run(args):
         args.all = True
     if args.all:
         artifacts_to_retrieve = filter_all_artifacts(
-            run_id, target, output_dir, s3_artifacts
+            bucket_info, target, output_dir, s3_artifacts
         )
     else:
         artifacts_to_retrieve = filter_base_artifacts(
-            args, run_id, output_dir, s3_artifacts
+            args, bucket_info, output_dir, s3_artifacts
         )
         if not args.base_only:
             artifacts_to_retrieve.extend(
-                filter_enabled_artifacts(args, target, run_id, output_dir, s3_artifacts)
+                filter_enabled_artifacts(
+                    args, target, bucket_info, output_dir, s3_artifacts
+                )
             )
 
     # Include/exclude filtering.
@@ -432,6 +452,11 @@ def main(argv):
         help="Number of extract jobs to execute at once (defaults to python VM defaults for CPU tasks)",
     )
     parser.add_argument(
+        "--run-github-repo",
+        type=str,
+        help="GitHub repository for --run-id. If omitted, this is inferred from the GITHUB_REPOSITORY env var or defaults to ROCm/TheRock",
+    )
+    parser.add_argument(
         "--run-id",
         type=str,
         required=True,
@@ -443,6 +468,14 @@ def main(argv):
         type=str,
         required=True,
         help="Target variant for specific GPU target",
+    )
+
+    parser.add_argument(
+        "--platform",
+        type=str,
+        choices=["linux", "windows"],
+        default=platform.system().lower(),
+        help="Platform to download artifacts for (matches artifact folder name suffixes in S3)",
     )
 
     parser.add_argument(

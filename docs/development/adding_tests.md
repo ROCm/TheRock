@@ -2,7 +2,7 @@
 
 ## Test Flow
 
-After TheRock builds its artifacts, we test those artifacts through [`test_packages.yml`](../../.github/workflows/test_packages.yml). The testing flow works as:
+After TheRock builds its artifacts, we test those artifacts through [`test_artifacts.yml`](../../.github/workflows/test_artifacts.yml). The testing flow works as:
 
 ```mermaid
 graph LR

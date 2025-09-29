@@ -1,0 +1,96 @@
+name: Build Portable Linux Python Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_github_repo:
+        description: GitHub repository for artifact_run_id
+        type: string
+        default: ROCm/TheRock
+      artifact_run_id:
+        description: Workflow run ID to download artifacts from
+        type: string
+        default: "17865324892" # TODO: default to the most recent successful run (using a script)
+      amdgpu_family:
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
+      # TODO: scripts and/or reusable workflow for versions and release types
+      package_version:
+        type: string
+        default: "7.0.0.dev0"
+  workflow_call:
+    inputs:
+      artifact_github_repo:
+        type: string
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_family:
+        type: string
+      package_version:
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build | ${{ inputs.amdgpu_family }}
+    # Note: GitHub-hosted runners run out of disk space for some gpu families
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    env:
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
+      PACKAGES_DIR: "${{ github.workspace }}/packages"
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python requirements
+        run: pip install boto3 packaging piprepo setuptools
+
+      # Note: we could fetch "all" artifacts if we wanted to include more files
+      - name: Fetch artifacts
+        env:
+          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          python ./build_tools/fetch_artifacts.py \
+            --run-github-repo=${{ inputs.artifact_github_repo }} \
+            --run-id=${{ env.ARTIFACT_RUN_ID }} \
+            --target=${{ inputs.amdgpu_family }} \
+            --output-dir=${{ env.ARTIFACTS_DIR }} \
+            _dev_ _lib_ _run_
+
+      - name: Build Python packages
+        run: |
+          ./build_tools/linux_portable_build.py \
+            --image=${{ env.BUILD_IMAGE }} \
+            --output-dir=${{ env.PACKAGES_DIR }} \
+            --artifact-dir=${{ env.ARTIFACTS_DIR }} \
+            --build-python-only \
+            -- \
+            "--version=${{ inputs.package_version }}"
+
+      - name: Inspect Python packages
+        run: |
+          ls -la "${{ env.PACKAGES_DIR }}"
+
+      # TODO(#1559): Sanity check (Linux can't find the directories, maybe Docker issues?)
+
+      # - name: Sanity check Python packages
+      #   run: |
+      #     piprepo build "${{ env.PACKAGES_DIR }}/dist"
+      #     pip install rocm[devel]==${{ inputs.package_version }} \
+      #       --extra-index-url "${{ env.PACKAGES_DIR }}/dist/simple/"
+      #     rocm-sdk test
+
+      # TODO(#1559): upload packages to artifacts S3 bucket and/or a dedicated Python packages bucket

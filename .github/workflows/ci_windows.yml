@@ -11,7 +11,7 @@ on:
         type: string
       expect_failure:
         type: boolean
-      windows_use_prebuilt_artifacts:
+      use_prebuilt_artifacts:
         type: string
       extra_cmake_options:
         type: string
@@ -21,10 +21,10 @@ permissions:
   contents: read
 
 jobs:
-  build_windows_packages:
+  build_windows_artifacts:
     name: Build
-    if: ${{ inputs.windows_use_prebuilt_artifacts == 'false' }}
-    uses: ./.github/workflows/build_windows_packages.yml
+    if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
+    uses: ./.github/workflows/build_windows_artifacts.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       extra_cmake_options: ${{ inputs.extra_cmake_options }}
@@ -33,23 +33,23 @@ jobs:
       contents: read
       id-token: write
 
-  test_windows_packages:
-    needs: [build_windows_packages]
+  test_windows_artifacts:
+    needs: [build_windows_artifacts]
     name: Test
     # If the dependent job failed/cancelled, this job will not be run
-    # The windows_use_prebuilt_artifacts "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
         (
-          inputs.windows_use_prebuilt_artifacts == 'false' ||
-          inputs.windows_use_prebuilt_artifacts == 'true'
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
         )
       }}
     strategy:
       fail-fast: false
-    uses: ./.github/workflows/test_packages.yml
+    uses: ./.github/workflows/test_artifacts.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}

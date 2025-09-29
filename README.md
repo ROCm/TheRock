@@ -44,6 +44,9 @@ instructions and configurations for alternatives.
 > [installing from releases](#installing-from-releases) in supported
 > configurations is often faster and easier.
 
+> [!IMPORTANT]
+> Frequent setup and building problems and their solutions can be found in section [Common Issues](docs/environment_setup_guide.md#common-issues).
+
 ### Setup - Ubuntu (24.04)
 
 > [!TIP]
@@ -66,7 +69,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Download submodules and apply patches
-python ./build_tools/fetch_sources.py
+python3 ./build_tools/fetch_sources.py
 ```
 
 ### Setup - Windows 11 (VS 2022)
@@ -184,7 +187,10 @@ Further flags allow to build components with specific features enabled.
 
 ### CMake build usage
 
-To build ROCm/HIP:
+For workflows that demand frequent rebuilds, it is _recommended to build it with ccache_ enabled to speed up the build.
+See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Windows](#ccache-usage-on-windows).
+
+Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
 ```bash
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
