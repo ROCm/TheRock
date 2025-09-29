@@ -30,7 +30,7 @@ jobs:
       contents: read
       id-token: write
 
-  test_linux_packages:
+  test_linux_artifacts:
     needs: [build_portable_linux_artifacts]
     name: Test
     # If the dependent job failed/cancelled, this job will not be run
@@ -46,7 +46,7 @@ jobs:
       }}
     strategy:
       fail-fast: false
-    uses: ./.github/workflows/test_packages.yml
+    uses: ./.github/workflows/test_artifacts.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}

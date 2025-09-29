@@ -33,7 +33,7 @@ jobs:
       contents: read
       id-token: write
 
-  test_windows_packages:
+  test_windows_artifacts:
     needs: [build_windows_artifacts]
     name: Test
     # If the dependent job failed/cancelled, this job will not be run
@@ -49,7 +49,7 @@ jobs:
       }}
     strategy:
       fail-fast: false
-    uses: ./.github/workflows/test_packages.yml
+    uses: ./.github/workflows/test_artifacts.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}

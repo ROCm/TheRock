@@ -1,4 +1,4 @@
-name: Test Packages
+name: Test Artifacts
 
 on:
   workflow_dispatch:
