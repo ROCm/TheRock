@@ -1,0 +1,28 @@
+From d0ec81a8c6de4844e586b12272495dbcc92dc24d Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Mon, 29 Sep 2025 19:12:22 +0000
+Subject: [PATCH] Fix finding libamd_smi.so
+
+Allow amdsmi to find it's shared library bundled in Python packages
+produced with TheRock.
+---
+ py-interface/amdsmi_wrapper.py | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/py-interface/amdsmi_wrapper.py b/py-interface/amdsmi_wrapper.py
+index f5f05dfe..7eabff43 100644
+--- a/py-interface/amdsmi_wrapper.py
++++ b/py-interface/amdsmi_wrapper.py
+@@ -179,6 +179,9 @@ from pathlib import Path
+ def find_smi_library():
+     err = OSError("Could not load libamd_smi.so")
+     possible_locations = []
++    # 0.
++    libamd_smi_path = Path(__file__).resolve().parent.parent.parent.parent / "lib/libamd_smi.so.26"
++    possible_locations.append(libamd_smi_path)
+     # 1.
+     rocm_path = os.getenv("ROCM_HOME", os.getenv("ROCM_PATH"))
+     if rocm_path:
+-- 
+2.43.0
+
