@@ -19,7 +19,9 @@ REPO_DIR = THIS_DIR.parent.parent
 class ArtifactsIndexPageTest(unittest.TestCase):
     @patch("fetch_artifacts.paginator")
     def testRetrieveS3Artifacts(self, mock_paginator):
-        bucket_info = BucketMetadata("ROCm-TheRock/", "therock-artifacts", "123")
+        bucket_info = BucketMetadata(
+            "ROCm-TheRock/", "therock-artifacts", "123", "linux"
+        )
         mock_paginator.paginate.return_value = [
             {
                 "Contents": [
@@ -42,7 +44,9 @@ class ArtifactsIndexPageTest(unittest.TestCase):
 
     @patch("fetch_artifacts.paginator")
     def testRetrieveS3ArtifactsNotFound(self, mock_paginator):
-        bucket_info = BucketMetadata("ROCm-TheRock/", "therock-artifacts", "123")
+        bucket_info = BucketMetadata(
+            "ROCm-TheRock/", "therock-artifacts", "123", "linux"
+        )
         mock_paginator.paginate.side_effect = ClientError(
             error_response={
                 "Error": {"Code": "AccessDenied", "Message": "Access Denied"}
