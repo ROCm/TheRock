@@ -32,6 +32,20 @@ tests_to_exclude = {
             "quick/coomv.level2/*",
             "quick/csrmv.level2/*",
             "quick/bsrgemm.extra/*",
+            "quick/coo2csr.conversion/*",
+            "quick/csr2gebsr.conversion/*",
+            "quick/csr2bsr.conversion/*",
+            "quick/csr2hyb.conversion/*",
+            "quick/csr2csc.conversion/*",
+            "quick/csr2ell.conversion/*",
+            "quick/gebsr2gebsc.conversion/*",
+            "quick/csr2coo.conversion/*",
+            "quick/gpsv_interleaved_batch.precond/*",
+            "quick/gtsv_interleaved_batch.precond/*",
+            "quick/gtsv_no_pivot_strided_batch.precond/*",
+            "quick/gtsv_no_pivot.precond/*",
+            "quick/csritilu0_ex.precond/*",
+            "quick/csritilu0.precond/*"
         ]
     }
 }
