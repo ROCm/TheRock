@@ -86,6 +86,9 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 6,
+        "exclude_family": {
+            "windows": ["gfx1151"]
+        },  # issue: https://ontrack-internal.amd.com/browse/SWDEV-557164
     },
     # RAND tests
     "rocrand": {
@@ -128,11 +131,20 @@ test_matrix = {
 def run():
     platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
 
     logging.info(f"Selecting projects: {project_to_test}")
 
     output_matrix = []
     for key in test_matrix:
+        # If the test is disabled for a particular platform, skip the test
+        if (
+            "exclude_family" in test_matrix[key]
+            and platform in test_matrix[key]["exclude_family"]
+            and amdgpu_families in test_matrix[key]["exclude_family"][platform]
+        ):
+            continue
+
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
         if platform in test_matrix[key]["platform"] and (
             key in project_to_test or project_to_test == "*"
