@@ -1,6 +1,13 @@
 # Get access to LLVM_VERSION_MAJOR
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
+# Since THEROCK_ROCM_SYSTEMS_SOURCE_DIR may not be available during the prehook, we explicitly declare it
+if(DEFINED ENV{THEROCK_ROCM_SYSTEMS_SOURCE_DIR})
+    set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "$ENV{THEROCK_ROCM_SYSTEMS_SOURCE_DIR}")
+else()
+    message(WARNING "THEROCK_ROCM_SYSTEMS_SOURCE_DIR not set in environment")
+endif()
+
 # Build LLVM and the comgr dependency.
 # Note that in LLVM "BUILD_SHARED_LIBS" enables an unsupported development mode.
 # The flag you want for a shared library build is LLVM_BUILD_LLVM_DYLIB.
