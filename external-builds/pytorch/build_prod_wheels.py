@@ -609,12 +609,12 @@ def do_build_pytorch(
     match = re.match(r"^(\d+)\.(\d+)", pytorch_ver)
     if not match:
         raise ValueError(f"Could not parse version from {pytorch_build_version}")
-    pytorch_version = float(f"{major}.{minor}")
+    major, minor = map(int, match.groups())
 
-    ## Disable only for Linux on 2.10 Pytorch version
+    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.10 and higher Pytorch version
     ## https://github.com/ROCm/TheRock/issues/1619
     if not is_windows:
-        if pytorch_version < 2.10:
+        if (major, minor) < (2, 10):
             env["USE_FBGEMM_GENAI"] = "ON"
             use_flash_attention = (
                 "1" if args.enable_pytorch_flash_attention_linux else "0"
