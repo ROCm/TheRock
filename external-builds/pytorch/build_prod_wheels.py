@@ -112,8 +112,8 @@ import argparse
 from datetime import date
 import json
 import os
-import re
 from pathlib import Path
+from packaging.version import Version, parse
 import platform
 import shutil
 import shlex
@@ -601,20 +601,15 @@ def do_build_pytorch(
 ):
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
-    pytorch_ver = pytorch_build_version
     pytorch_build_version += args.version_suffix
+    pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
-
-    match = re.match(r"^(\d+)\.(\d+)", pytorch_ver)
-    if not match:
-        raise ValueError(f"Could not parse version from {pytorch_build_version}")
-    major, minor = map(int, match.groups())
 
     ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.10 and higher Pytorch version
     ## https://github.com/ROCm/TheRock/issues/1619
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if (major, minor) < (2, 10):
+        if pytorch_build_version_parsed.release < (2, 10):
             env["USE_FBGEMM_GENAI"] = "ON"
             print(
                 f"FBGEMM_GENAI enabled (PyTorch < 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
@@ -626,7 +621,7 @@ def do_build_pytorch(
             )
 
         # Enabling/Disabling Flash attention based on Pytorch version in Linux
-        if (major, minor) < (2, 10):
+        if pytorch_build_version_parsed.release < (2, 10):
             use_flash_attention = (
                 "1" if args.enable_pytorch_flash_attention_linux else "0"
             )
