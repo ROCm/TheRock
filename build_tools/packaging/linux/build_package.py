@@ -179,7 +179,7 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
     print(inspect.currentframe().f_code.co_name)
     changelog = Path(deb_dir) / "changelog"
 
-    pkg_name = update_debian_package_name(pkg_info.get("Package"), config)
+    pkg_name = update_package_name(pkg_info.get("Package"), config)
     maintainer = pkg_info.get("Maintainer")
     name_part, email_part = maintainer.split("<")
     name = name_part.strip()
@@ -282,7 +282,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     print(inspect.currentframe().f_code.co_name)
     control_file = Path(deb_dir) / "control"
 
-    pkg_name = update_debian_package_name(pkg_info.get("Package"), config)
+    pkg_name = update_package_name(pkg_info.get("Package"), config)
 
     if config.versioned_pkg:
         depends_list = pkg_info.get("DEBDepends", [])
@@ -539,9 +539,11 @@ def move_packages_to_destination(pkg_name, config: PackageConfig):
 
     # Create destination dir to move the packages created
     os.makedirs(config.dest_dir, exist_ok=True)
-
+    print(f"Package name: {pkg_name}")
     if config.pkg_type.lower() == "deb":
         artifacts = glob.glob(os.path.join(f"{DEBIAN_CONTENTS_DIR}", "*.deb"))
+        # Replace -devel with -dev for debian packages
+        pkg_name = debian_replace_devel_name(pkg_name)
     else:
         artifacts = glob.glob(
             os.path.join(
@@ -612,26 +614,28 @@ def update_package_name(pkg_name, config: PackageConfig):
         pkg_name = pkg_name + pkg_suffix + "-" + gfx_arch
     else:
         pkg_name = pkg_name + pkg_suffix
+
+    if config.pkg_type.lower() == "deb":
+        pkg_name = debian_replace_devel_name(pkg_name)
+
     return pkg_name
 
 
-def update_debian_package_name(pkg_name, config: PackageConfig):
-    """Function will update package name for debian package.
+def debian_replace_devel_name(pkg_name):
+    """Function will replace -devel with -dev string.
     Development package names are defined as devel in json file
     For debian package dev should be used
 
     Parameters:
     pkg_name : Package name
-    config: Configuration object containing package metadata
 
     Returns: Updated package name
     """
     print(inspect.currentframe().f_code.co_name)
-    deb_pkgname = update_package_name(pkg_name, config)
     # Only required for debian developement package
-    deb_pkgname = deb_pkgname.replace("-devel", "-dev")
+    pkg_name = pkg_name.replace("-devel", "-dev")
 
-    return deb_pkgname
+    return pkg_name
 
 
 def convert_to_versiondependency(dependency_list, config: PackageConfig):

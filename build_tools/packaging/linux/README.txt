@@ -5,6 +5,7 @@ The current scope of this is for producing AMD vendor packaging for hosting in A
 Python version required : python 3.12 or above
  Almalinux:
 dnf install rpm-build
+dnf install llvm
 pip install -r requirements.txt
 
  Ubuntu:

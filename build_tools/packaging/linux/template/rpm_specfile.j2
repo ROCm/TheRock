@@ -1,3 +1,8 @@
+# Use LLVM tools for stripping / objcopy
+%global __strip   /usr/bin/llvm-strip
+%global __objcopy /usr/bin/llvm-objcopy
+
+
 %global _debugsource_template %{nil}
 %global debug_package %{nil}          # disables -debuginfo
 %define __brp_mangle_shebangs %{nil}
