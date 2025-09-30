@@ -105,19 +105,52 @@ def list_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str) -> set[st
     page_iterator = paginator.paginate(Bucket=bucket_info.bucket, Prefix=s3_key_path)
     data = set()
     for page in page_iterator:
-        if "Contents" in page:
-            for artifact in page["Contents"]:
-                artifact_key = artifact["Key"]
-                if (
-                    "sha256sum" not in artifact_key
-                    and "tar.xz" in artifact_key
-                    and (amdgpu_family in artifact_key or "generic" in artifact_key)
-                ):
-                    file_name = artifact_key.split("/")[-1]
-                    data.add(file_name)
+        if not "Contents" in page:
+            continue
+
+        for artifact in page["Contents"]:
+            artifact_key = artifact["Key"]
+            if (
+                "sha256sum" not in artifact_key
+                and "tar.xz" in artifact_key
+                and (amdgpu_family in artifact_key or "generic" in artifact_key)
+            ):
+                file_name = artifact_key.split("/")[-1]
+                data.add(file_name)
     if not data:
         log(f"Found no S3 artifacts for {bucket_info.run_id} at '{s3_key_path}'")
     return data
+
+
+def filter_artifacts(
+    artifacts: set[str], includes: list[str], excludes: list[str]
+) -> set[str]:
+    """Filters artifacts based on include and exclude regex lists"""
+
+    def _should_include(artifact_name: str) -> bool:
+        if not includes and not excludes:
+            return True
+
+        # If includes, then one include must match.
+        if includes:
+            for include in includes:
+                pattern = re.compile(include)
+                if pattern.search(artifact_name):
+                    break
+            else:
+                return False
+
+        # If excludes, then no excludes must match.
+        if excludes:
+            for exclude in excludes:
+                pattern = re.compile(exclude)
+                if pattern.search(artifact_name):
+                    return False
+
+        # Included and not excluded.
+        return True
+
+    return {a for a in artifacts if _should_include(a)}
 
 
 @dataclass
@@ -253,38 +286,13 @@ def run(args):
     # expected files.
     s3_artifacts = list_s3_artifacts(bucket_info=bucket_info, amdgpu_family=target)
     if not s3_artifacts:
-        log(f"No matching S3 artifacts for {run_id} exist. Exiting...")
+        log(f"No matching artifacts for {run_id} exist. Exiting...")
         sys.exit(1)
 
     # Include/exclude filtering.
-    def _should_include(artifact_name: str) -> bool:
-        if not args.include and not args.exclude:
-            return True
-
-        # If includes, then one include must match.
-        if args.include:
-            for include in args.include:
-                pattern = re.compile(include)
-                if pattern.search(artifact_name):
-                    break
-            else:
-                return False
-
-        # If excludes, then no excludes must match.
-        if args.exclude:
-            for exclude in args.exclude:
-                pattern = re.compile(exclude)
-                if pattern.search(artifact_name):
-                    return False
-
-        # Included and not excluded.
-        return True
-
-    s3_artifacts_filtered = [a for a in s3_artifacts if _should_include(a)]
+    s3_artifacts_filtered = filter_artifacts(s3_artifacts, args.include, args.exclude)
     if not s3_artifacts_filtered:
-        log(
-            f"Filtering S3 artifacts for {run_id} resulted in an empty list. Exiting..."
-        )
+        log(f"Filtering artifacts for {run_id} resulted in an empty set. Exiting...")
         sys.exit(1)
 
     artifacts_to_download = get_artifact_download_requests(
