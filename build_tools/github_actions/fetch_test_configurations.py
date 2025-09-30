@@ -87,9 +87,7 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 4,
         "exclude_family": {
-            "windows": [
-                "gfx1151"
-            ]  # issue: https://ontrack-internal.amd.com/browse/SWDEV-557164
+            "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
         },
     },
     # RAND tests
@@ -145,6 +143,9 @@ def run():
             and platform in test_matrix[key]["exclude_family"]
             and amdgpu_families in test_matrix[key]["exclude_family"][platform]
         ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
+            )
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
