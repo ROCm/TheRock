@@ -2,7 +2,7 @@
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
 # Since THEROCK_ROCM_SYSTEMS_SOURCE_DIR may not be available during the prehook, we explicitly declare it
-if(NOT DEFINED THEROCK_ROCM_SYSTEMS_SOURCE_DIR AND NOT DEFINED CACHE{THEROCK_ROCM_SYSTEMS_SOURCE_DIR})
+if(NOT DEFINED CACHE{THEROCK_ROCM_SYSTEMS_SOURCE_DIR})
   set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
 endif()
 
