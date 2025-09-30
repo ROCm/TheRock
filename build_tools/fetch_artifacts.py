@@ -281,7 +281,7 @@ def filter_enabled_artifacts(
     artifact_paths = []
     all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
     # RCCL is disabled for Windows
-    if PLATFORM != "windows":
+    if bucket_info.platform != "windows":
         all_artifacts.append("rccl")
 
     if args.blas:
@@ -294,7 +294,7 @@ def filter_enabled_artifacts(
         artifact_paths.append("prim")
     if args.rand:
         artifact_paths.append("rand")
-    if args.rccl and PLATFORM != "windows":
+    if args.rccl and bucket_info.platform != "windows":
         artifact_paths.append("rccl")
 
     enabled_artifacts = []
