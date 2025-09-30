@@ -2,10 +2,8 @@
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
 # Since THEROCK_ROCM_SYSTEMS_SOURCE_DIR may not be available during the prehook, we explicitly declare it
-if(DEFINED ENV{THEROCK_ROCM_SYSTEMS_SOURCE_DIR})
-    set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "$ENV{THEROCK_ROCM_SYSTEMS_SOURCE_DIR}")
-else()
-    message(WARNING "THEROCK_ROCM_SYSTEMS_SOURCE_DIR not set in environment")
+if(NOT DEFINED THEROCK_ROCM_SYSTEMS_SOURCE_DIR)
+  set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/rocm-systems")
 endif()
 
 # Build LLVM and the comgr dependency.
