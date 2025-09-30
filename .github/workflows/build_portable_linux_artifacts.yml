@@ -143,20 +143,20 @@ jobs:
             --build-dir build \
             --upload
 
-      - name: Upload job metrics to Redshift database
-        if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-        env:
-          RUN_ID: ${{ github.run_id }}
-          ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          # Fetch job summary and store it
-          JOB_SUMMARY=$(python3 build_tools/github_actions/fetch_job_status.py)
-          # Populate Redshift Database tables
-          python3 build_tools/github_actions/populate_redshift_db.py \
-            --api-output "$JOB_SUMMARY" \
-            --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
-            --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
-            --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
-            --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
-            --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
-            --run-id ${{ github.run_number }}
+      # - name: Upload job metrics to Redshift database
+      #   if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
+      #   env:
+      #     RUN_ID: ${{ github.run_id }}
+      #     ATTEMPT: ${{ github.run_attempt }}
+      #   run: |
+      #     # Fetch job summary and store it
+      #     JOB_SUMMARY=$(python3 build_tools/github_actions/fetch_job_status.py)
+      #     # Populate Redshift Database tables
+      #     python3 build_tools/github_actions/populate_redshift_db.py \
+      #       --api-output "$JOB_SUMMARY" \
+      #       --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
+      #       --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
+      #       --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
+      #       --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
+      #       --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
+      #       --run-id ${{ github.run_number }}
