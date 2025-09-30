@@ -64,8 +64,11 @@ sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patch
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
 
-# Init python virtual environment and install python dependencies
+# Init python virtual environment
 python3 -m venv .venv && source .venv/bin/activate
+# Optional: Upgrade pip, can resolve problems when installing the requirements.txt
+pip install --upgrade pip
+# Install python dependencies
 pip install -r requirements.txt
 
 # Download submodules and apply patches
