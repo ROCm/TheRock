@@ -241,8 +241,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   python ./build_tools/fetch_artifacts.py \
     --run-id=17123441166 \
     --target=gfx110X-dgpu \
-    --output-dir=$HOME/.therock/17123441166/artifacts \
-    --all
+    --output-dir=$HOME/.therock/17123441166/artifacts
 
   python ./build_tools/build_python_packages.py \
     --artifact-dir=$HOME/.therock/17123441166/artifacts \
