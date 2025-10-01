@@ -7,6 +7,7 @@ import shutil
 import sys
 import time
 
+
 class RecursiveGlobPattern:
     def __init__(self, glob: str):
         self.glob = glob
@@ -122,11 +123,17 @@ class PatternMatcher:
                 except PermissionError:
                     wait_time = retry_delay_seconds * (attempt + 2)
                     if verbose:
-                        print(f"PermissionError calling shutil.rmtree('{destdir}') retrying after {wait_time}s", file=sys.stderr)
+                        print(
+                            f"PermissionError calling shutil.rmtree('{destdir}') retrying after {wait_time}s",
+                            file=sys.stderr,
+                        )
                     time.sleep(wait_time)
                     if attempt == max_attempts - 1:
                         if verbose:
-                            print(f"rmtree failed after {attempt} attempts, failing", file=sys.stderr)
+                            print(
+                                f"rmtree failed after {attempt} attempts, failing",
+                                file=sys.stderr,
+                            )
                         raise
         destdir.mkdir(parents=True, exist_ok=True)
 
