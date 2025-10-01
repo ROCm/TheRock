@@ -135,14 +135,13 @@ def run(args: argparse.Namespace):
             )
 
     # Reset statistic counters
-    if args.no_reset_stats == False:
+    if args.reset_stats:
         try:
             proc_ccache = subprocess.run(
                 ["ccache", "--zero-stats"], capture_output=True, text=True
             )
             proc_ccache.check_returncode()
-
-            print(proc_ccache.stdout, end="")
+            print(proc_ccache.stdout, end="", file=sys.stderr)
 
         except subprocess.CalledProcessError:
             print(
@@ -162,9 +161,9 @@ def main(argv: list[str]):
         help="Location of the .ccache directory (defaults to ../.ccache)",
     )
     p.add_argument(
-        "--no-reset-stats",
-        type=bool,
-        default=False,
+        "--reset-stats",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="If true, prevents zeroing the statistic counters. (default: False)",
     )
     command_group = p.add_mutually_exclusive_group()
