@@ -28,13 +28,12 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature              | Linux support                              | Windows support |
-| ------------------------------ | ------------------------------------------ | --------------- |
-| torch                          | ✅ Supported                               | ✅ Supported    |
-| torchaudio                     | ✅ Supported                               | ✅ Supported    |
-| torchvision                    | ✅ Supported                               | ✅ Supported    |
-| Flash attention via [ao]triton | ✅ Supported                               | ✅ Supported    |
-|                                | (only for versions < 2.10, disabled ≥2.10) |                 |
+| Project / feature              | Linux support                                                                                                                 | Windows support |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| torch                          | ✅ Supported                                                                                                                  | ✅ Supported    |
+| torchaudio                     | ✅ Supported                                                                                                                  | ✅ Supported    |
+| torchvision                    | ✅ Supported                                                                                                                  | ✅ Supported    |
+| Flash attention via [ao]triton | ✅ Supported for torch < 2.10<br>❌ Disabled for torch ≥ 2.10 (see [Issue#1408](https://github.com/ROCm/TheRock/issues/1408)) | ✅ Supported    |
 
 ### Supported PyTorch versions
 
