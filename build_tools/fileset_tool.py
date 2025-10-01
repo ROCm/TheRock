@@ -19,7 +19,6 @@ from pathlib import Path
 import sys
 import shutil
 import tarfile
-import time
 
 from _therock_utils.artifacts import ArtifactPopulator
 import _therock_utils.artifact_builder as artifact_builder
@@ -35,24 +34,11 @@ def do_list(args: argparse.Namespace, pm: PatternMatcher):
 def do_copy(args: argparse.Namespace, pm: PatternMatcher):
     verbose = args.verbose
     destdir: Path = args.dest_dir
-
-    # Remove destination directory with retry logic
-    if args.remove_dest:
-        for attempt in range(5):  # Retry up to 5 times
-            try:
-                shutil.rmtree(destdir)
-                break
-            except PermissionError:
-                time.sleep(0.2 * (attempt + 2))
-                if attempt == 4:
-                    raise
-
-    # Perform the copy
     pm.copy_to(
         destdir=destdir,
         verbose=verbose,
         always_copy=args.always_copy,
-        remove_dest=False,  # Already handled above
+        remove_dest=args.remove_dest,
     )
 
 
