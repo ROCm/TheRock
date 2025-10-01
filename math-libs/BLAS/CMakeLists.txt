@@ -278,6 +278,39 @@ if(THEROCK_ENABLE_SPARSE)
   therock_cmake_subproject_provide_package(hipSPARSE hipsparse lib/cmake/hipsparse)
   therock_cmake_subproject_activate(hipSPARSE)
   list(APPEND _blas_subproject_names hipSPARSE)
+
+  ##############################################################################
+  # hipSPARSELt
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipSPARSELt
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparselt"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSPARSELt"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DHIPSPARSELT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+      -DHIPSPARSELT_ENABLE_BENCHMARKS=${THEROCK_BUILD_TESTING}
+      -DHIPSPARSELT_ENABLE_SAMPLES=OFF
+      -DHIPSPARSELT_ENABLE_FETCH=ON
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      hipSPARSE
+      therock-googletest
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipSPARSELt
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_provide_package(hipSPARSELt hipsparselt lib/cmake/hipsparselt)
+  therock_cmake_subproject_activate(hipSPARSELt)
+  list(APPEND _blas_subproject_names hipSPARSELt)
 endif(THEROCK_ENABLE_SPARSE)
 
 

@@ -138,6 +138,7 @@ LINUX_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "rccl",  # Linux only for the moment.
     "hipblaslt",
@@ -153,6 +154,7 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "hipblaslt",
     "miopen",
