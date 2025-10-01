@@ -79,6 +79,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       TORCH_VERSION: ${{ inputs.torch_version }}
+      INPUT_AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      INPUT_THEROCK_ROOT_DIR: ${{ github.workspace }}
 
     steps:
       - name: Checkout
@@ -132,4 +134,4 @@ jobs:
       - name: Run PyTorch tests
         if: "contains(inputs.test_runs_on, 'linux')"
         run: |
-          bash external-builds/pytorch/run_linux_pytorch_tests.sh
+          ./external-builds/pytorch/run_linux_pytorch_tests.py
