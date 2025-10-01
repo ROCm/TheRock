@@ -120,6 +120,12 @@ The build can be customized through cmake feature flags.
 > See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file
 > for available options.
 
+#### Discovering the targets available on your system without an existing ROCm installation
+
+1. python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv
+1. .tmpvenv/bin/amdgpu-arch on Linux, .tmpvenv\\Scripts\\amdgpu-arch on Windows
+1. rm -rf .tmpvenv
+
 #### Optional configuration flags
 
 By default, the project builds everything available. The following group flags
