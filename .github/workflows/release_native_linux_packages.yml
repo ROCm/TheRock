@@ -63,7 +63,7 @@ permissions:
 
 jobs:
   release:
-    name: Release Native Linux Package (xfail ${{ inputs.expect_failure }}) 
+    name: Release Native Linux Package (xfail ${{ inputs.expect_failure }})
     strategy:
       fail-fast: false
 
