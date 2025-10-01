@@ -120,11 +120,23 @@ The build can be customized through cmake feature flags.
 > See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file
 > for available options.
 
-#### Discovering the targets available on your system without an existing ROCm installation
+#### Discovering available targets on your system
 
-1. python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv
-1. .tmpvenv/bin/amdgpu-arch on Linux, .tmpvenv\\Scripts\\amdgpu-arch on Windows
-1. rm -rf .tmpvenv
+In case you don't have an existing ROCm/HIP installation from which you can run any of these tools:
+
+| Tool                    | Platform |
+| ----------------------- | -------- |
+| `amd-smi`               | Linux    |
+| `rocm-smi`              | Linux    |
+| `rocm_agent_enumerator` | Linux    |
+| `hipinfo`               | Windows  |
+| `amdgpu-arch`           | Both     |
+
+You can install the `rocm` Python package for any architecture inside a venv and run `amdgpu-arch` from there:
+
+1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv`
+1. `.tmpvenv/bin/amdgpu-arch` on Linux, `.tmpvenv\Scripts\amdgpu-arch` on Windows
+1. `rm -rf .tmpvenv`
 
 #### Optional configuration flags
 
