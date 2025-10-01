@@ -126,6 +126,7 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
+    -DHIPBLASLT_ENABLE_THEROCK=ON
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
