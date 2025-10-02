@@ -82,7 +82,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
+        # python_version: ["3.11", "3.12", "3.13"]
+        python_version: ["3.12"]  # DO NOT SUBMIT - limited for testing
         pytorch_version: ["release/2.8", "release/2.9", "main"]
         include:
           - pytorch_version: release/2.8
