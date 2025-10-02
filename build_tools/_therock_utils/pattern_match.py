@@ -131,7 +131,7 @@ class PatternMatcher:
                     if attempt == max_attempts - 1:
                         if verbose:
                             print(
-                                f"rmtree failed after {attempt} attempts, failing",
+                                f"rmtree failed after {max_attempts} attempts, failing",
                                 file=sys.stderr,
                             )
                         raise
