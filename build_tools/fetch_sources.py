@@ -312,10 +312,10 @@ def main(argv):
         "--depth", type=int, help="Git depth when updating submodules", default=None
     )
     parser.add_argument(
-        "--progress", 
+        "--progress",
         default=False,
-        action='store_true',
-        help="Git progress displayed when updating submodules", 
+        action="store_true",
+        help="Git progress displayed when updating submodules",
     )
     parser.add_argument(
         "--jobs",
