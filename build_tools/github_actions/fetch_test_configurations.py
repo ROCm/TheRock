@@ -122,7 +122,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 2,
         "exclude_family": {
             "windows": ["gfx1151"],
