@@ -61,6 +61,11 @@ class MatchPredicate:
 
 
 class PatternMatcher:
+    # Maximum number of attempts to retry removing the destination directory
+    max_attempts: int = 5
+    # Delay between retry attempts in seconds
+    retry_delay_seconds: float = 0.2
+
     def __init__(
         self,
         includes: Sequence[str] = (),
@@ -111,27 +116,26 @@ class PatternMatcher:
         always_copy: bool = False,
         remove_dest: bool = True,
     ):
+        verbose=True
         if remove_dest and destdir.exists():
-            max_attempts = 5
-            retry_delay_seconds = 0.2
-            for attempt in range(max_attempts):
+            for attempt in range(self.max_attempts):
                 try:
                     shutil.rmtree(destdir)
                     if verbose:
                         print(f"rmtree {destdir}", file=sys.stderr)
                     break
                 except PermissionError:
-                    wait_time = retry_delay_seconds * (attempt + 2)
+                    wait_time = self.retry_delay_seconds * (attempt + 2)
                     if verbose:
                         print(
                             f"PermissionError calling shutil.rmtree('{destdir}') retrying after {wait_time}s",
                             file=sys.stderr,
                         )
                     time.sleep(wait_time)
-                    if attempt == max_attempts - 1:
+                    if attempt == self.max_attempts - 1:
                         if verbose:
                             print(
-                                f"rmtree failed after {max_attempts} attempts, failing",
+                                f"rmtree failed after {self.max_attempts} attempts, failing",
                                 file=sys.stderr,
                             )
                         raise
