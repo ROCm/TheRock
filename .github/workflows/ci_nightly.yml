@@ -65,7 +65,7 @@ jobs:
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
-      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
     permissions:
       contents: read
       id-token: write
@@ -89,7 +89,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       extra_cmake_options: ${{ matrix.extra_cmake_options }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
-      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
     permissions:
       contents: read
       id-token: write

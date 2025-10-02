@@ -1,0 +1,44 @@
+From 859089aef3ccd42f328ae53b04a236b3c3cb3d1f Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Thu, 2 Oct 2025 14:41:39 +0000
+Subject: [PATCH] Patch `gemm.cpp` to work with latest rocRoller
+
+Cherry-picked changes included in
+https://github.com/ROCm/rocm-libraries/pull/1588 to enable building
+hipBLASLt + rocRoller with TheRock.
+---
+ .../src/amd_detail/rocblaslt/src/rocroller/gemm.cpp    | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp
+index c2b7ad900b..68f37f4137 100644
+--- a/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp
++++ b/projects/hipblaslt/library/src/amd_detail/rocblaslt/src/rocroller/gemm.cpp
+@@ -27,6 +27,8 @@
+ #include "gemm.hpp"
+ #include "runtime_args_selection.hpp"
+ 
++#include <rocRoller/Parameters/Solution/StreamK.hpp>
++
+ #include "utility.hpp"
+ 
+ using namespace rocRoller;
+@@ -459,10 +461,12 @@ std::shared_ptr<GemmKernel> genGemmKernel(std::shared_ptr<SolutionParameters> ge
+ 
+     if(gemm->streamK)
+     {
+-        params->streamK = true;
+-        params->loopOverOutputTilesDimensions = {0, 1};
++        StreamKMode streamKMode = StreamKMode::Standard;
+         if(gemm->streamKTwoTile)
+-            params->streamKTwoTile = true;
++            streamKMode = StreamKMode::TwoTile;
++        params->streamK = streamKMode;
++
++        params->loopOverOutputTilesDimensions = {0, 1};
+     }
+ 
+     params->setManualWorkgroupSize({workgroupSizeX, workgroupSizeY, 1});
+-- 
+2.43.0
+

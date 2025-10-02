@@ -28,12 +28,12 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature              | Linux support | Windows support |
-| ------------------------------ | ------------- | --------------- |
-| torch                          | ✅ Supported  | ✅ Supported    |
-| torchaudio                     | ✅ Supported  | ✅ Supported    |
-| torchvision                    | ✅ Supported  | ✅ Supported    |
-| Flash attention via [ao]triton | ✅ Supported  | ✅ Supported    |
+| Project / feature              | Linux support                                                                                                                 | Windows support |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| torch                          | ✅ Supported                                                                                                                  | ✅ Supported    |
+| torchaudio                     | ✅ Supported                                                                                                                  | ✅ Supported    |
+| torchvision                    | ✅ Supported                                                                                                                  | ✅ Supported    |
+| Flash attention via [ao]triton | ✅ Supported for torch < 2.10<br>❌ Disabled for torch ≥ 2.10 (see [Issue#1408](https://github.com/ROCm/TheRock/issues/1408)) | ✅ Supported    |
 
 ### Supported PyTorch versions
 
@@ -240,8 +240,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   python ./build_tools/fetch_artifacts.py \
     --run-id=17123441166 \
     --target=gfx110X-dgpu \
-    --output-dir=$HOME/.therock/17123441166/artifacts \
-    --all
+    --output-dir=$HOME/.therock/17123441166/artifacts
 
   python ./build_tools/build_python_packages.py \
     --artifact-dir=$HOME/.therock/17123441166/artifacts \

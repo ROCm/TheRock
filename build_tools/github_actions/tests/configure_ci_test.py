@@ -44,15 +44,21 @@ class ConfigureCITest(unittest.TestCase):
         paths = [".github/workflows/ci.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
-        paths = [".github/workflows/build_package.yml"]
+
+        paths = [".github/workflows/build_portable_linux_artifacts.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
-        paths = [".github/workflows/test_some_subproject.yml"]
+
+        paths = [".github/workflows/build_artifact.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertTrue(run_ci)
 
     def test_dont_run_ci_if_unrelated_workflow_file_edited(self):
         paths = [".github/workflows/pre-commit.yml"]
+        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
+        self.assertFalse(run_ci)
+
+        paths = [".github/workflows/test_jax_dockerfile.yml"]
         run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
         self.assertFalse(run_ci)
 

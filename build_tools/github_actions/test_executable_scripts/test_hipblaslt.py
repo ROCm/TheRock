@@ -11,26 +11,17 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 PLATFORM = os.getenv("PLATFORM")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
+# GTest sharding
+SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
+TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
+envion_vars = os.environ.copy()
+# For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
+envion_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
+envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+
 logging.basicConfig(level=logging.INFO)
 
 cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test", "--gtest_filter=*pre_checkin*"]
 
-tests_to_exclude = {
-    # Related issue: https://github.com/ROCm/TheRock/issues/1114
-    "gfx1151": {
-        "windows": ["_/aux_test.conversion/pre_checkin_aux_auxiliary_func_f16_r"]
-    }
-}
-
-if AMDGPU_FAMILIES in tests_to_exclude and PLATFORM in tests_to_exclude.get(
-    AMDGPU_FAMILIES, {}
-):
-    exclusion_list = ":".join(tests_to_exclude[AMDGPU_FAMILIES][PLATFORM])
-    cmd.append(f"--gtest_filter=-{exclusion_list}")
-
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)
