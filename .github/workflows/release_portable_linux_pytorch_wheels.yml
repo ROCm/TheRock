@@ -83,12 +83,16 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
-        pytorch_version: ["release/2.7", "nightly"]
+        pytorch_version: ["release/2.7", "release/2.8", "release/2.9", "nightly"]
         include:
           - pytorch_version: release/2.7
-            pytorch_patchset: "rocm_2.7"
+            pytorch_patchset: rocm_2.7
+          - pytorch_version: release/2.8
+            pytorch_patchset: rocm_2.8
+          - pytorch_version: release/2.9
+            pytorch_patchset: rocm_2.9
           - pytorch_version: nightly
-            pytorch_patchset: "nightly"
+            pytorch_patchset: nightly
 
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
     with:

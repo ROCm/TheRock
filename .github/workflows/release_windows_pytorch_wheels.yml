@@ -83,6 +83,14 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
+        pytorch_version: ["release/2.8", "release/2.9", "main"]
+        include:
+          - pytorch_version: release/2.8
+            pytorch_patchset: rocm_2.8
+          - pytorch_version: release/2.9
+            pytorch_patchset: rocm_2.9
+          - pytorch_version: main
+            pytorch_patchset: main
 
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:
@@ -94,4 +102,6 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
+      pytorch_version: ${{ matrix.pytorch_version }}
+      pytorch_patchset: ${{ matrix.pytorch_patchset }}
       ref: ${{ inputs.ref || '' }}

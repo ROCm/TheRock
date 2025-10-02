@@ -32,6 +32,14 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      pytorch_version:
+        description: PyTorch version to checkout. (typically "main", or "release/X.Y")
+        required: true
+        type: string
+      pytorch_patchset:
+        description: Patch directory name from where to apply existing patches.
+        required: true
+        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -76,6 +84,16 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      pytorch_version:
+        description: PyTorch version to checkout. (typically "main", or "release/X.Y")
+        required: true
+        type: string
+        default: "release/2.7"
+      pytorch_patchset:
+        description: Patch directory name from where to apply existing patches.
+        required: true
+        type: string
+        default: "rocm_2.7"
 
 permissions:
   id-token: write
@@ -83,7 +101,7 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }}
+    name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
       CHECKOUT_ROOT: B:/src
@@ -134,7 +152,10 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
+      # Checkout main sources from https://github.com/pytorch/pytorch
+      # TODO: switch to 'nightly' to match our Linux workflows?
       - name: Checkout PyTorch source repos (main branch)
+        if: ${{ inputs.pytorch_version == 'main' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
@@ -146,6 +167,18 @@ jobs:
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --repo ${{ env.CHECKOUT_ROOT }}/vision \
             --repo-hashtag main
+
+      # Checkout stable sources from https://github.com/ROCm/pytorch
+      - name: Checkout PyTorch Source Repos from stable branch
+        if: ${{ inputs.pytorch_version != 'main' }}
+        run: |
+          git config --global core.longpaths true
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+              --gitrepo-origin https://github.com/ROCm/pytorch.git \
+              --repo-hashtag ${{ inputs.pytorch_version }} \
+              --patchset ${{ inputs.pytorch_patchset }}
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
@@ -233,6 +266,7 @@ jobs:
       package_index_url: ${{ inputs.cloudfront_staging_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+      pytorch_version: ${{ inputs.pytorch_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
 
