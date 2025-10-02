@@ -116,7 +116,6 @@ class PatternMatcher:
         always_copy: bool = False,
         remove_dest: bool = True,
     ):
-        verbose=True
         if remove_dest and destdir.exists():
             for attempt in range(self.max_attempts):
                 try:
