@@ -38,13 +38,10 @@ def _do_init(args: argparse.Namespace):
     from . import _devel
 
     try:
+        # The function `_devel.get_devel_root()` calls into `_expand_devel_contents`
+        # if contetens for development were not yet unpacked.
         root_path = _devel.get_devel_root()
     except ModuleNotFoundError as e:
-        print(
-            "ERROR: Could not load the `rocm[devel]` package, which is required. "
-            "Please install it with your package manager (pip, uv, etc)",
-            file=sys.stderr,
-        )
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
     print(f"Devel contents expanded to '{root_path}'.")
