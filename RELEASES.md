@@ -240,7 +240,7 @@ contents:
 
 ```console
 $ rocm-sdk init
-Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'.
+Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
 ```
 
 These contents are useful for using the package outside of Python and _lazily_ expanded on the
