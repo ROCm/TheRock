@@ -164,7 +164,7 @@ def main(argv: list[str]):
         "--reset-stats",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="If true, prevents zeroing the statistic counters. (default: False)",
+        help="Zeros statistics counters (default to enabled).",
     )
     command_group = p.add_mutually_exclusive_group()
     command_group.add_argument(
