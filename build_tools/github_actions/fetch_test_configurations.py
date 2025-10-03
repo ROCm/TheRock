@@ -125,6 +125,15 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # hipDNN tests
+    "hipdnn": {
+        "job_name": "hipdnn",
+        "fetch_artifact_args": "--hipdnn --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
