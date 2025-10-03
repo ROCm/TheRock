@@ -12,6 +12,9 @@ on:
       windows_amdgpu_families:
         description: Windows families to run builds and tests for.
         value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
+      rocm_package_version:
+        description: ROCm package version (primarily for Python packages).
+        value: ${{ jobs.setup.outputs.rocm_package_version }}
 
 permissions:
   contents: read
@@ -27,8 +30,9 @@ jobs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_amdgpu_families: ${{ steps.configure.outputs.linux_amdgpu_families }}
       windows_amdgpu_families: ${{ steps.configure.outputs.windows_amdgpu_families }}
+      rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
-      - name: "Checking out repository"
+      - name: Checking out repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           # We need the parent commit to do a diff
@@ -42,7 +46,7 @@ jobs:
         run: |
           echo "PR_LABELS=$(gh pr view ${PR_NUMBER} --json labels)" >> $GITHUB_ENV
 
-      - name: "Configuring CI options"
+      - name: Configuring CI options
         id: configure
         env:
           INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
@@ -50,3 +54,9 @@ jobs:
           INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
         run: ./build_tools/github_actions/configure_ci.py
+
+      - name: Compute package version
+        id: rocm_package_version
+        run: |
+          python ./build_tools/github_actions/compute_rocm_package_version.py \
+            --release-type=dev

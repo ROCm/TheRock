@@ -20,7 +20,8 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
-      # TODO: scripts and/or reusable workflow for versions and release types
+      # TODO: Omit this argument and/or use compute_rocm_package_version.py (via setup.yml?)
+      #       Could run that with `--override-base-version` or `--override-version`
       package_version:
         type: string
         default: "7.0.0.dev0"

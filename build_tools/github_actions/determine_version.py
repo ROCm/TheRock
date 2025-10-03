@@ -15,7 +15,12 @@ Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 `--no-write-env-file`.
 """
 
-from packaging.version import Version, parse
+# TODO: Rename to something more like "forward rocm to version to pytorch build"?
+#       This overlaps with compute_package_version used for rocm python packages
+#       Maybe unify with write_torch_versions.py too? These should also work
+#       together and follow a similar style.
+
+from packaging.version import parse
 
 import argparse
 import sys

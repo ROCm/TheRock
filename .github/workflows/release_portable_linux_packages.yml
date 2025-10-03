@@ -61,7 +61,7 @@ jobs:
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
-      version: ${{ steps.release_information.outputs.version }}
+      version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
       release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
@@ -78,26 +78,25 @@ jobs:
         with:
           python-version: 3.12
 
-      # Compute version suffix based on inputs (default to 'rc')
+      - name: Compute package version
+        id: rocm_package_version
+        run: |
+          python ./build_tools/github_actions/compute_rocm_package_version.py \
+            --release-type=${{ env.release_type }}
+
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
         run: |
-          version_suffix="$(printf 'rc%(%Y%m%d)T')"
-          echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "cloudfront_base_url=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
-          version_suffix=".dev0+${{ github.sha }}"
-          echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "cloudfront_base_url=https://d25kgig7rdsyks.cloudfront.net" >> $GITHUB_ENV
 
       - name: Generate release information
         id: release_information
         run: |
-          base_version=$(jq -r '.["rocm-version"]' version.json)
-          echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
           echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
           echo "cloudfront_staging_url=${cloudfront_base_url}/${{ env.S3_STAGING_SUBDIR }}" >> $GITHUB_OUTPUT
 
