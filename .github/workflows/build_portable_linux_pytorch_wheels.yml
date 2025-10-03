@@ -156,8 +156,8 @@ jobs:
         if: ${{ inputs.pytorch_version != 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --patchset ${{ inputs.pytorch_patchset }}
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout --use-related-commit
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout --use-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
       - name: Create pip cache directory
