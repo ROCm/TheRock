@@ -400,6 +400,7 @@ therock_cmake_subproject_declare(hipBLAS
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_SAMPLES=OFF
     -DLINK_BLIS=OFF
+    "-Dpython=${Python3_EXECUTABLE}"
   COMPILER_TOOLCHAIN
     amd-hip
   BUILD_DEPS
