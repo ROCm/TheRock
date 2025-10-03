@@ -1,0 +1,11 @@
+# fftw3
+[components.dbg."third-party/fftw3/stage"]
+[components.dev."third-party/fftw3/stage"]
+[components.doc."third-party/fftw3/stage"]
+[components.lib."third-party/fftw3/stage"]
+
+# fftw3f
+[components.dbg."third-party/fftwf3/stage"]
+[components.dev."third-party/fftwf3/stage"]
+[components.doc."third-party/fftwf3/stage"]
+[components.lib."third-party/fftwf3/stage"]

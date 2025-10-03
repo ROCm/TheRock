@@ -11,6 +11,7 @@ add_subdirectory(nlohmann-json)
 add_subdirectory(yaml-cpp)
 add_subdirectory(Catch2)
 add_subdirectory(FunctionalPlus)
+add_subdirectory(fftw3)
 
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)
