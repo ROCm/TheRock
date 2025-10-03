@@ -62,7 +62,7 @@ def main(cl_args: list[str]):
             "--gitrepo-origin",
             type=str,
             default=None,
-            help="Git repository url (default is set based on --use-related-commit)",
+            help="Git repository url",
         )
         command_parser.add_argument(
             "--patch-dir",
@@ -76,30 +76,27 @@ def main(cl_args: list[str]):
             default=THIS_MAIN_REPO_NAME,
             help="Subdirectory name in which to checkout repo",
         )
-
-        commit_group = command_parser.add_mutually_exclusive_group()
-        commit_group.add_argument(
+        command_parser.add_argument(
             "--repo-hashtag",
             type=str,
             default=None,
             help="Git repository ref/tag to checkout",
         )
-        commit_group.add_argument(
-            "--use-related-commit",
-            action=argparse.BooleanOptionalAction,
-            help="Use Git repository related commit from --torch-repo",
+        command_parser.add_argument(
+            "--patchset",
+            default=None,
+            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
         )
-
+        command_parser.add_argument(
+            "--require-related-commit",
+            action=argparse.BooleanOptionalAction,
+            help="Require that a related commit was found from --torch-repo",
+        )
         command_parser.add_argument(
             "--torch-repo",
             type=Path,
             default=THIS_DIR / "pytorch",
             help="Git repository path for torch, if using --use-related-commit",
-        )
-        command_parser.add_argument(
-            "--patchset",
-            default=None,
-            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
         )
 
     p = argparse.ArgumentParser("pytorch_audio_repo.py")
@@ -134,37 +131,33 @@ def main(cl_args: list[str]):
 
     args = p.parse_args(cl_args)
 
-    if args.use_related_commit:
-        # Set default values based on the pin file in the pytorch repo.
-        (
-            git_origin,
-            git_hashtag,
-            patchset,
-            has_related_commit,
-        ) = repo_management.read_pytorch_rocm_pins(
-            args.torch_repo,
-            os="centos",
-            project="torchaudio",
-            default_origin=DEFAULT_ORIGIN,
-            default_hashtag=DEFAULT_HASHTAG,
-            default_patchset=DEFAULT_PATCHSET,
+    # Set default values based on the pin file in the pytorch repo.
+    (
+        default_git_origin,
+        default_git_hashtag,
+        default_patchset,
+        has_related_commit,
+    ) = repo_management.read_pytorch_rocm_pins(
+        args.torch_repo,
+        os="centos",  # Even for Windows
+        project="torchaudio",
+        default_origin=DEFAULT_ORIGIN,
+        default_hashtag=DEFAULT_HASHTAG,
+        default_patchset=DEFAULT_PATCHSET,
+    )
+
+    if args.require_related_commit and not has_related_commit:
+        raise ValueError(
+            f"Could not find torchaudio in '{args.torch_repo}/related_commits' (did you mean to set a different --torch-repo?)"
         )
-        if not has_related_commit:
-            raise ValueError(
-                f"Could not find torchaudio in '{args.torch_repo}/related_commits' (did you mean to set a different --torch-repo?)"
-            )
-        print("Found pytorch rocm pins:")
-        print(f"  git_origin: {git_origin}")
-        print(f"  git_hashtag: {git_hashtag}")
-        print(f"  patchset: {patchset}")
-        args.gitrepo_origin = args.gitrepo_origin or git_origin
-        args.repo_hashtag = args.repo_hashtag or git_hashtag
-        args.patchset = args.patchset or patchset
-    else:
-        # Otherwise use the usual defaults.
-        args.gitrepo_origin = args.gitrepo_origin or DEFAULT_ORIGIN
-        args.repo_hashtag = args.repo_hashtag or DEFAULT_HASHTAG
-        args.patchset = args.patchset or DEFAULT_PATCHSET
+
+    # Priority order:
+    #   1. Explicitly set values
+    #   2. Values loaded from the pin in the torch repo
+    #   3. Fallback default values
+    args.gitrepo_origin = args.gitrepo_origin or default_git_origin
+    args.repo_hashtag = args.repo_hashtag or default_git_hashtag
+    args.patchset = args.patchset or default_patchset
 
     args.func(args)
 

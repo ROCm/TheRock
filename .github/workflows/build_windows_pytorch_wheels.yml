@@ -181,11 +181,11 @@ jobs:
           ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --repo ${{ env.CHECKOUT_ROOT }}/audio \
               --torch-repo ${{ env.CHECKOUT_ROOT }}/torch \
-              --use-related-commit
+              --require-related-commit
           ./external-builds/pytorch/pytorch_vision_repo.py checkout \
               --repo ${{ env.CHECKOUT_ROOT }}/vision \
               --torch-repo ${{ env.CHECKOUT_ROOT }}/torch \
-              --use-related-commit
+              --require-related-commit
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
