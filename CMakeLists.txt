@@ -94,12 +94,6 @@ therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-lib
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 
-# Map THEROCK_VERBOSE to a CLI flag for fileset_tool.py
-set(THEROCK_FILESET_VERBOSE_ARG "")
-if(THEROCK_VERBOSE)
-  set(THEROCK_FILESET_VERBOSE_ARG --verbose)
-endif()
-
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "${THEROCK_SOURCE_DIR}/install" CACHE PATH "" FORCE)

@@ -759,7 +759,14 @@ function(therock_cmake_subproject_activate target_name)
   _therock_cmake_subproject_get_stage_dirs(
     _dist_source_dirs "${target_name}" ${_runtime_deps})
 
+  # Map THEROCK_VERBOSE to fileset_tool.py
+  set(_fileset_verbose_arg "")
+  if(THEROCK_VERBOSE)
+    set(_fileset_verbose_arg --verbose)
+  endif()
+
   if(EXISTS "${_prebuilt_file}")
+
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
     # for this part of the build).
@@ -777,7 +784,7 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${THEROCK_FILESET_VERBOSE_ARG} ${_dist_source_dirs}
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       DEPENDS
         "${_prebuilt_file}"
@@ -911,7 +918,7 @@ function(therock_cmake_subproject_activate target_name)
       # Install to stage directory.
       COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${THEROCK_FILESET_VERBOSE_ARG} ${_dist_source_dirs}
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"
