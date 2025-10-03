@@ -278,6 +278,46 @@ if(THEROCK_ENABLE_SPARSE)
   therock_cmake_subproject_provide_package(hipSPARSE hipsparse lib/cmake/hipsparse)
   therock_cmake_subproject_activate(hipSPARSE)
   list(APPEND _blas_subproject_names hipSPARSE)
+
+  ##############################################################################
+  # hipSPARSELt
+  ##############################################################################
+
+  set(hipSPARSELt_optional_deps)
+  if(NOT WIN32)
+    # hipSPARSELt is hard-coded to not expect rocm-smi on Windows.
+    list(APPEND hipSPARSELt_optional_deps
+      rocm_smi_lib
+    )
+  endif()
+
+  therock_cmake_subproject_declare(hipSPARSELt
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparselt"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSPARSELt"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DHIPSPARSELT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+      -DHIPSPARSELT_ENABLE_BENCHMARKS=${THEROCK_BUILD_TESTING}
+      -DHIPSPARSELT_ENABLE_SAMPLES=OFF
+      -DHIPSPARSELT_ENABLE_FETCH=OFF
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      hipSPARSE
+      therock-googletest
+    RUNTIME_DEPS
+      hip-clr
+      ${hipSPARSELt_optional_deps}
+  )
+  therock_cmake_subproject_glob_c_sources(hipSPARSELt
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_provide_package(hipSPARSELt hipsparselt lib/cmake/hipsparselt)
+  therock_cmake_subproject_activate(hipSPARSELt)
+  list(APPEND _blas_subproject_names hipSPARSELt)
 endif(THEROCK_ENABLE_SPARSE)
 
 

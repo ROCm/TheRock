@@ -196,3 +196,30 @@ include = [
   "clients/matrices/**"
 ]
 optional = true
+
+# hipSPARSELt
+[components.dbg."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+[components.dev."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+include = [
+  "**/*.cmake"
+]
+[components.doc."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+[components.lib."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+[components.run."math-libs/BLAS/hipSPARSELt/stage"]
+optional = true
+[components.test."math-libs/BLAS/hipSPARSELt/stage"]
+include = [
+  # Clients benchmarks
+  "bin/hipsparselt-bench*",
+  # Clients tests
+  "bin/hipsparselt-test*",
+  "bin/hipsparselt_gtest.data",
+  "bin/hipsparselt_gentest.py",
+  "bin/hipsparselt_*.yaml",
+  # Clients samples (may want these in a samples component at some point).
+  "bin/example_*",
+]
