@@ -766,7 +766,6 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   if(EXISTS "${_prebuilt_file}")
-
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
     # for this part of the build).
