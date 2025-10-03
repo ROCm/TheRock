@@ -139,7 +139,7 @@ def main(cl_args: list[str]):
         has_related_commit,
     ) = repo_management.read_pytorch_rocm_pins(
         args.torch_repo,
-        os="centos",  # Even for Windows
+        os="centos",  # Read pins for "centos" on Linux and Windows
         project="torchvision",
         default_origin=DEFAULT_ORIGIN,
         default_hashtag=DEFAULT_HASHTAG,
