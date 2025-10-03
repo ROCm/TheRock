@@ -23,7 +23,10 @@ envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "all")
 if test_type == "smoke":
-    test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocsparse_smoke.yaml"]
+    test_filter = [
+        "--yaml",
+        f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
+    ]
 else:
     test_filter = ["--gtest_filter=*quick*"]
 
