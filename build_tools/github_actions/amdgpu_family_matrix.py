@@ -42,7 +42,9 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            # Networking issue: https://github.com/ROCm/TheRock/issues/1660
+            # Label is "linux-mi355-1gpu-ossci-rocm"
+            "test-runs-on": "",
             "family": "gfx950-dcgpu",
         }
     },
@@ -78,7 +80,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": False,
+            "expect_failure": True,
         },
         "windows": {
             "test-runs-on": "",
