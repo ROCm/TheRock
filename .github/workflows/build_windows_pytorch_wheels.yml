@@ -174,11 +174,16 @@ jobs:
         run: |
           git config --global core.longpaths true
           ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+              --repo ${{ env.CHECKOUT_ROOT }}/torch \
               --gitrepo-origin https://github.com/ROCm/pytorch.git \
               --repo-hashtag ${{ inputs.pytorch_version }} \
               --patchset ${{ inputs.pytorch_patchset }}
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout \
+              --repo ${{ env.CHECKOUT_ROOT }}/audio \
+              --require-related-commit
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout \
+              --repo ${{ env.CHECKOUT_ROOT }}/vision \
+              --require-related-commit
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}

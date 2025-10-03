@@ -78,7 +78,7 @@ permissions:
 
 jobs:
   release:
-    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_version }}
     strategy:
       fail-fast: false
       matrix:
