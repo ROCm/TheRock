@@ -185,6 +185,7 @@ def apply_all_patches(
 
 
 # repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
+# Note: unused function, delete? or use in get_patches_dir_name?
 def repo_hashtag_to_patches_dir_name(version_ref: str) -> str:
     pos = version_ref.find("-")
     if pos != -1:
