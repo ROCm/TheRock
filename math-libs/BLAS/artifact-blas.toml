@@ -166,7 +166,7 @@ include = [
   "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
-  "bin/rocsparse_*.yaml",
+  "**/rocsparse_*.yaml",
   "libexec/rocsparse/test/rocsparse_gentest.py",
   "share/rocsparse/test/**",
   "clients/matrices/**"
