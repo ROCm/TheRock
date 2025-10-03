@@ -6,9 +6,9 @@ therock_subproject_fetch(therock-fftw3-sources
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(FFTW3_ENABLE_THREADS TRUE CACHE BOOL "FFTW3_ENABLE_THREADS set TRUE on Linux" FORCE)
+  set(_fftw3_enable_threads "ON")
 else()
-  set(FFTW3_ENABLE_THREADS FALSE CACHE BOOL "FFTW3_ENABLE_THREADS set FALSE" FORCE)
+  set(_fftw3_enable_threads "OFF")
 endif()
 
 therock_cmake_subproject_declare(therock-fftw3
@@ -20,24 +20,12 @@ therock_cmake_subproject_declare(therock-fftw3
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   CMAKE_ARGS
     -DBUILD_SHARED_LIBS=ON
-    -DENABLE_THREADS=${FFTW3_ENABLE_THREADS}
+    -DENABLE_THREADS=${_fftw3_enable_threads}
 )
 therock_cmake_subproject_provide_package(therock-fftw3 FFTW3 lib/cmake/fftw3)
 therock_cmake_subproject_activate(therock-fftw3)
 
 add_dependencies(therock-third-party therock-fftw3)
-
-therock_provide_artifact(fftw3
-  DESCRIPTOR artifact_fftw3.toml
-  TARGET_NEUTRAL
-  COMPONENTS
-    dbg
-    dev
-    doc
-    lib
-    run
-  SUBPROJECT_DEPS therock-fftw3
-)
 
 therock_cmake_subproject_declare(therock-fftw3f
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/build_fftw3f"
@@ -49,15 +37,15 @@ therock_cmake_subproject_declare(therock-fftw3f
   CMAKE_ARGS
     -DENABLE_FLOAT=ON
     -DBUILD_SHARED_LIBS=ON
-    -DENABLE_THREADS=${FFTW3_ENABLE_THREADS}
+    -DENABLE_THREADS=${_fftw3_enable_threads}
 )
 therock_cmake_subproject_provide_package(therock-fftw3f FFTW3f lib/cmake/fftw3f)
 therock_cmake_subproject_activate(therock-fftw3f)
 
 add_dependencies(therock-third-party therock-fftw3f)
 
-therock_provide_artifact(fftw3f
-  DESCRIPTOR artifact_fftw3f.toml
+therock_provide_artifact(fftw3
+  DESCRIPTOR artifact_fftw3.toml
   TARGET_NEUTRAL
   COMPONENTS
     dbg
@@ -65,5 +53,5 @@ therock_provide_artifact(fftw3f
     doc
     lib
     run
-  SUBPROJECT_DEPS therock-fftw3f
+  SUBPROJECT_DEPS therock-fftw3 therock-fftw3f
 )
