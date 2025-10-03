@@ -36,31 +36,32 @@ in, CI runs for that revision will incorporate them the same as anyone
 interactively using this tool.
 """
 import argparse
-from pathlib import Path, PurePosixPath
-import shlex
-import shutil
-import subprocess
+from pathlib import Path
 import sys
 
 import repo_management
 
 THIS_MAIN_REPO_NAME = "pytorch_vision"
 THIS_DIR = Path(__file__).resolve().parent
-THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
-(
-    DEFAULT_ORIGIN,
-    DEFAULT_HASHTAG,
-    DEFAULT_PATCHSET,
-    HAS_RELATED_COMMIT,
-) = repo_management.read_pytorch_rocm_pins(
-    THIS_DIR / "pytorch",
-    os="centos",
-    project="torchvision",
-    default_origin="https://github.com/pytorch/vision.git",
-    default_hashtag="main",
-    default_patchset=None,
-)
+DEFAULT_ORIGIN = "https://github.com/pytorch/audio.git"
+DEFAULT_HASHTAG = "main"
+DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
+DEFAULT_PATCHSET = None
+
+# (
+#     DEFAULT_ORIGIN,
+#     DEFAULT_HASHTAG,
+#     DEFAULT_PATCHSET,
+#     HAS_RELATED_COMMIT,
+# ) = repo_management.read_pytorch_rocm_pins(
+#     THIS_DIR / "pytorch",
+#     os="centos",
+#     project="torchvision",
+#     default_origin="https://github.com/pytorch/vision.git",
+#     default_hashtag="main",
+#     default_patchset=None,
+# )
 
 
 def main(cl_args: list[str]):
@@ -72,9 +73,15 @@ def main(cl_args: list[str]):
             help="Git repository path",
         )
         command_parser.add_argument(
+            "--gitrepo-origin",
+            type=str,
+            default=None,
+            help="git repository url",
+        )
+        command_parser.add_argument(
             "--patch-dir",
             type=Path,
-            default=THIS_PATCHES_DIR,
+            default=DEFAULT_PATCHES_DIR,
             help="Git repository patch path",
         )
         command_parser.add_argument(
@@ -95,19 +102,22 @@ def main(cl_args: list[str]):
         )
         command_parser.add_argument(
             "--require-related-commit",
-            action="store_true",
-            help="Require that a related commit was found",
+            action=argparse.BooleanOptionalAction,
+            help="Require that a related commit was found from --torch-repo",
+        )
+        command_parser.add_argument(
+            "--torch-repo",
+            type=Path,
+            default=THIS_DIR / "pytorch",
+            help="Git repository path for torch, for loading the related_commits file",
         )
 
     p = argparse.ArgumentParser("pytorch_vision_repo.py")
     sub_p = p.add_subparsers(required=True)
-    checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
-    add_common(checkout_p)
-    checkout_p.add_argument(
-        "--gitrepo-origin",
-        default=DEFAULT_ORIGIN,
-        help="git repository url",
+    checkout_p = sub_p.add_parser(
+        "checkout", help="Clone PyTorch Vision locally and checkout"
     )
+    add_common(checkout_p)
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
     checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
     checkout_p.add_argument(
@@ -135,8 +145,34 @@ def main(cl_args: list[str]):
     save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
-    if args.require_related_commit and not HAS_RELATED_COMMIT:
-        raise ValueError("Could not find torchvision in pytorch/related_commits")
+    # Set default values based on the pin file in the pytorch repo.
+    (
+        default_git_origin,
+        default_git_hashtag,
+        default_patchset,
+        has_related_commit,
+    ) = repo_management.read_pytorch_rocm_pins(
+        args.torch_repo,
+        os="centos",  # Even for Windows
+        project="torchvision",
+        default_origin=DEFAULT_ORIGIN,
+        default_hashtag=DEFAULT_HASHTAG,
+        default_patchset=DEFAULT_PATCHSET,
+    )
+
+    if args.require_related_commit and not has_related_commit:
+        raise ValueError(
+            f"Could not find torchvision in '{args.torch_repo}/related_commits' (did you mean to set a different --torch-repo?)"
+        )
+
+    # Priority order:
+    #   1. Explicitly set values
+    #   2. Values loaded from the pin in the torch repo
+    #   3. Fallback default values
+    args.gitrepo_origin = args.gitrepo_origin or default_git_origin
+    args.repo_hashtag = args.repo_hashtag or default_git_hashtag
+    args.patchset = args.patchset or default_patchset
+
     args.func(args)
 
 

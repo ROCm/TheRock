@@ -96,12 +96,14 @@ def main(cl_args: list[str]):
             "--torch-repo",
             type=Path,
             default=THIS_DIR / "pytorch",
-            help="Git repository path for torch, if using --use-related-commit",
+            help="Git repository path for torch, for loading the related_commits file",
         )
 
     p = argparse.ArgumentParser("pytorch_audio_repo.py")
     sub_p = p.add_subparsers(required=True)
-    checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
+    checkout_p = sub_p.add_parser(
+        "checkout", help="Clone PyTorch Audio locally and checkout"
+    )
     add_common(checkout_p)
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
     checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
