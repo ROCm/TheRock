@@ -62,7 +62,7 @@ def main(cl_args: list[str]):
             "--gitrepo-origin",
             type=str,
             default=None,
-            help="Git repository url",
+            help=f"Git repository url. Defaults to the origin in torch/related_commits (see --torch-dir), or '{DEFAULT_ORIGIN}'",
         )
         command_parser.add_argument(
             "--patch-dir",
@@ -80,23 +80,23 @@ def main(cl_args: list[str]):
             "--repo-hashtag",
             type=str,
             default=None,
-            help="Git repository ref/tag to checkout",
+            help=f"Git repository ref/tag to checkout. Defaults to the ref in torch/related_commits (see --torch-dir), or '{DEFAULT_HASHTAG}'",
         )
         command_parser.add_argument(
             "--patchset",
             default=None,
-            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
+            help=f"Patch dir subdirectory. Defaults to rocm-custom if torch/related_commits exists (see --torch-dir), or '{DEFAULT_PATCHSET}'",
         )
         command_parser.add_argument(
             "--require-related-commit",
             action=argparse.BooleanOptionalAction,
-            help="Require that a related commit was found from --torch-repo",
+            help="Require that a related commit was found from --torch-dir",
         )
         command_parser.add_argument(
-            "--torch-repo",
+            "--torch-dir",
             type=Path,
             default=THIS_DIR / "pytorch",
-            help="Git repository path for torch, for loading the related_commits file",
+            help="Directory of the torch checkout, for loading the related_commits file that can populate alternate default values for --gitrepo-origin, --repo-hashtag, and --patchset. If missing then fallback/upstream defaults will be used",
         )
 
     p = argparse.ArgumentParser("pytorch_audio_repo.py")
@@ -150,7 +150,7 @@ def main(cl_args: list[str]):
 
     if args.require_related_commit and not has_related_commit:
         raise ValueError(
-            f"Could not find torchaudio in '{args.torch_repo}/related_commits' (did you mean to set a different --torch-repo?)"
+            f"Could not find torchaudio in '{args.torch_repo}/related_commits' (did you mean to set a different --torch-dir?)"
         )
 
     # Priority order:
