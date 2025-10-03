@@ -49,20 +49,6 @@ DEFAULT_HASHTAG = "main"
 DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 DEFAULT_PATCHSET = None
 
-# (
-#     DEFAULT_ORIGIN,
-#     DEFAULT_HASHTAG,
-#     DEFAULT_PATCHSET,
-#     HAS_RELATED_COMMIT,
-# ) = repo_management.read_pytorch_rocm_pins(
-#     THIS_DIR / "pytorch",
-#     os="centos",
-#     project="torchvision",
-#     default_origin="https://github.com/pytorch/vision.git",
-#     default_hashtag="main",
-#     default_patchset=None,
-# )
-
 
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
