@@ -83,8 +83,10 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
-      # TODO: switch to 'nightly' to match our Linux workflows?
-        pytorch_version: ["release/2.8", "release/2.9", "main"]
+        # TODO: switch to 'nightly' to match our Linux workflows?
+        # TODO(#1677): Get 2.8 and 2.9 builds working and enable them
+        # pytorch_version: ["release/2.8", "release/2.9", "main"]
+        pytorch_version: ["main"]
         include:
           # TODO(#1677): Get 2.8 and 2.9 builds working and enable them
           # - pytorch_version: release/2.8
