@@ -28,7 +28,9 @@
 
   Written to GITHUB_OUTPUT:
   * linux_amdgpu_families : List of valid Linux AMD GPU families to execute build and test jobs
+  * linux_test_labels : List of test names to run on Linux, optionally filtered by PR labels.
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
+  * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
 
   Written to GITHUB_STEP_SUMMARY:
@@ -229,9 +231,7 @@ def matrix_generator(
 
     # Select target names based on inputs. Targets will be filtered by platform afterwards.
     selected_target_names = []
-    # Select test names based on label inputs, if applied. If no test labels apply, use default logic.
-    # Default logic is to run all tests right now; Default logic in short-term: smoke tests
-    # Default logic in long term: auto-detect what tests need to run
+    # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
     selected_test_names = []
 
     if is_workflow_dispatch:
@@ -267,8 +267,8 @@ def matrix_generator(
                 target, _ = label.split("-")
                 requested_target_names.append(target)
             if "test:" in label:
-                _, test = label.split(":")
-                requested_test_names.append(test)
+                _, test_name = label.split(":")
+                requested_test_names.append(test_name)
         selected_target_names.extend(
             filter_known_names(requested_target_names, "target")
         )

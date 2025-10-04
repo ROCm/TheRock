@@ -26,7 +26,7 @@ on:
         default: ""
       linux_test_labels:
         type: string
-        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'"
+        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'. ex: test:rocprim, test:hipcub"
         default: ""
       linux_use_prebuilt_artifacts:
         type: boolean
@@ -37,7 +37,7 @@ on:
         default: ""
       windows_test_labels:
         type: string
-        description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:'"
+        description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:' ex: test:rocprim, test:hipcub"
         default: ""
       windows_use_prebuilt_artifacts:
         type: boolean
