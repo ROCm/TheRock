@@ -140,7 +140,7 @@ def main(cl_args: list[str]):
         default_patchset,
         has_related_commit,
     ) = repo_management.read_pytorch_rocm_pins(
-        args.torch_repo,
+        args.torch_dir,
         os="centos",  # Read pins for "centos" on Linux and Windows
         project="torchaudio",
         default_origin=DEFAULT_ORIGIN,
@@ -150,7 +150,7 @@ def main(cl_args: list[str]):
 
     if args.require_related_commit and not has_related_commit:
         raise ValueError(
-            f"Could not find torchaudio in '{args.torch_repo}/related_commits' (did you mean to set a different --torch-dir?)"
+            f"Could not find torchaudio in '{args.torch_dir}/related_commits' (did you mean to set a different --torch-dir?)"
         )
 
     # Priority order:
