@@ -66,6 +66,8 @@ RUN yum install -y epel-release && \
       gcc-toolset-12-libatomic-devel \
       gcc-toolset-12-libstdc++-devel \
       patchelf \
+      xz \
+      xz-devel \
       vim-common \
       git-lfs \
       m4 \
@@ -78,6 +80,10 @@ RUN yum install -y epel-release && \
       unzip \
     && yum clean all && \
     rm -rf /var/cache/yum
+
+######## Verify libzma is installed ##########
+
+RUN pkg-config --libs liblzma
 
 ######## DVC via pip ######
 # dvc's rpm package includes .so dependencies built against glib 2.29
