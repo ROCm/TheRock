@@ -16,12 +16,20 @@ on:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
+      linux_test_labels:
+        type: string
+        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'"
+        default: ""
       linux_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      windows_test_labels:
+        type: string
+        description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:'"
         default: ""
       windows_use_prebuilt_artifacts:
         type: boolean

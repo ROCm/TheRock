@@ -9,9 +9,15 @@ on:
       linux_amdgpu_families:
         description: Linux families to run builds and tests on.
         value: ${{ jobs.setup.outputs.linux_amdgpu_families }}
+      linux_test_labels:
+        description: ROCm projects to run Linux tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.linux_test_labels }}
       windows_amdgpu_families:
         description: Windows families to run builds and tests for.
         value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
+      windows_test_labels:
+        description: ROCm projects to run Windows tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.windows_test_labels }}
 
 permissions:
   contents: read
@@ -26,7 +32,9 @@ jobs:
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_amdgpu_families: ${{ steps.configure.outputs.linux_amdgpu_families }}
+      linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_amdgpu_families: ${{ steps.configure.outputs.windows_amdgpu_families }}
+      windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
