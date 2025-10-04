@@ -138,6 +138,8 @@ def run():
 
     output_matrix = []
     for key in test_matrix:
+        job_name = test_matrix[key]["job_name"]
+
         # If the test is disabled for a particular platform, skip the test
         if (
             "exclude_family" in test_matrix[key]
@@ -158,7 +160,6 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key in project_to_test or project_to_test == "*"
         ):
-            job_name = test_matrix[key]["job_name"]
             logging.info(f"Including job {job_name}")
             job_config_data = test_matrix[key]
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
