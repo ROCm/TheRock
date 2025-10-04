@@ -37,6 +37,14 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    "hipblas": {
+        "job_name": "hipblas",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipblas.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
