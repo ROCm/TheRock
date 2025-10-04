@@ -8,8 +8,7 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-PLATFORM = os.getenv("PLATFORM")
-AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+logging.basicConfig(level=logging.INFO)
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -19,9 +18,15 @@ envion_vars = os.environ.copy()
 envion_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
-logging.basicConfig(level=logging.INFO)
+# If smoke tests are enabled, we run smoke tests only.
+# Otherwise, we run the normal test suite
+test_type = os.getenv("TEST_TYPE", "all")
+if test_type == "smoke":
+    test_filter = "--gtest_filter=*smoke*"
+else:
+    test_filter = "--gtest_filter=*pre_checkin*"
 
-cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test", "--gtest_filter=*pre_checkin*"]
+cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test", test_filter]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)

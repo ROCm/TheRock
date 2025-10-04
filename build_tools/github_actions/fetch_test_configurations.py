@@ -32,10 +32,10 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards": 6,
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
@@ -132,6 +132,7 @@ def run():
     platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    test_type = os.getenv("TEST_TYPE", "false")
 
     logging.info(f"Selecting projects: {project_to_test}")
 
@@ -161,6 +162,12 @@ def run():
             job_config_data["shard_arr"] = [
                 i + 1 for i in range(job_config_data["total_shards"])
             ]
+
+            # If the test type is smoke tests, we only need one shard for the test job
+            if test_type == "smoke":
+                job_config_data["total_shards"] = 1
+                job_config_data["shard_arr"] = [1]
+
             output_matrix.append(job_config_data)
 
     gha_set_output(

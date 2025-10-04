@@ -13,6 +13,8 @@ on:
         type: boolean
       use_prebuilt_artifacts:
         type: string
+      test_type:
+        type: string
 
 permissions:
   contents: read
@@ -57,6 +59,7 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
 
   build_portable_linux_python_packages:
     needs: [build_portable_linux_artifacts]
