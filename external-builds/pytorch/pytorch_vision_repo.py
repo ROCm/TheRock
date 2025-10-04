@@ -44,7 +44,7 @@ import repo_management
 THIS_MAIN_REPO_NAME = "pytorch_vision"
 THIS_DIR = Path(__file__).resolve().parent
 
-DEFAULT_ORIGIN = "https://github.com/pytorch/audio.git"
+DEFAULT_ORIGIN = "https://github.com/pytorch/vision.git"
 DEFAULT_HASHTAG = "main"
 DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 DEFAULT_PATCHSET = None
@@ -139,7 +139,7 @@ def main(cl_args: list[str]):
         default_patchset,
         has_related_commit,
     ) = repo_management.read_pytorch_rocm_pins(
-        args.torch_repo,
+        args.torch_dir,
         os="centos",  # Read pins for "centos" on Linux and Windows
         project="torchvision",
         default_origin=DEFAULT_ORIGIN,
@@ -149,7 +149,7 @@ def main(cl_args: list[str]):
 
     if args.require_related_commit and not has_related_commit:
         raise ValueError(
-            f"Could not find torchvision in '{args.torch_repo}/related_commits' (did you mean to set a different --torch-dir?)"
+            f"Could not find torchvision in '{args.torch_dir}/related_commits' (did you mean to set a different --torch-dir?)"
         )
 
     # Priority order:
