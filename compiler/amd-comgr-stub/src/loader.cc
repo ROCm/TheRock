@@ -29,7 +29,8 @@ struct LibraryInitialization {
   LibraryInitialization(const char *lib_name) : initial_lib_name(lib_name) {
     char *namespace_mode = std::getenv("AMD_COMGR_NAMESPACE");
     bool enable_namespace =
-        namespace_mode && std::strcmp(namespace_mode, "1") == 0;
+        !namespace_mode ||
+        (namespace_mode && std::strcmp(namespace_mode, "1") == 0);
     if (enable_namespace) {
       InitializeNamespace(lib_name);
     }
