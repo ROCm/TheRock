@@ -11,6 +11,7 @@ on:
       test_runs_on:
         type: string
       test_type:
+      test_labels:
         type: string
   workflow_call:
     inputs:
@@ -22,6 +23,7 @@ on:
       test_runs_on:
         type: string
       test_type:
+      test_labels:
         type: string
   push:
     branches:
@@ -67,6 +69,7 @@ jobs:
         env:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
+          TEST_LABELS: ${{ inputs.test_labels }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
