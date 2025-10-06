@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "all")
+test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:

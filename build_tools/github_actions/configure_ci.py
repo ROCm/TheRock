@@ -367,7 +367,11 @@ def main(base_args, linux_families, windows_families):
         # If the modified path contains "rocm-libraries" or "rocm-systems", we want to run a full test suite.
         # Otherwise, we just run smoke tests
         if "rocm-systems" in modified_paths or "rocm-libraries" in modified_paths:
-            test_type = "all"
+            test_type = "full"
+
+        # If any test label is included, run full test suite for specified tests
+        if linux_test_output or windows_test_output:
+            test_type = "full"
 
     gha_append_step_summary(
         f"""## Workflow configure results

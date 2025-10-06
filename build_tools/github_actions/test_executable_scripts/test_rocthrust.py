@@ -97,7 +97,7 @@ cmd = [
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 environ_vars = os.environ.copy()
-test_type = os.getenv("TEST_TYPE", "all")
+test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
 

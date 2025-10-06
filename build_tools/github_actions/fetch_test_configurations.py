@@ -42,7 +42,8 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
-        "platform": ["linux", "windows"],
+        # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1702
+        "platform": ["linux"],
         "total_shards": 1,
     },
     "hipblaslt": {
@@ -140,7 +141,7 @@ def run():
     platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    test_type = os.getenv("TEST_TYPE", "all")
+    test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
 
     logging.info(f"Selecting projects: {project_to_test}")
