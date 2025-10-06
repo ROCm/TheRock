@@ -61,8 +61,6 @@ def create_list(amdgpu_family="", pytorch_version=""):
     filters = ["common"]
     filters += [amdgpu_family]
 
-    print("filters", filters)
-
     # load skip_tests only generic and (pytorch_<version> or "all" pytorch versions)
     dict_skipt_tests = import_skip_tests(pytorch_version)
 
@@ -115,7 +113,6 @@ Output can be used with 'pytest -k <list>'""",
 
 
 def get_tests(amdgpu_family="", pytorch_version="", create_skip_list=True):
-    print("get_tests", locals())
     if create_skip_list == True:
         print("Creating list of tests to be skipped... ", end="")
     else:
