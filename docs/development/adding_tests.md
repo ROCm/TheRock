@@ -64,3 +64,60 @@ In [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_
 | timeout_minutes     | int    | The timeout (in minutes) for the test step                                                                                         |
 | test_script         | string | The path to the test script                                                                                                        |
 | platform            | array  | An array of platforms that the test can execute on, options are `linux` and `windows`                                              |
+
+## Adding artifact support for new components
+
+To allow tests to run for a new component, you must ensure there is support for fetching its artifacts in [`install_rocm_from_artifacts.py`](../../build_tools/install_rocm_from_artifacts.py).
+
+Steps for adding artifact support:
+
+### Step 1: Add command-line argument
+
+Add your component's flag to the argument parser:
+
+```python
+parser.add_argument(
+    "--blas",
+    default=False,
+    help="Include 'blas' artifacts",
+    action=argparse.BooleanOptionalAction,
+)
+```
+
+### Step 2: Add artifact installation logic
+
+Add your component to the artifact installation logic:
+
+```python
+if args.blas:
+    extra_artifacts.append("blas")
+```
+
+The artifact patterns are automatically generated as `{component}_lib` and optionally `{component}_test` if `--tests` is specified.
+
+### Step 3: Test artifact fetching
+
+Verify your artifact can be fetched and installed:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+  --run-id <CI_RUN_ID> \
+  --blas \
+  --tests \
+  --amdgpu-family gfx94X-dcgpu \
+  --output-dir ./test-install
+```
+
+### Step 4: Add test configuration
+
+Now you can add your test entry to [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_configurations.py):
+
+```python
+"rocblas": {
+    "job_name": "rocblas",
+    "fetch_artifact_args": "--blas --tests",  # Use the flag you created in Step 1
+    "timeout_minutes": 5,
+    "test_script": f"python {_get_script_path('test_rocblas.py')}",
+    "platform": ["linux"],
+},
+```
