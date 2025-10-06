@@ -19,7 +19,10 @@ __pycache__
 .*.smrev
 
 # Output directories.
+*therock/build*
 /build/
 /install/
 /output-*/
 /out/
+*therock-build/*
+venv/

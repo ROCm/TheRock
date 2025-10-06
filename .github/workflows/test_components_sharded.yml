@@ -1,4 +1,4 @@
-name: TheRock Sanity Check
+name: TheRock Test Components Sharded
 
 on:
   workflow_dispatch:
@@ -31,29 +31,24 @@ on:
 
 permissions:
   contents: read
+  id-token: write  # Move to top level for OIDC
 
 jobs:
-  test_sanity_check:
-    name: "Sanity ROCM Test"
+  test_components_sharded:
+    name: "Sharded ROCM Test"
     runs-on: ${{ inputs.test_runs_on }}
-    container:
-      image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
-      options: --ipc host
-        --group-add video
-        --device /dev/kfd
-        --device /dev/dri
-        --group-add 992
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
-    defaults:
-      run:
-        shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
-
     steps:
+      - name: Configure AWS Credentials - Tests
+        uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-tests
+
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -77,21 +72,19 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: "--base-only"
+          FETCH_ARTIFACT_ARGS: "--tests"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
         run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
 
-      - name: Run ROCm Sanity Tests
-        timeout-minutes: 5
-        env:
-          # Enable verbose logging, see
-          # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
-          AMD_LOG_LEVEL: 4
+      - name: Sharded Tests
+        timeout-minutes: 600
         run: |
-          pytest tests/ --log-cli-level=info --timeout=60
+          cd tests/sharding
+          pip install -r requirements.txt
+          pytest -v -s --tb=short tests.py --rock=${OUTPUT_ARTIFACTS_DIR} -k rocthrust;
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
