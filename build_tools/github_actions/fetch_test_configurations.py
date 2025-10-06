@@ -32,10 +32,10 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 6,
+        "total_shards": 1,
     },
     "hipblas": {
         "job_name": "hipblas",
