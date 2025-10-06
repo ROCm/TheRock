@@ -135,4 +135,4 @@ jobs:
       - name: Run PyTorch tests
         if: "contains(inputs.test_runs_on, 'linux')"
         run: |
-          ./external-builds/pytorch/run_linux_pytorch_tests.py
+          python3 ./external-builds/pytorch/run_linux_pytorch_tests.py

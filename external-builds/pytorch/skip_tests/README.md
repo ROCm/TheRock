@@ -27,41 +27,55 @@ Independent of this tooling, it is _always_ welcome to _get those changes upstre
 
 ## Structure
 
-Each module to test has its own `skip_test_<name>.py` file and should have the following structure
+The files including the tests to be skipped are:
 
-```
+- `generic.py` is always included to skip tests
+- `pytorch_<version>.py` is only included for the given PyTorch version to skip tests
+
+Within those files, the following structure is used
+
+```py
 skip_tests = {
-    "always": [
-    ],
-    "pytorch-version": {
-        <major.minor version>
+    "common": {
+        <PyTorch test module> : [ <Tests> ],
     },
-    "amdgpu_family": {
-        <use cmake build target names>
-    }
+    "<amdgpu family>": {,
+        <PyTorch test module> : [ <Tests> ],
+    },
 }
 ```
 
-An example how it could look like
+The PyTorch test modules are `nn`, `cuda`, `unary_ufuncs` etc.
+This ordering is mainly added for easier debugging as otherwise it is difficult to determine which test module contains a given tests like `test_host_memory_stats` belongs to.
 
-```
+When adding new tests to be skipped, consider adding a small comment why it was added, and best if there is any condition/resolution waiting when it can be taken off again.
+
+An example how it could look like is given below:
+
+```py
 skip_tests = {
-    "always": [
-        "test_RNN_dropout_state",
-        "test_rnn_check_device"
-    ],
-    "pytorch-version": {
-        "2.10": [
-            "test_terminate_handler_on_crash"
+    "common": {
+        "cuda": [
+            "test_device_count_not_cached_pre_init",
+            "test_host_memory_stats",
         ]
     },
-    "amdgpu_family": {
-        "gfx950": [
-            "test_preferred_blas_library_settings",
-            "test_autocast_torch_bf16",
-            "test_autocast_torch_fp16",
+    "gfx942": {
+        "autograd": [
+            "test_multi_grad_all_hooks",
+            "test_side_stream_backward_overlap"
+            ],
+        "cuda": [
+            "test_cpp_memory_snapshot_pickle",
+            "test_memory_compile_regions",
+        ],
+        "nn": [
+            "test_side_stream_backward_overlap"
+        ],
+        "torch": [
+            "test_terminate_handler_on_crash",  # hangs forever
         ]
-    }
+    },
 }
 ```
 

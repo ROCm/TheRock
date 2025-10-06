@@ -1,16 +1,8 @@
 skip_tests = {
-    "always": [
-        "test_device_count_not_cached_pre_init",
-        "test_host_memory_stats",
-        # In file included from /home/tester/.cache/torch_extensions/py312_cpu/dummy_allocator/main_hip.cpp:5:
-        # /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/include/ATen/hip/Exceptions.h:4:10: fatal error: hipblas/hipblas.h: No such file or directory
-        #     4 | #include <hipblas/hipblas.h>
-        #     |          ^~~~~~~~~~~~~~~~~~~
-        # compilation terminated.
-        "test_mempool_with_allocator",
-    ],
-    "pytorch_version": {
-        "2.10": [
+    "common": {},
+    "gfx942": {
+        "autograd": ["test_multi_grad_all_hooks", "test_side_stream_backward_overlap"],
+        "cuda": [
             "test_cpp_memory_snapshot_pickle",
             "test_memory_compile_regions",
             "test_memory_plots",
@@ -34,28 +26,13 @@ skip_tests = {
             "test_fp32_precision_with_tf32",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_invalid_status_for_legacy_api",
-        ]
-    },
-    "amdgpu_family": {
-        "gfx950": [
-            "test_preferred_blas_library_settings",
-            "test_autocast_torch_bf16",
-            "test_autocast_torch_fp16",
-        ]
+        ],
+        "nn": [
+            # RuntimeError: miopenStatusUnknownError
+            "test_side_stream_backward_overlap"
+        ],
+        "torch": [
+            "test_terminate_handler_on_crash",  # hangs forever
+        ],
     },
 }
-
-# maybe failing
-# general
-# "test_hip_device_count"
-# "test_nvtx"
-
-# gfx942
-# TestCuda under test_cuda.py, failing on gfx942 (#1143) --> not on sharkmi300x-4
-#    "test_float32_matmul_precision_get_set ",
-# TestCude under test_cuda.py, failing on gfx942 (#1151) --> not on sharkmi300x-4
-#    "test_graph_concurrent_replay",
-
-# Explicitly deselected since givind segfault
-#    "test_unused_output_device_cuda",
-#    "test_pinned_memory_empty_cache",

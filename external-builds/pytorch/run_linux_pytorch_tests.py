@@ -26,7 +26,12 @@ import os
 import tempfile
 
 from skip_tests.create_skip_tests import *
+from importlib.metadata import version
 import pytest
+from pathlib import Path
+
+# TODO TODO remove just for testing
+from pprint import pprint
 
 
 def setup_env(pytorch_dir):
@@ -40,40 +45,89 @@ def setup_env(pytorch_dir):
         os.environ["PYTHONPATH"] = f"{test_dir}:{old_pythonpath}"
     else:
         os.environ["PYTHONPATH"] = f"{test_dir}"
-    # we need to force update the PYTHONPATH to the sys path
-    # otherwise our current python process that will run
-    # pytest will not find it and pytest will crash!
+
+    # we need to force update the PYTHONPATH to be part of the sys path
+    # otherwise our current python process that will run pytest will NOT
+    # find it and pytest will crash!
     if test_dir not in sys.path:
         sys.path.insert(0, test_dir)
 
 
+def cmd_arguments(argv: list[str]):
+    p = argparse.ArgumentParser(
+        description="""
+Runs PyTorch pytest for AMD GPUs. Skips additional tests compared to upstream.
+Additional tests to be skipped can be tuned by PyTorch version and amdgpu family.
+"""
+    )
+
+    amdgpu_family = os.getenv("INPUT_AMDGPU_FAMILY")
+    p.add_argument(
+        "--amdgpu-family",
+        type=str,
+        default=amdgpu_family if not amdgpu_family == None else "",
+        required=False,
+        help="""Amdgpu family (e.g. "gfx942").
+Select (potentially) additional tests to be skipped based on the amdgpu family""",
+    )
+
+    pytorch_version = os.getenv("INPUT_PYTORCH_VERSION")
+    p.add_argument(
+        "--pytorch-version",
+        type=str,
+        default=pytorch_version if not pytorch_version == None else "",
+        required=False,
+        help="""Pytorch version (e.g. "2.7" or "all).
+Select (potentially) additional tests to be skipped based on the Pytorch version.
+'All' is also possible. Then all skip tests for all pytorch versions are included.
+If no PyTorch version is given, it is auto-determined by the PyTorch used to run pytest.""",
+    )
+
+    env_root_dir = os.getenv("INPUT_THEROCK_ROOT_DIR")
+    p.add_argument(
+        "--the-rock-root-dir",
+        type=Path,
+        default=Path(env_root_dir if not env_root_dir == None else ""),
+        required=False,
+        help="""Overwrites the root directory of TheRock.
+By default TheRock root dir is determined based on this script's location.""",
+    )
+
+    args = p.parse_args(argv)
+    return args
+
+
 if __name__ == "__main__":
-    root_dir = os.getenv("INPUT_THEROCK_ROOT_DIR", "")
+    args = cmd_arguments(sys.argv[1:])
+
+    root_dir = args.the_rock_root_dir
     # autodetect root dir via path of the script
     if root_dir == "":
         script_dir = os.path.dirname(sys.argv[0])
         # we are in <TheRock Root Dir>/external-builds/pytorch
         root_dir = script_dir.rsplit("/", 2)[0]
 
-    pytorch_dir = f"{root_dir}/external-builds/pytorch/pytorch"
+    amdgpu_family = args.amdgpu_family
 
-    amdgpu_family = os.getenv("INPUT_AMDGPU_FAMILY", "")
-    pytorch_version = os.getenv("INPUT_PYTORCH_VERSION", "")
-
+    pytorch_version = args.pytorch_version
     # auto detect version by reading version string from pytorch/version.txt
     if pytorch_version == "":
-        with open(f"{pytorch_dir}/version.txt", "r") as file:
-            line = file.read()
-            # hopefully pytorch version always stays like
-            # major.minor.<some more version stuff without dots>
-            pytorch_version = line.rsplit(".", 1)[0].strip()
+        pytorch_version = version("torch").rsplit(".", 1)[0]
 
     tests_to_skip = get_tests(amdgpu_family, pytorch_version)
 
     # Debugging: Get lists of tests always skipped and only run on those
     # tests_to_skip = skipped_tests.get_tests(amdgpu_family, pytorch_version, False)
 
+    pytorch_dir = f"{root_dir}/external-builds/pytorch/pytorch"
     setup_env(pytorch_dir)
+
+    # TODO TODO remove just for testing
+    print("root_dir", root_dir)
+    print("amdgpu_family", amdgpu_family)
+    print("pytorch_version", pytorch_version)
+    print("tests_to_skip")
+    pprint(tests_to_skip)
 
     pytorch_args = [
         f"{pytorch_dir}/test/test_nn.py",
