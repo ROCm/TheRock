@@ -118,6 +118,6 @@ Now you can add your test entry to [`fetch_test_configurations.py`](../../build_
     "fetch_artifact_args": "--blas --tests",  # Use the flag you created in Step 1
     "timeout_minutes": 5,
     "test_script": f"python {_get_script_path('test_rocblas.py')}",
-    "platform": ["linux"],
+    "platform": ["linux", "windows"],
 },
 ```
