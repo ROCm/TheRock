@@ -38,7 +38,7 @@ skip_tests = {
             "test_side_stream_backward_overlap"
         ],
         "torch": [
-            "test_terminate_handler_on_crash",  # hangs forever
+            "test_terminate_handler_on_crash",  # flaky !! hangs forever or works...
         ],
     },
 }
