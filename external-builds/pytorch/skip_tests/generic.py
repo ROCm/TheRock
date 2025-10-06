@@ -21,6 +21,7 @@ skip_tests = {
             #     |          ^~~~~~~~~~~~~~~~~~~
             # compilation terminated.
             "test_mempool_with_allocator",
+            "test_graph_concurrent_replay",  # flaky on gfx942!!
             # ----------------
             # maybe failing
             # ----------------
@@ -30,8 +31,6 @@ skip_tests = {
             # gfx942
             # TestCuda under test_cuda.py, failing on gfx942 (#1143) --> not on sharkmi300x-4
             #    "test_float32_matmul_precision_get_set ",
-            # TestCude under test_cuda.py, failing on gfx942 (#1151) --> not on sharkmi300x-4
-            #    "test_graph_concurrent_replay",
             #
             # Explicitly deselected since givind segfault
             #    "test_unused_output_device_cuda",

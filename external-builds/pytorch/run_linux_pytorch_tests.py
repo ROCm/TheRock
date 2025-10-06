@@ -86,11 +86,18 @@ If no PyTorch version is given, it is auto-determined by the PyTorch used to run
     env_root_dir = os.getenv("INPUT_THEROCK_ROOT_DIR")
     p.add_argument(
         "--the-rock-root-dir",
-        type=Path,
-        default=Path(env_root_dir if not env_root_dir == None else ""),
+        default=env_root_dir if not env_root_dir == None else "",
         required=False,
         help="""Overwrites the root directory of TheRock.
 By default TheRock root dir is determined based on this script's location.""",
+    )
+
+    p.add_argument(
+        "--debug",
+        default=False,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="""Inverts the selection. Only runs skipped tests.""",
     )
 
     args = p.parse_args(argv)
@@ -103,31 +110,24 @@ if __name__ == "__main__":
     root_dir = args.the_rock_root_dir
     # autodetect root dir via path of the script
     if root_dir == "":
-        script_dir = os.path.dirname(sys.argv[0])
+        script_dir = Path(__file__).resolve().parent
         # we are in <TheRock Root Dir>/external-builds/pytorch
-        root_dir = script_dir.rsplit("/", 2)[0]
+        root_dir = script_dir.parent.parent
 
     amdgpu_family = args.amdgpu_family
 
     pytorch_version = args.pytorch_version
     # auto detect version by reading version string from pytorch/version.txt
     if pytorch_version == "":
-        pytorch_version = version("torch").rsplit(".", 1)[0]
+        pytorch_version = version("torch").rsplit("+", 1)[0].rsplit(".", 1)[0]
 
-    tests_to_skip = get_tests(amdgpu_family, pytorch_version)
+    tests_to_skip = get_tests(amdgpu_family, pytorch_version, not args.debug)
 
     # Debugging: Get lists of tests always skipped and only run on those
     # tests_to_skip = skipped_tests.get_tests(amdgpu_family, pytorch_version, False)
 
     pytorch_dir = f"{root_dir}/external-builds/pytorch/pytorch"
     setup_env(pytorch_dir)
-
-    # TODO TODO remove just for testing
-    print("root_dir", root_dir)
-    print("amdgpu_family", amdgpu_family)
-    print("pytorch_version", pytorch_version)
-    print("tests_to_skip")
-    pprint(tests_to_skip)
 
     pytorch_args = [
         f"{pytorch_dir}/test/test_nn.py",
@@ -149,8 +149,8 @@ if __name__ == "__main__":
     ]
 
     debug_pytorch_args = [
-        "-p",
-        "no:cacheprovider",  # disable caching: useful when running in
+        # "-p",
+        # "no:cacheprovider",  # disable caching: useful when running in
         # a container but wanting to use read-only TheRock
         # from the host system via setting INPUT_THEROCK_ROOT_DIR
         "--tb=no",
