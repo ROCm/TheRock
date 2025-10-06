@@ -11,6 +11,7 @@ on:
       test_runs_on:
         type: string
       test_type:
+        type: string
       test_labels:
         type: string
   workflow_call:
@@ -23,6 +24,7 @@ on:
       test_runs_on:
         type: string
       test_type:
+        type: string
       test_labels:
         type: string
   push:
