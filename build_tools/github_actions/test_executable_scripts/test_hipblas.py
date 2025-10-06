@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -19,20 +18,26 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
-environ_vars[
-    "HIPSPARSE_CLIENTS_MATRICES_DIR"
-] = f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
+tests_to_exclude = [
+    "*known_bug*",
+    "_/getrs*",
+    "_/getri_batched.solver*",
+    "_/gels_batched.solver*",
+]
 
-cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
+exclusion_list = ":".join(tests_to_exclude)
 
+cmd = [
+    f"{THEROCK_BIN_DIR}/hipblas-test",
+    f"--gtest_filter=-{exclusion_list}",
+]
+
+# If smoke tests are enabled, we run smoke tests only.
+# Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "all")
 if test_type == "smoke":
-    cmd.append("--gtest_filter=*spmv*:*spsv*:*spsm*:*spmm*:*csric0*:*csrilu0*")
+    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml"]
+
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-    env=environ_vars,
-)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)

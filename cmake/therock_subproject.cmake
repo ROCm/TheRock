@@ -643,6 +643,7 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_init_contents)
+  string(APPEND _init_contents "set(THEROCK_PRIVATE_BUILD_RPATH_DIRS)\n")
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
@@ -759,6 +760,12 @@ function(therock_cmake_subproject_activate target_name)
   _therock_cmake_subproject_get_stage_dirs(
     _dist_source_dirs "${target_name}" ${_runtime_deps})
 
+  # Map THEROCK_VERBOSE to fileset_tool.py
+  set(_fileset_verbose_arg "")
+  if(THEROCK_VERBOSE)
+    set(_fileset_verbose_arg --verbose)
+  endif()
+
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
@@ -777,7 +784,7 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       DEPENDS
         "${_prebuilt_file}"
@@ -911,7 +918,7 @@ function(therock_cmake_subproject_activate target_name)
       # Install to stage directory.
       COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"
@@ -1288,8 +1295,18 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
+  # Configure sanitizer.
+  set(_sanitizer_stanza)
+  set(_sanitizer_enabled)
+
   if(NOT compiler_toolchain)
     # Make any additional customizations if no toolchain specified.
+    therock_sanitizer_configure(
+      _sanitizer_stanza
+      _sanitizer_enabled
+      "${CMAKE_CXX_COMPILER}"
+      "${compiler_toolchain}"
+      "${target_name}")
   elseif(compiler_toolchain STREQUAL "amd-llvm" OR compiler_toolchain STREQUAL "amd-hip")
     # The "amd-llvm" and "amd-hip" toolchains are configured very similarly so
     # we commingle them, but they are different:
@@ -1324,6 +1341,13 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
+    therock_sanitizer_configure(
+      _sanitizer_stanza
+      _sanitizer_enabled
+      "${AMD_LLVM_CXX_COMPILER}"
+      "${compiler_toolchain}"
+      "${target_name}")
+
     if(THEROCK_VERBOSE)
       string(JOIN " " _filtered_gpu_targets_spaces ${_filtered_gpu_targets})
       message(STATUS "Compiler toolchain ${compiler_toolchain}:")
@@ -1332,6 +1356,9 @@ function(_therock_cmake_subproject_setup_toolchain
       message(STATUS "CMAKE_CXX_COMPILER = ${AMD_LLVM_CXX_COMPILER}")
       message(STATUS "CMAKE_LINKER = ${AMD_LLVM_LINKER}")
       message(STATUS "GPU_TARGETS = ${_filtered_gpu_targets_spaces}")
+      if(_sanitizer_enabled)
+        message(STATUS "SANITIZER = ${_sanitizer_enabled}")
+      endif()
     endif()
   else()
     message(FATAL_ERROR "Unsupported COMPILER_TOOLCHAIN = ${compiler_toolchain} (supported: 'amd-llvm' or none)")
@@ -1352,6 +1379,7 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
+  string(APPEND _toolchain_contents "${_sanitizer_stanza}")
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
