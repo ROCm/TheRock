@@ -5,11 +5,8 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-
-logging.basicConfig(level=logging.INFO)
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -19,11 +16,21 @@ environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
-cmd = [
-    f"{THEROCK_BIN_DIR}/rocsparse-test",
-    "--gtest_filter=*quick*",
-    "--matrices-dir",
-    f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
+logging.basicConfig(level=logging.INFO)
+
+tests_to_exclude = [
+    "*known_bug*",
+    "_/getrs*",
+    "_/getri_batched.solver*",
+    "_/gels_batched.solver*",
 ]
+
+exclusion_list = ":".join(tests_to_exclude)
+
+cmd = [
+    f"{THEROCK_BIN_DIR}/hipblas-test",
+    f"--gtest_filter=-{exclusion_list}",
+]
+
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)

@@ -37,6 +37,14 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    "hipblas": {
+        "job_name": "hipblas",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipblas.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
@@ -65,7 +73,7 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -148,11 +156,14 @@ def run():
     platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
 
     logging.info(f"Selecting projects: {project_to_test}")
 
     output_matrix = []
     for key in test_matrix:
+        job_name = test_matrix[key]["job_name"]
+
         # If the test is disabled for a particular platform, skip the test
         if (
             "exclude_family" in test_matrix[key]
@@ -164,11 +175,15 @@ def run():
             )
             continue
 
+        # If test labels are populated, and the test job name is not in the test labels, skip the test
+        if test_labels and key not in test_labels:
+            logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
         if platform in test_matrix[key]["platform"] and (
             key in project_to_test or project_to_test == "*"
         ):
-            job_name = test_matrix[key]["job_name"]
             logging.info(f"Including job {job_name}")
             job_config_data = test_matrix[key]
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"

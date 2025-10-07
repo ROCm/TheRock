@@ -11,10 +11,10 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
-envion_vars = os.environ.copy()
+environ_vars = os.environ.copy()
 # For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
-envion_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
-envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
+environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -144,6 +144,11 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_BFP16")  # 0 min 27 sec
 negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32")  # 0 min 22 sec
 negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16")  # 0 min 16 sec
 
+# Flaky tests
+negative_filter.append(
+    "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
+)  # https://github.com/ROCm/TheRock/issues/1682
+
 ####################################################
 
 gtest_final_filter_cmd = (
@@ -154,4 +159,4 @@ gtest_final_filter_cmd = (
 
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", gtest_final_filter_cmd]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)

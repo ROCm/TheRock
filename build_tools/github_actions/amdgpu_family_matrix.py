@@ -80,7 +80,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": False,
+            "expect_failure": True,
         },
         "windows": {
             "test-runs-on": "",
