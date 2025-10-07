@@ -15,6 +15,9 @@ on:
       windows_amdgpu_families:
         description: Windows families to run builds and tests for.
         value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
+      test_type:
+        description: Test type to run (e.g. smoke, full).
+        value: ${{ jobs.setup.outputs.test_type }}
       windows_test_labels:
         description: ROCm projects to run Windows tests on. Optional filter.
         value: ${{ jobs.setup.outputs.windows_test_labels }}
@@ -34,6 +37,7 @@ jobs:
       linux_amdgpu_families: ${{ steps.configure.outputs.linux_amdgpu_families }}
       linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_amdgpu_families: ${{ steps.configure.outputs.windows_amdgpu_families }}
+      test_type: ${{ steps.configure.outputs.test_type }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
     steps:
       - name: "Checking out repository"

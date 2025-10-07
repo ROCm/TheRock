@@ -351,6 +351,8 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
+    test_type = "smoke"
+
     # In the case of a scheduled run, we always want to build
     if is_schedule:
         enable_build_jobs = True
@@ -362,6 +364,15 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
+        # If the modified path contains "rocm-libraries" or "rocm-systems", we want to run a full test suite.
+        # Otherwise, we just run smoke tests
+        if "rocm-systems" in modified_paths or "rocm-libraries" in modified_paths:
+            test_type = "full"
+
+        # If any test label is included, run full test suite for specified tests
+        if linux_test_output or windows_test_output:
+            test_type = "full"
+
     gha_append_step_summary(
         f"""## Workflow configure results
 
@@ -372,6 +383,7 @@ def main(base_args, linux_families, windows_families):
 * `windows_test_labels`: {str([test for test in windows_test_output])}
 * `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
+* `test_type`: {test_type}
     """
     )
 
@@ -381,6 +393,7 @@ def main(base_args, linux_families, windows_families):
         "windows_amdgpu_families": json.dumps(windows_target_output),
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
+        "test_type": test_type,
     }
     gha_set_output(output)
 

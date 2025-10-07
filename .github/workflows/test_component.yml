@@ -14,7 +14,8 @@ on:
         type: string
       component:
         type: string
-
+      test_type:
+        type: string
 
 permissions:
   contents: read
@@ -78,6 +79,7 @@ jobs:
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
+          TEST_TYPE: ${{ inputs.test_type }}
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 

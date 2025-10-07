@@ -18,6 +18,8 @@ on:
       extra_cmake_options:
         type: string
         default: "-DBUILD_TESTING=ON"
+      test_type:
+        type: string
 
 permissions:
   contents: read
@@ -62,6 +64,7 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
 
   build_windows_python_packages:
