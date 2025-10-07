@@ -11,7 +11,6 @@ therock_cmake_subproject_declare(therock-flatbuffers
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
-  BUILD_DEPS
   CMAKE_ARGS
 )
 therock_cmake_subproject_provide_package(therock-flatbuffers flatbuffers lib/cmake)
