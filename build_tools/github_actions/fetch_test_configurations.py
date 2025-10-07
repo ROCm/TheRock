@@ -167,8 +167,10 @@ def run():
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
+        # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
+        project_to_test = [item.strip() for item in project_to_test.split(",")]
         if platform in test_matrix[key]["platform"] and (
-            key in project_to_test or project_to_test == "*"
+            key in project_to_test or "*" in project_to_test
         ):
             logging.info(f"Including job {job_name}")
             job_config_data = test_matrix[key]
