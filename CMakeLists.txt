@@ -22,6 +22,7 @@ include(therock_artifacts)
 include(therock_compiler_config)
 include(therock_external_source)
 include(therock_features)
+include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
@@ -130,6 +131,15 @@ block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_
   list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
   message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
 endblock()
+
+################################################################################
+# Feature flags
+# Project wide flags for controlling the build system.
+################################################################################
+cmake_dependent_option(
+  THEROCK_FLAG_COMGR_DELAY_LOAD
+  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
+  ON "LINUX" OFF)
 
 ################################################################################
 # Debug Options
@@ -400,8 +410,6 @@ endif()
 ################################################################################
 # External project setup
 ################################################################################
-
-add_subdirectory(build_tools)
 
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).

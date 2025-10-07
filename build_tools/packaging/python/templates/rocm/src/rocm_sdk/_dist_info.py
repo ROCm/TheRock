@@ -113,12 +113,12 @@ def discover_current_target_family() -> str | None:
                 if arch in AVAILABLE_TARGET_FAMILIES:
                     return arch
     except subprocess.CalledProcessError as e:
-        print(f"[ERROR] amdgpu-arch failed with return code {e.returncode}")
+        print(f"[WARNING] amdgpu-arch failed with return code {e.returncode}")
         print(f"[stderr] {e.output}")
     except FileNotFoundError:
-        print(f"[ERROR] amdgpu-arch not found.")
+        print(f"[WARNING] failed to run amdgpu-arch: binary not found.")
     except Exception as e:
-        print(f"[ERROR] Unexpected error running amdgpu-arch: {e}")
+        print(f"[WARNING] Unexpected error running amdgpu-arch: {e}")
     return None
 
 
@@ -192,12 +192,12 @@ LibraryEntry("roctracer64", "core", "libroctracer64.so.4", "")
 
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so.3", "amd_comgr0701.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so.3", "libhipblas.dll")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "libhipblaslt.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so.0", "hipfft.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so.1", "hiprand.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4", "hipsparse.dll")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1", "hipsolver.dll")
 LibraryEntry("rccl", "libraries", "librccl.so.1", "")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "hipblaslt.dll")
 LibraryEntry("miopen", "libraries", "libMIOpen.so.1", "MIOpen.dll")
 
 # Overall ROCM package version.

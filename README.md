@@ -44,7 +44,16 @@ instructions and configurations for alternatives.
 > [installing from releases](#installing-from-releases) in supported
 > configurations is often faster and easier.
 
+> [!IMPORTANT]
+> Frequent setup and building problems and their solutions can be found in section [Common Issues](docs/environment_setup_guide.md#common-issues).
+
 ### Setup - Ubuntu (24.04)
+
+> [!TIP]
+> `dvc` is used for version control of pre-compiled MIOpen kernels.
+> `dvc` is not a hard requirement, but it does reduce compile time.
+> `snap install --classic dvc` can be used to install on Ubuntu.
+> Visit the [DVC website](https://dvc.org/doc/install/linux) for other installation methods.
 
 ```bash
 # Install Ubuntu dependencies
@@ -57,10 +66,11 @@ cd TheRock
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches
-python ./build_tools/fetch_sources.py
+python3 ./build_tools/fetch_sources.py
 ```
 
 ### Setup - Windows 11 (VS 2022)
@@ -87,9 +97,11 @@ cd TheRock
 # Init python virtual environment and install python dependencies
 python -m venv .venv
 .venv\Scripts\Activate.bat
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches
+# Note that dvc is used for pulling large files
 python ./build_tools/fetch_sources.py
 ```
 
@@ -172,12 +184,15 @@ Further flags allow to build components with specific features enabled.
 
 > [!NOTE]
 > Building components with MPI support, currently requires MPI to be
-> pre-installed until [issue #128](https://github.com/ROCm/TheRock/issues/128)
+> pre-installed until [issue #1284](https://github.com/ROCm/TheRock/issues/1284)
 > is resolved.
 
 ### CMake build usage
 
-To build ROCm/HIP:
+For workflows that demand frequent rebuilds, it is _recommended to build it with ccache_ enabled to speed up the build.
+See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Windows](#ccache-usage-on-windows).
+
+Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
 ```bash
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu

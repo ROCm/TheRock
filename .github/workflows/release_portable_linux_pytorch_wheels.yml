@@ -29,6 +29,9 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -63,6 +66,10 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+        default: ''
 
 
 permissions:
@@ -71,11 +78,11 @@ permissions:
 
 jobs:
   release:
-    name: Release PyTorch | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_version }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", 3.13]
+        python_version: ["3.11", "3.12", "3.13"]
         pytorch_version: ["release/2.7", "nightly"]
         include:
           - pytorch_version: release/2.7
@@ -95,3 +102,4 @@ jobs:
       rocm_version: ${{ inputs.rocm_version }}
       pytorch_version: ${{ matrix.pytorch_version }}
       pytorch_patchset: ${{ matrix.pytorch_patchset }}
+      ref: ${{ inputs.ref || '' }}

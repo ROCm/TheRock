@@ -81,6 +81,7 @@ add_custom_target(
         # Only enable the libraries we want.
         -Damdgpu=enabled
         -Dintel=disabled
+        -Dman-pages=disabled
         -Dnouveau=disabled
         -Dradeon=disabled
         -Dvmwgfx=disabled

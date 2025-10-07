@@ -14,16 +14,31 @@ from _therock_utils.hash_util import calculate_hash
 FILESET_TOOL = Path(__file__).parent.parent / "fileset_tool.py"
 
 ARTIFACT_DESCRIPTOR_1 = r"""
+[options]
+unmatched_exclude = "include/foobar.h"
+
+[components.doc]
+
 [components.doc."example/stage"]
+include = [
+    "**/*.so.1",
+]
+[components.lib."example/stage"]
 """
 
 
-def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
+def capture(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     return subprocess.check_output(
         args, cwd=str(cwd), stdin=subprocess.DEVNULL
     ).decode()
+
+
+def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+    args = [str(arg) for arg in args]
+    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    return subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
 def write_text(p: Path, text: str):
@@ -85,6 +100,13 @@ class FilesetToolTest(unittest.TestCase):
             ) as f:
                 f.write(b"Contents")
                 fset_executable(f)
+        write_text(
+            Path(input_dir / "example" / "stage" / "lib" / "libfoobar.so.1"), "foobar"
+        )
+        write_text(
+            Path(input_dir / "example" / "stage" / "include" / "foobar.h"), "foobar"
+        )
+
         exec(
             [
                 sys.executable,
@@ -92,12 +114,10 @@ class FilesetToolTest(unittest.TestCase):
                 "artifact",
                 "--descriptor",
                 descriptor_file,
-                "--output-dir",
-                artifact_dir,
                 "--root-dir",
                 input_dir,
-                "--component",
                 "doc",
+                artifact_dir,
             ]
         )
 
@@ -167,7 +187,7 @@ class FilesetToolTest(unittest.TestCase):
             self.assertTrue(is_executable(flat1_dir / "share" / "doc" / "executable"))
 
         # Flatten the archive file and verify.
-        flatten_output = exec(
+        flatten_output = capture(
             [
                 sys.executable,
                 FILESET_TOOL,

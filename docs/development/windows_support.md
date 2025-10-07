@@ -26,6 +26,7 @@ mainline, in open source, using MSVC, etc.).
 | Component subset    | Subproject                                                                   | Supported | Notes                                         |
 | ------------------- | ---------------------------------------------------------------------------- | --------- | --------------------------------------------- |
 | base                | aux-overlay                                                                  | ✅        |                                               |
+| base                | [amdsmi](https://github.com/ROCm/amdsmi)                                     | ❌        | Unsupported                                   |
 | base                | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                             | ✅        |                                               |
 | base                | [rocm-core](https://github.com/ROCm/rocm-core)                               | ✅        |                                               |
 | base                | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                         | ❌        | Unsupported                                   |
@@ -132,6 +133,14 @@ These instructions mostly mirror the instructions in the root
 > choco install strawberryperl -y
 > ```
 
+> [!TIP]
+> winget installation is recommended for dvc
+> [winget-cli](https://github.com/microsoft/winget-cli):
+>
+> ```bash
+> winget install --id Iterative.DVC --silent --accept-source-agreements
+> ```
+
 If you prefer to install tools manually, you will need:
 
 - The MSVC compiler from https://visualstudio.microsoft.com/downloads/
@@ -156,6 +165,10 @@ If you prefer to install tools manually, you will need:
   https://github.com/mozilla/sccache
 
 - gfortran, recommended from Strawberry Perl: https://strawberryperl.com/
+
+- patch, available in Strawberry Perl or Git.
+
+- dvc: https://dvc.org/doc/install/windows
 
 - Python: https://www.python.org/downloads/ (3.11+ recommended)
 
@@ -375,9 +388,9 @@ An incremental rollout is planned:
    This will allow AMD developers to iterate on integration into TheRock while
    we work on making this folder or more source files available.
 1. The interop folder will be available publicly
-   (currently at https://github.com/ROCm/amdgpu-windows-interop).
+   (currently at https://github.com/ROCm/rocm-systems/tree/develop/shared/amdgpu-windows-interop).
 1. *(We are here today)* The interop folder will be included automatically from
-   a git repository using git LFS.
+   a git repository using [dvc](https://dvc.org/).
 1. A more permanent open source strategy for building the CLR (the HIP runtime)
    from source on Windows will eventually be available.
 

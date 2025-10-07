@@ -87,20 +87,24 @@ class OutputSink:
         if self.log_file and self.log_timestamps:
             self.log_file.write(f"BEGIN\t{self.start_time}\n".encode())
 
-    def finish(self):
+    def finish(self, rc: int):
         end_time = time.time()
         if self.log_file is not None:
             if self.log_timestamps:
                 self.log_file.write(
-                    f"END\t{end_time}\t{end_time - self.start_time}\n".encode()
+                    f"END\t{end_time}\t{end_time - self.start_time}\t{rc}\n".encode()
                 )
             self.log_file.close()
         if self.gh_group_label is not None:
             self.out.write(b"::endgroup::\n")
         elif self.interactive_prefix is not None and self.label is not None:
             run_pretty = f"{round(end_time - self.start_time)} seconds"
+            if rc == 0:
+                status_msg = f" SUCCEEDED in "
+            else:
+                status_msg = f" FAILED WITH CODE {rc} in "
             self.out.write(
-                b"[" + self.label + b" completed in " + run_pretty.encode() + b"]\n"
+                b"[" + self.label + status_msg.encode() + run_pretty.encode() + b"]\n"
             )
 
     def writeline(self, line: bytes):
@@ -194,10 +198,20 @@ def main(cl_args: list[str]):
 
     sink = OutputSink(args)
     sink.start()
+    rc = 0
     try:
         run(args, child_arg_list, sink)
+    except SystemExit as e:
+        # See docs for interpretation of e.code
+        if e.code is None:
+            rc = 0
+        elif isinstance(e.code, int):
+            rc = e.code
+        else:
+            rc = 1
+        raise
     finally:
-        sink.finish()
+        sink.finish(rc)
 
 
 if __name__ == "__main__":

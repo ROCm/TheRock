@@ -14,12 +14,23 @@ on:
         description: S3 subdirectory, not including the GPU-family
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: Staging subdirectory to push the wheels for test
+        type: string
+        default: "v2-staging"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
       rocm_version:
         description: ROCm version to pip install
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
   workflow_dispatch:
     inputs:
@@ -40,13 +51,26 @@ on:
         description: S3 subdirectory, not including the GPU-family
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: "Staging subdirectory to push the wheels for test"
+        type: string
+        default: "v2-staging"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+        default: ''
+
 
 permissions:
   id-token: write
@@ -54,7 +78,7 @@ permissions:
 
 jobs:
   release:
-    name: Release PyTorch | ${{ inputs.amdgpu_family }} | Python ${{ matrix.python_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -66,5 +90,8 @@ jobs:
       python_version: ${{ matrix.python_version }}
       release_type: ${{ inputs.release_type }}
       s3_subdir: ${{ inputs.s3_subdir }}
+      s3_staging_subdir: ${{ inputs.s3_staging_subdir }}
       cloudfront_url: ${{ inputs.cloudfront_url }}
+      cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
+      ref: ${{ inputs.ref || '' }}

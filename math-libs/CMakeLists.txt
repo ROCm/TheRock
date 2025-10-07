@@ -46,10 +46,10 @@ if(THEROCK_ENABLE_RAND)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      rocRAND
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      rocRAND
   )
   therock_cmake_subproject_glob_c_sources(hipRAND
     SUBDIRS

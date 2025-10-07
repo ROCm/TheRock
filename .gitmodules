@@ -13,19 +13,11 @@
 [submodule "rccl"]
 	path = comm-libs/rccl
 	url = https://github.com/ROCm/rccl.git
-	branch = mainline
+	branch = develop
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
 	branch = mainline
-[submodule "hipSOLVER"]
-	path = math-libs/BLAS/hipSOLVER
-	url = https://github.com/ROCm/hipSOLVER.git
-	branch = develop
-[submodule "rocSOLVER"]
-	path = math-libs/BLAS/rocSOLVER
-	url = https://github.com/ROCm/rocSOLVER.git
-	branch = develop
 [submodule "rccl-tests"]
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
@@ -37,9 +29,6 @@
 [submodule "rocprof-trace-decoder"]
 	path = profiler/rocprof-trace-decoder/binaries
 	url = https://github.com/ROCm/rocprof-trace-decoder.git
-[submodule "amdgpu-windows-interop"]
-	path = core/amdgpu-windows-interop
-	url = https://github.com/ROCm/amdgpu-windows-interop.git
 [submodule "rocm-libraries"]
 	path = rocm-libraries
 	url = https://github.com/ROCm/rocm-libraries
@@ -52,3 +41,7 @@
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
 	branch = amd-mainline
+[submodule "amdsmi"]
+	path = base/amdsmi
+	url = https://github.com/ROCm/amdsmi.git
+	branch = amd-staging

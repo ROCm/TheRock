@@ -1,3 +1,9 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
+
 # bzip2
 [components.dev."third-party/sysdeps/linux/bzip2/build/stage"]
 # Include the executables in the dev package since some sub-projects

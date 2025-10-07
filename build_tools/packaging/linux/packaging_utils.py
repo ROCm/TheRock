@@ -1,7 +1,10 @@
 import json
+from pathlib import Path
 
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
+
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def read_package_json_file():
@@ -10,23 +13,59 @@ def read_package_json_file():
 
     Returns: List of package details read from Json
     """
-
-    with open("package.json", "r") as file:
+    file_path = SCRIPT_DIR / "package.json"
+    with file_path.open("r", encoding="utf-8") as file:
         data = json.load(file)
     return data
 
 
-def is_packaging_disabled(package):
+def is_key_defined(pkg_info, key):
     """
-    Checks if packaging is disabled for a given package.
+    Verifies whether a specific key is enabled for a package.
 
     Parameters:
-    package (dict): A dictionary containing package details.
+    pkg_info (dict): A dictionary containing package details.
+    key : A key to be searched in the dictionary.
 
     Returns:
-    bool: True if 'DisablePackaging' key exists, False otherwise.
+    bool: True if key is defined, False otherwise.
     """
-    return "DisablePackaging" in package
+    value = ""
+    for k in pkg_info:
+        if k.lower() == key.lower():
+            value = pkg_info[k]
+
+    value = value.strip().lower()
+    if value in (
+        "1",
+        "true",
+        "t",
+        "yes",
+        "y",
+        "on",
+        "enable",
+        "enabled",
+        "found",
+    ):
+        return True
+    if value in (
+        "",
+        "0",
+        "false",
+        "f",
+        "no",
+        "n",
+        "off",
+        "disable",
+        "disabled",
+        "notfound",
+        "none",
+        "null",
+        "nil",
+        "undefined",
+        "n/a",
+    ):
+        return False
 
 
 def get_package_info(pkgname):
@@ -76,7 +115,9 @@ def get_package_list():
 
     data = read_package_json_file()
 
-    pkg_list = [pkg["Package"] for pkg in data if not is_packaging_disabled(pkg)]
+    pkg_list = [
+        pkg["Package"] for pkg in data if not is_key_defined(pkg, "disablepackaging")
+    ]
     return pkg_list
 
 

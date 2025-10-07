@@ -32,24 +32,36 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
+    "hipblas": {
+        "job_name": "hipblas",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_hipblas.py')}",
+        # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1702
+        "platform": ["linux"],
+        "total_shards": 1,
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 4,
     },
     # PRIM tests
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -57,6 +69,7 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     "rocthrust": {
         "job_name": "rocthrust",
@@ -64,6 +77,7 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux"],
+        "total_shards": 1,
     },
     # SPARSE tests
     "hipsparse": {
@@ -72,6 +86,7 @@ test_matrix = {
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux"],
+        "total_shards": 2,
     },
     "rocsparse": {
         "job_name": "rocsparse",
@@ -79,6 +94,10 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 4,
+        "exclude_family": {
+            "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
+        },
     },
     # RAND tests
     "rocrand": {
@@ -87,6 +106,7 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     "hiprand": {
         "job_name": "hiprand",
@@ -94,6 +114,7 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
     },
     # MIOpen tests
     "miopen": {
@@ -102,6 +123,7 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
+        "total_shards": 4,
     },
     # RCCL tests
     "rccl": {
@@ -110,6 +132,7 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
+        "total_shards": 1,
     },
     # FFT tests
     "rocfft": {
@@ -133,20 +156,58 @@ test_matrix = {
 def run():
     platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+    test_type = os.getenv("TEST_TYPE", "full")
+    test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
 
     logging.info(f"Selecting projects: {project_to_test}")
 
     output_matrix = []
     for key in test_matrix:
+        job_name = test_matrix[key]["job_name"]
+
+        # If the test is disabled for a particular platform, skip the test
+        if (
+            "exclude_family" in test_matrix[key]
+            and platform in test_matrix[key]["exclude_family"]
+            and amdgpu_families in test_matrix[key]["exclude_family"][platform]
+        ):
+            logging.info(
+                f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
+            )
+            continue
+
+        # If test labels are populated, and the test job name is not in the test labels, skip the test
+        if test_labels and key not in test_labels:
+            logging.info(f"Excluding job {job_name} since it's not in the test labels")
+            continue
+
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
         if platform in test_matrix[key]["platform"] and (
             key in project_to_test or project_to_test == "*"
         ):
-            job_name = test_matrix[key]["job_name"]
             logging.info(f"Including job {job_name}")
-            output_matrix.append(test_matrix[key])
+            job_config_data = test_matrix[key]
+            # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
+            # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
+            # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
+            job_config_data["shard_arr"] = [
+                i + 1 for i in range(job_config_data["total_shards"])
+            ]
 
-    gha_set_output({"components": json.dumps(output_matrix), "platform": platform})
+            # If the test type is smoke tests, we only need one shard for the test job
+            if test_type == "smoke":
+                job_config_data["total_shards"] = 1
+                job_config_data["shard_arr"] = [1]
+
+            output_matrix.append(job_config_data)
+
+    gha_set_output(
+        {
+            "components": json.dumps(output_matrix),
+            "platform": platform,
+        }
+    )
 
 
 if __name__ == "__main__":
