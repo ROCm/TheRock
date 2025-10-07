@@ -6,21 +6,21 @@ This document provides instructions for installing ROCm artifacts from TheRock b
 
 The script supports the following command-line options:
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `--output-dir` | Path | Output directory for TheRock installation (default: `./therock-build`) |
-| `--amdgpu-family` | String | AMD GPU family target (required) |
-| `--run-id` | String | GitHub CI workflow run ID to install from |
-| `--release` | String | Release version from nightly or dev tarballs |
-| `--input-dir` | String | Existing TheRock directory to copy from |
-| `--blas` | Flag | Include BLAS artifacts |
-| `--fft` | Flag | Include FFT artifacts |
-| `--miopen` | Flag | Include MIOpen artifacts |
-| `--prim` | Flag | Include primitives artifacts |
-| `--rand` | Flag | Include random number generator artifacts |
-| `--rccl` | Flag | Include RCCL artifacts |
-| `--tests` | Flag | Include test artifacts for enabled components |
-| `--base-only` | Flag | Include only base artifacts (minimal installation) |
+| Option            | Type   | Description                                                            |
+| ----------------- | ------ | ---------------------------------------------------------------------- |
+| `--amdgpu-family` | String | AMD GPU family target (required)                                       |
+| `--base-only`     | Flag   | Include only base artifacts (minimal installation)                     |
+| `--blas`          | Flag   | Include BLAS artifacts                                                 |
+| `--fft`           | Flag   | Include FFT artifacts                                                  |
+| `--input-dir`     | String | Existing TheRock directory to copy from                                |
+| `--miopen`        | Flag   | Include MIOpen artifacts                                               |
+| `--output-dir`    | Path   | Output directory for TheRock installation (default: `./therock-build`) |
+| `--prim`          | Flag   | Include primitives artifacts                                           |
+| `--rand`          | Flag   | Include random number generator artifacts                              |
+| `--rccl`          | Flag   | Include RCCL artifacts                                                 |
+| `--release`       | String | Release version from nightly or dev tarballs                           |
+| `--run-id`        | String | GitHub CI workflow run ID to install from                              |
+| `--tests`         | Flag   | Include test artifacts for enabled components                          |
 
 ### Finding GitHub Run IDs
 
@@ -54,23 +54,23 @@ TheRock provides two types of release tarballs:
 
 ### Install from CI Run with BLAS Components
 
-````bash
+```bash
 python build_tools/install_rocm_from_artifacts.py \
     --run-id 15575624591 \
     --amdgpu-family gfx110X-dgpu \
     --blas --tests
-````
+```
 
 ### Install from Nightly Tarball with Multiple Components
 
 Install RCCL and FFT components from a nightly build for gfx94X:
 
-````bash
+```bash
 python build_tools/install_rocm_from_artifacts.py \
     --release 6.4.0rc20250416 \
     --amdgpu-family gfx94X-dcgpu \
     --rccl --fft --tests
-````
+```
 
 ## Adding Support for New Components
 
@@ -89,13 +89,14 @@ Here's how to add support for a hypothetical component called `newcomponent`:
 
 Ensure your component's artifact is properly defined in CMake and built:
 
-````bash
+```bash
 # Check that the artifact is created during build
 cmake --build build
 ls build/artifacts/newcomponent_*
-````
+```
 
 You should see artifacts like:
+
 - `newcomponent_lib_gfx110X`
 - `newcomponent_test_gfx110X`
 - etc.
@@ -104,7 +105,7 @@ You should see artifacts like:
 
 Open `build_tools/install_rocm_from_artifacts.py` and add a new argument in the `artifacts_group`:
 
-````python
+```python
     artifacts_group.add_argument(
         "--rccl",
         default=False,
@@ -125,13 +126,13 @@ Open `build_tools/install_rocm_from_artifacts.py` and add a new argument in the 
         help="Include all test artifacts for enabled libraries",
         action=argparse.BooleanOptionalAction,
     )
-````
+```
 
 #### Step 3: Add to Artifact Selection Logic
 
 In the `retrieve_artifacts_by_run_id` function, add your component to the conditional logic:
 
-````python
+```python
 # filepath: \home\bharriso\Source\TheRock\build_tools\install_rocm_from_artifacts.py
     if args.base_only:
         argv.extend(base_artifact_patterns)
@@ -155,7 +156,7 @@ In the `retrieve_artifacts_by_run_id` function, add your component to the condit
             extra_artifacts.append("newcomponent")
 
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
-````
+```
 
 #### Step 4: Update Documentation
 
@@ -165,13 +166,13 @@ Add your new component to the command options table in this document (see the ta
 
 Test that artifacts can be fetched with your new flag:
 
-````bash
+```bash
 # Test with a CI run
 python build_tools/install_rocm_from_artifacts.py \
     --run-id YOUR_RUN_ID \
     --amdgpu-family gfx110X-dgpu \
     --newcomponent --tests
-````
+```
 
 #### Step 6: Update Test Configuration (Optional)
 
