@@ -1,0 +1,10 @@
+# rocprofiler-compute
+[components.dbg."profiler/rocprofiler-compute/stage"]
+[components.dev."profiler/rocprofiler-compute/stage"]
+[components.doc."profiler/rocprofiler-compute/stage"]
+[components.lib."profiler/rocprofiler-compute/stage"]
+[components.run."profiler/rocprofiler-compute/stage"]
+[components.test."profiler/rocprofiler-compute/stage"]
+include = [
+  "share/rocprofiler-compute/tests/**",
+]
