@@ -199,6 +199,7 @@ if(THEROCK_ENABLE_FFT)
       rocm-cmake
       therock-boost
       therock-googletest
+      therock-fftw3
     RUNTIME_DEPS
       hip-clr
       hipRAND
@@ -231,6 +232,7 @@ if(THEROCK_ENABLE_FFT)
       rocm-cmake
       therock-boost
       therock-googletest
+      therock-fftw3
     RUNTIME_DEPS
       hip-clr
       rocFFT
