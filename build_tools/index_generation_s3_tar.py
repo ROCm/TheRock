@@ -31,7 +31,6 @@ from github_actions.github_actions_utils import gha_append_step_summary
 
 log = logging.getLogger(__name__)
 
-
 def extract_gpu_details(files):
 
     # Regex: r"gfx(?:\d+[A-Za-z]*|\w+)"
@@ -46,7 +45,6 @@ def extract_gpu_details(files):
         if match:
             gpu_families.add(match.group(0))
     return sorted(list(gpu_families))
-
 
 def generate_index_s3(s3_client, bucket_name, upload=False):
     # List all objects and select .tar.gz keys
@@ -188,14 +186,14 @@ def generate_index_s3(s3_client, bucket_name, upload=False):
                 ExtraArgs={"ContentType": "text/html"},
             )
             
-            # Generate a presigned URL (time-limited) using boto3
-            presigned_url = s3_client.generate_presigned_url(
-                ClientMethod="get_object",
-                Params={"Bucket": bucket_name, "Key": "index.html"},
-                ExpiresIn=3600,
-            )
+            # URL to the uploaded index.html
+            region = s3_client.meta.region_name or "us-east-2"
+            if region == "us-east-2":
+                bucket_url = f"https://{bucket_name}.s3.amazonaws.com/index.html"
+            else:
+                bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/index.html"
 
-            message = f"index.html successfully uploaded. URL: {presigned_url}"
+            message = f"index.html successfully uploaded. URL: {bucket_url}"
             gha_append_step_summary(message)
 
         except ClientError as e:
