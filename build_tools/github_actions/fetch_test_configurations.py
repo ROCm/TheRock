@@ -53,6 +53,7 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 4,
     },
+    # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
@@ -67,7 +68,7 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         "platform": ["linux"],
-        "total_shards": 4,
+        "total_shards": 2,
     },
     # PRIM tests
     "rocprim": {
