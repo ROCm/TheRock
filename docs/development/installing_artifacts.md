@@ -135,7 +135,7 @@ In the `retrieve_artifacts_by_run_id` function, add your component to the condit
 # filepath: \home\bharriso\Source\TheRock\build_tools\install_rocm_from_artifacts.py
     if args.base_only:
         argv.extend(base_artifact_patterns)
-    elif any([args.blas, args.fft, args.miopen, args.prim, args.rand, args.rccl, args.new_component]):
+    elif any([args.blas, args.fft, args.miopen, args.prim, args.rand, args.rccl, args.newcomponent]):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
@@ -151,7 +151,7 @@ In the `retrieve_artifacts_by_run_id` function, add your component to the condit
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
-        if args.new_component:
+        if args.newcomponent:
             extra_artifacts.append("newcomponent")
 
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
