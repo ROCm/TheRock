@@ -3,7 +3,7 @@
 Fails if any wheels that were expected for the platform were not set.
 
 Currently,
-* Windows expects torch and torchaudio
+* Windows expects torch, torchaudio, and torchvision
 * Linux expects torch, torchaudio, torchvision, and triton
 """
 
@@ -73,10 +73,6 @@ def get_all_wheel_versions(
 
     if torchvision_version:
         all_versions = all_versions | {"torchvision_version": torchvision_version}
-    elif os.lower() == "windows":
-        _log(
-            "Did not find torchvision (that's okay, is not currently built on Windows)"
-        )
     else:
         raise FileNotFoundError("Did not find torchvision wheel")
 
@@ -91,14 +87,24 @@ def get_all_wheel_versions(
 
 
 def main(argv: list[str]):
+    env_dist_dir = os.getenv("PACKAGE_DIST_DIR")
     p = argparse.ArgumentParser(prog="write_torch_versions.py")
     p.add_argument(
         "--dist-dir",
         type=Path,
-        default=Path(os.getenv("PACKAGE_DIST_DIR")),
+        default=Path(env_dist_dir if not env_dist_dir == None else "<no-valid-dir>"),
         help="Path where wheels are located",
     )
+
     args = p.parse_args(argv)
+    if args.dist_dir == Path("<no-valid-dir>"):
+        print(
+            f"""[ERROR] No path given where to find the wheels!
+        Either set environment variable 'PACKAGE_DIST_DIR' or run the command with --dist-dir=<path-to-wheels>""",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if not args.dist_dir.exists():
         raise FileNotFoundError(f"Dist dir '{args.dist_dir}' does not exist")
     all_versions = get_all_wheel_versions(args.dist_dir)

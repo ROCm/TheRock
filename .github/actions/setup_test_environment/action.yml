@@ -21,9 +21,9 @@ runs:
   using: "composite"
   steps:
     - name: "Setting up Python"
-      uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+      uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
       with:
-        python-version: 3.11
+        python-version: 3.12
 
     - name: Create Python venv
       shell: bash

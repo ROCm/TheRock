@@ -92,9 +92,9 @@ SKIPPABLE_PATH_PATTERNS = [
     # At time of writing, workflows run in this sequence:
     #   `ci.yml`
     #   `ci_linux.yml`
-    #   `build_linux_packages.yml`
-    #   `test_linux_packages.yml`
-    #   `test_[rocm subproject].yml`
+    #   `build_linux_artifacts.yml`
+    #   `test_artifacts.yml`
+    #   `test_component.yml`
     # If we add external-builds tests there, we can revisit this, maybe leaning
     # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
     # workflows efficient when only nodes closer to the edges of the build graph
@@ -120,9 +120,10 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 GITHUB_WORKFLOWS_CI_PATTERNS = [
     "setup.yml",
     "ci*.yml",
-    "build*package*.yml",
-    "test*packages.yml",
-    "test*.yml",  # This may be too broad, but there are many test workflows.
+    "build*artifact*.yml",
+    "test*artifacts.yml",
+    "test_sanity_check.yml",
+    "test_component.yml",
 ]
 
 
