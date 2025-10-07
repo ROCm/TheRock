@@ -67,6 +67,8 @@ In [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_
 
 > [!NOTE]
 > When adding a new component to TheRock (typically a new .toml file), you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it.
+>
 > Adding libraries to existing components requires no script changes.
+>
 > See the [Adding Support for New Components](./installing_artifacts.md#adding-support-for-new-components) guide for step-by-step instructions.
 
