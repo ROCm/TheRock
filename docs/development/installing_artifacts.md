@@ -77,10 +77,8 @@ python build_tools/install_rocm_from_artifacts.py \
 When you add a new component to TheRock, you will need to update `install_rocm_from_artifacts.py` to allow users to selectively install it.
 
 > [!NOTE]
-> You only need to modify `install_rocm_from_artifacts.py` when adding an entirely new component to TheRock.
-> 
-> Typically if you are adding a new .toml file you will need to add support to `install_rocm_from_artifacts.py`.
-> 
+> You only need to modify `install_rocm_from_artifacts.py` when adding an entirely new component to TheRock.<br>
+> Typically if you are adding a new .toml file you will need to add support to `install_rocm_from_artifacts.py`.<br>
 > Adding libraries to existing components, (such as including a new library in the `blas` component) requires no script changes.
 
 ### Step-by-Step Guide
