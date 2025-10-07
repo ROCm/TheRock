@@ -89,7 +89,7 @@ jobs:
         --device /dev/dri
         --group-add 992
         --env-file /etc/podinfo/gha-gpu-isolation-settings
-        --user 0:0
+        # --user 0:0
     needs: [test_sanity_check, configure_test_matrix]
     # skip tests if no test matrix to run and sanity check only requested
     if: ${{ needs.configure_test_matrix.outputs.components != '[]' && !inputs.sanity_check_only }}
