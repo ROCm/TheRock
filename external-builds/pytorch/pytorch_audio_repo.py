@@ -53,10 +53,10 @@ DEFAULT_PATCHSET = None
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
         command_parser.add_argument(
-            "--repo",
+            "--checkout-dir",
             type=Path,
             default=THIS_DIR / THIS_MAIN_REPO_NAME,
-            help="Git repository path",
+            help=f"Directory path where the git repo is cloned into. Default is {THIS_DIR / THIS_MAIN_REPO_NAME}",
         )
         command_parser.add_argument(
             "--gitrepo-origin",
