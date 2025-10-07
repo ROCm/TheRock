@@ -1,4 +1,15 @@
 if(THEROCK_ENABLE_CORE_RUNTIME)
+  # On Linux, we compile core libraries with our own LLVM. This gets us the
+  # best optimizations and, most importantly, gives us uniform access to
+  # sanitizers. Currently, some of these projects, though, are hard-coded
+  # for MSVC on Windows, so on that platform, just build them with the system
+  # compiler.
+  # TODO: Switch windows to use our own clang.
+  set(_system_toolchain "amd-llvm")
+  if(WIN32)
+    set(_system_toolchain "")
+  endif()
+
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -8,6 +19,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ROCR-Runtime"
     BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      "${_system_toolchain}"
     CMAKE_ARGS
       "-DBUILD_SHARED_LIBS=ON"
     BUILD_DEPS
@@ -45,6 +58,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocminfo"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocminfo"
     BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      "${_system_toolchain}"
     RUNTIME_DEPS
       ROCR-Runtime
   )
@@ -104,6 +119,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     INTERFACE_PROGRAM_DIRS
       bin
     BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      "${_system_toolchain}"
     CMAKE_ARGS
       "-DHIP_PLATFORM=amd"
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
@@ -162,6 +179,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       EXTERNAL_SOURCE_DIR "hipInfo"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
       BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"
         "-DHIP_TESTS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests"
