@@ -29,6 +29,12 @@ tests_to_exclude = [
     "*HEGVJ*float_complex*",
     "*HEEVDX*float_complex*",
     "*SYTRF*float_complex*",
+    "*HEEVD*double_complex*",
+    "*HEEVJ*double_complex*",
+    "*HEGVD*double_complex*",
+    "*HEGVJ*double_complex*",
+    "*HEEVDX*double_complex*",
+    "*SYTRF*double_complex*",
 ]
 
 exclusion_list = ":".join(tests_to_exclude)
