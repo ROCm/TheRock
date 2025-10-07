@@ -40,15 +40,55 @@ TheRock provides two types of release tarballs:
 
 #### Nightly Tarballs
 
+Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.PATCHrcYYYYMMDD`
+
+**To find and use a nightly release:**
+
 1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/)
-1. Find the version you want (versions are date-stamped)
-1. Use the full version string with `--release`
+1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
+   - Example: `therock-dist-linux-gfx110X-dgpu-6.4.0rc20250514.tar.gz`
+1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
+   - In the example above, the version is: `6.4.0rc20250514`
+1. Use this version string with `--release`:
+   ```bash
+   python build_tools/install_rocm_from_artifacts.py \
+       --release 6.4.0rc20250514 \
+       --amdgpu-family gfx110X-dgpu
+   ```
+
+**Version format:** `X.Y.ZrcYYYYMMDD`
+
+- `X.Y.Z` = ROCm version (e.g., `6.4.0`)
+- `rc` = release candidate indicator
+- `YYYYMMDD` = build date (e.g., `20250514` = May 14, 2025)
 
 #### Dev Tarballs
 
+Dev tarballs are built from specific commits and follow the naming pattern: `MAJOR.MINOR.PATCH.dev0+{COMMIT_HASH}`
+
+**To find and use a dev release:**
+
 1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/)
-1. Find the version corresponding to the commit you want
-1. Use the full version string with `--release`
+1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
+   - Example: `therock-dist-linux-gfx94X-dcgpu-6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9.tar.gz`
+1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
+   - In the example above, the version is: `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
+1. Use this version string with `--release`:
+   ```bash
+   python build_tools/install_rocm_from_artifacts.py \
+       --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 \
+       --amdgpu-family gfx94X-dcgpu
+   ```
+
+**Version format:** `X.Y.Z.dev0+{HASH}`
+
+- `X.Y.Z` = ROCm version (e.g., `6.4.0`)
+- `dev0` = development build indicator
+- `{HASH}` = full Git commit hash (40 characters)
+
+> [!TIP]
+> You can browse the S3 buckets directly in your browser to see all available versions and GPU families.
+> The version string to use with `--release` is always the portion of the filename between the GPU family and `.tar.gz`.
 
 ## Usage Examples
 
