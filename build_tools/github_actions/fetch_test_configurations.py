@@ -57,7 +57,7 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
