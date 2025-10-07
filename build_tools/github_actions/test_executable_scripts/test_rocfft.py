@@ -25,7 +25,7 @@ if test_type == "smoke":
     test_filter = "--gtest_filter=*smoke*"
 else:
     test_filter = "--gtest_filter=*pre_checkin*"
-    
+
 cmd = [
     f"{THEROCK_BIN_DIR}/rocfft-test",
     "--gtest_filter=-*multi_gpu*",
