@@ -100,6 +100,21 @@ By default TheRock root dir is determined based on this script's location.""",
         help="""Inverts the selection. Only runs skipped tests.""",
     )
 
+    p.add_argument(
+        "-k",
+        default="",
+        required=False,
+        help="""Overwrites the pytest -k option that decides which tests should be run or skipped""",
+    )
+
+    p.add_argument(
+        "--no-cache",
+        default=False,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
+    )
+
     args = p.parse_args(argv)
     return args
 
@@ -126,6 +141,9 @@ if __name__ == "__main__":
     # Debugging: Get lists of tests always skipped and only run on those
     # tests_to_skip = skipped_tests.get_tests(amdgpu_family, pytorch_version, False)
 
+    if not args.k == "":
+        tests_to_skip = args.k
+
     pytorch_dir = f"{root_dir}/external-builds/pytorch/pytorch"
     setup_env(pytorch_dir)
 
@@ -148,14 +166,11 @@ if __name__ == "__main__":
         #         Forced to 0 (disabled) when used with --pdb.
     ]
 
-    debug_pytorch_args = [
-        # "-p",
-        # "no:cacheprovider",  # disable caching: useful when running in
-        # a container but wanting to use read-only TheRock
-        # from the host system via setting INPUT_THEROCK_ROOT_DIR
-        "--tb=no",
-        "--maxfail=9999",
-    ]
+    if args.no_cache:
+        pytorch_args += [
+            "-p",
+            "no:cacheprovider",  # disable caching: useful when running in
+        ]
 
     # pytorch_args += debug_pytorch_args
 
