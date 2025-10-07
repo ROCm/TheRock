@@ -12,6 +12,7 @@ therock_cmake_subproject_declare(therock-flatbuffers
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   CMAKE_ARGS
+    -DFLATBUFFERS_BUILD_TESTS=OFF
 )
 therock_cmake_subproject_provide_package(therock-flatbuffers flatbuffers lib/cmake)
 therock_cmake_subproject_activate(therock-flatbuffers)
