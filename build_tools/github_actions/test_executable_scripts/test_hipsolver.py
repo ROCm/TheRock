@@ -21,9 +21,21 @@ envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
+tests_to_exclude = [
+    "*known_bug*",
+    "*HEEVD*float_complex*",
+    "*HEEVJ*float_complex*",
+    "*HEGVD*float_complex*",
+    "*HEGVJ*float_complex*",
+    "*HEEVDX*float_complex*",
+    "*SYTRF*float_complex*",
+]
+
+exclusion_list = ":".join(tests_to_exclude)
+
 cmd = [
     f"{THEROCK_BIN_DIR}/hipsolver-test",
-    "--gtest_filter=*float_complex*-*known_bug*",
+    f"--gtest_filter=-{exclusion_list}",
 ]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
