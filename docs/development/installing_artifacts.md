@@ -9,7 +9,7 @@ The script supports the following command-line options:
 | Option | Type | Description |
 |--------|------|-------------|
 | `--output-dir` | Path | Output directory for TheRock installation (default: `./therock-build`) |
-| `--amdgpu-family` | String | AMD GPU family target (required). See [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake) for available options |
+| `--amdgpu-family` | String | AMD GPU family target (required) |
 | `--run-id` | String | GitHub CI workflow run ID to install from |
 | `--release` | String | Release version from nightly or dev tarballs |
 | `--input-dir` | String | Existing TheRock directory to copy from |
