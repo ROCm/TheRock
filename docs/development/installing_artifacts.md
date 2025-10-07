@@ -27,10 +27,10 @@ The script supports the following command-line options:
 To use the `--run-id` option, you need to find the GitHub Actions workflow run ID:
 
 1. Navigate to the [TheRock Actions page](https://github.com/ROCm/TheRock/actions)
-2. Click on the "CI" workflow
-3. Find a successful run (green checkmark)
-4. Click on the run to view details
-5. The run ID is the number in the URL: `https://github.com/ROCm/TheRock/actions/runs/[RUN_ID]`
+1. Click on the "CI" workflow
+1. Find a successful run (green checkmark)
+1. Click on the run to view details
+1. The run ID is the number in the URL: `https://github.com/ROCm/TheRock/actions/runs/[RUN_ID]`
 
 For example, if the URL is `https://github.com/ROCm/TheRock/actions/runs/15575624591`, then the run ID is `15575624591`.
 
@@ -41,14 +41,14 @@ TheRock provides two types of release tarballs:
 #### Nightly Tarballs
 
 1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/)
-2. Find the version you want (versions are date-stamped)
-3. Use the full version string with `--release`
+1. Find the version you want (versions are date-stamped)
+1. Use the full version string with `--release`
 
 #### Dev Tarballs
 
 1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/)
-2. Find the version corresponding to the commit you want
-3. Use the full version string with `--release`
+1. Find the version corresponding to the commit you want
+1. Use the full version string with `--release`
 
 ## Usage Examples
 
