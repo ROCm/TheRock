@@ -69,8 +69,8 @@ skip_tests = {
         ],
         "torch": [
             # FLAKY!! AssertionError: 'tensor([2.3000+4.j, 7.0000+6.j])' != 'tensor([2.30000+4.j, 7.00000+6.j])'
-            # Maybe not anymore?
-            # "test_print",
+            # (Note: this will also skip "test_print" in all other test modules)
+            "test_print",
             # ----------------
             # maybe failing
             # ----------------
