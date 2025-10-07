@@ -199,12 +199,9 @@ if(THEROCK_ENABLE_FFT)
       rocm-cmake
       therock-boost
       therock-googletest
-      therock-fftw
-      therock-fftwf
     RUNTIME_DEPS
       hip-clr
       hipRAND
-      rocRAND
   )
   therock_cmake_subproject_glob_c_sources(rocFFT
     SUBDIRS
@@ -234,8 +231,6 @@ if(THEROCK_ENABLE_FFT)
       rocm-cmake
       therock-boost
       therock-googletest
-      therock-fftw
-      therock-fftwf
     RUNTIME_DEPS
       hip-clr
       rocFFT
