@@ -31,6 +31,7 @@ from github_actions.github_actions_utils import gha_append_step_summary
 
 log = logging.getLogger(__name__)
 
+
 def extract_gpu_details(files):
 
     # Regex: r"gfx(?:\d+[A-Za-z]*|\w+)"
@@ -45,6 +46,7 @@ def extract_gpu_details(files):
         if match:
             gpu_families.add(match.group(0))
     return sorted(list(gpu_families))
+
 
 def generate_index_s3(s3_client, bucket_name, upload=False):
     # List all objects and select .tar.gz keys
@@ -97,7 +99,9 @@ def generate_index_s3(s3_client, bucket_name, upload=False):
         [f'<option value="{family}">{family}</option>' for family in gpu_families]
     )
     files_js_array = json.dumps([{"name": f[0], "mtime": f[1]} for f in files])
-    gha_append_step_summary(f"Found {len(files)} .tar.gz files in bucket '{bucket_name}'.")
+    gha_append_step_summary(
+        f"Found {len(files)} .tar.gz files in bucket '{bucket_name}'."
+    )
 
     # HTML content for displaying files
     html_content = f"""
@@ -185,13 +189,15 @@ def generate_index_s3(s3_client, bucket_name, upload=False):
                 "index.html",
                 ExtraArgs={"ContentType": "text/html"},
             )
-            
+
             # URL to the uploaded index.html
             region = s3_client.meta.region_name or "us-east-2"
             if region == "us-east-2":
                 bucket_url = f"https://{bucket_name}.s3.amazonaws.com/index.html"
             else:
-                bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/index.html"
+                bucket_url = (
+                    f"https://{bucket_name}.s3.{region}.amazonaws.com/index.html"
+                )
 
             message = f"index.html successfully uploaded. URL: {bucket_url}"
             gha_append_step_summary(message)
