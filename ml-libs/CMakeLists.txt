@@ -188,6 +188,10 @@ if(THEROCK_ENABLE_HIPDNN)
       therock-spdlog
     RUNTIME_DEPS
       hip-clr
+      therock-fmt
+      therock-flatbuffers
+      therock-nlohmann-json
+      therock-spdlog
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS

@@ -18,4 +18,12 @@ therock_cmake_subproject_declare(therock-flatbuffers
 therock_cmake_subproject_provide_package(therock-flatbuffers flatbuffers lib/cmake)
 therock_cmake_subproject_activate(therock-flatbuffers)
 
+therock_provide_artifact(flatbuffers
+  DESCRIPTOR artifact-flatbuffers.toml
+  COMPONENTS
+    dev
+  SUBPROJECT_DEPS
+    therock-flatbuffers
+)
+
 add_dependencies(therock-third-party therock-flatbuffers)
