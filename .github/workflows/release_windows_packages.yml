@@ -18,6 +18,9 @@ on:
         description: "Staging subdirectory to push the packages"
         type: string
         default: "v2-staging"
+      prerelease_version:
+        description: "(Optional) Number of the prerelease"
+        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -43,6 +46,9 @@ on:
         default: "v2-staging"
       families:
         description: "A comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`, or empty for the default list"
+        type: string
+      prerelease_version:
+        description: "(Optional) Number of the prerelease"
         type: string
       extra_cmake_options:
         description: "Extra options to pass to the CMake configure command"
@@ -93,7 +99,7 @@ jobs:
       - name: Set variables for prerelease
         if: ${{ env.release_type == 'prerelease' }}
         run: |
-          version_suffix="$(printf 'rc%(%Y%m%d)T')"
+          version_suffix="$(printf 'rc${{ inputs.prerelease_version }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "cloudfront_base_url=https://rocm.prerelease.amd.com" >> $GITHUB_ENV
 
