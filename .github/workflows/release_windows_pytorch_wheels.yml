@@ -84,13 +84,11 @@ jobs:
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
         # TODO: switch to 'nightly' to match our Linux workflows?
-        # TODO(#1677): Get 2.8 and 2.9 builds working and enable them
-        # pytorch_version: ["release/2.8", "release/2.9", "main"]
+        # TODO(#1677): Get 2.9 build working and enable it
+        # pytorch_version: ["release/2.9", "main"]
         pytorch_version: ["main"]
         include:
-          # TODO(#1677): Get 2.8 and 2.9 builds working and enable them
-          # - pytorch_version: release/2.8
-          #   pytorch_patchset: rocm_2.8
+          # TODO(#1677): Get 2.9 builds working and enable them
           # - pytorch_version: release/2.9
           #   pytorch_patchset: rocm_2.9
           - pytorch_version: main
