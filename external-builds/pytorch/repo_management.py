@@ -205,7 +205,7 @@ def get_patches_dir_name(args: argparse.Namespace) -> str | None:
 
 
 def do_hipify(args: argparse.Namespace):
-    repo_dir: Path = args.repo
+    repo_dir: Path = args.checkout_dir
     print(f"Hipifying {repo_dir}")
     build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
     if build_amd_path.exists():
@@ -266,14 +266,14 @@ def commit_hipify_module(module_path: Path):
 
 
 def commit_hipify(args: argparse.Namespace):
-    repo_dir: Path = args.repo
+    repo_dir: Path = args.checkout_dir
     all_paths = get_all_repositories(repo_dir)
     for module_path in all_paths:
         commit_hipify_module(module_path)
 
 
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
-    repo_dir: Path = args.repo
+    repo_dir: Path = args.checkout_dir
     repo_patch_dir_base = args.patch_dir
     check_git_dir = repo_dir / ".git"
     patches_dir_name = get_patches_dir_name(args)
@@ -346,10 +346,12 @@ def do_save_patches(args: argparse.Namespace):
     repo_patch_dir_base = args.patch_dir
     patches_dir_name = get_patches_dir_name(args)
     patches_dir = repo_patch_dir_base / patches_dir_name
-    save_repo_patches(args.repo, patches_dir / repo_name)
-    relative_sm_paths = list_submodules(args.repo, relative=True)
+    save_repo_patches(args.checkout_dir, patches_dir / repo_name)
+    relative_sm_paths = list_submodules(args.checkout_dir, relative=True)
     for relative_sm_path in relative_sm_paths:
-        save_repo_patches(args.repo / relative_sm_path, patches_dir / relative_sm_path)
+        save_repo_patches(
+            args.checkout_dir / relative_sm_path, patches_dir / relative_sm_path
+        )
 
 
 # Reads the ROCm maintained "related_commits" file from the given pytorch dir.
