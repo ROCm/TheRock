@@ -19,12 +19,14 @@ therock_cmake_subproject_provide_package(
   therock-fmt fmt lib/cmake/fmt)
 therock_cmake_subproject_activate(therock-fmt)
 
-therock_provide_artifact(fmt
-  DESCRIPTOR artifact-fmt.toml
-  COMPONENTS
-    dev
-  SUBPROJECT_DEPS
-    therock-fmt
-)
+if(THEROCK_ENABLE_HIPDNN)
+  therock_provide_artifact(fmt
+    DESCRIPTOR artifact-fmt.toml
+    COMPONENTS
+      dev
+    SUBPROJECT_DEPS
+      therock-fmt
+  )
+endif()
 
 add_dependencies(therock-third-party therock-fmt)

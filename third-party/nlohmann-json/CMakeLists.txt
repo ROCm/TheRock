@@ -18,12 +18,14 @@ therock_cmake_subproject_provide_package(
   therock-nlohmann-json nlohmann_json share/cmake/nlohmann_json)
 therock_cmake_subproject_activate(therock-nlohmann-json)
 
-therock_provide_artifact(nlohmann-json
-  DESCRIPTOR artifact-nlohmann-json.toml
-  COMPONENTS
-    dev
-  SUBPROJECT_DEPS
-    therock-nlohmann-json
-)
+if(THEROCK_ENABLE_HIPDNN)
+  therock_provide_artifact(nlohmann-json
+    DESCRIPTOR artifact-nlohmann-json.toml
+    COMPONENTS
+      dev
+    SUBPROJECT_DEPS
+      therock-nlohmann-json
+  )
+endif()
 
 add_dependencies(therock-third-party therock-nlohmann-json)
