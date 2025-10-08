@@ -55,6 +55,11 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
     BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DCMAKE_PREFIX_PATH="
+      "-ROCM_DIR="
+      "-DLLVM_DIR="
+      "-DOPENCL_DIR="
     COMPILER_TOOLCHAIN
       "${_system_toolchain}"
     BUILD_DEPS
