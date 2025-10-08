@@ -8,16 +8,17 @@ skip_tests = {
             # "test_side_stream_backward_overlap",
             # "test_side_stream_backward_overlap",
             #
-            # AttributeError: 'torch._C._autograd.SavedTensor' object has no attribute 'data'
-            "test_get_data_and_hooks_from_raw_saved_variable ",  # new?
-            # AssertionError: tensor(1., grad_fn=<AsStridedBackward0>) is not None -- weakref not working?
-            "test_custom_function_saving_mutated_view_no_leak",  # new?
-            #
-            # RuntimeError: Output 0 of IdOneOutputBackward is a view and is being modified inplace. This view was created inside a custom
-            # Function (or because an input was returned as-is) and the autograd logic to handle view+inplace would override the custom backward
-            # associated with the custom Function, leading to incorrect gradients. This behavior is forbidden. You can fix this by cloning the output
-            # of the custom Function.
-            "test_autograd_simple_views_python",
+            #  Test run says they are good????
+            # # AttributeError: 'torch._C._autograd.SavedTensor' object has no attribute 'data'
+            # "test_get_data_and_hooks_from_raw_saved_variable ",  # new?
+            # # AssertionError: tensor(1., grad_fn=<AsStridedBackward0>) is not None -- weakref not working?
+            # "test_custom_function_saving_mutated_view_no_leak",  # new?
+            # #
+            # # RuntimeError: Output 0 of IdOneOutputBackward is a view and is being modified inplace. This view was created inside a custom
+            # # Function (or because an input was returned as-is) and the autograd logic to handle view+inplace would override the custom backward
+            # # associated with the custom Function, leading to incorrect gradients. This behavior is forbidden. You can fix this by cloning the output
+            # # of the custom Function.
+            # "test_autograd_simple_views_python",
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
@@ -71,6 +72,7 @@ skip_tests = {
             "test_invalid_status_for_legacy_api",
         ],
         "nn": [
+            # Is now skipped.. on pytorch side
             # RuntimeError: miopenStatusUnknownError
             # MIOpen(HIP): Warning [BuildHip] In file included from /tmp/comgr-f75870/input/MIOpenDropoutHIP.cpp:32:
             # /tmp/comgr-f75870/include/miopen_rocrand.hpp:45:10: fatal error: 'rocrand/rocrand_xorwow.h' file not found

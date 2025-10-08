@@ -15,6 +15,8 @@ INPUT_THEROCK_ROOT_DIR (optional)  - To change the root directory of TheRock
 INPUT_AMDGPU_FAMILY    (optional)  - amdgpu_family as to run the tests on
                                    - names used as in "TheRock/cmake/therock_amdgpu_targets.cmake"
                                    - if not set, can lead to test failure as not enough tests might be omitted
+                                   - if not set: tries to auto-detect which amdgpu arch is available.
+                                                 selects the first one returned by amdgpu-arch
 INPUT_PYTORCH_VERSION  (optional)  - PyTorch version used for the tests
                                    - major.minor version as a string (e.g. "2.10")
                                    - if not set: auto-detection based on pytorch/version.txt
@@ -30,8 +32,7 @@ from importlib.metadata import version
 import pytest
 from pathlib import Path
 
-# TODO TODO remove just for testing
-from pprint import pprint
+import subprocess
 
 
 def setup_env(pytorch_dir):
@@ -130,6 +131,11 @@ if __name__ == "__main__":
         root_dir = script_dir.parent.parent
 
     amdgpu_family = args.amdgpu_family
+    # try auto determine amdgpu_arch
+    if amdgpu_family == "":
+        proc = subprocess.run(["amdgpu-arch"], capture=True, text=True)
+        if len(proc.stderr) == 0 and proc.returncoed == 0:  # must have been successful
+            amdgpu_family = proc.stdout.split("/n")[0]
 
     pytorch_version = args.pytorch_version
     # auto detect version by reading version string from pytorch/version.txt
