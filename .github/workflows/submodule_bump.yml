@@ -1,0 +1,66 @@
+name: Bump submodules
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+    inputs:
+      branch-name:
+        default: "bump-submodule"
+        type: string
+        description: "Branch name to use for the PR"
+        
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  GIT_BRANCH_NAME: ${{ inputs.branch-name || 'bump-submodule' }}
+
+jobs:
+  bump-submodules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+      
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "therockbot"
+          git config --global user.email "therockbot@amd.com"
+
+      - name: Run bump_submodules.py
+        run: |
+          python3 ./build_tools/bump_submodules.py \
+            --push-branch \
+            --branch-name ${{ env.GIT_BRANCH_NAME }} \
+            --components rocm-systems \
+            --no-pin-ck
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@v2
+        id: generate-token
+        with:
+          app-id: ${{ secrets.PULL_REQUEST_APP_ID }}
+          private-key: ${{ secrets.PULL_REQUEST_APP_KEY }}
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          {
+            echo "Automated submodule bump"
+            echo "This PR was automatically created by a GitHub App to update submodules."
+          } >> pr_body.txt
+          gh pr create \
+            --base main \
+            --head ${{ env.GIT_BRANCH_NAME }} \
+            --title "Weekly Submodule Bump" \
+            --body-file pr_body.txt
+
