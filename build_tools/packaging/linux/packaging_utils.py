@@ -1,9 +1,11 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+
 import json
 import sys
 from pathlib import Path
 
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 currentFuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
