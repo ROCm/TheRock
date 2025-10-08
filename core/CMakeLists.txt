@@ -56,8 +56,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     BACKGROUND_BUILD
     CMAKE_ARGS
       "-DCMAKE_PREFIX_PATH="
-      "-DLLVM_DIR="
-      "-DOPENCL_DIR="
     COMPILER_TOOLCHAIN
       "${_system_toolchain}"
     BUILD_DEPS
