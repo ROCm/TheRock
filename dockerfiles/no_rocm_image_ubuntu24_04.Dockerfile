@@ -11,6 +11,7 @@ RUN groupadd -g 109 render && usermod -a -G render,video tester
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # Set as default user
+ENTRYPOINT ["./entrypoint.sh"]
 USER tester
 
 RUN sudo apt-get update -y \
