@@ -29,7 +29,7 @@ def get_triton_version(torch_dir: Path) -> str:
 
 
 def do_checkout(args: argparse.Namespace):
-    repo_dir: Path = args.repo
+    repo_dir: Path = args.checkout_dir
     torch_dir: Path = args.torch_dir
     if not torch_dir.exists():
         raise ValueError(
