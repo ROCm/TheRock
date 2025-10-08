@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", or "dev")
+        description: The type of build version to produce ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       package_suffix:
@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", or "dev")
+        description: The type of build version to produce ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       package_suffix:
@@ -78,13 +78,20 @@ jobs:
         with:
           python-version: 3.12
 
-      # Compute version suffix based on inputs (default to 'rc')
+      # Compute version suffix based on inputs (default to 'a')
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
         run: |
-          version_suffix="$(printf 'rc%(%Y%m%d)T')"
+          version_suffix="$(printf 'a%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "cloudfront_base_url=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
+
+      - name: Set variables for prerelease
+        if: ${{ env.release_type == 'prerelease' }}
+        run: |
+          version_suffix="$(printf 'rc%(%Y%m%d)T')"
+          echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
+          echo "cloudfront_base_url=https://rocm.prerelease.amd.com" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
