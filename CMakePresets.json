@@ -22,6 +22,28 @@
       }
     },
     {
+      "name": "linux-release-asan",
+      "displayName": "Linux release asan build",
+      "description": "Ninja generator, default compiler, RelWithDebInfo and ASAN for most runtime subprojects",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "amd-llvm_BUILD_TYPE": "Release",
+        "therock-host-blas_BUILD_TYPE": "Release",
+        "therock-SuiteSparse_BUILD_TYPE": "Release",
+        "THEROCK_SANITIZER": "ASAN",
+        "amd-llvm_SANITIZER": "OFF",
+        "amd-comgr_SANITIZER": "OFF",
+        "amd-comgr-impl_SANITIZER": "OFF",
+        "hipcc_SANITIZER": "OFF",
+        "hipify_SANITIZER": "OFF",
+        "aqlprofile_SANITIZER": "OFF",
+        "rocprof-trace-decoder_SANITIZER": "OFF",
+        "rocprofiler-sdk_SANITIZER": "OFF",
+        "roctracer_SANITIZER": "OFF"
+      }
+    },
+    {
       "name": "windows-base",
       "displayName": "Windows base preset",
       "description": "Ninja generator, MSVC (cl.exe), x64 architecture",

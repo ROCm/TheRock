@@ -40,6 +40,12 @@ on:
         description: Patch directory name from where to apply existing patches.
         required: true
         type: string
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -98,7 +104,7 @@ jobs:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:9d3b77fc375d26dfcbecbeb435d9b9681728e301f434f1e2bbd9789bd004a993
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -113,6 +119,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Configure Git Identity
         run: |
@@ -182,7 +191,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
@@ -208,6 +217,9 @@ jobs:
     steps:
       - name: Checking out repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Generating target to run
         id: configure
@@ -228,11 +240,13 @@ jobs:
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
       pytorch_version: ${{ inputs.pytorch_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
 
   upload_pytorch_wheels:
     name: Release PyTorch Wheels to S3
     needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
@@ -245,10 +259,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases

@@ -67,9 +67,16 @@ RUN yum install -y epel-release && \
       gcc-toolset-12-libstdc++-devel \
       patchelf \
       vim-common \
-      git-lfs && \
-    yum clean all && \
+      git-lfs \
+    && yum clean all && \
     rm -rf /var/cache/yum
+
+######## DVC via pip ######
+# dvc's rpm package includes .so dependencies built against glib 2.29
+# settling for pip install for now, but it installs modules not needed for dvc pull
+# more dvc features may be used in upcoming sequenced builds
+RUN pip install dvc[s3]==3.62.0 && \
+    which dvc && dvc --version || true
 
 ######## Enable GCC Toolset and verify ########
 # This is a subset of what is typically sourced in the gcc-toolset enable
@@ -94,23 +101,3 @@ RUN which gcc && gcc --version && \
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
-
-######## vcpkg ########
-# vcpkg is used to install OpenMPI and can be dropped once the latter
-# is vendored into TheRock.
-WORKDIR /opt
-ENV VCPKG_HASH="3f5ad7be7693ce6ac5599ddb7cc24f260b9d44f9"
-COPY install_vcpkg.sh ./
-RUN yum install -y zip unzip
-RUN ./install_vcpkg.sh "${VCPKG_HASH}"
-
-######## OpenMPI ########
-# OpenMPI is currently not vendored into TheRock and temorarily installed
-# via vcpkg: https://github.com/ROCm/TheRock/issues/1284
-RUN /opt/vcpkg/vcpkg install openmpi:x64-linux
-ENV PATH="/opt/vcpkg/installed/x64-linux/tools/openmpi/bin:${PATH}"
-ENV PKG_CONFIG_PATH="/opt/vcpkg/installed/x64-linux/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-ENV LD_LIBRARY_PATH="/opt/vcpkg/installed/x64-linux/lib:${LD_LIBRARY_PATH}"
-
-RUN which mpicc && mpirun && \
-    mpirun --version || true

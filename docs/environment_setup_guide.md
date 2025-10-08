@@ -58,7 +58,7 @@ Based on upstream: AlmaLinux 8 with gcc toolset 12
 
 While this generally implies that the project should build on similarly versioned alternative EL distributions, do note that we install several upgraded tools (see dockerfile above) in our standard CI pipelines.
 
-Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:9d3b77fc375d26dfcbecbeb435d9b9681728e301f434f1e2bbd9789bd004a993`
+Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c`
 
 ### Ubuntu 22.04
 

@@ -192,12 +192,12 @@ LibraryEntry("roctracer64", "core", "libroctracer64.so.4", "")
 
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so.3", "amd_comgr0701.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so.3", "libhipblas.dll")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "libhipblaslt.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so.0", "hipfft.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so.1", "hiprand.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4", "hipsparse.dll")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1", "hipsolver.dll")
 LibraryEntry("rccl", "libraries", "librccl.so.1", "")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "hipblaslt.dll")
 LibraryEntry("miopen", "libraries", "libMIOpen.so.1", "MIOpen.dll")
 
 # Overall ROCM package version.

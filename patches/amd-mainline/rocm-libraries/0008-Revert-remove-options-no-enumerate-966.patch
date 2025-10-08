@@ -1,0 +1,29 @@
+From 09c7ea7e00de961ce35653b5dd4924904990f7ac Mon Sep 17 00:00:00 2001
+From: Marius Brehler <marius.brehler@amd.com>
+Date: Wed, 6 Aug 2025 16:08:22 +0000
+Subject: [PATCH 08/12] Revert "remove options --no-enumerate (#966)"
+
+This reverts commit 68a380c7dd5498a744d5d63892d7431a5aa31367.
+
+This breaks building rocBLAS on Windows.
+---
+ shared/tensile/Tensile/cmake/TensileConfig.cmake | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/shared/tensile/Tensile/cmake/TensileConfig.cmake b/shared/tensile/Tensile/cmake/TensileConfig.cmake
+index 62682d74ec..794eb10cc2 100644
+--- a/shared/tensile/Tensile/cmake/TensileConfig.cmake
++++ b/shared/tensile/Tensile/cmake/TensileConfig.cmake
+@@ -215,6 +215,9 @@ function(TensileCreateLibraryFiles
+     set(Options ${Options} "--architecture=${archString}")
+   endif()
+ 
++  # We do not need to do device enumeration at library build time.
++  set(Options ${Options} "--no-enumerate")
++
+   set(CommandLine ${Script} ${Options} ${Tensile_LOGIC_PATH} ${Tensile_OUTPUT_PATH} HIP)
+   if (WIN32 OR (VIRTUALENV_BIN_DIR AND VIRTUALENV_PYTHON_EXENAME))
+     set(CommandLine ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${CommandLine})
+-- 
+2.47.1.windows.2
+

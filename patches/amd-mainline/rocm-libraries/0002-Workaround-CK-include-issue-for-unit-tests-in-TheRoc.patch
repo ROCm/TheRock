@@ -1,0 +1,30 @@
+From f178bbe0e8c44ca948cad3b42be20c8dec2f340b Mon Sep 17 00:00:00 2001
+From: Jonathan Lichtner
+ <195780826+JonathanLichtnerAMD@users.noreply.github.com>
+Date: Thu, 3 Jul 2025 21:00:13 +0000
+Subject: [PATCH 02/12] Workaround CK include issue for unit tests in TheRock
+
+The test unit_implicitgemm_ck_util.cpp includes from CK, but this
+currently fails.  Skip this test as a temporary workaround.
+---
+ projects/miopen/test/gtest/CMakeLists.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/projects/miopen/test/gtest/CMakeLists.txt b/projects/miopen/test/gtest/CMakeLists.txt
+index 45b6d99859..5c3c58ff1a 100644
+--- a/projects/miopen/test/gtest/CMakeLists.txt
++++ b/projects/miopen/test/gtest/CMakeLists.txt
+@@ -22,6 +22,10 @@ if(MIOPEN_BACKEND_OPENCL)
+   set(SKIP_TESTS dumpTensorTest.cpp)
+ endif()
+ 
++if(NOT MIOPEN_TEST_DISCRETE)
++  set(SKIP_TESTS ${SKIP_TESTS} unit_implicitgemm_ck_util.cpp)
++endif()
++
+ function(add_gtest_negative_filter NEGATIVE_FILTER_TO_ADD)
+     set (TMP_FILTER ${MIOPEN_GTEST_FILTER_NEGATIVE})
+ 
+-- 
+2.47.1.windows.2
+

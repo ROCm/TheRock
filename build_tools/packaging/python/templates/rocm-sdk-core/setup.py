@@ -69,6 +69,7 @@ setup(
         + (
             [
                 # These tools are only available on Linux.
+                "amd-smi=rocm_sdk_core._cli:amd_smi",
                 "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
                 "rocminfo=rocm_sdk_core._cli:rocm_info",
                 "rocm-smi=rocm_sdk_core._cli:rocm_smi",

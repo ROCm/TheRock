@@ -52,6 +52,24 @@ exclude = [
 [components.lib."compiler/amd-comgr/stage"]
 [components.run."compiler/amd-comgr/stage"]
 
+# amd-comgr-stub (if enabled)
+[components.dbg."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.dev."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.doc."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.lib."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.run."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.test."compiler/amd-comgr-stub/stage"]
+optional = true
+include = [
+  "bin/test_*",
+]
+
+# hipcc
 [components.dbg."compiler/hipcc/stage"]
 [components.dev."compiler/hipcc/stage"]
 [components.doc."compiler/hipcc/stage"]

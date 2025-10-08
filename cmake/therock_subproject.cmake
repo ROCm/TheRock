@@ -18,6 +18,8 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   Python3_FIND_VIRTUALENV
   THEROCK_SOURCE_DIR
   THEROCK_BINARY_DIR
+  THEROCK_ROCM_LIBRARIES_SOURCE_DIR
+  THEROCK_ROCM_SYSTEMS_SOURCE_DIR
   THEROCK_BUILD_TESTING
   THEROCK_USE_SAFE_DEPENDENCY_PROVIDER
   ROCM_SYMLINK_LIBS
@@ -254,6 +256,10 @@ endfunction()
 #   it fails (logs will still be written). While generally not good to squelch a
 #   "chatty" build, some third party libraries are hopeless and provide little
 #   signal.
+# LOGICAL_TARGET_NAME: If conditional coding is used to alias the actual target
+#   name (i.e. foobar-old) but configuration files and directories should be
+#   named relative to some other name, then that can be specified here. This
+#   affects hooks and default choices of source and binary directories.
 #
 # RPATH handling:
 # Each subproject has default logic injected which configures the INSTALL_RPATH
@@ -294,11 +300,14 @@ function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TAGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
+  endif()
+  if(NOT ARG_LOGICAL_TARGET_NAME)
+    set(ARG_LOGICAL_TARGET_NAME "${target_name}")
   endif()
 
   cmake_path(IS_ABSOLUTE ARG_EXTERNAL_SOURCE_DIR _source_is_absolute)
@@ -429,6 +438,7 @@ function(therock_cmake_subproject_declare target_name)
   endif()
 
   set_target_properties("${target_name}" PROPERTIES
+    THEROCK_LOGICAL_TARGET_NAME "${ARG_LOGICAL_TARGET_NAME}"
     THEROCK_SUBPROJECT cmake
     THEROCK_BUILD_POOL "${_build_pool}"
     THEROCK_AMDGPU_TARGETS "${_gpu_targets}"
@@ -545,6 +555,8 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_stamp_dir "${target_name}" THEROCK_STAMP_DIR)
   get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
+  get_target_property(_logical_target_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+
   # RPATH properties: just mirror these to same named variables because we just
   # mirror them syntactically into the subprojet..
   get_target_property(THEROCK_NO_INSTALL_RPATH "${target_name}" THEROCK_NO_INSTALL_RPATH)
@@ -568,11 +580,11 @@ function(therock_cmake_subproject_activate target_name)
   set(_build_comment_suffix)
 
   # Detect pre/post hooks.
-  set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${target_name}.cmake")
+  set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${_logical_target_name}.cmake")
   if(NOT EXISTS "${_pre_hook_path}")
     set(_pre_hook_path)
   endif()
-  set(_post_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/post_hook_${target_name}.cmake")
+  set(_post_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/post_hook_${_logical_target_name}.cmake")
   if(NOT EXISTS "${_post_hook_path}")
     set(_post_hook_path)
   endif()
@@ -631,6 +643,7 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_init_contents)
+  string(APPEND _init_contents "set(THEROCK_PRIVATE_BUILD_RPATH_DIRS)\n")
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
@@ -747,6 +760,12 @@ function(therock_cmake_subproject_activate target_name)
   _therock_cmake_subproject_get_stage_dirs(
     _dist_source_dirs "${target_name}" ${_runtime_deps})
 
+  # Map THEROCK_VERBOSE to fileset_tool.py
+  set(_fileset_verbose_arg "")
+  if(THEROCK_VERBOSE)
+    set(_fileset_verbose_arg --verbose)
+  endif()
+
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
@@ -765,7 +784,7 @@ function(therock_cmake_subproject_activate target_name)
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       DEPENDS
         "${_prebuilt_file}"
@@ -899,7 +918,7 @@ function(therock_cmake_subproject_activate target_name)
       # Install to stage directory.
       COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
       # Populate local dist directory with this+all transitive stage installs.
-      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy "${_dist_dir}" ${_dist_source_dirs}
+      COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
       WORKING_DIRECTORY "${_binary_dir}"
       COMMENT "Stage installing sub-project ${target_name}"
@@ -1276,8 +1295,18 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
+  # Configure sanitizer.
+  set(_sanitizer_stanza)
+  set(_sanitizer_enabled)
+
   if(NOT compiler_toolchain)
     # Make any additional customizations if no toolchain specified.
+    therock_sanitizer_configure(
+      _sanitizer_stanza
+      _sanitizer_enabled
+      "${CMAKE_CXX_COMPILER}"
+      "${compiler_toolchain}"
+      "${target_name}")
   elseif(compiler_toolchain STREQUAL "amd-llvm" OR compiler_toolchain STREQUAL "amd-hip")
     # The "amd-llvm" and "amd-hip" toolchains are configured very similarly so
     # we commingle them, but they are different:
@@ -1312,6 +1341,13 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
+    therock_sanitizer_configure(
+      _sanitizer_stanza
+      _sanitizer_enabled
+      "${AMD_LLVM_CXX_COMPILER}"
+      "${compiler_toolchain}"
+      "${target_name}")
+
     if(THEROCK_VERBOSE)
       string(JOIN " " _filtered_gpu_targets_spaces ${_filtered_gpu_targets})
       message(STATUS "Compiler toolchain ${compiler_toolchain}:")
@@ -1320,6 +1356,9 @@ function(_therock_cmake_subproject_setup_toolchain
       message(STATUS "CMAKE_CXX_COMPILER = ${AMD_LLVM_CXX_COMPILER}")
       message(STATUS "CMAKE_LINKER = ${AMD_LLVM_LINKER}")
       message(STATUS "GPU_TARGETS = ${_filtered_gpu_targets_spaces}")
+      if(_sanitizer_enabled)
+        message(STATUS "SANITIZER = ${_sanitizer_enabled}")
+      endif()
     endif()
   else()
     message(FATAL_ERROR "Unsupported COMPILER_TOOLCHAIN = ${compiler_toolchain} (supported: 'amd-llvm' or none)")
@@ -1340,6 +1379,7 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
+  string(APPEND _toolchain_contents "${_sanitizer_stanza}")
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
