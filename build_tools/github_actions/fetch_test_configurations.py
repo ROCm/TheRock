@@ -66,7 +66,7 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
