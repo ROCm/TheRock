@@ -49,7 +49,7 @@ test_matrix = {
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -91,7 +91,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -103,7 +103,7 @@ test_matrix = {
     "rocrand": {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -120,7 +120,7 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
         "total_shards": 4,
