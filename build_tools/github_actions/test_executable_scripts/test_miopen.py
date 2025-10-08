@@ -90,6 +90,8 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
+positive_filter.append("*DBSync*")
+
 #############################################
 
 negative_filter.append("*DeepBench*")
@@ -97,7 +99,6 @@ negative_filter.append("*MIOpenTestConv*")
 
 # Failing tests
 negative_filter.append("*/GPU_KernelTuningNetTest*")
-negative_filter.append("*DBSync*")
 negative_filter.append("*/GPU_MIOpenDriver*")
 negative_filter.append("*GPU_TestMhaFind20*")
 
