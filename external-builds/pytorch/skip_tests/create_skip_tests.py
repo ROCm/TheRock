@@ -48,9 +48,10 @@ def import_skip_tests(pytorch_version=""):
             if "pytorch" in module_name:
                 msg_pytorch = f" and given pytorch_version {pytorch_version}"
             print(
-                f"Create_skip_tests.py: Failed to import module {module_name}{msg_pytorch} with path {full_path} : {ex}"
+                f"Create_skip_tests.py: Failed to import module {module_name}{msg_pytorch} with path {full_path} : {ex}",
+                file=sys.stderr,
             )
-            sys.exit(1)
+            # sys.exit(1)  # TODO do we want to exit? means each new pytorch version we would have to add a new file
 
     return dict_skipt_tests
 
