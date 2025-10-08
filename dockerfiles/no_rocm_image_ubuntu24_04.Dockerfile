@@ -6,7 +6,6 @@ RUN apt update && apt install sudo -y
 
 # Create tester user with sudo privileges and render/video permissions
 RUN useradd -m -s /bin/bash -U -G sudo tester
-RUN usermod -aG docker tester
 RUN groupadd -g 109 render && usermod -a -G render,video tester
 # New added for disable sudo password
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
