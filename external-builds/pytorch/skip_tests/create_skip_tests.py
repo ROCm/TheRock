@@ -115,9 +115,15 @@ Output can be used with 'pytest -k <list>'""",
 
 def get_tests(amdgpu_family="", pytorch_version="", create_skip_list=True):
     if create_skip_list == True:
-        print("Creating list of tests to be skipped... ", end="")
+        print(
+            f"Creating list of tests to be skipped for amdgpu_family {amdgpu_family} and PyTorch verison {pytorch_version}... ",
+            end="",
+        )
     else:
-        print("Creating list of tests to be included... ", end="")
+        print(
+            "Creating list of tests to be included for amdgpu_family {amdgpu_family} and PyTorch verison {pytorch_version}... ",
+            end="",
+        )
 
     tests = create_list(amdgpu_family=amdgpu_family, pytorch_version=pytorch_version)
 
