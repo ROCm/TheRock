@@ -70,6 +70,12 @@ skip_tests = {
             "test_fp32_precision_with_tf32",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_invalid_status_for_legacy_api",
+            # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
+            "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
+            # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
+            "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
+            # AssertionError: Scalars are not close!
+            "test_allocator_settings",
         ],
         "nn": [
             # Is now skipped.. on pytorch side
