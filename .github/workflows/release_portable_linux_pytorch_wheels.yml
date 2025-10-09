@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       s3_subdir:
@@ -44,7 +44,7 @@ on:
           - gfx950-dcgpu
         default: gfx94X-dcgpu
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       s3_subdir:
