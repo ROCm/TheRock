@@ -59,12 +59,12 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
-      gcc-toolset-12-binutils \
-      gcc-toolset-12-gcc \
-      gcc-toolset-12-gcc-c++ \
-      gcc-toolset-12-gcc-gfortran \
-      gcc-toolset-12-libatomic-devel \
-      gcc-toolset-12-libstdc++-devel \
+      gcc-toolset-13-binutils \
+      gcc-toolset-13-gcc \
+      gcc-toolset-13-gcc-c++ \
+      gcc-toolset-13-gcc-gfortran \
+      gcc-toolset-13-libatomic-devel \
+      gcc-toolset-13-libstdc++-devel \
       patchelf \
       vim-common \
       git-lfs \
