@@ -89,8 +89,8 @@ ENV LIBRARY_PATH=""
 ENV LD_LIBRARY_PATH=""
 ENV DEVTOOLSET_ROOTPATH="/opt/rh/gcc-toolset-13/root"
 ENV PATH="/opt/rh/gcc-toolset-13/root/usr/bin:${PATH}"
-ENV LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:${LIBRARY_PATH}"
-ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:${LD_LIBRARY_PATH}"
+ENV LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-13/root/usr/lib:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-13/root/usr/lib:${LD_LIBRARY_PATH}"
 
 ######## Enable GCC Toolset and verify ########
 RUN which gcc && gcc --version && \
