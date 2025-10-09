@@ -47,9 +47,6 @@ skip_tests = {
             # TestCuda under test_cuda.py, failing on gfx942 (#1143) --> not on sharkmi300x-4
             #    "test_float32_matmul_precision_get_set ",
             #
-            # Explicitly deselected since givind segfault
-            #    "test_unused_output_device_cuda",  # this test does not exist in nightly anymore
-            #    "test_pinned_memory_empty_cache",
             # ----------------
         ],
         "nn": [
