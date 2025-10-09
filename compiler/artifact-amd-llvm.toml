@@ -7,6 +7,7 @@ unmatched_exclude = [
   # Various docs or utilities we don't care about.
   "lib/llvm/share/clang-doc/**",
   "lib/llvm/share/clang/**",
+  "lib/llvm/lib/amdgcn-amd-amdhsa/**"
 ]
 
 # LLVM deviates from the defaults in some key ways:

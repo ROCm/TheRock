@@ -125,6 +125,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       "-DHIP_PLATFORM=amd"
       "-DHIP_COMMON_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip"
       "-DCLR_BUILD_HIP=ON"
+      "-DBUILD_ICD=ON"
       # Legacy: Disable various auto-detection logic that breaks out of jail
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="

@@ -13,7 +13,7 @@ if(WIN32)
   # TODO(#36): Enable libunwind, libcxx, and libcxxabi on Windows?
   #     Should they be supported? What depends on them?
   set(LLVM_ENABLE_LIBCXX OFF)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "libcxx;libcxxabi;libunwind;openmp;offload;compiler-rt;flang-rt" CACHE STRING "Enabled runtimes" FORCE)
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
@@ -57,6 +57,7 @@ endif()
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
 set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
@@ -77,9 +78,9 @@ set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING
 # options to manage this transition but they require knowing the clange resource
 # dir. In order to avoid drift, we just fixate that too. This can all be
 # removed in a future version.
-# set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
+set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
+set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/lib/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
+set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
 
 # Setup the install rpath (let CMake handle build RPATH per usual):
 # * Executables and libraries can always search their adjacent lib directory
@@ -136,14 +137,12 @@ block()
     OPT
     YAML2OBJ
   )
-  if(WIN32)
     # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
     # we might as well build them from source ourselves.
     list(APPEND _llvm_required_tools "LLVM_AR")
     list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
     list(APPEND _llvm_required_tools "LLVM_LIB")
     list(APPEND _llvm_required_tools "LLVM_RANLIB")
-  endif()
   therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
 
   # Clang tools that are required.

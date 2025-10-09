@@ -50,10 +50,15 @@ if(THEROCK_ENABLE_ROCPROFV3)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
+    # INTERFACE_INCLUDE_DIRS not working as expected so add compiler flags
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DCMAKE_CXX_FLAGS=-I${THEROCK_SOURCE_DIR}/build/dist/rocm/include
+      -DCMAKE_C_FLAGS=-I${THEROCK_SOURCE_DIR}/build/dist/rocm/include
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    INTERFACE_INCLUDE_DIRS
+      ${THEROCK_SOURCE_DIR}/build/dist/rocm/include
     RUNTIME_DEPS
       aqlprofile
       hip-clr
@@ -89,10 +94,14 @@ if(THEROCK_ENABLE_ROCPROFV3)
       amd-hip
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DCMAKE_CXX_FLAGS=-I${THEROCK_SOURCE_DIR}/build/dist/rocm/include
+      -DCMAKE_C_FLAGS=-I${THEROCK_SOURCE_DIR}/build/dist/rocm/include
     INTERFACE_INCLUDE_DIRS
       # All old clients of roctx64 expect to just be able to find its include
       # with no further qualification. Bad design, but also deprecated, so meh.
       include
+      # to include hip/* stuff
+      ${THEROCK_SOURCE_DIR}/build/dist/rocm/include
     INTERFACE_LINK_DIRS
       # So that dependents can find the roctx library via find_library()
       lib
