@@ -18,6 +18,9 @@ on:
         description: "Staging subdirectory to push the packages"
         type: string
         default: "v2-staging"
+      families:
+        description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
+        type: string
       prerelease_version:
         description: "(Optional) Number of the prerelease"
         type: string
@@ -63,8 +66,6 @@ jobs:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     env:
-      S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
-      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.release_information.outputs.version }}
@@ -90,29 +91,33 @@ jobs:
         run: |
           version_suffix="$(printf 'a%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.nightlies.amd.com/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.nightlies.amd.com/v2-staging" >> $GITHUB_ENV
+
 
       - name: Set variables for prerelease
         if: ${{ env.release_type == 'prerelease' }}
         run: |
-          version_suffix="$(printf 'rc${{ inputs.prerelease_version }}"
+          version_suffix="rc${{ inputs.prerelease_version }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://rocm.prerelease.amd.com" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://d3j6fjkrc11mxv.cloudfront.net/whl" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://d3j6fjkrc11mxv.cloudfront.net/whl-staging" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
           version_suffix=".dev0+${{ github.sha }}"
-          echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://d25kgig7rdsyks.cloudfront.net" >> $GITHUB_ENV
+          echo "version_suffix=${version_suffix}" >> $GITHUB_ENVV
+          echo "tmp_cloudfront_url=https://d25kgig7rdsyks.cloudfront.net/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://d25kgig7rdsyks.cloudfront.net/v2-staging" >> $GITHUB_ENV
 
       - name: Generate release information
         id: release_information
         run: |
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
-          echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
-          echo "cloudfront_staging_url=${cloudfront_base_url}/${{ env.S3_STAGING_SUBDIR }}" >> $GITHUB_OUTPUT
+          echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
+          echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -266,11 +271,14 @@ jobs:
             }
 
       - name: URL-encode .tar URL
+        # TODO: Enable JAX wheels for prereleases
+        if: ${{ env.release_type != 'prerelease' }}
         id: url-encode-tar
         run: python -c "from urllib.parse import quote; print('tar_url=https://therock-${{ env.RELEASE_TYPE }}-tarball.s3.amazonaws.com/' + quote('therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz'))" >> ${GITHUB_OUTPUT}
 
       - name: Trigger build JAX wheels
-        if: ${{ github.repository_owner == 'ROCm' }}
+        # TODO: Enable JAX wheels for prereleases
+        if: ${{ env.release_type != 'prerelease' && github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
           workflow: build_linux_jax_wheels.yml

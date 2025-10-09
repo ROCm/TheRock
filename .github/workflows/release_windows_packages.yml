@@ -99,7 +99,7 @@ jobs:
       - name: Set variables for prerelease
         if: ${{ env.release_type == 'prerelease' }}
         run: |
-          version_suffix="$(printf 'rc${{ inputs.prerelease_version }}"
+          version_suffix="rc${{ inputs.prerelease_version }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "cloudfront_base_url=https://rocm.prerelease.amd.com" >> $GITHUB_ENV
 
