@@ -68,9 +68,6 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
-      # TheRock features.
-      "-DTHEROCK_ENABLE_FLANG=${THEROCK_ENABLE_FLANG}"
-
       ${_extra_llvm_cmake_args}
     BUILD_DEPS
       rocm-cmake
