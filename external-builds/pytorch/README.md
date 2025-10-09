@@ -28,13 +28,14 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature              | Linux support                              | Windows support |
-| ------------------------------ | ------------------------------------------ | --------------- |
-| torch                          | ✅ Supported                               | ✅ Supported    |
-| torchaudio                     | ✅ Supported                               | ✅ Supported    |
-| torchvision                    | ✅ Supported                               | ✅ Supported    |
-| Flash attention via [ao]triton | ✅ Supported                               | ✅ Supported    |
-|                                | (only for versions < 2.10, disabled ≥2.10) |                 |
+<!-- TODO: Add when aotriton was enabled on Windows (2.10) -->
+
+| Project / feature              | Linux support                                                                                                                 | Windows support |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| torch                          | ✅ Supported                                                                                                                  | ✅ Supported    |
+| torchaudio                     | ✅ Supported                                                                                                                  | ✅ Supported    |
+| torchvision                    | ✅ Supported                                                                                                                  | ✅ Supported    |
+| Flash attention via [ao]triton | ✅ Supported for torch < 2.10<br>❌ Disabled for torch ≥ 2.10 (see [Issue#1408](https://github.com/ROCm/TheRock/issues/1408)) | ✅ Supported    |
 
 ### Supported PyTorch versions
 
@@ -52,6 +53,8 @@ Each PyTorch version uses a combination of:
 
 See the following table for how each version is supported. Previously supported
 versions are no longer being built but may have existing wheels in the [nightly build repo](https://rocm.nightlies.amd.com/v2/).
+
+<!-- TODO: update this support table once we publish 2.9 stable for Linux and Windows -->
 
 | PyTorch version      | Linux                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Windows                                                                                                                                                                                                                                                                                            |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -127,9 +130,9 @@ Now checkout repositories using their default branches:
 - On Windows, use shorter paths to avoid command length limits:
 
   ```batch
-  python pytorch_torch_repo.py checkout --repo C:/b/pytorch
-  python pytorch_audio_repo.py checkout --repo C:/b/audio
-  python pytorch_vision_repo.py checkout --repo C:/b/vision
+  python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
+  python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
+  python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
   ```
 
 Now note the gfx target you want to build for and then...
@@ -241,8 +244,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   python ./build_tools/fetch_artifacts.py \
     --run-id=17123441166 \
     --target=gfx110X-dgpu \
-    --output-dir=$HOME/.therock/17123441166/artifacts \
-    --all
+    --output-dir=$HOME/.therock/17123441166/artifacts
 
   python ./build_tools/build_python_packages.py \
     --artifact-dir=$HOME/.therock/17123441166/artifacts \

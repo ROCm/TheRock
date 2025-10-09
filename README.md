@@ -66,6 +66,7 @@ cd TheRock
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches
@@ -96,6 +97,7 @@ cd TheRock
 # Init python virtual environment and install python dependencies
 python -m venv .venv
 .venv\Scripts\Activate.bat
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches

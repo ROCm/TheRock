@@ -10,15 +10,7 @@ Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
 
-Or, to fetch _all_ artifacts and not just a subset (this is safest for packaging
-workflows where dependencies may not be accurately modeled, at the cost of
-additional disk space):
-  python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
-    --all
-
-Alternatively, include/exclude regular expressions can be given to control what
-is downloaded (this implies --all):
+Include/exclude regular expressions can be given to control what is downloaded:
   python build_tools/fetch_artifacts.py \
     --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
     amd-llvm base 'core-(hip|runtime)' sysdeps \
@@ -52,10 +44,8 @@ import time
 from urllib3.exceptions import InsecureRequestWarning
 import warnings
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent
-sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
-from github_actions_utils import *
+from github_actions.github_actions_utils import retrieve_bucket_info
 
 
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
@@ -105,7 +95,7 @@ class BucketMetadata:
         self.s3_key_path = f"{self.external_repo}{self.workflow_run_id}-{self.platform}"
 
 
-def retrieve_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str):
+def list_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str) -> set[str]:
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     s3_key_path = bucket_info.s3_key_path
     log(
@@ -115,19 +105,52 @@ def retrieve_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str):
     page_iterator = paginator.paginate(Bucket=bucket_info.bucket, Prefix=s3_key_path)
     data = set()
     for page in page_iterator:
-        if "Contents" in page:
-            for artifact in page["Contents"]:
-                artifact_key = artifact["Key"]
-                if (
-                    "sha256sum" not in artifact_key
-                    and "tar.xz" in artifact_key
-                    and (amdgpu_family in artifact_key or "generic" in artifact_key)
-                ):
-                    file_name = artifact_key.split("/")[-1]
-                    data.add(file_name)
+        if not "Contents" in page:
+            continue
+
+        for artifact in page["Contents"]:
+            artifact_key = artifact["Key"]
+            if (
+                "sha256sum" not in artifact_key
+                and "tar.xz" in artifact_key
+                and (amdgpu_family in artifact_key or "generic" in artifact_key)
+            ):
+                file_name = artifact_key.split("/")[-1]
+                data.add(file_name)
     if not data:
         log(f"Found no S3 artifacts for {bucket_info.run_id} at '{s3_key_path}'")
     return data
+
+
+def filter_artifacts(
+    artifacts: set[str], includes: list[str], excludes: list[str]
+) -> set[str]:
+    """Filters artifacts based on include and exclude regex lists"""
+
+    def _should_include(artifact_name: str) -> bool:
+        if not includes and not excludes:
+            return True
+
+        # If includes, then one include must match.
+        if includes:
+            for include in includes:
+                pattern = re.compile(include)
+                if pattern.search(artifact_name):
+                    break
+            else:
+                return False
+
+        # If excludes, then no excludes must match.
+        if excludes:
+            for exclude in excludes:
+                pattern = re.compile(exclude)
+                if pattern.search(artifact_name):
+                    return False
+
+        # Included and not excluded.
+        return True
+
+    return {a for a in artifacts if _should_include(a)}
 
 
 @dataclass
@@ -140,30 +163,6 @@ class ArtifactDownloadRequest:
 
     def __str__(self):
         return f"{self.bucket}:{self.artifact_key}"
-
-
-def collect_artifacts_download_requests(
-    artifact_names: list[str],
-    bucket_info: BucketMetadata,
-    output_dir: Path,
-    variant: str,
-    existing_artifacts: set[str],
-) -> list[ArtifactDownloadRequest]:
-    """Collects S3 artifact URLs to execute later in parallel."""
-    artifacts_to_retrieve = []
-    for artifact_name in artifact_names:
-        file_name = f"{artifact_name}_{variant}.tar.xz"
-        # If artifact does exist in s3 bucket
-        if file_name in existing_artifacts:
-            artifacts_to_retrieve.append(
-                ArtifactDownloadRequest(
-                    artifact_key=f"{bucket_info.s3_key_path}/{file_name}",
-                    bucket=bucket_info.bucket,
-                    output_path=output_dir / file_name,
-                )
-            )
-
-    return artifacts_to_retrieve
 
 
 def download_artifact(
@@ -204,28 +203,23 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
             future.result(timeout=60)
 
 
-def filter_all_artifacts(
+def get_artifact_download_requests(
     bucket_info: BucketMetadata,
-    target: str,
-    output_dir: Path,
     s3_artifacts: set[str],
+    output_dir: Path,
 ) -> list[ArtifactDownloadRequest]:
-    """Filters to all available artifacts."""
-    artifacts_to_retrieve = []
+    """Gets artifact download requests from requested artifacts."""
+    artifacts_to_download = []
 
     for artifact in sorted(list(s3_artifacts)):
-        an = ArtifactName.from_filename(artifact)
-        if an.target_family != "generic" and target != an.target_family:
-            continue
-
-        artifacts_to_retrieve.append(
+        artifacts_to_download.append(
             ArtifactDownloadRequest(
                 artifact_key=f"{bucket_info.s3_key_path}/{artifact}",
                 bucket=bucket_info.bucket,
                 output_path=output_dir / artifact,
             )
         )
-    return artifacts_to_retrieve
+    return artifacts_to_download
 
 
 def get_postprocess_mode(args) -> str | None:
@@ -235,83 +229,6 @@ def get_postprocess_mode(args) -> str | None:
     if args.no_extract:
         return None
     return "extract"
-
-
-def filter_base_artifacts(
-    args: argparse.Namespace,
-    bucket_info: BucketMetadata,
-    output_dir: Path,
-    s3_artifacts: set[str],
-) -> list[ArtifactDownloadRequest]:
-    """Filters TheRock base artifacts."""
-    base_artifacts = [
-        "core-runtime_run",
-        "core-runtime_lib",
-        "sysdeps_lib",
-        "base_run",
-        "base_lib",
-        "amd-llvm_run",
-        "amd-llvm_lib",
-        "core-hip_lib",
-        "core-hip_dev",
-        "rocprofiler-sdk_lib",
-        "host-suite-sparse_lib",
-    ]
-    if args.blas:
-        base_artifacts.append("host-blas_lib")
-
-    artifacts_to_retrieve = collect_artifacts_download_requests(
-        base_artifacts, bucket_info, output_dir, "generic", s3_artifacts
-    )
-    return artifacts_to_retrieve
-
-
-def filter_enabled_artifacts(
-    args: argparse.Namespace,
-    target: str,
-    bucket_info: BucketMetadata,
-    output_dir: Path,
-    s3_artifacts: set[str],
-) -> list[ArtifactDownloadRequest]:
-    """Filters TheRock artifacts using based on the enabled arguments.
-
-    If no artifacts have been collected, we assume that we want to install the default subset.
-    If `args.tests` have been enabled, we also collect test artifacts.
-    """
-    artifact_paths = []
-    all_artifacts = ["blas", "fft", "miopen", "prim", "rand"]
-    # RCCL is disabled for Windows
-    if PLATFORM != "windows":
-        all_artifacts.append("rccl")
-
-    if args.blas:
-        artifact_paths.append("blas")
-    if args.fft:
-        artifact_paths.append("fft")
-    if args.miopen:
-        artifact_paths.append("miopen")
-    if args.prim:
-        artifact_paths.append("prim")
-    if args.rand:
-        artifact_paths.append("rand")
-    if args.rccl and PLATFORM != "windows":
-        artifact_paths.append("rccl")
-
-    enabled_artifacts = []
-
-    # In the case that no library arguments were passed and base_only args is false, we install all artifacts
-    if not artifact_paths and not args.base_only:
-        artifact_paths = all_artifacts
-
-    for base_path in artifact_paths:
-        enabled_artifacts.append(f"{base_path}_lib")
-        if args.tests:
-            enabled_artifacts.append(f"{base_path}_test")
-
-    artifacts_to_retrieve = collect_artifacts_download_requests(
-        enabled_artifacts, bucket_info, output_dir, target, s3_artifacts
-    )
-    return artifacts_to_retrieve
 
 
 def extract_artifact(
@@ -363,69 +280,55 @@ def run(args):
         platform=args.platform,
     )
 
-    s3_artifacts = retrieve_s3_artifacts(bucket_info=bucket_info, amdgpu_family=target)
+    # Lookup which artifacts exist in the bucket.
+    # Note: this currently does not check that all requested artifacts
+    # (via include patterns) do exist, so this may silently fail to fetch
+    # expected files.
+    s3_artifacts = list_s3_artifacts(bucket_info=bucket_info, amdgpu_family=target)
     if not s3_artifacts:
-        log(f"S3 artifacts for {run_id} does not exist. Exiting...")
+        log(f"No matching artifacts for {run_id} exist. Exiting...")
         sys.exit(1)
 
-    # Filter the artifacts we will retrieve.
-    artifacts_to_retrieve: list[ArtifactDownloadRequest] | None = None
-    if args.include:
-        args.all = True
-    if args.all:
-        artifacts_to_retrieve = filter_all_artifacts(
-            bucket_info, target, output_dir, s3_artifacts
-        )
-    else:
-        artifacts_to_retrieve = filter_base_artifacts(
-            args, bucket_info, output_dir, s3_artifacts
-        )
-        if not args.base_only:
-            artifacts_to_retrieve.extend(
-                filter_enabled_artifacts(
-                    args, target, bucket_info, output_dir, s3_artifacts
-                )
-            )
-
     # Include/exclude filtering.
-    def _should_include(artifact: ArtifactDownloadRequest) -> bool:
-        if not args.include:
-            return True
-        # If includes, then one include must match.
-        for include in args.include:
-            pattern = re.compile(include)
-            if pattern.search(artifact.artifact_key):
-                break
-        else:
-            return False
-        # If excludes, then no excludes must match.
-        if args.exclude:
-            for exclude in args.exclude:
-                pattern = re.compile(exclude)
-                if pattern.search(artifact.artifact_key):
-                    return False
-        return True
+    s3_artifacts_filtered = filter_artifacts(s3_artifacts, args.include, args.exclude)
+    if not s3_artifacts_filtered:
+        log(f"Filtering artifacts for {run_id} resulted in an empty set. Exiting...")
+        sys.exit(1)
 
-    artifacts_to_retrieve = [a for a in artifacts_to_retrieve if _should_include(a)]
+    artifacts_to_download = get_artifact_download_requests(
+        bucket_info=bucket_info,
+        s3_artifacts=s3_artifacts_filtered,
+        output_dir=output_dir,
+    )
 
-    joined_artifact_summary = "\n  ".join([str(item) for item in artifacts_to_retrieve])
-    log(f"Downloading in parallel:\n  {joined_artifact_summary}\n")
+    download_summary = "\n  ".join([str(item) for item in artifacts_to_download])
+    log(f"\nFiltered artifacts to download:\n  {download_summary}\n")
+
+    if args.dry_run:
+        log("Skipping downloads since --dry-run was set")
+        return
 
     # Download and extract in parallel.
-    postprocess_mode = get_postprocess_mode(args)
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=args.download_concurrency
-    ) as download_executor, concurrent.futures.ThreadPoolExecutor(
-        max_workers=args.extract_concurrency
-    ) as extract_executor:
+    ) as download_executor:
         download_futures = [
             download_executor.submit(download_artifact, req)
-            for req in artifacts_to_retrieve
+            for req in artifacts_to_download
         ]
-        extract_futures: list[concurrent.futures.Future] = []
-        for download_future in concurrent.futures.as_completed(download_futures):
-            download_result = download_future.result(timeout=60)
-            if postprocess_mode:
+
+        postprocess_mode = get_postprocess_mode(args)
+        if not postprocess_mode:
+            # No postprocessing to do, wait on downloads then return.
+            [f.result() for f in download_futures]
+            return
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=args.extract_concurrency
+        ) as extract_executor:
+            extract_futures: list[concurrent.futures.Future] = []
+            for download_future in concurrent.futures.as_completed(download_futures):
+                download_result = download_future.result(timeout=60)
                 extract_futures.append(
                     extract_executor.submit(
                         extract_artifact,
@@ -435,11 +338,38 @@ def run(args):
                     )
                 )
 
-        [f.result() for f in extract_futures]
+            [f.result() for f in extract_futures]
 
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="fetch_artifacts")
+
+    filter_group = parser.add_argument_group("Artifact filtering")
+    filter_group.add_argument(
+        "include",
+        nargs="*",
+        help="Regular expression patterns of artifacts to include: "
+        "if supplied one pattern must match for an artifact to be included",
+    )
+    filter_group.add_argument(
+        "--exclude",
+        nargs="*",
+        help="Regular expression patterns of artifacts to exclude",
+    )
+    filter_group.add_argument(
+        "--platform",
+        type=str,
+        choices=["linux", "windows"],
+        default=platform.system().lower(),
+        help="Platform to download artifacts for (matches artifact folder name suffixes in S3)",
+    )
+    filter_group.add_argument(
+        "--target",
+        type=str,
+        required=True,
+        help="Target variant for specific GPU target",
+    )
+
     parser.add_argument(
         "--download-concurrency",
         type=int,
@@ -462,31 +392,21 @@ def main(argv):
         required=True,
         help="GitHub run ID to retrieve artifacts from",
     )
-
-    parser.add_argument(
-        "--target",
-        type=str,
-        required=True,
-        help="Target variant for specific GPU target",
-    )
-
-    parser.add_argument(
-        "--platform",
-        type=str,
-        choices=["linux", "windows"],
-        default=platform.system().lower(),
-        help="Platform to download artifacts for (matches artifact folder name suffixes in S3)",
-    )
-
     parser.add_argument(
         "--output-dir",
         type=Path,
         default="build/artifacts",
         help="Output path for fetched artifacts, defaults to `build/artifacts/` as in source builds",
     )
+    parser.add_argument(
+        "--dry-run",
+        default=False,
+        help="If set, will only log which artifacts would be fetched without downloading or extracting",
+        action=argparse.BooleanOptionalAction,
+    )
 
-    # Post processing mode
-    postprocess_p = parser.add_mutually_exclusive_group()
+    postprocess_group = parser.add_argument_group("Postprocessing")
+    postprocess_p = postprocess_group.add_mutually_exclusive_group()
     postprocess_p.add_argument(
         "--no-extract",
         default=False,
@@ -505,91 +425,14 @@ def main(argv):
         action="store_true",
         help="Flattens artifacts after fetching them",
     )
-
-    parser.add_argument(
+    postprocess_group.add_argument(
         "--delete-after-extract",
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Delete archive files after extraction",
     )
-    artifacts_group = parser.add_argument_group("artifacts_group")
-    artifacts_group.add_argument(
-        "--all",
-        default=False,
-        help="Include all artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    parser.add_argument(
-        "include",
-        nargs="*",
-        help="Regular expression patterns of artifacts to include (implies --all): "
-        "if supplied one pattern must match for an artifact to be included",
-    )
-    parser.add_argument(
-        "--exclude",
-        nargs="*",
-        help="Regular expression patterns of artifacts to exclude",
-    )
-
-    artifacts_group.add_argument(
-        "--blas",
-        default=False,
-        help="Include 'blas' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    artifacts_group.add_argument(
-        "--fft",
-        default=False,
-        help="Include 'fft' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    artifacts_group.add_argument(
-        "--miopen",
-        default=False,
-        help="Include 'miopen' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    artifacts_group.add_argument(
-        "--prim",
-        default=False,
-        help="Include 'prim' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    artifacts_group.add_argument(
-        "--rand",
-        default=False,
-        help="Include 'rand' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    artifacts_group.add_argument(
-        "--rccl",
-        default=False,
-        help="Include 'rccl' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-    artifacts_group.add_argument(
-        "--tests",
-        default=False,
-        help="Include all test artifacts for enabled libraries",
-        action=argparse.BooleanOptionalAction,
-    )
-    artifacts_group.add_argument(
-        "--base-only", help="Include only base artifacts", action="store_true"
-    )
 
     args = parser.parse_args(argv)
-
-    if (args.all or args.include) and (
-        args.blas
-        or args.fft
-        or args.miopen
-        or args.prim
-        or args.rand
-        or args.rccl
-        or args.tests
-        or args.base_only
-    ):
-        parser.error("--all cannot be set together with artifact group options")
 
     run(args)
 

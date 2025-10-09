@@ -667,7 +667,6 @@ def download_and_extract_artifacts(run_id, gfxarch):
                 "--target",
                 gfxarch_params,
                 "--extract",
-                "--all",
                 "--output-dir",
                 ARTIFACTS_DIR,
             ],

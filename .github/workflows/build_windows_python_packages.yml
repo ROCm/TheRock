@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   build:
-    name: Build | ${{ inputs.amdgpu_family }}
+    name: Build Python | ${{ inputs.amdgpu_family }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"

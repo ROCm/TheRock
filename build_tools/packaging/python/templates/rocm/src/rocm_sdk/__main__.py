@@ -34,6 +34,19 @@ def _do_path(args: argparse.Namespace):
         sys.exit(1)
 
 
+def _do_init(args: argparse.Namespace):
+    from . import _devel
+
+    try:
+        # The function `_devel.get_devel_root()` calls into `_expand_devel_contents`
+        # if contents for development were not yet unpacked.
+        root_path = _devel.get_devel_root()
+    except ModuleNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Devel contents expanded to '{root_path}'")
+
+
 def _do_test(args: argparse.Namespace):
     import unittest
 
@@ -126,6 +139,12 @@ def main(argv: list[str] | None = None):
         "targets", help="Print information about the GPU targets that are supported"
     )
     targets_p.set_defaults(func=_do_targets)
+
+    # 'init' subcommand.
+    init_p = sub_p.add_parser(
+        "init", help="Expand devel contents to initialize rocm[devel]"
+    )
+    init_p.set_defaults(func=_do_init)
 
     args = p.parse_args(argv)
     args.func(args)
