@@ -92,9 +92,9 @@ RUN pip install dvc[s3]==3.62.0 && \
 # -- Predefine variables to avoid Dockerfile linting warnings --
 # Docker requires environment variables to be defined before reuse.
 ENV LIBRARY_PATH=""
-ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
-ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}"
-ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
+ENV PATH="/opt/rh/gcc-toolset-13/root/usr/bin:${PATH}"
+ENV LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:${LD_LIBRARY_PATH}"
 
 ######## Enable GCC Toolset and verify ########
 RUN which gcc && gcc --version && \
