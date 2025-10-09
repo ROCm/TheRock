@@ -131,6 +131,7 @@ if __name__ == "__main__":
         root_dir = script_dir.parent.parent
 
     amdgpu_family = args.amdgpu_family
+    print("amdgpu_family", amdgpu_family)
     # try auto determine amdgpu_arch
     if amdgpu_family == "":
         proc = subprocess.run(["amdgpu-arch"], capture=True, text=True)
@@ -139,6 +140,8 @@ if __name__ == "__main__":
             print(f"AMDGPU Arch auto-detected: {amdgpu_family}")
         else:
             print(f"AMDGPU arch auto-detectiong FAILED: {proc.stderr}")
+    if "GFX94X" in amdgpu_family.upper():
+        amdgpu_family = "gfx942"
 
     pytorch_version = args.pytorch_version
     # auto detect version by reading version string from pytorch/version.txt
