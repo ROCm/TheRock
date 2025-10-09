@@ -202,7 +202,7 @@ jobs:
         run: |
           mkdir -p ${{ env.OUTPUT_DIR }}/packages/dist/
           touch  ${{ env.OUTPUT_DIR }}/packages/dist/therock-tmp-${{ matrix.target_bundle.amdgpu_family }}.whl
-          ./build_tools/linux_portable_build.py \
+      #    ./build_tools/linux_portable_build.py \
       #       --image=${{ env.BUILD_IMAGE }} \
       #       --output-dir=${{ env.OUTPUT_DIR }}/packages \
       #       --build-python-only \
