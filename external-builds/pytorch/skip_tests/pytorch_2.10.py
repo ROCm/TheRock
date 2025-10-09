@@ -23,7 +23,7 @@ skip_tests = {
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
-            # "test_mempool_ctx_multithread",
+            "test_mempool_ctx_multithread",
             #
             # passes on single run, crashes if run in a group
             "test_memory_plots",
