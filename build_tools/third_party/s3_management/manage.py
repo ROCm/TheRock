@@ -54,6 +54,8 @@ CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
 if CUSTOM_PREFIX:
     PREFIXES.append(CUSTOM_PREFIX)
 
+STRIP_PREFIX = getenv('STRIP_PREFIX', '')
+
 # NOTE: This refers to the name on the wheels themselves and not the name of
 # package as specified by setuptools, for packages with "-" (hyphens) in their
 # names you need to convert them to "_" (underscores) in order for them to be
@@ -287,8 +289,9 @@ class S3Index:
             if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
                 attributes += ' data-requires-python="&gt;=3.10"'
 
+            stripped_key = obj.key.lstrip(STRIP_PREFIX) if STRIP_PREFIX else obj.key
             out.append(
-                f'    <a href="/{obj.key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
+                f'    <a href="{stripped_key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
             )
         # Adding html footer
         out.append('  </body>')
