@@ -136,6 +136,9 @@ if __name__ == "__main__":
         proc = subprocess.run(["amdgpu-arch"], capture=True, text=True)
         if len(proc.stderr) == 0 and proc.returncoed == 0:  # must have been successful
             amdgpu_family = proc.stdout.split("/n")[0]
+            print(f"AMDGPU Arch auto-detected: {amdgpu_family}")
+        else:
+            print(f"AMDGPU arch auto-detectiong FAILED: {proc.stderr}")
 
     pytorch_version = args.pytorch_version
     # auto detect version by reading version string from pytorch/version.txt
