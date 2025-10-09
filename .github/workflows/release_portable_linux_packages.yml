@@ -136,7 +136,7 @@ jobs:
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64:stage-gcc-toolset-13-update
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
