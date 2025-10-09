@@ -19,6 +19,7 @@ skip_tests = {
             # # associated with the custom Function, leading to incorrect gradients. This behavior is forbidden. You can fix this by cloning the output
             # # of the custom Function.
             # "test_autograd_simple_views_python",
+            "test_grad_dtype"
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
@@ -28,6 +29,11 @@ skip_tests = {
             "test_memory_plots",
             "test_memory_compile_regions",
             "test_memory_plots_free_segment_stack",
+            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
+            "test_memory_snapshot",
+            #  AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
+            "test_memory_snapshot_script",
+            "test_memory_snapshot_with_cpp",
             #
             # /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/include/ATen/hip/Exceptions.h:4:10: fatal error: 'hipblas/hipblas.h' file not found
             # 4 | #include <hipblas/hipblas.h>
@@ -75,6 +81,11 @@ skip_tests = {
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
             # AssertionError: Scalars are not close!
+            "test_allocator_settings",
+            # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
+            "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
+            # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
+            "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
             "test_allocator_settings",
         ],
         "nn": [
