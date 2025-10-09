@@ -102,8 +102,8 @@ jobs:
         run: |
           version_suffix="rc${{ inputs.prerelease_version }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "tmp_cloudfront_url=https://d3j6fjkrc11mxv.cloudfront.net/whl" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://d3j6fjkrc11mxv.cloudfront.net/whl-staging" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.prereleases.amd.com/whl" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.prereleases.amd.com/whl-staging" >> $GITHUB_ENV
           echo "tmp_s3_bucket_tar=therock-${{ env.release_type }}-tarball/v3/tarball/" >> $GITHUB_ENV
 
       - name: Set variables for development release
