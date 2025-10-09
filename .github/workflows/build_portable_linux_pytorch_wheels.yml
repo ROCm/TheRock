@@ -204,6 +204,7 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
+          export CUSTOM_PREFIX="${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}
 
   generate_target_to_run:
@@ -294,4 +295,5 @@ jobs:
         if: ${{ env.upload == 'true' }}
         run: |
           pip install boto3 packaging
+          export CUSTOM_PREFIX="${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
           python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
