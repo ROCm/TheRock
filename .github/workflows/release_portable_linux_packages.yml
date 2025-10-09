@@ -73,6 +73,7 @@ jobs:
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
       cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
+      s3_bucket_tar: ${{ steps.release_information.outputs.s3_bucket_tar }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -93,6 +94,7 @@ jobs:
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "tmp_cloudfront_url=https://rocm.nightlies.amd.com/v2" >> $GITHUB_ENV
           echo "tmp_cloudfront_staging_url=https://rocm.nightlies.amd.com/v2-staging" >> $GITHUB_ENV
+          echo "tmp_s3_bucket_tar=therock-${{ env.release_type }}-tarball" >> $GITHUB_ENV
 
 
       - name: Set variables for prerelease
@@ -102,6 +104,7 @@ jobs:
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "tmp_cloudfront_url=https://d3j6fjkrc11mxv.cloudfront.net/whl" >> $GITHUB_ENV
           echo "tmp_cloudfront_staging_url=https://d3j6fjkrc11mxv.cloudfront.net/whl-staging" >> $GITHUB_ENV
+          echo "tmp_s3_bucket_tar=therock-${{ env.release_type }}-tarball/v3/tarball/" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
@@ -110,6 +113,7 @@ jobs:
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "tmp_cloudfront_url=https://d25kgig7rdsyks.cloudfront.net/v2" >> $GITHUB_ENV
           echo "tmp_cloudfront_staging_url=https://d25kgig7rdsyks.cloudfront.net/v2-staging" >> $GITHUB_ENV
+          echo "tmp_s3_bucket_tar=therock-${{ env.release_type }}-tarball" >> $GITHUB_ENV
 
       - name: Generate release information
         id: release_information
@@ -118,6 +122,7 @@ jobs:
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
           echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
           echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
+          echo "s3_bucket_tar=${tmp_s3_bucket_tar}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -145,7 +150,7 @@ jobs:
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
-      S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
+      S3_BUCKET_TAR: ${{ needs.setup_metadata.outputs.s3_bucket_tar }}
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
