@@ -28,6 +28,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Convert slashes in branch name to dashes for tag names.
+      # Other restrictions for git branch names and docker tag names mostly match.
       - name: Determine Docker tag
         id: tag
         run: |
@@ -38,8 +40,7 @@ jobs:
           elif [[ "$ref" == "main" ]]; then
             echo "TAG_SUFFIX=latest" >> "$GITHUB_OUTPUT"
           else
-            safe_ref=$(echo "$ref" | tr '/' '-')
-            echo "TAG_SUFFIX=${safe_ref}" >> "$GITHUB_OUTPUT"
+            echo "TAG_SUFFIX=${ref}" >> "$GITHUB_OUTPUT"
           fi
 
       # Adds extra tags to the image, with the default tags from https://github.com/docker/metadata-action#tags-input
