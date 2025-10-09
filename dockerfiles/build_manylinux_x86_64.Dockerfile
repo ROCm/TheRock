@@ -5,7 +5,7 @@
 #   sudo docker run --rm -it --entrypoint /bin/bash <<IMAGE>>
 #
 # To build and push to a test branch, create a pull request on a branch named:
-#   docker*
+#   stage/docker/*
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
