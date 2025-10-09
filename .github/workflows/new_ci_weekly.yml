@@ -4,7 +4,7 @@
 # In the scheduled run, we run all targets from amdgpu_family_matrix.py and amdgpu_family_matrix_xfail.py
 # As some of these builds are xfail, we allow errors to occur with `continue-on-error`, where the job will fail but the workflow is green
 
-name: CI Weekly (New)
+name: WIP!!! CI Weekly (New)
 
 on:
   # For AMD GPU families that expect_failure, we run builds and tests from this scheduled trigger
