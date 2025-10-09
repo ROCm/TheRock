@@ -21,6 +21,9 @@ if(THEROCK_ENABLE_LLAMA_CPP)
       -DGGML_HIP_ROCWMMA_FATTN=OFF
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DHIP_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      # Solves the issue with libomp.so
+      -DCMAKE_BUILD_RPATH="${THEROCK_BINARY_DIR}/external-builds/llama.cpp/llamacpp/dist/lib/llvm/lib"
+      -DCMAKE_INSTALL_RPATH="${THEROCK_BINARY_DIR}/external-builds/llama.cpp/llamacpp/dist/lib/llvm/lib"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
