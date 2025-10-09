@@ -42,11 +42,6 @@ skip_tests = {
             # ----------------
             # "test_hip_device_count"
             # "test_nvtx"
-            #
-            # gfx942
-            # TestCuda under test_cuda.py, failing on gfx942 (#1143) --> not on sharkmi300x-4
-            #    "test_float32_matmul_precision_get_set ",
-            #
             # ----------------
         ],
         "nn": [
