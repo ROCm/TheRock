@@ -235,6 +235,7 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
+          export CUSTOM_PREFIX=${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
 
       ## TODO: Restrict uploading to the non-staging S3 directory until ROCm sanity checks and all validation tests have successfully passed.
@@ -252,6 +253,7 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
+          export CUSTOM_PREFIX=${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
 
       - name: Trigger building PyTorch wheels
