@@ -133,6 +133,12 @@ def upload_missing_whls(
         # Skip i686 packages
         if "i686" in pkg:
             continue
+        # Skip iphoneos packages
+        if "iphoneos" in pkg:
+            continue
+        # Skip iphonesimulator packages
+        if "iphonesimulator" in pkg:
+            continue
         # Skip unsupported Python version
         if "cp39" in pkg:
             continue
