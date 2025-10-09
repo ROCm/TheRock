@@ -141,7 +141,7 @@ def run():
     platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    test_type = os.getenv("TEST_TYPE", "full")
+    test_type = os.getenv("TEST_TYPE", "smoke")
     test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
 
     logging.info(f"Selecting projects: {project_to_test}")
@@ -152,6 +152,7 @@ def run():
     output_matrix = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
+        job_test_type = test_type
 
         # If the test is disabled for a particular platform, skip the test
         if (
@@ -173,8 +174,13 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name}")
+            # In the case that the project was specified for testing, we run a full test suite
+            if key in project_array:
+                job_test_type = "full"
+
+            logging.info(f"Including job {job_name} with test_type {job_test_type}")
             job_config_data = test_matrix[key]
+            job_config_data["test_type"] = job_test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
