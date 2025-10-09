@@ -36,7 +36,6 @@ skip_tests = {
             # NEW ERROR
             # RuntimeError: Error building extension 'dummy_allocator'
             "test_mempool_with_allocator",
-            # "test_graph_concurrent_replay",  # flaky on gfx942!! not anymore?
             # ----------------
             # maybe failing
             # ----------------
