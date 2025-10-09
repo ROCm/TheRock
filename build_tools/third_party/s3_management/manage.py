@@ -274,6 +274,7 @@ class S3Index:
         out.append('<html>')
         out.append('  <body>')
         out.append('    <h1>Links for {}</h1>'.format(package_name.lower().replace("_", "-")))
+        print(f'STRIP_PREFIX: {STRIP_PREFIX}')
         for obj in sorted(self.gen_file_list(subdir, package_name)):
             # Do not include checksum for nightly packages, see
             # https://github.com/pytorch/test-infra/pull/6307
@@ -288,8 +289,8 @@ class S3Index:
             # Ugly hack: mark networkx-3.3, 3.4.2 as Python-3.10+ only to unblock https://github.com/pytorch/pytorch/issues/152191
             if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
                 attributes += ' data-requires-python="&gt;=3.10"'
-
             stripped_key = obj.key.lstrip(STRIP_PREFIX) if STRIP_PREFIX else obj.key
+            print(f'stripped_key: {stripped_key}')
             out.append(
                 f'    <a href="{stripped_key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
             )
