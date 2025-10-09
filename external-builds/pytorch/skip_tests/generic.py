@@ -63,11 +63,6 @@ skip_tests = {
             # FLAKY!! AssertionError: 'tensor([2.3000+4.j, 7.0000+6.j])' != 'tensor([2.30000+4.j, 7.00000+6.j])'
             # (Note: this will also skip "test_print" in all other test modules)
             "test_print",
-            # ----------------
-            # maybe failing
-            # ----------------
-            # "test_index_add_correctness",
-            # ----------------
         ],
         "unary_ufuncs": [
             # ----------------
