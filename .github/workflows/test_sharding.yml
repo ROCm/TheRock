@@ -6,14 +6,13 @@ on:
     branches:
       - madkasul/delme_shardedTestWorkflow
 
-
 permissions:
   contents: read
   id-token: write
 
 jobs:
   sharded_test_linux_nightly:
-    name: ROCK Tests Sharded Linux Nightly
+    name: TheRock Tests Sharded Linux Nightly
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
@@ -22,8 +21,11 @@ jobs:
           fetch-depth: 2
 
       - name: Run Tests
+        env:
+          KUBE_CONFIG: ${{ secrets.THEROCK_KUBE_CONFIG_SECRET }}
         run: |
-          kubectl -n rocmci get pods
-          kubectl -n rocmci apply -f tests/sharding/spec.yaml
+          echo $KUBE_CONFIG >> kube_config
+          kubectl --kubeconfig kube_config -n rocmci get pods
+          kubectl --kubeconfig kube_config -n rocmci apply -f tests/sharding/spec.yaml
           sleep 30
-          kubectl -n rocmci get pods
+          kubectl --kubeconfig kube_config -n rocmci get pods
