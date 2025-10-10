@@ -124,6 +124,7 @@ block()
   # It is empically derived (either configure or ninja invocation will fail
   # on a missing tool).
   set(_llvm_required_tools
+    LLVM_AR
     LLVM_CONFIG
     LLVM_DWARFDUMP
     LLVM_JITLINK
@@ -139,7 +140,6 @@ block()
   if(WIN32)
     # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
     # we might as well build them from source ourselves.
-    list(APPEND _llvm_required_tools "LLVM_AR")
     list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
     list(APPEND _llvm_required_tools "LLVM_LIB")
     list(APPEND _llvm_required_tools "LLVM_RANLIB")
