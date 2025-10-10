@@ -80,6 +80,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DENABLE_TESTS=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     RUNTIME_DEPS

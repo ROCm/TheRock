@@ -6,5 +6,5 @@
 [components.run."profiler/rocprofiler-compute/stage"]
 [components.test."profiler/rocprofiler-compute/stage"]
 include = [
-  "**/tests/**",
+  "**/tests/*",
 ]
