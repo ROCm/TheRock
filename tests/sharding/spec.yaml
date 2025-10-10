@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: rocmci
+  name: rock-tests-7-0-0rc20250924
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rock-tests-7-0-0rc20250924
+  template:
+    metadata:
+      labels:
+        app: rock-tests-7-0-0rc20250924
+    spec:
+      containers:
+        - name: rock-tests-7-0-0rc20250924
+          image: ubuntu:22.04
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update && apt-get install -y git python3 python3-pip python3-venv;
+              pip install urllib3 requests
+              python3 -m venv .venv && source /.venv/bin/activate;
+              pip install boto3 awscli;
+              git clone https://github.com/ROCm/TheRock.git;
+              cd TheRock;
+              pip install -r requirements.txt;
+              python build_tools/install_rocm_from_artifacts.py --release 7.9.0rc20250925 --amdgpu-family gfx94X-dcgpu;
+              export THEROCK_DIR=/TheRock/therock-build
+              $THEROCK_DIR/bin/rocm-smi;
+              git checkout madkasul/testSharding
+              cd tests/sharding;
+              pip install -r requirements.txt;
+              pytest -s -v --tb=short tests.py -k rocprim --rock=$THEROCK_DIR
+              tail -f /dev/null;
+          securityContext:
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - video
+          resources:
+            requests:
+              amd.com/gpu: 4
+            limits:
+              amd.com/gpu: 4
+      hostIPC: false
+      hostNetwork: false
+      hostPID: false
