@@ -32,6 +32,7 @@
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
   * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
+  * test_type: The type of test that component tests will run (i.e. smoke, full)
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
