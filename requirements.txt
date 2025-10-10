@@ -24,7 +24,6 @@ pandas>=1.4.3
 plotext
 plotille
 pymongo
-pyyaml
 sqlalchemy>=2.0.42
 tabulate
 textual
