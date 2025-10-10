@@ -4,4 +4,4 @@
 
 list(APPEND THEROCK_PRIVATE_INSTALL_RPATH_DIRS "lib/hipdnn_plugins/engines")
 
-message(STATUS "Added lib/hipdnn_plugins/engines to THEROCK_PRIVATE_INSTALL_RPATH_DIRS for MIOpen-plugin")
+message(STATUS "Added lib/hipdnn_plugins/engines to THEROCK_PRIVATE_INSTALL_RPATH_DIRS for MIOpen_plugin")

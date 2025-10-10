@@ -212,14 +212,14 @@ if(THEROCK_ENABLE_HIPDNN)
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
-if(THEROCK_ENABLE_HIPDNN AND THEROCK_ENABLE_MIOPEN)
+if(THEROCK_ENABLE_MIOPEN_PLUGIN)
   ##############################################################################
   # hipDNN MIOpen plugin
   ##############################################################################
 
-  therock_cmake_subproject_declare(MIOpen-plugin
+  therock_cmake_subproject_declare(MIOpen_plugin
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/plugins/miopen_legacy_plugin"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopen_legacy_plugin"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopen_plugin"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -240,11 +240,11 @@ if(THEROCK_ENABLE_HIPDNN AND THEROCK_ENABLE_MIOPEN)
     RUNTIME_DEPS
       MIOpen
   )
-  therock_cmake_subproject_glob_c_sources(MIOpen-plugin
+  therock_cmake_subproject_glob_c_sources(MIOpen_plugin
   SUBDIRS
     .
   )
-  therock_cmake_subproject_activate(MIOpen-plugin)
+  therock_cmake_subproject_activate(MIOpen_plugin)
 
   therock_provide_artifact(miopen-plugin
     DESCRIPTOR artifact-miopen-plugin.toml
@@ -253,6 +253,6 @@ if(THEROCK_ENABLE_HIPDNN AND THEROCK_ENABLE_MIOPEN)
       lib
       test
     SUBPROJECT_DEPS
-      MIOpen-plugin
+      MIOpen_plugin
   )
-endif(THEROCK_ENABLE_HIPDNN AND THEROCK_ENABLE_MIOPEN)
+endif(THEROCK_ENABLE_MIOPEN_PLUGIN)
