@@ -59,12 +59,12 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
-      gcc-toolset-12-binutils \
-      gcc-toolset-12-gcc \
-      gcc-toolset-12-gcc-c++ \
-      gcc-toolset-12-gcc-gfortran \
-      gcc-toolset-12-libatomic-devel \
-      gcc-toolset-12-libstdc++-devel \
+      gcc-toolset-13-binutils \
+      gcc-toolset-13-gcc \
+      gcc-toolset-13-gcc-c++ \
+      gcc-toolset-13-gcc-gfortran \
+      gcc-toolset-13-libatomic-devel \
+      gcc-toolset-13-libstdc++-devel \
       patchelf \
       vim-common \
       git-lfs \
@@ -89,12 +89,16 @@ RUN pip install dvc[s3]==3.62.0 && \
 ######## Enable GCC Toolset and verify ########
 # This is a subset of what is typically sourced in the gcc-toolset enable
 # script.
+# The base manylinux container has references to its gcc-toolset in its PATHs,
+# clean up LIBRARY_PATH and LD_LIBRARY_PATH since we yum remove that version.
 # -- Predefine variables to avoid Dockerfile linting warnings --
 # Docker requires environment variables to be defined before reuse.
 ENV LIBRARY_PATH=""
-ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
-ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}"
-ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH=""
+ENV DEVTOOLSET_ROOTPATH="/opt/rh/gcc-toolset-13/root"
+ENV PATH="/opt/rh/gcc-toolset-13/root/usr/bin:${PATH}"
+ENV LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-13/root/usr/lib:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-13/root/usr/lib:${LD_LIBRARY_PATH}"
 
 ######## Enable GCC Toolset and verify ########
 RUN which gcc && gcc --version && \

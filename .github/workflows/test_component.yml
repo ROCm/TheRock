@@ -31,7 +31,7 @@ jobs:
         --group-add video
         --device /dev/kfd
         --device /dev/dri
-        --group-add 992
+        --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
     strategy:
       fail-fast: false
