@@ -162,6 +162,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("blas")
         if args.fft:
             extra_artifacts.append("fft")
+            extra_artifacts.append("fftw3")
         if args.miopen:
             extra_artifacts.append("miopen")
         if args.prim:
