@@ -45,10 +45,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         -DBUILD_SHARED_LIBS=ON
-        # TODO: DYNAMIC_ARCH=ON produces illegal elf files
-        # See: https://github.com/ROCm/TheRock/issues/83
-        -DDYNAMIC_ARCH=OFF
-        -DC_LAPACK=ON
+        -DTARGET=CORE2
+        -DDYNAMIC_ARCH=ON
+        -DDYNAMIC_OLDER=ON
         -DBUILD_TESTING=OFF
       EXTRA_DEPENDS
         "${_download_stamp}"
