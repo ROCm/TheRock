@@ -1,4 +1,4 @@
-name: TheRock Sanity Check
+name: TheRock Sharded Tests
 
 on:
   workflow_dispatch:
