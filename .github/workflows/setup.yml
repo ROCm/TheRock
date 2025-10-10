@@ -16,7 +16,7 @@ on:
         description: Windows families to run builds and tests for.
         value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
       test_type:
-        description: Test type to run (e.g. smoke, full).
+        description: The test type to run for component tests (i.e. smoke, full)
         value: ${{ jobs.setup.outputs.test_type }}
       windows_test_labels:
         description: ROCm projects to run Windows tests on. Optional filter.
