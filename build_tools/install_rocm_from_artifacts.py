@@ -14,8 +14,8 @@ python build_tools/install_rocm_from_artifacts.py
     [--output-dir OUTPUT_DIR]
     [--amdgpu-family AMDGPU_FAMILY]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
-    [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--prim | --no-prim]
-    [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
+    [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--miopen_plugin | --no-miopen_plugin]
+    [--prim | --no-prim] [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
 
 Examples:
 - Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 14474448215
@@ -155,7 +155,16 @@ def retrieve_artifacts_by_run_id(args):
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
-        [args.blas, args.fft, args.hipdnn, args.miopen, args.prim, args.rand, args.rccl]
+        [
+            args.blas,
+            args.fft,
+            args.hipdnn,
+            args.miopen,
+            args.miopen_plugin,
+            args.prim,
+            args.rand,
+            args.rccl,
+        ]
     ):
         argv.extend(base_artifact_patterns)
 
@@ -168,6 +177,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.miopen:
             extra_artifacts.append("miopen")
+        if args.miopen_plugin:
+            extra_artifacts.append("miopen_plugin")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
@@ -318,6 +329,13 @@ def main(argv):
         "--miopen",
         default=False,
         help="Include 'miopen' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--miopen_plugin",
+        default=False,
+        help="Include 'miopen_plugin' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

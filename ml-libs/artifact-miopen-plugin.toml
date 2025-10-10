@@ -1,0 +1,11 @@
+# miopen-plugin
+[components.dbg."ml-libs/miopen-plugin/stage"]
+[components.lib."ml-libs/miopen-plugin/stage"]
+exclude = [
+  "lib/*.a",
+]
+[components.test."ml-libs/miopen-plugin/stage"]
+include = [
+  "bin/miopen_*_test*",
+  "bin/CTestTestfile.cmake",
+]
