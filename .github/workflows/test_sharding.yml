@@ -24,7 +24,7 @@ jobs:
         env:
           KUBE_CONFIG: ${{ secrets.THEROCK_KUBE_CONFIG_SECRET }}
         run: |
-          echo $KUBE_CONFIG >> kube_config
+          echo "$KUBE_CONFIG" >> kube_config
           kubectl --kubeconfig kube_config -n rocmci get pods
           kubectl --kubeconfig kube_config -n rocmci apply -f tests/sharding/spec.yaml
           sleep 30
