@@ -2,6 +2,10 @@ name: TheRock Sharded Tests
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - madkasul/delme_shardedTestWorkflow
+
 
 permissions:
   contents: read
