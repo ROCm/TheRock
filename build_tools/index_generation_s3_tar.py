@@ -48,11 +48,12 @@ def extract_gpu_details(files):
     return sorted(list(gpu_families))
 
 
-def generate_index_s3(s3_client, bucket_name, upload=False):
+def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
+    prefix = prefix.lstrip("/").rstrip("/")
     # List all objects and select .tar.gz keys
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(Bucket=bucket_name)
+        page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
     except NoCredentialsError:
         # Preserve specific exception type for callers to handle
         log.exception(
@@ -73,8 +74,10 @@ def generate_index_s3(s3_client, bucket_name, upload=False):
     for page in page_iterator:
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            if key.endswith(".tar.gz"):
-                files.append((key, obj["LastModified"].timestamp()))
+            if key.endswith(".tar.gz") and os.path.dirname(key) == prefix:
+                files.append(
+                    (key.removeprefix(f"{prefix}/"), obj["LastModified"].timestamp())
+                )
 
     if not files:
         raise FileNotFoundError(f"No .tar.gz files found in bucket {bucket_name}.")
@@ -85,6 +88,8 @@ def generate_index_s3(s3_client, bucket_name, upload=False):
         page_title = "ROCm SDK dev tarballs"
     elif "nightly" in bucket_lower or "nightlies" in bucket_lower:
         page_title = "ROCm SDK nightly tarballs"
+    elif "prerelease" in bucket_lower:
+        page_title = "ROCm SDK prerelease tarballs"
     else:
         page_title = "ROCm SDK tarballs"
 
@@ -180,24 +185,25 @@ def generate_index_s3(s3_client, bucket_name, upload=False):
 
     message = f"index.html generated successfully for bucket '{bucket_name}'. File saved as {local_path}"
     gha_append_step_summary(message)
-    # Upload to bucket root
+    # Upload to bucket
+    upload_prefix = f"{prefix}/" if prefix else ""
     if upload:
         try:
             s3_client.upload_file(
                 local_path,
                 bucket_name,
-                "index.html",
+                f"{upload_prefix}index.html",
                 ExtraArgs={"ContentType": "text/html"},
             )
 
             # URL to the uploaded index.html
             region = s3_client.meta.region_name or "us-east-2"
             if region == "us-east-2":
-                bucket_url = f"https://{bucket_name}.s3.amazonaws.com/index.html"
-            else:
                 bucket_url = (
-                    f"https://{bucket_name}.s3.{region}.amazonaws.com/index.html"
+                    f"https://{bucket_name}.s3.amazonaws.com/{upload_prefix}index.html"
                 )
+            else:
+                bucket_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{upload_prefix}index.html"
 
             message = f"index.html successfully uploaded. URL: {bucket_url}"
             gha_append_step_summary(message)
@@ -236,6 +242,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Upload index.html back to S3 (default: do not upload)",
     )
+    parser.add_argument(
+        "--directory",
+        default="",
+        help="Directory to index. Defaults to the top level directory.",
+    )
     args = parser.parse_args()
     s3 = boto3.client("s3", region_name=args.region)
-    generate_index_s3(s3_client=s3, bucket_name=args.bucket, upload=args.upload)
+    generate_index_s3(
+        s3_client=s3, bucket_name=args.bucket, prefix=args.directory, upload=args.upload
+    )
