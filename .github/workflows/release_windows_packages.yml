@@ -294,11 +294,12 @@ jobs:
 
       # TODO(marbre): guard against race conditions where multiple workflows update the index at the same time?
       #    Moving the index computation server-side could help
-      - name: (Re-)Generate Python package release index
+      - name: (Re-)Generate release index pages
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
+          python ./build_tools/index_generation_s3_tar.py --bucket ${{ env.S3_BUCKET_TAR }} --upload
 
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' }}

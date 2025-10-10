@@ -289,9 +289,10 @@ class S3Index:
             if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
                 attributes += ' data-requires-python="&gt;=3.10"'
 
-            stripped_key = obj.key.lstrip(STRIP_PREFIX) if STRIP_PREFIX else obj.key
+            stripped_key = obj.key.removeprefix(STRIP_PREFIX) if STRIP_PREFIX else obj.key
+
             out.append(
-                f'    <a href="{stripped_key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
+                f'    <a href="/{stripped_key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
             )
         # Adding html footer
         out.append('  </body>')
