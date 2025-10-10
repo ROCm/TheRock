@@ -141,7 +141,7 @@ def run():
     platform = os.getenv("RUNNER_OS").lower()
     project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
-    test_type = os.getenv("TEST_TYPE", "smoke")
+    test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
 
     logging.info(f"Selecting projects: {project_to_test}")
@@ -174,7 +174,7 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key in project_array or "*" in project_array
         ):
-            # In the case that the project was specified for testing, we run a full test suite
+            # In the case that the project was specified for build and test, we run a full test suite
             if key in project_array:
                 job_test_type = "full"
 
