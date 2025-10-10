@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", or "dev")
+        description: The type of build version to produce ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       package_suffix:
@@ -18,6 +18,9 @@ on:
         description: "Staging subdirectory to push the packages"
         type: string
         default: "v2-staging"
+      prerelease_version:
+        description: "(Optional) Number of the prerelease"
+        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -28,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", or "dev")
+        description: The type of build version to produce ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       package_suffix:
@@ -43,6 +46,9 @@ on:
         default: "v2-staging"
       families:
         description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
+        type: string
+      prerelease_version:
+        description: "(Optional) Number of the prerelease"
         type: string
   # Trigger on a schedule to build nightly release candidates.
   schedule:
@@ -78,13 +84,20 @@ jobs:
         with:
           python-version: 3.12
 
-      # Compute version suffix based on inputs (default to 'rc')
+      # Compute version suffix based on inputs (default to 'a')
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
         run: |
-          version_suffix="$(printf 'rc%(%Y%m%d)T')"
+          version_suffix="$(printf 'a%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
           echo "cloudfront_base_url=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
+
+      - name: Set variables for prerelease
+        if: ${{ env.release_type == 'prerelease' }}
+        run: |
+          version_suffix="$(printf 'rc${{ inputs.prerelease_version }}"
+          echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
+          echo "cloudfront_base_url=https://rocm.prerelease.amd.com" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
@@ -123,7 +136,7 @@ jobs:
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
@@ -199,7 +212,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
@@ -230,11 +243,12 @@ jobs:
           --include "*.whl" \
           --include "*.tar.gz"
 
-      - name: (Re-)Generate Python package release index
+      - name: (Re-)Generate release index pages
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
+          python ./build_tools/index_generation_s3_tar.py --bucket ${{ env.S3_BUCKET_TAR }} --upload
 
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' }}

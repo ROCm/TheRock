@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         required: true
         type: string
       s3_subdir:
@@ -33,7 +33,7 @@ on:
         description: ROCm version to pip install
         type: string
       pytorch_version:
-        description: Pytorch version to checkout. ("nightly", or "release/2.7")
+        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
       pytorch_patchset:
@@ -62,7 +62,7 @@ on:
         type: string
         default: "3.12"
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       s3_subdir:
@@ -85,7 +85,7 @@ on:
         description: ROCm version to pip install
         type: string
       pytorch_version:
-        description: Pytorch version to checkout. ("nightly", or "release/2.7")
+        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
         default: "release/2.7"
@@ -104,7 +104,7 @@ jobs:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -142,10 +142,8 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
-      # Github workflows do not have if/else and therefore we define two jobs with different if clauses.
-      # First the if branch to checkout nightly version of code for the build.
+      # Checkout nightly sources from https://github.com/pytorch/pytorch
       - name: Checkout PyTorch Source Repos from nightly branch
-        # Checkout default upstream PyTorch/PyTorch branch.
         if: ${{ inputs.pytorch_version == 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
@@ -153,7 +151,7 @@ jobs:
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout --patch --patchset nightly
 
-      # Then the else branch to checkout release version of source code instead.
+      # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ inputs.pytorch_version != 'nightly' }}
         run: |
@@ -191,7 +189,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
@@ -265,7 +263,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases

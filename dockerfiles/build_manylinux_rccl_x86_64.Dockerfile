@@ -68,6 +68,14 @@ RUN yum install -y epel-release && \
       patchelf \
       vim-common \
       git-lfs \
+      m4 \
+      flex \
+      libevent-devel \
+      hwloc-devel \
+      numactl-devel \
+      pkgconfig \
+      zip \
+      unzip \
     && yum clean all && \
     rm -rf /var/cache/yum
 
@@ -105,3 +113,20 @@ RUN which gcc && gcc --version && \
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
+
+######## Open MPI 5.0.8 (from source) ########
+# OpenMPI is currently not vendored into TheRock and temorarily installed
+ENV OMPI_VER=5.0.8
+ENV OMPI_PREFIX=/opt/openmpi-${OMPI_VER}
+
+# Copy and execute the build/install portion
+COPY install_openmpi.sh /tmp/install_openmpi.sh
+RUN /tmp/install_openmpi.sh && rm -f /tmp/install_openmpi.sh
+
+# Expose Open MPI by default
+ENV PATH="${OMPI_PREFIX}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${OMPI_PREFIX}/lib:${LD_LIBRARY_PATH}"
+ENV PKG_CONFIG_PATH="${OMPI_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+
+RUN which mpicc && mpirun && \
+    mpirun --version || true

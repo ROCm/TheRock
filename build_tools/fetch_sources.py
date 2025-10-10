@@ -55,6 +55,8 @@ def run(args):
     update_args = []
     if args.depth:
         update_args += ["--depth", str(args.depth)]
+    if args.progress:
+        update_args += ["--progress"]
     if args.jobs:
         update_args += ["--jobs", str(args.jobs)]
     if args.remote:
@@ -275,6 +277,8 @@ def populate_submodules_if_exists(args, git_dir: Path):
         update_args = ["--depth", str(args.depth)]
     if args.jobs:
         update_args += ["--jobs", str(args.jobs)]
+    if args.progress:
+        update_args += ["--progress"]
     exec(["git", "submodule", "update", "--init"] + update_args, cwd=git_dir)
 
 
@@ -306,6 +310,12 @@ def main(argv):
     )
     parser.add_argument(
         "--depth", type=int, help="Git depth when updating submodules", default=None
+    )
+    parser.add_argument(
+        "--progress",
+        default=False,
+        action="store_true",
+        help="Git progress displayed when updating submodules",
     )
     parser.add_argument(
         "--jobs",

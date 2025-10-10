@@ -28,7 +28,9 @@
 
   Written to GITHUB_OUTPUT:
   * linux_amdgpu_families : List of valid Linux AMD GPU families to execute build and test jobs
+  * linux_test_labels : List of test names to run on Linux, optionally filtered by PR labels.
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
+  * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
 
   Written to GITHUB_STEP_SUMMARY:
@@ -43,7 +45,7 @@ import json
 import os
 import subprocess
 import sys
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 import string
 from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
@@ -51,6 +53,7 @@ from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_nightly,
     amdgpu_family_info_matrix_all,
 )
+from fetch_test_configurations import test_matrix
 
 from github_actions_utils import *
 
@@ -187,22 +190,29 @@ def get_pr_labels(args) -> List[str]:
     return labels
 
 
-def filter_known_target_names(requested_target_names: List[str]) -> List[str]:
-    """Filters a requested target names list down to known target names."""
-    target_names = []
-    for target_name in requested_target_names:
-        # Standardize on lowercase target names.
+def filter_known_names(requested_names: List[str], name_type: str) -> List[str]:
+    """Filters a requested names list down to known names."""
+    known_references = {
+        "target": amdgpu_family_info_matrix_all,
+        "test": test_matrix,
+    }
+    filtered_names = []
+    if name_type not in known_references:
+        print(f"WARNING: unknown name_type '{name_type}'")
+        return filtered_names
+    for name in requested_names:
+        # Standardize on lowercase names.
         # This helps prevent potential user-input errors.
-        target_name = target_name.lower()
+        name = name.lower()
 
-        if target_name in amdgpu_family_info_matrix_all:
-            target_names.append(target_name)
+        if name in known_references[name_type]:
+            filtered_names.append(name)
         else:
             print(
-                f"WARNING: unknown target name '{target_name}' not found in matrix:\n{amdgpu_family_info_matrix_all}"
+                f"WARNING: unknown {name_type} name '{name}' not found in matrix:\n{known_references[name_type]}"
             )
 
-    return target_names
+    return filtered_names
 
 
 def matrix_generator(
@@ -214,10 +224,15 @@ def matrix_generator(
     families={},
     platform="linux",
 ):
-    """Generates a matrix of "family" and "test-runs-on" parameters based on the workflow inputs."""
+    """
+    Generates a matrix of "family" and "test-runs-on" parameters based on the workflow inputs.
+    Second return value is a list of test names to run, if any.
+    """
 
     # Select target names based on inputs. Targets will be filtered by platform afterwards.
     selected_target_names = []
+    # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
+    selected_test_names = []
 
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
@@ -230,7 +245,9 @@ def matrix_generator(
         translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
         requested_target_names = input_gpu_targets.translate(translator).split()
 
-        selected_target_names.extend(filter_known_target_names(requested_target_names))
+        selected_target_names.extend(
+            filter_known_names(requested_target_names, "target")
+        )
 
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
@@ -243,12 +260,19 @@ def matrix_generator(
         # TODO(#1097): This (or the code below) should handle opting in for
         #     a GPU family for only one platform (e.g. Windows but not Linux)
         requested_target_names = []
+        requested_test_names = []
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
             if "gfx" in label:
                 target, _ = label.split("-")
                 requested_target_names.append(target)
-        selected_target_names.extend(filter_known_target_names(requested_target_names))
+            if "test:" in label:
+                _, test_name = label.split(":")
+                requested_test_names.append(test_name)
+        selected_target_names.extend(
+            filter_known_names(requested_target_names, "target")
+        )
+        selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
@@ -266,8 +290,9 @@ def matrix_generator(
         for key in amdgpu_family_info_matrix_nightly:
             selected_target_names.append(key)
 
-    # Ensure the targets in the list are unique
+    # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
+    unique_test_names = list(set(selected_test_names))
 
     # Expand selected target names back to a matrix.
     matrix_output = []
@@ -278,7 +303,8 @@ def matrix_generator(
             matrix_output.append(platform_set.get(platform))
 
     print(f"Generated build matrix: {str(matrix_output)}")
-    return matrix_output
+    print(f"Generated test list: {str(unique_test_names)}")
+    return matrix_output, unique_test_names
 
 
 # --------------------------------------------------------------------------- #
@@ -302,7 +328,7 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     print(f"Generating build matrix for Linux: {str(linux_families)}")
-    linux_target_output = matrix_generator(
+    linux_target_output, linux_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
         is_push,
@@ -314,7 +340,7 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     print(f"Generating build matrix for Windows: {str(windows_families)}")
-    windows_target_output = matrix_generator(
+    windows_target_output, windows_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
         is_push,
@@ -324,6 +350,8 @@ def main(base_args, linux_families, windows_families):
         platform="windows",
     )
     print("")
+
+    test_type = "smoke"
 
     # In the case of a scheduled run, we always want to build
     if is_schedule:
@@ -336,21 +364,36 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
+        # If the modified path contains "rocm-libraries" or "rocm-systems", we want to run a full test suite.
+        # Otherwise, we just run smoke tests
+        if "rocm-systems" in modified_paths or "rocm-libraries" in modified_paths:
+            test_type = "full"
+
+        # If any test label is included, run full test suite for specified tests
+        if linux_test_output or windows_test_output:
+            test_type = "full"
+
     gha_append_step_summary(
         f"""## Workflow configure results
 
 * `linux_amdgpu_families`: {str([item.get("family") for item in linux_target_output])}
+* `linux_test_labels`: {str([test for test in linux_test_output])}
 * `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
 * `windows_amdgpu_families`: {str([item.get("family") for item in windows_target_output])}
+* `windows_test_labels`: {str([test for test in windows_test_output])}
 * `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
+* `test_type`: {test_type}
     """
     )
 
     output = {
         "linux_amdgpu_families": json.dumps(linux_target_output),
+        "linux_test_labels": json.dumps(linux_test_output),
         "windows_amdgpu_families": json.dumps(windows_target_output),
+        "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
+        "test_type": test_type,
     }
     gha_set_output(output)
 

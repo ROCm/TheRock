@@ -28,6 +28,8 @@ This incorporates advice from:
 
 ### Project and feature support status
 
+<!-- TODO: Add when aotriton was enabled on Windows (2.10) -->
+
 | Project / feature              | Linux support                                                                                                                 | Windows support |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | torch                          | ✅ Supported                                                                                                                  | ✅ Supported    |
@@ -51,6 +53,8 @@ Each PyTorch version uses a combination of:
 
 See the following table for how each version is supported. Previously supported
 versions are no longer being built but may have existing wheels in the [nightly build repo](https://rocm.nightlies.amd.com/v2/).
+
+<!-- TODO: update this support table once we publish 2.9 stable for Linux and Windows -->
 
 | PyTorch version      | Linux                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Windows                                                                                                                                                                                                                                                                                            |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -126,9 +130,9 @@ Now checkout repositories using their default branches:
 - On Windows, use shorter paths to avoid command length limits:
 
   ```batch
-  python pytorch_torch_repo.py checkout --repo C:/b/pytorch
-  python pytorch_audio_repo.py checkout --repo C:/b/audio
-  python pytorch_vision_repo.py checkout --repo C:/b/vision
+  python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
+  python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
+  python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
   ```
 
 Now note the gfx target you want to build for and then...
