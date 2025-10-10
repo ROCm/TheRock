@@ -13,13 +13,14 @@ logging.basicConfig(level=logging.INFO)
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}",
+    f"{THEROCK_BIN_DIR}/miopen_legacy_plugin",
     "--output-on-failure",
     "--parallel",
     "8",
     "--timeout",
-    "300",
+    "30",
 ]
+
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
 subprocess.run(
