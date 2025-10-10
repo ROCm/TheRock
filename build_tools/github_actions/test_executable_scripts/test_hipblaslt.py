@@ -24,13 +24,15 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
-# Only run smoke tests for Windows strix-halo, issue: https://github.com/ROCm/TheRock/issues/1750
+# Only run quick tests (less memory intensive) for Windows strix-halo, issue: https://github.com/ROCm/TheRock/issues/1750
 if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
-    test_type = "smoke"
+    test_type = "quick"
 
 test_filter = []
 if test_type == "smoke":
     test_filter.append("--gtest_filter=*smoke*")
+elif test_type == "quick":
+    test_filter.append("--gtest_filter=*quick*")
 
 cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test"] + test_filter
 
