@@ -2,9 +2,9 @@ name: TheRock Sharded Tests
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - madkasul/delme_shardedTestWorkflow
+#  push:
+#    branches:
+#      - madkasul/delme_shardedTestWorkflow
 
 
 permissions:
@@ -23,9 +23,9 @@ jobs:
 
       - name: Run Tests
         run: |
-          apt-get update
-          apt-get install python3 python3-pip
-          pip install kubectl
+          sudo apt-get update
+          sudo apt-get install python3 python3-pip
+          pip3 install kubectl
           kubectl -n rocmci get pods
           kubectl -n rocmci apply -f tests/sharding/spec.yaml
           sleep 30
