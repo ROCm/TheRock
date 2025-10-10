@@ -74,9 +74,9 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 25,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
     },
     # SPARSE tests
