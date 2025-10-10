@@ -9,11 +9,11 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  id-token: write
 
 jobs:
   sharded_test_linux_nightly:
-    name: ROCK Tests Linux Nightly
+    name: ROCK Tests Sharded Linux Nightly
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout Repository
@@ -23,11 +23,6 @@ jobs:
 
       - name: Run Tests
         run: |
-          curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key --output /tmp/Release.key
-          sudo gpg --dearmor --decrypt /tmp/Release.key -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-          echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-          sudo apt-get update
-          sudo apt-get install -y kubectl
           kubectl -n rocmci get pods
           kubectl -n rocmci apply -f tests/sharding/spec.yaml
           sleep 30
