@@ -13,12 +13,12 @@ logging.basicConfig(level=logging.INFO)
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}",
+    f"{THEROCK_BIN_DIR}/hipdnn",
     "--output-on-failure",
     "--parallel",
     "8",
     "--timeout",
-    "300",
+    "10",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
