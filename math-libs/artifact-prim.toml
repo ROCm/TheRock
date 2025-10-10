@@ -1,7 +1,6 @@
 [options]
 unmatched_exclude = [
-  # Seems to be some test artifacts only on Windows.
-  "bin/*.hip.exe",
+  # (was: "bin/*.hip.exe") removed on purpose so Windows .hip.exe tests are included.
 ]
 
 # rocPRIM
@@ -33,5 +32,6 @@ include = [
 include = [
   "bin/test_*",
   "bin/*.hip",
+  "bin/*.hip.exe", # Windows
   "bin/rocthrust/CTestTestfile.cmake",
 ]
