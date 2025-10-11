@@ -3,12 +3,24 @@ name: Build Portable Linux Artifacts
 on:
   workflow_dispatch:
     inputs:
-      package_version:
-        type: string
-        default: ADHOCBUILD
       amdgpu_families:
         type: string
         default: gfx94X-dcgpu
+      artifact_group:
+        type: string
+        default: gfx94X-dcgpu
+      build_variant_label:
+        type: string
+        default: "Release"
+      build_variant_suffix:
+        type: string
+        default: ""
+      build_variant_cmake_preset:
+        type: string
+        default: ""
+      package_version:
+        type: string
+        default: ADHOCBUILD
       expect_failure:
         type: boolean
         default: false
@@ -22,6 +34,14 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      artifact_group:
+        type: string
+      build_variant_label:
+        type: string
+      build_variant_suffix:
+        type: string
+      build_variant_cmake_preset:
+        type: string
       expect_failure:
         type: boolean
       extra_cmake_options:
@@ -34,7 +54,7 @@ permissions:
 
 jobs:
   build_portable_linux_artifacts:
-    name: Build Artifacts (xfail ${{ inputs.expect_failure }})
+    name: Build ${{ inputs.build_variant_label }} (xfail ${{ inputs.expect_failure }})
     runs-on: azure-linux-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
     permissions:
@@ -88,6 +108,7 @@ jobs:
 
       - name: Configure Projects
         env:
+          cmake_preset: ${{ inputs.build_variant_cmake_preset }}
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
@@ -139,7 +160,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ inputs.amdgpu_families }} \
+            --artifact-group "${{ inputs.artifact_group }}" \
             --build-dir build \
             --upload
 
