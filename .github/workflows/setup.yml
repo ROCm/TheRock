@@ -6,15 +6,15 @@ on:
       enable_build_jobs:
         description: Whether to enable build jobs.
         value: ${{ jobs.setup.outputs.enable_build_jobs }}
-      linux_amdgpu_families:
-        description: Linux families to run builds and tests on.
-        value: ${{ jobs.setup.outputs.linux_amdgpu_families }}
+      linux_variants:
+        description: Matrix variants to run on Linux
+        value: ${{ jobs.setup.outputs.linux_variants }}
       linux_test_labels:
         description: ROCm projects to run Linux tests on. Optional filter.
         value: ${{ jobs.setup.outputs.linux_test_labels }}
-      windows_amdgpu_families:
-        description: Windows families to run builds and tests for.
-        value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
+      windows_variants:
+        description: Matrix variants to run on Windows.
+        value: ${{ jobs.setup.outputs.windows_variants }}
       test_type:
         description: Test type to run (e.g. smoke, full).
         value: ${{ jobs.setup.outputs.test_type }}
