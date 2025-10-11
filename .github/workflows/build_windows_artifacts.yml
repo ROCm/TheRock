@@ -115,12 +115,45 @@ jobs:
         run: |
           Get-ChildItem Env: | Sort-Object Name
 
+      - name: Print raw git data (with commands)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Run {
+            param([string]$Cmd)
+            Write-Host "+ $Cmd"
+            # Invoke via cmd to run the exact string (supports args/flags as written)
+            cmd /c $Cmd
+            if ($LASTEXITCODE -ne 0) { throw "Command failed: $Cmd (exit $LASTEXITCODE)" }
+            ""
+          }
+
+          Run "git config --get remote.origin.url"
+          Run "git rev-parse HEAD"
+          Run "git rev-parse --short HEAD"
+          Run "git describe --always --tags --dirty"
+
+          Run "git status --porcelain"
+
+          # Show .gitmodules raw
+          Write-Host "+ type .gitmodules"
+          type .gitmodules
+          ""
+          Run "git submodule status --recursive"
+
+          Write-Host "+ (derive top-level submodule paths from .gitmodules)"
+          $gm = Get-Content -Raw .gitmodules
+          $paths = [regex]::Matches($gm, '^\s*path\s*=\s*(.+)$', 'Multiline') | ForEach-Object { $_.Groups[1].Value.Trim() }
+          foreach ($p in $paths) {
+            Run ("git submodule status -- " + $p)
+          }
+
       - name: Generate & print TheRock manifest
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
 
-          # Prefer python3 (same as rest of workflow)
           $fname = (& python3 build_tools/generate_repo_manifest.py) 2>$null
           if (-not $fname) { throw "Failed to generate therock-manifest JSON." }
 
