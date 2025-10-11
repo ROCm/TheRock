@@ -69,7 +69,7 @@ def gha_set_output(vars: Mapping[str, str | Path]):
       * https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-output-parameter
       * https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/passing-information-between-jobs
     """
-    _log(f"Setting github output:\n{vars}")
+    _log(f"Setting github output:\n{json.dumps(vars, indent=2)}")
 
     step_output_file = os.getenv("GITHUB_OUTPUT")
     if not step_output_file:
