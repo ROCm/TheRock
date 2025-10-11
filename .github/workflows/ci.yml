@@ -68,7 +68,7 @@ jobs:
     uses: ./.github/workflows/setup.yml
 
   linux_build_and_test:
-    name: Linux
+    name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
     needs: setup
     if: >-
       ${{
@@ -98,7 +98,7 @@ jobs:
       id-token: write
 
   windows_build_and_test:
-    name: Windows
+    name: Windows::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
     needs: setup
     if: >-
       ${{
