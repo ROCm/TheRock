@@ -25,32 +25,26 @@ def _run(cmd, cwd=None, check=True):
         raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{res.stderr}")
     return res.stdout.strip()
 
-
 def _try(cmd, cwd=None):
     try:
         return _run(cmd, cwd=cwd, check=True)
     except Exception:
         return None
 
-
 def git_root():
     return _run(["git", "rev-parse", "--show-toplevel"])
-
 
 def git_tree_state():
     # empty output => clean
     dirty = _run(["git", "status", "--porcelain"])
     return "clean" if dirty == "" else "dirty"
 
-
 def git_remote_origin():
     return _try(["git", "config", "--get", "remote.origin.url"])
-
 
 def file_sha256(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
-
 
 def parse_gitmodules():
     """
@@ -80,7 +74,6 @@ def parse_gitmodules():
                 out[cur]["branch"] = v.strip()
     return out
 
-
 def submodule_list_status():
     """
     Returns list of {path, commit or None}.
@@ -91,18 +84,16 @@ def submodule_list_status():
     for line in raw.splitlines():
         if not line:
             continue
-        ch = line[0]  # ' ', '-', '+', 'U'
+        # first char: ' ', '-', '+', 'U'
         rest = line[1:].strip()
         parts = rest.split()
         if len(parts) < 2:
-            # defensive; skip malformed lines
             continue
         commit_token = parts[0]
         path = parts[1]
         commit = None if commit_token == "-" else commit_token
         items.append({"path": path, "commit": commit})
     return items
-
 
 def main():
     ap = argparse.ArgumentParser(description="Generate TheRock JSON manifest.")
@@ -135,45 +126,39 @@ def main():
     now_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     ci_provider = "github-actions" if os.getenv("GITHUB_ACTIONS") else None
-    run_id = os.getenv("RUN_ID")
-    runner_os = os.getenv("RUNNER_OS")
-    amdgpu_families = os.getenv("AMDGPU_FAMILIES") or os.getenv(
-        "THEROCK_AMDGPU_FAMILIES"
-    )
+
+    # Robust run_id: prefer GITHUB_RUN_ID, else fallback to run_number(.attempt)
+    run_id = os.getenv("GITHUB_RUN_ID")
+    if not run_id:
+        run_num = os.getenv("GITHUB_RUN_NUMBER")
+        run_attempt = os.getenv("GITHUB_RUN_ATTEMPT")
+        if run_num and run_attempt:
+            run_id = f"{run_num}.{run_attempt}"
+        elif run_num:
+            run_id = run_num
+
+    # Prefer ImageOS (e.g., 'windows-2022'); fallback to RUNNER_OS ('Windows')
+    runner_os = os.getenv("ImageOS") or os.getenv("RUNNER_OS")
+
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES") or os.getenv("THEROCK_AMDGPU_FAMILIES")
     rocm_version = os.getenv("ROCM_VERSION") or os.getenv("THEROCK_ROCM_VERSION")
 
     # --- submodules ---
-    gm_map = parse_gitmodules()  # path -> {url, branch}
+    gm_map = parse_gitmodules()            # path -> {url, branch}
     status_list = submodule_list_status()  # [{path, commit}]
-    # Merge, keep only required fields in required order
-    submodules = []
-    for rec in sorted(status_list, key=lambda r: r["path"]):
-        path = rec["path"]
-        commit = rec["commit"]
-        meta = gm_map.get(path, {"url": None, "branch": None})
-        submodules.append(
-            {
-                "path": path,
-                "url": meta.get("url"),
-                "branch": meta.get("branch"),
-                "commit": commit,
-            }
-        )
+    status_by_path = {r["path"]: r["commit"] for r in status_list}
 
-    # Some submodules might exist in .gitmodules but not in status (e.g., not initialized)
-    # Include them too with commit=null
-    for path in sorted(set(gm_map.keys()) - {r["path"] for r in status_list}):
+    # Include submodules declared in root .gitmodules
+    submodules = []
+    for path in sorted(gm_map.keys()):
         meta = gm_map[path]
-        submodules.append(
-            {
-                "path": path,
-                "url": meta.get("url"),
-                "branch": meta.get("branch"),
-                "commit": None,
-            }
-        )
-    # Re-sort after union
-    submodules.sort(key=lambda r: r["path"])
+        commit = status_by_path.get(path)  # None if uninitialized
+        submodules.append({
+            "path": path,
+            "url": meta.get("url"),
+            "branch": meta.get("branch"),
+            "commit": commit,
+        })
 
     # Build manifest dict with keys in desired order
     manifest = {
@@ -208,7 +193,6 @@ def main():
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
     print(out_path)
-
 
 if __name__ == "__main__":
     sys.exit(main())
