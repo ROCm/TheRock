@@ -41,7 +41,7 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       build_variant_label: ${{ inputs.build_variant_label }}
-      build_variant_cmake_preset: ${{ inputs.build_varaiant_cmake_preset }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       extra_cmake_options: ${{ inputs.extra_cmake_options }}
       expect_failure: ${{ inputs.expect_failure }}
