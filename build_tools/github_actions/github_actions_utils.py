@@ -78,7 +78,7 @@ def gha_set_output(vars: Mapping[str, str | Path]):
 
     with open(step_output_file, "a") as f:
         for k, v in vars.items():
-            print(f"OUTPUT {k}={str{v}}")
+            print(f"OUTPUT {k}={str(v)}")
             f.write(f"{k}={str(v)}\n")
 
 
