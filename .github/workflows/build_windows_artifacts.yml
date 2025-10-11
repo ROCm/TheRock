@@ -112,7 +112,8 @@ jobs:
 
       - name: Dump env (Debug)
         shell: powershell
-        run: gci env: | sort-object Name
+        run: |
+          Get-ChildItem Env: | Sort-Object Name
 
       - name: Generate & print TheRock manifest
         shell: powershell
