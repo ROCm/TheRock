@@ -202,3 +202,126 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   endif()
 
 endif(THEROCK_ENABLE_HIP_RUNTIME)
+
+if(THEROCK_ENABLE_OCL_RUNTIME)
+  ##############################################################################
+  # clr
+  # The primary HIP compiler and runtime target. This is also the project used
+  # to root the "amd-hip" compiler toolchain and is a superset of amd-llvm.
+  # As a particularly sharp edge, the `hipconfig` tool is really only fully
+  # functional from this project (which contributes version and metadata).
+  ##############################################################################
+  set(OCL_CLR_CMAKE_ARGS)
+  set(OCL_CLR_RUNTIME_DEPS)
+  if(WIN32)
+    # Windows CLR options
+    set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
+    cmake_path(NORMAL_PATH _compute_pal_dir)
+    list(APPEND OCL_CLR_CMAKE_ARGS
+      "-DUSE_PROF_API=OFF"
+      "-D__HIP_ENABLE_PCH=OFF"
+      "-DROCCLR_ENABLE_PAL=1"
+      "-DROCCLR_ENABLE_HSA=0"
+      "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
+    )
+  else()
+    # Non-Windows CLR options.
+    list(APPEND OCL_CLR_RUNTIME_DEPS
+      rocminfo  # Various things expect to be able to find the rocminfo tools
+      rocprofiler-register
+      ROCR-Runtime
+    )
+  endif()
+
+  therock_cmake_subproject_declare(ocl-clr
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/clr"
+    INTERFACE_PROGRAM_DIRS
+      bin
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DCLR_BUILD_OCL=ON"
+      "-DROCCLR_ENABLE_HSA=OFF"
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      amd-llvm
+      amd-comgr
+      # hipcc     # For hipconfig
+      rocm-core
+      ${OCL_CLR_RUNTIME_DEPS}
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_glob_c_sources(ocl-clr SUBDIRS .)
+  therock_cmake_subproject_provide_package(ocl-clr ocl-icd lib/cmake/ocl-icd)
+  therock_cmake_subproject_activate(ocl-clr)
+
+  therock_provide_artifact(core-ocl
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-ocl.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS
+      ocl-clr
+  )
+
+  therock_test_validate_shared_lib(
+    PATH ocl-clr/dist/lib
+    LIB_NAMES
+      libamdhip64.so
+      libhiprtc-builtins.so
+      libhiprtc.so
+  )
+  # if(WIN32)
+  #   ##############################################################################
+  #   # hipInfo (from hip-tests)
+  #   ##############################################################################
+  #   therock_cmake_subproject_declare(hipInfo
+  #     EXTERNAL_SOURCE_DIR "hipInfo"
+  #     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
+  #     BACKGROUND_BUILD
+  #     CMAKE_ARGS
+  #       "-DHIP_PLATFORM=amd"
+  #       "-DHIP_TESTS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests"
+  #     RUNTIME_DEPS
+  #       ocl-clr
+  #   )
+  #   therock_cmake_subproject_glob_c_sources(hipInfo SUBDIRS .)
+  #   therock_cmake_subproject_activate(hipInfo)
+
+  #   # Provide it as an artifact:
+  #   therock_provide_artifact(core-hipinfo
+  #     TARGET_NEUTRAL
+  #     DESCRIPTOR artifact-core-hipinfo.toml
+  #     COMPONENTS
+  #       run
+  #     SUBPROJECT_DEPS
+  #       hipInfo
+  #   )
+  # endif()
+
+endif(THEROCK_ENABLE_OCL_RUNTIME)
+
+################################################################################
+# ocl-icd
+################################################################################
+
+therock_cmake_subproject_declare(ocl-icd
+  USE_DIST_AMDGPU_TARGETS
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl"
+  BACKGROUND_BUILD
+  INTERFACE_LINK_DIRS
+    "lib"
+  INTERFACE_INSTALL_RPATH_DIRS
+    "lib"
+)
+therock_cmake_subproject_activate(ocl-icd)
