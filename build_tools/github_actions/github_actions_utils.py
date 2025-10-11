@@ -77,7 +77,9 @@ def gha_set_output(vars: Mapping[str, str | Path]):
         return
 
     with open(step_output_file, "a") as f:
-        f.writelines(f"{k}={str(v)}" + "\n" for k, v in vars.items())
+        for k, v in vars.items():
+            print(f"OUTPUT {k}={str{v}}")
+            f.write(f"{k}={str(v)}\n")
 
 
 def gha_append_step_summary(summary: str):
