@@ -1,0 +1,19 @@
+# llama.cpp
+[components.dbg."external-builds/llama_cpp/stage"]
+include = [
+  "include/**",
+  "src/**",
+]
+[components.dev."external-builds/llama_cpp/stage"]
+include = [
+  "include/**",
+  "src/**",
+]
+[components.lib."external-builds/llama_cpp/stage"]
+include = [
+  "libllama_cpp.*",
+]
+[components.run."external-builds/llama_cpp/stage"]
+include = [
+  "llama-cli",
+]
