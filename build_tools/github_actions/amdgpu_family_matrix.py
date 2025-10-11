@@ -5,12 +5,36 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 * Each group determines which entries run by default on workflow triggers
 """
 
+all_build_variants = {
+    "linux": {
+        "release": {
+            "build_variant_label": "Release",
+            "build_variant_suffix": "",
+            "build_variant_cmake_preset": "linux-release-package",
+        },
+        "asan": {
+            "build_variant_label": "ASAN",
+            "build_variant_suffix": "asan",
+            "build_variant_cmake_preset": "linux-release-asan",
+            "expect_failure": True,
+        },
+    },
+    "windows": {
+        "release": {
+            "build_variant_label": "Release",
+            "build_variant_suffix": "",
+            "build_variant_cmake_preset": "windows-release",
+        },
+    },
+}
+
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
+            "build_variants": ["release", "asan"],
         }
     },
     "gfx110x": {
@@ -18,11 +42,13 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
             "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx110X-dgpu",
             "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
         },
     },
     "gfx115x": {
@@ -30,10 +56,12 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on": "",
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
             "family": "gfx1151",
+            "build_variants": ["release"],
         },
     },
 }
@@ -46,6 +74,7 @@ amdgpu_family_info_matrix_postsubmit = {
             # Label is "linux-mi355-1gpu-ossci-rocm"
             "test-runs-on": "",
             "family": "gfx950-dcgpu",
+            "build_variants": ["release", "asan"],
         }
     },
     "gfx120x": {
@@ -53,11 +82,13 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on": "",  # removed due to machine issues, label is "linux-rx9070-gpu-rocm"
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
         },
     },
 }
@@ -69,11 +100,13 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "expect_failure": False,
+            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "expect_failure": False,
+            "build_variants": ["release"],
         },
     },
     "gfx101x": {
@@ -81,11 +114,13 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "expect_failure": True,
+            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "expect_failure": False,
+            "build_variants": ["release"],
         },
     },
     "gfx103x": {
@@ -93,11 +128,13 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "expect_failure": True,
+            "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "expect_failure": True,
+            "build_variants": ["release"],
         },
     },
 }
