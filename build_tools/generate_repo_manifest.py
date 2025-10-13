@@ -47,6 +47,16 @@ def file_sha256(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
 
+def read_rocm_version_from_version_json():
+    try:
+        with open("version.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # key used in CMake: rocm-version
+        v = data.get("rocm-version")
+        return str(v) if v is not None else None
+    except Exception:
+        return None
+
 def main():
     ap = argparse.ArgumentParser(description="Generate TheRock JSON manifest.")
     ap.add_argument(
@@ -90,7 +100,7 @@ def main():
     runner_os = os.getenv("ImageOS") or os.getenv("RUNNER_OS")
 
     amdgpu_families = os.getenv("AMDGPU_FAMILIES") or os.getenv("THEROCK_AMDGPU_FAMILIES")
-    rocm_version = os.getenv("ROCM_VERSION") or os.getenv("THEROCK_ROCM_VERSION")
+    rocm_version = read_rocm_version_from_version_json()
 
     # Build manifest dict
     manifest = {
