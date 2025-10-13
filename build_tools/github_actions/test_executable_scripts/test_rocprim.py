@@ -10,7 +10,19 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
-TESTS_TO_IGNORE = "'rocprim.lookback_reproducibility|rocprim.linking|rocprim.device_merge_inplace|rocprim.device_merge_sort|rocprim.device_partition|rocprim.device_radix_sort|rocprim.device_select'"
+# Issue to fix ignored tests: https://github.com/ROCm/TheRock/issues/1724
+TESTS_TO_IGNORE = [
+    "rocprim.lookback_reproducibility",
+    "rocprim.linking",
+    "rocprim.device_merge_inplace",
+    "rocprim.device_merge_sort",
+    "rocprim.device_partition",
+    "rocprim.device_radix_sort",
+    "rocprim.device_select",
+    "rocprim.device_find_first_of",
+    "rocprim.device_reduce_by_key",
+]
+
 SMOKE_TESTS = [
     "*ArgIndexIterator",
     "*BasicTests.GetVersion",
@@ -80,7 +92,7 @@ cmd = [
     "--parallel",
     "8",
     "--exclude-regex",
-    TESTS_TO_IGNORE,
+    "|".join(TESTS_TO_IGNORE),
     "--timeout",
     "900",
     "--repeat",

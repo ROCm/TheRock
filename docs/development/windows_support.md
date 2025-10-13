@@ -374,7 +374,7 @@ These have been worked around by disabling ccache.
 ### Building CLR from partial sources
 
 We are working on enabling flexible open source builds of
-https://github.com/ROCm/clr (notably for `amdhip64_6.dll`) on Windows.
+https://github.com/ROCm/clr (notably for `amdhip64_7.dll`) on Windows.
 Historically this has been a closed source component due to the dependency on
 [Platform Abstraction Library (PAL)](https://github.com/GPUOpen-Drivers/pal)
 and providing a fully open source build will take more time. As an incremental

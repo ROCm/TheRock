@@ -100,4 +100,3 @@ jobs:
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
-      test_type: ${{ inputs.test_type }}

@@ -32,6 +32,7 @@ PACKAGES_PER_PROJECT = {
     "networkx": {"version": "latest", "project": "torch"},
     "numpy": {"version": "latest", "project": "torch"},
     "jinja2": {"version": "latest", "project": "torch"},
+    "markupsafe": {"version": "latest", "project": "torch"},
     "filelock": {"version": "latest", "project": "torch"},
     "fsspec": {"version": "latest", "project": "torch"},
     "typing-extensions": {"version": "latest", "project": "torch"},
@@ -132,6 +133,12 @@ def upload_missing_whls(
             continue
         # Skip i686 packages
         if "i686" in pkg:
+            continue
+        # Skip iphoneos packages
+        if "iphoneos" in pkg:
+            continue
+        # Skip iphonesimulator packages
+        if "iphonesimulator" in pkg:
             continue
         # Skip unsupported Python version
         if "cp39" in pkg:

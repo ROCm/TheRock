@@ -43,9 +43,10 @@
 import fnmatch
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional
 import string
 from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
@@ -57,6 +58,8 @@ from fetch_test_configurations import test_matrix
 
 from github_actions_utils import *
 
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 # --------------------------------------------------------------------------- #
 # Filtering by modified paths
@@ -80,6 +83,33 @@ def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
             file=sys.stderr,
         )
         return None
+
+
+def get_therock_submodule_paths() -> Optional[Iterable[str]]:
+    """Returns TheRock submodules paths."""
+    try:
+        response = subprocess.run(
+            ["git", "submodule", "status"],
+            stdout=subprocess.PIPE,
+            check=True,
+            text=True,
+            timeout=60,
+            cwd=THEROCK_DIR,
+        ).stdout.splitlines()
+
+        submodule_paths = []
+        for line in response:
+            submodule_data_array = line.split()
+            # The line will be "{commit-hash} {path} {branch}". We will retrieve the path.
+            submodule_paths.append(submodule_data_array[1])
+        return submodule_paths
+    except TimeoutError:
+        print(
+            "Computing modified files timed out. Not using PR diff to determine"
+            " jobs to run.",
+            file=sys.stderr,
+        )
+        return []
 
 
 # Paths matching any of these patterns are considered to have no influence over
@@ -364,9 +394,14 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
-        # If the modified path contains "rocm-libraries" or "rocm-systems", we want to run a full test suite.
+        # If the modified path contains any git submodules, we want to run a full test suite.
         # Otherwise, we just run smoke tests
-        if "rocm-systems" in modified_paths or "rocm-libraries" in modified_paths:
+        submodule_paths = get_therock_submodule_paths()
+        matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
+        if matching_submodule_paths:
+            print(
+                f"Found changed submodules: {str(matching_submodule_paths)}. Running full tests."
+            )
             test_type = "full"
 
         # If any test label is included, run full test suite for specified tests
