@@ -15,7 +15,6 @@ on:
       component:
         type: string
 
-
 permissions:
   contents: read
 
@@ -23,13 +22,14 @@ jobs:
   test_component:
     name: 'Test ${{ fromJSON(inputs.component).job_name }} (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})'
     runs-on: ${{ inputs.test_runs_on }}
+    timeout-minutes: 60
     container:
       image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd
         --device /dev/dri
-        --group-add 992
+        --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
     strategy:
       fail-fast: false
@@ -78,6 +78,7 @@ jobs:
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
+          TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 

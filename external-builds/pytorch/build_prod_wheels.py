@@ -32,9 +32,9 @@ python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
-python pytorch_torch_repo.py checkout --repo C:/b/pytorch
-python pytorch_audio_repo.py checkout --repo C:/b/audio
-python pytorch_vision_repo.py checkout --repo C:/b/vision
+python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
+python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
+python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
 ```
 
 2. Install rocm wheels:

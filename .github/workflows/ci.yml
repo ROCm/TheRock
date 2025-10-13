@@ -24,12 +24,20 @@ on:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
+      linux_test_labels:
+        type: string
+        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'. ex: test:rocprim, test:hipcub"
+        default: ""
       linux_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      windows_test_labels:
+        type: string
+        description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:' ex: test:rocprim, test:hipcub"
         default: ""
       windows_use_prebuilt_artifacts:
         type: boolean
@@ -75,10 +83,12 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: ${{ matrix.families.family }}
+      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      test_type: ${{ needs.setup.outputs.test_type }}
     permissions:
       contents: read
       id-token: write
@@ -98,11 +108,12 @@ jobs:
     uses: ./.github/workflows/ci_windows.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
+      test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      extra_cmake_options: ${{ matrix.extra_cmake_options }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      test_type: ${{ needs.setup.outputs.test_type }}
     permissions:
       contents: read
       id-token: write

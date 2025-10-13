@@ -64,3 +64,8 @@ In [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_
 | timeout_minutes     | int    | The timeout (in minutes) for the test step                                                                                         |
 | test_script         | string | The path to the test script                                                                                                        |
 | platform            | array  | An array of platforms that the test can execute on, options are `linux` and `windows`                                              |
+
+> [!NOTE]
+> When adding a new component to TheRock (typically a new .toml file), you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it.<br>
+> Adding libraries to existing components requires no script changes.<br>
+> See the [Adding Support for New Components](./installing_artifacts.md#adding-support-for-new-components) guide for step-by-step instructions.
