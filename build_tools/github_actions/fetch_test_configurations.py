@@ -173,8 +173,9 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name}")
+            logging.info(f"Including job {job_name} with test_type {test_type}")
             job_config_data = test_matrix[key]
+            job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
