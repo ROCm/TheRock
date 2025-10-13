@@ -68,7 +68,8 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
-        "platform": ["linux", "windows"],
+        # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
+        "platform": ["linux"],
         "total_shards": 1,
     },
     # PRIM tests
