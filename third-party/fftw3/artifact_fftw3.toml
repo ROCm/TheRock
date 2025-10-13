@@ -5,7 +5,7 @@
 [components.lib."third-party/fftw3/build_fftw3/stage"]
 
 # fftw3f
-[components.dbg."third-party/fftw3/build_fftwf3/stage"]
-[components.dev."third-party/fftw3/build_fftwf3/stage"]
-[components.doc."third-party/fftw3/build_fftwf3/stage"]
-[components.lib."third-party/fftw3/build_fftwf3/stage"]
+[components.dbg."third-party/fftw3/build_fftw3f/stage"]
+[components.dev."third-party/fftw3/build_fftw3f/stage"]
+[components.doc."third-party/fftw3/build_fftw3f/stage"]
+[components.lib."third-party/fftw3/build_fftw3f/stage"]
