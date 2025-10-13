@@ -10,7 +10,7 @@ exclude = [
 [components.test."ml-libs/hipDNN/stage"]
 include = [
   "bin/*hipdnn_*_tests*",
-  "bin/CTestTestfile.cmake",
+  "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
 ]
 [components.run."ml-libs/hipDNN/stage"]
