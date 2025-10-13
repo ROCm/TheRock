@@ -1,0 +1,11 @@
+cmake
+dill
+kubernetes
+lxml
+pymsteams
+pytest
+pytest-repeat
+pytest-rerunfailures
+pyyaml
+requests
+tabulate

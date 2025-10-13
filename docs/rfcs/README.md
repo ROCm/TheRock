@@ -17,6 +17,7 @@ benefit from further discussion.
 ## Index
 
 - [RFC0001: BLAS Stack Build Improvements](./RFC0001-BLAS-Stack-Build-Improvements.md)
+- [RFC0004: Test Orchestrator](./RFC0004-Test-Orchestrator.md)
 
 ## Adding an RFC
 

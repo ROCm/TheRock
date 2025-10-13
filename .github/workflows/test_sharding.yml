@@ -1,0 +1,38 @@
+name: TheRock Sharded Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - madkasul/testSharding
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sharded_test_linux_nightly:
+    name: TheRock Tests Sharded Linux Nightly
+    runs-on: linux-mi325-1gpu-ossci-rocm
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 2
+
+      - name: Install TheRock
+        shell: bash
+        run: |
+          pip3 install -r requirements.txt
+          python3 build_tools/install_rocm_from_artifacts.py --release 7.9.0rc20250925 --amdgpu-family gfx94X-dcgpu
+
+      - name: Pre Requisites
+        shell: bash
+        run: pip3 install -r tests/sharding/requirements.txt
+
+      - name: Running Sharded Tests
+        shell: bash
+        run: |
+          cd tests/sharding/
+          python3 -m pytest -s -v --tb=short tests.py --rock=../../therock-build
