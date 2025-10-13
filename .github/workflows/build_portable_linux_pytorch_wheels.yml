@@ -114,6 +114,7 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
+      HIP_PLATFORM: "amd"  # TODO TODO JUST FOR TESTING! REMOVE AFTERWARDS!!
     outputs:
       cp_version: ${{ env.cp_version }}
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
@@ -131,6 +132,11 @@ jobs:
         run: |
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
+
+      # TODO TODO JUST FOR TESTING! REMOVE AFTERWARDS!!
+      - name: WIP JUST FOR TESTIN - INSTALL XZ-DEVEL
+        run: |
+          yum install xz-devel
 
       - name: Select Python version
         run: |
