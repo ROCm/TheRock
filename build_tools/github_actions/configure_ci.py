@@ -364,9 +364,21 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
-        # If the modified path contains "rocm-libraries" or "rocm-systems", we want to run a full test suite.
+        # If the modified path contains any submodule bumps, we want to run a full test suite.
         # Otherwise, we just run smoke tests
-        if "rocm-systems" in modified_paths or "rocm-libraries" in modified_paths:
+        submodule_paths = [
+            "base/amdsmi",
+            "base/half",
+            "base/rocm-cmake",
+            "comm-libs/rccl",
+            "compiler/amd-llvm",
+            "compiler/hipify",
+            "ml-libs/composable_kernel",
+            "rocm-libraries",
+            "rocm-systems",
+        ]
+        matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
+        if matching_submodule_paths:
             test_type = "full"
 
         # If any test label is included, run full test suite for specified tests
