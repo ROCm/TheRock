@@ -450,7 +450,6 @@ add_subdirectory(profiler)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
-add_subdirectory(external-builds/llama.cpp)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)
