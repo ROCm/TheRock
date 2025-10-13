@@ -49,6 +49,7 @@ def extract_gpu_details(files):
 
 
 def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
+    # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
     prefix = prefix.lstrip("/").rstrip("/")
     # List all objects and select .tar.gz keys
     try:
@@ -75,6 +76,7 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             if key.endswith(".tar.gz") and os.path.dirname(key) == prefix:
+                # Only append the filename without the full path.
                 files.append(
                     (key.removeprefix(f"{prefix}/"), obj["LastModified"].timestamp())
                 )
@@ -186,6 +188,7 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     message = f"index.html generated successfully for bucket '{bucket_name}'. File saved as {local_path}"
     gha_append_step_summary(message)
     # Upload to bucket
+    # Generate a prefix for the case that the index file should go to a subdirectory. Empty otherwise.
     upload_prefix = f"{prefix}/" if prefix else ""
     if upload:
         try:
