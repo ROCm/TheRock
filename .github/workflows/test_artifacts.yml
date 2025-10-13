@@ -10,7 +10,7 @@ on:
         type: string
       test_runs_on:
         type: string
-      sanity_check_only:
+      sanity_check_only_for_family:
         type: boolean
         default: false
       test_type:
@@ -26,7 +26,7 @@ on:
         type: string
       test_runs_on:
         type: string
-      sanity_check_only:
+      sanity_check_only_for_family:
         type: boolean
         default: false
       test_type:
@@ -95,7 +95,7 @@ jobs:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
     # skip tests if no test matrix to run and sanity check only requested
-    if: ${{ needs.configure_test_matrix.outputs.components != '[]' && !inputs.sanity_check_only }}
+    if: ${{ needs.configure_test_matrix.outputs.components != '[]' && !inputs.sanity_check_only_for_family }}
     strategy:
       fail-fast: false
       matrix:

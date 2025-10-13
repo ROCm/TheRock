@@ -18,7 +18,7 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-dgpu",
             "bypass_tests_for_releases": True,
-            "sanity_check_only": True,
+            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -31,7 +31,7 @@ amdgpu_family_info_matrix_presubmit = {
             "test-runs-on": "linux-strix-halo-gpu-rocm",
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
-            "sanity_check_only": True,
+            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
@@ -55,7 +55,7 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on": "linux-rx9070-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
-            "sanity_check_only": True,
+            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -96,7 +96,7 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-rx6950-gpu-rocm",
             "family": "gfx103X-dgpu",
             "expect_failure": True,
-            "sanity_check_only": True,
+            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
