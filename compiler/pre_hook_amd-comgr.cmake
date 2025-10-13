@@ -4,6 +4,8 @@ else()
   set(LLVM_LINK_LLVM_DYLIB ON)
 endif()
 
+set(COMGR_DISABLE_SPIRV OFF)
+
 # The comgr tests have a circular dependency on the HIP runtime.
 # https://github.com/ROCm/TheRock/issues/67
 set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)

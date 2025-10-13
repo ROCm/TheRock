@@ -136,27 +136,51 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
-    if args.base_only:
-        argv.append("--base-only")
-    elif any([args.blas, args.fft, args.miopen, args.prim, args.rand, args.rccl]):
-        if args.blas:
-            argv.append("--blas")
-        if args.fft:
-            argv.append("--fft")
-        if args.miopen:
-            argv.append("--miopen")
-        if args.prim:
-            argv.append("--prim")
-        if args.rand:
-            argv.append("--rand")
-        if args.rccl and PLATFORM != "windows":
-            argv.append("--rccl")
-        if args.tests:
-            argv.append("--tests")
-    else:
-        argv.append("--all")
 
-    log(f"Calling fetch_artifacts_main with args:\n  {' '.join(argv)}")
+    # These artifacts are the "base" requirements for running tests.
+    base_artifact_patterns = [
+        "core-runtime_run",
+        "core-runtime_lib",
+        "sysdeps_lib",
+        "base_run",
+        "base_lib",
+        "amd-llvm_run",
+        "amd-llvm_lib",
+        "core-hip_lib",
+        "core-hip_dev",
+        "rocprofiler-sdk_lib",
+        "host-suite-sparse_lib",
+    ]
+
+    if args.base_only:
+        argv.extend(base_artifact_patterns)
+    elif any([args.blas, args.fft, args.miopen, args.prim, args.rand, args.rccl]):
+        argv.extend(base_artifact_patterns)
+
+        extra_artifacts = []
+        if args.blas:
+            extra_artifacts.append("blas")
+        if args.fft:
+            extra_artifacts.append("fft")
+        if args.miopen:
+            extra_artifacts.append("miopen")
+        if args.prim:
+            extra_artifacts.append("prim")
+        if args.rand:
+            extra_artifacts.append("rand")
+        if args.rccl:
+            extra_artifacts.append("rccl")
+
+        extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
+        if args.tests:
+            extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
+
+        argv.extend(extra_artifact_patterns)
+    else:
+        # No include (or exclude) patterns, so all artifacts will be fetched.
+        pass
+
+    log(f"\nCalling fetch_artifacts_main with args:\n  {' '.join(argv)}\n")
     fetch_artifacts_main(argv)
 
     log(f"Retrieved artifacts for run ID {run_id}")

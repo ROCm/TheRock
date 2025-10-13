@@ -219,11 +219,12 @@ usage: rocm-sdk {command} ...
 ROCm SDK Python CLI
 
 positional arguments:
-  {path,test,version,targets}
+  {path,test,version,targets,init}
     path                Print various paths to ROCm installation
     test                Run installation tests to verify integrity
     version             Print version information
     targets             Print information about the GPU targets that are supported
+    init                Expand devel contents to initialize rocm[devel]
 
 $ rocm-sdk test
 ...
@@ -233,6 +234,17 @@ OK
 $ rocm-sdk targets
 gfx1100;gfx1101;gfx1102
 ```
+
+To initialize the `rocm[devel]` package, use the `rocm-sdk` tool to _eagerly_ expand development
+contents:
+
+```console
+$ rocm-sdk init
+Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
+```
+
+These contents are useful for using the package outside of Python and _lazily_ expanded on the
+first use when used from Python.
 
 Once you have verified your installation, you can continue to use it for
 standard ROCm development or install PyTorch or another supported Python ML

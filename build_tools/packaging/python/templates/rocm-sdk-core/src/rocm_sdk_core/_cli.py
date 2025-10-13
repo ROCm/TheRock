@@ -51,6 +51,10 @@ def amdlld():
     _exec("lib/llvm/bin/amdlld")
 
 
+def amd_smi():
+    _exec("bin/amd-smi")
+
+
 def hipcc():
     _exec("bin/hipcc")
 
