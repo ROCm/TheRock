@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""
+Generate TheRock build manifest (JSON Format).
+
+Schema: TheRock-Manifest.v1
+- TheRock: remote, commit, tree_state, describe, gitmodules_sha256
+- Environment: generated_at_utc, ci_provider, run_id, runner_os, amdgpu_families, rocm_version
+"""
+
+import argparse
+from datetime import datetime, UTC
+import hashlib
+import json
+import os
+import shlex
+import subprocess
+import sys
+
+SCHEMA_VERSION = "TheRock-Manifest.v1"
+
+def _run(cmd, cwd=None, check=True):
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
+    res = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
+    if check and res.returncode != 0:
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{res.stderr}")
+    return res.stdout.strip()
+
+def _try(cmd, cwd=None):
+    try:
+        return _run(cmd, cwd=cwd, check=True)
+    except Exception:
+        return None
+
+def git_root():
+    return _run(["git", "rev-parse", "--show-toplevel"])
+
+def git_tree_state():
+    # empty output => clean
+    dirty = _run(["git", "status", "--porcelain"])
+    return "clean" if dirty == "" else "dirty"
+
+def git_remote_origin():
+    return _try(["git", "config", "--get", "remote.origin.url"])
+
+def file_sha256(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+def main():
+    ap = argparse.ArgumentParser(description="Generate TheRock JSON manifest.")
+    ap.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Output file path. If omitted, uses TheRock-Manifest-<shortsha>-<UTC>.json",
+    )
+    args = ap.parse_args()
+
+    # Ensure we run at repo root for consistent paths
+    root = git_root()
+    os.chdir(root)
+
+    # --- TheRock section ---
+    rock_commit = _run(["git", "rev-parse", "HEAD"])
+    rock_short = _run(["git", "rev-parse", "--short", "HEAD"])
+    rock_remote = git_remote_origin()
+    rock_state = git_tree_state()
+    rock_desc = _try(["git", "describe", "--always", "--tags", "--dirty"])
+
+    # .gitmodules hash only
+    gm_path = ".gitmodules"
+    gitmodules_sha = file_sha256(gm_path) if os.path.exists(gm_path) else None
+
+    # --- Environment section ---
+    now_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ci_provider = "github-actions" if os.getenv("GITHUB_ACTIONS") else None
+
+    # Prefer GITHUB_RUN_ID; fallback to number(.attempt)
+    run_id = os.getenv("GITHUB_RUN_ID")
+    if not run_id:
+        run_num = os.getenv("GITHUB_RUN_NUMBER")
+        run_attempt = os.getenv("GITHUB_RUN_ATTEMPT")
+        if run_num and run_attempt:
+            run_id = f"{run_num}.{run_attempt}"
+        elif run_num:
+            run_id = run_num
+
+    # Prefer ImageOS (hosted); fallback to RUNNER_OS (self-hosted)
+    runner_os = os.getenv("ImageOS") or os.getenv("RUNNER_OS")
+
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES") or os.getenv("THEROCK_AMDGPU_FAMILIES")
+    rocm_version = os.getenv("ROCM_VERSION") or os.getenv("THEROCK_ROCM_VERSION")
+
+    # Build manifest dict
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "TheRock": {
+            "remote": rock_remote,
+            "commit": rock_commit,
+            "tree_state": rock_state,
+            "describe": rock_desc,
+            "gitmodules_sha256": gitmodules_sha,
+        },
+        "Environment": {
+            "generated_at_utc": now_utc,
+            "ci_provider": ci_provider,
+            "run_id": run_id,
+            "runner_os": runner_os,
+            "amdgpu_families": amdgpu_families,
+            "rocm_version": rocm_version,
+        }
+    }
+
+    # Decide output path
+    out_path = args.output
+    if not out_path:
+        safe_ts = now_utc.replace(":", "-")
+        out_path = f"{SCHEMA_VERSION}-{rock_short}-{safe_ts}.json"
+
+    # Write JSON
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    print(out_path)
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

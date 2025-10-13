@@ -110,6 +110,62 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
 
+      - name: Dump env (Debug)
+        shell: powershell
+        run: |
+          Get-ChildItem Env: | Sort-Object Name
+
+      - name: Print raw git data
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Run {
+            param([string]$Cmd)
+            Write-Host "+ $Cmd"
+            # Invoke via cmd to run the exact string (supports args/flags as written)
+            cmd /c $Cmd
+            if ($LASTEXITCODE -ne 0) { throw "Command failed: $Cmd (exit $LASTEXITCODE)" }
+            ""
+          }
+
+          Run "git config --get remote.origin.url"
+          Run "git rev-parse HEAD"
+          Run "git rev-parse --short HEAD"
+          Run "git describe --always --tags --dirty"
+
+          Run "git status --porcelain"
+
+          # Show .gitmodules raw
+          Write-Host "+ type .gitmodules"
+          type .gitmodules
+          ""
+          Run "git submodule status --recursive"
+
+          Write-Host "+ (derive top-level submodule paths from .gitmodules)"
+          $gm = Get-Content -Raw .gitmodules
+          $paths = [regex]::Matches($gm, '^\s*path\s*=\s*(.+)$', 'Multiline') | ForEach-Object { $_.Groups[1].Value.Trim() }
+          foreach ($p in $paths) {
+            Run ("git submodule status -- " + $p)
+          }
+
+      - name: Generate TheRock manifest JSON & show contents
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # Run the generator; capture the output filename the script prints
+          $fname = (& python3 build_tools/generate_repo_manifest.py) 2>$null
+          if (-not $fname) { throw "Failed to generate therock-manifest JSON." }
+
+          # Make the path available to later steps (optional)
+          "MANIFEST_FILE=$fname" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Print the JSON file exactly as written
+          Write-Host "----- BEGIN therock-manifest ($fname) -----"
+          Get-Content -Raw -LiteralPath $fname
+          Write-Host "----- END therock-manifest -----"
+
       - name: Configure Projects
         env:
           amdgpu_families: ${{ inputs.amdgpu_families }}
