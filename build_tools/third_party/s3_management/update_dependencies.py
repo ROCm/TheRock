@@ -32,6 +32,7 @@ PACKAGES_PER_PROJECT = {
     "networkx": {"version": "latest", "project": "torch"},
     "numpy": {"version": "latest", "project": "torch"},
     "jinja2": {"version": "latest", "project": "torch"},
+    "markupsafe": {"version": "latest", "project": "torch"},
     "filelock": {"version": "latest", "project": "torch"},
     "fsspec": {"version": "latest", "project": "torch"},
     "typing-extensions": {"version": "latest", "project": "torch"},
