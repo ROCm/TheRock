@@ -30,6 +30,16 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       TOUCH "${_download_stamp}"
     )
 
+    # MSVC does not support VLA and AT&T assembly which are required by DYNAMIC_ARCH
+    # See: https://github.com/OpenMathLib/OpenBLAS/issues/2826#issuecomment-814170090
+    # Multi-arch support on Windows seems to be a problem not limited to MSVC
+    # See: https://github.com/OpenMathLib/OpenBLAS/issues/3985
+    if(WIN32)
+      set(_enable_dynamicArch "OFF")
+    else()
+      set(_enable_dynamicArch "ON")
+    endif()
+
     therock_cmake_subproject_declare(therock-host-blas
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL
@@ -47,11 +57,14 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DBUILD_SHARED_LIBS=ON
         # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
         # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
+        -DCMAKE_CROSSCOMPILING=ON
         -DTARGET=HASWELL
-        -DDYNAMIC_ARCH=ON
+        -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
         # MSVC_RUNTIME_LIBRARY value 'MultiThreadedDLL' not known for MSVC ASM compiler
         -DCMAKE_MSVC_RUNTIME_LIBRARY=
+      BUILD_DEPS
+        amd-llvm
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
