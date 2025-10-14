@@ -49,7 +49,7 @@ test_matrix = {
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -94,7 +94,7 @@ test_matrix = {
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
     },
     # SPARSE tests
@@ -109,7 +109,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -121,7 +121,7 @@ test_matrix = {
     "rocrand": {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -138,7 +138,7 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
         "total_shards": 4,
@@ -164,6 +164,9 @@ def run():
 
     logging.info(f"Selecting projects: {project_to_test}")
 
+    # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
+    project_array = [item.strip() for item in project_to_test.split(",")]
+
     output_matrix = []
     for key in test_matrix:
         job_name = test_matrix[key]["job_name"]
@@ -186,10 +189,11 @@ def run():
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
         if platform in test_matrix[key]["platform"] and (
-            key in project_to_test or project_to_test == "*"
+            key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name}")
+            logging.info(f"Including job {job_name} with test_type {test_type}")
             job_config_data = test_matrix[key]
+            job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
