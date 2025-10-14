@@ -33,7 +33,7 @@ on:
         description: ROCm version to pip install
         type: string
       pytorch_version:
-        description: PyTorch version to checkout. (typically "main", or "release/X.Y")
+        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
       pytorch_patchset:
@@ -85,7 +85,7 @@ on:
         description: ROCm version to pip install
         type: string
       pytorch_version:
-        description: PyTorch version to checkout. (typically "main", or "release/X.Y")
+        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
         default: "release/2.7"
@@ -152,25 +152,25 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      # Checkout main sources from https://github.com/pytorch/pytorch
+      # Checkout nightly sources from https://github.com/pytorch/pytorch
       # TODO: switch to 'nightly' to match our Linux workflows?
-      - name: Checkout PyTorch source repos (main branch)
-        if: ${{ inputs.pytorch_version == 'main' }}
+      - name: Checkout PyTorch source repos (nightly branch)
+        if: ${{ inputs.pytorch_version == 'nightly' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag main
+            --repo-hashtag nightly
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --repo-hashtag main
+            --repo-hashtag nightly
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag main
+            --repo-hashtag nightly
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ inputs.pytorch_version != 'main' }}
+        if: ${{ inputs.pytorch_version != 'nightly' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
