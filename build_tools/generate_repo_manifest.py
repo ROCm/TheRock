@@ -5,6 +5,7 @@ Generate TheRock build manifest (JSON Format).
 Schema: TheRock-Manifest.v1
 - TheRock: remote, commit, tree_state, describe, gitmodules_sha256
 - Environment: generated_at_utc, ci_provider, run_id, runner_os, amdgpu_families, rocm_version
+- submodules[]: path, url, branch, commit
 """
 
 import argparse
@@ -65,13 +66,66 @@ def read_rocm_version_from_version_json():
         return None
 
 
+def parse_gitmodules():
+    """
+    Parse top-level .gitmodules into: { path: { 'url': str|None, 'branch': str|None } }
+    """
+    out = {}
+    cur = None
+    if not os.path.exists(".gitmodules"):
+        return out
+    with open(".gitmodules", "r", encoding="utf-8") as f:
+        for line in f:
+            s = line.strip()
+            if not s:
+                continue
+            if s.startswith("[submodule"):
+                cur = None
+                continue
+            if s.startswith("path"):
+                _, v = s.split("=", 1)
+                cur = v.strip()
+                out.setdefault(cur, {"url": None, "branch": None})
+                continue
+            if cur is None:
+                continue
+            if s.startswith("url"):
+                _, v = s.split("=", 1)
+                out[cur]["url"] = v.strip()
+            elif s.startswith("branch"):
+                _, v = s.split("=", 1)
+                out[cur]["branch"] = v.strip()
+    return out
+
+
+def submodule_list_status():
+    """
+    Returns list of {path, commit or None} using `git submodule status --recursive`.
+    """
+    raw = _run(["git", "submodule", "status", "--recursive"])
+    items = []
+    for line in raw.splitlines():
+        if not line:
+            continue
+        # First char: ' ' initialized, '-' not yet initialized, '+' out of date, 'U' conflict
+        rest = line[1:].strip()
+        parts = rest.split()
+        if len(parts) < 2:
+            continue
+        commit_token = parts[0]
+        path = parts[1]
+        commit = None if commit_token == "-" else commit_token
+        items.append({"path": path, "commit": commit})
+    return items
+
+
 def main():
     ap = argparse.ArgumentParser(description="Generate TheRock JSON manifest.")
     ap.add_argument(
         "-o",
         "--output",
         default=None,
-        help="Output file path. If omitted, uses TheRock-Manifest-<shortsha>-<UTC>.json",
+        help="Output file path. If omitted, uses TheRock-Manifest-<UTC>-<shortsha>.json",
     )
     args = ap.parse_args()
 
@@ -118,6 +172,25 @@ def main():
     )
     rocm_version = read_rocm_version_from_version_json()
 
+    # --- Submodules section ---
+    gm_map = parse_gitmodules()  # {path: {url, branch}}
+    status_list = submodule_list_status()  # [{path, commit}]
+    status_by_path = {r["path"]: r["commit"] for r in status_list}
+
+    # Only include submodules declared in root .gitmodules
+    submodules = []
+    for path in sorted(gm_map.keys()):
+        meta = gm_map[path]
+        commit = status_by_path.get(path)  # None if uninitialized
+        submodules.append(
+            {
+                "path": path,
+                "url": meta.get("url"),
+                "branch": meta.get("branch"),
+                "commit": commit,
+            }
+        )
+
     # Build manifest dict
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -136,6 +209,7 @@ def main():
             "amdgpu_families": amdgpu_families,
             "rocm_version": rocm_version,
         },
+        "submodules": submodules,
     }
 
     # Decide output path
