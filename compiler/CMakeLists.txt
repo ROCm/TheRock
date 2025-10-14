@@ -68,6 +68,14 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
+      # ASAN features.
+      # Note that building AMDGPU ASAN extensions depends on various runtime headers
+      # (since it instruments them). These paths must line up and will be an error
+      # in the compiler-rt build if not found.
+      "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
+      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_SOURCE_DIR}/rocm-systems/projects/rocr-runtime/runtime/hsa-runtime/inc"
+      "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
+
       ${_extra_llvm_cmake_args}
     BUILD_DEPS
       rocm-cmake
