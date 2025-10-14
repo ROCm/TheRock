@@ -194,7 +194,7 @@ LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
 
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "hipblaslt*.dll")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so*", "hiprand*.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
