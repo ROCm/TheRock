@@ -178,7 +178,7 @@ def retrieve_artifacts_by_run_id(args):
         if args.miopen:
             extra_artifacts.append("miopen")
         if args.miopen_plugin:
-            extra_artifacts.append("miopen_plugin")
+            extra_artifacts.append("miopen-plugin")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
