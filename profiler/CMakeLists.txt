@@ -82,6 +82,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DHIP_PLATFORM=amd
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    BUILD_DEPS
+      rocm-cmake
     RUNTIME_DEPS
       rocprofiler-sdk
       aqlprofile
