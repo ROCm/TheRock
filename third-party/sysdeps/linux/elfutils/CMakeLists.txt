@@ -23,6 +23,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
       RUNTIME_DEPS
         therock-bzip2
+        therock-liblzma
         therock-zlib
         therock-zstd
       INSTALL_DESTINATION
@@ -63,6 +64,7 @@ endif()
 # paths.
 set(EXTRA_CPPFLAGS)
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/bzip2/build/stage/lib/rocm_sysdeps/include")
+string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/liblzma/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/include")
 message(STATUS "EXTRA_CPPFLAGS=${EXTRA_CPPFLAGS}")
@@ -98,8 +100,7 @@ add_custom_target(
       --disable-debuginfod
       --enable-install-elfh
       --with-bzlib --with-zlib --with-zstd
-      # We don't have an lzma sysdep yet and may not need it.
-      --without-lzma
+      --with-lzma
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND

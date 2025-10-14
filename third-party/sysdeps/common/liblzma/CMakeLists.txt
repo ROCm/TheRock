@@ -19,6 +19,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       OUTPUT_ON_FAILURE
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
+        "-DPATCHELF=${PATCHELF}"
+        "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
       INSTALL_DESTINATION
         lib/rocm_sysdeps
       INTERFACE_PROGRAM_DIRS
@@ -32,7 +34,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
-    therock_cmake_subproject_provide_package(therock-liblzma LibLZMA lib/rocm_sysdeps/lib/cmake/liblzma)
+    therock_cmake_subproject_provide_package(therock-liblzma liblzma lib/rocm_sysdeps/lib/cmake/liblzma)
     therock_cmake_subproject_activate(therock-liblzma)
 
     therock_test_validate_shared_lib(
@@ -44,10 +46,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(
-  LIBLZMA_BUILD
-  VERSION 1.3.1
-)
+project(LIBLZMA_BUILD)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
@@ -73,9 +72,9 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     ${patch_source_commands}
-  COMMAND
+  # COMMAND
     # Provide our own version map with private symbol versions.
-    "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/liblzma.map"
+    # "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/src/liblzma/liblzma_linux.map"
   COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"
@@ -86,6 +85,12 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      "-DCMAKE_BUILD_TYPE=Release"
+      # Force shared library build
+      "-DBUILD_SHARED_LIBS=ON"
+      # Disable symlink creation
+      "-DCREATE_XZ_SYMLINKS=OFF"
+      "-DCREATE_LZMA_SYMLINKS=OFF"
       # Disable writing pc files: we will do so ourselves.
       -DSKIP_INSTALL_FILES=ON
 
@@ -124,5 +129,5 @@ configure_file(
   @ONLY
 )
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/liblzma-config.cmake" DESTINATION lib/cmake/XZ)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/liblzma-config.cmake" DESTINATION lib/cmake/LIBLZMA)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/liblzma.pc" DESTINATION lib/pkgconfig)
