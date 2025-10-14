@@ -45,7 +45,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         -DBUILD_SHARED_LIBS=ON
-        -DTARGET=CORE2
+        # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
+        # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
+        -DTARGET=HASWELL
         -DDYNAMIC_ARCH=ON
         -DBUILD_TESTING=OFF
         # MSVC_RUNTIME_LIBRARY value 'MultiThreadedDLL' not known for MSVC ASM compiler
