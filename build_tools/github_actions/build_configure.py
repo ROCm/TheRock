@@ -41,9 +41,14 @@ platform_options = {
     ],
 }
 
+platform_presets = {
+    "linux": "linux-release-package",
+}
+
 
 def build_configure():
-    logging.info(f"Building package {package_version}")
+    preset = platform_presets.get(PLATFORM)
+    logging.info(f"Building package {package_version} (preset {preset})")
 
     cmd = [
         "cmake",
@@ -51,13 +56,19 @@ def build_configure():
         build_dir,
         "-GNinja",
         ".",
-        f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
-        f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
-        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
-        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
-        "-DTHEROCK_VERBOSE=ON",
-        "-DBUILD_TESTING=ON",
     ]
+    if preset:
+        cmd.extend(["--preset", str(preset)])
+    cmd.extend(
+        [
+            f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
+            f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
+            "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+            "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+            "-DTHEROCK_VERBOSE=ON",
+            "-DBUILD_TESTING=ON",
+        ]
+    )
 
     # Adding platform specific options
     cmd += platform_options.get(PLATFORM, [])

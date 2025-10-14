@@ -5,6 +5,7 @@ unmatched_exclude = [
 ]
 
 # bzip2
+[components.dbg."third-party/sysdeps/linux/bzip2/build/stage"]
 [components.dev."third-party/sysdeps/linux/bzip2/build/stage"]
 # Include the executables in the dev package since some sub-projects
 # require them.
@@ -14,10 +15,12 @@ include = [
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
 
 # elfutils
+[components.dbg."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 
 # libdrm
+[components.dbg."third-party/sysdeps/linux/libdrm/build/stage"]
 [components.dev."third-party/sysdeps/linux/libdrm/build/stage"]
 [components.lib."third-party/sysdeps/linux/libdrm/build/stage"]
 include = [
@@ -25,17 +28,21 @@ include = [
 ]
 
 # numactl
+[components.dbg."third-party/sysdeps/linux/numactl/build/stage"]
 [components.dev."third-party/sysdeps/linux/numactl/build/stage"]
 [components.lib."third-party/sysdeps/linux/numactl/build/stage"]
 
 # sqlite3
+[components.dbg."third-party/sysdeps/linux/sqlite3/build/stage"]
 [components.dev."third-party/sysdeps/linux/sqlite3/build/stage"]
 [components.lib."third-party/sysdeps/linux/sqlite3/build/stage"]
 
 # zlib
+[components.dbg."third-party/sysdeps/linux/zlib/build/stage"]
 [components.dev."third-party/sysdeps/linux/zlib/build/stage"]
 [components.lib."third-party/sysdeps/linux/zlib/build/stage"]
 
 # zstd
+[components.dbg."third-party/sysdeps/linux/zstd/build/stage"]
 [components.dev."third-party/sysdeps/linux/zstd/build/stage"]
 [components.lib."third-party/sysdeps/linux/zstd/build/stage"]

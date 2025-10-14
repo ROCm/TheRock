@@ -48,8 +48,7 @@ def do_artifact(args):
     """
     descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(args.descriptor)
     scanner = artifact_builder.ComponentScanner(args.root_dir, descriptor)
-    # Disable strict verification temporarily until debug builds are tested/fixed.
-    # scanner.verify()
+    scanner.verify()
     component_dirs = args.component_dirs
     # It is an alternating list of <component> <dir> so must be divisible by 2.
     if len(component_dirs) % 2:
