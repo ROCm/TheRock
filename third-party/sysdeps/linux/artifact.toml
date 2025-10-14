@@ -24,6 +24,10 @@ include = [
   "**/share/**",
 ]
 
+# liblzma
+[components.dev."third-party/sysdeps/linux/liblzma/build/stage"]
+[components.lib."third-party/sysdeps/linux/liblzma/build/stage"]
+
 # numactl
 [components.dev."third-party/sysdeps/linux/numactl/build/stage"]
 [components.lib."third-party/sysdeps/linux/numactl/build/stage"]
