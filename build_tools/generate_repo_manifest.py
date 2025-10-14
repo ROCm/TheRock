@@ -74,7 +74,13 @@ def main():
     # --- TheRock section ---
     rock_commit = _run(["git", "rev-parse", "HEAD"])
     rock_short = _run(["git", "rev-parse", "--short", "HEAD"])
-    rock_remote = git_remote_origin()
+    repo = os.getenv("GITHUB_REPOSITORY")  #"ROCm/TheRock"
+    if repo:
+        # avoids URL masking in logs
+        rock_remote = f"github.com/{repo}.git"
+    else:
+        # fallback if GITHUB_REPOSITORY not on GitHub Actions
+        rock_remote = git_remote_origin()
     rock_state = git_tree_state()
     rock_desc = _try(["git", "describe", "--always", "--tags", "--dirty"])
 
