@@ -73,6 +73,7 @@ jobs:
       }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
+      artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
@@ -97,5 +98,5 @@ jobs:
     uses: ./.github/workflows/build_windows_python_packages.yml
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      amdgpu_family: ${{ inputs.amdgpu_families }}
+      artifact_group: ${{ inputs.artifact_group }}
       package_version: "7.0.0.dev0"  # TODO: setup version with a script/workflow

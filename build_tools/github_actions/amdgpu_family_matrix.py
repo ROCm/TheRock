@@ -10,7 +10,10 @@ all_build_variants = {
         "release": {
             "build_variant_label": "Release",
             "build_variant_suffix": "",
-            "build_variant_cmake_preset": "linux-release-package",
+            # TODO: Enable linux-release-package once capacity and rccl link
+            # issues are resolved. https://github.com/ROCm/TheRock/issues/1781
+            # "build_variant_cmake_preset": "linux-release-package",
+            "build_variant_cmake_preset": "",
         },
         "asan": {
             "build_variant_label": "ASAN",
