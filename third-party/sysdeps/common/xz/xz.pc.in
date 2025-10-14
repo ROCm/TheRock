@@ -1,0 +1,13 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${pcfiledir}/../../bin
+libdir=${pcfiledir}/../../lib
+sharedlibdir=${pcfiledir}/../../bin
+includedir=${pcfiledir}/../../include
+
+Name: xz
+Description: xz compression library
+Version: @PROJECT_VERSION@
+
+Requires:
+Libs: -L${libdir} -L${sharedlibdir} @XZ_IMPORTED_LOCATION@
+Cflags: -I${includedir}
