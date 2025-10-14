@@ -1,0 +1,48 @@
+From c66503248758416867c21e6069c92cf1da2bd879 Mon Sep 17 00:00:00 2001
+From: Konstantin Zhuravlyov <kzhuravl_dev@outlook.com>
+Date: Tue, 14 Oct 2025 08:00:00 -0400
+Subject: [PATCH] Ensure to use libamdhip64 with major version
+
+---
+ clang/lib/Driver/ToolChains/Linux.cpp        | 2 +-
+ clang/tools/offload-arch/AMDGPUArchByHIP.cpp | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/clang/lib/Driver/ToolChains/Linux.cpp b/clang/lib/Driver/ToolChains/Linux.cpp
+index 322d973f15e6..6e7c8454941e 100644
+--- a/clang/lib/Driver/ToolChains/Linux.cpp
++++ b/clang/lib/Driver/ToolChains/Linux.cpp
+@@ -983,7 +983,7 @@ void Linux::AddHIPRuntimeLibArgs(const ArgList &Args,
+     CmdArgs.append({"-rpath", Args.MakeArgString(p)});
+   }
+ 
+-  CmdArgs.push_back("-lamdhip64");
++  CmdArgs.push_back("-l:libamdhip64.so.7");
+ }
+ 
+ void Linux::AddIAMCUIncludeArgs(const ArgList &DriverArgs,
+diff --git a/clang/tools/offload-arch/AMDGPUArchByHIP.cpp b/clang/tools/offload-arch/AMDGPUArchByHIP.cpp
+index 02431bf909d6..cbf93e47e601 100644
+--- a/clang/tools/offload-arch/AMDGPUArchByHIP.cpp
++++ b/clang/tools/offload-arch/AMDGPUArchByHIP.cpp
+@@ -117,7 +117,7 @@ static bool compareVersions(StringRef A, StringRef B) {
+ // amdhip64_n.dll but we do not know what n is since this program may be used
+ // with a future version of HIP runtime.
+ //
+-// On Linux, always use default libamdhip64.so.
++// On Linux, always use default libamdhip64.so.7.
+ static std::pair<std::string, bool> findNewestHIPDLL() {
+ #ifdef _WIN32
+   StringRef HipDLLPrefix = "amdhip64_";
+@@ -146,7 +146,7 @@ static std::pair<std::string, bool> findNewestHIPDLL() {
+   return {DLLNames[0], false};
+ #else
+   // On Linux, fallback to default shared object
+-  return {"libamdhip64.so", true};
++  return {"libamdhip64.so.7", true};
+ #endif
+ }
+ 
+-- 
+2.34.1
+
