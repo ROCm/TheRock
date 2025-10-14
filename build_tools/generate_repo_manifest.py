@@ -18,6 +18,7 @@ import sys
 
 SCHEMA_VERSION = "TheRock-Manifest.v1"
 
+
 def _run(cmd, cwd=None, check=True):
     if isinstance(cmd, str):
         cmd = shlex.split(cmd)
@@ -26,26 +27,32 @@ def _run(cmd, cwd=None, check=True):
         raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{res.stderr}")
     return res.stdout.strip()
 
+
 def _try(cmd, cwd=None):
     try:
         return _run(cmd, cwd=cwd, check=True)
     except Exception:
         return None
 
+
 def git_root():
     return _run(["git", "rev-parse", "--show-toplevel"])
+
 
 def git_tree_state():
     # empty output => clean
     dirty = _run(["git", "status", "--porcelain"])
     return "clean" if dirty == "" else "dirty"
 
+
 def git_remote_origin():
     return _try(["git", "config", "--get", "remote.origin.url"])
+
 
 def file_sha256(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
+
 
 def read_rocm_version_from_version_json():
     try:
@@ -56,6 +63,7 @@ def read_rocm_version_from_version_json():
         return str(v) if v is not None else None
     except Exception:
         return None
+
 
 def main():
     ap = argparse.ArgumentParser(description="Generate TheRock JSON manifest.")
@@ -74,7 +82,7 @@ def main():
     # --- TheRock section ---
     rock_commit = _run(["git", "rev-parse", "HEAD"])
     rock_short = _run(["git", "rev-parse", "--short", "HEAD"])
-    repo = os.getenv("GITHUB_REPOSITORY")  #"ROCm/TheRock"
+    repo = os.getenv("GITHUB_REPOSITORY")  # "ROCm/TheRock"
     if repo:
         # avoids URL masking in logs
         rock_remote = f"github.com/{repo}.git"
@@ -105,7 +113,9 @@ def main():
     # Prefer ImageOS (hosted); fallback to RUNNER_OS (self-hosted)
     runner_os = os.getenv("ImageOS") or os.getenv("RUNNER_OS")
 
-    amdgpu_families = os.getenv("AMDGPU_FAMILIES") or os.getenv("THEROCK_AMDGPU_FAMILIES")
+    amdgpu_families = os.getenv("AMDGPU_FAMILIES") or os.getenv(
+        "THEROCK_AMDGPU_FAMILIES"
+    )
     rocm_version = read_rocm_version_from_version_json()
 
     # Build manifest dict
@@ -125,7 +135,7 @@ def main():
             "runner_os": runner_os,
             "amdgpu_families": amdgpu_families,
             "rocm_version": rocm_version,
-        }
+        },
     }
 
     # Decide output path
@@ -140,6 +150,7 @@ def main():
 
     print(out_path)
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
