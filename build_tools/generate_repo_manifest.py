@@ -83,7 +83,7 @@ def main():
     gitmodules_sha = file_sha256(gm_path) if os.path.exists(gm_path) else None
 
     # --- Environment section ---
-    now_utc = datetime.now(UTC).isoformat(timespec="seconds")
+    now_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     ci_provider = "github-actions" if os.getenv("GITHUB_ACTIONS") else None
 
     # Prefer GITHUB_RUN_ID; fallback to number(.attempt)
@@ -126,7 +126,7 @@ def main():
     out_path = args.output
     if not out_path:
         safe_ts = now_utc.replace(":", "-")
-        out_path = f"{SCHEMA_VERSION}-{rock_short}-{safe_ts}.json"
+        out_path = f"{SCHEMA_VERSION}-{safe_ts}-{rock_short}.json"
 
     # Write JSON
     with open(out_path, "w", encoding="utf-8") as f:
