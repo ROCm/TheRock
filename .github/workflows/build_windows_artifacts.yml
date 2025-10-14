@@ -110,44 +110,6 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
 
-      - name: Dump env (Debug)
-        shell: powershell
-        run: |
-          Get-ChildItem Env: | Sort-Object Name
-
-      - name: Print raw git data
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          function Run {
-            param([string]$Cmd)
-            Write-Host "+ $Cmd"
-            # Invoke via cmd to run the exact string (supports args/flags as written)
-            cmd /c $Cmd
-            if ($LASTEXITCODE -ne 0) { throw "Command failed: $Cmd (exit $LASTEXITCODE)" }
-            ""
-          }
-
-          Run "git config --get remote.origin.url"
-          Run "git rev-parse HEAD"
-          Run "git rev-parse --short HEAD"
-          Run "git describe --always --tags --dirty"
-
-          Run "git status --porcelain"
-
-          # Show .gitmodules raw
-          Write-Host "+ type .gitmodules"
-          type .gitmodules
-          ""
-          Run "git submodule status --recursive"
-
-          Write-Host "+ (derive top-level submodule paths from .gitmodules)"
-          $gm = Get-Content -Raw .gitmodules
-          $paths = [regex]::Matches($gm, '^\s*path\s*=\s*(.+)$', 'Multiline') | ForEach-Object { $_.Groups[1].Value.Trim() }
-          foreach ($p in $paths) {
-            Run ("git submodule status -- " + $p)
-          }
 
       - name: Generate TheRock manifest JSON & show contents
         shell: powershell
@@ -165,3 +127,71 @@ jobs:
           Write-Host "----- BEGIN therock-manifest ($fname) -----"
           Get-Content -Raw -LiteralPath $fname
           Write-Host "----- END therock-manifest -----"
+
+      - name: Configure Projects
+        env:
+          amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ${{ inputs.package_version }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+        run: |
+          # clear cache before build and after download
+          ccache -z
+          python3 build_tools/github_actions/build_configure.py
+
+      - name: Build therock-archives and therock-dist
+        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          if [ -d "${{ env.BUILD_DIR }}" ]; then
+            echo "Build dir:"
+            echo "------------"
+            ls -lh "${{ env.BUILD_DIR }}"
+            echo "Artifact Archives:"
+            echo "------------------"
+            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
+            echo "Artifacts:"
+            echo "----------"
+            du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
+            echo "CCache Stats:"
+            echo "-------------"
+            ccache -s
+          else
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
+            echo "        This should only happen if the CI is cancelled before the build step."
+            exit 1
+          fi
+
+      - name: "Build size report"
+        if: always()
+        shell: powershell
+        run: |
+          $fs = Get-PSDrive -PSProvider "FileSystem"
+          $fsout = $fs | Select-Object -Property Name,Used,Free,Root
+          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
+          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
+
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+
+      - name: Post Build Upload
+        if: always()
+        run: |
+          python3 build_tools/github_actions/post_build_upload.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --build-dir ${{ env.BUILD_DIR }} \
+            --upload
+
+      - name: Save cache
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: ${{ !cancelled() }}
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
