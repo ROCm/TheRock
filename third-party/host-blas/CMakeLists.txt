@@ -49,6 +49,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DDYNAMIC_ARCH=ON
         -DDYNAMIC_OLDER=ON
         -DBUILD_TESTING=OFF
+        # MSVC_RUNTIME_LIBRARY value 'MultiThreadedDLL' not known for MSVC ASM compiler
+        -DCMAKE_MSVC_RUNTIME_LIBRARY=
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
