@@ -9,6 +9,7 @@ therock_cmake_subproject_declare(therock-aux-overlay
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
 
+
 ################################################################################
 # rocm-cmake
 ################################################################################
@@ -36,7 +37,8 @@ else()
 endif()
 
 therock_cmake_subproject_declare(rocm-core
-  EXTERNAL_SOURCE_DIR "rocm-core"
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocm-core"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-core"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
@@ -51,13 +53,40 @@ therock_cmake_subproject_activate(rocm-core)
 
 
 ################################################################################
+# amdsmi
+################################################################################
+
+if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+
+therock_cmake_subproject_declare(amdsmi
+  EXTERNAL_SOURCE_DIR "amdsmi"
+  USE_DIST_AMDGPU_TARGETS
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    # TODO: Enable tests
+    # -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+  BUILD_DEPS
+    therock-googletest
+  RUNTIME_DEPS
+    rocm-core
+    ${THEROCK_BUNDLED_LIBDRM}
+)
+therock_cmake_subproject_provide_package(amdsmi
+  amd_smi lib/cmake)
+therock_cmake_subproject_activate(amdsmi)
+
+endif()
+
+
+################################################################################
 # rocm_smi_lib
 ################################################################################
 
 if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
 
 therock_cmake_subproject_declare(rocm_smi_lib
-  EXTERNAL_SOURCE_DIR "rocm_smi_lib"
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocm-smi-lib"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm_smi_lib"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
@@ -94,7 +123,8 @@ endif()
 if(NOT WIN32)  # TODO(#36): Enable on Windows?
 
 therock_cmake_subproject_declare(rocprofiler-register
-  EXTERNAL_SOURCE_DIR "rocprofiler-register"
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-register"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-register"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   INTERFACE_LINK_DIRS
@@ -141,6 +171,7 @@ therock_cmake_subproject_activate(rocm-half)
 set(_optional_subproject_deps)
 if(NOT WIN32)
   # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+  list(APPEND _optional_subproject_deps amdsmi)
   list(APPEND _optional_subproject_deps rocm_smi_lib)
   list(APPEND _optional_subproject_deps rocprofiler-register)
 endif()

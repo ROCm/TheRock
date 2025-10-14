@@ -1,7 +1,7 @@
 # Most libraries need to depend on the profiler, but is conditionally only used
 # on Posix.
 set(optional_profiler_deps)
-if(NOT WIN32)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
@@ -12,7 +12,8 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   # TODO: Move this to math-libs
 
   therock_cmake_subproject_declare(composable_kernel
-    EXTERNAL_SOURCE_DIR "composable_kernel"
+    EXTERNAL_SOURCE_DIR "${THEROCK_COMPOSABLE_KERNEL_SOURCE_DIR}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -91,26 +92,26 @@ if(THEROCK_ENABLE_MIOPEN)
     else()
       message(WARNING "Unhandled MSVC_VERSION '${MSVC_VERSION}', Boost may not configure correctly")
     endif()
-  endif()
 
-  if(THEROCK_USE_ROCM_LIBRARIES)
-    set(_miopen_source_dir "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen")
+    # TODO(#1407): re-enable MIOpen tests on Windows when they don't crash clang on CI builders
+    #   We also don't run MIOpen tests on Windows, see
+    #   build_tools/github_actions/fetch_test_configurations.py
+    set(_THEROCK_MIOPEN_ENABLE_TESTING OFF)
   else()
-    set(_miopen_source_dir "MIOpen")
+    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
   endif()
 
   therock_cmake_subproject_declare(MIOpen
-    EXTERNAL_SOURCE_DIR "${_miopen_source_dir}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/MIOpen"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+      "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
-      -DMIOPEN_BUILD_DRIVER=ON
       -DMIOPEN_TEST_DISCRETE=OFF
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
     CMAKE_INCLUDES

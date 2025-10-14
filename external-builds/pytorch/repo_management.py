@@ -171,17 +171,12 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
     )
 
 
-def apply_main_repository_patches(
-    root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
-):
-    # Apply patches to main repository.
-    apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
-
-
-def apply_submodule_patches(
+def apply_all_patches(
     root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
 ):
     relative_sm_paths = list_submodules(root_repo_path, relative=True)
+    # Apply base patches.
+    apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
     for relative_sm_path in relative_sm_paths:
         apply_repo_patches(
             root_repo_path / relative_sm_path,
@@ -189,16 +184,8 @@ def apply_submodule_patches(
         )
 
 
-def apply_all_patches(
-    root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
-):
-    apply_main_repository_patches(
-        root_repo_path, patches_path, repo_name, patchset_name
-    )
-    apply_submodule_patches(root_repo_path, patches_path, repo_name, patchset_name)
-
-
 # repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
+# Note: unused function, delete? or use in get_patches_dir_name?
 def repo_hashtag_to_patches_dir_name(version_ref: str) -> str:
     pos = version_ref.find("-")
     if pos != -1:
@@ -218,33 +205,75 @@ def get_patches_dir_name(args: argparse.Namespace) -> str | None:
 
 
 def do_hipify(args: argparse.Namespace):
-    repo_dir: Path = args.repo
+    repo_dir: Path = args.checkout_dir
     print(f"Hipifying {repo_dir}")
     build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
     if build_amd_path.exists():
         exec([sys.executable, build_amd_path], cwd=repo_dir)
 
 
-def commit_hipify(args: argparse.Namespace):
-    repo_dir: Path = args.repo
-    # Iterate over the base repository and all submodules. Because we process
-    # the root repo first, it will not add submodule changes.
-    all_paths = get_all_repositories(repo_dir)
-    for module_path in all_paths:
-        status = list_status(module_path)
-        if not status:
-            continue
-        print(f"HIPIFY made changes to {module_path}: Committing")
-        exec(["git", "add", "-A"], cwd=module_path)
+def tag_hipify_diffbase(module_path: Path):
+    """Apply the HIPIFY diffbase tag to the module."""
+    try:
+        exec(
+            ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"],
+            cwd=module_path,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to apply tag {TAG_HIPIFY_DIFFBASE} in {module_path}: {e}")
+        raise
+
+
+def commit_hipify_module(module_path: Path):
+    """Handle HIPIFY commit for a single module."""
+    status = list_status(module_path)
+    if not status:
+        return
+
+    print(f"HIPIFY made changes to {module_path}: Committing")
+    exec(["git", "add", "-A"], cwd=module_path)
+
+    # Check if there are staged changes
+    try:
+        staged_result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=str(module_path),
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+        )
+        if staged_result.returncode == 0:
+            print(f"No staged changes in {module_path} after git add: Skipping commit")
+            tag_hipify_diffbase(module_path)
+            return
+    except subprocess.CalledProcessError as e:
+        print(f"Error checking staged changes in {module_path}: {e}")
+        return
+
+    # Attempt to commit changes
+    try:
         exec(
             ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
             cwd=module_path,
         )
-        exec(["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"], cwd=module_path)
+    except subprocess.CalledProcessError as e:
+        if e.returncode == 1:
+            print(f"No changes to commit in {module_path} (git returned exit code 1)")
+        else:
+            print(f"Commit failed in {module_path}: {e}")
+            raise
+
+    tag_hipify_diffbase(module_path)
+
+
+def commit_hipify(args: argparse.Namespace):
+    repo_dir: Path = args.checkout_dir
+    all_paths = get_all_repositories(repo_dir)
+    for module_path in all_paths:
+        commit_hipify_module(module_path)
 
 
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
-    repo_dir: Path = args.repo
+    repo_dir: Path = args.checkout_dir
     repo_patch_dir_base = args.patch_dir
     check_git_dir = repo_dir / ".git"
     patches_dir_name = get_patches_dir_name(args)
@@ -266,17 +295,6 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         fetch_args.extend(["-j", str(args.jobs)])
     exec(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
     exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
-    if args.patch and patches_dir_name:
-        # Apply base patches to main repository. Patches to
-        # submodules will be applied later. This enables patches
-        # to modify submodule version to be checked out.
-        apply_main_repository_patches(
-            repo_dir,
-            repo_patch_dir_base / patches_dir_name,
-            args.repo_name,
-            "base",
-        )
-
     exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
     try:
         exec(
@@ -299,9 +317,9 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     )
     git_config_ignore_submodules(repo_dir)
 
+    # Base patches.
     if args.patch and patches_dir_name:
-        # Apply base patches to submodules.
-        apply_submodule_patches(
+        apply_all_patches(
             repo_dir,
             repo_patch_dir_base / patches_dir_name,
             args.repo_name,
@@ -313,7 +331,7 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         custom_hipify(args)
         commit_hipify(args)
 
-    # Apply hipified patches to main repository and submodules.
+    # Hipified patches.
     if args.hipify and args.patch and patches_dir_name:
         apply_all_patches(
             repo_dir,
@@ -328,10 +346,12 @@ def do_save_patches(args: argparse.Namespace):
     repo_patch_dir_base = args.patch_dir
     patches_dir_name = get_patches_dir_name(args)
     patches_dir = repo_patch_dir_base / patches_dir_name
-    save_repo_patches(args.repo, patches_dir / repo_name)
-    relative_sm_paths = list_submodules(args.repo, relative=True)
+    save_repo_patches(args.checkout_dir, patches_dir / repo_name)
+    relative_sm_paths = list_submodules(args.checkout_dir, relative=True)
     for relative_sm_path in relative_sm_paths:
-        save_repo_patches(args.repo / relative_sm_path, patches_dir / relative_sm_path)
+        save_repo_patches(
+            args.checkout_dir / relative_sm_path, patches_dir / relative_sm_path
+        )
 
 
 # Reads the ROCm maintained "related_commits" file from the given pytorch dir.

@@ -45,6 +45,7 @@ endfunction()
 therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X-all gfx90X-dgpu gfx90X-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
 therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
@@ -53,20 +54,23 @@ therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gf
 therock_add_amdgpu_target(gfx942 "MI300A/MI300X CDNA" FAMILY dcgpu-all gfx94X-all gfx94X-dcgpu)
 
 # gfx950
-therock_add_amdgpu_target(gfx950 "" FAMILY dcgpu-all gfx950-all gfx950-dcgpu)
+therock_add_amdgpu_target(gfx950 "MI350X/MI355X CDNA" FAMILY dcgpu-all gfx950-all gfx950-dcgpu)
 
 # gfx101X family
 therock_add_amdgpu_target(gfx1010 "AMD RX 5700" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 therock_add_amdgpu_target(gfx1011 "AMD Radeon Pro V520" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
 )
 
 # gfx103X family
@@ -94,12 +98,14 @@ therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
 )
-therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu)
+therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    rccl  # https://github.com/ROCm/TheRock/issues/150
+)
 
 # gfx115X family
 therock_add_amdgpu_target(gfx1150 "AMD Strix Point iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
-    hipBLASLt # https://github.com/ROCm/TheRock/issues/154
     rccl  # https://github.com/ROCm/TheRock/issues/150
 )
 therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
@@ -111,6 +117,8 @@ therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-
 therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all)
 therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all)
 
+# Optional extension targets (used for out of tree target development).
+include(therock_custom_amdgpu_targets OPTIONAL)
 
 # Validates and normalizes AMDGPU target selection cache variables.
 function(therock_validate_amdgpu_targets)

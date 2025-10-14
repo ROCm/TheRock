@@ -80,6 +80,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "amd-llvm",
         "base",
         "core-hip",
+        "core-hipinfo",
         "core-runtime",
         "host-blas",
         "host-suite-sparse",

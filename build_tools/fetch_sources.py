@@ -8,6 +8,7 @@ import hashlib
 from pathlib import Path
 import platform
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -38,8 +39,10 @@ def get_enabled_projects(args) -> list[str]:
         projects.extend(args.system_projects)
     if args.include_compilers:
         projects.extend(args.compiler_projects)
-    if args.include_math_libs:
-        projects.extend(args.math_lib_projects)
+    if args.include_rocm_libraries:
+        projects.extend(["rocm-libraries"])
+    if args.include_rocm_systems:
+        projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
     return projects
@@ -52,6 +55,8 @@ def run(args):
     update_args = []
     if args.depth:
         update_args += ["--depth", str(args.depth)]
+    if args.progress:
+        update_args += ["--progress"]
     if args.jobs:
         update_args += ["--jobs", str(args.jobs)]
     if args.remote:
@@ -64,6 +69,8 @@ def run(args):
             + submodule_paths,
             cwd=THEROCK_DIR,
         )
+    if args.dvc_projects:
+        pull_large_files(args.dvc_projects, projects)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
@@ -82,6 +89,32 @@ def run(args):
 
     if args.apply_patches:
         apply_patches(args, projects)
+
+
+def pull_large_files(dvc_projects, projects):
+    if not dvc_projects:
+        print("No DVC projects specified, skipping large file pull.")
+        return
+    dvc_missing = shutil.which("dvc") is None
+    if dvc_missing:
+        if is_windows():
+            print("Could not find `dvc` on PATH so large files could not be fetched")
+            print("Visit https://dvc.org/doc/install for installation instructions.")
+            sys.exit(1)
+        else:
+            print("`dvc` not found, skipping large file pull on Linux.")
+            return
+    for project in dvc_projects:
+        if not project in projects:
+            continue
+        submodule_path = get_submodule_path(project)
+        project_dir = THEROCK_DIR / submodule_path
+        dvc_config_file = project_dir / ".dvc" / "config"
+        if dvc_config_file.exists():
+            print(f"dvc detected in {project_dir}, running dvc pull")
+            exec(["dvc", "pull"], cwd=project_dir)
+        else:
+            log(f"WARNING: dvc config not found in {project_dir}, when expected.")
 
 
 def remove_smrev_files(args, projects):
@@ -244,6 +277,8 @@ def populate_submodules_if_exists(args, git_dir: Path):
         update_args = ["--depth", str(args.depth)]
     if args.jobs:
         update_args += ["--jobs", str(args.jobs)]
+    if args.progress:
+        update_args += ["--progress"]
     exec(["git", "submodule", "update", "--init"] + update_args, cwd=git_dir)
 
 
@@ -277,6 +312,12 @@ def main(argv):
         "--depth", type=int, help="Git depth when updating submodules", default=None
     )
     parser.add_argument(
+        "--progress",
+        default=False,
+        action="store_true",
+        help="Git progress displayed when updating submodules",
+    )
+    parser.add_argument(
         "--jobs",
         type=int,
         help="Number of jobs to use for updating submodules",
@@ -295,10 +336,16 @@ def main(argv):
         help="Include compilers",
     )
     parser.add_argument(
-        "--include-math-libs",
+        "--include-rocm-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
-        help="Include supported math libraries",
+        help="Include supported rocm-libraries projects",
+    )
+    parser.add_argument(
+        "--include-rocm-systems",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include supported rocm-systems projects",
     )
     parser.add_argument(
         "--include-ml-frameworks",
@@ -311,33 +358,13 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
-            "aqlprofile",
-            "clr",
+            "amdsmi",
             "half",
-            "HIP",
             "rccl",
             "rccl-tests",
-            "rocm_smi_lib",
             "rocm-cmake",
-            "rocm-core",
-            "rocminfo",
-            "rocprofiler-register",
-            # TODO: Re-enable when used.
-            # "rocprofiler-compute",
-            "rocprofiler-sdk",
             "rocprof-trace-decoder",
-            # TODO: Re-enable when used.
-            # "rocprofiler-systems",
-            "roctracer",
-            "ROCR-Runtime",
-        ]
-        + (
-            [
-                "amdgpu-windows-interop",
-            ]
-            if is_windows()
-            else []
-        ),
+        ],
     )
     parser.add_argument(
         "--compiler-projects",
@@ -346,46 +373,35 @@ def main(argv):
         default=[
             "HIPIFY",
             "llvm-project",
-        ],
-    )
-    parser.add_argument(
-        "--math-lib-projects",
-        nargs="+",
-        type=str,
-        default=[
-            "hipBLAS-common",
-            "hipBLAS",
-            "hipBLASLt",
-            "hipCUB",
-            "hipFFT",
-            "hipRAND",
-            "hipSOLVER",
-            "hipSPARSE",
-            "mxDataGenerator",
-            "Tensile",
-            "rocBLAS",
-            "rocFFT",
-            "rocPRIM",
-            "rocRAND",
-            "rocRoller",
-            "rocSOLVER",
-            "rocSPARSE",
-            "rocThrust",
+            "spirv-llvm-translator",
         ],
     )
     parser.add_argument(
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=[
-            "MIOpen",
-        ]
-        + (
+        default=(
             []
             if is_windows()
             else [
                 # Linux only projects.
                 "composable_kernel",
+            ]
+        ),
+    )
+    parser.add_argument(
+        # projects that use DVC to manage large files
+        "--dvc-projects",
+        nargs="+",
+        type=str,
+        default=(
+            [
+                "rocm-libraries",
+                "rocm-systems",
+            ]
+            if is_windows()
+            else [
+                "rocm-libraries",
             ]
         ),
     )

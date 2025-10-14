@@ -2,6 +2,7 @@
 # Currently, this includes:
 #   atomic
 #   filesystem
+#   multi_index
 #   system
 #   Static libraries only
 #   Release build
@@ -27,7 +28,7 @@ therock_cmake_subproject_declare(therock-boost
   OUTPUT_ON_FAILURE
   CMAKE_ARGS
     "-DBOOST_SOURCE_DIR=${_source_dir}"
-    "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,system"
+    "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,multi_index,system"
   EXTRA_DEPENDS
     "${_download_stamp}"
 )

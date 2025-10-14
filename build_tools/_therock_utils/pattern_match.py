@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import sys
+import time
 
 
 class RecursiveGlobPattern:
@@ -60,6 +61,11 @@ class MatchPredicate:
 
 
 class PatternMatcher:
+    # Maximum number of attempts to retry removing the destination directory
+    max_attempts: int = 5
+    # Delay between retry attempts in seconds
+    retry_delay_seconds: float = 0.2
+
     def __init__(
         self,
         includes: Sequence[str] = (),
@@ -93,6 +99,9 @@ class PatternMatcher:
 
         scan_children(basedir, "")
 
+    def add_entry(self, relpath: str, direntry: os.DirEntry):
+        self.all[relpath] = direntry
+
     def matches(self) -> Generator[tuple[str, os.DirEntry[str]], None, None]:
         for match_path, direntry in self.all.items():
             if self.predicate.matches(match_path, direntry):
@@ -108,9 +117,27 @@ class PatternMatcher:
         remove_dest: bool = True,
     ):
         if remove_dest and destdir.exists():
-            if verbose:
-                print(f"rmtree {destdir}", file=sys.stderr)
-            shutil.rmtree(destdir)
+            for attempt in range(self.max_attempts):
+                try:
+                    shutil.rmtree(destdir)
+                    if verbose:
+                        print(f"rmtree {destdir}", file=sys.stderr)
+                    break
+                except PermissionError:
+                    wait_time = self.retry_delay_seconds * (attempt + 2)
+                    if verbose:
+                        print(
+                            f"PermissionError calling shutil.rmtree('{destdir}') retrying after {wait_time}s",
+                            file=sys.stderr,
+                        )
+                    time.sleep(wait_time)
+                    if attempt == self.max_attempts - 1:
+                        if verbose:
+                            print(
+                                f"rmtree failed after {self.max_attempts} attempts, failing",
+                                file=sys.stderr,
+                            )
+                        raise
         destdir.mkdir(parents=True, exist_ok=True)
 
         for relpath, direntry in self.matches():
@@ -136,8 +163,30 @@ class PatternMatcher:
                     os.symlink(targetpath, destpath)
                 else:
                     # Regular file.
+
+                    # Sometimes multiple processes try to link the same file.
+                    # On Unix, we can safely unlink/remove a file and overwrite
+                    # it. However, on Windows a file that is in use cannot be
+                    # removed: https://docs.python.org/3/library/os.html#os.remove.
+                    # Here we check if the inode matches (true for hardlinks)
+                    # and avoid the unlink/link step in that case.
+                    if (
+                        destpath.exists()
+                        and not always_copy
+                        and os.stat(destpath).st_ino == os.stat(direntry.path).st_ino
+                    ):
+                        if verbose:
+                            print(
+                                f"skipping unlink and link for existing hardlink {direntry.path} -> {destpath}",
+                                file=sys.stderr,
+                                end="",
+                            )
+                        continue
+
                     if not remove_dest and (destpath.exists() or destpath.is_symlink()):
+                        # Hopefully safe even on Windows given the check above.
                         os.unlink(destpath)
+
                     destpath.parent.mkdir(parents=True, exist_ok=True)
                     linked_file = False
                     if not always_copy:

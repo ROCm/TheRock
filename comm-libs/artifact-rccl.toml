@@ -6,6 +6,10 @@
 include = [
   "share/rccl/**",
 ]
+[components.run."comm-libs/rccl/stage"]
+include = [
+  "bin/rcclras",
+]
 [components.test."comm-libs/rccl/stage"]
 include = [
   "bin/rccl-UnitTests",

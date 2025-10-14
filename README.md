@@ -44,7 +44,16 @@ instructions and configurations for alternatives.
 > [installing from releases](#installing-from-releases) in supported
 > configurations is often faster and easier.
 
+> [!IMPORTANT]
+> Frequent setup and building problems and their solutions can be found in section [Common Issues](docs/environment_setup_guide.md#common-issues).
+
 ### Setup - Ubuntu (24.04)
+
+> [!TIP]
+> `dvc` is used for version control of pre-compiled MIOpen kernels.
+> `dvc` is not a hard requirement, but it does reduce compile time.
+> `snap install --classic dvc` can be used to install on Ubuntu.
+> Visit the [DVC website](https://dvc.org/doc/install/linux) for other installation methods.
 
 ```bash
 # Install Ubuntu dependencies
@@ -57,10 +66,11 @@ cd TheRock
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches
-python ./build_tools/fetch_sources.py
+python3 ./build_tools/fetch_sources.py
 ```
 
 ### Setup - Windows 11 (VS 2022)
@@ -87,9 +97,11 @@ cd TheRock
 # Init python virtual environment and install python dependencies
 python -m venv .venv
 .venv\Scripts\Activate.bat
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches
+# Note that dvc is used for pulling large files
 python ./build_tools/fetch_sources.py
 ```
 
@@ -109,6 +121,24 @@ The build can be customized through cmake feature flags.
 > Not all family and targets are currently supported.
 > See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file
 > for available options.
+
+#### Discovering available targets on your system
+
+In case you don't have an existing ROCm/HIP installation from which you can run any of these tools:
+
+| Tool                    | Platform |
+| ----------------------- | -------- |
+| `amd-smi`               | Linux    |
+| `rocm-smi`              | Linux    |
+| `rocm_agent_enumerator` | Linux    |
+| `hipinfo`               | Windows  |
+| `amdgpu-arch`           | Both     |
+
+You can install the `rocm` Python package for any architecture inside a venv and run `amdgpu-arch` from there:
+
+1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv`
+1. `.tmpvenv/bin/amdgpu-arch` on Linux, `.tmpvenv\Scripts\amdgpu-arch` on Windows
+1. `rm -rf .tmpvenv`
 
 #### Optional configuration flags
 
@@ -152,9 +182,35 @@ minimal build):
 > A report of enabled/disabled features and flags will be printed on every
 > CMake configure.
 
+By default, components are built from the sources fetched via the submodules.
+For some components, external sources can be used instead.
+
+| External source settings                        | Description                                    |
+| ----------------------------------------------- | ---------------------------------------------- |
+| `-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=OFF`  | Use external composable-kernel source location |
+| `-DTHEROCK_USE_EXTERNAL_RCCL=OFF`               | Use external rccl source location              |
+| `-DTHEROCK_USE_EXTERNAL_RCCL_TESTS=OFF`         | Use external rccl-tests source location        |
+| `-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=<PATH>` | Path to composable-kernel sources              |
+| `-DTHEROCK_RCCL_SOURCE_DIR=<PATH>`              | Path to rccl sources                           |
+| `-DTHEROCK_RCCL_TESTS_SOURCE_DIR=<PATH>`        | Path to rccl-tests sources                     |
+
+Further flags allow to build components with specific features enabled.
+
+| Other flags                | Description                                                              |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `-DTHEROCK_ENABLE_MPI=OFF` | Enables building components with Message Passing Interface (MPI) support |
+
+> [!NOTE]
+> Building components with MPI support, currently requires MPI to be
+> pre-installed until [issue #1284](https://github.com/ROCm/TheRock/issues/1284)
+> is resolved.
+
 ### CMake build usage
 
-To build ROCm/HIP:
+For workflows that demand frequent rebuilds, it is _recommended to build it with ccache_ enabled to speed up the build.
+See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Windows](#ccache-usage-on-windows).
+
+Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
 ```bash
 cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu

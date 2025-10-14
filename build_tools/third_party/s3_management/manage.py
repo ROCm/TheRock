@@ -13,9 +13,7 @@ import dataclasses
 import functools
 import time
 
-from contextlib import suppress
 from os import path, makedirs, getenv
-from datetime import datetime
 from collections import defaultdict
 from typing import Iterable, List, Type, Dict, Set, TypeVar, Optional
 from re import sub, match, search
@@ -29,13 +27,22 @@ S3 = boto3.resource('s3')
 CLIENT = boto3.client('s3')
 
 # bucket for TheRock
-BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-nightly-python"))
+# We also manage `therock-nightly-python` (not the default to make the script safer to test)
+BUCKET_NAME = getenv("S3_BUCKET_PY", "therock-dev-python")
+BUCKET = S3.Bucket(BUCKET_NAME)
 # TODO: bucket mirror just to hold index used with CDN
 # BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
 INDEX_BUCKETS = {BUCKET} #, BUCKET_CDN}
 
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
+    # Note: v2-staging first, in case issues are observed while the script runs
+    # and the developer wants to more safely cancel the script.
+    "v2-staging/gfx110X-dgpu",
+    "v2-staging/gfx1151",
+    "v2-staging/gfx120X-all",
+    "v2-staging/gfx94X-dcgpu",
+    "v2-staging/gfx950-dcgpu",
     "v2/gfx110X-dgpu",
     "v2/gfx1151",
     "v2/gfx120X-all",
@@ -46,6 +53,8 @@ PREFIXES = [
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
 if CUSTOM_PREFIX:
     PREFIXES.append(CUSTOM_PREFIX)
+
+STRIP_PREFIX = getenv('STRIP_PREFIX', '')
 
 # NOTE: This refers to the name on the wheels themselves and not the name of
 # package as specified by setuptools, for packages with "-" (hyphens) in their
@@ -128,6 +137,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "xformers",
     "executorch",
     "setuptools",
+    "setuptools_scm",
     "wheel",
     # ---- JAX ----
     "jax",
@@ -135,14 +145,6 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "jax_rocm7_plugin",
     "jax_rocm7_pjrt",
 ]}
-
-# Should match torch-2.0.0.dev20221221+cu118-cp310-cp310-linux_x86_64.whl as:
-# Group 1: torch-2.0.0.dev
-# Group 2: 20221221
-PACKAGE_DATE_REGEX = r"([a-zA-z]*-[0-9.]*.dev)([0-9]*)"
-
-# How many packages should we keep of a specific package?
-KEEP_THRESHOLD = 60
 
 S3IndexType = TypeVar('S3IndexType', bound='S3Index')
 
@@ -167,21 +169,6 @@ class S3Object:
 
     def __lt__(self, other):
         return self.key < other.key
-
-
-def extract_package_build_time(full_package_name: str) -> datetime:
-    result = search(PACKAGE_DATE_REGEX, full_package_name)
-    if result is not None:
-        with suppress(ValueError):
-            # Ignore any value errors since they probably shouldn't be hidden anyways
-            return datetime.strptime(result.group(2), "%Y%m%d")
-    return datetime.now()
-
-
-def between_bad_dates(package_build_time: datetime):
-    start_bad = datetime(year=2022, month=8, day=17)
-    end_bad = datetime(year=2022, month=12, day=30)
-    return start_bad <= package_build_time <= end_bad
 
 
 def safe_parse_version(ver_str: str) -> Version:
@@ -226,13 +213,10 @@ class S3Index:
         for obj in all_sorted_packages:
             full_package_name = path.basename(obj)
             package_name = full_package_name.split('-')[0]
-            package_build_time = extract_package_build_time(full_package_name)
             # Hard pass on `rocm_sdk_libraries` and packages that are included in our allow list
             if not match(r"rocm_sdk_libraries_gfx", package_name.lower()) and package_name.lower() not in PACKAGE_ALLOW_LIST:
                 to_hide.add(obj)
                 continue
-            if packages[package_name] >= KEEP_THRESHOLD or between_bad_dates(package_build_time):
-                to_hide.add(obj)
             else:
                 packages[package_name] += 1
         return list(set(self.objects).difference({
@@ -305,8 +289,10 @@ class S3Index:
             if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
                 attributes += ' data-requires-python="&gt;=3.10"'
 
+            stripped_key = obj.key.removeprefix(STRIP_PREFIX) if STRIP_PREFIX else obj.key
+
             out.append(
-                f'    <a href="/{obj.key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
+                f'    <a href="/{stripped_key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
             )
         # Adding html footer
         out.append('  </body>')
@@ -385,11 +371,14 @@ class S3Index:
     @classmethod
     def fetch_object_names(cls: Type[S3IndexType], prefix: str) -> List[str]:
         obj_names = []
-        for obj in BUCKET.objects.filter(Prefix=prefix):
-            is_acceptable = ([path.dirname(obj.key) == prefix]) and obj.key.endswith(ACCEPTED_FILE_EXTENSIONS)
-            if not is_acceptable:
-                continue
-            obj_names.append(obj.key)
+        paginator = CLIENT.get_paginator('list_objects_v2')
+        page_iterator = paginator.paginate(Bucket=BUCKET_NAME, Prefix=prefix)
+        for page in page_iterator:
+            for obj in page['Contents']:
+                is_acceptable = ([path.dirname(obj['Key']) == prefix]) and obj['Key'].endswith(ACCEPTED_FILE_EXTENSIONS)
+                if not is_acceptable:
+                    continue
+                obj_names.append(obj['Key'])
         return obj_names
 
     def fetch_metadata(self: S3IndexType) -> None:

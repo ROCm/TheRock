@@ -57,6 +57,7 @@ setup(
             "amdclang++=rocm_sdk_core._cli:amdclangpp",
             "amdclang-cpp=rocm_sdk_core._cli:amdclang_cpp",
             "amdclang-cl=rocm_sdk_core._cli:amdclang_cl",
+            "amdgpu-arch=rocm_sdk_core._cli:amdgpu_arch",
             "amdflang=rocm_sdk_core._cli:amdflang",
             "amdlld=rocm_sdk_core._cli:amdlld",
             "hipcc=rocm_sdk_core._cli:hipcc",
@@ -68,13 +69,14 @@ setup(
         + (
             [
                 # These tools are only available on Linux.
+                "amd-smi=rocm_sdk_core._cli:amd_smi",
                 "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
                 "rocminfo=rocm_sdk_core._cli:rocm_info",
                 "rocm-smi=rocm_sdk_core._cli:rocm_smi",
             ]
             if platform.system() != "Windows"
             else [
-                # TODO(#600): add hipInfo on Windows
+                "hipInfo=rocm_sdk_core._cli:hipInfo",
             ]
         ),
     },

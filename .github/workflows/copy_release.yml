@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rocm_version:
-        description: ROCm version to copy
+        description: ROCm version to copy, e.g. 7.0.0rc20250912
         type: string
       amdgpu_family:
         type: choice
@@ -20,6 +20,7 @@ on:
           - 3.11
           - 3.12
           - 3.13
+        default: 3.12
       include_torch:
         type: boolean
         default: false
@@ -36,20 +37,20 @@ permissions:
 
 jobs:
   copy_python_packages:
-    name: Copy release | ${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }} | ${{ inputs.rocm_version }} | Python ${{ inputs.python_version }}
+    name: Copy nightly ${{ inputs.sourcesubdir }} -> dev ${{ inputs.destsubdir }} | ${{ inputs.amdgpu_family }} | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Install the AWS tool
-        run: ./dockerfiles/cpubuilder/install_awscli.sh
+        run: ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-dev-releases

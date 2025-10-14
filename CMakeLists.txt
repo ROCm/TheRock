@@ -16,13 +16,30 @@ cmake_policy(SET CMP0135 NEW)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CMakeDependentOption)
 include(ExternalProject)
+include(therock_globals)
+include(therock_default_targets)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
+include(therock_external_source)
 include(therock_features)
+include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
+
+################################################################################
+# Notices
+# If there are ongoing issues for specific configurations log them here.
+################################################################################
+
+#   message(WARNING
+#     "*************************************************\n"
+#     ".."
+#     " The last known good commit on {Windows,Linux} is"
+#     " https://github.com/ROCm/TheRock/commit/{HASH}"
+#     " See https://github.com/ROCm/TheRock/issues/{ISSUE} for details.\n"
+#     "*************************************************")
 
 ################################################################################
 # Testing Setup
@@ -57,18 +74,24 @@ set(ROCM_SYMLINK_LIBS OFF)
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
+option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
 
 # Source settings.
-# Source can be consumed from the https://github.com/ROCm/rocm-libraries superrepo,
-# while the default is to consume the submodules defined in TheRock's `.gitmodules`.
-option(THEROCK_USE_ROCM_LIBRARIES "Use the `rocm-libraries` superrepo" OFF)
-if(THEROCK_USE_ROCM_LIBRARIES AND NOT THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
-  message(FATAL_ERROR "If THEROCK_USE_ROCM_LIBRARIES is set, THEROCK_ROCM_LIBRARIES_SOURCE_DIR is required!")
-endif()
+# Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
+# allow to specify an alternative source location.
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-libraries")
+set(THEROCK_ROCM_LIBRARIES_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-libraries superrepo")
+cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
 
-if(THEROCK_ROCM_LIBRARIES_SOURCE_DIR)
-  cmake_path(ABSOLUTE_PATH THEROCK_ROCM_LIBRARIES_SOURCE_DIR NORMALIZE)
-endif()
+set(THEROCM_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT "${THEROCK_SOURCE_DIR}/rocm-systems")
+set(THEROCK_ROCM_SYSTEMS_SOURCE_DIR "${THEROCM_ROCM_SYSTEMS_SOURCE_DIR_DEFAULT}" CACHE STRING "Path to rocm-systems superrepo")
+cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
+
+# Allow to specify alternative source locations instead of using
+# repositories tracked in TheRock's `.gitmodules`.
+therock_enable_external_source("rccl" "${THEROCK_SOURCE_DIR}/comm-libs/rccl" OFF)
+therock_enable_external_source("rccl-tests" "${THEROCK_SOURCE_DIR}/comm-libs/rccl-tests" OFF)
+therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel" OFF)
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
@@ -99,7 +122,7 @@ endblock()
 # least from a major/minor perspective, the ROCM version is a "user" version, whereas
 # the HIP version is hardcoded into various places in the code.
 block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_VERSION)
-  set(VERSION_PATH "${CMAKE_CURRENT_SOURCE_DIR}/core/HIP/VERSION")
+  set(VERSION_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip/VERSION")
   if(NOT EXISTS "${VERSION_PATH}")
     message(FATAL_ERROR "Could not find HIP VERSION file: ${VERSION_PATH}")
   endif()
@@ -109,6 +132,26 @@ block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_
   list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
   message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
 endblock()
+
+################################################################################
+# Feature flags
+# Project wide flags for controlling the build system.
+################################################################################
+cmake_dependent_option(
+  THEROCK_FLAG_COMGR_DELAY_LOAD
+  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
+  ON "LINUX" OFF)
+
+# Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
+# Note that the profiler is an integral part of the system and disabling it is not
+# fully supported. However, in early bringup, it can be useful to disable building
+# it, even though that may cause problems in other libraries.
+# On some platforms (WIN32 presently), the profiler is always disabled.
+cmake_dependent_option(
+  THEROCK_FLAG_INCLUDE_PROFILER
+  "Allows the profiler to be manually disabled by setting to OFF"
+  ON "NOT WIN32" OFF)
+
 
 ################################################################################
 # Debug Options
@@ -184,7 +227,7 @@ therock_add_feature(HIP_RUNTIME
 )
 
 # Profiler Features.
-if(NOT WIN32)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
   therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
     GROUP PROFILER
     DESCRIPTION "Enables the closed-source rocprof trace decoder binary"
@@ -380,8 +423,6 @@ endif()
 # External project setup
 ################################################################################
 
-add_subdirectory(build_tools)
-
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
 add_subdirectory(third-party)
@@ -421,4 +462,3 @@ endif()
 # Finalization
 ################################################################################
 therock_subproject_merge_compile_commands()
-therock_create_dist()

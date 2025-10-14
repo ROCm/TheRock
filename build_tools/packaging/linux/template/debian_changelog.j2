@@ -1,0 +1,7 @@
+{{ package }} ({{ version }}) {{ distribution | default('UNRELEASED') }}; urgency={{ urgency | default('medium') }}
+
+{%- for change in changes %}
+  * {{ change }}
+{%- endfor %}
+
+ -- {{ maintainer_name }} <{{ maintainer_email }}>  {{ date }}

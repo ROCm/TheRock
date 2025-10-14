@@ -11,6 +11,8 @@ on:
         default: ""
       test_runs_on:
         type: string
+      platform:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -20,6 +22,8 @@ on:
         type: string
         default: ""
       test_runs_on:
+        type: string
+      platform:
         type: string
   push:
     branches:
@@ -32,8 +36,14 @@ jobs:
   test_sanity_check:
     name: "Sanity ROCM Test"
     runs-on: ${{ inputs.test_runs_on }}
-    strategy:
-      fail-fast: false
+    container:
+      image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
     defaults:
       run:
         shell: bash
@@ -44,8 +54,19 @@ jobs:
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
 
     steps:
+      - name: "Fetch 'build_tools' from repository"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: build_tools
+          path: prejob
+
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+
       - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: "ROCm/TheRock"
 
@@ -57,6 +78,7 @@ jobs:
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--base-only"
+          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
@@ -64,5 +86,14 @@ jobs:
 
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5
+        env:
+          # Enable verbose logging, see
+          # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
+          AMD_LOG_LEVEL: 4
         run: |
           pytest tests/ --log-cli-level=info --timeout=60
+
+      - name: Post-job cleanup processes on Windows
+        if: ${{ always() && runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'

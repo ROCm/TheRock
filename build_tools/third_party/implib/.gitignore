@@ -1,0 +1,19 @@
+# Bytecode
+__pycache__/
+*.py[cod]
+*.swp
+.*.swp
+
+# Temp files
+*.tramp.S
+*.init.c
+*.so*
+tests/*/a.out*
+tests/*/*.log
+
+# Coverage
+*.coverage
+*coverage.xml
+
+# GDB
+.gdb_history

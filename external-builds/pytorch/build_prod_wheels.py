@@ -32,14 +32,10 @@ python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
-# TODO(#910): Support torchvision and torchaudio on Windows
-python pytorch_torch_repo.py checkout --repo C:/b/pytorch
+python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
+python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
+python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
 ```
-
-Note that as of 2025-05-28, some small patches are needed to PyTorch's `__init__.py`
-to enable library resolution from `rocm` wheels. We will aim to land this at head
-in the PyTorch 2.8 timeframe and then rebase build support from the 2.7.0 ref
-to 2.8.
 
 2. Install rocm wheels:
 
@@ -60,7 +56,7 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
@@ -78,10 +74,11 @@ python build_prod_wheels.py build \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
-# TODO(#910): Support torchvision and torchaudio on Windows
-python build_prod_wheels.py build \
-    --output-dir %HOME%/tmp/pyout \
-    --pytorch-dir C:/b/pytorch
+python build_prod_wheels.py build ^
+    --output-dir %HOME%/tmp/pyout ^
+    --pytorch-dir C:/b/pytorch ^
+    --pytorch-audio-dir C:/b/audio ^
+    --pytorch-vision-dir C:/b/vision
 ```
 
 ## Building Linux portable wheels
@@ -102,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://d2awnip2yjpvqn.cloudfront.net/v2/gfx110X-dgpu/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -116,8 +113,8 @@ from datetime import date
 import json
 import os
 from pathlib import Path
+from packaging.version import Version, parse
 import platform
-import re
 import shutil
 import shlex
 import subprocess
@@ -366,12 +363,19 @@ def do_build(args: argparse.Namespace):
         )
 
     env: dict[str, str] = {
+        "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
         "ROCM_HOME": str(rocm_dir),
         "ROCM_PATH": str(rocm_dir),
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
+
+    if args.use_ccache:
+        print("Building with ccache, clearing stats first")
+        env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
+        env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+        exec(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
 
     # GLOO enabled for only Linux
     if not is_windows:
@@ -463,28 +467,46 @@ def do_build(args: argparse.Namespace):
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
+    print("--- Builds all completed")
+
+    if args.use_ccache:
+        ccache_stats_output = capture(
+            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+        )
+        print(f"ccache --show-stats output:\n{ccache_stats_output}")
+
 
 def do_build_triton(
     args: argparse.Namespace, triton_dir: Path, env: dict[str, str]
 ) -> str:
-    # TODO: Latest upstream triton calculates its own git hash and
-    # TRITON_WHEEL_VERSION_SUFFIX goes after the "+". Older versions
-    # as well as `ROCm/triton`, which does not call
-    # `get_git_version_suffix()`, must supply their own "+".
-    # The below only works for the latter and a better fix is needed.
     version_suffix = env.get("TRITON_WHEEL_VERSION_SUFFIX", "")
 
-    # Append the version suffix passed via `arg.version_suffix` to
-    # TRITON_WHEEL_VERSION_SUFFIX. If the latter was set before,
-    # replace any "+" in `args.version_suffix` with a "-" as multiple
-    # "+" characters result in an invalid version.
-    # If TRITON_WHEEL_VERSION_SUFFIX is not set, the version for a build
-    # based on ROCm 7.0.0rc20250728 will be `3.3.1+rocm7.0.0rc20250728`
-    # insteaf of `3.3.1`.
-    if re.search(r"\+", version_suffix):
-        version_suffix += str(args.version_suffix).replace("+", "-")
-    else:
-        version_suffix += str(args.version_suffix)
+    # Triton's setup.py constructs the final version string by using
+    # a few components:
+    # * Base version: `3.3.1`
+    # * Version suffix
+    #
+    # Version suffix itself consist of from following two parts:
+    # * git hash suffix:
+    #   * "+git<githash>" for development builds
+    #   * empty string "" for builds made from git release branches
+    # * Additional version information is passed by using environment variable
+    #   TRITON_WHEEL_VERSION_SUFFIX
+    #   For example:
+    #       env["TRITON_WHEEL_VERSION_SUFFIX"] = "+rocm7.0.0rc20250728"
+    #
+    # Version suffix part of the version is allowed to have only a single
+    # "+"-character. Therefore if there are multiple suffixes,
+    # they are joined togeher with `-` characters
+    # instead of `+` characters in Triton's setup.py so that
+    # there is only a single `+` character after the base version.
+    #
+    # For example:
+    # * PyTorch release/2.7 builds use Triton versions like:
+    #    3.3.1+rocm7.0.0rc20250728
+    # * PyTorch nightly builds use Triton versions like:
+    #    3.4.0+git12345678-rocm7.0.0rc20250728
+    version_suffix += str(args.version_suffix)
     env["TRITON_WHEEL_VERSION_SUFFIX"] = version_suffix
 
     triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
@@ -532,6 +554,44 @@ def do_build_triton(
     return f"{triton_wheel_name}=={installed_triton_version}"
 
 
+def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
+    # When USE_OPENMP is set (it is by default), torch_cpu.dll depends on OpenMP.
+    #
+    # Typically implementations of OpenMP are:
+    #   * Intel OpenMP, `libiomp`, which PyTorch upstream uses
+    #   * MSVC OpenMP, `libomp140`, which we'll use here since we have MSVC already
+    #   * (?) LLVM OpenMP (https://openmp.llvm.org/)?
+    #
+    # Torch's CMake build selects which OpenMP to use in `FindOpenMP.cmake`,
+    # then the relevant .dll files must be copied into the torch/lib/ folder or
+    # torch will fail to initialize. This feels like something that could be
+    # handled upstream as part of the centralized setup.py and/or CMake build
+    # processes, but given the varied scripts and build workflows upstream and
+    # multiple choices for where to source an implementation, we handle it here.
+    #
+    # If we wanted to switch to Intel OpenMP, we could:
+    #   1. Install Intel OpenMP (and/or MKL?)
+    #   2. Set CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH (?) so `FindOpenMP.cmake` finds them
+    #   3. Copy `libiomp5md.dll` to torch/lib
+    # Then remove the rest of the code from this function.
+
+    vc_tools_redist_dir = os.environ.get("VCToolsRedistDir", "")
+    if not vc_tools_redist_dir:
+        raise RuntimeError("VCToolsRedistDir not set, can't copy libomp to torch lib")
+
+    omp_name = "libomp140.x86_64.dll"
+    dll_paths = sorted(Path(vc_tools_redist_dir).rglob(omp_name))
+    if not dll_paths:
+        raise RuntimeError(
+            f"Did not find '{omp_name}' under '{vc_tools_redist_dir}', can't copy libomp to torch lib"
+        )
+
+    omp_path = dll_paths[0]
+    target_lib = pytorch_dir / "torch" / "lib"
+    print(f"Copying libomp from '{omp_path}' to '{target_lib}'")
+    shutil.copy2(omp_path, target_lib)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -542,8 +602,55 @@ def do_build_pytorch(
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
+    pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+
+    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.10 and higher Pytorch version
+    ## https://github.com/ROCm/TheRock/issues/1619
+    if not is_windows:
+        # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
+        if pytorch_build_version_parsed.release < (2, 10):
+            env["USE_FBGEMM_GENAI"] = "ON"
+            print(
+                f"FBGEMM_GENAI enabled (PyTorch < 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
+            )
+        else:
+            env["USE_FBGEMM_GENAI"] = (
+                "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
+            )
+            print(
+                f"FBGEMM_GENAI enabled (PyTorch >= 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
+            )
+
+        # Enabling/Disabling Flash attention based on Pytorch version in Linux
+        if pytorch_build_version_parsed.release < (2, 10):
+            env.update(
+                {
+                    "USE_FLASH_ATTENTION": "1",
+                    "USE_MEM_EFF_ATTENTION": "1",
+                }
+            )
+            print(
+                f"Flash Attention enabled (PyTorch < 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
+            )
+        else:
+            use_flash_attention = (
+                "1" if args.enable_pytorch_flash_attention_linux else "0"
+            )
+            env.update(
+                {
+                    "USE_FLASH_ATTENTION": use_flash_attention,
+                    "USE_MEM_EFF_ATTENTION": use_flash_attention,
+                }
+            )
+            print(
+                f"Flash Attention enabled (PyTorch >= 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
+            )
+
     env["USE_ROCM"] = "ON"
+    env["USE_CUDA"] = "OFF"
+    env["USE_MPI"] = "OFF"
+    env["USE_NUMA"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -561,12 +668,17 @@ def do_build_pytorch(
     # Add the _rocm_init.py file.
     (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
 
-    # Workaround missing features on windows.
+    # Windows-specific settings.
     if is_windows:
+        copy_msvc_libomp_to_torch_lib(pytorch_dir)
+
+        use_flash_attention = (
+            "1" if args.enable_pytorch_flash_attention_windows else "0"
+        )
         env.update(
             {
-                "USE_FLASH_ATTENTION": "0",
-                "USE_MEM_EFF_ATTENTION": "0",
+                "USE_FLASH_ATTENTION": use_flash_attention,
+                "USE_MEM_EFF_ATTENTION": use_flash_attention,
                 "DISTUTILS_USE_SDK": "1",
                 # Workaround compile errors in 'aten/src/ATen/test/hip/hip_vectorized_test.hip'
                 # on Torch 2.7.0: https://gist.github.com/ScottTodd/befdaf6c02a8af561f5ac1a2bc9c7a76.
@@ -577,6 +689,9 @@ def do_build_pytorch(
                 # We may want to fix that and other issues to then enable building tests.
                 "BUILD_TEST": "0",
             }
+        )
+        print(
+            f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
         )
 
     if not is_windows:
@@ -613,8 +728,6 @@ def do_build_pytorch(
             "install",
             "-r",
             pytorch_dir / "requirements.txt",
-            # TODO: Remove cmake<4 pin once the world adapts (check at end of 2025).
-            "cmake<4",
         ]
         + pip_install_args,
         cwd=pytorch_dir,
@@ -770,6 +883,11 @@ def main(argv: list[str]):
         help="Directory to copy built wheels to",
     )
     build_p.add_argument(
+        "--use-ccache",
+        action=argparse.BooleanOptionalAction,
+        help="Use ccache as the compiler launcher",
+    )
+    build_p.add_argument(
         "--pytorch-dir",
         default=directory_if_exists(script_dir / "pytorch"),
         type=Path,
@@ -817,6 +935,24 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch vision (requires --pytorch-vision-dir)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-flash-attention-windows",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch flash attention on Windows (enabled by default for Linux)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-flash-attention-linux",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch flash attention on Linux (enabled by default, sets USE_FLASH_ATTENTION=1)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-fbgemm-genai-linux",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
 
     today = date.today()

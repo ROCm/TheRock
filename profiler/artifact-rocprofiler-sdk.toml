@@ -24,6 +24,9 @@ include = [
 include = [
   "bin/**",
   "share/rocprofiler-sdk/**",
+  "share/rocprofiler-sdk-rocpd/**",
+  "share/rocprofiler-sdk-roctx/**",
+  "lib/python*/**",
 ]
 [components.test."profiler/rocprofiler-sdk/stage"]
 include = [

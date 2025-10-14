@@ -46,6 +46,10 @@ endif()
 # via THEROCK_NO_INSTALL_RPATH target property, performs default installation
 # RPATH assignment.
 function(_therock_post_process_rpath_target target)
+  if(THEROCK_PRIVATE_BUILD_RPATH_DIRS)
+    message(STATUS "Add build RPATH ${THEROCK_PRIVATE_BUILD_RPATH_DIRS} on ${target}")
+    set_property(TARGET "${target}" APPEND PROPERTY BUILD_RPATH "${THEROCK_PRIVATE_BUILD_RPATH_DIRS}")
+  endif()
   get_target_property(_no_install_rpath "${target}" THEROCK_NO_INSTALL_RPATH)
   if(THEROCK_NO_INSTALL_RPATH OR _no_install_rpath)
     return()
@@ -116,3 +120,33 @@ if(THEROCK_SPLIT_DEBUG_INFO AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
   endblock()
 endif()
+
+# Add convenience targets within the sub-project that interact with the super-project.
+# This allows developers to work entirely in the sub-project build directory and
+# perform most operations.
+
+# Removes the sub-project stage.stamp file. This will cause any subsequent action
+# on the super-project to see the sub-project as out of date with respect to
+# being stage installed and populated in distributions. We invoke it on ALL
+# so that most local build commands (i.e. `ninja` without args) triggers
+# invalidation. During normal super-project build, once the build phase is
+# done, the build.stamp will be touched, which will cause the stage.stamp to
+# show as out of date. So either way, the ordering is preserved.
+add_custom_target(therock-touch ALL
+  COMMAND
+    "${CMAKE_COMMAND}" -E rm -f "${THEROCK_STAGE_STAMP_FILE}"
+  VERBATIM
+)
+
+# Removes the sub-project build.stamp file, indicating that the project must be
+# rebuilt, then invokes the parent {target}+dist, causing all stage installation
+# and distributions to be populated upon successful build.
+add_custom_target(therock-dist
+  COMMAND
+    "${CMAKE_COMMAND}" -E rm -f "${THEROCK_BUILD_STAMP_FILE}"
+  COMMAND
+    "${CMAKE_COMMAND}" --build "${THEROCK_BINARY_DIR}" --target "${THEROCK_SUBPROJECT_TARGET}+dist"
+  COMMENT "Trigger super-project dist"
+  VERBATIM
+  USES_TERMINAL
+)

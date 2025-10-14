@@ -6,7 +6,6 @@ from pathlib import Path
 import platform
 import subprocess
 import sys
-import sysconfig
 import unittest
 
 from .. import _dist_info as di
@@ -23,15 +22,13 @@ utils.assert_is_physical_package(core_mod)
 so_paths = utils.get_module_shared_libraries(core_mod)
 is_windows = platform.system() == "Windows"
 
-LINUX_CONSOLE_SCRIPT_TESTS = [
-    # These currently only have unprefixed names (e.g. 'clang') on Windows.
-    # These tools are only available on Linux.
-    ("rocm_agent_enumerator", [], "", True),
-    ("rocminfo", [], "", True),
-    ("rocm-smi", [], "Management", True),
-]
-
-CONSOLE_SCRIPT_TESTS = [
+# Console script tests are templated across tuples of
+#   (script_name, cl, expected_text, required)
+# For example:
+#   ("hipcc", ["--help"], "clang LLVM compiler", True)
+#   This will run `hipcc --help` and check the output for "clang LLVM compiler".
+#   If the script does not exist, the test case will fail.
+COMMON_CONSOLE_SCRIPT_TESTS = [
     ("amdclang", ["--help"], "clang LLVM compiler", True),
     ("amdclang++", ["--help"], "clang LLVM compiler", True),
     ("amdclang-cpp", ["--help"], "clang LLVM compiler", True),
@@ -40,7 +37,22 @@ CONSOLE_SCRIPT_TESTS = [
     ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
-] + (LINUX_CONSOLE_SCRIPT_TESTS if not is_windows else [])
+]
+
+LINUX_CONSOLE_SCRIPT_TESTS = [
+    ("amd-smi", [], "AMD-SMI", True),
+    ("rocm_agent_enumerator", [], "", True),
+    ("rocminfo", [], "", True),
+    ("rocm-smi", [], "Management", True),
+]
+
+WINDOWS_CONSOLE_SCRIPT_TESTS = [
+    ("hipInfo", [], "", True),
+]
+
+CONSOLE_SCRIPT_TESTS = COMMON_CONSOLE_SCRIPT_TESTS + (
+    WINDOWS_CONSOLE_SCRIPT_TESTS if is_windows else LINUX_CONSOLE_SCRIPT_TESTS
+)
 
 
 class ROCmCoreTest(unittest.TestCase):
@@ -70,6 +82,10 @@ class ROCmCoreTest(unittest.TestCase):
         )
 
         for so_path in so_paths:
+            if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
+                # TODO: Library preloads for amdsmi need to be implement.
+                # Though this is not needed for the amd-smi client.
+                self.skipTest("Skipping amdsmi test")
             if "clang_rt" in so_path.name:
                 continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):

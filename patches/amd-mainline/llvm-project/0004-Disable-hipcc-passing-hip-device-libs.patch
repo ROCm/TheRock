@@ -1,0 +1,43 @@
+From 0c49dff21a4552035f38d9eaa5100fa024707678 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Thu, 13 Feb 2025 19:07:07 -0800
+Subject: [PATCH 4/8] Disable hipcc passing hip-device-libs.
+
+In modern times, the clang driver is far more knowledgable about this stuff and can operate without instruction.
+---
+ amd/hipcc/src/hipBin_amd.h | 19 ++++++++++---------
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/amd/hipcc/src/hipBin_amd.h b/amd/hipcc/src/hipBin_amd.h
+index c74b43ff598f..cb70026f6abf 100644
+--- a/amd/hipcc/src/hipBin_amd.h
++++ b/amd/hipcc/src/hipBin_amd.h
+@@ -844,15 +844,16 @@ void HipBinAmd::executeHipCCCmd(vector<string> argv) {
+     }
+   }
+ 
+-  if (hasHIP) {
+-    fs::path bitcodeFs = roccmPath;
+-    bitcodeFs /= "amdgcn/bitcode";
+-    if (deviceLibPath != bitcodeFs.string()) {
+-      string hip_device_lib_str = " --hip-device-lib-path=\""
+-                                  + deviceLibPath + "\"";
+-      HIPCXXFLAGS += hip_device_lib_str;
+-    }
+-  }
++  // Clang knows better how to find its device libs. Let it.
++  // if (hasHIP) {
++  //   fs::path bitcodeFs = roccmPath;
++  //   bitcodeFs /= "amdgcn/bitcode";
++  //   if (deviceLibPath != bitcodeFs.string()) {
++  //     string hip_device_lib_str = " --hip-device-lib-path=\""
++  //                                 + deviceLibPath + "\"";
++  //     HIPCXXFLAGS += hip_device_lib_str;
++  //   }
++  // }
+ 
+   // to avoid using dk linker or MSVC linker
+   if (isWindows()) {
+-- 
+2.48.1
+

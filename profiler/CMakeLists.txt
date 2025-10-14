@@ -28,7 +28,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
     # USE_DIST_AMDGPU_TARGETS once fixed.
     # See: https://github.com/ROCm/aqlprofile/issues/2
     DISABLE_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "aqlprofile"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
@@ -46,7 +47,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   therock_cmake_subproject_declare(rocprofiler-sdk
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "rocprofiler-sdk"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -79,7 +81,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
   therock_cmake_subproject_declare(roctracer
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "roctracer"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/roctracer"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/roctracer"
     BACKGROUND_BUILD
     COMPILER_TOOLCHAIN
       # Must build with the HIP compiler.

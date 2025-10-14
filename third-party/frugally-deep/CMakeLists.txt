@@ -17,6 +17,8 @@ therock_cmake_subproject_declare(therock-frugally-deep
     therock-eigen
     therock-nlohmann-json
     therock-FunctionalPlus
+  CMAKE_ARGS
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 therock_cmake_subproject_provide_package(
   therock-frugally-deep frugally-deep lib/cmake/frugally-deep)

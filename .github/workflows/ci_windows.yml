@@ -5,49 +5,85 @@ on:
     inputs:
       amdgpu_families:
         type: string
+      test_labels:
+        type: string
       artifact_run_id:
         type: string
       test_runs_on:
         type: string
-      windows_use_prebuilt_artifacts:
+      expect_failure:
+        type: boolean
+      use_prebuilt_artifacts:
         type: string
       extra_cmake_options:
         type: string
         default: "-DBUILD_TESTING=ON"
+      test_type:
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  build_windows_packages:
-    name: Build
-    if: ${{ inputs.windows_use_prebuilt_artifacts == 'false' }}
-    uses: ./.github/workflows/build_windows_packages.yml
+  build_windows_artifacts:
+    name: Build Artifacts
+    if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
+    uses: ./.github/workflows/build_windows_artifacts.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       extra_cmake_options: ${{ inputs.extra_cmake_options }}
+      expect_failure: ${{ inputs.expect_failure }}
     permissions:
       contents: read
       id-token: write
 
-  test_windows_packages:
-    needs: [build_windows_packages]
-    name: Test
+  # TODO: rework "artifact_run_id" and "use_prebuilt_artifacts" here?
+  #   I don't want to copy/paste this condition and special case plumbing
+  #   through multiple workflows. All the packaging and testing workflows need
+  #   to know is what artifact run id to use. That could be the current
+  #   (implicit) run id, or it could be an explicit run id.
+  #   How about having the "build artifacts" job run as a passthrough?
+
+  test_windows_artifacts:
+    needs: [build_windows_artifacts]
+    name: Test Artifacts
     # If the dependent job failed/cancelled, this job will not be run
-    # The windows_use_prebuilt_artifacts "or" statement ensures that tests will run if previous build step is run or skipped.concurrency.
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.concurrency.
     if: >-
       ${{
         !failure() &&
         !cancelled() &&
         (
-          inputs.windows_use_prebuilt_artifacts == 'false' ||
-          inputs.windows_use_prebuilt_artifacts == 'true'
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
         )
       }}
-    strategy:
-      fail-fast: false
-    uses: ./.github/workflows/test_packages.yml
+    uses: ./.github/workflows/test_artifacts.yml
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+
+  build_windows_python_packages:
+    needs: [build_windows_artifacts]
+    name: Build Python
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.concurrency.
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        )
+      }}
+    uses: ./.github/workflows/build_windows_python_packages.yml
+    with:
+      artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      amdgpu_family: ${{ inputs.amdgpu_families }}
+      package_version: "7.0.0.dev0"  # TODO: setup version with a script/workflow

@@ -223,3 +223,7 @@ These artifacts are built if any project features requiring them are enabled:
 - `rand`: Random number generator libraries.
 - `rccl`: Collective communication libraries.
 - `MIOpen`: MIOpen kernel-select/fusion library.
+
+> [!NOTE]
+> After adding a new artifact via `therock_provide_artifact()`, you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it. <br>
+> See the [Adding Support for New Components](./installing_artifacts.md#adding-support-for-new-components) guide for step-by-step instructions.

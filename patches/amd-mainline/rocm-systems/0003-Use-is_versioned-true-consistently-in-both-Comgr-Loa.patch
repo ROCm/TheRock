@@ -1,0 +1,27 @@
+From 81def63b75bb7876e67f9bcc4a6ef9b0165ce880 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Fri, 9 May 2025 19:21:34 -0700
+Subject: [PATCH 3/9] Use is_versioned = true consistently in both
+ Comgr::LoadLib paths.
+
+Prior to this, RTCProgram was using is_version = true and device initialization was using false. On Windows, this was causing us to attempt to load amd_comgr_3.dll at device load and amd_comgr0605.dll for RTC programs. Obviously, there is only one DLL and it must be used consistently.
+---
+ projects/clr/rocclr/device/device.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/clr/rocclr/device/device.cpp b/projects/clr/rocclr/device/device.cpp
+index 6beb967129..e7554a32d8 100644
+--- a/projects/clr/rocclr/device/device.cpp
++++ b/projects/clr/rocclr/device/device.cpp
+@@ -782,7 +782,7 @@ bool Device::ValidateComgr() {
+ #if defined(USE_COMGR_LIBRARY)
+   // Check if Lightning compiler was requested
+   if (settings_->useLightning_) {
+-    constexpr bool kComgrVersioned = false;
++    constexpr bool kComgrVersioned = true;
+     std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib, kComgrVersioned);
+     // Use Lightning only if it's available
+     settings_->useLightning_ = amd::Comgr::IsReady();
+-- 
+2.43.0
+

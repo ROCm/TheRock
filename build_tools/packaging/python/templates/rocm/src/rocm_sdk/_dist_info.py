@@ -6,6 +6,7 @@ of bootstrapping, we are including it inline for the moment.
 
 import importlib.util
 import os
+import subprocess
 
 
 CACHED_TARGET_FAMILY: str | None = None
@@ -95,16 +96,37 @@ class PackageEntry:
         return self.dist_package_template
 
 
+def discover_current_target_family() -> str | None:
+    try:
+        result = subprocess.check_output(["amdgpu-arch"], text=True)
+        if result:
+            arch_set = set(result.strip().split("\n"))
+            suffixes = ["-all", "-dgpu", "-igpu", "-dcgpu"]
+            for arch in arch_set:
+                # There may be multiple architecture supported on the system.
+                # This will select the first matching family.
+                arch_family = arch[:-1] + "X"
+                for suffix in suffixes:
+                    target_family = arch_family + suffix
+                    if target_family in AVAILABLE_TARGET_FAMILIES:
+                        return target_family
+                if arch in AVAILABLE_TARGET_FAMILIES:
+                    return arch
+    except subprocess.CalledProcessError as e:
+        print(f"[WARNING] amdgpu-arch failed with return code {e.returncode}")
+        print(f"[stderr] {e.output}")
+    except FileNotFoundError:
+        print(f"[WARNING] failed to run amdgpu-arch: binary not found.")
+    except Exception as e:
+        print(f"[WARNING] Unexpected error running amdgpu-arch: {e}")
+    return None
+
+
 # Resolve the build target family. This consults a list of things in increasing
 # order of specificity:
 #   1. "ROCM_SDK_TARGET_FAMILY" environment variable
 #   2. Dynamically discovered/most salient target family on the actual system
 #   3. dist_info.DEFAULT_TARGET_FAMILY
-def discover_current_target_family() -> str | None:
-    # TODO: Implement dynamic discovery.
-    return None
-
-
 def determine_target_family() -> str:
     global CACHED_TARGET_FAMILY
     if CACHED_TARGET_FAMILY is not None:
@@ -171,13 +193,13 @@ LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", ""
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
 
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
-LibraryEntry("hipblas", "libraries", "libhipblas.so*", "libhipblas*.dll")
+LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so*", "hiprand*.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "hipblaslt*.dll")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
 
 # Others we may want:

@@ -10,54 +10,82 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         required: true
         type: string
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
+        required: true
+        type: string
+      s3_staging_subdir:
+        description: S3 staging subdirectory, not including the GPU-family
         required: true
         type: string
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         required: true
         type: string
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
       rocm_version:
         description: ROCm version to pip install
         type: string
       pytorch_version:
-        description: Pytorch version to checkout. ("nightly", or "release/2.7")
+        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
       pytorch_patchset:
         description: Patch directory name from where to apply existing patches.
         required: true
         type: string
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
       python_version:
         required: true
         type: string
         default: "3.12"
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: S3 staging subdirectory, not including the GPU-family
+        type: string
+        default: "v2-staging"
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
         default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
       pytorch_version:
-        description: Pytorch version to checkout. ("nightly", or "release/2.7")
+        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
         default: "release/2.7"
@@ -73,20 +101,27 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build Linux PyTorch Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
+    name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:543ba2609de3571d2c64f3872e5f1af42fdfa90d074a7baccb1db120c9514be2
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
     outputs:
+      cp_version: ${{ env.cp_version }}
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
+      torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
+      torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
+      triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Configure Git Identity
         run: |
@@ -107,18 +142,16 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
-      # Github workflows do not have if/else and therefore we define two jobs with different if clauses.
-      # First the if branch to checkout nightly version of code for the build.
+      # Checkout nightly sources from https://github.com/pytorch/pytorch
       - name: Checkout PyTorch Source Repos from nightly branch
-        # Checkout default upstream PyTorch/PyTorch branch.
         if: ${{ inputs.pytorch_version == 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout --patch --patchset nightly
 
-      # Then the else branch to checkout release version of source code instead.
+      # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ inputs.pytorch_version != 'nightly' }}
         run: |
@@ -150,37 +183,41 @@ jobs:
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
-      - name: Configure AWS Credentials
-        if: always()
-        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
-
       - name: Sanity Check Wheel
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}/
 
-      - name: Upload wheels to S3
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+
+      - name: Upload wheels to S3 staging
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
-      - name: (Re-)Generate Python package release index
+      - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}
 
   generate_target_to_run:
     name: Generate target_to_run
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Generating target to run
         id: configure
@@ -190,14 +227,71 @@ jobs:
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
+    name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_pytorch_wheels, generate_target_to_run]
-
     uses: ./.github/workflows/test_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-      cloudfront_url: ${{ inputs.cloudfront_url }}
+      package_index_url: ${{ inputs.cloudfront_staging_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
       pytorch_version: ${{ inputs.pytorch_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
+
+  upload_pytorch_wheels:
+    name: Release PyTorch Wheels to S3
+    needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    env:
+      S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+      CP_VERSION: "${{ needs.build_pytorch_wheels.outputs.cp_version }}"
+      TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
+      TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
+      TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
+      TRITON_VERSION: "${{ needs.build_pytorch_wheels.outputs.triton_version }}"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+
+      - name: Determine upload flag
+        env:
+          BUILD_RESULT: ${{ needs.build_pytorch_wheels.result }}
+          TEST_RESULT: ${{ needs.test_pytorch_wheels.result }}
+          TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+          BYPASS_TESTS_FOR_RELEASES: ${{ needs.generate_target_to_run.outputs.bypass_tests_for_releases }}
+        run: python ./build_tools/github_actions/promote_wheels_based_on_policy.py
+
+      - name: Copy PyTorch wheels from staging to release S3
+        if: ${{ env.upload == 'true' }}
+        run: |
+          echo "Copying exact tested wheels to release S3 bucket..."
+          aws s3 cp \
+            s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
+            --recursive \
+            --exclude "*" \
+            --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "pytorch_triton_rocm-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+
+      - name: (Re-)Generate Python package release index
+        if: ${{ env.upload == 'true' }}
+        run: |
+          pip install boto3 packaging
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}

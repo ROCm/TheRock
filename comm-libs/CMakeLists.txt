@@ -2,7 +2,7 @@ if(THEROCK_ENABLE_RCCL)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
-  if(NOT WIN32)
+  if(THEROCK_FLAG_INCLUDE_PROFILER)
     list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
   endif()
 
@@ -12,7 +12,8 @@ if(THEROCK_ENABLE_RCCL)
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
-    EXTERNAL_SOURCE_DIR "rccl"
+    EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_SOURCE_DIR}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -49,14 +50,15 @@ if(THEROCK_ENABLE_RCCL)
 
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rccl-tests
-      EXTERNAL_SOURCE_DIR "rccl-tests"
+      EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_TESTS_SOURCE_DIR}"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DROCM_PATH=
 #        -DROCM_DIR=
         "-DEXPLICIT_ROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
-        -DUSE_MPI=OFF
+        -DUSE_MPI=${THEROCK_ENABLE_MPI}
       COMPILER_TOOLCHAIN
         amd-hip
       BUILD_DEPS
