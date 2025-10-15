@@ -72,9 +72,9 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     ${patch_source_commands}
-  # COMMAND
+  COMMAND
     # Provide our own version map with private symbol versions.
-    # "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/src/liblzma/liblzma_linux.map"
+    "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/src/liblzma/liblzma_linux.map"
   COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"
