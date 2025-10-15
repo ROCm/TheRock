@@ -274,6 +274,7 @@ def upload_build_summary(args):
     manifest_url = f"{bucket_url}/manifests/{amdgpu_family}/therock-manifest.json"
     gha_append_step_summary(f"[Manifest]({manifest_url})")
 
+
 def run(args):
     if not args.build_dir.is_dir():
         log(
