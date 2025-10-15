@@ -1,0 +1,146 @@
+name: TheRock Test Components Sharded
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+        default: ""
+      test_runs_on:
+        type: string
+      platform:
+        type: string
+      num_shards:
+        type: number
+        default: 8
+        description: "Number of test shards to run in parallel"
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        type: string
+        default: ""
+      amdgpu_families:
+        type: string
+        default: ""
+      test_runs_on:
+        type: string
+      platform:
+        type: string
+      num_shards:
+        type: number
+        default: 8
+  push:
+    branches:
+      - ADHOCBUILD
+
+permissions:
+  contents: read
+  id-token: write  # Move to top level for OIDC
+
+jobs:
+  test_components_sharded:
+    name: "Sharded ROCM Test - Shard ${{ matrix.shard }}"
+    runs-on: ${{ inputs.test_runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(format('[{0}]', join(range(1, inputs.num_shards || 8), ','))) }}
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
+      SHARD_ID: ${{ matrix.shard }}
+      TOTAL_SHARDS: ${{ inputs.num_shards || 8 }}
+      ROCR_VISIBLE_DEVICES: 0  # Each runner uses its single GPU
+    steps:
+      - name: Configure AWS Credentials - Tests
+        uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-tests
+
+      - name: "Fetch 'build_tools' from repository"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          sparse-checkout: build_tools
+          path: prejob
+
+      - name: Pre-job cleanup processes on Windows
+        if: ${{ runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+
+      - name: Checkout Repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: "ROCm/TheRock"
+
+      - name: Run setup test environment workflow
+        uses: './.github/actions/setup_test_environment'
+        with:
+          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: "--tests"
+          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+
+      - name: Set HIP_CLANG_PATH for windows
+        if: ${{ runner.os == 'Windows' }}
+        run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
+
+      - name: Sharded Tests
+        timeout-minutes: 600
+        run: |
+          cd tests/sharding
+          pip install -r requirements.txt
+          pip install pytest-xdist
+          
+          echo "Running shard $SHARD_ID of $TOTAL_SHARDS"
+          
+          # Run only this shard's portion of tests
+          # pytest-xdist will automatically distribute tests based on shard ID
+          pytest -v -s --tb=short tests.py \
+            --rock=${OUTPUT_ARTIFACTS_DIR} \
+            --dist=loadscope \
+            --numprocesses=1 \
+            --shard-id=$SHARD_ID \
+            --num-shards=$TOTAL_SHARDS
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-shard-${{ matrix.shard }}
+          path: |
+            tests/sharding/test-results-*.xml
+            tests/sharding/*.log
+
+      - name: Post-job cleanup processes on Windows
+        if: ${{ always() && runner.os == 'Windows' }}
+        shell: powershell
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+
+  # Aggregate results from all shards
+  aggregate_results:
+    name: "Aggregate Test Results"
+    runs-on: ubuntu-latest
+    needs: test_components_sharded
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: test-results
+
+      - name: Aggregate and report results
+        run: |
+          echo "Test results from all shards:"
+          find test-results -name "*.xml" -o -name "*.log" | while read file; do
+            echo "=== $file ==="
+            cat "$file"
+          done

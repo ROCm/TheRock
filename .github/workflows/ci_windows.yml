@@ -22,6 +22,7 @@ on:
         type: string
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
@@ -46,7 +47,7 @@ jobs:
 
   test_windows_artifacts:
     needs: [build_windows_artifacts]
-    name: Test Artifacts
+    name: Test Artifacts Sharded
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
@@ -59,13 +60,17 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         )
       }}
-    uses: ./.github/workflows/test_artifacts.yml
+    uses: ./.github/workflows/test_artifacts_sharded.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      test_type: ${{ inputs.test_type }}
-      test_labels: ${{ inputs.test_labels }}
+      # test_type: ${{ inputs.test_type }}
+      # test_labels: ${{ inputs.test_labels }}
+    permissions:
+      contents: read
+      id-token: write
 
   build_windows_python_packages:
     needs: [build_windows_artifacts]
