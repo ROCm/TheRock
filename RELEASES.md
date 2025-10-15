@@ -10,7 +10,7 @@ part of Continuous Delivery (CD) nightly releases. See also the
 > [!WARNING]
 > These instructions assume familiarity with how to use ROCm. Please see
 > https://rocm.docs.amd.com/ for general information about the ROCm software
-> platform.
+> platform. In addition, Linux users, please be aware of the [prerequisites](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access), including enabling GPU access, needed to run ROCm.
 >
 > **Note: these install steps are a substitute for those on that website**.
 
