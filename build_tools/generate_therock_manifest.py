@@ -13,19 +13,19 @@ import sys
 # git helpers
 # -----------------------
 
+
 def _run(cmd, cwd=None, check=True) -> str:
     if isinstance(cmd, str):
         cmd = shlex.split(cmd)
-    res = subprocess.run(cmd, cwd=cwd, text=True,
-                         capture_output=True, check=False)
+    res = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
     if check and res.returncode != 0:
-        raise RuntimeError(
-            f"Command failed: {' '.join(cmd)}\n{res.stderr}"
-        )
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{res.stderr}")
     return res.stdout.strip()
+
 
 def git_root() -> Path:
     return Path(_run(["git", "rev-parse", "--show-toplevel"]))
+
 
 def list_submodules_via_gitconfig(repo_dir: Path):
     """
@@ -33,9 +33,16 @@ def list_submodules_via_gitconfig(repo_dir: Path):
     Returns [{name, path, url, branch?}]
     """
     raw = _run(
-        ["git", "config", "-f", ".gitmodules",
-         "--get-regexp", r"^submodule\..*\.path$"],
-        cwd=repo_dir, check=False
+        [
+            "git",
+            "config",
+            "-f",
+            ".gitmodules",
+            "--get-regexp",
+            r"^submodule\..*\.path$",
+        ],
+        cwd=repo_dir,
+        check=False,
     )
     if not raw:
         return []
@@ -48,27 +55,46 @@ def list_submodules_via_gitconfig(repo_dir: Path):
         if not m:
             continue
         name = m.group("name")
-        url = _run(["git", "config", "-f", ".gitmodules",
-                    "--get", f"submodule.{name}.url"],
-                   cwd=repo_dir, check=False).strip() or None
-        branch = _run(["git", "config", "-f", ".gitmodules",
-                       "--get", f"submodule.{name}.branch"],
-                      cwd=repo_dir, check=False).strip() or None
-        out.append({
-            "name": name,
-            "path": path.strip(),
-            "url": url,
-            "branch": branch
-        })
+        url = (
+            _run(
+                [
+                    "git",
+                    "config",
+                    "-f",
+                    ".gitmodules",
+                    "--get",
+                    f"submodule.{name}.url",
+                ],
+                cwd=repo_dir,
+                check=False,
+            ).strip()
+            or None
+        )
+        branch = (
+            _run(
+                [
+                    "git",
+                    "config",
+                    "-f",
+                    ".gitmodules",
+                    "--get",
+                    f"submodule.{name}.branch",
+                ],
+                cwd=repo_dir,
+                check=False,
+            ).strip()
+            or None
+        )
+        out.append({"name": name, "path": path.strip(), "url": url, "branch": branch})
     return out
+
 
 def submodule_pin(repo_dir: Path, commit: str, sub_path: str):
     """
     Read the gitlink SHA for submodule `sub_path` at `commit`.
     Uses: git ls-tree <commit> -- <path>
     """
-    out = _run(["git", "ls-tree", commit, "--", sub_path],
-               cwd=repo_dir, check=False)
+    out = _run(["git", "ls-tree", commit, "--", sub_path], cwd=repo_dir, check=False)
     if not out:
         return None
     for line in out.splitlines():
@@ -76,6 +102,7 @@ def submodule_pin(repo_dir: Path, commit: str, sub_path: str):
         if len(parts) >= 3 and parts[1] == "commit":
             return parts[2]
     return None
+
 
 def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     """
@@ -87,23 +114,19 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
         return []
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
+
 # ---------------
-# Main 
+# Main
 # ---------------
+
 
 def main():
     ap = argparse.ArgumentParser(
         description="Generate submodule pin/patch manifest for TheRock."
     )
+    ap.add_argument("-o", "--output", required=True, help="Output JSON path")
     ap.add_argument(
-        "-o", "--output",
-        required=True,
-        help="Output JSON path"
-    )
-    ap.add_argument(
-        "--commit",
-        help="TheRock commit/ref to inspect (default: HEAD)",
-        default="HEAD"
+        "--commit", help="TheRock commit/ref to inspect (default: HEAD)", default="HEAD"
     )
     args = ap.parse_args()
 
@@ -121,13 +144,15 @@ def main():
     rows = []
     for e in sorted(entries, key=lambda x: x["path"] or ""):
         pin = submodule_pin(repo_root, the_rock_commit, e["path"])
-        rows.append({
-            "submodule_name": e["name"],
-            "submodule_path": e["path"],
-            "submodule_url": e["url"],
-            "pin_sha": pin,
-            "patches": patches_for_submodule_by_name(repo_root, e["name"]),
-        })
+        rows.append(
+            {
+                "submodule_name": e["name"],
+                "submodule_path": e["path"],
+                "submodule_url": e["url"],
+                "pin_sha": pin,
+                "patches": patches_for_submodule_by_name(repo_root, e["name"]),
+            }
+        )
 
     manifest = {
         "the_rock_commit": the_rock_commit,
@@ -143,6 +168,7 @@ def main():
 
     print(str(out_path))
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
