@@ -16,6 +16,7 @@ part of Continuous Delivery (CD) nightly releases. See also the
 
 Table of contents:
 
+- [Prerequisites](#prerequisites)
 - [Installing releases using pip](#installing-releases-using-pip)
   - [Python packages release status](#python-packages-release-status)
   - [Installing ROCm Python packages](#installing-rocm-python-packages)
@@ -27,6 +28,17 @@ Table of contents:
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
   - [Using installed tarballs](#using-installed-tarballs)
+
+## Prerequisites
+
+> [!IMPORTANT]
+> **Linux users**: You need to add your user to the `render` and `video` groups to access ROCm devices:
+>
+> ```bash
+> sudo usermod -a -G render,video $LOGNAME
+> ```
+>
+> After running this command, log out and log back in for the changes to take effect.
 
 ## Installing releases using pip
 
