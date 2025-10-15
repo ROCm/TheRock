@@ -376,8 +376,8 @@ wrapper Python wheels or utility scripts.
 
 Release tarballs are automatically uploaded to AWS S3 buckets.
 
-| S3 bucket                                                                    | Description                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| S3 bucket                                                                              | Description                                       |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the `main` branch             |
 | [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️ |
 
