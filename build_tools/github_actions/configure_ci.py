@@ -280,6 +280,25 @@ def matrix_generator(
             filter_known_names(requested_target_names, "target")
         )
 
+        # If any workflow dispatch test labels are specified, we run full tests for those specific tests
+        workflow_dispatch_test_labels_str = (
+            base_args.get("workflow_dispatch_linux_test_labels")
+            if platform == "linux"
+            else base_args.get("workflow_dispatch_windows_test_labels")
+        )
+        # (ex: "test:rocprim, test:hipcub" -> ["test:rocprim", "test:hipcub"])
+        workflow_dispatch_test_labels = [
+            test_label.trim()
+            for test_label in workflow_dispatch_test_labels_str.split(",")
+        ]
+
+        requested_test_names = []
+        for label in workflow_dispatch_test_labels:
+            if "test:" in label:
+                _, test_name = label.split(":")
+                requested_test_names.append(test_name)
+        selected_test_names.extend(filter_known_names(requested_test_names, "test"))
+
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
 
@@ -457,6 +476,12 @@ if __name__ == "__main__":
     )
     base_args["windows_use_prebuilt_artifacts"] = (
         os.environ.get("WINDOWS_USE_PREBUILT_ARTIFACTS") == "true"
+    )
+    base_args["workflow_dispatch_linux_test_labels"] = os.getenv(
+        "LINUX_TEST_LABELS", ""
+    )
+    base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
+        "WINDOWS_TEST_LABELS", ""
     )
 
     main(base_args, linux_families, windows_families)
