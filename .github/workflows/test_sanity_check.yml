@@ -44,6 +44,7 @@ jobs:
         --device /dev/dri
         --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
     defaults:
       run:
         shell: bash
@@ -52,9 +53,9 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
-
     steps:
       - name: "Fetch 'build_tools' from repository"
+        if: ${{ runner.os == 'Windows' }}
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           sparse-checkout: build_tools

@@ -90,6 +90,8 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
+positive_filter.append("*DBSync*")
+
 #############################################
 
 negative_filter.append("*DeepBench*")
@@ -97,7 +99,6 @@ negative_filter.append("*MIOpenTestConv*")
 
 # Failing tests
 negative_filter.append("*/GPU_KernelTuningNetTest*")
-negative_filter.append("*DBSync*")
 negative_filter.append("*/GPU_MIOpenDriver*")
 negative_filter.append("*GPU_TestMhaFind20*")
 
@@ -163,6 +164,7 @@ smoke_filter = [
     # CK Grouped FWD Conv smoke tests
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_FP16*",
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_BFP16*",
+    "*DBSync*",
 ]
 
 ####################################################
@@ -176,7 +178,6 @@ else:
     test_filter = (
         "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
     )
-
 #############################################
 
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]

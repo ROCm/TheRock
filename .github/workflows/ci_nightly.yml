@@ -74,6 +74,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      sanity_check_only: ${{ matrix.families.sanity_check_only == true }}
     permissions:
       contents: read
       id-token: write
@@ -98,6 +99,7 @@ jobs:
       extra_cmake_options: ${{ matrix.extra_cmake_options }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      sanity_check_only: ${{ matrix.families.sanity_check_only == true }}
     permissions:
       contents: read
       id-token: write

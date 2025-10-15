@@ -54,6 +54,24 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 4,
     },
+    # SOLVER tests
+    "hipsolver": {
+        "job_name": "hipsolver",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipsolver.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
+    "rocsolver": {
+        "job_name": "rocsolver",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_rocsolver.py')}",
+        # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # PRIM tests
     "rocprim": {
         "job_name": "rocprim",
