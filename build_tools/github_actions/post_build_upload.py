@@ -25,6 +25,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from typing import Optional
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
@@ -210,6 +211,47 @@ def upload_logs_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
+def find_manifest(build_dir: Path) -> Optional[Path]:
+    """
+    Look for therock-manifest.json file in the locations.
+    Return the first match or None.
+    """
+    candidates = [
+        # Generated (build tree)
+        build_dir / "base" / "aux-overlay" / "build" / "therock-manifest.json",
+        # Installed into the aux-overlay staging folder
+        build_dir
+        / "base"
+        / "aux-overlay"
+        / "stage"
+        / "share"
+        / "therock"
+        / "therock-manifest.json",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
+
+
+def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
+    """
+    Upload therock-manifest.json to:
+      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<amdgpu_family>/therock-manifest.json
+    """
+    external_repo_path, bucket = retrieve_bucket_info()
+    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
+
+    manifest = find_manifest(build_dir)
+    if not manifest:
+        log(f"[WARN] therock-manifest.json not found under {build_dir}")
+        return
+
+    dest = f"{bucket_uri}/manifests/{amdgpu_family}/therock-manifest.json"
+    log(f"[INFO] Uploading manifest {manifest} -> {dest}")
+    run_aws_cp(manifest, dest, content_type="application/json")
+
+
 def upload_build_summary(args):
     external_repo_path, bucket = retrieve_bucket_info()
     run_id = args.run_id
@@ -222,6 +264,10 @@ def upload_build_summary(args):
 
     log_url = f"{bucket_url}/logs/{amdgpu_family}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_url})")
+
+    manifest_url = f"{bucket_url}/manifests/{amdgpu_family}/therock-manifest.json"
+    gha_append_step_summary(f"[therock-manifest.json]({manifest_url})")
+
     if os.path.exists(build_dir / "artifacts" / "index.html"):
         artifact_url = f"{bucket_url}/index-{amdgpu_family}.html"
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
@@ -261,6 +307,10 @@ def run(args):
         log("Upload log")
         log("----------")
         upload_logs_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
+
+        log("Upload manifest")
+        log("----------------")
+        upload_manifest_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
 
         log("Upload build summary")
         log("--------------------")
