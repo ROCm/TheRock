@@ -83,4 +83,4 @@ jobs:
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       amdgpu_family: ${{ inputs.amdgpu_families }}
-      package_version: "7.0.0.dev0"  # TODO: setup version with a script/workflow
+      package_version: "7.0.0.dev0" # TODO: setup version with a script/workflow
