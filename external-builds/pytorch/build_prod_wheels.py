@@ -623,7 +623,7 @@ def do_build_pytorch(
             )
 
         # Enabling/Disabling Flash attention based on Pytorch version in Linux
-        if pytorch_build_version_parsed.release < (2, 10):
+        if pytorch_build_version_parsed.release < (2, 9):
             env.update(
                 {
                     "USE_FLASH_ATTENTION": "1",
