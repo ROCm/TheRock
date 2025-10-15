@@ -8,11 +8,11 @@ download artifacts then unpack them into a usable install directory.
 Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   pip install boto3
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
+    --run-id 15685736080 --artifact-group gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
 
 Include/exclude regular expressions can be given to control what is downloaded:
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --target gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
+    --run-id 15685736080 --artifact-group gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
     amd-llvm base 'core-(hip|runtime)' sysdeps \
     --exclude _dbg_
 
@@ -95,7 +95,7 @@ class BucketMetadata:
         self.s3_key_path = f"{self.external_repo}{self.workflow_run_id}-{self.platform}"
 
 
-def list_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str) -> set[str]:
+def list_s3_artifacts(bucket_info: BucketMetadata, artifact_group: str) -> set[str]:
     """Checks that the AWS S3 bucket exists and returns artifact names."""
     s3_key_path = bucket_info.s3_key_path
     log(
@@ -113,7 +113,7 @@ def list_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str) -> set[st
             if (
                 "sha256sum" not in artifact_key
                 and "tar.xz" in artifact_key
-                and (amdgpu_family in artifact_key or "generic" in artifact_key)
+                and (artifact_group in artifact_key or "generic" in artifact_key)
             ):
                 file_name = artifact_key.split("/")[-1]
                 data.add(file_name)
@@ -265,7 +265,7 @@ def extract_artifact(
 def run(args):
     run_github_repo = args.run_github_repo
     run_id = args.run_id
-    target = args.target
+    artifact_group = args.artifact_group
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -284,7 +284,9 @@ def run(args):
     # Note: this currently does not check that all requested artifacts
     # (via include patterns) do exist, so this may silently fail to fetch
     # expected files.
-    s3_artifacts = list_s3_artifacts(bucket_info=bucket_info, amdgpu_family=target)
+    s3_artifacts = list_s3_artifacts(
+        bucket_info=bucket_info, artifact_group=artifact_group
+    )
     if not s3_artifacts:
         log(f"No matching artifacts for {run_id} exist. Exiting...")
         sys.exit(1)
@@ -364,10 +366,10 @@ def main(argv):
         help="Platform to download artifacts for (matches artifact folder name suffixes in S3)",
     )
     filter_group.add_argument(
-        "--target",
+        "--artifact-group",
         type=str,
         required=True,
-        help="Target variant for specific GPU target",
+        help="Artifact group to fetch",
     )
 
     parser.add_argument(
