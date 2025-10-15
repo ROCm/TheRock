@@ -288,7 +288,7 @@ def matrix_generator(
         )
         # (ex: "test:rocprim, test:hipcub" -> ["test:rocprim", "test:hipcub"])
         workflow_dispatch_test_labels = [
-            test_label.trim()
+            test_label.strip()
             for test_label in workflow_dispatch_test_labels_str.split(",")
         ]
 
