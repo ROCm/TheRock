@@ -151,9 +151,15 @@ negative_filter.append(
 )  # https://github.com/ROCm/TheRock/issues/1682
 
 # Tests that fail when run with sharding
-negative_filter.append("Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/0")
-negative_filter.append("Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/2")
-negative_filter.append("Smoke/GPU_ConvBiasActivInfer_FP16.ConvCKIgemmFwdBiasActivFused/1")
+negative_filter.append(
+    "Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/0"
+)
+negative_filter.append(
+    "Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/2"
+)
+negative_filter.append(
+    "Smoke/GPU_ConvBiasActivInfer_FP16.ConvCKIgemmFwdBiasActivFused/1"
+)
 
 ####################################################
 
