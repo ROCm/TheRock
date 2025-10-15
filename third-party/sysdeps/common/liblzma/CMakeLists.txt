@@ -74,7 +74,7 @@ add_custom_target(
     ${patch_source_commands}
   COMMAND
     # Provide our own version map with private symbol versions.
-    "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/src/liblzma/liblzma_linux.map"
+    "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/src/liblzma/liblzma_generic.map"
   COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"
@@ -93,6 +93,8 @@ add_custom_target(
       "-DCREATE_LZMA_SYMLINKS=OFF"
       # Disable writing pc files: we will do so ourselves.
       -DSKIP_INSTALL_FILES=ON
+      # Set versioning to generic to override with a private map
+      -DXZ_SYMBOL_VERSIONING=generic
 
   COMMAND
     "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"
