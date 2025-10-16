@@ -23,12 +23,14 @@ import boto3
 import shutil
 import datetime
 
+
 def run_command(cmd, cwd=None):
     """
     Function to execute commands in shell.
     """
     print(f"Running: {cmd}")
     subprocess.run(cmd, shell=True, check=True, cwd=cwd)
+
 
 def find_package_dir():
     """
@@ -40,6 +42,7 @@ def find_package_dir():
         raise RuntimeError(f"Package directory not found: {base_dir}")
     print(f"Using package directory: {base_dir}")
     return base_dir
+
 
 def create_deb_repo(package_dir, origin_name):
     """Function to create rpm repo
@@ -65,7 +68,9 @@ def create_deb_repo(package_dir, origin_name):
         if file.endswith(".deb"):
             shutil.move(os.path.join(package_dir, file), os.path.join(pool_dir, file))
 
-    print("Generating Packages file at repository root so 'Filename' paths are 'pool/...'.")
+    print(
+        "Generating Packages file at repository root so 'Filename' paths are 'pool/...'."
+    )
     cmd = "dpkg-scanpackages -m pool/main /dev/null > dists/stable/main/binary-amd64/Packages"
     run_command(cmd, cwd=package_dir)
     run_command("gzip -9c Packages > Packages.gz", cwd=dists_dir)
@@ -89,7 +94,6 @@ Description: ROCm Repository
     print(f"Wrote Release file to {release_path}")
 
 
-
 def create_rpm_repo(package_dir):
     """Function to create rpm repo
     It takes all the rpm files in the package_dir parameter
@@ -109,6 +113,7 @@ def create_rpm_repo(package_dir):
             shutil.move(os.path.join(package_dir, file), os.path.join(arch_dir, file))
     run_command("createrepo_c .", cwd=arch_dir)
     print(f"Generated repodata/ in {arch_dir}")
+
 
 def upload_to_s3(source_dir, bucket, prefix):
     """Function to upload the packges and repo files to the s3 bucket
@@ -132,12 +137,22 @@ def upload_to_s3(source_dir, bucket, prefix):
             print(f"Uploading: {local_path} → s3://{bucket}/{s3_key}")
             s3.upload_file(local_path, bucket, s3_key)
 
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"], help="Type of packages to process")
+    parser.add_argument(
+        "--pkg-type",
+        required=True,
+        choices=["deb", "rpm"],
+        help="Type of packages to process",
+    )
     parser.add_argument("--s3-bucket", required=True, help="Target S3 bucket name")
-    parser.add_argument("--amdgpu-family", required=True, help="AMDGPU family identifier (e.g., gfx94X)")
-    parser.add_argument("--artifact-id", required=True, help="Unique artifact ID or version tag")
+    parser.add_argument(
+        "--amdgpu-family", required=True, help="AMDGPU family identifier (e.g., gfx94X)"
+    )
+    parser.add_argument(
+        "--artifact-id", required=True, help="Unique artifact ID or version tag"
+    )
     args = parser.parse_args()
 
     package_dir = find_package_dir()
@@ -149,6 +164,7 @@ def main():
         create_rpm_repo(package_dir)
 
     upload_to_s3(package_dir, args.s3_bucket, s3_prefix)
+
 
 if __name__ == "__main__":
     main()
