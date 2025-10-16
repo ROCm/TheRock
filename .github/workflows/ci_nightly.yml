@@ -70,11 +70,13 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families: ${{ matrix.families.family }}
+      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
-      sanity_check_only: ${{ matrix.families.sanity_check_only == true }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      sanity_check_only_for_family: ${{ matrix.families.sanity_check_only_for_family == true }}
     permissions:
       contents: read
       id-token: write
@@ -94,12 +96,13 @@ jobs:
     uses: ./.github/workflows/ci_windows.yml
     with:
       amdgpu_families: ${{ matrix.families.family }}
+      test_labels: ${{ needs.setup.outputs.windows_test_labels }}
       test_runs_on: ${{ matrix.families.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      extra_cmake_options: ${{ matrix.extra_cmake_options }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
-      sanity_check_only: ${{ matrix.families.sanity_check_only == true }}
+      test_type: ${{ needs.setup.outputs.test_type }}
+      sanity_check_only_for_family: ${{ matrix.families.sanity_check_only_for_family == true }}
     permissions:
       contents: read
       id-token: write
