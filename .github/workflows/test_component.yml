@@ -14,8 +14,6 @@ on:
         type: string
       component:
         type: string
-      test_type:
-        type: string
 
 permissions:
   contents: read
@@ -31,8 +29,9 @@ jobs:
         --group-add video
         --device /dev/kfd
         --device /dev/dri
-        --group-add 992
+        --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +79,7 @@ jobs:
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
-          TEST_TYPE: ${{ inputs.test_type }}
+          TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 

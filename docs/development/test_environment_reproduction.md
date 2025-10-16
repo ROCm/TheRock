@@ -11,7 +11,7 @@ $ docker run -i \
     --group-add video \
     --device /dev/kfd \
     --device /dev/dri \
-    --group-add 992 \
+    --group-add 110 \
     -t ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26 /bin/bash
 $ git clone https://github.com/ROCm/TheRock.git
 $ cd TheRock

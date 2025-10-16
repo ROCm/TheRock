@@ -16,6 +16,7 @@ cmake_policy(SET CMP0135 NEW)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CMakeDependentOption)
 include(ExternalProject)
+include(therock_globals)
 include(therock_default_targets)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
@@ -141,6 +142,17 @@ cmake_dependent_option(
   "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
   ON "LINUX" OFF)
 
+# Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
+# Note that the profiler is an integral part of the system and disabling it is not
+# fully supported. However, in early bringup, it can be useful to disable building
+# it, even though that may cause problems in other libraries.
+# On some platforms (WIN32 presently), the profiler is always disabled.
+cmake_dependent_option(
+  THEROCK_FLAG_INCLUDE_PROFILER
+  "Allows the profiler to be manually disabled by setting to OFF"
+  ON "NOT WIN32" OFF)
+
+
 ################################################################################
 # Debug Options
 ################################################################################
@@ -215,7 +227,7 @@ therock_add_feature(HIP_RUNTIME
 )
 
 # Profiler Features.
-if(NOT WIN32)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
   therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
     GROUP PROFILER
     DESCRIPTION "Enables the closed-source rocprof trace decoder binary"
