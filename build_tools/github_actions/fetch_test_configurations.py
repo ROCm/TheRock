@@ -115,7 +115,7 @@ test_matrix = {
         "total_shards": 4,
         "exclude_family": {
             "windows": [
-                "gfx115X-igpu"
+                "gfx1151"
             ]  # issue: https://github.com/ROCm/TheRock/issues/1640
         },
     },

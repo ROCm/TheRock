@@ -29,13 +29,13 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx115x": {
         "linux": {
             "test-runs-on": "linux-strix-halo-gpu-rocm",
-            "family": "gfx115X-igpu",
+            "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
-            "family": "gfx115X-igpu",
+            "family": "gfx1151",
         },
     },
 }

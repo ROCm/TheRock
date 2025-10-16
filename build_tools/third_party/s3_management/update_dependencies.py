@@ -185,7 +185,7 @@ def main() -> None:
         "gfx101X-dgpu",
         "gfx103X-dgpu",
         "gfx110X-dgpu",
-        "gfx115X-igpu",
+        "gfx1151",
         "gfx120X-all",
         "gfx90X-dcgpu",
         "gfx94X-dcgpu",

@@ -23,7 +23,7 @@ class ConfigureTargetRunTest(unittest.TestCase):
         self.assertEqual(runner_label, "linux-mi325-1gpu-ossci-rocm")
 
     def test_windows_gfx115x(self):
-        runner_label = configure_target_run.get_runner_label("gfx115X-igpu", "windows")
+        runner_label = configure_target_run.get_runner_label("gfx1151", "windows")
         self.assertEqual(runner_label, "windows-strix-halo-gpu-rocm")
 
     def test_windows_gfx120X_all(self):
