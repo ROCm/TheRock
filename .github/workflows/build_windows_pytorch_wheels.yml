@@ -101,10 +101,6 @@ on:
         required: true
         type: string
         default: "rocm_2.7"
-      expect_failure:
-        description: Specific AMD GPU families have known issues. In this case, we mark them as xfail
-        default: "false"
-        type: string
 
 permissions:
   id-token: write
