@@ -299,7 +299,7 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TAGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
   )
@@ -431,7 +431,7 @@ function(therock_cmake_subproject_declare target_name)
   # GPU Targets.
   if(ARG_DISABLE_AMDGPU_TARGETS)
     set(_gpu_targets)
-  elseif(ARG_USE_DIST_AMDGPU_TAGETS)
+  elseif(ARG_USE_DIST_AMDGPU_TARGETS)
     set(_gpu_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
   else()
     set(_gpu_targets "${THEROCK_AMDGPU_TARGETS}")
@@ -643,6 +643,7 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_init_contents)
+  string(APPEND _init_contents "set(THEROCK_PRIVATE_BUILD_RPATH_DIRS)\n")
   string(APPEND _init_contents "set(THEROCK_BUILD_STAMP_FILE \"@_build_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_STAGE_STAMP_FILE \"@_stage_stamp_file@\")\n")
   string(APPEND _init_contents "set(THEROCK_SUBPROJECT_TARGET \"@target_name@\")\n")
@@ -1294,8 +1295,18 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
+  # Configure sanitizer.
+  set(_sanitizer_stanza)
+  set(_sanitizer_enabled)
+
   if(NOT compiler_toolchain)
     # Make any additional customizations if no toolchain specified.
+    therock_sanitizer_configure(
+      _sanitizer_stanza
+      _sanitizer_enabled
+      "${CMAKE_CXX_COMPILER}"
+      "${compiler_toolchain}"
+      "${target_name}")
   elseif(compiler_toolchain STREQUAL "amd-llvm" OR compiler_toolchain STREQUAL "amd-hip")
     # The "amd-llvm" and "amd-hip" toolchains are configured very similarly so
     # we commingle them, but they are different:
@@ -1330,6 +1341,13 @@ function(_therock_cmake_subproject_setup_toolchain
     string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@AMD_LLVM_LINKER@\")\n")
     string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_amd_llvm_cxx_flags_spaces}\")\n")
 
+    therock_sanitizer_configure(
+      _sanitizer_stanza
+      _sanitizer_enabled
+      "${AMD_LLVM_CXX_COMPILER}"
+      "${compiler_toolchain}"
+      "${target_name}")
+
     if(THEROCK_VERBOSE)
       string(JOIN " " _filtered_gpu_targets_spaces ${_filtered_gpu_targets})
       message(STATUS "Compiler toolchain ${compiler_toolchain}:")
@@ -1338,6 +1356,9 @@ function(_therock_cmake_subproject_setup_toolchain
       message(STATUS "CMAKE_CXX_COMPILER = ${AMD_LLVM_CXX_COMPILER}")
       message(STATUS "CMAKE_LINKER = ${AMD_LLVM_LINKER}")
       message(STATUS "GPU_TARGETS = ${_filtered_gpu_targets_spaces}")
+      if(_sanitizer_enabled)
+        message(STATUS "SANITIZER = ${_sanitizer_enabled}")
+      endif()
     endif()
   else()
     message(FATAL_ERROR "Unsupported COMPILER_TOOLCHAIN = ${compiler_toolchain} (supported: 'amd-llvm' or none)")
@@ -1358,6 +1379,7 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
+  string(APPEND _toolchain_contents "${_sanitizer_stanza}")
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)

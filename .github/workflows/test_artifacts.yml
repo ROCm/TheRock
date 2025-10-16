@@ -10,6 +10,13 @@ on:
         type: string
       test_runs_on:
         type: string
+      sanity_check_only_for_family:
+        type: boolean
+        default: false
+      test_type:
+        type: string
+      test_labels:
+        type: string
   workflow_call:
     inputs:
       artifact_run_id:
@@ -18,6 +25,13 @@ on:
       amdgpu_families:
         type: string
       test_runs_on:
+        type: string
+      sanity_check_only_for_family:
+        type: boolean
+        default: false
+      test_type:
+        type: string
+      test_labels:
         type: string
   push:
     branches:
@@ -38,6 +52,7 @@ jobs:
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
       - name: "Fetch 'build_tools' from repository"
+        if: ${{ runner.os == 'Windows' }}
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           sparse-checkout: build_tools
@@ -62,6 +77,8 @@ jobs:
         id: configure
         env:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          TEST_TYPE: ${{ inputs.test_type }}
+          TEST_LABELS: ${{ inputs.test_labels }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
@@ -77,8 +94,8 @@ jobs:
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
     needs: [test_sanity_check, configure_test_matrix]
-    # skip tests if no test matrix to run
-    if: ${{ needs.configure_test_matrix.outputs.components != '[]' }}
+    # skip tests if no test matrix to run and sanity check only requested
+    if: ${{ needs.configure_test_matrix.outputs.components != '[]' && !inputs.sanity_check_only_for_family }}
     strategy:
       fail-fast: false
       matrix:

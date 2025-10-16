@@ -5,6 +5,8 @@ on:
     inputs:
       amdgpu_families:
         type: string
+      test_labels:
+        type: string
       artifact_run_id:
         type: string
       test_runs_on:
@@ -13,6 +15,10 @@ on:
         type: boolean
       use_prebuilt_artifacts:
         type: string
+      test_type:
+        type: string
+      sanity_check_only_for_family:
+        type: boolean
 
 permissions:
   contents: read
@@ -57,6 +63,9 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+      sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
 
   build_portable_linux_python_packages:
     needs: [build_portable_linux_artifacts]
@@ -77,4 +86,4 @@ jobs:
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       amdgpu_family: ${{ inputs.amdgpu_families }}
-      package_version: "7.0.0.dev0"  # TODO: setup version with a script/workflow
+      package_version: "7.0.0.dev0" # TODO: setup version with a script/workflow
