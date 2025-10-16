@@ -1,7 +1,7 @@
-From a70031a9f55a11d1912816ffe7f51ce3fb2e4706 Mon Sep 17 00:00:00 2001
+From e5f041e4b021f4a3fbd2e4e9cfd1f4fb1ceb6d37 Mon Sep 17 00:00:00 2001
 From: Stella Laurenzo <stellaraccident@gmail.com>
 Date: Fri, 12 Sep 2025 16:55:57 -0700
-Subject: [PATCH 8/8] [offload] Tunnel CMAKE_PREFIX_PATH with proper escaping.
+Subject: [PATCH 8/9] Tunnel CMAKE_PREFIX_PATH with proper escaping.
 
 Prior to this patch, if CMAKE_PREFIX_PATH contained precisely zero or one entries, behavior would work as expected. However, with more than one, the extra cmake args would be emitted with literal semicolons, expanding to multiple command line arguments vs a single list as expected.
 
@@ -46,5 +46,5 @@ index f070cd767f2e..6baffc04e5a9 100644
        if(NOT DEFINED LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH)
          message(SEND_ERROR "External ROCr requires setting LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH")
 -- 
-2.48.1
+2.43.0
 
