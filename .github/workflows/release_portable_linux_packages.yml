@@ -18,6 +18,9 @@ on:
         description: "Staging subdirectory to push the packages"
         type: string
         default: "v2-staging"
+      families:
+        description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`"
+        type: string
       prerelease_version:
         description: "(Optional) Number of the prerelease"
         type: string
@@ -63,8 +66,6 @@ jobs:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
     env:
-      S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
-      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.release_information.outputs.version }}
@@ -72,6 +73,7 @@ jobs:
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
       cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
+      s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -90,29 +92,36 @@ jobs:
         run: |
           version_suffix="$(printf 'a%(%Y%m%d)T')"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.nightlies.amd.com/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.nightlies.amd.com/v2-staging" >> $GITHUB_ENV
+          echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
 
       - name: Set variables for prerelease
         if: ${{ env.release_type == 'prerelease' }}
         run: |
-          version_suffix="$(printf 'rc${{ inputs.prerelease_version }}"
+          version_suffix="rc${{ inputs.prerelease_version }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://rocm.prerelease.amd.com" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.prereleases.amd.com/whl" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.prereleases.amd.com/whl-staging" >> $GITHUB_ENV
+          echo "tmp_s3_subdir_tar=v3/tarball/" >> $GITHUB_ENV
 
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
           version_suffix=".dev0+${{ github.sha }}"
           echo "version_suffix=${version_suffix}" >> $GITHUB_ENV
-          echo "cloudfront_base_url=https://d25kgig7rdsyks.cloudfront.net" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://d25kgig7rdsyks.cloudfront.net/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://d25kgig7rdsyks.cloudfront.net/v2-staging" >> $GITHUB_ENV
+          echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
 
       - name: Generate release information
         id: release_information
         run: |
           base_version=$(jq -r '.["rocm-version"]' version.json)
           echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
-          echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
-          echo "cloudfront_staging_url=${cloudfront_base_url}/${{ env.S3_STAGING_SUBDIR }}" >> $GITHUB_OUTPUT
+          echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
+          echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
+          echo "s3_subdir_tar=${tmp_s3_subdir_tar}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -141,9 +150,11 @@ jobs:
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
+      S3_SUBDIR_TAR: ${{ needs.setup_metadata.outputs.s3_subdir_tar }}
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
+      STRIP_PREFIX: "v3/" # Environment variable to be set for `manage.py`
 
     steps:
       - name: "Checking out repository"
@@ -228,15 +239,18 @@ jobs:
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
+        env:
+          # Environment variable to be set for `manage.py`
+          CUSTOM_PREFIX: "${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
       ## TODO: Restrict uploading to the non-staging S3 directory until ROCm sanity checks and all validation tests have successfully passed.
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}
+          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}/${{ env.S3_SUBDIR_TAR }}
           aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
           --recursive --no-follow-symlinks \
           --exclude "*" \
@@ -245,10 +259,16 @@ jobs:
 
       - name: (Re-)Generate release index pages
         if: ${{ github.repository_owner == 'ROCm' }}
+        env:
+          # Environment variable to be set for `manage.py`
+          CUSTOM_PREFIX: "${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}
-          python ./build_tools/index_generation_s3_tar.py --bucket ${{ env.S3_BUCKET_TAR }} --upload
+          python ./build_tools/third_party/s3_management/manage.py  ${{ env.CUSTOM_PREFIX }}
+          python ./build_tools/index_generation_s3_tar.py \
+            --bucket ${{ env.S3_BUCKET_TAR }} \
+            --directory ${{ env.S3_SUBDIR_TAR }} \
+            --upload
 
       - name: Trigger building PyTorch wheels
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -267,11 +287,14 @@ jobs:
             }
 
       - name: URL-encode .tar URL
+        # TODO: Enable JAX wheels for prereleases
+        if: ${{ env.RELEASE_TYPE != 'prerelease' }}
         id: url-encode-tar
         run: python -c "from urllib.parse import quote; print('tar_url=https://therock-${{ env.RELEASE_TYPE }}-tarball.s3.amazonaws.com/' + quote('therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz'))" >> ${GITHUB_OUTPUT}
 
       - name: Trigger build JAX wheels
-        if: ${{ github.repository_owner == 'ROCm' }}
+        # TODO: Enable JAX wheels for prereleases
+        if: ${{ env.RELEASE_TYPE != 'prerelease' && github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
           workflow: build_linux_jax_wheels.yml
