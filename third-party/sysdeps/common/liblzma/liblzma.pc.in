@@ -8,5 +8,5 @@ Version: @PROJECT_VERSION@
 
 Requires:
 Cflags: -I${includedir}
-Libs: -L${libdir} -lrocm_sysdeps_liblzma ${libdir}/librocm_sysdeps_liblzma.so.5
+Libs: -L${libdir} -llzma
 Libs.private: @PTHREAD_CFLAGS@ @LIBS@
