@@ -114,7 +114,9 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 4,
         "exclude_family": {
-            "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
+            "windows": [
+                "gfx115X-igpu"
+            ]  # issue: https://github.com/ROCm/TheRock/issues/1640
         },
     },
     # RAND tests

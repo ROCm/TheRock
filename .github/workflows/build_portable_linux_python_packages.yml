@@ -14,9 +14,12 @@ on:
       amdgpu_family:
         type: choice
         options:
+          - gfx101X-dgpu
+          - gfx103X-dgpu
           - gfx110X-dgpu
-          - gfx1151
+          - gfx115X-igpu
           - gfx120X-all
+          - gfx90X-dcgpu
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu

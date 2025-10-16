@@ -46,14 +46,21 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      expect_failure:
+        description: Specific AMD GPU families have known issues. In this case, we mark them as xfail
+        default: "false"
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
         type: choice
         options:
+          - gfx101X-dgpu
+          - gfx103X-dgpu
           - gfx110X-dgpu
-          - gfx1151
+          - gfx115X-igpu
           - gfx120X-all
+          - gfx90X-dcgpu
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
@@ -94,6 +101,10 @@ on:
         required: true
         type: string
         default: "rocm_2.7"
+      expect_failure:
+        description: Specific AMD GPU families have known issues. In this case, we mark them as xfail
+        default: "false"
+        type: string
 
 permissions:
   id-token: write
@@ -103,6 +114,7 @@ jobs:
   build_pytorch_wheels:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    continue-on-error: ${{ inputs.expect_failure == 'true' }} # for GPU families that are flaky, we mark as xfail
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b
     env:
