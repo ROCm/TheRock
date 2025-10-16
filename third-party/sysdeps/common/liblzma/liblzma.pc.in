@@ -1,13 +1,12 @@
 prefix=${pcfiledir}/../..
-exec_prefix=${pcfiledir}/../../bin
-libdir=${pcfiledir}/../../lib
-sharedlibdir=${pcfiledir}/../../bin
-includedir=${pcfiledir}/../../include
+libdir=${prefix}/lib
+includedir=${prefix}/include
 
 Name: liblzma
-Description: xz/liblzma compression library
+Description: General purpose data compression library
 Version: @PROJECT_VERSION@
 
 Requires:
-Libs: -L${libdir} -L${sharedlibdir} @LIBLZMA_IMPORTED_LOCATION@
 Cflags: -I${includedir}
+Libs: -L${libdir} -lrocm_sysdeps_liblzma ${libdir}/librocm_sysdeps_liblzma.so.5
+Libs.private: @PTHREAD_CFLAGS@ @LIBS@

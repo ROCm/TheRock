@@ -112,7 +112,7 @@ add_custom_target(
 # on windows vs linux.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LIBLZMA_TYPE "SHARED")
-  set(LIBLZMA_IMPORTED_LOCATION "lib/librocm_sysdeps_liblzma.so.1")
+  set(LIBLZMA_IMPORTED_LOCATION "lib/librocm_sysdeps_liblzma.so.5")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(LIBLZMA_TYPE "STATIC")
   set(LIBLZMA_IMPORTED_LOCATION "lib/liblzmastatic.lib")
