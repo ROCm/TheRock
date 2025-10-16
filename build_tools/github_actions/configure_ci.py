@@ -11,8 +11,10 @@
   * GITHUB_OUTPUT        : path to write workflow output variables.
   * GITHUB_STEP_SUMMARY  : path to write workflow summary output.
   * INPUT_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families
+  * LINUX_TEST_LABELS (optional): Comma-separated list of test labels to test
   * LINUX_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Linux tests
   * INPUT_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families
+  * WINDOWS_TEST_LABELS (optional): Comma-separated list of test labels to test
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
 
@@ -282,9 +284,9 @@ def matrix_generator(
 
         # If any workflow dispatch test labels are specified, we run full tests for those specific tests
         workflow_dispatch_test_labels_str = (
-            base_args.get("workflow_dispatch_linux_test_labels")
+            base_args.get("workflow_dispatch_linux_test_labels", "")
             if platform == "linux"
-            else base_args.get("workflow_dispatch_windows_test_labels")
+            else base_args.get("workflow_dispatch_windows_test_labels", "")
         )
         # (ex: "test:rocprim, test:hipcub" -> ["test:rocprim", "test:hipcub"])
         workflow_dispatch_test_labels = [
