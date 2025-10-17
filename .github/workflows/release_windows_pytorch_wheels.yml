@@ -32,10 +32,6 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
-      expect_failure:
-        description: Specific AMD GPU families have known issues. In this case, we mark them as xfail
-        default: "false"
-        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -77,11 +73,6 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
         default: ''
-      expect_failure:
-        description: Specific AMD GPU families have known issues. In this case, we mark them as xfail
-        default: "false"
-        type: string
-
 
 permissions:
   id-token: write
@@ -117,4 +108,3 @@ jobs:
       pytorch_version: ${{ matrix.pytorch_version }}
       pytorch_patchset: ${{ matrix.pytorch_patchset }}
       ref: ${{ inputs.ref || '' }}
-      expect_failure: ${{ inputs.expect_failure }}
