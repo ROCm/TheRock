@@ -71,5 +71,5 @@ include = [
 [components.lib."base/aux-overlay/stage"]
 default_patterns = false
 include = [
-  "share/therock/therock-manifest.json",
+  "**/*",
 ]
