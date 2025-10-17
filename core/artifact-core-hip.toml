@@ -11,3 +11,12 @@ include = [
 include = [
   "bin/**",
 ]
+
+# hip-tests
+[components.doc."core/hip-tests/stage"]
+optional = true
+[components.test."core/hip-tests/stage"]
+include = [
+  "share/hip/**",
+]
+optional = true
