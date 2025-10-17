@@ -140,6 +140,7 @@ if(THEROCK_ENABLE_PRIM)
       -DROCM_PATH=
       -DROCM_DIR=
       -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DSQLITE_USE_SYSTEM_PACKAGE=${THEROCK_BUNDLED_SQLITE3}
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
@@ -147,6 +148,7 @@ if(THEROCK_ENABLE_PRIM)
       rocPRIM
       therock-googletest
     RUNTIME_DEPS
+    ${THEROCK_BUNDLED_SQLITE3}
       hip-clr
   )
   therock_cmake_subproject_glob_c_sources(rocThrust
