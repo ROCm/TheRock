@@ -41,13 +41,13 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dist_info.json"
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 set(THEROCK_MANIFEST_JSON "${CMAKE_CURRENT_BINARY_DIR}/therock-manifest.json")
-set(THEROCK_MANIFEST_SCRIPT "${THEROCK_SOURCE_DIR}/../../build_tools/generate_therock_manifest.py")
+set(THEROCK_MANIFEST_SCRIPT "${THEROCK_SOURCE_DIR}/build_tools/generate_therock_manifest.py")
 
 add_custom_command(
   OUTPUT "${THEROCK_MANIFEST_JSON}"
   COMMAND "${Python3_EXECUTABLE}" "${THEROCK_MANIFEST_SCRIPT}" -o "${THEROCK_MANIFEST_JSON}"
   WORKING_DIRECTORY "${THEROCK_SOURCE_DIR}"
-  DEPENDS "${THEROCK_MANIFEST_SCRIPT}" "${THEROCK_SOURCE_DIR}/../../.gitmodules"
+  DEPENDS "${THEROCK_MANIFEST_SCRIPT}" "${THEROCK_SOURCE_DIR}/.gitmodules"
   COMMENT "Generating TheRock manifest"
   VERBATIM
 )
