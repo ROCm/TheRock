@@ -58,7 +58,7 @@ instructions and configurations for alternatives.
 ```bash
 # Install Ubuntu dependencies
 sudo apt update
-sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
+sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git

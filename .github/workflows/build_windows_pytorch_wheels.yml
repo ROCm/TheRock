@@ -240,7 +240,6 @@ jobs:
         env:
           # Environment variables to be set for `manage.py`
           CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
-          STRIP_PREFIX: "v3/"
         shell: cmd
         run: |
           pip install boto3 packaging
@@ -332,7 +331,6 @@ jobs:
         env:
           # Environment variables to be set for `manage.py`
           CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
-          STRIP_PREFIX: "v3/"
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
