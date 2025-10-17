@@ -134,8 +134,8 @@ if __name__ == "__main__":
     print("amdgpu_family", amdgpu_family)
     # try auto determine amdgpu_arch
     if amdgpu_family == "":
-        proc = subprocess.run(["amdgpu-arch"], capture=True, text=True)
-        if len(proc.stderr) == 0 and proc.returncoed == 0:  # must have been successful
+        proc = subprocess.run(["amdgpu-arch"], capture_output=True, text=True)
+        if len(proc.stderr) == 0 and proc.returncode == 0:  # must have been successful
             amdgpu_family = proc.stdout.split("/n")[0]
             print(f"AMDGPU Arch auto-detected: {amdgpu_family}")
         else:
