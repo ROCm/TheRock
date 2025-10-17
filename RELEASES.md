@@ -261,8 +261,8 @@ also install `torch`, `torchaudio`, and `torchvision`.
 >
 > | torch version | torchaudio version | torchvision version |
 > | ------------- | ------------------ | ------------------- |
-> | 2.10          | 2.8 (?)            | 0.25                |
-> | 2.9           | 2.8 (?)            | 0.24                |
+> | 2.10          | 2.10               | 0.25                |
+> | 2.9           | 2.9                | 0.24                |
 > | 2.7           | 2.7.1a0            | 0.22.1              |
 >
 > For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
