@@ -22,16 +22,14 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
-    test_filter = "--gtest_filter=*smoke*"
+    test_filter = ["--smoketest"]
 else:
-    test_filter = "--gtest_filter=*pre_checkin*"
+    # "--R" is the mxaimum RAM limit in GiB for tests
+    # "--nrand" is the number of extra random tests
+    # These filters are matching the math-libs test filters
+    test_filter = ["--gtest_filter=*", "--R", "80", "--nrand", "10"]
 
-cmd = [
-    f"{THEROCK_BIN_DIR}/rocfft-test",
-    "--gtest_filter=-*multi_gpu*",
-    "--test_prob",
-    "0.02",
-]
+cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
     cmd,
