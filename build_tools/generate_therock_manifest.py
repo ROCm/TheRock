@@ -24,64 +24,56 @@ def git_root() -> Path:
 
 def list_submodules_via_gitconfig(repo_dir: Path):
     """
-    Enumerate submodules using: git config -f .gitmodules
-    Returns [{name, path, url, branch?}]
+    Read path/url/branch for all submodules from .gitmodules using a single git-config call.
+    Returns: [{name, path, url, branch}]
     """
-    raw = _run(
+    gitconfig_output = _run(
         [
             "git",
             "config",
             "-f",
             ".gitmodules",
             "--get-regexp",
-            r"^submodule\..*\.path$",
+            r"^submodule\..*\.(path|url|branch)$",
         ],
         cwd=repo_dir,
         check=False,
     )
-    if not raw:
+    if not gitconfig_output:
         return []
 
-    out = []
-    for line in raw.splitlines():
-        # line: "submodule.<name>.path <path>"
-        key, path = line.split(None, 1)
-        m = re.match(r"^submodule\.(?P<name>.+)\.path$", key)
+    submodules_by_name = (
+        {}
+    )  # name -> {"name": ..., "path": ..., "url": ..., "branch": ...}
+    for line in gitconfig_output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            full_key, raw_value = line.split(None, 1)
+        except ValueError:
+            continue
+
+        m = re.match(r"^submodule\.(?P<name>.+)\.(?P<attr>path|url|branch)$", full_key)
         if not m:
             continue
+
         name = m.group("name")
-        url = (
-            _run(
-                [
-                    "git",
-                    "config",
-                    "-f",
-                    ".gitmodules",
-                    "--get",
-                    f"submodule.{name}.url",
-                ],
-                cwd=repo_dir,
-                check=False,
-            ).strip()
-            or None
+        attr = m.group("attr")
+        value = raw_value.strip()
+
+        rec = submodules_by_name.setdefault(
+            name, {"name": name, "path": None, "url": None, "branch": None}
         )
-        branch = (
-            _run(
-                [
-                    "git",
-                    "config",
-                    "-f",
-                    ".gitmodules",
-                    "--get",
-                    f"submodule.{name}.branch",
-                ],
-                cwd=repo_dir,
-                check=False,
-            ).strip()
-            or None
-        )
-        out.append({"name": name, "path": path.strip(), "url": url, "branch": branch})
-    return out
+        rec[attr] = value
+
+    results = [
+        {"name": n, "path": r["path"], "url": r["url"], "branch": r["branch"]}
+        for n, r in submodules_by_name.items()
+        if r["path"]
+    ]
+    results.sort(key=lambda r: r["path"])
+    return results
 
 
 def submodule_pin(repo_dir: Path, commit: str, sub_path: str):
