@@ -40,7 +40,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dist_info.json"
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-set(THEROCK_MANIFEST_JSON "${CMAKE_CURRENT_BINARY_DIR}/therock-manifest.json")
+set(THEROCK_MANIFEST_JSON "${CMAKE_CURRENT_BINARY_DIR}/therock_manifest.json")
 set(THEROCK_MANIFEST_SCRIPT "${THEROCK_SOURCE_DIR}/build_tools/generate_therock_manifest.py")
 
 add_custom_command(
