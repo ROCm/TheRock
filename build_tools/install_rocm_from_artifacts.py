@@ -14,7 +14,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--output-dir OUTPUT_DIR]
     [--amdgpu-family AMDGPU_FAMILY]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
-    [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--miopen_plugin | --no-miopen_plugin]
+    [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--miopen-plugin | --no-miopen-plugin]
     [--prim | --no-prim] [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
 
 Examples:
@@ -333,9 +333,9 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--miopen_plugin",
+        "--miopen-plugin",
         default=False,
-        help="Include 'miopen_plugin' artifacts",
+        help="Include 'miopen-plugin' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
