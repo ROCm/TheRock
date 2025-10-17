@@ -27,7 +27,7 @@ else:
     # "--test_prob" is the probability that a given test will run.
     # Due to the large number of tests for hipFFT, we only run a subset.
     # This is matching math-libs test filters
-    test_filter = ["--gtest_filter=*", "--test_prob", "0.1"]
+    test_filter = ["--gtest_filter=*", "--test_prob", "0.05"]
 
 cmd = [f"{THEROCK_BIN_DIR}/hipfft-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

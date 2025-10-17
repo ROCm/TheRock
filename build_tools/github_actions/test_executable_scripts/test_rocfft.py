@@ -27,7 +27,14 @@ else:
     # "--R" is the mxaimum RAM limit in GiB for tests
     # "--nrand" is the number of extra random tests
     # These filters are matching the math-libs test filters
-    test_filter = ["--gtest_filter=*", "--R", "80", "--nrand", "10"]
+    test_filter = [
+        "--gtest_filter=*",
+        "--R",
+        "80",
+        "--nrand",
+        "10",
+        "--precompile=rocfft-test-precompile.db",
+    ]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
