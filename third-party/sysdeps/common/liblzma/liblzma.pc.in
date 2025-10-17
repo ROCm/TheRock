@@ -4,7 +4,7 @@ includedir=${prefix}/include
 
 Name: liblzma
 Description: General purpose data compression library
-Version: @PROJECT_VERSION@
+Version: @PACKAGE_VERSION@
 
 Requires:
 Cflags: -I${includedir}
