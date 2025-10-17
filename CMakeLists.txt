@@ -310,7 +310,7 @@ therock_add_feature(MIOPEN
   REQUIRES COMPILER HIP_RUNTIME BLAS RAND ${_optional_profiler_requirements}
 )
 
-#hipDNN on Windows is disabled for now, but will be enabled in a follow-up change.
+# hipDNN on Windows is disabled for now, but will be enabled in a follow-up change.
 if(NOT WIN32)
   therock_add_feature(HIPDNN
     GROUP ML_LIBS
