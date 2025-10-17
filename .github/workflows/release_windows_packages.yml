@@ -162,7 +162,6 @@ jobs:
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
-      STRIP_PREFIX: "v3/" # Environment variable to be set for `manage.py`
 
     steps:
       - name: "Checking out repository"
