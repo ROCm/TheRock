@@ -311,6 +311,7 @@ therock_add_feature(MIOPEN
 )
 
 # hipDNN on Windows is disabled for now, but will be enabled in a follow-up change.
+# Windows support issue tracked at: https://github.com/ROCm/TheRock/issues/1822
 if(NOT WIN32)
   therock_add_feature(HIPDNN
     GROUP ML_LIBS
