@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-from datetime import datetime, UTC
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -136,7 +134,6 @@ def main():
 
     # Resolve commit + short SHA
     the_rock_commit = _run(["git", "rev-parse", args.commit])
-    short_sha = _run(["git", "rev-parse", "--short", the_rock_commit])
 
     # Enumerate submodules via .gitmodules
     entries = list_submodules_via_gitconfig(repo_root)
