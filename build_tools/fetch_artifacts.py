@@ -118,7 +118,9 @@ def list_s3_artifacts(bucket_info: BucketMetadata, amdgpu_family: str) -> set[st
                 file_name = artifact_key.split("/")[-1]
                 data.add(file_name)
     if not data:
-        log(f"Found no S3 artifacts for {bucket_info.run_id} at '{s3_key_path}'")
+        log(
+            f"Found no S3 artifacts for {bucket_info.workflow_run_id} at '{s3_key_path}'"
+        )
     return data
 
 
