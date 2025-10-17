@@ -84,9 +84,14 @@ def submodule_pin(repo_dir: Path, commit: str, sub_path: str):
     out = _run(["git", "ls-tree", commit, "--", sub_path], cwd=repo_dir, check=False)
     if not out:
         return None
+    # Iterate over matching entries
     for line in out.splitlines():
+        # An example of ls-tree output:
+        # "160000 commit d777ee5b682bfabe3d4cd436fd5c7f0e0b75300e  rocm-libraries"
         parts = line.split()
+        # Make sure there is no malformed record
         if len(parts) >= 3 and parts[1] == "commit":
+            # The pin comes after "commit"
             return parts[2]
     return None
 
