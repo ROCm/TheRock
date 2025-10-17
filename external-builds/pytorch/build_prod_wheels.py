@@ -609,7 +609,7 @@ def do_build_pytorch(
     ## https://github.com/ROCm/TheRock/issues/1619
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if pytorch_build_version_parsed.release < (2, 10):
+        if pytorch_build_version_parsed.release < (2, 9):
             env["USE_FBGEMM_GENAI"] = "ON"
             print(
                 f"FBGEMM_GENAI enabled (PyTorch < 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
@@ -623,7 +623,7 @@ def do_build_pytorch(
             )
 
         # Enabling/Disabling Flash attention based on Pytorch version in Linux
-        if pytorch_build_version_parsed.release < (2, 10):
+        if pytorch_build_version_parsed.release < (2, 9):
             env.update(
                 {
                     "USE_FLASH_ATTENTION": "1",
