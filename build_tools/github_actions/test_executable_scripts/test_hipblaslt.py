@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -21,12 +23,18 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    test_filter = "--gtest_filter=*smoke*"
-else:
-    test_filter = "--gtest_filter=*pre_checkin*"
 
-cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test", test_filter]
+# Only run quick tests (less memory intensive) for Windows strix-halo, issue: https://github.com/ROCm/TheRock/issues/1750
+if AMDGPU_FAMILIES == "gfx1151" and platform == "windows":
+    test_type = "quick"
+
+test_filter = []
+if test_type == "smoke":
+    test_filter.append("--gtest_filter=*smoke*")
+elif test_type == "quick":
+    test_filter.append("--gtest_filter=*quick*")
+
+cmd = [f"{THEROCK_BIN_DIR}/hipblaslt-test"] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
