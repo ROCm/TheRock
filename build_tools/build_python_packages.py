@@ -80,6 +80,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "amd-llvm",
         "base",
         "core-hip",
+        "core-ocl",
         "core-hipinfo",
         "core-runtime",
         "host-blas",
@@ -93,6 +94,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
     # hiprtc needs to be able to find HIP headers in its same tree.
     hip_dev = an.name in [
         "core-hip",
+        "core-ocl",
     ] and an.component in ["dev"]
     return core or hip_dev
 
