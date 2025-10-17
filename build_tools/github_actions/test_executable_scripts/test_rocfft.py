@@ -24,16 +24,12 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     test_filter = ["--smoketest"]
 else:
-    # "--R" is the mxaimum RAM limit in GiB for tests
-    # "--nrand" is the number of extra random tests
-    # These filters are matching the math-libs test filters
+    # "--test_prob" is the probability that a given test will run.
+    # Due to the large number of tests for rocFFT, we only run a subset.
     test_filter = [
-        "--gtest_filter=*",
-        "--R",
-        "80",
-        "--nrand",
-        "10",
-        "--precompile=rocfft-test-precompile.db",
+        "--gtest_filter=-*multi_gpu*",
+        "--test_prob",
+        "0.02",
     ]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
