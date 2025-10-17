@@ -8,10 +8,6 @@ import shlex
 import subprocess
 import sys
 
-# -----------------------
-# git helpers
-# -----------------------
-
 
 def _run(cmd, cwd=None, check=True) -> str:
     if isinstance(cmd, str):
@@ -112,11 +108,6 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     if not base.exists():
         return []
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
-
-
-# ---------------
-# Main
-# ---------------
 
 
 def main():
