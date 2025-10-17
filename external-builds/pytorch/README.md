@@ -30,12 +30,12 @@ This incorporates advice from:
 
 <!-- TODO: Add when aotriton was enabled on Windows (2.10) -->
 
-| Project / feature              | Linux support                                                                                                                 | Windows support |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| torch                          | ✅ Supported                                                                                                                  | ✅ Supported    |
-| torchaudio                     | ✅ Supported                                                                                                                  | ✅ Supported    |
-| torchvision                    | ✅ Supported                                                                                                                  | ✅ Supported    |
-| Flash attention via [ao]triton | ✅ Supported for torch < 2.10<br>❌ Disabled for torch ≥ 2.10 (see [Issue#1408](https://github.com/ROCm/TheRock/issues/1408)) | ✅ Supported    |
+| Project / feature              | Linux support                                                                                                               | Windows support |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| torch                          | ✅ Supported                                                                                                                | ✅ Supported    |
+| torchaudio                     | ✅ Supported                                                                                                                | ✅ Supported    |
+| torchvision                    | ✅ Supported                                                                                                                | ✅ Supported    |
+| Flash attention via [ao]triton | ✅ Supported for torch < 2.8<br>❌ Disabled for torch ≥ 2.8 (see [Issue#1408](https://github.com/ROCm/TheRock/issues/1408)) | ✅ Supported    |
 
 ### Supported PyTorch versions
 
