@@ -23,11 +23,11 @@ therock_cmake_subproject_declare(therock-SuiteSparse
   INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
   CMAKE_ARGS
     "-DSUITESPARSE_ENABLE_PROJECTS=\"suitesparse_config;cholmod\""
-    -DBLA_VENDOR=OpenBLAS
     -DBUILD_STATIC_LIBS=OFF
     -DSUITESPARSE_USE_CUDA=OFF
     -DSUITESPARSE_USE_OPENMP=OFF
     -DSUITESPARSE_USE_FORTRAN=OFF
+    -DSUITESPARSE_USE_64BIT_BLAS=ON
   RUNTIME_DEPS
     therock-host-blas
 )

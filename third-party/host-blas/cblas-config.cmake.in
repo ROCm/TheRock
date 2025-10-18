@@ -1,6 +1,6 @@
 if(NOT TARGET cblas)
   find_package(OpenBLAS REQUIRED)
   add_library(cblas INTERFACE)
-  target_link_libraries(cblas INTERFACE OpenBLAS::OpenBLAS)
+  target_link_libraries(cblas INTERFACE ${BLAS_LIBRARIES})
   set(CBLAS_LIBRARIES cblas)
 endif()

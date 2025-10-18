@@ -57,15 +57,15 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DBUILD_SHARED_LIBS=ON
         # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
         # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
-        -DCMAKE_CROSSCOMPILING=ON
         -DTARGET=HASWELL
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
+        -DINTERFACE64=ON
         -DBUILD_TESTING=OFF
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
-    therock_cmake_subproject_provide_package(therock-host-blas OpenBLAS lib/host-math/lib/cmake/OpenBLAS)
-    therock_cmake_subproject_provide_package(therock-host-blas cblas lib/host-math/lib/cmake/OpenBLAS)
+    therock_cmake_subproject_provide_package(therock-host-blas OpenBLAS lib/host-math/lib/cmake/OpenBLAS64)
+    therock_cmake_subproject_provide_package(therock-host-blas cblas lib/host-math/lib/cmake/OpenBLAS64)
     therock_cmake_subproject_activate(therock-host-blas)
 
     therock_test_validate_shared_lib(
@@ -109,11 +109,11 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas)
 # We would like this to be a library scoped to ROCm, so give it a custom
 # name.
 # TODO: Also set Linux symbol versioning flags.
-set_target_properties(openblas_shared PROPERTIES
+set_target_properties(openblas_64_shared PROPERTIES
   # Private SONAME/DLL name.
   OUTPUT_NAME rocm-openblas
   # Install location in the library is hard-coded to include in the install root.
-  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas>
+  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas64>
 )
 
 # Some of the test targets do not build with an altered library name on
@@ -126,4 +126,4 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake
   @ONLY
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS64)
