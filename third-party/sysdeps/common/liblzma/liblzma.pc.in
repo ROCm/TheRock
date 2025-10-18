@@ -1,0 +1,12 @@
+prefix=${pcfiledir}/../..
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: liblzma
+Description: General purpose data compression library
+Version: @PACKAGE_VERSION@
+
+Requires:
+Cflags: -I${includedir}
+Libs: -L${libdir} -llzma
+Libs.private: @PTHREAD_CFLAGS@ @LIBS@
