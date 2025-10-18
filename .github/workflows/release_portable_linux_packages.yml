@@ -133,6 +133,7 @@ jobs:
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    continue-on-error: ${{ matrix.target_bundle.expect_failure == true }} # for GPU families that are flaky, we mark as xfail
     needs: [setup_metadata]
     permissions:
       contents: write
@@ -270,7 +271,7 @@ jobs:
             --upload
 
       - name: Trigger building PyTorch wheels
-        if: ${{ github.repository_owner == 'ROCm' }}
+        if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
           workflow: release_portable_linux_pytorch_wheels.yml

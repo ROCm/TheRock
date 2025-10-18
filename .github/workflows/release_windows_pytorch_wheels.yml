@@ -37,9 +37,13 @@ on:
       amdgpu_family:
         type: choice
         options:
+          - gfx101X-dgpu
+          - gfx103X-dgpu
           - gfx110X-dgpu
+          - gfx1150
           - gfx1151
           - gfx120X-all
+          - gfx90X-dcgpu
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx1151
@@ -70,7 +74,6 @@ on:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
         default: ''
-
 
 permissions:
   id-token: write
