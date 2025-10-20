@@ -271,9 +271,6 @@ def upload_build_summary(args):
     log_url = f"{bucket_url}/logs/{amdgpu_family}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_url})")
 
-    manifest_url = f"{bucket_url}/manifests/{amdgpu_family}/therock_manifest.json"
-    gha_append_step_summary(f"[Manifest]({manifest_url})")
-
     if os.path.exists(build_dir / "artifacts" / "index.html"):
         artifact_url = f"{bucket_url}/index-{amdgpu_family}.html"
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
