@@ -239,7 +239,9 @@ def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
 
     manifest = get_manifest_from_build(build_dir)
     if not manifest:
-        raise FileNotFoundError(f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}")
+        raise FileNotFoundError(
+            f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}"
+        )
 
     dest = f"{bucket_uri}/manifests/{amdgpu_family}/therock_manifest.json"
     log(f"[INFO] Uploading manifest {manifest} -> {dest}")
