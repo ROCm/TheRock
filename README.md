@@ -58,7 +58,7 @@ instructions and configurations for alternatives.
 ```bash
 # Install Ubuntu dependencies
 sudo apt update
-sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
+sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
@@ -66,6 +66,7 @@ cd TheRock
 
 # Init python virtual environment and install python dependencies
 python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches
@@ -96,6 +97,7 @@ cd TheRock
 # Init python virtual environment and install python dependencies
 python -m venv .venv
 .venv\Scripts\Activate.bat
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download submodules and apply patches
@@ -119,6 +121,24 @@ The build can be customized through cmake feature flags.
 > Not all family and targets are currently supported.
 > See [therock_amdgpu_targets.cmake](cmake/therock_amdgpu_targets.cmake) file
 > for available options.
+
+#### Discovering available targets on your system
+
+In case you don't have an existing ROCm/HIP installation from which you can run any of these tools:
+
+| Tool                    | Platform |
+| ----------------------- | -------- |
+| `amd-smi`               | Linux    |
+| `rocm-smi`              | Linux    |
+| `rocm_agent_enumerator` | Linux    |
+| `hipinfo`               | Windows  |
+| `amdgpu-arch`           | Both     |
+
+You can install the `rocm` Python package for any architecture inside a venv and run `amdgpu-arch` from there:
+
+1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv`
+1. `.tmpvenv/bin/amdgpu-arch` on Linux, `.tmpvenv\Scripts\amdgpu-arch` on Windows
+1. `rm -rf .tmpvenv`
 
 #### Optional configuration flags
 
@@ -152,6 +172,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SOLVER=ON`       | Enables the SOLVER libraries                  |
 | `-DTHEROCK_ENABLE_SPARSE=ON`       | Enables the SPARSE libraries                  |
 | `-DTHEROCK_ENABLE_MIOPEN=ON`       | Enables MIOpen                                |
+| `-DTHEROCK_ENABLE_HIPDNN=ON`       | Enables hipDNN                                |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some

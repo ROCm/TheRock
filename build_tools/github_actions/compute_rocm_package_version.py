@@ -63,6 +63,7 @@ def get_current_date():
 def compute_version(
     release_type: str | None,
     custom_version_suffix: str | None,
+    prerelease_version: str | None,
     override_base_version: str | None,
 ) -> str:
     if override_base_version:
@@ -81,10 +82,14 @@ def compute_version(
         git_sha = get_git_sha()
         version_suffix = f".dev0+{git_sha}"
     elif release_type == "nightly":
-        # Construct a nightly (pre-release) version:
+        # Construct a nightly (a / "alpha") version:
         # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
         current_date = get_current_date()
-        version_suffix = f"rc{current_date}"
+        version_suffix = f"a{current_date}"
+    elif release_type == "prerelease":
+        # Construct a prerelease (rc / "release candidate") version
+        # https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases
+        version_suffix = f"rc{prerelease_version}"
     else:
         raise ValueError(f"Unhandled release type '{release_type}'")
     _log(f"Version suffix: '{version_suffix}'")
@@ -102,13 +107,19 @@ def main(argv):
     release_type_group.add_argument(
         "--release-type",
         type=str,
-        choices=["dev", "nightly"],
+        choices=["dev", "nightly", "prerelease"],
         help="The type of package version to produce",
     )
     release_type_group.add_argument(
         "--custom-version-suffix",
         type=str,
         help="Custom version suffix to use instead of an automatic suffix",
+    )
+
+    parser.add_argument(
+        "--prerelease-version",
+        type=str,
+        help="Prerelease version (typically a build number)",
     )
 
     parser.add_argument(
@@ -119,9 +130,17 @@ def main(argv):
 
     args = parser.parse_args(argv)
 
+    if args.release_type != "prerelease" and args.prerelease_version:
+        parser.error("release type must be 'prerelease' if --prerelease-version is set")
+    elif args.release_type == "prerelease" and not args.prerelease_version:
+        parser.error(
+            "--prerelease-version is required when release type is 'prerelease'"
+        )
+
     rocm_package_version = compute_version(
         args.release_type,
         args.custom_version_suffix,
+        args.prerelease_version,
         args.override_base_version,
     )
     gha_set_output({"rocm_package_version": rocm_package_version})

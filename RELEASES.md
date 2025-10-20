@@ -219,11 +219,12 @@ usage: rocm-sdk {command} ...
 ROCm SDK Python CLI
 
 positional arguments:
-  {path,test,version,targets}
+  {path,test,version,targets,init}
     path                Print various paths to ROCm installation
     test                Run installation tests to verify integrity
     version             Print version information
     targets             Print information about the GPU targets that are supported
+    init                Expand devel contents to initialize rocm[devel]
 
 $ rocm-sdk test
 ...
@@ -233,6 +234,17 @@ OK
 $ rocm-sdk targets
 gfx1100;gfx1101;gfx1102
 ```
+
+To initialize the `rocm[devel]` package, use the `rocm-sdk` tool to _eagerly_ expand development
+contents:
+
+```console
+$ rocm-sdk init
+Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
+```
+
+These contents are useful for using the package outside of Python and _lazily_ expanded on the
+first use when used from Python.
 
 Once you have verified your installation, you can continue to use it for
 standard ROCm development or install PyTorch or another supported Python ML
@@ -363,12 +375,11 @@ wrapper Python wheels or utility scripts.
 ### Installing release tarballs
 
 Release tarballs are automatically uploaded to AWS S3 buckets.
-The S3 buckets do not yet have index pages.
 
-| S3 bucket                                                                    | Description                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------- |
-| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/) | Nightly builds from the `main` branch             |
-| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/)         | ⚠️ Development builds from project maintainers ⚠️ |
+| S3 bucket                                                                              | Description                                       |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the `main` branch             |
+| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️ |
 
 After downloading, simply extract the release tarball into place:
 

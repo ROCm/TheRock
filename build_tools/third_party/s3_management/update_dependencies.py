@@ -32,6 +32,7 @@ PACKAGES_PER_PROJECT = {
     "networkx": {"version": "latest", "project": "torch"},
     "numpy": {"version": "latest", "project": "torch"},
     "jinja2": {"version": "latest", "project": "torch"},
+    "markupsafe": {"version": "latest", "project": "torch"},
     "filelock": {"version": "latest", "project": "torch"},
     "fsspec": {"version": "latest", "project": "torch"},
     "typing-extensions": {"version": "latest", "project": "torch"},
@@ -133,6 +134,12 @@ def upload_missing_whls(
         # Skip i686 packages
         if "i686" in pkg:
             continue
+        # Skip iphoneos packages
+        if "iphoneos" in pkg:
+            continue
+        # Skip iphonesimulator packages
+        if "iphonesimulator" in pkg:
+            continue
         # Skip unsupported Python version
         if "cp39" in pkg:
             continue
@@ -175,9 +182,13 @@ def main() -> None:
     args = parser.parse_args()
 
     SUBFOLDERS =  [
+        "gfx101X-dgpu",
+        "gfx103X-dgpu",
         "gfx110X-dgpu",
+        "gfx1150",
         "gfx1151",
         "gfx120X-all",
+        "gfx90X-dcgpu",
         "gfx94X-dcgpu",
         "gfx950-dcgpu",
     ]

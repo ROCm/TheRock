@@ -9,12 +9,21 @@ on:
       linux_amdgpu_families:
         description: Linux families to run builds and tests on.
         value: ${{ jobs.setup.outputs.linux_amdgpu_families }}
+      linux_test_labels:
+        description: ROCm projects to run Linux tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.linux_test_labels }}
       windows_amdgpu_families:
         description: Windows families to run builds and tests for.
         value: ${{ jobs.setup.outputs.windows_amdgpu_families }}
+      windows_test_labels:
+        description: ROCm projects to run Windows tests on. Optional filter.
+        value: ${{ jobs.setup.outputs.windows_test_labels }}
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
+      test_type:
+        description: The test type to run for component tests (i.e. smoke, full)
+        value: ${{ jobs.setup.outputs.test_type }}
 
 permissions:
   contents: read
@@ -29,7 +38,10 @@ jobs:
     outputs:
       enable_build_jobs: ${{ steps.configure.outputs.enable_build_jobs }}
       linux_amdgpu_families: ${{ steps.configure.outputs.linux_amdgpu_families }}
+      linux_test_labels: ${{ steps.configure.outputs.linux_test_labels }}
       windows_amdgpu_families: ${{ steps.configure.outputs.windows_amdgpu_families }}
+      windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
+      test_type: ${{ steps.configure.outputs.test_type }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository
@@ -50,8 +62,10 @@ jobs:
         id: configure
         env:
           INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
+          LINUX_TEST_LABELS: ${{ github.event.inputs.linux_test_labels }}
           LINUX_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.linux_use_prebuilt_artifacts }}
           INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
+          WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
         run: ./build_tools/github_actions/configure_ci.py
 

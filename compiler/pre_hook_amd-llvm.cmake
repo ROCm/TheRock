@@ -35,6 +35,18 @@ else()
     # For now we will switch the priorty for find_package to first search in
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
+
+    # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
+    if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
+      list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
+      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
+      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "openmp")
+      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
+      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
+      #TODO: Enable when HWLOC dependency is figured out
+      #set(LIBOMP_USE_HWLOC ON)
+    endif()
   endif()
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
@@ -112,6 +124,7 @@ block()
   # It is empically derived (either configure or ninja invocation will fail
   # on a missing tool).
   set(_llvm_required_tools
+    LLVM_AR
     LLVM_CONFIG
     LLVM_DWARFDUMP
     LLVM_JITLINK
@@ -127,7 +140,6 @@ block()
   if(WIN32)
     # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
     # we might as well build them from source ourselves.
-    list(APPEND _llvm_required_tools "LLVM_AR")
     list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
     list(APPEND _llvm_required_tools "LLVM_LIB")
     list(APPEND _llvm_required_tools "LLVM_RANLIB")
