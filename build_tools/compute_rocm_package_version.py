@@ -61,7 +61,7 @@ def get_current_date():
 
 
 def compute_version(
-    release_type: str | None,
+    release_type: str | None = None,
     custom_version_suffix: str | None = None,
     prerelease_version: str | None = None,
     override_base_version: str | None = None,
