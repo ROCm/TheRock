@@ -198,18 +198,10 @@ LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so*", "hiprand*.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
+LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "hipsparselt*.dll")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
-
-# Others we may want:
-# hiprtc-builtins
-# rocblas
-# rocfft
-# rocm-openblas
-# rocrand
-# rocsolver
-# rocsparse
 
 # Others we may want:
 # hiprtc-builtins
