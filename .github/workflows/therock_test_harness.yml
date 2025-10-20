@@ -58,7 +58,7 @@ jobs:
   therock_test_harness_linux:
     name: TheRock Tests Sharded Linux Nightly
     needs: [setup_metadata]
-    runs-on: linux-mi325-1gpu-ossci-rocm
+    runs-on: ${{ matrix.target_bundle.test_runs_on }}
     container:
       image: 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98'
       options: --ipc host
