@@ -7,5 +7,5 @@ Description: zlib compression library
 Version: @PROJECT_VERSION@
 
 Requires:
-Libs: ${prefix}/@ZLIB_IMPORTED_LOCATION@
+Libs: -L${libdir} -lz
 Cflags: -I${includedir}
