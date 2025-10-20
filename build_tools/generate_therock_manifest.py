@@ -99,7 +99,7 @@ def submodule_pin(repo_dir: Path, commit: str, sub_path: str):
         # An example of ls-tree output:
         # "160000 commit d777ee5b682bfabe3d4cd436fd5c7f0e0b75300e  rocm-libraries"
         parts = line.split()
-        # Make sure there is no malformed record
+        # Skip malformed records that don't match the expected format
         if len(parts) >= 3 and parts[1] == "commit":
             # The pin comes after "commit"
             return parts[2]
