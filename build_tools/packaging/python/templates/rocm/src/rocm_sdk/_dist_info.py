@@ -192,16 +192,24 @@ LibraryEntry("roctx64", "core", "libroctx64.so*", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
 
-LibraryEntry("amd_comgr", "core", "libamd_comgr.so.3", "amd_comgr0701.dll")
-LibraryEntry("hipblas", "libraries", "libhipblas.so.3", "libhipblas.dll")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so.1", "libhipblaslt.dll")
-LibraryEntry("hipfft", "libraries", "libhipfft.so.0", "hipfft.dll")
-LibraryEntry("hiprand", "libraries", "libhiprand.so.1", "hiprand.dll")
-LibraryEntry("hipsparse", "libraries", "libhipsparse.so.4", "hipsparse.dll")
-LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so.0", "hipsparselt.dll")
-LibraryEntry("hipsolver", "libraries", "libhipsolver.so.1", "hipsolver.dll")
-LibraryEntry("rccl", "libraries", "librccl.so.1", "")
-LibraryEntry("miopen", "libraries", "libMIOpen.so.1", "MIOpen.dll")
+LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
+LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
+LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
+LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
+LibraryEntry("hiprand", "libraries", "libhiprand.so*", "hiprand*.dll")
+LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
+LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
+LibraryEntry("rccl", "libraries", "librccl.so*", "")
+LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
+
+# Others we may want:
+# hiprtc-builtins
+# rocblas
+# rocfft
+# rocm-openblas
+# rocrand
+# rocsolver
+# rocsparse
 
 # Others we may want:
 # hiprtc-builtins
