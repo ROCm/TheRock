@@ -65,7 +65,8 @@ defaults to the first available family, in which case it might be necessary to s
 ```bash
 ./build_tools/build_python_packages.py \
     --artifact-dir ./output-linux-portable/build/artifacts \
-    --dest-dir ${HOME}/tmp/packages
+    --dest-dir ${HOME}/tmp/packages \
+    --version 7.0.0.dev0
 ```
 
 Note that this does do some dynamic compilation of files and it performs
