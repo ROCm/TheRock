@@ -1,11 +1,15 @@
 # TheRock-Test-Framework
--------------------
+
+______________________________________________________________________
+
 The Rock Test Framework is developed on top of [pytest](https://docs.pytest.org/en/6.2.x/reference.html#) Framework. It can be used to run Rock Tests on AMD GPU enabled BareMetal Machines or KubePods. You can leverage this framework by integrating your tests code via pytest.
 
 ## Setup
+
 ![Setup](assets/therock_test_orchestrator.png)
 
 ## Features
+
 - **TestTopology:** Supports all Rock Components testing on all supported AMD GPU Targets running Linux / Windows.
 - **Orchestrator:** Auto Detects GPU count and Intellegently fills test shards as per their previous execution history. Thus acheives efficient uses all GPUs for faster execution times.
 - **Auto Re-run:** Auto detects the individual test failures and configures to re-run the failed test cases in next iteration.
@@ -13,6 +17,7 @@ The Rock Test Framework is developed on top of [pytest](https://docs.pytest.org/
 - **Reporting:** Detailed Reporting in Html format with individual failure tracking against their issue-tickets.
 
 ## Cloning Repo and Basic Configuration
+
 ```
 $ git clone https://github.com/TheRock
 $ cd tests/sharding
@@ -20,12 +25,18 @@ $ pip3 install --quiet -r requirements.txt
 ```
 
 ## Tests Integration using PyTest Framework
+
 #### Test Development
+
 Please add your test function in the following script files to integrate your tests under pytest framework.
-* *conftest.py*: Add your tests dependent fixtures in this script file. Ex: *conftest.py::ompEnv()*
-* *tests.py*: You can add your actual test functions here. Ex: *tests.py::test_rocprim()*
+
+- *conftest.py*: Add your tests dependent fixtures in this script file. Ex: *conftest.py::ompEnv()*
+- *tests.py*: You can add your actual test functions here. Ex: *tests.py::test_rocprim()*
+
 #### Test Execution
+
 Run the tests using the following options
+
 ```
 $ cd tests/sharding
 $ pytest -v -s --tb=short \
@@ -39,17 +50,22 @@ $ pytest -v -s --rock=/TheRock/therock-build tests.py -k 'rocrand or rocthrust'
 # Ex: To run only hipblas tests but not hipblaslt
 $ pytest -v -s --rock=/TheRock/therock-build tests.py -k 'hipblas and not hipblaslt'
 ```
+
 Note: You can get more help on options with `pytest -h`
+
 #### Available Pytest Fixtures in conftest.py
+
 - **rock:** The rock path provided via `--rock` option
 - **extraEnv:**: The env dictionary provided via `--env` option
 - **orch:** The orchestrator to run ctest/gtest/binary type of tests
-- **dmesgs:** Fetches node's dmesgs and dumps in dmesg_<testName>.log
+- **dmesgs:** Fetches node's dmesgs and dumps in dmesg\_<testName>.log
 - **report:** Overall Reporting object
 - **result:** Test suite result object for Reporting
 
 ## Test Sharding with Orchestrator
+
 This is fully developed in pytest framework and basically it works as follows:
+
 - Test Orchestrator detects all the available GPUs on the Pod/Node.
 - Installs the required pre-requisites as per the selected tests.
 - Collects individual tests of the given test suite.
@@ -61,7 +77,9 @@ This is fully developed in pytest framework and basically it works as follows:
 - Collects the results from all the Test Runners and creates an Test Reports.
 
 ## Utilities
+
 #### Basic Utilities
+
 ```
 >>> from libs import utils
 
@@ -78,6 +96,7 @@ This is fully developed in pytest framework and basically it works as follows:
 ```
 
 #### Nodelib
+
 ```
 >>> from libs import nodes
 
@@ -93,6 +112,7 @@ This is fully developed in pytest framework and basically it works as follows:
 ```
 
 #### Orchestrator
+
 ```
 >>> from libs import orchestrator
 
@@ -109,6 +129,7 @@ This is fully developed in pytest framework and basically it works as follows:
 ```
 
 #### Reporting
+
 ```
 >>> from libs import report
 
