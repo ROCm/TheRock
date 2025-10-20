@@ -217,26 +217,16 @@ def upload_logs_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
-def find_manifest(build_dir: Path):
+def get_manifest_from_build(build_dir: Path):
     """
-    Look for therock_manifest.json file in the locations.
-    Return the first match or None.
+    Look only in the aux-overlay *build* directory.
+    Non-fatal: returns None if not found.
     """
-    candidates = [
-        # Generated (build tree)
-        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json",
-        # Installed into the aux-overlay staging folder
-        build_dir
-        / "base"
-        / "aux-overlay"
-        / "stage"
-        / "share"
-        / "therock"
-        / "therock_manifest.json",
-    ]
-    for p in candidates:
-        if p.is_file():
-            return p
+    build_path = build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
+
+    if build_path.is_file():
+        return build_path
+
     return None
 
 
@@ -248,7 +238,7 @@ def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
     external_repo_path, bucket = get_bucket_info_cached()
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
 
-    manifest = find_manifest(build_dir)
+    manifest = get_manifest_from_build(build_dir)
     if not manifest:
         log(f"[WARN] therock_manifest.json not found under {build_dir}")
         return
