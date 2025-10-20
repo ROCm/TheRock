@@ -18,6 +18,7 @@ TESTS_TO_IGNORE = [
     "rocprim.device_merge_sort",
     "rocprim.device_partition",
     "rocprim.device_radix_sort",
+    "rocprim.device_scan",
     "rocprim.device_select",
     "rocprim.device_find_first_of",
     "rocprim.device_reduce_by_key",

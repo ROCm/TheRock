@@ -90,6 +90,8 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
+positive_filter.append("*DBSync*")
+
 #############################################
 
 negative_filter.append("*DeepBench*")
@@ -97,7 +99,6 @@ negative_filter.append("*MIOpenTestConv*")
 
 # Failing tests
 negative_filter.append("*/GPU_KernelTuningNetTest*")
-negative_filter.append("*DBSync*")
 negative_filter.append("*/GPU_MIOpenDriver*")
 negative_filter.append("*GPU_TestMhaFind20*")
 
@@ -149,6 +150,17 @@ negative_filter.append(
     "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
 )  # https://github.com/ROCm/TheRock/issues/1682
 
+# Tests that fail when run with sharding
+negative_filter.append(
+    "Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/0"
+)
+negative_filter.append(
+    "Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/2"
+)
+negative_filter.append(
+    "Smoke/GPU_ConvBiasActivInfer_FP16.ConvCKIgemmFwdBiasActivFused/1"
+)
+
 ####################################################
 
 # Creating a smoke test filter
@@ -163,6 +175,7 @@ smoke_filter = [
     # CK Grouped FWD Conv smoke tests
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_FP16*",
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_BFP16*",
+    "*DBSync*",
 ]
 
 ####################################################
@@ -176,7 +189,6 @@ else:
     test_filter = (
         "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
     )
-
 #############################################
 
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]

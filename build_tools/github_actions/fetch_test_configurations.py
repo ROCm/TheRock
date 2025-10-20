@@ -54,6 +54,24 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 4,
     },
+    # SOLVER tests
+    "hipsolver": {
+        "job_name": "hipsolver",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipsolver.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
+    "rocsolver": {
+        "job_name": "rocsolver",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_rocsolver.py')}",
+        # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # PRIM tests
     "rocprim": {
         "job_name": "rocprim",
@@ -76,7 +94,7 @@ test_matrix = {
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
     },
     # SPARSE tests
@@ -116,6 +134,24 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    # FFT tests
+    "rocfft": {
+        "job_name": "rocfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocfft.py')}",
+        # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    "hipfft": {
+        "job_name": "hipfft",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_hipfft.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
@@ -131,6 +167,15 @@ test_matrix = {
         "fetch_artifact_args": "--rccl --tests",
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    # hipDNN tests
+    "hipdnn": {
+        "job_name": "hipdnn",
+        "fetch_artifact_args": "--hipdnn --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn.py')}",
         "platform": ["linux"],
         "total_shards": 1,
     },
@@ -173,8 +218,9 @@ def run():
         if platform in test_matrix[key]["platform"] and (
             key in project_array or "*" in project_array
         ):
-            logging.info(f"Including job {job_name}")
+            logging.info(f"Including job {job_name} with test_type {test_type}")
             job_config_data = test_matrix[key]
+            job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
