@@ -21,12 +21,12 @@ cmd = [
     "900",
 ]
 
-# Determine test filter and timeout based on TEST_TYPE environment variable
+# Determine test filter based on TEST_TYPE environment variable
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
 
 if test_type == "smoke":
-    # Exclude tests that start with "Full"
+    # Exclude tests that start with "Full" during smoke tests
     environ_vars["GTEST_FILTER"] = "-Full*"
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
