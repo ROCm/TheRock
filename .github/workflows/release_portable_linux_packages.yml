@@ -134,6 +134,7 @@ jobs:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     continue-on-error: ${{ matrix.target_bundle.expect_failure == true }} # for GPU families that are flaky, we mark as xfail
+    timeout-minutes: 720 # 12 hour timeout
     needs: [setup_metadata]
     permissions:
       contents: write
