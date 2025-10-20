@@ -71,6 +71,4 @@ jobs:
 
       - name: Compute package version
         id: rocm_package_version
-        run: |
-          python ./build_tools/github_actions/compute_rocm_package_version.py \
-            --release-type=dev
+        run: python ./build_tools/compute_rocm_package_version.py --release-type=dev

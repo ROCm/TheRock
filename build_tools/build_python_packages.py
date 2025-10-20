@@ -136,7 +136,11 @@ def main(argv: list[str]):
         required=True,
         help="Destination directory in which to materialize packages",
     )
-    p.add_argument("--version", default="0.1.dev0", help="Package versions")
+    p.add_argument(
+        "--version",
+        default="",
+        help="Package versions (defaults to an automatic dev version)",
+    )
     p.add_argument(
         "--version-suffix",
         default="",
@@ -155,6 +159,14 @@ def main(argv: list[str]):
         help="Apply compression when building wheels (disable for faster iteration or prior to recompression activities)",
     )
     args = p.parse_args(argv)
+
+    if not args.version:
+        print(f"::: Version not specified, choosing a default")
+        import compute_rocm_package_version
+
+        args.version = compute_rocm_package_version.compute_version(release_type="dev")
+        print(f"::: Version defaulting to {args.version}")
+
     run(args)
 
 

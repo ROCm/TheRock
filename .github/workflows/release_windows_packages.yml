@@ -93,7 +93,7 @@ jobs:
       - name: Compute package version
         id: rocm_package_version
         run: |
-          python ./build_tools/github_actions/compute_rocm_package_version.py \
+          python ./build_tools/compute_rocm_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }}
 

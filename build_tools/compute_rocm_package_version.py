@@ -5,7 +5,7 @@
 
 """Computes a ROCm package version with an appropriate suffix for a given release type.
 
-Writes to 'version' in GITHUB_OUTPUT.
+Also writes to 'version' in GITHUB_OUTPUT if running under GitHub Actions.
 """
 
 import argparse
@@ -16,10 +16,10 @@ import os
 import subprocess
 import sys
 
-from github_actions_utils import *
+from github_actions.github_actions_utils import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent
 
 
 def _log(*args, **kwargs):
@@ -62,9 +62,9 @@ def get_current_date():
 
 def compute_version(
     release_type: str | None,
-    custom_version_suffix: str | None,
-    prerelease_version: str | None,
-    override_base_version: str | None,
+    custom_version_suffix: str | None = None,
+    prerelease_version: str | None = None,
+    override_base_version: str | None = None,
 ) -> str:
     if override_base_version:
         base_version = override_base_version
