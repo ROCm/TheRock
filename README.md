@@ -172,6 +172,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SOLVER=ON`       | Enables the SOLVER libraries                  |
 | `-DTHEROCK_ENABLE_SPARSE=ON`       | Enables the SPARSE libraries                  |
 | `-DTHEROCK_ENABLE_MIOPEN=ON`       | Enables MIOpen                                |
+| `-DTHEROCK_ENABLE_HIPDNN=ON`       | Enables hipDNN                                |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
