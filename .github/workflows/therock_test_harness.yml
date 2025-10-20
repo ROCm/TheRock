@@ -86,9 +86,11 @@ jobs:
           python-version: 3.12
 
       - name: Install TheRock
+        env:
+          release_version: ${{ inputs.release_version }}
         run: |
           pip install -r requirements-test.txt
-          python3 build_tools/install_rocm_from_artifacts.py --tests --amdgpu-family ${{ matrix.target_bundle.amdgpu_family }} --release ${{ inputs.release_version }}
+          python3 build_tools/install_rocm_from_artifacts.py --tests --amdgpu-family ${{ matrix.target_bundle.amdgpu_family }} --release ${{ env.release_version }}
 
       # TODO: add parallelism
       - name: Running test harness

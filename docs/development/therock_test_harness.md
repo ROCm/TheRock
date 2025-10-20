@@ -1,6 +1,6 @@
 # TheRock Test Harness
 
----
+______________________________________________________________________
 
 The Rock Test Framework is developed on top of [pytest](https://docs.pytest.org/en/6.2.x/reference.html#) Framework. It can be used to run Rock Tests on AMD GPU enabled BareMetal Machines or KubePods. You can leverage this framework by integrating your tests code via pytest.
 
@@ -85,12 +85,12 @@ This is fully developed in pytest framework and basically it works as follows:
 
 # Running python functions parallel in threads
 >>> def countDown(fromNum):
->>> 	import time
->>> 	for i in range(fromNum, 0, -1):
->>> 		sys.stdout.write(f'{i}\n')
->>> 		sys.stdout.flush()
->>> 		time.sleep(5)
->>> 	return fromNum + 100
+>>>    import time
+>>>      for i in range(fromNum, 0, -1):
+>>>         sys.stdout.write(f'{i}\n')
+>>>         sys.stdout.flush()
+>>>         time.sleep(5)
+>>>     return fromNum + 100
 >>> rets = utils.runParallel((countDown, (10, )), (countDown, (5, )))
 >>> print(f'rets: {rets}')
 ```
@@ -146,5 +146,5 @@ This is fully developed in pytest framework and basically it works as follows:
 
 # Creating Html Reports
 >>> with open('report.html', 'w') as fd:
->>> 	fd.write(report.toHtml())
+>>>    fd.write(report.toHtml())
 ```
