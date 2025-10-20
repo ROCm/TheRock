@@ -17,10 +17,10 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     # Exclude tests that start with "Full"
     environ_vars["GTEST_FILTER"] = "-Full*"
-    timeout = "300" # 5 minutes max for Smoke tests
+    timeout = "300"  # 5 minutes max for Smoke tests
     logging.info("Running smoke tests (excluding Full* tests)")
 else:
-    timeout = "900" # 15 minutes max for Full tests
+    timeout = "900"  # 15 minutes max for Full tests
     logging.info("Running full test suite")
 
 cmd = [
