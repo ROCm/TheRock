@@ -24,7 +24,7 @@ def orch():
 @pytest.fixture(scope="session")
 def therock_path(pytestconfig, orch):
     """Fixture to access the path to the TheRock passed by cmdline arg: --therock-path"""
-    rockDir = pytestconfig.getoption("therock-path")
+    rockDir = pytestconfig.getoption("therock_path")
     return rockDir
 
 
