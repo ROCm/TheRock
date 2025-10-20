@@ -268,7 +268,7 @@ def upload_build_summary(args):
         log("No artifacts index found. Skipping artifact link.")
 
     manifest_url = f"{bucket_url}/manifests/{amdgpu_family}/therock_manifest.json"
-    gha_append_step_summary(f"[Manifest]({manifest_url})")
+    gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 
 def run(args):
