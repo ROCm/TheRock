@@ -83,7 +83,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     # Resolve the Python package to its distribution package name and find the
     # RECORD file.
     dist_names = md.packages_distributions()["rocm_sdk_devel"]
-    assert len(dist_names) == 1  # Would only be != 1 for namespace package.
+    assert len(dist_names) in [1,2]
     dist_name = dist_names[0]
     dist_files = md.files(dist_name)
     if dist_files is None:
