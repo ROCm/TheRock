@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import json
-import os
 from pathlib import Path
 import re
 import shlex
@@ -118,36 +117,6 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
-def _compact(d: dict) -> dict:
-    return {k: v for k, v in d.items() if v}
-
-
-def _provenance_from_env() -> dict:
-    """
-    Collect minimal run association info for GitHub Actions, if available.
-    """
-    repo = os.getenv("GITHUB_REPOSITORY")
-    run_id = os.getenv("GITHUB_RUN_ID")
-    run_attempt = os.getenv("GITHUB_RUN_ATTEMPT")
-    workflow = os.getenv("GITHUB_WORKFLOW")
-    job = os.getenv("GITHUB_JOB")
-
-    run_url = (
-        f"https://github.com/{repo}/actions/runs/{run_id}" if repo and run_id else None
-    )
-
-    return _compact(
-        {
-            "repo": repo,
-            "run_id": run_id,
-            "run_attempt": run_attempt,
-            "workflow": workflow,
-            "job": job,
-            "run_url": run_url,
-        }
-    )
-
-
 def main():
     ap = argparse.ArgumentParser(
         description="Generate submodule pin/patch manifest for TheRock."
@@ -182,11 +151,6 @@ def main():
         "the_rock_commit": the_rock_commit,
         "submodules": rows,
     }
-
-    # Attach provenance if available
-    provenance = _provenance_from_env()
-    if provenance:
-        manifest["provenance"] = provenance
 
     # Decide output path
     out_path = Path(args.output)
