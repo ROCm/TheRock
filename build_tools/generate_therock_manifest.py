@@ -19,7 +19,18 @@ def _run(cmd, cwd=None, check=True) -> str:
 
 
 def git_root() -> Path:
-    return Path(_run(["git", "rev-parse", "--show-toplevel"]))
+    """
+    Determine the repo root strictly from this script's location:
+      <repo>/build_tools/generate_therock_manifest.py  ->  <repo>
+    """
+    here = Path(__file__).resolve()
+    repo_root = here.parents[1]  # .../build_tools -> repo root
+    if not ((repo_root / ".git").exists() or (repo_root / ".gitmodules").exists()):
+        raise RuntimeError(
+            f"Could not locate repo root at {repo_root}. "
+            "Expected this script to live under <repo>/build_tools/."
+        )
+    return repo_root
 
 
 def list_submodules_via_gitconfig(repo_dir: Path):
@@ -107,6 +118,36 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
+def _compact(d: dict) -> dict:
+    return {k: v for k, v in d.items() if v}
+
+
+def _provenance_from_env() -> dict:
+    """
+    Collect minimal run association info for GitHub Actions, if available.
+    """
+    repo = os.getenv("GITHUB_REPOSITORY")
+    run_id = os.getenv("GITHUB_RUN_ID")
+    run_attempt = os.getenv("GITHUB_RUN_ATTEMPT")
+    workflow = os.getenv("GITHUB_WORKFLOW")
+    job = os.getenv("GITHUB_JOB")
+
+    run_url = (
+        f"https://github.com/{repo}/actions/runs/{run_id}" if repo and run_id else None
+    )
+
+    return _compact(
+        {
+            "repo": repo,
+            "run_id": run_id,
+            "run_attempt": run_attempt,
+            "workflow": workflow,
+            "job": job,
+            "run_url": run_url,
+        }
+    )
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Generate submodule pin/patch manifest for TheRock."
@@ -118,10 +159,7 @@ def main():
     args = ap.parse_args()
 
     repo_root = git_root()
-    os.chdir(repo_root)
-
-    # Resolve commit + short SHA
-    the_rock_commit = _run(["git", "rev-parse", args.commit])
+    the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
 
     # Enumerate submodules via .gitmodules
     entries = list_submodules_via_gitconfig(repo_root)
@@ -144,6 +182,11 @@ def main():
         "the_rock_commit": the_rock_commit,
         "submodules": rows,
     }
+
+    # Attach provenance if available
+    provenance = _provenance_from_env()
+    if provenance:
+        manifest["provenance"] = provenance
 
     # Decide output path
     out_path = Path(args.output)
