@@ -1,6 +1,6 @@
-# TheRock-Test-Framework
+# TheRock Test Harness
 
-______________________________________________________________________
+---
 
 The Rock Test Framework is developed on top of [pytest](https://docs.pytest.org/en/6.2.x/reference.html#) Framework. It can be used to run Rock Tests on AMD GPU enabled BareMetal Machines or KubePods. You can leverage this framework by integrating your tests code via pytest.
 
@@ -30,8 +30,8 @@ $ pip3 install --quiet -r requirements.txt
 
 Please add your test function in the following script files to integrate your tests under pytest framework.
 
-- *conftest.py*: Add your tests dependent fixtures in this script file. Ex: *conftest.py::ompEnv()*
-- *tests.py*: You can add your actual test functions here. Ex: *tests.py::test_rocprim()*
+- _conftest.py_: Add your tests dependent fixtures in this script file. Ex: _conftest.py::ompEnv()_
+- _tests.py_: You can add your actual test functions here. Ex: _tests.py::test_rocprim()_
 
 #### Test Execution
 
@@ -55,7 +55,7 @@ Note: You can get more help on options with `pytest -h`
 
 #### Available Pytest Fixtures in conftest.py
 
-- **rock:** The rock path provided via `--rock` option
+- **therock-path:** The path of TheRock
 - **extraEnv:**: The env dictionary provided via `--env` option
 - **orch:** The orchestrator to run ctest/gtest/binary type of tests
 - **dmesgs:** Fetches node's dmesgs and dumps in dmesg\_<testName>.log

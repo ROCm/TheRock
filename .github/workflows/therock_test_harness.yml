@@ -87,7 +87,7 @@ jobs:
 
       - name: Install TheRock
         run: |
-          pip install requirements-test.txt
+          pip install -r requirements-test.txt
           python3 build_tools/install_rocm_from_artifacts.py --tests --amdgpu-family ${{ matrix.target_bundle.amdgpu_family }} --release ${{ inputs.release_version }}
 
       # TODO: add parallelism
