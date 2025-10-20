@@ -3,7 +3,7 @@
 The Rock Test Framework is developed on top of [pytest](https://docs.pytest.org/en/6.2.x/reference.html#) Framework. It can be used to run Rock Tests on AMD GPU enabled BareMetal Machines or KubePods. You can leverage this framework by integrating your tests code via pytest.
 
 ## Setup
-![Setup](images/test_setup.png)
+![Setup](assets/therock_test_orchestrator.png)
 
 ## Features
 - **TestTopology:** Supports all Rock Components testing on all supported AMD GPU Targets running Linux / Windows.
@@ -29,9 +29,9 @@ Run the tests using the following options
 ```
 $ cd tests/sharding
 $ pytest -v -s --tb=short \
-	--rock=/TheRock/therock-build  <path to the installed path of the rock> \
-	--env VAR:VALUE VAR2:VALUE2  <extra envs that your test needs> \
-	tests.py -k '<testName|pattern> or <test2Name>'
+    --rock=/TheRock/therock-build  <path to the installed path of the rock> \
+    --env VAR:VALUE VAR2:VALUE2  <extra envs that your test needs> \
+    tests.py -k '<testName|pattern> or <test2Name>'
 
 # Ex: To run rocrand and rocthrust tests
 $ pytest -v -s --rock=/TheRock/therock-build tests.py -k 'rocrand or rocthrust'
