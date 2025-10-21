@@ -97,12 +97,16 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DROCPROFSYS_USE_ROCM=OFF
+      -DROCPROFSYS_BUILD_TBB=ON
+      -DROCPROFSYS_BUILD_LIBIBERTY=ON
+      -DROCPROFSYS_BUILD_DYNINST=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
-      rocm-cmake
+      therock-boost
     RUNTIME_DEPS
       rocprofiler-sdk
       aqlprofile
