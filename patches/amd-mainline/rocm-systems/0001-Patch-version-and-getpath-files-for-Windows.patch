@@ -89,11 +89,11 @@ index c0eb448f52..7cf385d96b 100644
  #ifdef __cplusplus
  }  // end extern "C" block
 diff --git a/projects/rocm-core/rocm_version.h.in b/projects/rocm-core/rocm_version.h.in
-index f9c11a9c6f..6c239da9c9 100644
+index 4ac290ae85..5a6da77fef 100644
 --- a/projects/rocm-core/rocm_version.h.in
 +++ b/projects/rocm-core/rocm_version.h.in
 @@ -33,7 +33,13 @@ extern "C" {
- #endif  /* __cplusplus */
+ #endif  // __cplusplus
  
  
 -#define LIB_API_PUBLIC __attribute__ ((visibility ("default")))
@@ -107,15 +107,15 @@ index f9c11a9c6f..6c239da9c9 100644
  
  
  #define ROCM_VERSION_MAJOR   @VERSION_MAJOR@
-@@ -52,7 +58,7 @@ typedef enum {
+@@ -53,7 +59,7 @@ typedef enum {
  
- //  API for getting the verion
- //  Return val :  VerErros : API execution status.  The parameters are valid only when the exetution status is SUCCESS==0
+ //  API for getting the version
+ //  Return val :  VerErrors : API execution status.  The parameters are valid only when the exetution status is SUCCESS==0
 -LIB_API_PUBLIC VerErrors getROCmVersion(unsigned int* Major, unsigned int* Minor, unsigned int* Patch) __attribute__((nonnull)) ;
 +LIB_API_PUBLIC VerErrors getROCmVersion(unsigned int* Major, unsigned int* Minor, unsigned int* Patch) ATTRIBUTE_NON_NULL ;
  //  Usage :
  //  int mj=0,mn=0,p=0,ret=0;
  //  ret=getROCMVersion(&mj,&mn,&p);
 -- 
-2.43.0
+2.34.1
 
