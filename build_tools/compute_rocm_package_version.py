@@ -5,7 +5,27 @@
 
 """Computes a ROCm package version with an appropriate suffix for a given release type.
 
-Also writes to 'version' in GITHUB_OUTPUT if running under GitHub Actions.
+For usage from other Python scripts, call the `compute_version()` function
+directly. WHen used from GitHub Actions, this writes to 'version' in GITHUB_OUTPUT.
+
+Sample usage with standard release versions:
+
+  python compute_rocm_package_version.py --release-type=dev
+  # 7.10.0.dev0+f689a8ea40232f3f6be1ec958354b108349023ff
+
+  python compute_rocm_package_version.py --release-type=prerelease --prerelease-version=2
+  # 7.10.0rc2
+
+  python compute_rocm_package_version.py --release-type=nightly
+  # 7.10.0a20251021
+
+Sample usage with custom release versions:
+
+  python compute_rocm_package_version.py --custom-version-suffix=.dev0
+  # 7.10.0.dev0
+
+  python compute_rocm_package_version.py --release-type=nightly --override-base-version=7.99.0
+  # 7.99.0a20251021
 """
 
 import argparse
@@ -39,6 +59,7 @@ def load_rocm_version() -> str:
 def get_git_sha():
     """Gets the current git SHA, either from GITHUB_SHA or running git commands."""
 
+    # Default GitHub environment variable, info:
     # https://docs.github.com/en/actions/reference/workflows-and-actions/variables
     github_sha = os.getenv("GITHUB_SHA")
 
