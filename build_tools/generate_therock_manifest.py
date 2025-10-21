@@ -152,7 +152,13 @@ def main():
     ap = argparse.ArgumentParser(
         description="Generate submodule pin/patch manifest for TheRock."
     )
-    ap.add_argument("-o", "--output", required=True, help="Output JSON path")
+    # make --output optional with a default message and value of None
+    ap.add_argument(
+        "-o",
+        "--output",
+        help="Output JSON path (default: <repo>/therock_manifest.json)",
+        default=None,
+    )
     ap.add_argument(
         "--commit", help="TheRock commit/ref to inspect (default: HEAD)", default="HEAD"
     )
@@ -164,7 +170,10 @@ def main():
     manifest = build_manifest_schema(repo_root, the_rock_commit)
 
     # Decide output path
-    out_path = Path(args.output)
+    # if not provided, write to repo_root / "therock_manifest.json"
+    out_path = (
+        Path(args.output) if args.output else (repo_root / "therock_manifest.json")
+    )
 
     # Write JSON
     write_manifest_json(out_path, manifest)
