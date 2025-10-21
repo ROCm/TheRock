@@ -33,3 +33,25 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/dist_info.json" "${dist_info_json_str}")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dist_info.json"
   DESTINATION "share/therock"
 )
+
+# ---------------------------------------------------------------------------
+# TheRock manifest generation
+# ---------------------------------------------------------------------------
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+set(THEROCK_MANIFEST_JSON "${CMAKE_CURRENT_BINARY_DIR}/therock_manifest.json")
+set(THEROCK_MANIFEST_SCRIPT "${THEROCK_SOURCE_DIR}/build_tools/generate_therock_manifest.py")
+
+add_custom_command(
+  OUTPUT "${THEROCK_MANIFEST_JSON}"
+  COMMAND "${Python3_EXECUTABLE}" "${THEROCK_MANIFEST_SCRIPT}" -o "${THEROCK_MANIFEST_JSON}"
+  WORKING_DIRECTORY "${THEROCK_SOURCE_DIR}"
+  DEPENDS "${THEROCK_MANIFEST_SCRIPT}" "${THEROCK_SOURCE_DIR}/.gitmodules"
+  COMMENT "Generating TheRock manifest"
+  VERBATIM
+)
+
+add_custom_target(aux-overlay-manifest ALL DEPENDS "${THEROCK_MANIFEST_JSON}")
+
+install(FILES "${THEROCK_MANIFEST_JSON}" DESTINATION "share/therock")

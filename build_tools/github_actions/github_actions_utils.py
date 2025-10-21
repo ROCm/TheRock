@@ -113,7 +113,7 @@ def gha_get_request_headers():
     # If GITHUB_TOKEN environment variable is available, include it in the API request to avoid a lower rate limit
     gh_token = os.getenv("GITHUB_TOKEN", "")
     if gh_token:
-        headers["Authentication"] = f"Bearer {gh_token}"
+        headers["Authorization"] = f"Bearer {gh_token}"
 
     return headers
 

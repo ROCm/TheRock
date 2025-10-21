@@ -65,7 +65,8 @@ defaults to the first available family, in which case it might be necessary to s
 ```bash
 ./build_tools/build_python_packages.py \
     --artifact-dir ./output-linux-portable/build/artifacts \
-    --dest-dir ${HOME}/tmp/packages
+    --dest-dir ${HOME}/tmp/packages \
+    --version 7.10.0.dev0
 ```
 
 Note that this does do some dynamic compilation of files and it performs
@@ -79,8 +80,8 @@ To install locally built packages you can either
 
    ```bash
    python3 -m venv .venv && source .venv/bin/activate
-   pip install ${HOME}/tmp/packages/dist/rocm-7.0.0.dev0.tar.gz \
-               ${HOME}/tmp/packages/dist/rocm_sdk_core-7.0.0.dev0-py3-none-linux_x86_64.whl
+   pip install ${HOME}/tmp/packages/dist/rocm-7.10.0.dev0.tar.gz \
+               ${HOME}/tmp/packages/dist/rocm_sdk_core-7.10.0.dev0-py3-none-linux_x86_64.whl
    # Optionally install rocm_sdk_devel and rocm_sdk_libraries wheels
    ```
 
@@ -91,7 +92,7 @@ To install locally built packages you can either
    python3 -m venv .venv && source .venv/bin/activate
    pip install piprepo setuptools
    piprepo build ${HOME}/tmp/packages/dist
-   pip install rocm[libraries,devel]==7.0.0.dev0 \
+   pip install rocm[libraries,devel]==7.10.0.dev0 \
      --extra-index-url ${HOME}/tmp/packages/dist/simple \
      --force-reinstall --no-cache-dir
    ```

@@ -194,6 +194,8 @@ include = [
   "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
+  "libexec/hipsparse/test/hipsparse_gentest.py",
+  "share/hipsparse/test/**",
   "clients/matrices/**"
 ]
 optional = true

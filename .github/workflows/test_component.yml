@@ -31,6 +31,7 @@ jobs:
         --device /dev/dri
         --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
     strategy:
       fail-fast: false
       matrix:

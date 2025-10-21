@@ -5,9 +5,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-libdrm-sources
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: "https://gitlab.freedesktop.org/mesa/drm/-/archive/libdrm-2.4.124/drm-libdrm-2.4.124.tar.bz2"
-      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/drm-libdrm-2.4.124.tar.bz2"
-      URL_HASH "SHA256=18e66044e0542040614a7904b6a2c0e5249a81e705fe9ba5a1cc2e5df11416e6"
+      # Originally mirrored from: "https://gitlab.freedesktop.org/mesa/libdrm/-/archive/libdrm-2.4.127/libdrm-libdrm-2.4.127.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libdrm-libdrm-2.4.127.tar.bz2"
+      URL_HASH "SHA256=3A11654905C595FCA2825D6E259A8086D04A448DCE215B4CB03A49320D9259EC"
       TOUCH "${_download_stamp}"
     )
 

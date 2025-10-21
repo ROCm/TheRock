@@ -12,6 +12,7 @@ The script supports the following command-line options:
 | `--base-only`     | Flag   | Include only base artifacts (minimal installation)                     |
 | `--blas`          | Flag   | Include BLAS artifacts                                                 |
 | `--fft`           | Flag   | Include FFT artifacts                                                  |
+| `--hipdnn`        | Flag   | Include hipDNN artifacts                                               |
 | `--input-dir`     | String | Existing TheRock directory to copy from                                |
 | `--miopen`        | Flag   | Include MIOpen artifacts                                               |
 | `--output-dir`    | Path   | Output directory for TheRock installation (default: `./therock-build`) |
