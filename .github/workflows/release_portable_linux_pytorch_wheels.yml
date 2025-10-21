@@ -90,7 +90,7 @@ jobs:
         include:
           - pytorch_version: release/2.7
             pytorch_patchset: rocm_2.7
-          - pytorch_version: release/2.9
+          - pytorch_version: release/2.9_rocm7.9
             pytorch_patchset: rocm_2.9
           - pytorch_version: nightly
             pytorch_patchset: nightly
