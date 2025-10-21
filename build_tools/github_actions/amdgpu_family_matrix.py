@@ -153,11 +153,13 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1150",
+            "build_variants": ["release"],
             "expect_failure": False,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
+            "build_variants": ["release"],
             "expect_failure": False,
         },
     },
