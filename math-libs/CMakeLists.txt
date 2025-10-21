@@ -270,3 +270,49 @@ if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
+
+if(THEROCK_ENABLE_ROCWMMA)
+  ##############################################################################
+  # rocWMMA
+  ##############################################################################
+
+  therock_cmake_subproject_declare(rocWMMA
+    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocWMMA"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCWMMA_SOURCE_DIR}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      therock-googletest
+    RUNTIME_DEPS
+      rocm-smi-lib
+  )
+  therock_cmake_subproject_glob_c_sources(rocWMMA
+  SUBDIRS
+    .
+  )
+  therock_cmake_subproject_activate(rocWMMA)
+
+  therock_provide_artifact(rocWMMA
+    DESCRIPTOR artifact-rocwmma.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      rocWMMA
+  )
+endif(THEROCK_ENABLE_ROCWMMA)
