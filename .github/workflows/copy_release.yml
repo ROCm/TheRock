@@ -72,7 +72,7 @@ jobs:
             --recursive --exclude "*"  --include "rocm*${{ inputs.rocm_version }}*"
 
       - name: Copy torch wheels between S3 buckets
-        if: ${{ inputs.include_torch == 'true' }}
+        if: ${{ inputs.include_torch }}
         run: |
           aws s3 cp \
             s3://therock-nightly-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
