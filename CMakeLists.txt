@@ -318,6 +318,15 @@ if(NOT WIN32)
   cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL "Enables composable kernel in MIOpen" ON ${THEROCK_ENABLE_COMPOSABLE_KERNEL} OFF)
 endif()
 
+# rocWMMA on Windows is disabled for now.
+if(NOT WIN32)
+  therock_add_feature(ROCWMMA
+    GROUP MATH_LIBS
+    DESCRIPTION "Enables build of rocWMMA"
+    REQUIRES COMPILER # FIXME: rocm-smi?
+  )
+endif()
+
 # ML-Libs Features.
 therock_add_feature(MIOPEN
   GROUP ML_LIBS
