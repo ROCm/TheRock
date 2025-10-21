@@ -30,6 +30,7 @@ def exec(cmd: list[str], cwd: Path):
     logging.info(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
+
 def create_index_file(args: argparse.Namespace):
     logging.info("Creating index file")
     report_dir = args.report_path
@@ -39,6 +40,7 @@ def create_index_file(args: argparse.Namespace):
     indexer_args.verbose = False
     indexer_args.recursive = False
     process_dir(report_dir, indexer_args)
+
 
 def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
     """
