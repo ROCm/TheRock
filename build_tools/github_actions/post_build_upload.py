@@ -229,10 +229,10 @@ def get_manifest_from_build(build_dir: Path):
     return None
 
 
-def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
+def upload_manifest_to_s3(run_id: str, artifact_group: str, build_dir: Path):
     """
     Upload therock_manifest.json to:
-      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<amdgpu_family>/therock_manifest.json
+      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<artifact_group>/therock_manifest.json
     """
     external_repo_path, bucket = get_bucket_info_cached()
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
@@ -243,7 +243,7 @@ def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
             f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}"
         )
 
-    dest = f"{bucket_uri}/manifests/{amdgpu_family}/therock_manifest.json"
+    dest = f"{bucket_uri}/manifests/{artifact_group}/therock_manifest.json"
     log(f"[INFO] Uploading manifest {manifest} -> {dest}")
     run_aws_cp(manifest, dest, content_type="application/json")
 
@@ -267,7 +267,7 @@ def upload_build_summary(args):
     else:
         log("No artifacts index found. Skipping artifact link.")
 
-    manifest_url = f"{bucket_url}/manifests/{amdgpu_family}/therock_manifest.json"
+    manifest_url = f"{bucket_url}/manifests/{artifact_group}/therock_manifest.json"
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 
@@ -306,7 +306,7 @@ def run(args):
 
         log("Upload manifest")
         log("----------------")
-        upload_manifest_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
+        upload_manifest_to_s3(args.run_id, args.artifact_group, args.build_dir)
 
         log("Upload build summary")
         log("--------------------")
