@@ -2,7 +2,7 @@
 """
 upload_build_artifacts.py
 
-Uploads build artifacts to AWS S3 bucket
+Uploads test reports to AWS S3 bucket for each GitHub run ID and AMD GPU family
 """
 
 import argparse
@@ -13,6 +13,8 @@ import platform
 import shlex
 import subprocess
 import sys
+from github_actions.github_actions_utils import retrieve_bucket_info
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -28,36 +30,16 @@ def exec(cmd: list[str], cwd: Path):
     logging.info(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
-
-def retrieve_bucket_info() -> tuple[str, str]:
-    github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
-    is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
-    owner, repo_name = github_repository.split("/")
-    external_repo = (
-        ""
-        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
-        else f"{owner}-{repo_name}/"
-    )
-    bucket = (
-        "therock-artifacts"
-        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
-        else "therock-artifacts-external"
-    )
-    return (external_repo, bucket)
-
-
 def create_index_file(args: argparse.Namespace):
     logging.info("Creating index file")
     report_dir = args.report_path
     indexer_args = argparse.Namespace()
     indexer_args.filter = ["*.html*"]
-    indexer_args.output_file = "index_rccl_test_report.html"
+    indexer_args.output_file = args.index_file_name
     indexer_args.verbose = False
     indexer_args.recursive = False
     process_dir(report_dir, indexer_args)
 
-
-# Enhancement to upload all HTML test reports in a destination directory
 def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
     """
     Upload all .html files from report_dir to bucket_uri (keeps filenames).
@@ -68,6 +50,8 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
             report_dir,
         )
         return
+    # Safely join S3 bucket and log destination paths by removing any extra slashes
+    # to avoid malformed URLs like "s3://bucket//logs/...".
     dest_uri = f"{bucket_uri.rstrip('/')}/{log_destination.lstrip('/')}"
     # Use a single AWS CLI call to copy only *.html files recursively
     cmd = [
@@ -93,10 +77,6 @@ def run(args: argparse.Namespace):
     run_id = args.run_id
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
 
-    # Skip uploading report if report path is not set
-    if args.report_path is None:
-        logging.error("--report-path is not provided — skipping upload")
-        return
     if not args.report_path.exists():
         logging.error(
             "--report-path %s does not exist — skipping upload", args.report_path
@@ -113,7 +93,7 @@ def run(args: argparse.Namespace):
 
 
 def main(argv):
-    parser = argparse.ArgumentParser(prog="artifact_upload")
+    parser = argparse.ArgumentParser(prog="upload_test_report")
     parser.add_argument(
         "--run-id", type=str, required=True, help="GitHub run ID of this workflow run"
     )
@@ -125,14 +105,22 @@ def main(argv):
     parser.add_argument(
         "--report-path",
         type=Path,
+        required=True,
         help="Directory containing .html files to upload (optional)",
     )
 
     parser.add_argument(
         "--log-destination",
         type=str,
-        default="/logs/gfx950-dcgpu/multinode-ci-logs",
+        required=True,
         help="Subdirectory in S3 to upload reports",
+    )
+
+    parser.add_argument(
+        "--index-file-name",
+        type=str,
+        required=True,
+        help="index file name used for indexing test reports",
     )
 
     args = parser.parse_args(argv)
