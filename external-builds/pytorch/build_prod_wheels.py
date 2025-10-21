@@ -439,6 +439,7 @@ def do_build(args: argparse.Namespace):
             "Will not build with OpenBLAS support."
         )
     else:
+        env["BLAS"] = "OpenBLAS"
         env["OpenBLAS_HOME"] = str(host_math_path)
 
     # Build triton.
