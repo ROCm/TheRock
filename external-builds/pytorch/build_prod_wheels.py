@@ -627,16 +627,16 @@ def do_build_pytorch(
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by PyTorch version
             if pytorch_build_version_parsed.release < (2, 8):
-                use_flash_attention = "1"
+                use_flash_attention = "ON"
             else:
-                use_flash_attention = "0"
+                use_flash_attention = "OFF"
             print(
-                f"Flash Attention default behavior based on version: {use_flash_attention}"
+                f"Flash Attention default behavior based on pytorch version: {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
             use_flash_attention = (
-                "1" if args.enable_pytorch_flash_attention_linux else "0"
+                "ON" if args.enable_pytorch_flash_attention_linux else "0FF"
             )
             print(f"Flash Attention override set by flag: {use_flash_attention}")
 
@@ -646,7 +646,9 @@ def do_build_pytorch(
                 "USE_MEM_EFF_ATTENTION": use_flash_attention,
             }
         )
-        print(f"Flash Attention enabled: {env['USE_FLASH_ATTENTION'] == '1'}")
+        print(
+            f"Flash Attention and Memory efficiency enabled: {env['USE_FLASH_ATTENTION'] == 'ON'}"
+        )
 
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
