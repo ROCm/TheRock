@@ -42,7 +42,6 @@ jobs:
       windows_variants: ${{ steps.configure.outputs.windows_variants }}
       test_type: ${{ steps.configure.outputs.test_type }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
-      test_type: ${{ steps.configure.outputs.test_type }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository
