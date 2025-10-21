@@ -83,6 +83,48 @@ def is_key_defined(pkg_info, key):
         return False
 
 
+def is_composite_package(pkg_info):
+    """
+    Verifies whether composite key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if composite key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "composite")
+
+
+def is_debug_package_disabled(pkg_info):
+    """
+    Verifies whether Disable_Debug_Package key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if Disable_Debug_Package key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "Disable_Debug_Package")
+
+
+def is_packaging_disabled(pkg_info):
+    """
+    Verifies whether 'Disablepackaging' key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if 'Disablepackaging' key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "Disablepackaging")
+
+
 def get_package_info(pkgname):
     """Retrieves package details from a JSON file for the given package name
 
@@ -134,9 +176,7 @@ def get_package_list():
 
     data = read_package_json_file()
 
-    pkg_list = [
-        pkg["Package"] for pkg in data if not is_key_defined(pkg, "disablepackaging")
-    ]
+    pkg_list = [pkg["Package"] for pkg in data if not is_packaging_disabled(pkg)]
     return pkg_list
 
 
