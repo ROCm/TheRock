@@ -93,7 +93,7 @@ jobs:
       expect_failure: ${{ matrix.variant.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
       test_type: ${{ needs.setup.outputs.test_type }}
-      sanity_check_only_for_family: ${{ matrix.families.sanity_check_only_for_family == true }}
+      sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
     permissions:
       contents: read
       id-token: write
@@ -123,7 +123,7 @@ jobs:
       expect_failure: ${{ matrix.variant.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
       test_type: ${{ needs.setup.outputs.test_type }}
-      sanity_check_only_for_family: ${{ matrix.families.sanity_check_only_for_family == true }}
+      sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
     permissions:
       contents: read
       id-token: write

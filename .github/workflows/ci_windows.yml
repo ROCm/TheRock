@@ -71,7 +71,8 @@ jobs:
         (
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
-        )
+        ) &&
+        needs.build_windows_artifacts.outputs.xfail_job_result != 'failure'
       }}
     uses: ./.github/workflows/test_artifacts.yml
     with:

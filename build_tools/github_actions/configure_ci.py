@@ -385,7 +385,7 @@ def matrix_generator(
                 artifact_group = platform_info["family"]
                 build_variant_suffix = build_variant_info["build_variant_suffix"]
                 if build_variant_suffix:
-                    artifact_group += f"_{build_variant_suffix}"
+                    artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
 
                 matrix_output.append(matrix_row)

@@ -11,12 +11,15 @@ on:
         default: gfx94X-dcgpu
       build_variant_label:
         type: string
+        description: "A label for the build variant (ex: 'Release', 'ASAN')"
         default: "Release"
       build_variant_suffix:
         type: string
+        description: "The build variant suffix (ex: 'asan' suffix -> 'gfx94X-dcgpu-asan')"
         default: ""
       build_variant_cmake_preset:
         type: string
+        description: "The name of the cmake preset to use for this build variant, matching an entry in CMakePresets.json (ex: 'linux-release-asan')"
         default: ""
       package_version:
         type: string
@@ -46,6 +49,10 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+    outputs:
+      xfail_job_result:
+        description: "If the job is xfail, we output the job result"
+        value: ${{ jobs.build_portable_linux_artifacts.outputs.xfail_job_result }}
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -71,6 +78,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+    # For xfail jobs, we need to indicate to parent workflow if job succeeded or failed
+    outputs:
+      xfail_job_result: ${{ steps.xfail_job_status.outputs.xfail_job_result }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -164,6 +174,13 @@ jobs:
             --artifact-group "${{ inputs.artifact_group }}" \
             --build-dir build \
             --upload
+      
+        # For xfail jobs, we need to indicate to parent workflow if job succeeded or failed
+      - name: Set output status if xfail is true
+        id: xfail_job_status
+        if: ${{ always() && inputs.expect_failure == true }}
+        run: |
+          echo "xfail_job_result=${{ job.status }}" >> $GITHUB_OUTPUT
 
       # - name: Upload job metrics to Redshift database
       #   if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
