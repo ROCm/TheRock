@@ -36,12 +36,24 @@ on:
       destsubdir:
         type: string
         default: v2
+      sourcebucket:
+        type: choice
+        options:
+          - nightly
+          - dev
+        default: nightly
+      destbucket:
+        type: choice
+        options:
+          - dev
+          - nightly
+        default: dev
 permissions:
   contents: read
 
 jobs:
   copy_python_packages:
-    name: Copy nightly ${{ inputs.sourcesubdir }} -> dev ${{ inputs.destsubdir }} | ${{ inputs.amdgpu_family }} | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
+    name: Copy ${{ inputs.sourcebucket }} ${{ inputs.sourcesubdir }} -> ${{ inputs.destbucket }} ${{ inputs.destsubdir }} | ${{ inputs.amdgpu_family }} | rocm ${{ inputs.rocm_version }} | py ${{ inputs.python_version }}
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
@@ -67,21 +79,21 @@ jobs:
       - name: Copy ROCm packages between S3 buckets
         run: |
           aws s3 cp \
-            s3://therock-nightly-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://therock-dev-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*"  --include "rocm*${{ inputs.rocm_version }}*"
 
       - name: Copy torch wheels between S3 buckets
         if: ${{ inputs.include_torch }}
         run: |
           aws s3 cp \
-            s3://therock-nightly-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://therock-dev-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
+            s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*"  --include "torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
 
       - name: (Re-)Generate Python package release index
         env:
-          S3_BUCKET_PY: "therock-dev-python"
+          S3_BUCKET_PY: "therock-${{ inputs.destbucket }}-python"
           CUSTOM_PREFIX: "${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}"
         run: |
           pip install boto3 packaging
