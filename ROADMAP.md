@@ -57,21 +57,21 @@ Check [windows_support.md](docs/development/windows_support.md) on current statu
 
 #### AMD Radeon - Windows
 
-| Architecture | LLVM target | Build Passing | Release Ready | Sanity Tested |
-| ------------ | ----------- | ------------- | ------------- | ------------- |
-| **RDNA4**    | **gfx1201** | ✅            | ✅            |               |
-| **RDNA4**    | **gfx1200** | ✅            | ✅            |               |
-| **RDNA3.5**  | **gfx1151** | ✅            | ✅            | ✅            |
-| **RDNA3.5**  | **gfx1150** | ✅            | ✅            |               |
-| **RDNA3**    | **gfx1103** | ✅            | ✅            |               |
-| **RDNA3**    | **gfx1102** | ✅            | ✅            |               |
-| **RDNA3**    | **gfx1101** | ✅            | ✅            |               |
-| **RDNA3**    | **gfx1100** | ✅            | ✅            |               |
-| RDNA2        | gfx1036     |               |               |               |
-| RDNA2        | gfx1035     |               |               |               |
-| RDNA2        | gfx1032     | ✅            | ✅            |               |
-| RDNA2        | gfx1030     | ✅            | ✅            |               |
-| RDNA1        | gfx1012     | ✅            | ✅            |               |
-| RDNA1        | gfx1011     | ✅            | ✅            |               |
-| RDNA1        | gfx1010     | ✅            | ✅            |               |
-| GCN5.1       | gfx906      | ✅            | ✅            |               |
+| Architecture | LLVM target | Build Passing | Release Available | Sanity Tested |
+| ------------ | ----------- | ------------- | ----------------- | ------------- |
+| **RDNA4**    | **gfx1201** | ✅            | ✅                |               |
+| **RDNA4**    | **gfx1200** | ✅            | ✅                |               |
+| **RDNA3.5**  | **gfx1151** | ✅            | ✅                | ✅            |
+| **RDNA3.5**  | **gfx1150** | ✅            | ✅                |               |
+| **RDNA3**    | **gfx1103** | ✅            | ✅                |               |
+| **RDNA3**    | **gfx1102** | ✅            | ✅                |               |
+| **RDNA3**    | **gfx1101** | ✅            | ✅                |               |
+| **RDNA3**    | **gfx1100** | ✅            | ✅                |               |
+| RDNA2        | gfx1036     |               |                   |               |
+| RDNA2        | gfx1035     |               |                   |               |
+| RDNA2        | gfx1032     | ✅            | ✅                |               |
+| RDNA2        | gfx1030     | ✅            | ✅                |               |
+| RDNA1        | gfx1012     | ✅            | ✅                |               |
+| RDNA1        | gfx1011     | ✅            | ✅                |               |
+| RDNA1        | gfx1010     | ✅            | ✅                |               |
+| GCN5.1       | gfx906      | ✅            | ✅                |               |
