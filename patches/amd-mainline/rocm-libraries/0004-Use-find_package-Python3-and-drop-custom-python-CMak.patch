@@ -1,0 +1,326 @@
+From bc32cbc98fb4f8cc728aa383c8ceca5171fa1659 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Tue, 21 Oct 2025 09:49:46 -0700
+Subject: [PATCH 4/4] Use `find_package(Python3)` and drop custom `python`
+ CMake variables
+
+---
+ projects/hipblas/CMakeLists.txt                 |  4 +---
+ projects/hipblas/clients/gtest/CMakeLists.txt   |  2 +-
+ projects/hipblas/toolchain-linux.cmake          |  4 ----
+ projects/hipblas/toolchain-windows.cmake        |  4 ----
+ projects/hipcub/toolchain-windows.cmake         |  4 ----
+ projects/hipsparse/CMakeLists.txt               |  4 +---
+ projects/hipsparse/clients/tests/CMakeLists.txt |  2 +-
+ projects/hipsparse/toolchain-windows.cmake      |  1 -
+ projects/rocblas/CMakeLists.txt                 |  7 ++-----
+ projects/rocblas/clients/gtest/CMakeLists.txt   |  2 +-
+ projects/rocblas/cmake/virtualenv.cmake         | 10 +---------
+ projects/rocblas/library/src/CMakeLists.txt     |  4 ++--
+ projects/rocblas/toolchain-linux.cmake          |  4 ----
+ projects/rocblas/toolchain-windows.cmake        |  4 ----
+ projects/rocprim/toolchain-windows.cmake        |  4 ----
+ projects/rocrand/toolchain-linux.cmake          |  4 ----
+ projects/rocrand/toolchain-windows.cmake        |  4 ----
+ projects/rocsparse/toolchain-windows.cmake      |  4 ----
+ projects/rocthrust/toolchain-windows.cmake      |  4 ----
+ 19 files changed, 10 insertions(+), 66 deletions(-)
+
+diff --git a/projects/hipblas/CMakeLists.txt b/projects/hipblas/CMakeLists.txt
+index 49a23fc114..fc3c6da0aa 100644
+--- a/projects/hipblas/CMakeLists.txt
++++ b/projects/hipblas/CMakeLists.txt
+@@ -44,9 +44,7 @@ endif()
+ 
+ project( hipblas LANGUAGES CXX )
+ 
+-if (NOT python)
+-    set(python "python3") # default for linux
+-endif()
++find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+ 
+ # Append our library helper cmake path and the cmake path for hip (for convenience)
+ # Users may override HIP path by specifying their own in CMAKE_MODULE_PATH
+diff --git a/projects/hipblas/clients/gtest/CMakeLists.txt b/projects/hipblas/clients/gtest/CMakeLists.txt
+index 9251db447b..4089960762 100644
+--- a/projects/hipblas/clients/gtest/CMakeLists.txt
++++ b/projects/hipblas/clients/gtest/CMakeLists.txt
+@@ -235,7 +235,7 @@ if( BUILD_WITH_SOLVER )
+ endif()
+ 
+ add_custom_command( OUTPUT "${HIPBLAS_TEST_DATA}"
+-                    COMMAND ${python} ../common/hipblas_gentest.py -I ../include hipblas_gtest.yaml -o "${HIPBLAS_TEST_DATA}"
++                    COMMAND ${Python3_EXECUTABLE} ../common/hipblas_gentest.py -I ../include hipblas_gtest.yaml -o "${HIPBLAS_TEST_DATA}"
+                     DEPENDS ../common/hipblas_gentest.py ../include/hipblas_common.yaml "${HIPBLAS_AUX_YAML_DATA}" "${HIPBLAS_L1_YAML_DATA}" "${HIPBLAS_L2_YAML_DATA}" "${HIPBLAS_L3_YAML_DATA}" "${HIPBLAS_EX_YAML_DATA}" "${HIPBLAS_SOLVER_YAML_DATA}" hipblas_gtest.yaml
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" )
+ 
+diff --git a/projects/hipblas/toolchain-linux.cmake b/projects/hipblas/toolchain-linux.cmake
+index 6381e3af35..3ccc917501 100644
+--- a/projects/hipblas/toolchain-linux.cmake
++++ b/projects/hipblas/toolchain-linux.cmake
+@@ -1,8 +1,4 @@
+ 
+-if (NOT python)
+-  set(python "python3") # default for linux
+-endif()
+-
+ if (DEFINED ENV{ROCM_PATH})
+   set(rocm_bin "$ENV{ROCM_PATH}/bin")
+ else()
+diff --git a/projects/hipblas/toolchain-windows.cmake b/projects/hipblas/toolchain-windows.cmake
+index 79f3e26865..e83735c959 100644
+--- a/projects/hipblas/toolchain-windows.cmake
++++ b/projects/hipblas/toolchain-windows.cmake
+@@ -12,10 +12,6 @@ endif()
+ 
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ 
+-if (NOT python)
+-  set(python "python") # take default for windows
+-endif()
+-
+ # working
+ #set(CMAKE_Fortran_COMPILER "C:/Strawberry/c/bin/gfortran.exe")
+ 
+diff --git a/projects/hipcub/toolchain-windows.cmake b/projects/hipcub/toolchain-windows.cmake
+index 9b0f729211..6b688314c9 100644
+--- a/projects/hipcub/toolchain-windows.cmake
++++ b/projects/hipcub/toolchain-windows.cmake
+@@ -17,10 +17,6 @@ endif()
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ set(CMAKE_C_COMPILER "${rocm_bin}/clang.exe")
+ 
+-if (NOT python)
+-  set(python "python3") # take default for windows
+-endif()
+-
+ # our usage flags
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWIN32 -D_CRT_SECURE_NO_WARNINGS")
+ 
+diff --git a/projects/hipsparse/CMakeLists.txt b/projects/hipsparse/CMakeLists.txt
+index 6bd3c47416..c6985efa53 100644
+--- a/projects/hipsparse/CMakeLists.txt
++++ b/projects/hipsparse/CMakeLists.txt
+@@ -23,9 +23,7 @@
+ 
+ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+ 
+-if (NOT python)
+-    set(python "python3") # default for linux
+-endif()
++find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+ 
+ # Consider removing this in the future
+ # This should appear before the project command, because it does not use FORCE
+diff --git a/projects/hipsparse/clients/tests/CMakeLists.txt b/projects/hipsparse/clients/tests/CMakeLists.txt
+index de2ab99e5b..d49ef8a77b 100644
+--- a/projects/hipsparse/clients/tests/CMakeLists.txt
++++ b/projects/hipsparse/clients/tests/CMakeLists.txt
+@@ -223,7 +223,7 @@ set(HIPSPARSE_TEST_YAMLS test_axpyi.yaml
+ # Prepare testing data
+ set(HIPSPARSE_TEST_DATA "${PROJECT_BINARY_DIR}/staging/hipsparse_test.data")
+ add_custom_command(OUTPUT "${HIPSPARSE_TEST_DATA}"
+-                   COMMAND ${python} ../common/hipsparse_gentest.py -m ${PROJECT_BINARY_DIR}/matrices -I ../include hipsparse_test.yaml -o "${HIPSPARSE_TEST_DATA}"
++                   COMMAND ${Python3_EXECUTABLE} ../common/hipsparse_gentest.py -m ${PROJECT_BINARY_DIR}/matrices -I ../include hipsparse_test.yaml -o "${HIPSPARSE_TEST_DATA}"
+                    DEPENDS ../common/hipsparse_gentest.py hipsparse_test.yaml ../include/hipsparse_common.yaml ${HIPSPARSE_TEST_YAMLS}
+                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+ add_custom_target(hipsparse-test-data
+diff --git a/projects/hipsparse/toolchain-windows.cmake b/projects/hipsparse/toolchain-windows.cmake
+index 765867d9ae..c99e48ef6e 100644
+--- a/projects/hipsparse/toolchain-windows.cmake
++++ b/projects/hipsparse/toolchain-windows.cmake
+@@ -12,7 +12,6 @@ endif()
+ 
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ set(CMAKE_C_COMPILER "${rocm_bin}/clang.exe")
+-set(python "python")
+ 
+ # working
+ #set(CMAKE_Fortran_COMPILER "C:/Strawberry/c/bin/gfortran.exe")
+diff --git a/projects/rocblas/CMakeLists.txt b/projects/rocblas/CMakeLists.txt
+index 2e56386822..3a6346fc55 100644
+--- a/projects/rocblas/CMakeLists.txt
++++ b/projects/rocblas/CMakeLists.txt
+@@ -41,10 +41,7 @@ include(toolchain-options)
+ set(THREADS_PREFER_PTHREAD_FLAG ON)
+ find_package(Threads REQUIRED)
+ 
+-if(NOT python)
+-  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+-  set(python "${Python3_EXECUTABLE}")
+-endif()
++find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+ 
+ # ########################################################################
+ # Main
+@@ -399,7 +396,7 @@ if(BUILD_CODE_COVERAGE)
+   #
+   add_custom_target(coverage_analysis
+     COMMAND ${CMAKE_COMMAND} -E make_directory ./coverage-report/profraw
+-    COMMAND ${CMAKE_COMMAND} -E env LLVM_PROFILE_FILE="./coverage-report/profraw/rocblas-coverage_%m.profraw" ${python} ./clients/staging/rocblas_rtest.py -t code_coverage
++    COMMAND ${CMAKE_COMMAND} -E env LLVM_PROFILE_FILE="./coverage-report/profraw/rocblas-coverage_%m.profraw" ${Python3_EXECUTABLE} ./clients/staging/rocblas_rtest.py -t code_coverage
+     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+     )
+ 
+diff --git a/projects/rocblas/clients/gtest/CMakeLists.txt b/projects/rocblas/clients/gtest/CMakeLists.txt
+index 8f6d25ea2d..0936ee22fd 100644
+--- a/projects/rocblas/clients/gtest/CMakeLists.txt
++++ b/projects/rocblas/clients/gtest/CMakeLists.txt
+@@ -164,7 +164,7 @@ set_target_properties( rocblas-test PROPERTIES
+ file(GLOB yaml_files "${CMAKE_CURRENT_SOURCE_DIR}/*.yaml")
+ set( ROCBLAS_TEST_DATA "${PROJECT_BINARY_DIR}/staging/rocblas_gtest.data")
+ add_custom_command( OUTPUT "${ROCBLAS_TEST_DATA}"
+-                    COMMAND ${python} ../common/rocblas_gentest.py -I ../include rocblas_gtest.yaml -o "${ROCBLAS_TEST_DATA}"
++                    COMMAND ${Python3_EXECUTABLE} ../common/rocblas_gentest.py -I ../include rocblas_gtest.yaml -o "${ROCBLAS_TEST_DATA}"
+                     DEPENDS ../common/rocblas_gentest.py ../include/rocblas_common.yaml ${yaml_files}
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" )
+ add_custom_target( rocblas-test-data DEPENDS "${ROCBLAS_TEST_DATA}" )
+diff --git a/projects/rocblas/cmake/virtualenv.cmake b/projects/rocblas/cmake/virtualenv.cmake
+index bb5c095fc9..13cb657ed1 100644
+--- a/projects/rocblas/cmake/virtualenv.cmake
++++ b/projects/rocblas/cmake/virtualenv.cmake
+@@ -1,15 +1,7 @@
+ # find_package(PythonInterp)
+ # # TODO: Check PYTHON_VERSION_MAJOR
+ 
+-find_program(VIRTUALENV_PYTHON_EXE ${python})
+-if(NOT VIRTUALENV_PYTHON_EXE)
+-    # look for non default name
+-    if(${python} MATCHES "python3")
+-        find_program(VIRTUALENV_PYTHON_EXE python)
+-    else()
+-        find_program(VIRTUALENV_PYTHON_EXE python3)
+-    endif()
+-endif()
++find_program(VIRTUALENV_PYTHON_EXE ${Python3_EXECUTABLE})
+ 
+ set(VIRTUALENV_HOME_DIR ${CMAKE_BINARY_DIR}/virtualenv CACHE PATH "Path to virtual environment")
+ 
+diff --git a/projects/rocblas/library/src/CMakeLists.txt b/projects/rocblas/library/src/CMakeLists.txt
+index 12df4f47f3..33205e71ef 100644
+--- a/projects/rocblas/library/src/CMakeLists.txt
++++ b/projects/rocblas/library/src/CMakeLists.txt
+@@ -752,7 +752,7 @@ file( GLOB rocblas_prototype_inputs
+ )
+ set( ROCBLAS_PROTO_TEMPLATES "${PROJECT_BINARY_DIR}/include/rocblas/internal/rocblas-exported-proto.hpp" )
+ add_custom_command(OUTPUT ${ROCBLAS_PROTO_TEMPLATES}
+-  COMMAND ${python} template-proto.py ${CMAKE_CURRENT_SOURCE_DIR}/include/ ${CMAKE_CURRENT_SOURCE_DIR}/blas3/Tensile/ ${CMAKE_CURRENT_SOURCE_DIR}/blas3/ ${CMAKE_CURRENT_SOURCE_DIR}/blas2/ ${CMAKE_CURRENT_SOURCE_DIR}/blas1/ ${CMAKE_CURRENT_SOURCE_DIR}/src64/blas3/ ${CMAKE_CURRENT_SOURCE_DIR}/src64/blas2/ ${CMAKE_CURRENT_SOURCE_DIR}/src64/blas1/ > ${ROCBLAS_PROTO_TEMPLATES}
++  COMMAND ${Python3_EXECUTABLE} template-proto.py ${CMAKE_CURRENT_SOURCE_DIR}/include/ ${CMAKE_CURRENT_SOURCE_DIR}/blas3/Tensile/ ${CMAKE_CURRENT_SOURCE_DIR}/blas3/ ${CMAKE_CURRENT_SOURCE_DIR}/blas2/ ${CMAKE_CURRENT_SOURCE_DIR}/blas1/ ${CMAKE_CURRENT_SOURCE_DIR}/src64/blas3/ ${CMAKE_CURRENT_SOURCE_DIR}/src64/blas2/ ${CMAKE_CURRENT_SOURCE_DIR}/src64/blas1/ > ${ROCBLAS_PROTO_TEMPLATES}
+   #DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/blas3/Tensile/ ${CMAKE_CURRENT_SOURCE_DIR}/blas3/ ${CMAKE_CURRENT_SOURCE_DIR}/blas2/ ${CMAKE_CURRENT_SOURCE_DIR}/blas1/
+   DEPENDS ${rocblas_prototype_inputs}
+   COMMENT "Generating prototypes from ${CMAKE_CURRENT_SOURCE_DIR}."
+@@ -782,7 +782,7 @@ if( NOT BUILD_SHARED_LIBS )
+   if( BUILD_WITH_TENSILE )
+     add_custom_command( TARGET rocblas POST_BUILD
+       COMMAND
+-        ${python} ${CMAKE_CURRENT_SOURCE_DIR}/merge_archives.py
++        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/merge_archives.py
+       ARGS
+         -v
+         -o "$<TARGET_LINKER_FILE:rocblas>"
+diff --git a/projects/rocblas/toolchain-linux.cmake b/projects/rocblas/toolchain-linux.cmake
+index 0ce0c2c07b..415e2e59c3 100644
+--- a/projects/rocblas/toolchain-linux.cmake
++++ b/projects/rocblas/toolchain-linux.cmake
+@@ -1,8 +1,4 @@
+ 
+-if (NOT python)
+-  set(python "python3") # default for linux
+-endif()
+-
+ if (DEFINED ENV{ROCM_PATH})
+   set(rocm_bin "$ENV{ROCM_PATH}/bin")
+ else()
+diff --git a/projects/rocblas/toolchain-windows.cmake b/projects/rocblas/toolchain-windows.cmake
+index 039bf5280f..f25af58fe9 100644
+--- a/projects/rocblas/toolchain-windows.cmake
++++ b/projects/rocblas/toolchain-windows.cmake
+@@ -13,10 +13,6 @@ endif()
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ set(CMAKE_C_COMPILER "${rocm_bin}/clang.exe")
+ 
+-if (NOT python)
+-  set(python "python") # take default for windows
+-endif()
+-
+ # working
+ #set(CMAKE_Fortran_COMPILER "C:/Strawberry/c/bin/gfortran.exe")
+ 
+diff --git a/projects/rocprim/toolchain-windows.cmake b/projects/rocprim/toolchain-windows.cmake
+index 974fb7b337..6b99828389 100644
+--- a/projects/rocprim/toolchain-windows.cmake
++++ b/projects/rocprim/toolchain-windows.cmake
+@@ -16,10 +16,6 @@ endif()
+ 
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ 
+-if (NOT python)
+-  set(python "python3") # take default for windows
+-endif()
+-
+ # our usage flags
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWIN32 -D_CRT_SECURE_NO_WARNINGS")
+ 
+diff --git a/projects/rocrand/toolchain-linux.cmake b/projects/rocrand/toolchain-linux.cmake
+index ce435596f5..a56085e10a 100644
+--- a/projects/rocrand/toolchain-linux.cmake
++++ b/projects/rocrand/toolchain-linux.cmake
+@@ -2,10 +2,6 @@
+ #set(CMAKE_GENERATOR "Ninja")
+ # Ninja doesn't support platform
+ #set(CMAKE_GENERATOR_PLATFORM x64)
+-if (NOT python)
+-  set(python "python3") # default for linux
+-endif()
+-
+ 
+ if (NOT DEFINED ENV{ROCM_PATH})
+   set(ENV{ROCM_PATH} "/opt/rocm" CACHE PATH "Path to the ROCm installation.")
+diff --git a/projects/rocrand/toolchain-windows.cmake b/projects/rocrand/toolchain-windows.cmake
+index 8f98f26348..8989937527 100644
+--- a/projects/rocrand/toolchain-windows.cmake
++++ b/projects/rocrand/toolchain-windows.cmake
+@@ -16,10 +16,6 @@ endif()
+ 
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ 
+-if (NOT python)
+-  set(python "python3") # take default for windows
+-endif()
+-
+ # our usage flags
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWIN32 -D_CRT_SECURE_NO_WARNINGS")
+ 
+diff --git a/projects/rocsparse/toolchain-windows.cmake b/projects/rocsparse/toolchain-windows.cmake
+index 2963d84d15..541a4f1081 100644
+--- a/projects/rocsparse/toolchain-windows.cmake
++++ b/projects/rocsparse/toolchain-windows.cmake
+@@ -35,10 +35,6 @@ endif()
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ set(CMAKE_C_COMPILER "${rocm_bin}/clang.exe")
+ 
+-if (NOT python)
+-  set(python "python") # take default for windows
+-endif()
+-
+ # working
+ #set(CMAKE_Fortran_COMPILER "C:/Strawberry/c/bin/gfortran.exe")
+ 
+diff --git a/projects/rocthrust/toolchain-windows.cmake b/projects/rocthrust/toolchain-windows.cmake
+index 974fb7b337..6b99828389 100644
+--- a/projects/rocthrust/toolchain-windows.cmake
++++ b/projects/rocthrust/toolchain-windows.cmake
+@@ -16,10 +16,6 @@ endif()
+ 
+ set(CMAKE_CXX_COMPILER "${rocm_bin}/clang++.exe")
+ 
+-if (NOT python)
+-  set(python "python3") # take default for windows
+-endif()
+-
+ # our usage flags
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWIN32 -D_CRT_SECURE_NO_WARNINGS")
+ 
+-- 
+2.45.1.windows.1
+
