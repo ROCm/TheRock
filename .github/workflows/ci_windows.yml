@@ -23,9 +23,8 @@ on:
         type: boolean
       use_prebuilt_artifacts:
         type: string
-      extra_cmake_options:
+      rocm_package_version:
         type: string
-        default: "-DBUILD_TESTING=ON"
       test_type:
         type: string
       sanity_check_only_for_family:
@@ -39,6 +38,7 @@ jobs:
     name: Build Artifacts
     if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
     uses: ./.github/workflows/build_windows_artifacts.yml
+    secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
@@ -46,6 +46,7 @@ jobs:
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       extra_cmake_options: ${{ inputs.extra_cmake_options }}
+      package_version: ${{ inputs.rocm_package_version }}
       expect_failure: ${{ inputs.expect_failure }}
     permissions:
       contents: read
@@ -103,4 +104,4 @@ jobs:
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
-      package_version: "7.0.0.dev0"  # TODO: setup version with a script/workflow
+      package_version: ${{ inputs.rocm_package_version }}

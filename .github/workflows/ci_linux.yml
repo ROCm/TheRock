@@ -23,6 +23,8 @@ on:
         type: boolean
       use_prebuilt_artifacts:
         type: string
+      rocm_package_version:
+        type: string
       test_type:
         type: string
       sanity_check_only_for_family:
@@ -39,6 +41,7 @@ jobs:
     secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
+      package_version: ${{ inputs.rocm_package_version }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       build_variant_label: ${{ inputs.build_variant_label }}
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
@@ -100,4 +103,4 @@ jobs:
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
-      package_version: "7.0.0.dev0"  # TODO: setup version with a script/workflow
+      package_version: ${{ inputs.rocm_package_version }}
