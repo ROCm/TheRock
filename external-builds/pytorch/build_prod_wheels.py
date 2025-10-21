@@ -117,6 +117,7 @@ from packaging.version import Version, parse
 import platform
 import shutil
 import shlex
+from site import getsitepackages
 import subprocess
 import sys
 import tempfile
@@ -647,6 +648,17 @@ def do_build_pytorch(
                 f"Flash Attention enabled (PyTorch >= 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
             )
 
+    # OpenBLAS set up
+    if not is_windows:
+        for site_package in getsitepackages():
+            host_math_path = next(Path(site_package).rglob("host-math"), None)
+            if host_math_path:
+                env["OpenBLAS_HOME"] = str(host_math_path)
+                print(f"host-math found in site-packages, setting OpenBLAS_HOME to {env['OpenBLAS_HOME']}")
+                break
+        if "OpenBLAS_HOME" not in env:
+            print(f"host-math not found in site-packages, OpenBLAS_HOME not set")
+
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
     env["USE_MPI"] = "OFF"
@@ -954,7 +966,6 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
