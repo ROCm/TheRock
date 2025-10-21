@@ -16,13 +16,13 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-dgpu",
+            "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
-            "family": "gfx110X-dgpu",
+            "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
         },
     },
@@ -97,14 +97,14 @@ amdgpu_family_info_matrix_nightly = {
     "gfx103x": {
         "linux": {
             "test-runs-on": "linux-rx6950-gpu-rocm",
-            "family": "gfx103X-dgpu",
+            "family": "gfx103X-all",
             "expect_failure": False,
             "sanity_check_only_for_family": True,
             "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
-            "family": "gfx103X-dgpu",
+            "family": "gfx103X-all",
             "expect_failure": False,
             "expect_pytorch_failure": True,
         },
