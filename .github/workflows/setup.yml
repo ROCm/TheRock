@@ -24,9 +24,6 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
-      test_type:
-        description: The test type to run for component tests (i.e. smoke, full)
-        value: ${{ jobs.setup.outputs.test_type }}
 
 permissions:
   contents: read
