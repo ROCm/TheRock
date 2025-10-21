@@ -97,14 +97,14 @@ amdgpu_family_info_matrix_nightly = {
     "gfx103x": {
         "linux": {
             "test-runs-on": "linux-rx6950-gpu-rocm",
-            "family": "gfx103X-all",
+            "family": "gfx103X-dgpu",
             "expect_failure": False,
             "sanity_check_only_for_family": True,
             "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
-            "family": "gfx103X-all",
+            "family": "gfx103X-dgpu",
             "expect_failure": False,
             "expect_pytorch_failure": True,
         },

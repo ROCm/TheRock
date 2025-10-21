@@ -100,7 +100,7 @@ class ConfigureCITest(unittest.TestCase):
             any("gfx94X-dcgpu" == entry["family"] for entry in linux_target_output)
         )
         self.assertTrue(
-            any("gfx103X-all" == entry["family"] for entry in linux_target_output)
+            any("gfx103X-dgpu" == entry["family"] for entry in linux_target_output)
         )
         self.assertGreaterEqual(len(linux_target_output), 2)
         self.assert_target_output_is_valid(
