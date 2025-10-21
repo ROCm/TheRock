@@ -430,6 +430,18 @@ def do_build(args: argparse.Namespace):
     else:
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
 
+    # OpenBLAS path setup
+    # depends on `rocm-sdk --path cmake` call from earlier in the function
+    # for devel package to be extracted
+    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    if (not host_math_path.exists()):
+        raise ValueError(
+            "WARNING: Default location of host-math not found. "
+            "Will not build with OpenBLAS support."
+        )
+    else:
+        env["OpenBLAS_HOME"] = str(host_math_path)
+
     # Build triton.
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):

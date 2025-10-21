@@ -1,10 +1,5 @@
-# rocm-hostblas
+# SuiteSparse
 [components.dbg."third-party/host-blas/stage"]
 [components.dev."third-party/host-blas/stage"]
-include = [
-  "lib/host-math/include/**",
-  "lib/host-math/lib/cmake/**",
-  "lib/host-math/lib/pkgconfig/**",
-]
 [components.doc."third-party/host-blas/stage"]
 [components.lib."third-party/host-blas/stage"]
