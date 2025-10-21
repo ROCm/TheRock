@@ -51,9 +51,13 @@ on:
       amdgpu_family:
         type: choice
         options:
+          - gfx101X-dgpu
+          - gfx103X-dgpu
           - gfx110X-dgpu
+          - gfx1150
           - gfx1151
           - gfx120X-all
+          - gfx90X-dcgpu
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
@@ -104,7 +108,7 @@ jobs:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -202,9 +206,12 @@ jobs:
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
+        env:
+          # Environment variables to be set for `manage.py`
+          CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
   generate_target_to_run:
     name: Generate target_to_run
@@ -292,6 +299,9 @@ jobs:
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
+        env:
+          # Environment variables to be set for `manage.py`
+          CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}

@@ -241,13 +241,6 @@ class CheckGit(CheckProgram):
         self.name = "Git"
 
 
-class CheckGitLFS(CheckProgram):
-    def __init__(self, required=True):
-        super().__init__(required)
-        self.program = FindGitLFS()
-        self.name = "Git-LFS"
-
-
 class CheckUV(CheckProgram):
     def __init__(self, required=False):
         super().__init__(required)

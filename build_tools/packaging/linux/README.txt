@@ -5,6 +5,7 @@ The current scope of this is for producing AMD vendor packaging for hosting in A
 Python version required : python 3.12 or above
  Almalinux:
 dnf install rpm-build
+dnf install llvm
 pip install -r requirements.txt
 
  Ubuntu:
@@ -16,9 +17,9 @@ pip install -r requirements.txt
 
 #Usage:
 Almalinux:
-./build_package.py --artifact-url "https://therock-artifacts.s3.amazonaws.com/16418185899-linux/index-gfx94X-dcgpu.html" --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type rpm
+./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type rpm
 
 Ubuntu:
-./build_package.py --artifact-url "https://therock-artifacts.s3.amazonaws.com/16418185899-linux/index-gfx94X-dcgpu.html" --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb
+./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb
 
 For more options ./build_package.py -h

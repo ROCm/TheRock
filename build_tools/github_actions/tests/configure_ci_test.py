@@ -89,7 +89,10 @@ class ConfigureCITest(unittest.TestCase):
             is_workflow_dispatch=True,
             is_push=False,
             is_schedule=False,
-            base_args={},
+            base_args={
+                "workflow_dispatch_linux_test_labels": "",
+                "workflow_dispatch_windows_test_labels": "",
+            },
             families=build_families,
             platform="linux",
         )
