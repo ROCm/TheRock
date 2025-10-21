@@ -34,6 +34,7 @@ jobs:
     name: Build Artifacts (xfail ${{ inputs.expect_failure }})
     runs-on: azure-windows-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
+    timeout-minutes: 720 # 12 hour timeout
     permissions:
       id-token: write
     defaults:
