@@ -1,0 +1,29 @@
+From cf48299ab32d32aa9721b14ca5dc95b25bfa3406 Mon Sep 17 00:00:00 2001
+From: Joseph Macaranas <Joseph.Macaranas@amd.com>
+Date: Tue, 21 Oct 2025 23:03:58 -0400
+Subject: [PATCH] trace findopenblas
+
+---
+ cmake/Modules/FindOpenBLAS.cmake | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/cmake/Modules/FindOpenBLAS.cmake b/cmake/Modules/FindOpenBLAS.cmake
+index 69d8227aea5..ea463505ca7 100644
+--- a/cmake/Modules/FindOpenBLAS.cmake
++++ b/cmake/Modules/FindOpenBLAS.cmake
+@@ -1,4 +1,5 @@
+-
++message(STATUS "=== FindOpenBLAS: Tracing enabled ===")
++set(CMAKE_FIND_DEBUG_MODE ON)
+
+ SET(Open_BLAS_INCLUDE_SEARCH_PATHS
+   /usr/include
+@@ -64,3 +65,5 @@ MARK_AS_ADVANCED(
+     OpenBLAS_LIB
+     OpenBLAS
+ )
++
++set(CMAKE_FIND_DEBUG_MODE OFF)
+-- 
+2.43.0
+
