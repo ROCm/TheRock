@@ -83,12 +83,14 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     # Resolve the Python package to its distribution package name and find the
     # RECORD file.
     dist_names = md.packages_distributions()["rocm_sdk_devel"]
-    
+
     # De-duplication, preserving order (handles purelib/platlib duplicates)
     seen_dist_names = set()
-    dist_names_list = [d for d in dist_names if not (d in seen_dist_names or seen_dist_names.add(d))]
-    
-    #to preserve fail-fast behavior
+    dist_names_list = [
+        d for d in dist_names if not (d in seen_dist_names or seen_dist_names.add(d))
+    ]
+
+    # to preserve fail-fast behavior
     assert len(dist_names_list) >= 1, (
         "No distribution candidates found for 'rocm_sdk_devel'. "
         "Ensure rocm-sdk[devel] is installed in the current environment."
@@ -97,7 +99,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     record_pkg_file = None
     dist_files = None
     dist_name = None
-    
+
     for candidate in dist_names_list:
         candidate_files = md.files(candidate)
         if candidate_files is None:
@@ -105,15 +107,18 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
 
         # Look for RECORD inside a *.dist-info directory.
         for record_pkg_file in candidate_files:
-            if record_pkg_file.name == "RECORD" and record_pkg_file.parent.name.endswith(".dist-info"):
-                #Found a usable candidate; set dist_name/dist_files
+            if (
+                record_pkg_file.name == "RECORD"
+                and record_pkg_file.parent.name.endswith(".dist-info")
+            ):
+                # Found a usable candidate; set dist_name/dist_files
                 dist_name = candidate
                 dist_files = candidate_files
                 break
 
         if dist_name is not None:
             break
-            
+
     if dist_files is None:
         raise ImportError(
             "Cannot expand the `rocm-sdk[devel]` package because it was not installed "
@@ -129,7 +134,6 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
         raise ImportError(
             f"No distribution RECORD found for the `{msg_dist_name}` distribution package."
         )
-
 
     # Resolve to a physical file.
     record_path = record_pkg_file.locate()
