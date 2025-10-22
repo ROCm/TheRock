@@ -616,7 +616,9 @@ def do_build_pytorch(
                 use_fbgemm_genai = "ON"
             else:
                 use_fbgemm_genai = "OFF"
-            print(f"FBGEMM_GENAI default behavior based on version: {use_fbgemm_genai}")
+            print(
+                f"FBGEMM_GENAI default behavior based on PyTorch version: {use_fbgemm_genai}"
+            )
         else:
             # Explicit override: user has set the flag to true/false
             use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
@@ -627,13 +629,8 @@ def do_build_pytorch(
 
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by PyTorch version
-            if pytorch_build_version_parsed.release < (2, 8):
-                use_flash_attention = "ON"
-            else:
-                use_flash_attention = "OFF"
-            print(
-                f"Flash Attention default behavior based on pytorch version: {use_flash_attention}"
-            )
+            use_flash_attention = "ON"
+            print(f"Flash Attention default behavior: {use_flash_attention}")
         else:
             # Explicit override: user has set the flag to true/false
             use_flash_attention = (
