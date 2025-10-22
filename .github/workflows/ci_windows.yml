@@ -3,7 +3,15 @@ name: CI - Windows
 on:
   workflow_call:
     inputs:
+      artifact_group:
+        type: string
       amdgpu_families:
+        type: string
+      build_variant_label:
+        type: string
+      build_variant_cmake_preset:
+        type: string
+      build_variant_suffix:
         type: string
       test_labels:
         type: string
@@ -32,8 +40,12 @@ jobs:
     uses: ./.github/workflows/build_windows_artifacts.yml
     secrets: inherit
     with:
-      package_version: ${{ inputs.rocm_package_version }}
+      artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      build_variant_label: ${{ inputs.build_variant_label }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_variant_suffix: ${{ inputs.build_variant_suffix }}
+      package_version: ${{ inputs.rocm_package_version }}
       expect_failure: ${{ inputs.expect_failure }}
     permissions:
       contents: read
@@ -52,6 +64,7 @@ jobs:
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
+    # If we are expecting a build failure, do not run tests to save machine capacity
     if: >-
       ${{
         !failure() &&
@@ -59,10 +72,12 @@ jobs:
         (
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
-        )
+        ) &&
+        inputs.expect_failure == false
       }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
+      artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
@@ -88,5 +103,5 @@ jobs:
     uses: ./.github/workflows/build_windows_python_packages.yml
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      amdgpu_family: ${{ inputs.amdgpu_families }}
+      artifact_group: ${{ inputs.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}

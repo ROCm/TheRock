@@ -52,6 +52,7 @@ import sys
 from typing import Iterable, List, Optional
 import string
 from amdgpu_family_matrix import (
+    all_build_variants,
     amdgpu_family_info_matrix_presubmit,
     amdgpu_family_info_matrix_postsubmit,
     amdgpu_family_info_matrix_nightly,
@@ -348,11 +349,54 @@ def matrix_generator(
 
     # Expand selected target names back to a matrix.
     matrix_output = []
+    platform_build_variants = all_build_variants.get(platform)
+    assert isinstance(
+        platform_build_variants, dict
+    ), f"Expected build variant {platform} in {all_build_variants}"
     for target_name in unique_target_names:
         # Filter targets to only those matching the requested platform.
         platform_set = amdgpu_family_info_matrix_all.get(target_name)
         if platform in platform_set:
-            matrix_output.append(platform_set.get(platform))
+            platform_info = platform_set.get(platform)
+            assert isinstance(platform_info, dict)
+
+            # Further expand it based on build_variant.
+            build_variant_names = platform_info.get("build_variants")
+            assert isinstance(
+                build_variant_names, list
+            ), f"Expected 'build_variant' in platform: {platform_info}"
+            for build_variant_name in build_variant_names:
+                # Merge platform_info and build_variant_info into a matrix_row.
+                matrix_row = dict(platform_info)
+
+                build_variant_info = platform_build_variants.get(build_variant_name)
+                assert isinstance(
+                    build_variant_info, dict
+                ), f"Expected {build_variant_name} in {platform_build_variants} for {platform_info}"
+
+                # If "skip_presubmit_build" is enabled in `amdgpu_family_matrix.py`, then we skip for presubmit.
+                # This build variant is typically skipped for variants with long build times
+                if is_pull_request and build_variant_info.get(
+                    "skip_presubmit_build", False
+                ):
+                    continue
+
+                # If the build variant level notes expect_failure, set it on the overall row.
+                # But if not, honor what is already there.
+                if build_variant_info.get("expect_failure", False):
+                    del build_variant_info["expect_failure"]
+                    matrix_row["expect_failure"] = True
+                del matrix_row["build_variants"]
+                matrix_row.update(build_variant_info)
+
+                # Assign a computed "artifact_group" combining the family and variant.
+                artifact_group = platform_info["family"]
+                build_variant_suffix = build_variant_info["build_variant_suffix"]
+                if build_variant_suffix:
+                    artifact_group += f"-{build_variant_suffix}"
+                matrix_row["artifact_group"] = artifact_group
+
+                matrix_output.append(matrix_row)
 
     print(f"Generated build matrix: {str(matrix_output)}")
     print(f"Generated test list: {str(unique_test_names)}")
@@ -380,7 +424,7 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     print(f"Generating build matrix for Linux: {str(linux_families)}")
-    linux_target_output, linux_test_output = matrix_generator(
+    linux_variants_output, linux_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
         is_push,
@@ -392,7 +436,7 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     print(f"Generating build matrix for Windows: {str(windows_families)}")
-    windows_target_output, windows_test_output = matrix_generator(
+    windows_variants_output, windows_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
         is_push,
@@ -433,10 +477,10 @@ def main(base_args, linux_families, windows_families):
     gha_append_step_summary(
         f"""## Workflow configure results
 
-* `linux_amdgpu_families`: {str([item.get("family") for item in linux_target_output])}
+* `linux_variants`: {str([item.get("family") for item in linux_variants_output])}
 * `linux_test_labels`: {str([test for test in linux_test_output])}
 * `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
-* `windows_amdgpu_families`: {str([item.get("family") for item in windows_target_output])}
+* `windows_variants`: {str([item.get("family") for item in windows_variants_output])}
 * `windows_test_labels`: {str([test for test in windows_test_output])}
 * `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
@@ -445,9 +489,9 @@ def main(base_args, linux_families, windows_families):
     )
 
     output = {
-        "linux_amdgpu_families": json.dumps(linux_target_output),
+        "linux_variants": json.dumps(linux_variants_output),
         "linux_test_labels": json.dumps(linux_test_output),
-        "windows_amdgpu_families": json.dumps(windows_target_output),
+        "windows_variants": json.dumps(windows_variants_output),
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
         "test_type": test_type,
@@ -469,7 +513,7 @@ if __name__ == "__main__":
     )
 
     # For now, add default run for gfx94X-linux
-    base_args["pr_labels"] = os.environ.get("PR_LABELS", "[]")
+    base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
     base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
