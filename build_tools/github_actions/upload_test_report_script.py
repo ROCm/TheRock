@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
-upload_build_artifacts.py
-
-Uploads test reports to AWS S3 bucket for each GitHub run ID and AMD GPU family
+Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family
 """
 
 import argparse
@@ -31,6 +29,8 @@ def exec(cmd: list[str], cwd: Path):
     subprocess.run(cmd, check=True)
 
 
+# Create an index HTML file listing all test reports in report_dir.
+# Output file name is args.index_file_name (e.g. "index_rccl_test_report.html").
 def create_index_file(args: argparse.Namespace):
     logging.info("Creating index file")
     report_dir = args.report_path
@@ -52,9 +52,18 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
             report_dir,
         )
         return
-    # Safely join S3 bucket and log destination paths by removing any extra slashes
-    # to avoid malformed URLs like "s3://bucket//logs/...".
+
+    # Join S3 bucket and log path cleanly by trimming slashes to avoid double “//”.
+    # Example: "s3://bucket//logs/" → "s3://bucket/logs/"
+    # Resulting upload path:
+    # s3://therock-artifacts-external/ROCm-rccl/18718690315-linux/logs/gfx950-dcgpu/index_rccl_test_report.html
+
     dest_uri = f"{bucket_uri.rstrip('/')}/{log_destination.lstrip('/')}"
+    logging.info(
+        "uploading HTML reports from %s to %s",
+        report_dir,
+        dest_uri,
+    )
     # Use a single AWS CLI call to copy only *.html files recursively
     cmd = [
         "aws",
