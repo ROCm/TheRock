@@ -3,12 +3,27 @@ name: Build Windows Artifacts
 on:
   workflow_dispatch:
     inputs:
-      package_version:
-        type: string
-        default: ADHOCBUILD
       amdgpu_families:
         type: string
         default: gfx1151
+      artifact_group:
+        type: string
+        default: gfx1151
+      build_variant_label:
+        type: string
+        description: "A label for the build variant (ex: 'Release', 'ASAN')"
+        default: "Release"
+      build_variant_suffix:
+        type: string
+        description: "The build variant suffix (ex: 'asan' suffix -> 'gfx94X-dcgpu-asan')"
+        default: ""
+      build_variant_cmake_preset:
+        type: string
+        description: "The name of the cmake preset to use for this build variant, matching an entry in CMakePresets.json (ex: 'linux-release-asan')"
+        default: ""
+      package_version:
+        type: string
+        default: ADHOCBUILD
       expect_failure:
         type: boolean
       extra_cmake_options:
@@ -21,6 +36,14 @@ on:
         default: ADHOCBUILD
       amdgpu_families:
         type: string
+      artifact_group:
+        type: string
+      build_variant_label:
+        type: string
+      build_variant_suffix:
+        type: string
+      build_variant_cmake_preset:
+        type: string
       expect_failure:
         type: boolean
       extra_cmake_options:
@@ -31,7 +54,7 @@ permissions:
 
 jobs:
   build_windows_artifacts:
-    name: Build Artifacts (xfail ${{ inputs.expect_failure }})
+    name: Build ${{ inputs.build_variant_label }} (xfail ${{ inputs.expect_failure }})
     runs-on: azure-windows-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
@@ -113,6 +136,7 @@ jobs:
 
       - name: Configure Projects
         env:
+          cmake_preset: ${{ inputs.build_variant_cmake_preset }}
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
@@ -168,7 +192,7 @@ jobs:
         run: |
           python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
+            --artifact-group ${{ inputs.artifact_group }} \
             --build-dir ${{ env.BUILD_DIR }} \
             --upload
 

@@ -3,6 +3,8 @@ name: Test Artifacts
 on:
   workflow_dispatch:
     inputs:
+      artifact_group:
+        type: string
       artifact_run_id:
         type: string
         default: ""
@@ -19,6 +21,8 @@ on:
         type: string
   workflow_call:
     inputs:
+      artifact_group:
+        type: string
       artifact_run_id:
         type: string
         default: ""
@@ -76,6 +80,7 @@ jobs:
       - name: "Configuring CI options"
         id: configure
         env:
+          ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
@@ -86,6 +91,7 @@ jobs:
     needs: configure_test_matrix
     uses: './.github/workflows/test_sanity_check.yml'
     with:
+      artifact_group: ${{ inputs.artifact_group }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
@@ -103,6 +109,7 @@ jobs:
     uses: './.github/workflows/test_component.yml'
     with:
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
