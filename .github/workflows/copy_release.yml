@@ -89,7 +89,7 @@ jobs:
           aws s3 cp \
             s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
             s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*"  --include "torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+            --recursive --exclude "*"  --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
 
       - name: (Re-)Generate Python package release index
         env:
