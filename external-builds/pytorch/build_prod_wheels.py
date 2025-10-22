@@ -441,6 +441,11 @@ def do_build(args: argparse.Namespace):
     else:
         env["BLAS"] = "OpenBLAS"
         env["OpenBLAS_HOME"] = str(host_math_path)
+        env["CMAKE_PREFIX_PATH"] = (
+            f"{env['CMAKE_PREFIX_PATH']}"
+            f"{os.pathsep if env.get('CMAKE_PREFIX_PATH') else ''}"
+            f"{str(host_math_path)}"
+        )
 
     # Build triton.
     triton_requirement = None
