@@ -125,7 +125,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
         # We had files for at least one candidate, but did not find RECORD in any
         # Use the original RECORD error message with the first candidate name
         # If dist_name is None- fall back to the first name for message context
-        msg_dist_name = dist_name if dist_name is not None else dist_names[0]
+        msg_dist_name = dist_name if dist_name is not None else dist_names_list[0]
         raise ImportError(
             f"No distribution RECORD found for the `{msg_dist_name}` distribution package."
         )
