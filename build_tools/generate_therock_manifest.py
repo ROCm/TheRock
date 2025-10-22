@@ -117,18 +117,7 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        description="Generate submodule pin/patch manifest for TheRock."
-    )
-    ap.add_argument("-o", "--output", required=True, help="Output JSON path")
-    ap.add_argument(
-        "--commit", help="TheRock commit/ref to inspect (default: HEAD)", default="HEAD"
-    )
-    args = ap.parse_args()
-
-    repo_root = git_root()
-    the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
+def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
 
     # Enumerate submodules via .gitmodules
     entries = list_submodules_via_gitconfig(repo_root)
@@ -147,17 +136,47 @@ def main():
             }
         )
 
-    manifest = {
+    return {
         "the_rock_commit": the_rock_commit,
         "submodules": rows,
     }
 
-    # Decide output path
-    out_path = Path(args.output)
 
-    # Write JSON
+def write_manifest_json(out_path: Path, manifest: dict) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Generate submodule pin/patch manifest for TheRock."
+    )
+    # make --output optional with a default message and value of None
+    ap.add_argument(
+        "-o",
+        "--output",
+        help="Output JSON path (default: <repo>/therock_manifest.json)",
+        default=None,
+    )
+    ap.add_argument(
+        "--commit", help="TheRock commit/ref to inspect (default: HEAD)", default="HEAD"
+    )
+    args = ap.parse_args()
+
+    repo_root = git_root()
+    the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
+
+    manifest = build_manifest_schema(repo_root, the_rock_commit)
+
+    # Decide output path
+    # if not provided, write to repo_root / "therock_manifest.json"
+    out_path = (
+        Path(args.output) if args.output else (repo_root / "therock_manifest.json")
+    )
+
+    # Write JSON
+    write_manifest_json(out_path, manifest)
 
     print(str(out_path))
     return 0

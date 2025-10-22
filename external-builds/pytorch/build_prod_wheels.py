@@ -605,47 +605,50 @@ def do_build_pytorch(
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.10 and higher Pytorch version
+    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.8 and higher Pytorch version
     ## https://github.com/ROCm/TheRock/issues/1619
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if pytorch_build_version_parsed.release < (2, 10):
-            env["USE_FBGEMM_GENAI"] = "ON"
-            print(
-                f"FBGEMM_GENAI enabled (PyTorch < 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
-            )
+        if args.enable_pytorch_fbgemm_genai_linux is None:
+            # Default behavior — based on PyTorch version
+            if pytorch_build_version_parsed.release < (2, 8):
+                use_fbgemm_genai = "ON"
+            else:
+                use_fbgemm_genai = "OFF"
+            print(f"FBGEMM_GENAI default behavior based on version: {use_fbgemm_genai}")
         else:
-            env["USE_FBGEMM_GENAI"] = (
-                "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
-            )
-            print(
-                f"FBGEMM_GENAI enabled (PyTorch >= 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
-            )
+            # Explicit override: user has set the flag to true/false
+            use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
+            print(f"FBGEMM_GENAI override set by flag: {use_fbgemm_genai}")
 
-        # Enabling/Disabling Flash attention based on Pytorch version in Linux
-        if pytorch_build_version_parsed.release < (2, 10):
-            env.update(
-                {
-                    "USE_FLASH_ATTENTION": "1",
-                    "USE_MEM_EFF_ATTENTION": "1",
-                }
-            )
+        env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
+        print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
+
+        if args.enable_pytorch_flash_attention_linux is None:
+            # Default behavior — determined by PyTorch version
+            if pytorch_build_version_parsed.release < (2, 8):
+                use_flash_attention = "ON"
+            else:
+                use_flash_attention = "OFF"
             print(
-                f"Flash Attention enabled (PyTorch < 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
+                f"Flash Attention default behavior based on pytorch version: {use_flash_attention}"
             )
         else:
+            # Explicit override: user has set the flag to true/false
             use_flash_attention = (
-                "1" if args.enable_pytorch_flash_attention_linux else "0"
+                "ON" if args.enable_pytorch_flash_attention_linux else "0FF"
             )
-            env.update(
-                {
-                    "USE_FLASH_ATTENTION": use_flash_attention,
-                    "USE_MEM_EFF_ATTENTION": use_flash_attention,
-                }
-            )
-            print(
-                f"Flash Attention enabled (PyTorch >= 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
-            )
+            print(f"Flash Attention override set by flag: {use_flash_attention}")
+
+        env.update(
+            {
+                "USE_FLASH_ATTENTION": use_flash_attention,
+                "USE_MEM_EFF_ATTENTION": use_flash_attention,
+            }
+        )
+        print(
+            f"Flash Attention and Memory efficiency enabled: {env['USE_FLASH_ATTENTION'] == 'ON'}"
+        )
 
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
