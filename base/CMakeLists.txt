@@ -63,13 +63,16 @@ therock_cmake_subproject_declare(amdsmi
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
-    # TODO: Enable tests
-    # -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+    -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
   BUILD_DEPS
     therock-googletest
   RUNTIME_DEPS
     rocm-core
     ${THEROCK_BUNDLED_LIBDRM}
+  INSTALL_RPATH_DIRS
+    lib
+  INTERFACE_INSTALL_RPATH_DIRS
+    lib
 )
 therock_cmake_subproject_provide_package(amdsmi
   amd_smi lib/cmake)
