@@ -433,7 +433,7 @@ def do_build(args: argparse.Namespace):
     # depends on `rocm-sdk --path cmake` call from earlier in the function
     # for devel package to be extracted
     host_math_path = get_rocm_path("root") / "lib" / "host-math"
-    if (not host_math_path.exists()):
+    if not host_math_path.exists():
         raise ValueError(
             "WARNING: Default location of host-math not found. "
             "Will not build with OpenBLAS support."
