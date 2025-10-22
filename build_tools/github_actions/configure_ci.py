@@ -366,6 +366,10 @@ def matrix_generator(
                 build_variant_names, list
             ), f"Expected 'build_variant' in platform: {platform_info}"
             for build_variant_name in build_variant_names:
+                # Due to long build times for ASAN build variant, we ignore ASAN builds during presubmit flows
+                if is_pull_request and build_variant_name == "asan":
+                    continue
+
                 # Merge platform_info and build_variant_info into a matrix_row.
                 matrix_row = dict(platform_info)
 

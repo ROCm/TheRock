@@ -64,6 +64,7 @@ jobs:
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
+    # If we are expecting a build failure, do not run tests to save machine capacity
     if: >-
       ${{
         !failure() &&
@@ -72,7 +73,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        needs.build_portable_linux_artifacts.outputs.xfail_job_result != 'failure'
+        inputs.expect_failure == false
       }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
