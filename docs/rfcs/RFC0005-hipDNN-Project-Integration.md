@@ -72,6 +72,36 @@ Future plugin types:
 - **Heuristic Plugins**: Intelligent engine selection without sampling
 - **Benchmarking Plugins**: Exhaustive tuning through performance sampling
 
+## Dependencies
+
+### Build-Time Dependencies
+
+hipDNN's build requires:
+- CMake 3.25.2+
+- C++17 compatible compiler (AMD Clang)
+- ROCm/HIP stack
+- FlatBuffers
+- GoogleTest
+- spdlog
+- nlohmann-json
+- fmt
+
+### Consumer Dependencies
+
+Applications using hipDNN's Frontend or SDK also require:
+- C++17 compatible compiler
+- FlatBuffers
+- spdlog 
+- fmt
+- nlohmann-json
+
+Note: The Frontend and SDK are header-only libraries, but they depend on these third-party headers being available at compile time.
+
+### Runtime Dependencies
+- HIP runtime
+- ROCm libraries
+- Plugin-specific dependencies (e.g., MIOpen for MIOpen plugin)
+
 ## Current Status and Roadmap
 
 ### Current Capabilities
