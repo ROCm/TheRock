@@ -20,6 +20,7 @@ all_build_variants = {
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
             "expect_failure": True,
+            "skip_presubmit_build": True,
         },
     },
     "windows": {

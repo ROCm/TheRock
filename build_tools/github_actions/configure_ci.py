@@ -366,10 +366,6 @@ def matrix_generator(
                 build_variant_names, list
             ), f"Expected 'build_variant' in platform: {platform_info}"
             for build_variant_name in build_variant_names:
-                # Due to long build times for ASAN build variant, we ignore ASAN builds during presubmit flows
-                if is_pull_request and build_variant_name == "asan":
-                    continue
-
                 # Merge platform_info and build_variant_info into a matrix_row.
                 matrix_row = dict(platform_info)
 
@@ -377,6 +373,14 @@ def matrix_generator(
                 assert isinstance(
                     build_variant_info, dict
                 ), f"Expected {build_variant_name} in {platform_build_variants} for {platform_info}"
+
+                # If "skip_presubmit_build" is enabled in `amdgpu_family_matrix.py`, then we skip for presubmit.
+                # This build variant is typically skipped for variants with long build times
+                if is_pull_request and build_variant_info.get(
+                    "skip_presubmit_build", False
+                ):
+                    continue
+
                 # If the build variant level notes expect_failure, set it on the overall row.
                 # But if not, honor what is already there.
                 if build_variant_info.get("expect_failure", False):
