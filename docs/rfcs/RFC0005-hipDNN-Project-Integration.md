@@ -56,7 +56,7 @@ The SDK is a header-only C++ library providing shared utilities and interfaces f
 - Data-type utilities & definitions
 - Utilities for verifying end-to-end graph execution
   - Reference graph executor
-  - Output value validation utilities 
+  - Output value validation utilities
   - Reference implementations for supported operations
 
 #### Plugins
@@ -77,6 +77,7 @@ Future plugin types:
 ### Build-Time Dependencies
 
 hipDNN's build requires:
+
 - CMake 3.25.2+
 - C++17 compatible compiler (AMD Clang)
 - ROCm/HIP stack
@@ -89,15 +90,17 @@ hipDNN's build requires:
 ### Consumer Dependencies
 
 Applications using hipDNN's Frontend or SDK also require:
+
 - C++17 compatible compiler
 - FlatBuffers
-- spdlog 
+- spdlog
 - fmt
 - nlohmann-json
 
 Note: The Frontend and SDK are header-only libraries, but they depend on these third-party headers being available at compile time.
 
 ### Runtime Dependencies
+
 - HIP runtime
 - ROCm libraries
 - Plugin-specific dependencies (e.g., MIOpen for MIOpen plugin)
