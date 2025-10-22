@@ -15,6 +15,8 @@ on:
         type: boolean
       use_prebuilt_artifacts:
         type: string
+      rocm_package_version:
+        type: string
       test_type:
         type: string
       sanity_check_only_for_family:
@@ -30,6 +32,7 @@ jobs:
     uses: ./.github/workflows/build_portable_linux_artifacts.yml
     secrets: inherit
     with:
+      package_version: ${{ inputs.rocm_package_version }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       expect_failure: ${{ inputs.expect_failure }}
     permissions:
@@ -86,4 +89,4 @@ jobs:
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       amdgpu_family: ${{ inputs.amdgpu_families }}
-      package_version: "7.0.0.dev0" # TODO: setup version with a script/workflow
+      package_version: ${{ inputs.rocm_package_version }}

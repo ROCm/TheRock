@@ -24,10 +24,8 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx1151
-      # TODO: scripts and/or reusable workflow for versions and release types
       package_version:
         type: string
-        default: "7.0.0.dev0"
   workflow_call:
     inputs:
       artifact_github_repo:
@@ -80,7 +78,7 @@ jobs:
           python ./build_tools/build_python_packages.py \
             --artifact-dir="${{ env.ARTIFACTS_DIR }}" \
             --dest-dir="${{ env.PACKAGES_DIR }}" \
-            --version=${{ inputs.package_version }}
+            --version="${{ inputs.package_version }}"
 
       - name: Inspect Python packages
         run: |

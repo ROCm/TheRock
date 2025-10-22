@@ -25,6 +25,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from functools import lru_cache  # <-- added
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
@@ -182,8 +183,14 @@ def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
     exec(cmd, cwd=Path.cwd())
 
 
+@lru_cache(maxsize=1)
+def get_bucket_info_cached():
+    """Returns (external_repo_path, bucket) from retrieve_bucket_info(), cached."""
+    return retrieve_bucket_info()
+
+
 def upload_logs_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
-    external_repo_path, bucket = retrieve_bucket_info()
+    external_repo_path, bucket = get_bucket_info_cached()
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
     s3_base_path = f"{bucket_uri}/logs/{amdgpu_family}"
 
@@ -210,8 +217,39 @@ def upload_logs_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
+def get_manifest_from_build(build_dir: Path):
+    """
+    Look only in the aux-overlay *build* directory.
+    """
+    build_path = build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
+
+    if build_path.is_file():
+        return build_path
+
+    return None
+
+
+def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
+    """
+    Upload therock_manifest.json to:
+      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<amdgpu_family>/therock_manifest.json
+    """
+    external_repo_path, bucket = get_bucket_info_cached()
+    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
+
+    manifest = get_manifest_from_build(build_dir)
+    if not manifest:
+        raise FileNotFoundError(
+            f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}"
+        )
+
+    dest = f"{bucket_uri}/manifests/{amdgpu_family}/therock_manifest.json"
+    log(f"[INFO] Uploading manifest {manifest} -> {dest}")
+    run_aws_cp(manifest, dest, content_type="application/json")
+
+
 def upload_build_summary(args):
-    external_repo_path, bucket = retrieve_bucket_info()
+    external_repo_path, bucket = get_bucket_info_cached()
     run_id = args.run_id
     bucket_url = (
         f"https://{bucket}.s3.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
@@ -222,11 +260,15 @@ def upload_build_summary(args):
 
     log_url = f"{bucket_url}/logs/{amdgpu_family}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_url})")
+
     if os.path.exists(build_dir / "artifacts" / "index.html"):
         artifact_url = f"{bucket_url}/index-{amdgpu_family}.html"
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
     else:
         log("No artifacts index found. Skipping artifact link.")
+
+    manifest_url = f"{bucket_url}/manifests/{amdgpu_family}/therock_manifest.json"
+    gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 
 def run(args):
@@ -251,7 +293,7 @@ def run(args):
         check_aws_cli_available()
         log("Upload build artifacts")
         log("----------------------")
-        external_repo_path, bucket = retrieve_bucket_info()
+        external_repo_path, bucket = get_bucket_info_cached()
         run_id = args.run_id
         bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
 
@@ -261,6 +303,10 @@ def run(args):
         log("Upload log")
         log("----------")
         upload_logs_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
+
+        log("Upload manifest")
+        log("----------------")
+        upload_manifest_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
 
         log("Upload build summary")
         log("--------------------")

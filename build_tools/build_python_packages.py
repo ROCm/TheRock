@@ -74,6 +74,10 @@ def run(args: argparse.Namespace):
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
+    print(
+        f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
+    )
+
 
 def core_artifact_filter(an: ArtifactName) -> bool:
     core = an.name in [
@@ -136,7 +140,11 @@ def main(argv: list[str]):
         required=True,
         help="Destination directory in which to materialize packages",
     )
-    p.add_argument("--version", default="0.1.dev0", help="Package versions")
+    p.add_argument(
+        "--version",
+        default="",
+        help="Package versions (defaults to an automatic dev version)",
+    )
     p.add_argument(
         "--version-suffix",
         default="",
@@ -155,6 +163,19 @@ def main(argv: list[str]):
         help="Apply compression when building wheels (disable for faster iteration or prior to recompression activities)",
     )
     args = p.parse_args(argv)
+
+    if not args.version:
+        print(f"::: Version not specified, choosing a default")
+        import compute_rocm_package_version
+
+        # Generate a default version like `7.10.0.dev0`.
+        # This is a simple and predictable version, compared to using
+        # `release_type="dev"`, which appends the git commit hash.
+        args.version = compute_rocm_package_version.compute_version(
+            custom_version_suffix=".dev0"
+        )
+        print(f"::: Version defaulting to {args.version}")
+
     run(args)
 
 

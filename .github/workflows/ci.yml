@@ -88,6 +88,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.families.sanity_check_only_for_family == true }}
     permissions:
@@ -114,6 +115,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.families.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.families.sanity_check_only_for_family == true }}
     permissions:

@@ -1,13 +1,11 @@
 prefix=${pcfiledir}/../..
-exec_prefix=${pcfiledir}/../../bin
-libdir=${pcfiledir}/../../lib
-sharedlibdir=${pcfiledir}/../../bin
-includedir=${pcfiledir}/../../include
+libdir=${prefix}/lib
+includedir=${prefix}/include
 
 Name: zlib
 Description: zlib compression library
 Version: @PROJECT_VERSION@
 
 Requires:
-Libs: -L${libdir} -L${sharedlibdir} @ZLIB_IMPORTED_LOCATION@
+Libs: -L${libdir} -lz
 Cflags: -I${includedir}
