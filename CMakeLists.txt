@@ -321,10 +321,15 @@ endif()
 
 # rocWMMA on Windows is disabled for now.
 if(NOT WIN32)
+  if(ROCWMMA_VALIDATE_WITH_ROCBLAS OR ROCWMMA_BENCHMARK_WITH_ROCBLAS)
+    set(_rocwmma_blas_requirements "BLAS")
+  else()
+    set(_rocwmma_blas_requirements "")
+  endif()
   therock_add_feature(ROCWMMA
     GROUP MATH_LIBS
-    DESCRIPTION "Enables build of rocWMMA"
-    REQUIRES COMPILER # FIXME: rocm-smi?
+    DESCRIPTION "Enables rocWMMA"
+    REQUIRES COMPILER HIP_RUNTIME ${_rocwmma_blas_requirements}
   )
 endif()
 
