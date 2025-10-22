@@ -53,9 +53,11 @@ The SDK is a header-only C++ library providing shared utilities and interfaces f
 - Plugin API definitions
 - FlatBuffers-based graph data structures
 - Logging utilities
-- Type utilities
-- Reference implementations for testing
-- Verification utilities
+- Data-type utilities & definitions
+- Utilities for verifying end-to-end graph execution
+  - Reference graph executor
+  - Output value validation utilities 
+  - Reference implementations for supported operations
 
 #### Plugins
 
