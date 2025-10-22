@@ -288,18 +288,21 @@ if(THEROCK_ENABLE_ROCWMMA)
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
       -DENABLE_CLANG_TIDY=OFF
       -DENABLE_CLANG_FORMAT=OFF
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
+      rocm-cmake
       therock-googletest
     RUNTIME_DEPS
-      rocm-smi-lib
+      hip-clr
+      # rocm-smi-lib # FIXME
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
-  SUBDIRS
-    .
+    SUBDIRS
+      .
   )
   therock_cmake_subproject_activate(rocWMMA)
 
