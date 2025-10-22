@@ -1,0 +1,10 @@
+# rocWMMA
+# FIXME
+[components.dbg."math-libs/rocWMMA/stage"]
+[components.dev."math-libs/rocWMMA/stage"]
+[components.doc."math-libs/rocWMMA/stage"]
+[components.lib."math-libs/rocWMMA/stage"]
+[components.test."math-libs/rocWMMA/stage"]
+include = [
+  "bin/rocwmma-test*",
+]
