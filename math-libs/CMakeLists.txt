@@ -285,10 +285,9 @@ if(THEROCK_ENABLE_ROCWMMA)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
-      -DENABLE_CLANG_TIDY=OFF
-      -DENABLE_CLANG_FORMAT=OFF
+      "-DROCWMMA_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DROCWMMA_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -296,9 +295,12 @@ if(THEROCK_ENABLE_ROCWMMA)
     BUILD_DEPS
       rocm-cmake
       therock-googletest
+      rocblas # FIXME: only needed if ROCWMMA_VALIDATE_WITH_ROCBLAS=ON or ROCWMMA_BENCHMARK_WITH_ROCBLAS=ON
+      # rocm-smi-lib # FIXME: only needed if ROCWMMA_BUILD_BENCHMARK_TESTS=ON
     RUNTIME_DEPS
       hip-clr
-      # rocm-smi-lib # FIXME
+      rocblas # FIXME: only needed if ROCWMMA_VALIDATE_WITH_ROCBLAS=ON or ROCWMMA_BENCHMARK_WITH_ROCBLAS=ON
+      # rocm-smi-lib # FIXME: only needed if ROCWMMA_BUILD_BENCHMARK_TESTS=ON
   )
   therock_cmake_subproject_glob_c_sources(rocWMMA
     SUBDIRS
