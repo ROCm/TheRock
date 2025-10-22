@@ -142,6 +142,7 @@ LINUX_LIBRARY_PRELOADS = [
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
+    "rocm_sysdeps_liblzma",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -312,7 +313,7 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     current = env.get(flagname, "")
     append = ""
     for compiler_flag in compiler_flags:
-        append += f" {compiler_flag}"
+        append += f"{compiler_flag} "
     env[flagname] = f"{current}{append}"
     print(f"-- Appended {flagname}+={append}")
 
@@ -404,8 +405,8 @@ def do_build(args: argparse.Namespace):
         env.update(
             {
                 # Workaround GCC12 compiler flags.
-                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
         )
 
@@ -712,6 +713,10 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+
+        # needed to find liblzma packaged by rocm as sysdep to build aotriton
+        os.environ["PKG_CONFIG_PATH"] = f"{sysdeps_dir / 'lib' / 'pkgconfig'}"
+        os.environ["LD_LIBRARY_PATH"] = f"{sysdeps_dir / 'lib'}"
 
     print("+++ Uninstalling pytorch:")
     exec(
