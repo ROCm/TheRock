@@ -80,25 +80,25 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DCMAKE_C_COMPILER=gcc
+      -DCMAKE_CXX_COMPILER=g++
       -DROCPROFSYS_USE_ROCM=OFF
+      -DROCPROFSYS_BUILD_ELFUTILS=OFF
       -DROCPROFSYS_BUILD_TBB=ON
       -DROCPROFSYS_BUILD_LIBIBERTY=ON
+      -DROCPROFSYS_BUILD_BOOST=ON
       -DROCPROFSYS_BUILD_DYNINST=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    BUILD_DEPS
-      therock-boost
     RUNTIME_DEPS
       rocprofiler-sdk
       aqlprofile
       hip-clr
       rocprofiler-register
       ${_rocprofiler_sdk_optional_deps}
-      ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+      ${THEROCK_BUNDLED_ELFUTILS}
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-systems
     SUBDIRS .
