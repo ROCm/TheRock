@@ -59,7 +59,7 @@ from github_actions_utils import *
 def determine_package_targets(args):
     amdgpu_families = args.get("AMDGPU_FAMILIES")
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
-    test_machine_available_only = args.get("TEST_MACHINE_AVAILABLE_ONLY", "false")
+    test_machine_available_only = args.get("TEST_MACHINE_AVAILABLE_ONLY", False)
 
     matrix = amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
     family_matrix = (
@@ -91,7 +91,7 @@ def determine_package_targets(args):
 
         family = platform_for_key.get("family")
         test_machine = platform_for_key.get("test-runs-on")
-        if test_machine_available_only == "true" and not test_machine:
+        if test_machine_available_only and not test_machine:
             continue
 
         package_targets.append({"amdgpu_family": family, "test_machine": test_machine})
@@ -108,5 +108,5 @@ if __name__ == "__main__":
     args = {}
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
     args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
-    args["TEST_MACHINE_AVAILABLE_ONLY"] = os.getenv("TEST_MACHINE_AVAILABLE_ONLY")
+    args["TEST_MACHINE_AVAILABLE_ONLY"] = str2bool(os.getenv("TEST_MACHINE_AVAILABLE_ONLY"))
     main(args)
