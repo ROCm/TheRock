@@ -98,7 +98,8 @@ jobs:
         (
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
-        )
+        ) &&
+        inputs.expect_failure == false
       }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:
