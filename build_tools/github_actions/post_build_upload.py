@@ -25,7 +25,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from functools import lru_cache
+from functools import lru_cache  # <-- added
 from datetime import datetime, timezone
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
@@ -218,7 +218,9 @@ def upload_logs_to_s3(run_id: str, artifact_group: str, build_dir: Path):
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
-def compute_manifest_object_name(run_id: str | None, artifact_group: str | None, platform_name: str | None) -> str:
+def compute_manifest_object_name(
+    run_id: str | None, artifact_group: str | None, platform_name: str | None
+) -> str:
     """
     Prefer a stable name per workflow run; include artifact_group and platform to avoid collisions.
     Fall back to UTC timestamp if no run_id.
