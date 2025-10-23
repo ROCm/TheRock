@@ -12,6 +12,7 @@ The script supports the following command-line options:
 | `--base-only`     | Flag   | Include only base artifacts (minimal installation)                     |
 | `--blas`          | Flag   | Include BLAS artifacts                                                 |
 | `--fft`           | Flag   | Include FFT artifacts                                                  |
+| `--hipdnn`        | Flag   | Include hipDNN artifacts                                               |
 | `--input-dir`     | String | Existing TheRock directory to copy from                                |
 | `--miopen`        | Flag   | Include MIOpen artifacts                                               |
 | `--output-dir`    | Path   | Output directory for TheRock installation (default: `./therock-build`) |
@@ -46,14 +47,14 @@ Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.PAT
 
 1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
-   - Example: `therock-dist-linux-gfx110X-dgpu-6.4.0rc20250514.tar.gz`
+   - Example: `therock-dist-linux-gfx110X-all-6.4.0rc20250514.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
    - In the example above, the version is: `6.4.0rc20250514`
 1. Use this version string with `--release`:
    ```bash
    python build_tools/install_rocm_from_artifacts.py \
        --release 6.4.0rc20250514 \
-       --amdgpu-family gfx110X-dgpu
+       --amdgpu-family gfx110X-all
    ```
 
 **Version format:** `X.Y.ZrcYYYYMMDD`
@@ -97,7 +98,7 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 ```bash
 python build_tools/install_rocm_from_artifacts.py \
     --run-id 15575624591 \
-    --amdgpu-family gfx110X-dgpu \
+    --amdgpu-family gfx110X-all \
     --blas --tests
 ```
 
@@ -210,7 +211,7 @@ Test that artifacts can be fetched with your new flag:
 # Test with a CI run
 python build_tools/install_rocm_from_artifacts.py \
     --run-id YOUR_RUN_ID \
-    --amdgpu-family gfx110X-dgpu \
+    --amdgpu-family gfx110X-all \
     --newcomponent --tests
 ```
 

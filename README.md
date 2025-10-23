@@ -58,7 +58,7 @@ instructions and configurations for alternatives.
 ```bash
 # Install Ubuntu dependencies
 sudo apt update
-sudo apt install gfortran git git-lfs ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
+sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
@@ -136,7 +136,7 @@ In case you don't have an existing ROCm/HIP installation from which you can run 
 
 You can install the `rocm` Python package for any architecture inside a venv and run `amdgpu-arch` from there:
 
-1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv`
+1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv`
 1. `.tmpvenv/bin/amdgpu-arch` on Linux, `.tmpvenv\Scripts\amdgpu-arch` on Windows
 1. `rm -rf .tmpvenv`
 
@@ -172,6 +172,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SOLVER=ON`       | Enables the SOLVER libraries                  |
 | `-DTHEROCK_ENABLE_SPARSE=ON`       | Enables the SPARSE libraries                  |
 | `-DTHEROCK_ENABLE_MIOPEN=ON`       | Enables MIOpen                                |
+| `-DTHEROCK_ENABLE_HIPDNN=ON`       | Enables hipDNN                                |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
@@ -213,7 +214,7 @@ See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Wi
 Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
 ```bash
-cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 cmake --build build
 ```
 
@@ -239,7 +240,7 @@ Example:
 # Any shell used to build must eval setup_ccache.py to set environment
 # variables.
 eval "$(./build_tools/setup_ccache.py)"
-cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   .

@@ -25,6 +25,7 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 PLATFORM = platform.system().lower()
 
+cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
@@ -51,13 +52,19 @@ def build_configure():
         build_dir,
         "-GNinja",
         ".",
-        f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
-        f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
-        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
-        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
-        "-DTHEROCK_VERBOSE=ON",
-        "-DBUILD_TESTING=ON",
     ]
+    if cmake_preset:
+        cmd.extend(["--preset", cmake_preset])
+    cmd.extend(
+        [
+            f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
+            f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
+            "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+            "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+            "-DTHEROCK_VERBOSE=ON",
+            "-DBUILD_TESTING=ON",
+        ]
+    )
 
     # Adding platform specific options
     cmd += platform_options.get(PLATFORM, [])

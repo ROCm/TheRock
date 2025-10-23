@@ -45,7 +45,7 @@ THIS_MAIN_REPO_NAME = "pytorch"
 THIS_DIR = Path(__file__).resolve().parent
 
 DEFAULT_ORIGIN = "https://github.com/pytorch/pytorch.git"
-DEFAULT_HASHTAG = "main"
+DEFAULT_HASHTAG = "nightly"
 DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 
