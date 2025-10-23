@@ -32,7 +32,6 @@ def exec(cmd: list[str], cwd: Path):
 # Create an index HTML file listing all test reports in report_dir.
 # Output file name is args.index_file_name (e.g. "index_rccl_test_report.html").
 def create_index_file(args: argparse.Namespace):
-    logging.info("Creating index file")
     report_dir = args.report_path
     indexer_args = argparse.Namespace()
     indexer_args.filter = ["*.html*"]
