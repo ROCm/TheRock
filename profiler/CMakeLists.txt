@@ -109,7 +109,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       rocprofiler-register
       ${_rocprofiler_sdk_optional_deps}
-      ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
     )
