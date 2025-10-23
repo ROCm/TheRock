@@ -55,27 +55,22 @@ Check the script for detailed explanation.
 # --llama-dir: Path to llama.cpp source (default: ./llama.cpp)
 # --build-dir: Path to build directory (default: ./llama.cpp/build)
 # --cmake-build-type: CMake build type (default: Release)
-# --gpu-targets: AMD GPU targets (default: gfx1100)
+# --gpu-targets: AMD GPU target(s) (default: gfx1100)
 # --jobs: Number of parallel build jobs
 # --llama-curl: Enable libcurl support
 # --llama-openssl: Enable OpenSSL support
 # --llama-llguidance: Enable LLGuidance support
+# --clean: Clean build directory before building
 ```
-
-## Sanity Check
-
-TODO: Not Implemented yet.
-
-- Verify that the expected binaries are present in the build directory.
-- Use ldd to confirm that shared library dependencies are correctly linked.
-- Run a minimal test using a small model to validate basic functionality.
 
 ## Detailed Test
 
-TODO: Not Implemented yet.
-
-Execute all available test binaries located in llama.cpp/build/bin/:
+Rather than running test binaries directly, use the provided test runner script which invokes the tests found in llama.cpp/build/bin and will skip known problematic cases:
 
 ```bash
-./llama.cpp/build/bin/test-*
+# from this directory (external-builds/llama.cpp)
+python ./llamacpp_test.py
+# --save-logging <file>
 ```
+
+The script discovers test binaries under llama.cpp/build/bin, runs them, and prints a concise summary. It intentionally skips specific tests (see [llamacpp_test.py](./llamacpp_test.py) for the exact skip rules and any available command-line options).

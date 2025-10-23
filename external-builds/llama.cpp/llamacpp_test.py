@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-# Automates the execution of llama.cpp integrated tests.
-#
-# It supports both full and smoke test modes, filters out tests that require
-# unavailable resources or are known to fail, and logs results to the console
-# or an optional log file.
-#
-# Test binaries are discovered dynamically from the build directory.
+"""
+Automates the execution of llama.cpp integrated tests.
+
+It supports both full and smoke test modes, filters out tests that require
+unavailable resources or are known to fail, and logs results to the console
+or an optional log file.
+
+Test binaries are discovered dynamically from the build directory.
+"""
 
 import argparse
 import logging
@@ -30,8 +32,8 @@ TESTS_TO_IGNORE = [
     "test-tokenizer-1-bpe",
     "test-thread-safety",
     # TODO: fails due to FPE for Flash Attention ops
-    # on GFX1030 GPU (AMD RX 6700 XT)
-    "test-backend-ops",
+    # on GFX1030 GPU (AMD RX 6700 XT).
+    # "test-backend-ops",
 ]
 
 SMOKE_TESTS = [
