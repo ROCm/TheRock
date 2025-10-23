@@ -132,12 +132,12 @@ In case you don't have an existing ROCm/HIP installation from which you can run 
 | `rocm-smi`              | Linux    |
 | `rocm_agent_enumerator` | Linux    |
 | `hipinfo`               | Windows  |
-| `amdgpu-arch`           | Both     |
+| `offload-arch`          | Both     |
 
-You can install the `rocm` Python package for any architecture inside a venv and run `amdgpu-arch` from there:
+You can install the `rocm` Python package for any architecture inside a venv and run `offload-arch` from there:
 
 1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv`
-1. `.tmpvenv/bin/amdgpu-arch` on Linux, `.tmpvenv\Scripts\amdgpu-arch` on Windows
+1. `.tmpvenv/bin/offload-arch` on Linux, `.tmpvenv\Scripts\offload-arch` on Windows
 1. `rm -rf .tmpvenv`
 
 #### Optional configuration flags
