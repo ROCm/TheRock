@@ -218,19 +218,20 @@ def upload_logs_to_s3(run_id: str, artifact_group: str, build_dir: Path):
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
-def compute_manifest_object_name(run_id: str | None, artifact_group: str | None) -> str:
+def compute_manifest_object_name(run_id: str | None, artifact_group: str | None, platform_name: str | None) -> str:
     """
-    Prefer a stable name per workflow run; include artifact_group to avoid collisions across groups.
+    Prefer a stable name per workflow run; include artifact_group and platform to avoid collisions.
     Fall back to UTC timestamp if no run_id.
     Examples:
-      therock_manifest-gfx110X-dgpu-18644860544.json
-      therock_manifest-gfx110X-dgpu-20251021T013500Z.json
+      therock_manifest-gfx110X-dgpu-linux-18644860544.json
+      therock_manifest-gfx110X-dgpu-windows-20251021T013500Z.json
     """
     group = (artifact_group or "unknown").replace("/", "_")
+    plat = (platform_name or "unknown").replace("/", "_")
     if run_id:
-        return f"therock_manifest-{group}-{run_id}.json"
+        return f"therock_manifest-{group}-{plat}-{run_id}.json"
     time_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return f"therock_manifest-{group}-{time_stamp}.json"
+    return f"therock_manifest-{group}-{plat}-{time_stamp}.json"
 
 
 def get_manifest_from_build(build_dir: Path):
@@ -259,8 +260,8 @@ def upload_manifest_to_s3(run_id: str, artifact_group: str, build_dir: Path):
             f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}"
         )
 
-    # Unique filename per run (or timestamp) including artifact_group
-    manifest_name = compute_manifest_object_name(run_id, artifact_group)
+    # Unique filename per run (or timestamp) including artifact_group and platform
+    manifest_name = compute_manifest_object_name(run_id, artifact_group, PLATFORM)
     dest = f"{bucket_uri}/manifests/{artifact_group}/{manifest_name}"
     log(f"[INFO] Uploading manifest {manifest} -> {dest}")
     run_aws_cp(manifest, dest, content_type="application/json")
@@ -286,7 +287,7 @@ def upload_build_summary(args):
         log("No artifacts index found. Skipping artifact link.")
 
     # Link to the *same* unique manifest name we uploaded
-    manifest_name = compute_manifest_object_name(run_id, artifact_group)
+    manifest_name = compute_manifest_object_name(run_id, artifact_group, PLATFORM)
     manifest_url = f"{bucket_url}/manifests/{artifact_group}/{manifest_name}"
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
