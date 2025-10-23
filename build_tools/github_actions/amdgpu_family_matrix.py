@@ -114,7 +114,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx90X-dcgpu",
             "expect_failure": False,
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {
@@ -123,14 +122,12 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx101X-dgpu",
             "expect_failure": True,
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "expect_failure": False,
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx103x": {
@@ -140,14 +137,12 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
             "expect_failure": False,
             "sanity_check_only_for_family": True,
-            "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "expect_failure": False,
-            "expect_pytorch_failure": True,
         },
     },
     "gfx1150": {
