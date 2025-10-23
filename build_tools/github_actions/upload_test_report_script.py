@@ -39,6 +39,7 @@ def create_index_file(args: argparse.Namespace):
     indexer_args.output_file = args.index_file_name
     indexer_args.verbose = False
     indexer_args.recursive = False
+    logging.info("Index file to be created: %s", indexer_args.output_file)
     process_dir(report_dir, indexer_args)
 
 
@@ -57,10 +58,9 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
     # Example: "s3://bucket//logs/" → "s3://bucket/logs/"
     # Resulting upload path:
     # s3://therock-artifacts-external/ROCm-rccl/18718690315-linux/logs/gfx950-dcgpu/index_rccl_test_report.html
-
     dest_uri = f"{bucket_uri.rstrip('/')}/{log_destination.lstrip('/')}"
     logging.info(
-        "uploading HTML reports from %s to %s",
+        "Uploading HTML reports from %s to %s",
         report_dir,
         dest_uri,
     )
@@ -93,11 +93,6 @@ def run(args: argparse.Namespace):
             "--report-path %s does not exist — skipping upload", args.report_path
         )
         return
-    logging.info(
-        "--report-path is set; uploading HTML reports from %s to %s",
-        args.report_path,
-        bucket_uri,
-    )
 
     create_index_file(args)
     upload_test_report(args.report_path, bucket_uri, args.log_destination)
