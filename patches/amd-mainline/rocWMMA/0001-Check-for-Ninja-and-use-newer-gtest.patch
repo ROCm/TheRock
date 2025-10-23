@@ -1,0 +1,108 @@
+From 319e9a4baec910cd4e6ee487d03f3a981b96e2f2 Mon Sep 17 00:00:00 2001
+From: Bain Syrowik <bain.syrowik@amd.com>
+Date: Thu, 23 Oct 2025 11:07:41 -0400
+Subject: [PATCH] Check for Ninja and use newer gtest
+
+---
+ CMakeLists.txt         |  8 ++++++++
+ samples/CMakeLists.txt |  2 +-
+ test/CMakeLists.txt    | 31 +++++++++++++------------------
+ 3 files changed, 22 insertions(+), 19 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 84cb179e..b7b39646 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -27,6 +27,14 @@
+ cmake_minimum_required( VERSION 3.14 )
+ message(STATUS "CMake version: ${CMAKE_VERSION}")
+ 
++if(NOT WIN32)
++  if(CMAKE_GENERATOR STREQUAL "Ninja")
++    message(STATUS "The CMake generator is Ninja.")
++  else()
++    message(WARNING "The CMake generator is not Ninja. Ninja is preferred over Make.")
++  endif()
++endif()
++
+ # This has to be initialized before the project() command appears
+ # Set the default of CMAKE_BUILD_TYPE to be release, unless user specifies with -D.  MSVC_IDE does not use CMAKE_BUILD_TYPE
+ if( NOT DEFINED CMAKE_CONFIGURATION_TYPES AND NOT DEFINED CMAKE_BUILD_TYPE )
+diff --git a/samples/CMakeLists.txt b/samples/CMakeLists.txt
+index 4f864343..982fbcd2 100644
+--- a/samples/CMakeLists.txt
++++ b/samples/CMakeLists.txt
+@@ -34,7 +34,7 @@ endif()
+ # Custom target to build all rocWMMA samples
+ add_custom_target(rocwmma_samples)
+ 
+-# Regular gtests that don't require any special
++# Regular binaries that don't require any special
+ # designation for validation or benchmarking
+ function(add_rocwmma_sample TEST_TARGET TEST_SOURCE)
+ 
+diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
+index 530884c4..9d96a441 100644
+--- a/test/CMakeLists.txt
++++ b/test/CMakeLists.txt
+@@ -40,33 +40,28 @@ add_link_options(-mcmodel=large)
+ 
+ # Test/benchmark requires additional dependencies
+ if(ROCWMMA_USE_SYSTEM_GOOGLETEST)
+-  find_package(GTest 1.12.1 REQUIRED)
++  find_package(GTest 1.16.0 REQUIRED)
+ else()
+   include( FetchContent )
+ 
+   FetchContent_Declare(
+     googletest
+     GIT_REPOSITORY https://github.com/google/googletest.git
+-    GIT_TAG release-1.12.1
++    GIT_TAG v1.16.0
+   )
+-  FetchContent_GetProperties(googletest)
+-  if(NOT googletest_POPULATED)
+ 
+-    # Fetch the content using default details
+-    FetchContent_Populate(googletest)
+-    # Save the shared libs setting, then force to static libs
+-    set(BUILD_SHARED_LIBS_OLD ${BUILD_SHARED_LIBS})
+-    set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "Build SHARED libraries" FORCE)
++  # Turn off gtest installation
++  set(INSTALL_GTEST OFF)
+ 
+-    # Turn off gtest installation
+-    set(INSTALL_GTEST OFF)
++  # Save the shared libs setting, then force to static libs
++  set(BUILD_SHARED_LIBS_OLD ${BUILD_SHARED_LIBS})
++  set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "Build SHARED libraries" FORCE)
+ 
+-    # Add gtest targets as static libs
+-    add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR})
++  # Fetch the content using default details
++  FetchContent_MakeAvailable(googletest)
+ 
+-    # Restore shared libs setting
+-    set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_OLD} CACHE INTERNAL "Build SHARED libraries" FORCE)
+-  endif()
++  # Restore shared libs setting
++  set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_OLD} CACHE INTERNAL "Build SHARED libraries" FORCE)
+ endif()
+ 
+ set(ROCWMMA_TEST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR})
+@@ -87,10 +82,10 @@ function(add_rocwmma_test TEST_TARGET TEST_SOURCE)
+ 
+   list(APPEND TEST_SOURCE ${ARGN})
+   add_executable(${TEST_TARGET} ${TEST_SOURCE})
+-  target_link_libraries(${TEST_TARGET} rocwmma gtest)
++  target_link_libraries(${TEST_TARGET} rocwmma GTest::gtest)
+   target_link_libraries(${TEST_TARGET} OpenMP::OpenMP_CXX "-L${HIP_CLANG_ROOT}/lib")
+   if(UNIX)
+-    target_link_libraries(${TEST_TARGET} "-Wl,-rpath=$ORIGIN/../llvm/lib" "-fno-rtlib-add-rpath")
++    target_link_libraries(${TEST_TARGET} "-Wl,-rpath='\$$ORIGIN/../llvm/lib'" "-fno-rtlib-add-rpath")
+   endif()
+   target_include_directories(${TEST_TARGET} PRIVATE
+                              ${CMAKE_CURRENT_SOURCE_DIR}
+-- 
+2.43.0
+
