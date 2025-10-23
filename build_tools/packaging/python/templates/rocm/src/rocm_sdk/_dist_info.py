@@ -7,6 +7,7 @@ of bootstrapping, we are including it inline for the moment.
 import importlib.util
 import os
 import subprocess
+from pathlib import Path
 
 
 CACHED_TARGET_FAMILY: str | None = None
@@ -97,8 +98,25 @@ class PackageEntry:
 
 
 def discover_current_target_family() -> str | None:
+    """Attempts to query the current target family via the 'amdgpu-arch' tool."""
+
     try:
-        result = subprocess.check_output(["amdgpu-arch"], text=True)
+        import sysconfig
+
+        # amdgpu-arch is expected to be installed in the Python 'scripts'
+        # directory, which will vary depending on the platform and whether or
+        # not a virtual environment is used, for example:
+        #   Linux system:   /usr/local/bin
+        #   Linux venv:     .venv/bin
+        #   Windows system: C:\Users\...\Python313\Scripts
+        #   Windows venv:   .venv\Scripts
+        # It might also be provided by an install of LLVM (e.g. as part of
+        # Visual Studio on Windows), so prepend the scripts dir to PATH.
+        scripts_path = Path(sysconfig.get_path("scripts"))
+        env = os.environ
+        env["PATH"] = str(scripts_path) + os.path.pathsep + env.get("PATH", "")
+        result = subprocess.check_output(["amdgpu-arch"], env=env, text=True)
+
         if result:
             arch_set = set(result.strip().split("\n"))
             suffixes = ["-all", "-dgpu", "-igpu", "-dcgpu"]

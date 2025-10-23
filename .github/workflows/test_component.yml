@@ -6,6 +6,8 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      artifact_group:
+        type: string
       amdgpu_families:
         type: string
       test_runs_on:
@@ -31,6 +33,7 @@ jobs:
         --device /dev/dri
         --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +70,7 @@ jobs:
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
-          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
