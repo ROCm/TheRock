@@ -293,6 +293,12 @@ if(THEROCK_ENABLE_SPARSE)
     )
   endif()
 
+  set(hipSPARSELt_optional_build_deps)
+  if(THEROCK_BUILD_TESTING)
+    # hipSPARSELt clients call find_package(cblas) at configure time when tests are enabled
+    list(APPEND hipSPARSELt_optional_build_deps therock-host-blas)
+  endif()
+
   therock_cmake_subproject_declare(hipSPARSELt
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipsparselt"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipSPARSELt"
@@ -311,6 +317,7 @@ if(THEROCK_ENABLE_SPARSE)
       hipSPARSE
       therock-googletest
       therock-msgpack-cxx
+      ${hipSPARSELt_optional_build_deps}
     RUNTIME_DEPS
       hip-clr
       therock-host-blas
