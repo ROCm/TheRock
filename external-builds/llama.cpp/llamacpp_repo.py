@@ -53,8 +53,8 @@ import repo_management
 
 THIS_MAIN_REPO_NAME = "llama.cpp"
 THIS_DIR = Path(__file__).resolve().parent
-DEFAULT_REPO_HASHTAG = "amd-integration"
-GIT_REPO_ORIGIN = "https://github.com/ROCm/llama.cpp.git"
+DEFAULT_REPO_HASHTAG = "master"
+GIT_REPO_ORIGIN = "https://github.com/ggml-org/llama.cpp.git"
 FETCH_JOBS = 10
 
 
