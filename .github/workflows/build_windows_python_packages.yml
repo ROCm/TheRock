@@ -27,6 +27,7 @@ on:
         type: string
       package_version:
         type: string
+
 permissions:
   contents: read
 
