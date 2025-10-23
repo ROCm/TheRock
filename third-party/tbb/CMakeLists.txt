@@ -1,9 +1,9 @@
 therock_subproject_fetch(therock-tbb-sources
   CMAKE_PROJECT
-  # Originally mirrored from: https://github.com/uxlfoundation/oneTBB/archive/refs/tags/2018_U6.tar.gz
+  # Originally mirrored from: https://github.com/ajanicijamd/oneTBB/archive/refs/tags/v2018.6.01.tar.gz
   # TODO: Update this to be the ROCm S3 bucket URL instead once uploaded
-  URL https://github.com/uxlfoundation/oneTBB/archive/refs/tags/2018_U6.tar.gz
-  URL_HASH SHA256=0ebb5fc877871ef15f7395d6e3c86de4ffedb820dc336383a3ab71fc39426aa7
+  URL https://github.com/ajanicijamd/oneTBB/archive/refs/tags/v2018.6.01.tar.gz
+  URL_HASH SHA256=7769d82c48dde8fb250b1928891ddd70e16ceec32f71e69c7d97681e012aa6be
 )
 
 therock_cmake_subproject_declare(therock-tbb
