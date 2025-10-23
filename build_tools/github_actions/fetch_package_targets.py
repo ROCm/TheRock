@@ -90,9 +90,13 @@ def determine_package_targets(args):
 
         family = platform_for_key.get("family")
         test_machine = platform_for_key.get("test-runs-on")
-        sanity_check_only_for_family = platform_for_key.get("sanity_check_only_for_family", False)
+        sanity_check_only_for_family = platform_for_key.get(
+            "sanity_check_only_for_family", False
+        )
 
-        if (test_machine_available_only and not test_machine) or sanity_check_only_for_family:
+        if (test_machine_available_only and not test_machine) or (
+            test_machine_available_only and sanity_check_only_for_family
+        ):
             continue
 
         expect_failure = platform_for_key.get("expect_failure", False)
@@ -119,5 +123,7 @@ if __name__ == "__main__":
     args = {}
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
     args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
-    args["TEST_MACHINE_AVAILABLE_ONLY"] = str2bool(os.getenv("TEST_MACHINE_AVAILABLE_ONLY"))
+    args["TEST_MACHINE_AVAILABLE_ONLY"] = str2bool(
+        os.getenv("TEST_MACHINE_AVAILABLE_ONLY")
+    )
     main(args)
