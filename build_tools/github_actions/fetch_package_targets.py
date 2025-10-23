@@ -90,8 +90,9 @@ def determine_package_targets(args):
 
         family = platform_for_key.get("family")
         test_machine = platform_for_key.get("test-runs-on")
+        sanity_check_only_for_family = platform_for_key.get("sanity_check_only_for_family", False)
 
-        if test_machine_available_only and not test_machine:
+        if (test_machine_available_only and not test_machine) or sanity_check_only_for_family:
             continue
 
         expect_failure = platform_for_key.get("expect_failure", False)
