@@ -327,9 +327,6 @@ if(THEROCK_ENABLE_ROCWMMA)
     COMPONENTS
       dbg
       dev
-      doc
-      lib
-      run
       test
     SUBPROJECT_DEPS
       rocWMMA
