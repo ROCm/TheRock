@@ -42,8 +42,8 @@
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "rocprofiler-sdk_SANITIZER": "OFF",
         "roctracer_SANITIZER": "OFF",
-        "CMAKE_CXX_FLAGS": "-gline-tables-only",
-        "CMAKE_C_FLAGS": "-gline-tables-only"
+        "CMAKE_CXX_FLAGS": "-g1",
+        "CMAKE_C_FLAGS": "-g1"
       }
     },
     {
