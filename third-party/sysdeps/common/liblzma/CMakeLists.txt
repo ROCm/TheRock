@@ -91,9 +91,8 @@ add_custom_target(
       "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
       "-DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}"
+      # TODO: This should tunnel the CMAKE_BUILD_TYPE from TheRock
       "-DCMAKE_BUILD_TYPE=Release"
-      # Force shared library build
-      "-DBUILD_SHARED_LIBS=ON"
       # Disable symlink creation
       "-DCREATE_XZ_SYMLINKS=OFF"
       "-DCREATE_LZMA_SYMLINKS=OFF"
