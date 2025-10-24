@@ -1,0 +1,41 @@
+From aa631f59a13bd748306a327c5eb619d4333a166d Mon Sep 17 00:00:00 2001
+From: Bain Syrowik <bain.syrowik@amd.com>
+Date: Thu, 23 Oct 2025 18:53:09 -0400
+Subject: [PATCH 2/3] Suppress build warnings for gtest
+
+---
+ test/CMakeLists.txt | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
+index 9d96a441..f597a423 100644
+--- a/test/CMakeLists.txt
++++ b/test/CMakeLists.txt
+@@ -44,6 +44,14 @@ if(ROCWMMA_USE_SYSTEM_GOOGLETEST)
+ else()
+   include( FetchContent )
+ 
++  # Suppress ROCMChecks WARNING on GoogleTest
++  set(ROCM_DISABLE_CHECKS FALSE)
++  macro(rocm_check_toolchain_var var access value list_file)
++      if(NOT ROCM_DISABLE_CHECKS)
++          _rocm_check_toolchain_var("${var}" "${access}" "${value}" "${list_file}")
++      endif()
++  endmacro()
++
+   FetchContent_Declare(
+     googletest
+     GIT_REPOSITORY https://github.com/google/googletest.git
+@@ -58,7 +66,9 @@ else()
+   set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "Build SHARED libraries" FORCE)
+ 
+   # Fetch the content using default details
++  set(ROCM_DISABLE_CHECKS TRUE)
+   FetchContent_MakeAvailable(googletest)
++  set(ROCM_DISABLE_CHECKS FALSE)
+ 
+   # Restore shared libs setting
+   set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_OLD} CACHE INTERNAL "Build SHARED libraries" FORCE)
+-- 
+2.43.0
+
