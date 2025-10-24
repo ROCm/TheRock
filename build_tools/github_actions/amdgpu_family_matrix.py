@@ -106,18 +106,18 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
-            "expect_failure": False,
             "build_variants": ["release"],
         },
+        # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
-            "expect_failure": False,
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {
+        # TODO(#1926): Resolve bgemm kernel hip file generation error, to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
@@ -125,10 +125,10 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
+        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": False,
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
@@ -138,15 +138,13 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-rx6950-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "expect_failure": False,
             "sanity_check_only_for_family": True,
-            "expect_pytorch_failure": True,
         },
+        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "expect_failure": False,
             "expect_pytorch_failure": True,
         },
     },
@@ -155,13 +153,11 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx1150",
             "build_variants": ["release"],
-            "expect_failure": False,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
             "build_variants": ["release"],
-            "expect_failure": False,
         },
     },
 }

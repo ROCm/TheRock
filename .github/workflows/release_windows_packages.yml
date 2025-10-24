@@ -121,8 +121,6 @@ jobs:
       - name: Generate release information
         id: release_information
         run: |
-          base_version=$(jq -r '.["rocm-version"]' version.json)
-          echo "version=${base_version}${version_suffix}" >> $GITHUB_OUTPUT
           echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
           echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
           echo "s3_subdir_tar=${tmp_s3_subdir_tar}" >> $GITHUB_OUTPUT

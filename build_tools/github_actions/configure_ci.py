@@ -384,7 +384,6 @@ def matrix_generator(
                 # If the build variant level notes expect_failure, set it on the overall row.
                 # But if not, honor what is already there.
                 if build_variant_info.get("expect_failure", False):
-                    del build_variant_info["expect_failure"]
                     matrix_row["expect_failure"] = True
                 del matrix_row["build_variants"]
                 matrix_row.update(build_variant_info)

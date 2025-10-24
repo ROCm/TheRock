@@ -18,11 +18,16 @@ class LibraryEntry:
     distribution."""
 
     def __init__(
-        self, shortname: str, package_name: str, so_pattern: str, dll_pattern: str
+        self,
+        shortname: str,
+        package_name: str,
+        so_pattern: str,
+        dll_pattern: str,
+        posix_relpath="lib",
     ):
         self.shortname = shortname
         self.package = ALL_PACKAGES[package_name]
-        self.posix_relpath = "lib"
+        self.posix_relpath = posix_relpath
         self.windows_relpath = "bin"
         self.so_pattern = so_pattern
         self.dll_pattern = dll_pattern
@@ -209,6 +214,13 @@ LibraryEntry("hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
+LibraryEntry(
+    "rocm_sysdeps_liblzma",
+    "core",
+    "librocm_sysdeps_liblzma.so.*",
+    "",
+    "lib/rocm_sysdeps/lib",
+)
 
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
