@@ -133,11 +133,6 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      # TODO TODO JUST FOR TESTING! REMOVE AFTERWARDS!!
-      - name: WIP JUST FOR TESTIN - INSTALL XZ-DEVEL
-        run: |
-          yum install -y xz-devel
-
       - name: Select Python version
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
