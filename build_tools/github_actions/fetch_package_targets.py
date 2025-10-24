@@ -60,7 +60,7 @@ from github_actions_utils import *
 def determine_package_targets(args):
     amdgpu_families = args.get("AMDGPU_FAMILIES")
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
-    test_machine_available_only = args.get("TEST_MACHINE_AVAILABLE_ONLY", False)
+    test_harness_target_fetch = args.get("TEST_HARNESS_TARGET_FETCH", False)
 
     matrix = amdgpu_family_info_matrix_all
     family_matrix = amdgpu_family_info_matrix_all
@@ -94,8 +94,10 @@ def determine_package_targets(args):
             "sanity_check_only_for_family", False
         )
 
-        if (test_machine_available_only and not test_machine) or (
-            test_machine_available_only and sanity_check_only_for_family
+        # Due to the long test times for the test harness, we only want to use highly available test machines.
+        # TODO(#1920): Remove this logic and use direct communication with test machines (instead of using GH runners)
+        if (test_harness_target_fetch and not test_machine) or (
+            test_harness_target_fetch and sanity_check_only_for_family
         ):
             continue
 
@@ -123,7 +125,5 @@ if __name__ == "__main__":
     args = {}
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
     args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
-    args["TEST_MACHINE_AVAILABLE_ONLY"] = str2bool(
-        os.getenv("TEST_MACHINE_AVAILABLE_ONLY")
-    )
+    args["TEST_HARNESS_TARGET_FETCH"] = str2bool(os.getenv("TEST_HARNESS_TARGET_FETCH"))
     main(args)
