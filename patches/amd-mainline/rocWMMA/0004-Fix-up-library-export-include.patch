@@ -1,0 +1,24 @@
+From ab6963f4a35766fe6ae74ee7513565007d70f997 Mon Sep 17 00:00:00 2001
+From: Bain Syrowik <bain.syrowik@amd.com>
+Date: Fri, 24 Oct 2025 00:31:46 -0400
+Subject: [PATCH 4/4] Fix up library export include
+
+---
+ CMakeLists.txt | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 87feca08..3ba86520 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -201,7 +201,6 @@ set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+ rocm_export_targets(
+   TARGETS roc::rocwmma
+   NAMESPACE roc::
+-  INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA-config.cmake"
+ )
+ 
+ rocm_create_package(
+-- 
+2.43.0
+
