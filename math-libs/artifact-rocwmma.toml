@@ -1,5 +1,4 @@
 # rocWMMA
-# FIXME
 [components.dbg."math-libs/rocWMMA/stage"]
 optional = true
 [components.dev."math-libs/rocWMMA/stage"]
@@ -18,4 +17,5 @@ include = [
   "bin/*_test",
   "bin/*-validate",
   "bin/rocwmma/CTestTestfile.cmake",
+  "bin/rocwmma/*/CTestTestfile.cmake",
 ]
