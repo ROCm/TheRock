@@ -322,11 +322,12 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
   therock_cmake_subproject_activate(rocWMMA)
 
-  therock_provide_artifact(rocWMMA
+  therock_provide_artifact(rocwmma
     DESCRIPTOR artifact-rocwmma.toml
     COMPONENTS
       dbg
       dev
+      lib
       test
     SUBPROJECT_DEPS
       rocWMMA
