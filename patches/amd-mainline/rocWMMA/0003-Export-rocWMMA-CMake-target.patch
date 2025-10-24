@@ -1,0 +1,29 @@
+From 0f5cf420c5426c6eb10fbd87b89bb416d000ac39 Mon Sep 17 00:00:00 2001
+From: Bain Syrowik <bain.syrowik@amd.com>
+Date: Thu, 23 Oct 2025 19:31:50 -0400
+Subject: [PATCH 3/3] Export rocWMMA CMake target
+
+---
+ CMakeLists.txt | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b7b39646..87feca08 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -198,6 +198,12 @@ rocm_package_add_deb_dependencies("libomp-dev")
+ rocm_package_add_rpm_dependencies("libomp-devel")
+ set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+ 
++rocm_export_targets(
++  TARGETS roc::rocwmma
++  NAMESPACE roc::
++  INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA-config.cmake"
++)
++
+ rocm_create_package(
+   NAME rocwmma
+   DESCRIPTION "AMD GPU C++ library for GEMM primitives using MFMA and WMMA matrix instructions"
+-- 
+2.43.0
+
