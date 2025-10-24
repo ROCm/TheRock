@@ -82,7 +82,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DHIP_PLATFORM=amd
       -DCMAKE_C_COMPILER=gcc
       -DCMAKE_CXX_COMPILER=g++
-      -DROCPROFSYS_USE_ROCM=OFF
+      -DROCPROFSYS_USE_ROCM=ON
       -DROCPROFSYS_BUILD_ELFUTILS=ON
       -DROCPROFSYS_BUILD_TBB=ON
       -DROCPROFSYS_BUILD_LIBIBERTY=ON
@@ -95,6 +95,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       aqlprofile
       hip-clr
       rocprofiler-register
+      amdsmi
       ${_rocprofiler_sdk_optional_deps}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
