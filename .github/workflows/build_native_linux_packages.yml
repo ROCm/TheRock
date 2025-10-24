@@ -60,7 +60,7 @@ jobs:
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
-      PACKAGE_SUFFIX: ${{ (inputs.package_suffix || github.event.inputs.package_suffix || 'nightly') }}-${{ inputs.artifact_run_id || github.run_id }}
+      PACKAGE_SUFFIX: ${{ (inputs.package_suffix || github.event.inputs.package_suffix || 'test') }}.${{ inputs.artifact_run_id || github.run_id }}
       OUTPUT_DIR: ${{ github.workspace }}/output
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
