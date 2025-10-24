@@ -1,7 +1,7 @@
-From 09c7ea7e00de961ce35653b5dd4924904990f7ac Mon Sep 17 00:00:00 2001
+From e98e9123fb6f18b9158bcb84f4b77023b5860d10 Mon Sep 17 00:00:00 2001
 From: Marius Brehler <marius.brehler@amd.com>
 Date: Wed, 6 Aug 2025 16:08:22 +0000
-Subject: [PATCH 08/12] Revert "remove options --no-enumerate (#966)"
+Subject: [PATCH 3/4] Revert "remove options --no-enumerate (#966)"
 
 This reverts commit 68a380c7dd5498a744d5d63892d7431a5aa31367.
 
@@ -25,5 +25,5 @@ index 62682d74ec..794eb10cc2 100644
    if (WIN32 OR (VIRTUALENV_BIN_DIR AND VIRTUALENV_PYTHON_EXENAME))
      set(CommandLine ${VIRTUALENV_BIN_DIR}/${VIRTUALENV_PYTHON_EXENAME} ${CommandLine})
 -- 
-2.47.1.windows.2
+2.45.1.windows.1
 
