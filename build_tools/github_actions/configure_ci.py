@@ -317,7 +317,7 @@ def matrix_generator(
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
             if "gfx" in label:
-                target, _ = label.split("-")
+                target = label.split("-")[0]
                 requested_target_names.append(target)
             if "test:" in label:
                 _, test_name = label.split(":")
