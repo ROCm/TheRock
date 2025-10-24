@@ -109,7 +109,7 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
         "windows": {
-            "test-runs-on": "windows-gfx90X-gpu-rocm",
+            "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "expect_failure": False,
             "sanity_check_only_for_family": True,
@@ -152,7 +152,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1150": {
         "linux": {
-            "test-runs-on": "linux-strix-gpu-rocm",
+            "test-runs-on": "",
             "family": "gfx1150",
             "build_variants": ["release"],
             "expect_failure": False,
