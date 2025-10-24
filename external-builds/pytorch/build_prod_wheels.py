@@ -628,14 +628,21 @@ def do_build_pytorch(
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
         if args.enable_pytorch_flash_attention_linux is None:
-            # Default behavior — determined by PyTorch version
-            use_flash_attention = "ON"
-            print(f"Flash Attention default behavior: {use_flash_attention}")
+            # Default behavior — determined by if triton is build
+            use_flash_attention = "ON" if triton_requirement else "OFF"
+            print(
+                f"Flash Attention default behavior (based on triton): {use_flash_attention}"
+            )
         else:
             # Explicit override: user has set the flag to true/false
-            use_flash_attention = (
-                "ON" if args.enable_pytorch_flash_attention_linux else "0FF"
-            )
+            if args.enable_pytorch_flash_attention_linux:
+                assert (
+                    triton_requirement
+                ), "Must build with triton if wanting to use flash attention"
+                use_flash_attention = "ON"
+            else:
+                use_flash_attention = "OFF"
+
             print(f"Flash Attention override set by flag: {use_flash_attention}")
 
         env.update(
