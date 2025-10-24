@@ -1,4 +1,10 @@
 if(THEROCK_ENABLE_ROCPROFV3)
+
+  set(_system_toolchain "amd-llvm")
+  if(WIN32)
+    set(_system_toolchain "")
+  endif()
+  
   set(_rocprofiler_sdk_optional_deps)
 
   ##############################################################################
@@ -30,6 +36,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DAQLPROFILE_BUILD_TESTS=ON
+    COMPILER_TOOLCHAIN
+      "${_system_toolchain}"
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
     RUNTIME_DEPS
