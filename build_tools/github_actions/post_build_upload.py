@@ -20,13 +20,13 @@ import argparse
 from datetime import datetime, timezone
 from functools import lru_cache
 import os
-import tarfile
 from pathlib import Path
 import platform
 import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()

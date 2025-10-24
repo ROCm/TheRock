@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
+import platform
 from pathlib import Path
 import re
 import shlex
 import subprocess
 import sys
-import os
-import platform
 
 
 def _run(cmd, cwd=None, check=True) -> str:
