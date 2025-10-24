@@ -1,0 +1,38 @@
+From 6471596c0e99edf03370078d2eaa95081101cf73 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Fri, 24 Oct 2025 16:29:06 -0700
+Subject: [PATCH] Fix the printing of std::string
+
+- Debug function expects to get c-style
+  string.
+- Fixes a following error:
+
+rocm-systems/projects/clr/rocclr/os/os_posix.cpp:1013:71:
+error: cannot pass object of non-trivial type 'const std::string'
+(aka 'const basic_string<char>') through variadic function; call will abort at runtime [-Wnon-pod-varargs]
+1013 |     ClPrint(amd::LOG_DEBUG, amd::LOG_RESOURCE, "%s cannot be opened", path);
+[hip-clr] rocm-systems/projects/clr/rocclr/os/os_posix.cpp:1013:71:
+error: cannot pass object of non-trivial type 'const std::string' (aka 'const basic_string<char>')
+through variadic function; call will abort at runtime [-Wnon-pod-varargs]
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ projects/clr/rocclr/os/os_posix.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/clr/rocclr/os/os_posix.cpp b/projects/clr/rocclr/os/os_posix.cpp
+index a3766a71fd..2b807a628b 100644
+--- a/projects/clr/rocclr/os/os_posix.cpp
++++ b/projects/clr/rocclr/os/os_posix.cpp
+@@ -1010,7 +1010,7 @@ bool NumaNode::GetAffinity() {
+   std::ifstream file(path);
+   if (!file) {
+     std::cerr << "Failed to open " << path << "\n";
+-    ClPrint(amd::LOG_DEBUG, amd::LOG_RESOURCE, "%s cannot be opened", path);
++    ClPrint(amd::LOG_DEBUG, amd::LOG_RESOURCE, "%s cannot be opened", path.c_str());
+     return false;
+   }
+   std::string line;
+-- 
+2.43.0
+
