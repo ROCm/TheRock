@@ -401,14 +401,9 @@ def main(argv):
         "--math-library-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "rocWMMA",
-            ]
-        ),
+        default=[
+            "rocWMMA",
+        ],
     )
     parser.add_argument(
         # projects that use DVC to manage large files
