@@ -3,6 +3,8 @@ name: TheRock Sanity Check
 on:
   workflow_dispatch:
     inputs:
+      artifact_group:
+        type: string
       artifact_run_id:
         type: string
         default: ""
@@ -15,6 +17,8 @@ on:
         type: string
   workflow_call:
     inputs:
+      artifact_group:
+        type: string
       artifact_run_id:
         type: string
         default: ""
@@ -74,6 +78,7 @@ jobs:
       - name: Run setup test environment workflow
         uses: './.github/actions/setup_test_environment'
         with:
+          ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}

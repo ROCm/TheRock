@@ -37,8 +37,11 @@ function(therock_sanitizer_configure
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
     # This becomes an issue in projects that build with clang and gfortran, so we have to
     # use a generator expression to target the -shared-libsan flag only to clang.
-    string(APPEND _stanza "add_link_options(-fsanitize=address\n")
-    string(APPEND _stanza "  $<$<AND:$<OR:$<LINK_LANGUAGE:CXX>,$<LINK_LANGUAGE:C>>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    # Only enable ASAN for C/C++ for now. Include fortran once the toolchain
+    # is available and can be used for portable builds.
+    # https://github.com/ROCm/TheRock/issues/1782
+    string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
+    string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
     string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")

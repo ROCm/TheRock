@@ -76,9 +76,10 @@ project layouts.**
 | ---------------------------------- | ---------- | ------------ | ------------------------------------------------------------------ |
 | MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) |
 | MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
-| AMD RX 7800 XT                     | gfx1101    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD RX 7800 XT                     | gfx1101    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
 | AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151)           |
 | AMD RX 9060 / XT                   | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
 | AMD RX 9070 / XT                   | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
@@ -132,7 +133,7 @@ python -m pip install \
   "rocm[libraries,devel]"
 ```
 
-#### rocm for gfx110X-dgpu
+#### rocm for gfx110X-all
 
 Supported devices in this family:
 
@@ -141,12 +142,13 @@ Supported devices in this family:
 | AMD RX 7900 XTX                    | gfx1100    |
 | AMD RX 7800 XT                     | gfx1101    |
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 Install instructions:
 
 ```bash
 python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
   "rocm[libraries,devel]"
 ```
 
@@ -193,7 +195,7 @@ pip freeze | grep rocm
 # rocm==6.5.0rc20250610
 # rocm-sdk-core==6.5.0rc20250610
 # rocm-sdk-devel==6.5.0rc20250610
-# rocm-sdk-libraries-gfx110X-dgpu==6.5.0rc20250610
+# rocm-sdk-libraries-gfx110X-all==6.5.0rc20250610
 ```
 
 You should also see various tools on your `PATH` and in the `bin` directory:
@@ -302,7 +304,7 @@ python -m pip install \
   --pre torch torchaudio torchvision
 ```
 
-#### torch for gfx110X-dgpu
+#### torch for gfx110X-all
 
 Supported devices in this family:
 
@@ -311,10 +313,11 @@ Supported devices in this family:
 | AMD RX 7900 XTX                    | gfx1100    |
 | AMD RX 7800 XT                     | gfx1101    |
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
 python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
   --pre torch torchaudio torchvision
 ```
 
@@ -386,7 +389,7 @@ After downloading, simply extract the release tarball into place:
 ```bash
 mkdir therock-tarball && cd therock-tarball
 # For example...
-wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-dgpu-6.5.0rc20250610.tar.gz
+wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-all-6.5.0rc20250610.tar.gz
 
 mkdir install
 tar -xf *.tar.gz -C install
@@ -463,13 +466,13 @@ Examples:
 - Downloads the version `6.4.0rc20250516` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
 
   ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-dgpu --output-dir build
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-all --output-dir build
   ```
 
 - Downloads the version `6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14` gfx110X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
 
   ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-dgpu
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-all
   ```
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)

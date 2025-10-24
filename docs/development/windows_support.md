@@ -231,7 +231,7 @@ the [instructions in the root README](../../README.md#configuration) for other
 options you may want to set.
 
 ```bash
-cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 
 # If iterating and wishing to cache, add these:
 #  -DCMAKE_C_COMPILER_LAUNCHER=ccache \

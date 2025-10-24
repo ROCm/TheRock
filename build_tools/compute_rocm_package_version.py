@@ -6,7 +6,8 @@
 """Computes a ROCm package version with an appropriate suffix for a given release type.
 
 For usage from other Python scripts, call the `compute_version()` function
-directly. WHen used from GitHub Actions, this writes to 'version' in GITHUB_OUTPUT.
+directly. When used from GitHub Actions, this writes to
+'rocm_package_version' in GITHUB_OUTPUT.
 
 Sample usage with standard release versions:
 

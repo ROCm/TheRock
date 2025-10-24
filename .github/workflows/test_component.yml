@@ -6,6 +6,8 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      artifact_group:
+        type: string
       amdgpu_families:
         type: string
       test_runs_on:
@@ -68,7 +70,7 @@ jobs:
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
-          AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+          ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
