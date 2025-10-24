@@ -36,6 +36,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DAQLPROFILE_BUILD_TESTS=ON
+      -DROCM_PATH=
     COMPILER_TOOLCHAIN
       amd-hip
     INTERFACE_LINK_DIRS
@@ -43,6 +44,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BUILD_DEPS
       therock-googletest
     RUNTIME_DEPS
+      hip-clr
       amd-llvm
       ROCR-Runtime
   )
