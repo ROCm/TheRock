@@ -629,10 +629,7 @@ def do_build_pytorch(
 
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by if triton is build
-            if triton_requirement == None:
-                use_flash_attention = "OFF"
-            else:
-                use_flash_attention = "ON"
+            use_flash_attention = "ON" if triton_requirement else "OFF"
             print(
                 f"Flash Attention default behavior (based on triton): {use_flash_attention}"
             )
