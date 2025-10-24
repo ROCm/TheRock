@@ -17,6 +17,8 @@ For AWS credentials to upload, reach out to the #rocm-ci channel in the AMD Deve
 """
 
 import argparse
+from datetime import datetime, timezone
+from functools import lru_cache
 import os
 import tarfile
 from pathlib import Path
@@ -25,8 +27,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-from functools import lru_cache  # <-- added
-from datetime import datetime, timezone
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
@@ -225,15 +225,15 @@ def compute_manifest_object_name(
     Prefer a stable name per workflow run; include artifact_group and platform to avoid collisions.
     Fall back to UTC timestamp if no run_id.
     Examples:
-      therock_manifest-gfx110X-dgpu-linux-18644860544.json
-      therock_manifest-gfx110X-dgpu-windows-20251021T013500Z.json
+      therock_manifest-18644860544-linux=gfx110X-dgpu.json
+      therock_manifest-20251021T013500Z-windows-gfx110X-dgpu.json
     """
     group = (artifact_group or "unknown").replace("/", "_")
     plat = (platform_name or "unknown").replace("/", "_")
     if run_id:
-        return f"therock_manifest-{group}-{plat}-{run_id}.json"
+        return f"therock_manifest-{run_id}-{plat}-{group}.json"
     time_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return f"therock_manifest-{group}-{plat}-{time_stamp}.json"
+    return f"therock_manifest-{time_stamp}-{plat}-{group}.json"
 
 
 def get_manifest_from_build(build_dir: Path):

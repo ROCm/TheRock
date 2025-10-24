@@ -139,10 +139,6 @@ def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
 
     build_ctx: dict[str, str] = {}
 
-    artifact_group = os.getenv("ARTIFACT_GROUP")
-    if artifact_group:
-        build_ctx["artifact_group"] = artifact_group
-
     run_id = os.getenv("GITHUB_RUN_ID")
     if run_id:
         build_ctx["run_id"] = run_id
@@ -151,6 +147,10 @@ def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
     plat = (plat_env or platform.system() or "").lower()
     if plat:
         build_ctx["platform"] = plat
+
+    artifact_group = os.getenv("ARTIFACT_GROUP")
+    if artifact_group:
+        build_ctx["artifact_group"] = artifact_group
 
     # Key order: the_rock_commit, build_context, submodules
     manifest = {
