@@ -1461,6 +1461,67 @@
     "Gfxarch": "True"
   },
   {
+    "Package": "hipsparselt",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipsparse",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipsparse",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSPARSELt Maintainer <hipsparselt-maintainer@amd.com>",
+    "Description_Short": "HIP library structured sparse matrix multiplication",
+    "Description_Long": "HIP library structured sparse matrix multiplication",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSPARSELt",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "hipsparselt-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipsparselt",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipsparselt",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSPARSELt Maintainer <hipsparselt-maintainer@amd.com>",
+    "Description_Short": "HIP library structured sparse matrix multiplication",
+    "Description_Long": "Provides development files for hipsparselt library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSPARSELt",
+    "Gfxarch": "True"
+  },
+  {
     "Package": "rocsolver",
     "Version": "",
     "Architecture": "amd64",
@@ -2108,6 +2169,7 @@
     "Includes": [
       "rocsparse",
       "hipsparse",
+      "hipsparselt",
       "hipsolver",
       "rocsolver",
       "hipblas",
@@ -2149,6 +2211,7 @@
     "Includes": [
       "rocsparse-devel",
       "hipsparse-devel",
+      "hipsparselt-devel",
       "hipsolver-devel",
       "rocsolver-devel",
       "hipblas-devel",
