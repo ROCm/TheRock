@@ -37,7 +37,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     CMAKE_ARGS
       -DAQLPROFILE_BUILD_TESTS=ON
     COMPILER_TOOLCHAIN
-      "${_system_toolchain}"
+      amd-hip
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
     BUILD_DEPS
