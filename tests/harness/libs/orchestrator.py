@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-from . import utils
-from .utils import log
+from libs import utils
+from libs.utils import log
 
 
 class Orchestrator(object):

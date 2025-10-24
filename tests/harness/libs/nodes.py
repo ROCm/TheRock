@@ -3,7 +3,7 @@
 import glob
 import socket
 
-from . import utils
+from libs import utils
 
 
 class Gpu(object):

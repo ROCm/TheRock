@@ -99,6 +99,6 @@ jobs:
       - name: Running test harness
         # TESTING
         run: |
-          python3 -m pytest -s -v --tb=short --therock-path=./therock-build tests/harness/tests.py -k "hipcub or rocprim or rocrand or rocthrust"
+          python3 -m pytest -s -v --tb=short --therock-path=./therock-build tests/harness/tests*.py -k "hipcub or rocprim or rocrand or rocthrust"
 
 # TODO: Add windows tests
