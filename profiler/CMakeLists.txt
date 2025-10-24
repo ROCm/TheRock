@@ -4,7 +4,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   if(WIN32)
     set(_system_toolchain "")
   endif()
-  
+
   set(_rocprofiler_sdk_optional_deps)
 
   ##############################################################################
@@ -40,8 +40,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
       "${_system_toolchain}"
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
-    RUNTIME_DEPS
+    BUILD_DEPS
       amd-llvm
+    RUNTIME_DEPS
       ROCR-Runtime
   )
   therock_cmake_subproject_glob_c_sources(aqlprofile
