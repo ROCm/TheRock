@@ -28,6 +28,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
+    CMAKE_ARGS
+      - AQLPROFILE_BUILD_TESTS=ON
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
     RUNTIME_DEPS
