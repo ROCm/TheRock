@@ -10,27 +10,23 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
-# GTest filters
-environ_vars = os.environ.copy()
-
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
+test_subdir = "regression"
 if test_type == "smoke":
-    environ_vars["GTEST_FILTER"] = "*Emulation*Smoke*"
-else:
-    environ_vars["GTEST_FILTER"] = "*Emulation*Regression*"
+    test_subdir = "smoke"
 
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/rocwmma",
+    f"{THEROCK_BIN_DIR}/rocwmma/{test_subdir}",
     "--output-on-failure",
     "--parallel",
     "8",
     "--timeout",
-    "120",
+    "300",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 

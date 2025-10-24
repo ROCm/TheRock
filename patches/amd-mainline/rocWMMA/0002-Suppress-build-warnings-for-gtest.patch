@@ -1,7 +1,7 @@
 From aa631f59a13bd748306a327c5eb619d4333a166d Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Thu, 23 Oct 2025 18:53:09 -0400
-Subject: [PATCH 2/4] Suppress build warnings for gtest
+Subject: [PATCH 2/5] Suppress build warnings for gtest
 
 ---
  test/CMakeLists.txt | 10 ++++++++++
