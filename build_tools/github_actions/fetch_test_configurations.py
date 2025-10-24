@@ -190,8 +190,8 @@ test_matrix = {
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
-        "fetch_artifact_args": "--rocwmma --tests", # Fixme: may need to add --blas
-        "timeout_minutes": 10,
+        "fetch_artifact_args": "--rocwmma --tests --blas",
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux"],
         "total_shards": 1,
