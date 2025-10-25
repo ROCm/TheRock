@@ -152,6 +152,8 @@ def retrieve_artifacts_by_run_id(args):
         "amd-llvm_lib",
         "core-hip_lib",
         "core-hip_dev",
+        "core-ocl_lib",
+        "core-ocl_dev",
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]

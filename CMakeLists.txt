@@ -231,6 +231,12 @@ therock_add_feature(HIP_RUNTIME
   REQUIRES COMPILER ${_hip_runtime_platform_requirements}
 )
 
+therock_add_feature(OCL_RUNTIME
+  GROUP CORE
+  DESCRIPTION "Enables the OCL runtime"
+  REQUIRES COMPILER ${_hip_runtime_platform_requirements}
+)
+
 # Profiler Features.
 if(THEROCK_FLAG_INCLUDE_PROFILER)
   therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
