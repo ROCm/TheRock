@@ -17,15 +17,16 @@ For AWS credentials to upload, reach out to the #rocm-ci channel in the AMD Deve
 """
 
 import argparse
+from datetime import datetime, timezone
+from functools import lru_cache
 import os
-import tarfile
 from pathlib import Path
 import platform
 import shlex
 import shutil
 import subprocess
 import sys
-from functools import lru_cache  # <-- added
+import tarfile
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
@@ -217,6 +218,24 @@ def upload_logs_to_s3(run_id: str, artifact_group: str, build_dir: Path):
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
+def compute_manifest_object_name(
+    run_id: str | None, artifact_group: str | None, platform_name: str | None
+) -> str:
+    """
+    Prefer a stable name per workflow run; include artifact_group and platform to avoid collisions.
+    Fall back to UTC timestamp if no run_id.
+    Examples:
+      therock_manifest-18644860544-linux=gfx110X-dgpu.json
+      therock_manifest-20251021T013500Z-windows-gfx110X-dgpu.json
+    """
+    group = (artifact_group or "unknown").replace("/", "_")
+    plat = (platform_name or "unknown").replace("/", "_")
+    if run_id:
+        return f"therock_manifest-{run_id}-{plat}-{group}.json"
+    time_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"therock_manifest-{time_stamp}-{plat}-{group}.json"
+
+
 def get_manifest_from_build(build_dir: Path):
     """
     Look only in the aux-overlay *build* directory.
@@ -232,7 +251,7 @@ def get_manifest_from_build(build_dir: Path):
 def upload_manifest_to_s3(run_id: str, artifact_group: str, build_dir: Path):
     """
     Upload therock_manifest.json to:
-      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<artifact_group>/therock_manifest.json
+      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<artifact_group>/<unique-name>.json
     """
     external_repo_path, bucket = get_bucket_info_cached()
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
@@ -243,7 +262,9 @@ def upload_manifest_to_s3(run_id: str, artifact_group: str, build_dir: Path):
             f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}"
         )
 
-    dest = f"{bucket_uri}/manifests/{artifact_group}/therock_manifest.json"
+    # Unique filename per run (or timestamp) including artifact_group and platform
+    manifest_name = compute_manifest_object_name(run_id, artifact_group, PLATFORM)
+    dest = f"{bucket_uri}/manifests/{artifact_group}/{manifest_name}"
     log(f"[INFO] Uploading manifest {manifest} -> {dest}")
     run_aws_cp(manifest, dest, content_type="application/json")
 
@@ -267,7 +288,9 @@ def upload_build_summary(args):
     else:
         log("No artifacts index found. Skipping artifact link.")
 
-    manifest_url = f"{bucket_url}/manifests/{artifact_group}/therock_manifest.json"
+    # Link to the *same* unique manifest name we uploaded
+    manifest_name = compute_manifest_object_name(run_id, artifact_group, PLATFORM)
+    manifest_url = f"{bucket_url}/manifests/{artifact_group}/{manifest_name}"
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 

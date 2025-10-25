@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
+import platform
 from pathlib import Path
 import re
 import shlex
@@ -118,7 +120,6 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
 
 
 def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
-
     # Enumerate submodules via .gitmodules
     entries = list_submodules_via_gitconfig(repo_root)
 
@@ -136,10 +137,28 @@ def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
             }
         )
 
-    return {
+    build_ctx: dict[str, str] = {}
+
+    run_id = os.getenv("GITHUB_RUN_ID")
+    if run_id:
+        build_ctx["run_id"] = run_id
+
+    plat_env = os.getenv("RUNNER_OS")
+    plat = (plat_env or platform.system() or "").lower()
+    if plat:
+        build_ctx["platform"] = plat
+
+    artifact_group = os.getenv("ARTIFACT_GROUP")
+    if artifact_group:
+        build_ctx["artifact_group"] = artifact_group
+
+    # Key order: the_rock_commit, build_context, submodules
+    manifest = {
         "the_rock_commit": the_rock_commit,
+        "build_context": build_ctx or {},
         "submodules": rows,
     }
+    return manifest
 
 
 def write_manifest_json(out_path: Path, manifest: dict) -> None:
