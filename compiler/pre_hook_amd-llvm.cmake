@@ -148,7 +148,6 @@ block()
 
   # Clang tools that are required.
   set(_clang_required_tools
-    AMDGPU_ARCH
     CLANG_HIP
     CLANG_OFFLOAD_BUNDLER
     CLANG_OFFLOAD_PACKAGER
@@ -156,6 +155,7 @@ block()
     CLANG_LINKER_WRAPPER
     CLANG_SHLIB
     DRIVER
+    OFFLOAD_ARCH
   )
   if(WIN32)
     # These can be provided by the "C++ Clang tools for Windows" in MSVC, but

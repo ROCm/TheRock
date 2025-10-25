@@ -103,12 +103,12 @@ class PackageEntry:
 
 
 def discover_current_target_family() -> str | None:
-    """Attempts to query the current target family via the 'amdgpu-arch' tool."""
+    """Attempts to query the current target family via the 'offload-arch' tool."""
 
     try:
         import sysconfig
 
-        # amdgpu-arch is expected to be installed in the Python 'scripts'
+        # offload-arch is expected to be installed in the Python 'scripts'
         # directory, which will vary depending on the platform and whether or
         # not a virtual environment is used, for example:
         #   Linux system:   /usr/local/bin
@@ -120,7 +120,7 @@ def discover_current_target_family() -> str | None:
         scripts_path = Path(sysconfig.get_path("scripts"))
         env = os.environ
         env["PATH"] = str(scripts_path) + os.path.pathsep + env.get("PATH", "")
-        result = subprocess.check_output(["amdgpu-arch"], env=env, text=True)
+        result = subprocess.check_output(["offload-arch"], env=env, text=True)
 
         if result:
             arch_set = set(result.strip().split("\n"))
@@ -136,12 +136,12 @@ def discover_current_target_family() -> str | None:
                 if arch in AVAILABLE_TARGET_FAMILIES:
                     return arch
     except subprocess.CalledProcessError as e:
-        print(f"[WARNING] amdgpu-arch failed with return code {e.returncode}")
+        print(f"[WARNING] offload-arch failed with return code {e.returncode}")
         print(f"[stderr] {e.output}")
     except FileNotFoundError:
-        print(f"[WARNING] failed to run amdgpu-arch: binary not found.")
+        print(f"[WARNING] failed to run offload-arch: binary not found.")
     except Exception as e:
-        print(f"[WARNING] Unexpected error running amdgpu-arch: {e}")
+        print(f"[WARNING] Unexpected error running offload-arch: {e}")
     return None
 
 
