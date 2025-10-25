@@ -285,7 +285,7 @@ therock_add_feature(FFT
 )
 therock_add_feature(SPARSE
   GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
+  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse)"
   REQUIRES COMPILER HIP_RUNTIME BLAS PRIM ${_optional_profiler_requirements}
 )
 if(NOT WIN32)
