@@ -1,4 +1,4 @@
-From 0347da328a5ba7979143eac5499abcf435588f9a Mon Sep 17 00:00:00 2001
+From 5900330d896d2691c87b27aa0e939e9979048f6b Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Fri, 24 Oct 2025 18:49:28 -0400
 Subject: [PATCH 5/5] Create additional CTest files for smoke and regression
@@ -9,7 +9,7 @@ Subject: [PATCH 5/5] Create additional CTest files for smoke and regression
  1 file changed, 33 insertions(+)
 
 diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
-index f597a423..484ddb28 100644
+index f597a423..0acdaa69 100644
 --- a/test/CMakeLists.txt
 +++ b/test/CMakeLists.txt
 @@ -85,6 +85,21 @@ file(WRITE "${INSTALL_TEST_FILE}"
@@ -39,10 +39,10 @@ index f597a423..484ddb28 100644
    file(APPEND "${INSTALL_TEST_FILE}" "add_test(${TEST_TARGET} \"../${EXE_NAME}\")\n")
    file(APPEND "${INSTALL_TEST_FILE}" "set_tests_properties(${TEST_TARGET} PROPERTIES SKIP_REGULAR_EXPRESSION \"no ROCm-capable device;unsupported host device\")\n")
 +
-+  file(APPEND "${INSTALL_SMOKE_TEST_FILE}" "add_test(\"${TEST_TARGET} smoke\" \"../../${EXE_NAME}\" \"--emulation smoke\")\n")
++  file(APPEND "${INSTALL_SMOKE_TEST_FILE}" "add_test(\"${TEST_TARGET} smoke\" \"../../${EXE_NAME}\" --emulation smoke)\n")
 +  file(APPEND "${INSTALL_SMOKE_TEST_FILE}" "set_tests_properties(\"${TEST_TARGET} smoke\" PROPERTIES SKIP_REGULAR_EXPRESSION \"no ROCm-capable device;unsupported host device\")\n")
 +
-+  file(APPEND "${INSTALL_REGRESSION_TEST_FILE}" "add_test(\"${TEST_TARGET} regression\" \"../../${EXE_NAME}\" \"--emulation regression\")\n")
++  file(APPEND "${INSTALL_REGRESSION_TEST_FILE}" "add_test(\"${TEST_TARGET} regression\" \"../../${EXE_NAME}\" --emulation regression)\n")
 +  file(APPEND "${INSTALL_REGRESSION_TEST_FILE}" "set_tests_properties(\"${TEST_TARGET} regression\" PROPERTIES SKIP_REGULAR_EXPRESSION \"no ROCm-capable device;unsupported host device\")\n")
  endfunction()
  
