@@ -40,7 +40,7 @@ def get_enabled_projects(args) -> list[str]:
     if args.include_compilers:
         projects.extend(args.compiler_projects)
     if args.include_rocm_libraries:
-        projects.extend(["rocm-libraries"])
+        projects.extend(["rocm-libraries", "rocWMMA"])
     if args.include_rocm_systems:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
