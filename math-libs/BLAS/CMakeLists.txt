@@ -222,7 +222,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_WITH_ROCBLAS=ON
+      -DBUILD_WITH_ROCBLAS=OFF       # turned off until rocSPARSE is updated to align with rocBLAS 5.x.x
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_SAMPLES=OFF
@@ -232,7 +232,7 @@ if(THEROCK_ENABLE_SPARSE)
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      rocBLAS
+      # rocBLAS turned off until rocSPARSE is updated to align with rocBLAS 5.x.x
       rocPRIM
       therock-googletest
     RUNTIME_DEPS
