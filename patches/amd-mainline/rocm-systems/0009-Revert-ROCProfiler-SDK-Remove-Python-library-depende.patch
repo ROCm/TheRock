@@ -1,0 +1,243 @@
+From 33cd56789035e8a4e17ff63f5e3b0e00dc231e08 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Sun, 26 Oct 2025 17:25:03 -0700
+Subject: [PATCH] Revert "[ROCProfiler-SDK] Remove Python library dependency
+ from Python bindings (#1451)"
+
+This reverts commit 9cf8a5e0b59772f0e0380f3b03cc13d52bfa5535.
+
+Trying to fix therock build-error:
+
+[rocprofiler-sdk configure] -- [rocprofiler-sdk][python] Resolving system find_path(_Python3_INCLUDE_DIR NAMES Python.h ): _Python3_INCLUDE_DIR-NOTFOUND
+[rocprofiler-sdk configure] CMake Error at /usr/local/therock-tools/share/cmake-3.27/Modules/FindPackageHandleStandardArgs.cmake:230 (message):
+[rocprofiler-sdk configure]   Could NOT find Python3 (missing: Python3_EXECUTABLE Python3_INCLUDE_DIRS
+[rocprofiler-sdk configure]   Interpreter Development.Module) (Required is version range
+[rocprofiler-sdk configure]   "3.14.0...3.14.999")
+[rocprofiler-sdk configure]
+[rocprofiler-sdk configure]       Reason given by package:
+[rocprofiler-sdk configure]           Interpreter: Wrong version for the interpreter "/bin/python3"
+[rocprofiler-sdk configure]
+[rocprofiler-sdk configure] Call Stack (most recent call first):
+[rocprofiler-sdk configure]   /usr/local/therock-tools/share/cmake-3.27/Modules/FindPackageHandleStandardArgs.cmake:600 (_FPHSA_FAILURE_MESSAGE)
+[rocprofiler-sdk configure]   /usr/local/therock-tools/share/cmake-3.27/Modules/FindPython/Support.cmake:3824 (find_package_handle_standard_args)
+[rocprofiler-sdk configure]   /usr/local/therock-tools/share/cmake-3.27/Modules/FindPython3.cmake:545 (include)
+[rocprofiler-sdk configure]   /__w/TheRock/TheRock/cmake/therock_subproject_dep_provider.cmake:69 (find_package)
+[rocprofiler-sdk configure]   source/lib/python/utilities.cmake:49 (find_package)
+[rocprofiler-sdk configure]   source/lib/python/utilities.cmake:101 (rocprofiler_find_python3)
+[rocprofiler-sdk configure]   source/lib/python/roctx/CMakeLists.txt:6 (rocprofiler_roctx_python_bindings)
+[rocprofiler-sdk configure]
+[rocprofiler-sdk configure]
+[rocprofiler-sdk configure] -- Configuring incomplete, errors occurred!
+---
+ projects/rocprofiler-sdk/CMakeLists.txt       |  3 +-
+ .../cmake/rocprofiler_config_packaging.cmake  | 39 +++++--------------
+ .../source/lib/python/utilities.cmake         | 39 ++++---------------
+ 3 files changed, 18 insertions(+), 63 deletions(-)
+
+diff --git a/projects/rocprofiler-sdk/CMakeLists.txt b/projects/rocprofiler-sdk/CMakeLists.txt
+index d7c04dde39..0e49bfb4f0 100644
+--- a/projects/rocprofiler-sdk/CMakeLists.txt
++++ b/projects/rocprofiler-sdk/CMakeLists.txt
+@@ -39,8 +39,7 @@ endif()
+ 
+ find_package(Git)
+ 
+-if(Git_FOUND AND (EXISTS "${PROJECT_SOURCE_DIR}/../../.git"
+-                  OR EXISTS "${PROJECT_SOURCE_DIR}/.git"))
++if(Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+     execute_process(
+         COMMAND ${GIT_EXECUTABLE} describe --tags
+         OUTPUT_VARIABLE ROCPROFILER_SDK_GIT_DESCRIBE
+diff --git a/projects/rocprofiler-sdk/cmake/rocprofiler_config_packaging.cmake b/projects/rocprofiler-sdk/cmake/rocprofiler_config_packaging.cmake
+index 221aaef5a6..efec16fb6d 100644
+--- a/projects/rocprofiler-sdk/cmake/rocprofiler_config_packaging.cmake
++++ b/projects/rocprofiler-sdk/cmake/rocprofiler_config_packaging.cmake
+@@ -58,15 +58,14 @@ list(REMOVE_ITEM ROCPROFILER_PACKAGING_COMPONENTS "Development" "Unspecified")
+ list(LENGTH ROCPROFILER_PACKAGING_COMPONENTS NUM_ROCPROFILER_PACKAGING_COMPONENTS)
+ 
+ # the packages we will generate
+-set(ROCPROFILER_COMPONENT_GROUPS "core" "docs" "tests" "roctx" "rocpd" "benchmark")
++set(ROCPROFILER_COMPONENT_GROUPS "core" "docs" "tests" "roctx" "rocpd")
+ 
+-set(COMPONENT_GROUP_core_COMPONENTS "core" "development" "samples" "tools" "Development"
+-                                    "Unspecified")
++set(COMPONENT_GROUP_core_COMPONENTS "core" "development" "samples" "tools" "benchmark"
++                                    "Development" "Unspecified")
+ set(COMPONENT_GROUP_docs_COMPONENTS "docs")
+ set(COMPONENT_GROUP_tests_COMPONENTS "tests")
+ set(COMPONENT_GROUP_roctx_COMPONENTS "roctx")
+ set(COMPONENT_GROUP_rocpd_COMPONENTS "rocpd")
+-set(COMPONENT_GROUP_benchmark_COMPONENTS "benchmark")
+ 
+ # variables for each component group. Note: eventually we will probably want to separate
+ # the core to just be the runtime libraries, development to be the headers and cmake
+@@ -77,7 +76,6 @@ set(COMPONENT_NAME_docs "rocprofiler-sdk-docs")
+ set(COMPONENT_NAME_tests "rocprofiler-sdk-tests")
+ set(COMPONENT_NAME_roctx "rocprofiler-sdk-roctx")
+ set(COMPONENT_NAME_rocpd "rocprofiler-sdk-rocpd")
+-set(COMPONENT_NAME_benchmark "rocprofiler-sdk-benchmark")
+ 
+ set(COMPONENT_DEP_core "rocprofiler-sdk-roctx (>= ${PROJECT_VERSION})"
+                        "rocprofiler-sdk-rocpd (>= ${PROJECT_VERSION})")
+@@ -88,14 +86,12 @@ set(COMPONENT_DEP_tests
+     "rocprofiler-sdk-rocpd (>= ${PROJECT_VERSION})")
+ set(COMPONENT_DEP_roctx "rocprofiler-register")
+ set(COMPONENT_DEP_rocpd "")
+-set(COMPONENT_DEP_benchmark "rocprofiler-sdk (>= ${PROJECT_VERSION})")
+ 
+ set(COMPONENT_DESC_core "rocprofiler-sdk libraries, headers, samples, and tools")
+ set(COMPONENT_DESC_docs "rocprofiler-sdk documentation")
+ set(COMPONENT_DESC_tests "rocprofiler-sdk tests")
+ set(COMPONENT_DESC_roctx "ROCm Tools Extension library and headers")
+ set(COMPONENT_DESC_rocpd "ROCm Profiling Data library and headers")
+-set(COMPONENT_DESC_benchmark "rocprofiler-sdk benchmark")
+ 
+ set(EXPECTED_PACKAGING_COMPONENTS 7)
+ if(ROCPROFILER_BUILD_DOCS)
+@@ -112,20 +108,14 @@ if(NOT NUM_ROCPROFILER_PACKAGING_COMPONENTS EQUAL EXPECTED_PACKAGING_COMPONENTS)
+         )
+ endif()
+ 
+-# default values
+-set(_DEB_PACKAGE_DEPENDS)
+-set(_RPM_PACKAGE_REQUIRES)
+-
+-# append rocm-core dependency if option specified
+ if(ROCM_DEP_ROCMCORE OR ROCPROFILER_DEP_ROCMCORE)
+-    set(_DEB_PACKAGE_DEPENDS "rocm-core")
+-    set(_RPM_PACKAGE_REQUIRES "rocm-core")
++    set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
++    set(CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
++else()
++    set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
++    set(CPACK_RPM_PACKAGE_REQUIRES "")
+ endif()
+ 
+-# support general cache variables
+-list(APPEND _DEB_PACKAGE_DEPENDS ${ROCPROFILER_CPACK_DEBIAN_PACKAGE_DEPENDS})
+-list(APPEND _RPM_PACKAGE_REQUIRES ${ROCPROFILER_CPACK_RPM_PACKAGE_REQUIRES})
+-
+ foreach(COMPONENT_GROUP ${ROCPROFILER_COMPONENT_GROUPS})
+     set(_DEP "${COMPONENT_DEP_${COMPONENT_GROUP}}")
+     set(_NAME "${COMPONENT_NAME_${COMPONENT_GROUP}}")
+@@ -175,20 +165,14 @@ set(CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS_POLICY ">=")
+ set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS_PRIVATE_DIRS
+     ${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}
+     ${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME})
+-if(rocm_version_DIR)
+-    # library directory of ROCm install is treated as private directory for shlibdeps
+-    # since most ROCm packages do not set CPACK_DEBIAN_PACKAGE_GENERATE_SHLIBS=ON
+-    list(APPEND CPACK_DEBIAN_PACKAGE_SHLIBDEPS_PRIVATE_DIRS
+-         "${rocm_version_DIR}/${CMAKE_INSTALL_LIBDIR}")
+-endif()
+ if(DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
+     set(CPACK_DEBIAN_PACKAGE_RELEASE
+         "$ENV{CPACK_DEBIAN_PACKAGE_RELEASE}"
+         CACHE STRING "" FORCE)
+ endif()
+ 
+-rocprofiler_set_package_depends(CPACK_DEBIAN_PACKAGE_DEPENDS "${_DEB_PACKAGE_DEPENDS}"
+-                                "Debian" OFF)
++rocprofiler_set_package_depends(CPACK_DEBIAN_PACKAGE_DEPENDS
++                                "${CPACK_DEBIAN_PACKAGE_DEPENDS}" "Debian" OFF)
+ set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+ set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION}")
+ 
+@@ -216,9 +200,6 @@ if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
+         CACHE STRING "" FORCE)
+ endif()
+ 
+-rocprofiler_set_package_depends(CPACK_RPM_PACKAGE_REQUIRES "${_RPM_PACKAGE_REQUIRES}"
+-                                "RedHat" ON)
+-
+ # Get rpm distro
+ if(CPACK_RPM_PACKAGE_RELEASE)
+     set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
+diff --git a/projects/rocprofiler-sdk/source/lib/python/utilities.cmake b/projects/rocprofiler-sdk/source/lib/python/utilities.cmake
+index 1bc9171a3e..439f5aa1bb 100644
+--- a/projects/rocprofiler-sdk/source/lib/python/utilities.cmake
++++ b/projects/rocprofiler-sdk/source/lib/python/utilities.cmake
+@@ -28,26 +28,15 @@ macro(rocprofiler_reset_python3_cache)
+     endforeach()
+ endmacro()
+ 
+-# use Development.Module for manylinux compatibility
+-set(ROCPROFILER_BUILD_Find_Python3_COMPONENTS
+-    "Interpreter;Development.Module"
+-    CACHE STRING "Components to find for Python3")
+-
+-if(ROCPROFILER_MEMCHECK)
+-    # override with local variable for sanitizers. Sanitizers need Development (full) to
+-    # get Python3_LIBRARIES for linking
+-    set(ROCPROFILER_BUILD_Find_Python3_COMPONENTS "Interpreter" "Development")
+-endif()
+-
+ macro(rocprofiler_find_python3 _VERSION)
+     rocprofiler_reset_python3_cache()
+ 
+     if("${_VERSION}" MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+         find_package(Python3 ${_VERSION} EXACT ${ARGN} REQUIRED MODULE
+-                     COMPONENTS ${ROCPROFILER_BUILD_Find_Python3_COMPONENTS})
++                     COMPONENTS Interpreter Development)
+     elseif("${_VERSION}" MATCHES "^([0-9]+)\\.([0-9]+)$")
+         find_package(Python3 ${_VERSION}.0...${_VERSION}.999 ${ARGN} REQUIRED MODULE
+-                     COMPONENTS ${ROCPROFILER_BUILD_Find_Python3_COMPONENTS})
++                     COMPONENTS Interpreter Development)
+     else()
+         message(
+             FATAL_ERROR
+@@ -67,8 +56,7 @@ function(get_default_python_versions _VAR)
+     set(_PYTHON_FOUND_VERSIONS)
+ 
+     foreach(_VER IN LISTS ROCPROFILER_PYTHON_VERSION_CANDIDATES)
+-        find_package(Python3 ${_VER} EXACT QUIET
+-                     COMPONENTS ${ROCPROFILER_BUILD_Find_Python3_COMPONENTS})
++        find_package(Python3 ${_VER} EXACT QUIET COMPONENTS Interpreter Development)
+         if(Python3_FOUND)
+             list(APPEND _PYTHON_FOUND_VERSIONS
+                  "${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}")
+@@ -77,7 +65,7 @@ function(get_default_python_versions _VAR)
+ 
+     # If none found, do one last check for 3.6 (no EXACT)
+     if(NOT _PYTHON_FOUND_VERSIONS)
+-        find_package(Python3 3.6 COMPONENTS ${ROCPROFILER_BUILD_Find_Python3_COMPONENTS})
++        find_package(Python3 3.6 COMPONENTS Interpreter Development)
+         if(Python3_FOUND)
+             list(APPEND _PYTHON_FOUND_VERSIONS
+                  "${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}")
+@@ -124,14 +112,7 @@ function(rocprofiler_roctx_python_bindings _VERSION)
+     target_link_libraries(
+         rocprofiler-sdk-roctx-python-bindings-${_VERSION}
+         PRIVATE rocprofiler-sdk-roctx::rocprofiler-sdk-roctx-shared-library
+-                rocprofiler-sdk::rocprofiler-sdk-pybind11)
+-
+-    # if "Development" is specified instead of "Development.Module", we need to link to
+-    # python libraries
+-    if("Development" IN_LIST ROCPROFILER_BUILD_Find_Python3_COMPONENTS)
+-        target_link_libraries(rocprofiler-sdk-roctx-python-bindings-${_VERSION}
+-                              PRIVATE ${Python3_LIBRARIES})
+-    endif()
++                rocprofiler-sdk::rocprofiler-sdk-pybind11 ${Python3_LIBRARIES})
+ 
+     set_target_properties(
+         rocprofiler-sdk-roctx-python-bindings-${_VERSION}
+@@ -209,14 +190,8 @@ function(rocprofiler_rocpd_python_bindings _VERSION)
+                 rocprofiler-sdk::rocprofiler-sdk-gotcha
+                 rocprofiler-sdk::rocprofiler-sdk-dw
+                 rocprofiler-sdk::rocprofiler-sdk-static-library
+-                rocprofiler-sdk::rocprofiler-sdk-rocpd-library)
+-
+-    # if "Development" is specified instead of "Development.Module", we need to link to
+-    # python libraries
+-    if("Development" IN_LIST ROCPROFILER_BUILD_Find_Python3_COMPONENTS)
+-        target_link_libraries(rocprofiler-sdk-rocpd-python-bindings-${_VERSION}
+-                              PRIVATE ${Python3_LIBRARIES})
+-    endif()
++                rocprofiler-sdk::rocprofiler-sdk-rocpd-library
++                ${Python3_LIBRARIES})
+ 
+     set_target_properties(
+         rocprofiler-sdk-rocpd-python-bindings-${_VERSION}
+-- 
+2.43.0
+
