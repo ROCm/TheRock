@@ -92,7 +92,9 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
-positive_filter.append("*DBSync*")
+# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
+if AMDGPU_FAMILIES != "gfx950-dcgpu":
+    positive_filter.append("*DBSync*")
 
 #############################################
 

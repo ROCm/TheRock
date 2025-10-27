@@ -146,11 +146,23 @@ jobs:
       - name: Output failed jobs
         run: |
           echo '${{ toJson(needs) }}'
+
+          # Build a list of failed jobs, but ignore those marked continue-on-error
           FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
-            | jq --raw-output \
-            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
+            | jq --raw-output '
+              to_entries
+              | map(select(
+                  (.value.result != "success" and .value.result != "skipped")
+                  and (.value.outputs.continue_on_error | not)
+                ))
+              | map(.key)
+              | join(",")
+            ' \
           )"
-          if [[ "${FAILED_JOBS}" != "" ]]; then
+
+          if [[ -n "${FAILED_JOBS}" ]]; then
             echo "The following jobs failed: ${FAILED_JOBS}"
             exit 1
+          else
+            echo "All required jobs succeeded (continue-on-error jobs ignored)."
           fi
