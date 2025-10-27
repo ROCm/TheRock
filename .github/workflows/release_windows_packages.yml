@@ -121,8 +121,8 @@ jobs:
       - name: Generate release information
         id: release_information
         run: |
-          echo "cloudfront_url=${cloudfront_base_url}/${{ env.S3_SUBDIR }}" >> $GITHUB_OUTPUT
-          echo "cloudfront_staging_url=${cloudfront_base_url}/${{ env.S3_STAGING_SUBDIR }}" >> $GITHUB_OUTPUT
+          echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
+          echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
           echo "s3_subdir_tar=${tmp_s3_subdir_tar}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix

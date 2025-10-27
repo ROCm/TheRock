@@ -56,12 +56,12 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-all/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -99,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -143,6 +143,7 @@ LINUX_LIBRARY_PRELOADS = [
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
+    "rocm_sysdeps_liblzma",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -314,7 +315,7 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     current = env.get(flagname, "")
     append = ""
     for compiler_flag in compiler_flags:
-        append += f" {compiler_flag}"
+        append += f"{compiler_flag} "
     env[flagname] = f"{current}{append}"
     print(f"-- Appended {flagname}+={append}")
 
@@ -406,8 +407,8 @@ def do_build(args: argparse.Namespace):
         env.update(
             {
                 # Workaround GCC12 compiler flags.
-                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
         )
 
@@ -617,7 +618,9 @@ def do_build_pytorch(
                 use_fbgemm_genai = "ON"
             else:
                 use_fbgemm_genai = "OFF"
-            print(f"FBGEMM_GENAI default behavior based on version: {use_fbgemm_genai}")
+            print(
+                f"FBGEMM_GENAI default behavior based on PyTorch version: {use_fbgemm_genai}"
+            )
         else:
             # Explicit override: user has set the flag to true/false
             use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
@@ -627,19 +630,21 @@ def do_build_pytorch(
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
         if args.enable_pytorch_flash_attention_linux is None:
-            # Default behavior — determined by PyTorch version
-            if pytorch_build_version_parsed.release < (2, 8):
-                use_flash_attention = "ON"
-            else:
-                use_flash_attention = "OFF"
+            # Default behavior — determined by if triton is build
+            use_flash_attention = "ON" if triton_requirement else "OFF"
             print(
-                f"Flash Attention default behavior based on pytorch version: {use_flash_attention}"
+                f"Flash Attention default behavior (based on triton): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
-            use_flash_attention = (
-                "ON" if args.enable_pytorch_flash_attention_linux else "0FF"
-            )
+            if args.enable_pytorch_flash_attention_linux:
+                assert (
+                    triton_requirement
+                ), "Must build with triton if wanting to use flash attention"
+                use_flash_attention = "ON"
+            else:
+                use_flash_attention = "OFF"
+
             print(f"Flash Attention override set by flag: {use_flash_attention}")
 
         env.update(
@@ -714,6 +719,10 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+
+        # needed to find liblzma packaged by rocm as sysdep to build aotriton
+        os.environ["PKG_CONFIG_PATH"] = f"{sysdeps_dir / 'lib' / 'pkgconfig'}"
+        os.environ["LD_LIBRARY_PATH"] = f"{sysdeps_dir / 'lib'}"
 
     print("+++ Uninstalling pytorch:")
     exec(

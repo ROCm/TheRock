@@ -39,7 +39,7 @@ on:
         options:
           - gfx101X-dgpu
           - gfx103X-dgpu
-          - gfx110X-dgpu
+          - gfx110X-all
           - gfx1150
           - gfx1151
           - gfx120X-all
@@ -86,11 +86,11 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
-        pytorch_version: ["release/2.7", "release/2.9_rocm7.9", "nightly"]
+        pytorch_version: ["release/2.7", "release/2.9", "nightly"]
         include:
           - pytorch_version: release/2.7
             pytorch_patchset: rocm_2.7
-          - pytorch_version: release/2.9_rocm7.9
+          - pytorch_version: release/2.9
             pytorch_patchset: rocm_2.9
           - pytorch_version: nightly
             pytorch_patchset: nightly

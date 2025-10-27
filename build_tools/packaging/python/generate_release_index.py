@@ -7,7 +7,7 @@ Sample usage:
     ./build_tools/packaging/python/generate_release_index.py \
         --bucket=therock-dev-python \
         --endpoint=s3.us-east-2.amazonaws.com \
-        --subdir=gfx110X-dgpu \
+        --subdir=gfx110X-all \
         --output=index.html
     ```
 
