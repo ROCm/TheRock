@@ -44,4 +44,4 @@ class Orchestrator(object):
         for ret, out in rets:
             result &= bool(ret == 0)
         assert result
-        return True
+        return result

@@ -20,7 +20,7 @@ The Rock Test Framework is developed on top of [pytest](https://docs.pytest.org/
 
 ```
 $ git clone https://github.com/TheRock
-$ cd tests/sharding
+$ cd tests/harness
 $ pip3 install --quiet -r requirements.txt
 ```
 
@@ -31,24 +31,24 @@ $ pip3 install --quiet -r requirements.txt
 Please add your test function in the following script files to integrate your tests under pytest framework.
 
 - _conftest.py_: Add your tests dependent fixtures in this script file. Ex: _conftest.py::ompEnv()_
-- _tests.py_: You can add your actual test functions here. Ex: _tests.py::test_rocprim()_
+- _tests_comp.py_: You can add your actual test functions here. Ex: _tests_comp.py::test_rocprim()_
 
 #### Test Execution
 
 Run the tests using the following options
 
 ```
-$ cd tests/sharding
+$ cd tests/harness
 $ pytest -v -s --tb=short \
     --rock=/TheRock/therock-build  <path to the installed path of the rock> \
     --env VAR:VALUE VAR2:VALUE2  <extra envs that your test needs> \
-    tests.py -k '<testName|pattern> or <test2Name>'
+    tests_*.py -k '<testName|pattern> or <test2Name>'
 
 # Ex: To run rocrand and rocthrust tests
-$ pytest -v -s --rock=/TheRock/therock-build tests.py -k 'rocrand or rocthrust'
+$ pytest -v -s --rock=/TheRock/therock-build tests_*.py -k 'rocrand or rocthrust'
 
 # Ex: To run only hipblas tests but not hipblaslt
-$ pytest -v -s --rock=/TheRock/therock-build tests.py -k 'hipblas and not hipblaslt'
+$ pytest -v -s --rock=/TheRock/therock-build tests_*.py -k 'hipblas and not hipblaslt'
 ```
 
 Note: You can get more help on options with `pytest -h`
@@ -79,6 +79,7 @@ This is fully developed in pytest framework and basically it works as follows:
 ## Utilities
 
 #### Basic Utilities
+This includes all the basic utilities that this test harness needs
 
 ```
 >>> from libs import utils
@@ -96,6 +97,7 @@ This is fully developed in pytest framework and basically it works as follows:
 ```
 
 #### Nodelib
+Nodelib includes all the node/kubepod accessing functions like run cmd, gpu count, etc,.
 
 ```
 >>> from libs import nodes
@@ -112,6 +114,7 @@ This is fully developed in pytest framework and basically it works as follows:
 ```
 
 #### Orchestrator
+Orchestrator includes helper functions for running tests with ctest/gtest frameworks
 
 ```
 >>> from libs import orchestrator
@@ -129,6 +132,7 @@ This is fully developed in pytest framework and basically it works as follows:
 ```
 
 #### Reporting
+Reporting includes functions for report purposes, like html reports or console table prints
 
 ```
 >>> from libs import report

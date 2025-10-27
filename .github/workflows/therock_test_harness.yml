@@ -1,10 +1,6 @@
 name: TheRock Test Harness
 
 on:
-  # For testing
-  push:
-    branches:
-      - madkasul/testSharding
   workflow_dispatch:
     inputs:
       families:
@@ -88,9 +84,7 @@ jobs:
 
       - name: Install TheRock
         env:
-          # TESTING
-          release_version: 7.9.0rc20251008
-          # release_version: ${{ inputs.release_version }}
+          release_version: ${{ inputs.release_version }}
         run: |
           pip install -r requirements-test.txt
           python3 build_tools/install_rocm_from_artifacts.py --tests --amdgpu-family ${{ matrix.target_bundle.amdgpu_family }} --release ${{ env.release_version }}
@@ -99,6 +93,6 @@ jobs:
       - name: Running test harness
         # TESTING
         run: |
-          python3 -m pytest -s -v --tb=short --therock-path=./therock-build tests/harness/tests*.py -k "hipcub or rocprim or rocrand or rocthrust"
+          python3 -m pytest -s -v --tb=short --therock-path=./therock-build tests/harness/tests*.py -k ${{ inputs.tests_to_run }}
 
 # TODO: Add windows tests
