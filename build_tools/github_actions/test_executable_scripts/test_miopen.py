@@ -151,7 +151,7 @@ negative_filter.append(
 )  # https://github.com/ROCm/TheRock/issues/1682
 
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
-if AMDGPU_FAMILIES != "gfx950-dcgpu":
+if AMDGPU_FAMILIES == "gfx950-dcgpu":
     negative_filter.append("*DBSync*")
 
 ####################################################
