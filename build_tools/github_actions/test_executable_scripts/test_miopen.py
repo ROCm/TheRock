@@ -8,6 +8,8 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
@@ -164,8 +166,11 @@ smoke_filter = [
     # CK Grouped FWD Conv smoke tests
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_FP16*",
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_BFP16*",
-    "*DBSync*",
 ]
+
+# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
+if AMDGPU_FAMILIES != "gfx950-dcgpu":
+    smoke_filter.append("*DBSync*")
 
 ####################################################
 
