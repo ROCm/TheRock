@@ -27,6 +27,7 @@ project wide:
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
   - `THEROCK_BUNDLED_LIBDRM`
+  - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
   - `THEROCK_BUNDLED_ZLIB`
@@ -82,6 +83,12 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Canonical method: `pkg_check_modules(DRM_AMDGPU REQUIRED IMPORTED_TARGET libdrm_amdgpu)`
 - Import library: `PkgConfig::DRM_AMDGPU`
 - Vars: `DRM_AMDGPU_INCLUDE_DIRS`
+
+## liblzma
+
+- Canonical method: `find_package(LibLZMA)`
+- Import library: `LibLZMA::LibLZMA`
+- Alternatives: `pkg_check_modules(LZMA liblzma)`
 
 ### numactl
 

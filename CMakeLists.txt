@@ -76,6 +76,8 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
 
+set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
+
 # Source settings.
 # Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
 # allow to specify an alternative source location.
@@ -137,6 +139,9 @@ endblock()
 # Feature flags
 # Project wide flags for controlling the build system.
 ################################################################################
+
+# Note that delay-loading is incompatible with ASAN until a more robust mechanism
+# is implemented. See: https://github.com/ROCm/TheRock/issues/1783
 cmake_dependent_option(
   THEROCK_FLAG_COMGR_DELAY_LOAD
   "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
@@ -384,6 +389,7 @@ endif()
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
 set(THEROCK_BUNDLED_LIBDRM)
+set(THEROCK_BUNDLED_LIBLZMA)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
@@ -403,6 +409,7 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
+    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
