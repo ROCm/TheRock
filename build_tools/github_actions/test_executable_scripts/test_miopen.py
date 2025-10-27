@@ -92,10 +92,6 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
-# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
-if AMDGPU_FAMILIES != "gfx950-dcgpu":
-    positive_filter.append("*DBSync*")
-
 #############################################
 
 negative_filter.append("*DeepBench*")
@@ -153,6 +149,10 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16")  # 0 min 16 sec
 negative_filter.append(
     "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
 )  # https://github.com/ROCm/TheRock/issues/1682
+
+# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
+if AMDGPU_FAMILIES != "gfx950-dcgpu":
+    negative_filter.append("*DBSync*")
 
 ####################################################
 
