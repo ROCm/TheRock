@@ -122,11 +122,8 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        "platform": ["linux", "windows"],
+        "platform": ["linux"],
         "total_shards": 2,
-        "exclude_family": {
-            "windows": ["gfx1151"],
-        },
     },
     # RAND tests
     "rocrand": {
