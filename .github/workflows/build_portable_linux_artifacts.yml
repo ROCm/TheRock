@@ -121,7 +121,7 @@ jobs:
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-archives and therock-dist
-        run: cmake --build build --target therock-archives therock-dist -- -k 0 -j$(nproc --ignore=1)
+        run: cmake --build build --target therock-archives therock-dist -- -k 0 -j2
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
