@@ -287,9 +287,7 @@ if(THEROCK_ENABLE_ROCWMMA)
   endif()
 
   therock_cmake_subproject_declare(rocWMMA
-    # FIXME: use this after moving rocWMMA to rocm-libraries
-    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocWMMA"
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCWMMA_SOURCE_DIR}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocwmma"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA"
     BACKGROUND_BUILD
     CMAKE_ARGS

@@ -45,7 +45,3 @@
 	path = base/amdsmi
 	url = https://github.com/ROCm/amdsmi.git
 	branch = amd-staging
-[submodule "rocWMMA"]
-	path = math-libs/rocWMMA
-	url = https://github.com/ROCm/rocWMMA.git
-	branch = develop
