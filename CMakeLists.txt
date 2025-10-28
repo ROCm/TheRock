@@ -79,6 +79,9 @@ option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Inte
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
 
+# List of python executables to use for multi-version python builds
+set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "Build for multiple python versions in supported projects (default to Python3_EXECUTABLE if empty)")
+
 # Source settings.
 # Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
 # allow to specify an alternative source location.
@@ -135,11 +138,6 @@ block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_
   list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
   message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
 endblock()
-
-# List of python executables to use for multi-version python builds
-if(NOT DEFINED THEROCK_DIST_PYTHON_EXECUTABLES)
-  set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "List of Python executables to build for (semicolon-separated)")
-endif()
 
 ################################################################################
 # Feature flags

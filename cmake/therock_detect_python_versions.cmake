@@ -17,10 +17,10 @@ function(therock_detect_python_versions OUT_EXECUTABLES OUT_VERSIONS)
     message(STATUS "Using explicitly configured Python executables: ${THEROCK_DIST_PYTHON_EXECUTABLES}")
 
     foreach(_python_exe IN LISTS THEROCK_DIST_PYTHON_EXECUTABLES)
-      if(EXISTS ${_python_exe})
+      if(EXISTS "${_python_exe}")
         # Verify this is actually a Python executable and get its version
         execute_process(
-          COMMAND ${_python_exe} --version
+          COMMAND "${_python_exe}" --version
           OUTPUT_VARIABLE _version_output
           ERROR_VARIABLE _version_error
           OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -33,14 +33,14 @@ function(therock_detect_python_versions OUT_EXECUTABLES OUT_VERSIONS)
           set(_minor "${CMAKE_MATCH_2}")
           set(_version "${_major}.${_minor}")
 
-          list(APPEND _python_executables ${_python_exe})
-          list(APPEND _python_versions ${_version})
+          list(APPEND _python_executables "${_python_exe}")
+          list(APPEND _python_versions "${_version}")
           message(STATUS "  Verified Python ${_version} at ${_python_exe}")
         else()
-          message(WARNING "  Failed to verify Python at ${_python_exe}")
+          message(FATAL_ERROR "  Failed to verify Python at ${_python_exe}")
         endif()
       else()
-        message(WARNING "  Python executable not found: ${_python_exe}")
+        message(FATAL_ERROR "  Python executable not found: ${_python_exe}")
       endif()
     endforeach()
   else()
@@ -48,11 +48,11 @@ function(therock_detect_python_versions OUT_EXECUTABLES OUT_VERSIONS)
     find_package(Python3 COMPONENTS Interpreter)
 
     if(Python3_FOUND)
-      list(APPEND _python_executables ${Python3_EXECUTABLE})
-      list(APPEND _python_versions ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR})
+      list(APPEND _python_executables "${Python3_EXECUTABLE}")
+      list(APPEND _python_versions "${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}")
       message(STATUS "Using system Python ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR} at ${Python3_EXECUTABLE}")
     else()
-      message(WARNING "No Python 3 interpreter found on the system")
+      message(FATAL_ERROR "No Python 3 interpreter found on the system")
     endif()
   endif()
 

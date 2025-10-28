@@ -51,7 +51,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
   # Use detected versions or fall back to default if none found
   if(NOT _detected_python_versions)
-    message(WARNING "No Python versions detected for rocprofiler-sdk")
+    message(FATAL_ERROR "No Python versions detected for rocprofiler-sdk")
     set(_detected_python_versions_str "")
   else()
     message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
