@@ -48,17 +48,19 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-sdk
   ##############################################################################
-  # Detect available Python versions on the system
-  therock_detect_python_versions(_detected_python_versions)
+  # Detect available Default Python3 version on the system or
+  # use explicitly provided Python3 versions
+  therock_detect_python_versions(_detected_python_executables _detected_python_versions)
 
   # Use detected versions or fall back to default if none found
   if(NOT _detected_python_versions)
-    message(WARNING "No Python versions detected")
+    message(WARNING "No Python versions detected for rocprofiler-sdk")
+    set(_detected_python_versions_str "")
   else()
     message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
+    message(STATUS "Python executables: ${_detected_python_executables}")
+    list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
   endif()
-
-  list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
 
   therock_cmake_subproject_declare(rocprofiler-sdk
     USE_DIST_AMDGPU_TARGETS

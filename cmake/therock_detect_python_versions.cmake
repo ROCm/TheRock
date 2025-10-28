@@ -1,89 +1,65 @@
-# Function to detect available Python versions on the system
-function(therock_detect_python_versions OUT_VERSIONS)
-  cmake_policy(SET CMP0057 NEW)  # Enable IN_LIST operator
+# List of python executables to use for multi-version python builds
+# Usage scenarios:
+#   a. Defined Python3 Executables: an explicit list of python interpreters to build for
+#      Example: -DTHEROCK_DIST_PYTHON_EXECUTABLES="/opt/python-3.8/bin/python3.8;/opt/python-3.9/bin/python3.9"
+#   b. Default Python3 Available: only build for the single auto detected python version (default behavior)
+#
+# For manylinux builds, this should be set to a subset of Python versions from /opt/python-*/bin
+# For regular builds, if not set, it defaults to the system Python3_EXECUTABLE
+
+function(therock_detect_python_versions OUT_EXECUTABLES OUT_VERSIONS)
+  set(_python_executables)
   set(_python_versions)
-  set(_min_version 8)
-  set(_max_version 13)
 
-  # Try to find each Python version
-  foreach(_minor RANGE ${_min_version} ${_max_version})
-    set(_version "3.${_minor}")
+  if(THEROCK_DIST_PYTHON_EXECUTABLES)
+    # Use the explicitly provided list of Python executables
+    message(STATUS "Using explicitly configured Python executables: ${THEROCK_DIST_PYTHON_EXECUTABLES}")
 
-    # Try to find this specific Python version
-    find_program(_python_exe
-      NAMES python${_version} python${_version}.exe
-      PATHS
-        /usr/bin
-        /usr/local/bin
-        /opt/python-${_version}/bin
-        $ENV{HOME}/.pyenv/versions/${_version}*/bin
-        $ENV{HOME}/.local/bin
-        C:/Python${_minor}/
-        C:/Python3${_minor}/
-      NO_DEFAULT_PATH
-    )
+    foreach(_python_exe IN LISTS THEROCK_DIST_PYTHON_EXECUTABLES)
+      if(EXISTS ${_python_exe})
+        # Verify this is actually a Python executable and get its version
+        execute_process(
+          COMMAND ${_python_exe} --version
+          OUTPUT_VARIABLE _version_output
+          ERROR_VARIABLE _version_error
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+          ERROR_STRIP_TRAILING_WHITESPACE
+          RESULT_VARIABLE _result
+        )
 
-    if(_python_exe)
-      # Verify the version by running python --version
-      execute_process(
-        COMMAND ${_python_exe} --version
-        OUTPUT_VARIABLE _version_output
-        ERROR_VARIABLE _version_error
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE _result
-      )
+        if(_result EQUAL 0 AND _version_output MATCHES "Python ([0-9]+)\\.([0-9]+)\\.")
+          set(_major "${CMAKE_MATCH_1}")
+          set(_minor "${CMAKE_MATCH_2}")
+          set(_version "${_major}.${_minor}")
 
-      if(_result EQUAL 0)
-        # Extract version from output (Python X.Y.Z)
-        if(_version_output MATCHES "Python ${_version}\\.")
+          list(APPEND _python_executables ${_python_exe})
           list(APPEND _python_versions ${_version})
-          message(STATUS "Found Python ${_version} at ${_python_exe}")
+          message(STATUS "  Verified Python ${_version} at ${_python_exe}")
+        else()
+          message(WARNING "  Failed to verify Python at ${_python_exe}")
         endif()
+      else()
+        message(WARNING "  Python executable not found: ${_python_exe}")
       endif()
-    endif()
-
-    unset(_python_exe CACHE)
-  endforeach()
-
-  # Also check for generic python3 command
-  find_program(_python3_exe
-    NAMES python3 python3.exe python
-    PATHS
-      /usr/bin
-      /usr/local/bin
-      $ENV{HOME}/.local/bin
-  )
-
-  if(_python3_exe)
-    execute_process(
-      COMMAND ${_python3_exe} --version
-      OUTPUT_VARIABLE _version_output
-      ERROR_VARIABLE _version_error
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_STRIP_TRAILING_WHITESPACE
-      RESULT_VARIABLE _result
-    )
-
-    if(_result EQUAL 0 AND _version_output MATCHES "Python 3\\.([0-9]+)\\.")
-      set(_minor "${CMAKE_MATCH_1}")
-      if(_minor GREATER_EQUAL _min_version AND _minor LESS_EQUAL _max_version)
-        set(_version "3.${_minor}")
-        if(NOT _version IN_LIST _python_versions)
-          list(APPEND _python_versions ${_version})
-          message(STATUS "Found Python ${_version} at ${_python3_exe}")
-        endif()
-      endif()
-    endif()
-  endif()
-
-  # Sort the versions
-  if(_python_versions)
-    list(SORT _python_versions)
-    list(REMOVE_DUPLICATES _python_versions)
+    endforeach()
   else()
-    message(WARNING "No Python versions between 3.${_min_version} and 3.${_max_version} found on the system")
+    # Default behavior: find and use only the system Python
+    find_package(Python3 COMPONENTS Interpreter)
+
+    if(Python3_FOUND)
+      list(APPEND _python_executables ${Python3_EXECUTABLE})
+      list(APPEND _python_versions ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR})
+      message(STATUS "Using system Python ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR} at ${Python3_EXECUTABLE}")
+    else()
+      message(WARNING "No Python 3 interpreter found on the system")
+    endif()
   endif()
 
+  # Set output variables
+  set(${OUT_EXECUTABLES} "${_python_executables}" PARENT_SCOPE)
   set(${OUT_VERSIONS} "${_python_versions}" PARENT_SCOPE)
+
+  if(NOT _python_executables)
+    message(WARNING "No Python executables configured or found")
+  endif()
 endfunction()
