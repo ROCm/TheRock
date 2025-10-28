@@ -1,9 +1,6 @@
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
-  # Include module for detecting Python versions
-  include(therock_detect_python_versions)
-
   ##############################################################################
   # rocprof-trace-decoder-binary
   # The trace decoder is responsible for decoding advanced thread traces from
@@ -59,6 +56,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
   else()
     message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
     message(STATUS "Python executables: ${_detected_python_executables}")
+    # Join all detected Python versions into a single string separated by semicolons.
+    # This is a workaround because therock_cmake_subproject_declare does not support passing lists directly.
     list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
   endif()
 

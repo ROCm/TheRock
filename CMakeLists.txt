@@ -18,6 +18,7 @@ include(CMakeDependentOption)
 include(ExternalProject)
 include(therock_globals)
 include(therock_default_targets)
+include(therock_detect_python_versions)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
@@ -134,6 +135,11 @@ block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_
   list(GET VERSION_LIST 2 THEROCK_HIP_PATCH_VERSION)
   message(STATUS "HIP version: ${THEROCK_HIP_MAJOR_VERSION}.${THEROCK_HIP_MINOR_VERSION}.${THEROCK_HIP_PATCH_VERSION}")
 endblock()
+
+# List of python executables to use for multi-version python builds
+if(NOT DEFINED THEROCK_DIST_PYTHON_EXECUTABLES)
+  set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "List of Python executables to build for (semicolon-separated)")
+endif()
 
 ################################################################################
 # Feature flags

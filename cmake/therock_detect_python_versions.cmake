@@ -1,4 +1,5 @@
-# List of python executables to use for multi-version python builds
+# This variable allows building for multiple Python versions by specifying their executables.
+# Note: Most projects do not need to set this; only use it for multi-version Python builds.
 # Usage scenarios:
 #   a. Defined Python3 Executables: an explicit list of python interpreters to build for
 #      Example: -DTHEROCK_DIST_PYTHON_EXECUTABLES="/opt/python-3.8/bin/python3.8;/opt/python-3.9/bin/python3.9"
@@ -56,10 +57,10 @@ function(therock_detect_python_versions OUT_EXECUTABLES OUT_VERSIONS)
   endif()
 
   # Set output variables
-  set(${OUT_EXECUTABLES} "${_python_executables}" PARENT_SCOPE)
-  set(${OUT_VERSIONS} "${_python_versions}" PARENT_SCOPE)
+  set("${OUT_EXECUTABLES}" "${_python_executables}" PARENT_SCOPE)
+  set("${OUT_VERSIONS}" "${_python_versions}" PARENT_SCOPE)
 
   if(NOT _python_executables)
-    message(WARNING "No Python executables configured or found")
+    message(FATAL_ERROR "No Python executables configured or found")
   endif()
 endfunction()
