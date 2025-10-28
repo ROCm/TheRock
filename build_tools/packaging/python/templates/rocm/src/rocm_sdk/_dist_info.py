@@ -228,7 +228,7 @@ LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so*", "hiprand*.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
-# TODO: Omit hipsparselt until windows builds are enabled 
+# TODO: Omit hipsparselt until windows builds are enabled
 # LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "hipsparselt*.dll")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
