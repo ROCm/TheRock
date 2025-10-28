@@ -1,0 +1,26 @@
+From 1276cf6fd04854418d21463069078cb05edd9c93 Mon Sep 17 00:00:00 2001
+From: Scott Todd <scott.todd0@gmail.com>
+Date: Fri, 5 Sep 2025 15:47:54 -0700
+Subject: [PATCH 12/12] Allow overriding HIP_INSTALLS_HIPCC when HIPCC_BIN_DIR
+ is unset.
+
+---
+ projects/clr/hipamd/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/clr/hipamd/CMakeLists.txt b/projects/clr/hipamd/CMakeLists.txt
+index 7da51f1f2b..257c42671f 100755
+--- a/projects/clr/hipamd/CMakeLists.txt
++++ b/projects/clr/hipamd/CMakeLists.txt
+@@ -409,7 +409,7 @@ endif()
+ install(FILES ${PROJECT_BINARY_DIR}/include/hip/hip_version.h
+         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hip)
+ 
+-set(HIP_INSTALLS_HIPCC OFF)
++set(HIP_INSTALLS_HIPCC OFF CACHE STRING "True if hipcc and hipconfig are installed. Can override from cmake build when leaving HIPCC_BIN_DIR unset.")
+ if (NOT ${HIPCC_BIN_DIR} STREQUAL "")
+   file(TO_CMAKE_PATH "${HIPCC_BIN_DIR}" HIPCC_BIN_DIR)
+   if(EXISTS ${HIPCC_BIN_DIR})
+-- 
+2.47.1.windows.2
+

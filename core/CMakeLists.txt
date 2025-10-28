@@ -128,6 +128,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       # Legacy: Disable various auto-detection logic that breaks out of jail
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
+      # Override detection based on HIPCC_BIN_DIR.
+      "-DHIP_INSTALLS_HIPCC=ON"
       ${HIP_CLR_CMAKE_ARGS}
     BUILD_DEPS
       rocm-cmake
@@ -182,7 +184,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       COMPILER_TOOLCHAIN
         "${_system_toolchain}"
       CMAKE_ARGS
-        "-DHIP_PLATFORM=amd"
         "-DHIP_TESTS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests"
       RUNTIME_DEPS
         hip-clr
