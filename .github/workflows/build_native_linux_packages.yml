@@ -112,6 +112,31 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
 
+      - name: Install non-composite versioned packages (Python script)
+        run: |
+          python3 ./build_tools/packaging/linux/install_packages.py --dest-dir ${{ env.PACKAGE_DIST_DIR}} --version true --package_json build_tools/packaging/linux/package.json --composite=false --amdgpu_family ${{ inputs.amdgpu_family }} --upload pre --rocm-version  ${{ inputs.rocm_version }} 
+
+      - name: Install non-composite non-versioned packages (Python script)
+        run: |
+          python3 ./build_tools/packaging/linux/install_packages.py --dest-dir ${{ env.PACKAGE_DIST_DIR}} --version false --package_json build_tools/packaging/linux/package.json --composite=false --amdgpu_family ${{ inputs.amdgpu_family }} --upload pre --rocm-version  ${{ inputs.rocm_version }}
+
+      - name: Uninstall non-composite packages (Python script)
+        run: |
+          python3 ./build_tools/packaging/linux/uninstall_packages.py --run_id ${{ env.ARTIFACT_RUN_ID }} --version false --package_json build_tools/packaging/linux/package.json --composite=false --amdgpu_family ${{ inputs.amdgpu_family }} --rocm-version ${{ inputs.rocm_version }}
+
+      - name: Install composite versioned packages (Python script)
+        run: |
+          python3 ./build_tools/packaging/linux/install_packages.py --dest-dir ${{ env.PACKAGE_DIST_DIR}} --version true --package_json build_tools/packaging/linux/package.json --composite=true --amdgpu_family ${{ inputs.amdgpu_family }} --upload pre --rocm-version  ${{ inputs.rocm_version }}
+
+      - name: Install composite non-versioned packages (Python script)
+        run: |
+          python3 ./build_tools/packaging/linux/install_packages.py --dest-dir ${{ env.PACKAGE_DIST_DIR}} --version false --package_json build_tools/packaging/linux/package.json --composite=true --amdgpu_family ${{ inputs.amdgpu_family }} --upload pre  --rocm-version  ${{ inputs.rocm_version }}
+
+      - name: Uninstall composite packages (Python script)
+        run: |
+          python3 ./build_tools/packaging/linux/uninstall_packages.py --run_id ${{ env.ARTIFACT_RUN_ID }} --version false --package_json build_tools/packaging/linux/package.json --composite=true --amdgpu_family ${{ inputs.amdgpu_family }} --rocm-version ${{ inputs.rocm_version }}
+
+
       - name: Upload Package repo to S3
         id: upload-packages
         run: |
