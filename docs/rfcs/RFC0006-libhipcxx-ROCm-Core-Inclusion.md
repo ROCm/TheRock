@@ -1,7 +1,7 @@
 ---
 author: Marco Grond (marco-grond)
 created: 2025-10-16
-modified: 2025-10-20
+modified: 2025-10-29
 status: draft
 ---
 
@@ -47,3 +47,4 @@ included in TheRock. Release pipelines should also be updated to include libhipc
 
 - 2025-10-16: marco-grond: Create skeleton
 - 2025-10-20: marco-grond: Filled out content
+- 2025-10-29: marco-grond: Updated RFC number
