@@ -13,19 +13,17 @@ TIMEOUT = 1200  # default console timeout
 
 # Configure the basic logging settings
 logging.basicConfig(
-    level=logging.DEBUG, # Set the minimum level to log
-    datefmt='%Y-%m-%d %H:%M:%S',
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()         # Log to the console (stdout/stderr)
-    ]
+    level=logging.DEBUG,  # Set the minimum level to log
+    datefmt="%Y-%m-%d %H:%M:%S",
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()]   # Log to the console (stdout/stderr)
 )
 
 log = logging.getLogger(__name__)
 
 
 def _callOnce(funcPointer):
-    """ Decorator function enables calling function to get called only once per execution.
+    """Decorator function enables calling function to get called only once per execution.
     For the second call, it will simply returns the initially stored return value skipping the actual call
     to the decorated function.
     """
