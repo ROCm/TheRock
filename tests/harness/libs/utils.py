@@ -43,7 +43,6 @@ def runCmd(
     stdin=None,
     timeout=TIMEOUT,
     retOut=False,
-    retErr=False,
     **kwargs,
 ):
     """Executes Cmd on the current node:
@@ -78,10 +77,11 @@ def runCmd(
         **kwargs,
     )
 
-    # if requested write stdin to the process input stream
+    # if enabled, the stdin input will write to the subprocess stdin
     if stdin:
-        process.stdin.write(stdin if isinstance(stdin, bytes) else stdin.encode())
-        process.stdin.close()
+        with process.stdin:
+            data = stdin if isinstance(stdin, bytes) else stdin.encode()
+            process.stdin.write(data)
 
     # make process stdout / stderr as non-blocking to make unblocked reads
     os.set_blocking(process.stdout.fileno(), False)
@@ -93,7 +93,6 @@ def runCmd(
         log.debug(chunk)
         return chunk
 
-    log.debug("output:")
     ret, stdout, stderr = None, b"", b""
     chunk = None
     while chunk != b"":
@@ -114,16 +113,14 @@ def runCmd(
 
     # handling return value
     ret = process.wait()
-    if ret != 0:
-        log.error(f'cmd failed: {" ".join(cmd)}')
-    log.info(f"ret: {ret}")
+    log.info(f"[{' '.join(cmd)}] return code: {ret}")
+    if ret == 0:
+        log.error(f"cmd failed: {' '.join(cmd)}")
 
     # returns
     if not retOut:
         return ret
-    if not retErr:
-        return ret, (stdout + stderr).decode()
-    return ret, stdout.decode(), stderr.decode()
+    return ret, (stdout + stderr).decode()
 
 
 def runParallel(*funcs):
