@@ -193,7 +193,14 @@ jobs:
             --image=${{ env.BUILD_IMAGE }} \
             --output-dir=${{ env.OUTPUT_DIR }} \
             -- \
-            "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}"
+            "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}" \
+            "-DTHEROCK_DIST_PYTHON_EXECUTABLES=\" \
+                /usr/local/bin/python3.8; \
+                /usr/local/bin/python3.9; \
+                /usr/local/bin/python3.10; \
+                /usr/local/bin/python3.11; \
+                /usr/local/bin/python3.12; \
+                /usr/local/bin/python3.13\""
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
