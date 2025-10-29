@@ -120,3 +120,88 @@ jobs:
   # build_python_packages:
   #   name: Build Python Packages
   #   uses: ./.github/workflows/build_python_packages.yml
+
+  aggregate_and_push_to_loki:
+    name: "Aggregate all CI logs and push to Loki"
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [linux_build_and_test, windows_build_and_test]
+
+    steps:
+      - name: Download all logs from Linux and Windows jobs
+        uses: actions/download-artifact@v4
+        with:
+          path: ./aggregated_logs
+
+      - name: Aggregate all logs and outcomes
+        run: |
+          echo "CI Nightly Aggregated Report" > ci_summary.txt
+          echo "--------------------------------------" >> ci_summary.txt
+          echo "Workflow: ${{ github.workflow }}" >> ci_summary.txt
+          echo "Run ID: ${{ github.run_id }}" >> ci_summary.txt
+          echo "Run Number: ${{ github.run_number }}" >> ci_summary.txt
+          echo "Repository: ${{ github.repository }}" >> ci_summary.txt
+          echo "Commit: ${{ github.sha }}" >> ci_summary.txt
+          echo "Trigger: ${{ github.event_name }}" >> ci_summary.txt
+          echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> ci_summary.txt
+          echo "" >> ci_summary.txt
+
+          echo "--------------------------------------" >> ci_summary.txt
+          echo "Linux Configuration:" >> ci_summary.txt
+          echo "  AMD GPU Families: ${{ inputs.linux_amdgpu_families || 'N/A' }}" >> ci_summary.txt
+          echo "  Test Labels: ${{ inputs.linux_test_labels || 'N/A' }}" >> ci_summary.txt
+          echo "  Using Prebuilt Artifacts: ${{ inputs.linux_use_prebuilt_artifacts }}" >> ci_summary.txt
+          echo "" >> ci_summary.txt
+
+          echo "Windows Configuration:" >> ci_summary.txt
+          echo "  AMD GPU Families: ${{ inputs.windows_amdgpu_families || 'N/A' }}" >> ci_summary.txt
+          echo "  Test Labels: ${{ inputs.windows_test_labels || 'N/A' }}" >> ci_summary.txt
+          echo "  Using Prebuilt Artifacts: ${{ inputs.windows_use_prebuilt_artifacts }}" >> ci_summary.txt
+          echo "" >> ci_summary.txt
+
+          echo "--------------------------------------" >> ci_summary.txt
+          echo "Job Results Summary:" >> ci_summary.txt
+          echo "--------------------------------------" >> ci_summary.txt
+          echo "All Linux Jobs Passing? : ${{ needs.linux_build_and_test.result }}" >> ci_summary.txt
+          echo "All Windows Jobs Passing? : ${{ needs.windows_build_and_test.result }}" >> ci_summary.txt
+          echo "" >> ci_summary.txt
+          echo "Detailed Logs Found:" >> ci_summary.txt
+          find ./aggregated_logs -type f -name "*.log" >> ci_summary.txt || echo "No detailed logs found" >> ci_summary.txt
+
+          # Optionally compress logs for reference
+          tar -czf ci_logs_bundle.tar.gz ./aggregated_logs || true
+
+      - name: Upload aggregated report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-nightly-summary
+          path: |
+            ci_summary.txt
+            ci_logs_bundle.tar.gz
+          retention-days: 7
+
+      - name: Send CI summary to Loki
+        env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_USER: ${{ secrets.LOKI_USER }}
+          LOKI_PASS: ${{ secrets.LOKI_PASS }}
+        run: |
+          echo "Pushing CI Nightly summary to Loki..."
+          LOG_CONTENT=$(cat ci_summary.txt | jq -Rs .)
+          TIMESTAMP=$(date +%s%N)
+          curl -u "$LOKI_USER:$LOKI_PASS" -X POST -H "Content-Type: application/json" \
+            -d "{
+              \"streams\": [
+                {
+                  \"stream\": {
+                    \"job\": \"ci_nightly\",
+                    \"repo\": \"${{ github.repository }}\",
+                    \"workflow\": \"${{ github.workflow }}\",
+                    \"run_id\": \"${{ github.run_id }}\"
+                  },
+                  \"values\": [[\"$TIMESTAMP\", $LOG_CONTENT]]
+                }
+              ]
+            }" \
+            "$LOKI_URL/api/prom/push"

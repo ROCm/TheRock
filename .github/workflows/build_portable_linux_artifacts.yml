@@ -132,22 +132,23 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: |
+          mkdir -p build/logs
           if [ -d "./build" ]; then
-            echo "Full SDK du:"
+            echo "Full SDK du:" | tee build/logs/report.log
             echo "------------"
-            du -h -d 1 build/dist/rocm
-            echo "Artifact Archives:"
+             du -h -d 1 build/dist/rocm | tee -a build/logs/report.log
+            echo "Artifact Archives:" | tee -a build/logs/report.log
             echo "------------------"
-            ls -lh build/artifacts/*.tar.xz
+            ls -lh build/artifacts/*.tar.xz | tee -a build/logs/report.log
             echo "Artifacts:"
             echo "----------"
             du -h -d 1 build/artifacts
-            echo "CCache Stats:"
+            echo "CCache Stats:" | tee -a build/logs/report.log
             echo "-------------"
-            ccache -s -v
+            ccache -s -v | tee -a build/logs/report.log
             tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
           else
-            echo "[ERROR] Build directory ./build does not exist. Skipping report!"
+            echo "[ERROR] Build directory ./build does not exist. Skipping report!" | tee build/logs/error.log
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
@@ -167,6 +168,15 @@ jobs:
             --artifact-group "${{ inputs.artifact_group }}" \
             --build-dir build \
             --upload
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/logs/**/*.log
+          retention-days: 7
 
       # - name: Upload job metrics to Redshift database
       #   if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}

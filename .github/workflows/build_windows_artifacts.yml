@@ -110,7 +110,7 @@ jobs:
       - name: Runner health status
         run: |
           ccache --zero-stats
-          python ./build_tools/health_status.py
+          python ./build_tools/health_status.py | tee build_health_status.log
 
       - name: Test build_tools
         run: |
@@ -152,21 +152,22 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: |
+          mkdir -p build/logs
           if [ -d "${{ env.BUILD_DIR }}" ]; then
-            echo "Build dir:"
+            echo "Build dir:" | tee build/logs/report.log
             echo "------------"
-            ls -lh "${{ env.BUILD_DIR }}"
-            echo "Artifact Archives:"
+            ls -lh "${{ env.BUILD_DIR }}" | tee -a build/logs/report.log
+            echo "Artifact Archives:" | tee -a build/logs/report.log
             echo "------------------"
-            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
-            echo "Artifacts:"
+            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz | tee -a build/logs/report.log
+            echo "Artifacts:" | tee -a build/logs/report.log
             echo "----------"
             du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
-            echo "CCache Stats:"
+            echo "CCache Stats:" | tee -a build/logs/report.log
             echo "-------------"
-            ccache -s
+            ccache -s | tee -a build/logs/report.log
           else
-            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report! | tee build/logs/error.log"
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
@@ -196,9 +197,47 @@ jobs:
             --build-dir ${{ env.BUILD_DIR }} \
             --upload
 
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/logs/**/*.log
+            build_health_status.log
+          retention-days: 7
+
       - name: Save cache
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.CACHE_DIR }}
           key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
+
+  upload_build_status:
+    name: "Upload build job status summary"
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [build_windows_artifacts]
+    steps:
+      - name: Generate job summary (JSON)
+        run: |
+          cat <<EOF > build_windows_status.json
+          {
+            "workflow": "${{ github.workflow }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "commit": "${{ github.sha }}",
+            "repo": "${{ github.repository }}",
+            "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+            "jobs": {
+              "build_windows_artifacts": "${{ needs.build_windows_artifacts.result }}"
+            }
+          }
+          EOF
+
+      - name: Upload build status summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-status
+          path: build_windows_status.json
