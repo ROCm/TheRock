@@ -6,9 +6,6 @@ on:
       amdgpu_family:
         required: true
         type: string
-      python_versions:
-        required: true
-        type: string
       release_type:
         description: The type of release to build ("nightly", "prerelease", or "dev")
         required: true
@@ -26,11 +23,14 @@ on:
   workflow_dispatch:
     inputs:
       amdgpu_family:
-        required: true
-        type: string
-      python_versions:
-        required: true
-        type: string
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
       release_type:
         description: The type of release to build ("nightly", "prerelease", or "dev")
         required: true
@@ -50,9 +50,10 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: write
 
 jobs:
-  build_jax_wheels:
+  build_jax_docker:
     strategy:
       matrix:
         jax_ref: [master]
@@ -60,6 +61,8 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax_rocm_plugin/wheelhouse
+      PYTHON_VERSION: "3.12"
+      REGISTRY: ghcr.io
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
     steps:
       - name: Checkout TheRock
@@ -68,12 +71,59 @@ jobs:
       - name: Checkout JAX
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          path: jax
+          path: rocm-jax
           repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ matrix.jax_ref }}
 
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
-      # TODO: Pull down JAX plugin wheels into the wheelhouse directory and run the image build script from rocm-jax
+
+      - name: Configure AWS Credentials
+        if: always()
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+
+      - name: Install AWS CLI
+        if: always()
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          ./aws/install -i ./aws-cli-files -b ./aws-bin
+          sudo ./aws/install
+
+      - name: Download JAX plugin wheels
+        run: |
+          mkdir ./wheelhouse
+          # TODO: Parameterize the s3 download for plugin versions and ROCm versions
+          aws s3 cp s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/jax_rocm7_plugin-0.6.0-cp${PYTHON_VERSION//.}-cp${PYTHON_VERSION//.}-manylinux_2_28_x86_64.whl ./rocm-jax/wheelhouse/
+          aws s3 cp s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/jax_rocm7_pjrt-0.6.0-py3-none-manylinux_2_28_x86_64.whl ./rocm-jax/wheelhouse/
+
+      - name: Build Docker image
+        run: |
+          pushd rocm-jax
+          python3 build/ci_build \
+            --rocm-version="${{ inputs.rocm_version }}" \
+            --therock-path="${{ inputs.tar_url }}" \
+            build_dockers \
+            -f ubu24
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push docker image to Container Registry
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+        run: |
+          ubu24_img="ghcr.io/rocm/jax-ubu24.therock.${ROCM_VERSION//.}:${GITHUB_SHA}"
+          echo "Ubuntu 24 image name: ${ubu24_img}"
+          docker images
+          docker tag "jax-ubu24.rocm${ROCM_VERSION//.}" "${ubu24_img}"
+          docker push "${ubu24_img}"
