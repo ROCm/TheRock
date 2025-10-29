@@ -195,12 +195,12 @@ jobs:
             -- \
             "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}" \
             "-DTHEROCK_DIST_PYTHON_EXECUTABLES=\" \
-                /usr/local/bin/python3.8; \
-                /usr/local/bin/python3.9; \
-                /usr/local/bin/python3.10; \
-                /usr/local/bin/python3.11; \
-                /usr/local/bin/python3.12; \
-                /usr/local/bin/python3.13\""
+                /opt/python/cp38-cp38/bin/python; \
+                /opt/python/cp39-cp39/bin/python; \
+                /opt/python/cp310-cp310/bin/python; \
+                /opt/python/cp311-cp311/bin/python; \
+                /opt/python/cp312-cp312/bin/python; \
+                /opt/python/cp313-cp313/bin/python\""
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
