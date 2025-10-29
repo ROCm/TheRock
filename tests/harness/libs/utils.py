@@ -16,7 +16,7 @@ logging.basicConfig(
     level=logging.DEBUG,  # Set the minimum level to log
     datefmt="%Y-%m-%d %H:%M:%S",
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()]   # Log to the console (stdout/stderr)
+    handlers=[logging.StreamHandler()],  # Log to the console (stdout/stderr)
 )
 
 log = logging.getLogger(__name__)
