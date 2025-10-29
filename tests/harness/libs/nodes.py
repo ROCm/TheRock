@@ -33,7 +33,6 @@ class Node(object):
         env[dict]: extra environment variable to be passed to the cmd
         stdin[str]: input to the cmd via its stdin
         timeout[int]: min time to wait before killing the process when no activity observed
-        verbose[bool]: verbose level, True=FullLog, False=OnlyInfo-NoLog, None=NoInfo-NoLog
         """
         return utils.runCmd(*args, **kwargs)
 

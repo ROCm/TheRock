@@ -3,7 +3,25 @@
 import os
 import sys
 import select
+import logging
+import threading
 import subprocess
+
+
+TIMEOUT = 1200  # default console timeout
+
+
+# Configure the basic logging settings
+logging.basicConfig(
+    level=logging.DEBUG, # Set the minimum level to log
+    datefmt='%Y-%m-%d %H:%M:%S',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()         # Log to the console (stdout/stderr)
+    ]
+)
+
+log = logging.getLogger(__name__)
 
 
 def _callOnce(funcPointer):
@@ -11,31 +29,23 @@ def _callOnce(funcPointer):
     For the second call, it will simply returns the initially stored return value skipping the actual call
     to the decorated function.
     """
+
     def funcWrapper(*args, **kwargs):
         if "ret" not in funcPointer.__dict__:
             funcPointer.ret = funcPointer(*args, **kwargs)
         return funcPointer.ret
+
     return funcWrapper
 
 
-def log(msg, newline=True):
-    """Common logger function to prints msg to the console"""
-    if isinstance(msg, bytes):
-        msg = msg.decode("utf-8", errors="ignore")
-    msg = msg + ("", "\n")[newline]
-    sys.stdout.write(msg) and sys.stdout.flush()
-
-
-TIMEOUT = 1200  # default console timeout
 def runCmd(
     *cmd,
     cwd=None,
     env=None,
     stdin=None,
     timeout=TIMEOUT,
-    verbose=True,
-    out=False,
-    err=False,
+    retOut=False,
+    retErr=False,
     **kwargs,
 ):
     """Executes Cmd on the current node:
@@ -44,23 +54,21 @@ def runCmd(
     env[dict]: extra environment variable to be passed to the cmd
     stdin[str]: input to the cmd via its stdin
     timeout[int]: min time to wait before killing the process when no activity observed
-    verbose[bool]: verbose level, True=FullLog, False=OnlyInfo-NoLog, None=NoInfo-NoLog
     """
+
     # console prints to log all the running cmds for easy repro of test steps
-    if verbose != None:
-        cwdStr = f"cd {cwd}; " if cwd else ""
-        envStr = ""
-        if env:
-            for key, value in env.items():
-                envStr += f"{key}='{value}' "
-        log(f'RunCmd: {cwdStr}{envStr}{" ".join(cmd)}')
+    envStr = ""
+    if env:
+        for key, value in env.items():
+            envStr += f"{key}='{value}' "
+    log.info(f'++Exec [{cwd}]$ {envStr}{" ".join(cmd)}')
 
     # handling extra env variables along with session envs
     if env:
         env = {k: str(v) for k, v in env.items()}
         env.update(os.environ)
 
-    # launch process
+    # launch process with enabled stream redirections
     process = subprocess.Popen(
         cmd,
         stdin=subprocess.PIPE if stdin else None,
@@ -72,7 +80,7 @@ def runCmd(
         **kwargs,
     )
 
-    # handling stdin
+    # if requested write stdin to the process input stream
     if stdin:
         process.stdin.write(stdin if isinstance(stdin, bytes) else stdin.encode())
         process.stdin.close()
@@ -81,38 +89,41 @@ def runCmd(
     os.set_blocking(process.stdout.fileno(), False)
     os.set_blocking(process.stderr.fileno(), False)
 
-    # collecting process stdout / stderr
+    # live collection of process stdout / stderr streams
     def _readStream(fd):
-        chunk = fd.read(8196)
-        verbose and log(chunk, newline=False)
+        chunk = fd.read(8196)  # read upto 8k bytes size chunks
+        log.debug(chunk)
         return chunk
 
-    verbose and log("out:")
+    log.debug("output:")
     ret, stdout, stderr = None, b"", b""
     chunk = None
     while chunk != b"":
-        rfds = select.select([process.stdout, process.stderr], [], [], timeout)[0]
-        if not rfds:
+        # select helps in efficient wait on resource events
+        readFds = select.select([process.stdout, process.stderr], [], [], timeout)[0]
+        if not readFds:
             msg = f"Reached Timeout of {timeout} sec, Exiting..."
-            log(msg)
+            log.warning(msg)
             stdout += msg.encode()
             process.kill()
             break
-        if process.stdout in rfds:
+        # live reading of stdout
+        if process.stdout in readFds:
             stdout += (chunk := _readStream(process.stdout))
-        if process.stderr in rfds:
+        # live reading of stderr
+        if process.stderr in readFds:
             stderr += (chunk := _readStream(process.stderr))
 
     # handling return value
     ret = process.wait()
-    if ret != 0 and verbose != None:
-        log(f'cmd failed: {" ".join(cmd)}')
-    verbose and log(f"ret: {ret}")
+    if ret != 0:
+        log.error(f'cmd failed: {" ".join(cmd)}')
+    log.info(f"ret: {ret}")
 
     # returns
-    if not out:
+    if not retOut:
         return ret
-    if not err:
+    if not retErr:
         return ret, (stdout + stderr).decode()
     return ret, stdout.decode(), stderr.decode()
 
@@ -121,24 +132,21 @@ def runParallel(*funcs):
     """Runs the given list of funcs in parallel threads and returns their respective return values
     *funcs[(funcPtr, args, kwargs), ...]: list of funcpts along with their args and kwargs
     """
-    import threading
+    results = [None] * len(funcs)
 
-    rets = [None] * len(funcs)
-    def proxy(i, funcPtr, *args, **kwargs):
-        rets[i] = funcPtr(*args, **kwargs)
+    def worker(i, funcPtr, *args, **kwargs):
+        results[i] = funcPtr(*args, **kwargs)
 
     # launching parallel threads
-    threads = []
-    for (i, (funcPtr, args, kwargs)) in enumerate(funcs):
-        thread = threading.Thread(target=proxy, args=(i, funcPtr, *args), kwargs=kwargs)
-        threads.append(thread)
+    threads = [
+        threading.Thread(target=worker, args=(i, funcPtr, *args), kwargs=kwargs)
+        for i, (funcPtr, args, kwargs) in enumerate(funcs)
+    ]
+    for thread in threads:
         thread.start()
 
     # wait for threads join
-    while threads:
-        for thread in threads:
-            thread.join()
-            if thread.is_alive():
-                continue
-            threads.remove(thread)
-    return rets
+    for thread in threads:
+        thread.join()
+
+    return results

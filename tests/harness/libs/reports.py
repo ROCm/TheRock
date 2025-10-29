@@ -1,9 +1,12 @@
 #!/usr/bin/python3
 
-from libs.utils import log
-from pathlib import Path
 import sys
+import logging
 import tabulate
+from pathlib import Path
+
+
+log = logging.getLogger(__name__)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
@@ -46,8 +49,8 @@ class Report(object):
         return table
 
     def pprint(self):
-        log(f": {self.title} :".center(100, "-"))
+        log.info(f": {self.title} :".center(100, "-"))
         # tables
         for table in self.tables:
-            log(table.pprint())
+            log.info(table.pprint())
             gha_append_step_summary(table.pprint())

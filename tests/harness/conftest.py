@@ -1,3 +1,4 @@
+import logging
 import pytest
 import time
 
@@ -5,7 +6,7 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 from libs import nodes
 from libs import orchestrator
-from libs import report
+from libs import reports
 
 
 def pytest_addoption(parser):
@@ -31,7 +32,7 @@ def therock_path(pytestconfig, orch):
 @pytest.fixture(scope="session")
 def report(request):
     """Fixture to access the Test Reporting Object"""
-    report = report.Report()
+    report = reports.Report()
     yield report
     verdict = not (request.session.testsfailed)
     report.pprint()

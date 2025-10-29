@@ -1,7 +1,10 @@
 #!/usr/bin/python3
 
+import logging
 from libs import utils
-from libs.utils import log
+
+
+log = logging.getLogger(__name__)
 
 
 class Orchestrator(object):
@@ -10,7 +13,7 @@ class Orchestrator(object):
     def __init__(self, node):
         self.node = node
         self.gpus = node.getGpus()
-        log(f"Total GPUs: {len(self.gpus)}")
+        log.info(f"Total GPUs: {len(self.gpus)}")
 
     def runCtest(self, *args, retries=3, **kwargs):
         """Runs the CTest based tests in sharded parallel threads"""
@@ -19,11 +22,11 @@ class Orchestrator(object):
             """Runs an single CTest shard on an assigned GPU with auto retry of failed tests"""
             cmd = ("ctest",)
             for i in range(retries):
-                ret, out = gpu.runCmd(*cmd, *tests, *args, out=True, **kwargs)
+                ret, out = gpu.runCmd(*cmd, *tests, *args, retOut=True, **kwargs)
                 if ret == 0:
                     return ret, out
                 tests = (*tests, "--rerun-failed")
-                log(f"[{gpu.node.host}]: Rerunning Failed Tests")
+                log.info(f"[{gpu.node.host}]: Rerunning Failed Tests")
             return ret, out
 
         def _runCtestShards(gpu, shards, iShard, *args, **kwargs):
