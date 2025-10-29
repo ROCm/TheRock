@@ -13,7 +13,7 @@ create RPM and DEB packages and upload to artifactory server
         --dest-dir ./OUTPUT_PKGDIR \
         --rocm-version 7.1.0 \
         --pkg-type deb (or rpm) \
-        --version-suffix test.17421247050
+        --version-suffix build_type (daily/master/nightly/release)
 ```
 """
 
