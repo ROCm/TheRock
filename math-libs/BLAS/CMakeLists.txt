@@ -42,8 +42,9 @@ list(APPEND _blas_subproject_names hipBLAS-common)
 # rocRoller
 ##############################################################################
 
+option(THEROCK_ENABLE_ROCROLLER "Enable rocRoller subproject" OFF)
 if(WIN32)
-  set(_enable_rocRoller "OFF")
+  set(_enable_rocRoller "${THEROCK_ENABLE_ROCROLLER}")
 else()
   set(_enable_rocRoller "ON")
 endif()
@@ -58,6 +59,9 @@ if(_enable_rocRoller)
       -DROCROLLER_ENABLE_YAML_CPP=ON
       -DROCROLLER_ENABLE_CLIENT=OFF
       -DROCROLLER_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+      -DROCROLLER_ENABLE_TEST_DISCOVERY=ON
+      -DROCM_LIBS_SUPERBUILD=ON
+      -DROCROLLER_ENABLE_THEROCK=ON
       -DROCROLLER_BUILD_SHARED_LIBS=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake

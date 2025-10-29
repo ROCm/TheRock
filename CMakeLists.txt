@@ -11,6 +11,11 @@ endif()
 
 project(THEROCK)
 
+# Make __cplusplus reflect the selected C++ standard value under MSVC.
+if(MSVC)
+  add_compile_options(/Zc:__cplusplus)
+endif()
+
 cmake_policy(SET CMP0135 NEW)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
