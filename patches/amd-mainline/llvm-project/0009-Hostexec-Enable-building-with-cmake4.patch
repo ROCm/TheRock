@@ -1,0 +1,28 @@
+From db79cdcf261884226a768a9404eaa3178c5bac86 Mon Sep 17 00:00:00 2001
+From: Laura Promberger <laura.promberger@amd.com>
+Date: Tue, 16 Sep 2025 14:35:25 +0000
+Subject: [PATCH] Hostexec: Enable building with cmake4
+
+Bump the minimum required cmake version from 3.0 to 3.20.0 to enable
+building with cmake4. This is the same minimum required version as the
+parent directory "offload" uses.
+---
+ offload/hostexec/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/offload/hostexec/CMakeLists.txt b/offload/hostexec/CMakeLists.txt
+index 20a98ade577c..69d8d2201e18 100644
+--- a/offload/hostexec/CMakeLists.txt
++++ b/offload/hostexec/CMakeLists.txt
+@@ -10,7 +10,7 @@
+ #
+ ##===----------------------------------------------------------------------===##
+ 
+-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
++cmake_minimum_required(VERSION 3.20.0 FATAL_ERROR)
+ 
+ if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
+   message(FATAL_ERROR "Direct configuration not supported, please use parent directory!")
+-- 
+2.43.0
+
