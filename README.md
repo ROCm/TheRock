@@ -136,7 +136,7 @@ In case you don't have an existing ROCm/HIP installation from which you can run 
 
 You can install the `rocm` Python package for any architecture inside a venv and run `amdgpu-arch` from there:
 
-1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv`
+1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv`
 1. `.tmpvenv/bin/amdgpu-arch` on Linux, `.tmpvenv\Scripts\amdgpu-arch` on Windows
 1. `rm -rf .tmpvenv`
 
@@ -164,6 +164,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_HIPIFY=ON`       | Enables the hipify tool                       |
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON` | Enables the core runtime components and tools |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`  | Enables the HIP runtime components            |
+| `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`  | Enables the OpenCL runtime components         |
 | `-DTHEROCK_ENABLE_ROCPROFV3=ON`    | Enables rocprofv3                             |
 | `-DTHEROCK_ENABLE_RCCL=ON`         | Enables RCCL                                  |
 | `-DTHEROCK_ENABLE_PRIM=ON`         | Enables the PRIM library                      |
@@ -214,7 +215,7 @@ See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Wi
 Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
 ```bash
-cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 cmake --build build
 ```
 
@@ -240,7 +241,7 @@ Example:
 # Any shell used to build must eval setup_ccache.py to set environment
 # variables.
 eval "$(./build_tools/setup_ccache.py)"
-cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   .

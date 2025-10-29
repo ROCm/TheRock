@@ -1,0 +1,128 @@
+From abde7f0b1d885ba8ec5def52b172dee529119203 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Mon, 27 Oct 2025 11:06:37 -0700
+Subject: [PATCH] Revert "SWDEV-543498 - Some compute Ubertrace profiles are
+ missing queue timing data (#1146)"
+
+This reverts commit 63a991a8b968f155e59ed46ff5654c4e086cb90d.
+---
+ .../rocclr/device/pal/palubercapturemgr.cpp   | 48 +------------------
+ .../rocclr/device/pal/palubercapturemgr.hpp   |  7 ---
+ 2 files changed, 1 insertion(+), 54 deletions(-)
+
+diff --git a/projects/clr/rocclr/device/pal/palubercapturemgr.cpp b/projects/clr/rocclr/device/pal/palubercapturemgr.cpp
+index d0153d1448..e5777edfdb 100644
+--- a/projects/clr/rocclr/device/pal/palubercapturemgr.cpp
++++ b/projects/clr/rocclr/device/pal/palubercapturemgr.cpp
+@@ -57,37 +57,6 @@ UberTraceCaptureMgr* UberTraceCaptureMgr::Create(Pal::IPlatform* platform, const
+   return mgr;
+ }
+ 
+-static void UberTraceStateChangeCallback(const GpuUtil::TraceSession& pTraceSession,
+-                                         GpuUtil::TraceSessionState newState,
+-                                         void* pPrivateData)
+-{
+-    UberTraceCaptureMgr* mgr = static_cast<UberTraceCaptureMgr*>(pPrivateData);
+-
+-    switch (newState)
+-    {
+-        // boundary for prepare-phase dispatches
+-        case GpuUtil::TraceSessionState::Preparing:
+-        // boundary for detailed capture
+-        case GpuUtil::TraceSessionState::Running:
+-        // boundary for end of detailed trace
+-#if (PAL_CLIENT_INTERFACE_MAJOR_VERSION >= 939)
+-        case GpuUtil::TraceSessionState::Postamble:
+-#endif
+-        // boundary for end of trace
+-        case GpuUtil::TraceSessionState::Waiting:
+-        {
+-            VirtualGPU* current_gpu = mgr->GetCurrentGPU();
+-            if (current_gpu != nullptr) {
+-                bool flush_success = current_gpu->queue(MainEngine).flush();
+-                assert(flush_success);
+-            }
+-            break;
+-        }
+-        default:
+-            break;
+-    }
+-}
+-
+ // ================================================================================================
+ UberTraceCaptureMgr::UberTraceCaptureMgr(Pal::IPlatform* platform, const Device& device)
+     : device_(device),
+@@ -98,8 +67,7 @@ UberTraceCaptureMgr::UberTraceCaptureMgr(Pal::IPlatform* platform, const Device&
+       trace_session_(platform->GetTraceSession()),
+       trace_controller_(nullptr),
+       code_object_trace_source_(nullptr),
+-      queue_timings_trace_source_(nullptr),
+-      registered_trace_state_callback_(false) {}
++      queue_timings_trace_source_(nullptr) {}
+ 
+ // ================================================================================================
+ UberTraceCaptureMgr::~UberTraceCaptureMgr() { DestroyUberTraceResources(); }
+@@ -148,13 +116,6 @@ bool UberTraceCaptureMgr::CreateUberTraceResources(Pal::IPlatform* platform) {
+       break;
+     }
+ 
+-    result = trace_session_->RegisterTraceStateChangeCallback(UberTraceStateChangeCallback, this);
+-    if (result != Pal::Result::Success) {
+-      break;
+-    }
+-
+-    registered_trace_state_callback_ = true;
+-
+     success = true;
+   } while (false);
+ 
+@@ -189,11 +150,6 @@ void UberTraceCaptureMgr::DestroyUberTraceResources() {
+     delete queue_timings_trace_source_;
+     queue_timings_trace_source_ = nullptr;
+   }
+-
+-  if (registered_trace_state_callback_) {
+-    trace_session_->UnregisterTraceStateChangeCallback(UberTraceStateChangeCallback, this);
+-    registered_trace_state_callback_ = false;
+-  }
+ }
+ 
+ // ================================================================================================
+@@ -226,9 +182,7 @@ void UberTraceCaptureMgr::PreDispatch(VirtualGPU* gpu, const pal::Kernel& kernel
+   GpuUtil::RenderOpCounts opCounts = {
+       .dispatchCount = 1u,
+   };
+-  current_gpu_ = gpu;
+   trace_controller_->RecordRenderOps(pQueue, opCounts);
+-  current_gpu_ = nullptr;
+ 
+   if (trace_session_->GetTraceSessionState() == GpuUtil::TraceSessionState::Running) {
+     RgpSqttMarkerEventType apiEvent = RgpSqttMarkerEventType::CmdNDRangeKernel;
+diff --git a/projects/clr/rocclr/device/pal/palubercapturemgr.hpp b/projects/clr/rocclr/device/pal/palubercapturemgr.hpp
+index 8d8009711f..18b909d9f4 100644
+--- a/projects/clr/rocclr/device/pal/palubercapturemgr.hpp
++++ b/projects/clr/rocclr/device/pal/palubercapturemgr.hpp
+@@ -67,10 +67,6 @@ class UberTraceCaptureMgr final : public ICaptureMgr {
+                         size_t elf_binary_size, Pal::IGpuMemory* pGpuMemory,
+                         size_t offset) override;
+ 
+-  VirtualGPU* GetCurrentGPU() {
+-      return current_gpu_;
+-  }
+-
+  private:
+   UberTraceCaptureMgr(Pal::IPlatform* platform, const Device& device);
+   bool Init(Pal::IPlatform* platform);
+@@ -100,9 +96,6 @@ class UberTraceCaptureMgr final : public ICaptureMgr {
+   GpuUtil::CodeObjectTraceSource* code_object_trace_source_;
+   GpuUtil::QueueTimingsTraceSource* queue_timings_trace_source_;
+ 
+-  VirtualGPU*                       current_gpu_;
+-  bool                              registered_trace_state_callback_;
+-
+   PAL_DISALLOW_DEFAULT_CTOR(UberTraceCaptureMgr);
+   PAL_DISALLOW_COPY_AND_ASSIGN(UberTraceCaptureMgr);
+ };
+-- 
+2.43.0
+

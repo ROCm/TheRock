@@ -11,8 +11,8 @@ directory from one of these sources:
 
 Usage:
 python build_tools/install_rocm_from_artifacts.py
+    (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
-    [--amdgpu-family AMDGPU_FAMILY]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
     [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--prim | --no-prim]
     [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
@@ -32,7 +32,7 @@ Examples:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0rc20250416 \
-        --amdgpu-family gfx110X-dgpu \
+        --amdgpu-family gfx110X-all \
         --output-dir build
     ```
 - Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
@@ -49,6 +49,10 @@ By default for CI workflow retrieval, all artifacts (excluding test artifacts)
 will be downloaded. For specific artifacts, pass in the flag such as `--rand`
 (RAND artifacts) For test artifacts, pass in the flag `--tests` (test artifacts).
 For base artifacts only, pass in the flag `--base-only`
+
+Note that the ARTIFACT_GROUP controls which sub-directory of the run contains
+the artifacts. If not specified, it defaults to the AMDGPU_FAMILY, which was
+the historic interpretation.
 
 Note: the script will overwrite the output directory argument. If no argument
 is passed, it will overwrite the default "therock-build" directory.
@@ -106,12 +110,12 @@ def _create_output_directory(output_dir: Path):
 
 
 def _retrieve_s3_release_assets(
-    release_bucket, amdgpu_family, release_version, output_dir
+    release_bucket, artifact_group, release_version, output_dir
 ):
     """
     Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
     """
-    asset_name = f"therock-dist-{PLATFORM}-{amdgpu_family}-{release_version}.tar.gz"
+    asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
     destination = output_dir / asset_name
 
     with open(destination, "wb") as f:
@@ -130,8 +134,8 @@ def retrieve_artifacts_by_run_id(args):
     argv = [
         "--run-id",
         run_id,
-        "--target",
-        args.amdgpu_family,
+        "--artifact-group",
+        args.artifact_group,
         "--output-dir",
         str(args.output_dir),
         "--flatten",
@@ -148,6 +152,8 @@ def retrieve_artifacts_by_run_id(args):
         "amd-llvm_lib",
         "core-hip_lib",
         "core-hip_dev",
+        "core-ocl_lib",
+        "core-ocl_dev",
         "rocprofiler-sdk_lib",
         "host-suite-sparse_lib",
     ]
@@ -196,7 +202,7 @@ def retrieve_artifacts_by_release(args):
     If the user requested TheRock artifacts by release version, this function will retrieve those assets
     """
     output_dir = args.output_dir
-    amdgpu_family = args.amdgpu_family
+    artifact_group = args.artifact_group
     # Determine if version is nightly-tarball or dev-tarball
     nightly_regex_expression = (
         "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
@@ -223,7 +229,7 @@ def retrieve_artifacts_by_release(args):
 
     log(f"Retrieving artifacts from release bucket {release_bucket}")
     _retrieve_s3_release_assets(
-        release_bucket, amdgpu_family, release_version, output_dir
+        release_bucket, artifact_group, release_version, output_dir
     )
 
 
@@ -275,11 +281,17 @@ def main(argv):
         help="Path of the output directory for TheRock",
     )
 
-    parser.add_argument(
-        "--amdgpu-family",
+    artifact_group_parser = parser.add_mutually_exclusive_group(required=True)
+    artifact_group_parser.add_argument(
+        "--artifact-group",
+        dest="artifact_group",
         type=str,
-        required=True,
-        default="gfx94X-dcgpu",
+        help="Explicit artifact group to install",
+    )
+    artifact_group_parser.add_argument(
+        "--amdgpu-family",
+        dest="artifact_group",
+        type=str,
         help="AMD GPU family to install (please refer to this: https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81 for family choices)",
     )
 
@@ -362,9 +374,9 @@ def main(argv):
 
     args = parser.parse_args(argv)
 
-    if not args.amdgpu_family:
+    if not args.artifact_group:
         raise argparse.ArgumentTypeError(
-            "AMD GPU family argument is required and cannot be empty"
+            "Either --amdgpu-family or --artifact-group must be specified"
         )
 
     run(args)

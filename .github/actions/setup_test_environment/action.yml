@@ -7,9 +7,9 @@ inputs:
   OUTPUT_ARTIFACTS_DIR:
     type: string
     required: true
-  ARTIFACT_RUN_ID:
+  ARTIFACT_GROUP:
     type: string
-  AMDGPU_FAMILIES:
+  ARTIFACT_RUN_ID:
     type: string
   FETCH_ARTIFACT_ARGS:
     type: string
@@ -55,14 +55,14 @@ runs:
       shell: bash
       env:
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
+        ARTIFACT_GROUP: ${{ inputs.ARTIFACT_GROUP }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
-        AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
         IS_PR_FROM_FORK: ${{ inputs.IS_PR_FROM_FORK }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
-          --amdgpu-family=${AMDGPU_FAMILIES} \
+          --artifact-group=${ARTIFACT_GROUP} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}
