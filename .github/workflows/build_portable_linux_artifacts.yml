@@ -58,7 +58,7 @@ permissions:
 jobs:
   build_portable_linux_artifacts:
     name: Build (xfail ${{ inputs.expect_failure }})
-    runs-on: azure-linux-scale-rocm
+    runs-on: ${{ inputs.build_variant_label == 'Release' && 'azure-linux-scale-rocm' || 'azure-linux-scale-rocm-heavy' }}
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
     permissions:
