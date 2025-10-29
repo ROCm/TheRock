@@ -29,10 +29,13 @@ if AMDGPU_FAMILIES.startswith("gfx11") or platform == "windows":
     test_type = "regression"
 
 test_subdir = ""
+timeout = "1800"
 if test_type == "smoke":
     test_subdir = "/smoke"
+    timeout = "300"
 elif test_type == "regression":
     test_subdir = "/regression"
+    timeout = "900"
 
 cmd = [
     "ctest",
@@ -42,7 +45,7 @@ cmd = [
     "--parallel",
     "8",
     "--timeout",
-    "300",
+    timeout,
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
