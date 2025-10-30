@@ -120,27 +120,25 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Run telemetry for ASAN builds
-        if: ${{ inputs.build_variant_label == 'ASAN' }}
-        run: |
-          # Background telemetry loop
-          ( while true; do
-              echo "--- $(date) ---"
-              free -h
-              top -b -n1 | head -20
-              sleep 10
-            done ) &
-          TELEMETRY_PID=$!
-
       - name: Build therock-archives and therock-dist
         run: |
+          if [[ ${{ inputs.build_variant_label }} == "ASAN" ]]; then
+            # Background telemetry loop
+            ( while true; do
+                echo "--- $(date) ---"
+                free -h
+                top -b -n1 | head -20
+                sleep 10
+              done ) &
+            TELEMETRY_PID=$!
+          fi
+
           cmake --build build --target therock-archives therock-dist -- -k 0
 
-      - name: Stop telemetry for ASAN builds
-        if: ${{ inputs.build_variant_label == 'ASAN' }}
-        run: |
-          # Stop telemetry loop
-          kill $TELEMETRY_PID
+          if [[ ${{ inputs.build_variant_label }} == "ASAN" ]]; then
+            # Stop telemetry loop
+            kill $TELEMETRY_PID
+          fi
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
