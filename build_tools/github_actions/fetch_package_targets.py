@@ -92,9 +92,10 @@ def determine_package_targets(args):
         test_machine = platform_for_key.get("test-runs-on")
         expect_failure = platform_for_key.get("expect_failure", False)
         expect_pytorch_failure = platform_for_key.get("expect_pytorch_failure", False)
+        sanity_check_only_for_family = platform_for_key.get("sanity_check_only_for_family", False)
 
         # In the case that test_machine_available_only is enabled, we only add families where test machines are available
-        if test_machine_available_only and not test_machine:
+        if test_machine_available_only and not sanity_check_only_for_family and not test_machine:
             continue
 
         package_targets.append(
