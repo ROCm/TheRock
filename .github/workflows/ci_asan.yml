@@ -8,8 +8,6 @@ on:
   push:
     branches:
       - main
-      # for testing
-      - users/geomin12/asan-fix
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
