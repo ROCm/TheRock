@@ -125,10 +125,9 @@ jobs:
           mkdir -p telemetry
           # Background telemetry loop
           ( while true; do
-              echo "--- $(date) ---" >> telemetry/sys_stats.log
-              free -h >> telemetry/sys_stats.log
-              top -b -n1 | head -20 >> telemetry/sys_stats.log
-              echo >> telemetry/sys_stats.log
+              echo "--- $(date) ---"
+              free -h
+              top -b -n1 | head -20
               sleep 10
             done ) &
           TELEMETRY_PID=$!
