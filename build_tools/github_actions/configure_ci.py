@@ -328,9 +328,7 @@ def matrix_generator(
         )
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
-    # for testing
-    if is_push:
-    # if is_push and base_args.get("branch_name") == "main":
+    if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
         # Add presubmit and postsubmit targets.
@@ -375,7 +373,7 @@ def matrix_generator(
                 # In the case that the build variant is not requested, we skip it
                 if build_variant_name != base_args.get("build_variant"):
                     continue
-                    
+
                 # Merge platform_info and build_variant_info into a matrix_row.
                 matrix_row = dict(platform_info)
 
