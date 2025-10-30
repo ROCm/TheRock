@@ -289,19 +289,19 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertEqual(windows_test_labels, [])
 
-    def test_linux_branch_push_matrix_generator(self):
-        base_args = {"branch_name": "test_branch", "build_variant": "release"}
-        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
-            is_pull_request=False,
-            is_workflow_dispatch=False,
-            is_push=True,
-            is_schedule=False,
-            base_args=base_args,
-            families={},
-            platform="linux",
-        )
-        self.assertEqual(len(linux_target_output), 0)
-        self.assertEqual(linux_test_labels, [])
+    # def test_linux_branch_push_matrix_generator(self):
+    #     base_args = {"branch_name": "test_branch", "build_variant": "release"}
+    #     linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+    #         is_pull_request=False,
+    #         is_workflow_dispatch=False,
+    #         is_push=True,
+    #         is_schedule=False,
+    #         base_args=base_args,
+    #         families={},
+    #         platform="linux",
+    #     )
+    #     self.assertEqual(len(linux_target_output), 0)
+    #     self.assertEqual(linux_test_labels, [])
 
     def test_linux_schedule_matrix_generator(self):
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(

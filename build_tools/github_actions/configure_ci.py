@@ -329,7 +329,7 @@ def matrix_generator(
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     # for testing
-    if is_push and (base_args.get("branch_name") == "main" or base_args.get("branch_name") == "users/geomin12/asan-fix"):
+    if is_push:
     # if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
