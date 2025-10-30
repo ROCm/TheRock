@@ -118,7 +118,7 @@ jobs:
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
-          python3 build_tools/github_actions/build_configure.py
+          python3 build_tools/github_actions/build_configure.py --manylinux
 
       - name: Build therock-archives and therock-dist
         run: cmake --build build --target therock-archives therock-dist -- -k 0
