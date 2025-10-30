@@ -60,6 +60,7 @@ from github_actions_utils import *
 def determine_package_targets(args):
     amdgpu_families = args.get("AMDGPU_FAMILIES")
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
+    test_machine_available_only = str2bool(args.get("TEST_MACHINE_AVAILABLE_ONLY", "false"))
 
     matrix = amdgpu_family_info_matrix_all
     family_matrix = amdgpu_family_info_matrix_all
@@ -92,6 +93,10 @@ def determine_package_targets(args):
         expect_failure = platform_for_key.get("expect_failure", False)
         expect_pytorch_failure = platform_for_key.get("expect_pytorch_failure", False)
 
+        # In the case that test_machine_available_only is enabled, we only add families where test machines are available
+        if test_machine_available_only and not test_machine:
+            continue
+
         package_targets.append(
             {
                 "amdgpu_family": family,
@@ -113,4 +118,5 @@ if __name__ == "__main__":
     args = {}
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
     args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
+    args["TEST_MACHINE_AVAILABLE_ONLY"] = os.getenv("TEST_MACHINE_AVAILABLE_ONLY")
     main(args)
