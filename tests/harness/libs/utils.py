@@ -59,7 +59,7 @@ def runCmd(
     if env:  # for printing the extra envs
         for key, value in env.items():
             envStr += f"{key}='{value}' "
-    log.info(f'++Exec [{cwd}]$ {envStr}{shlex.join(cmd)}')
+    log.info(f"++Exec [{cwd}]$ {envStr}{shlex.join(cmd)}")
 
     # handling extra env variables along with session envs
     if env:
@@ -114,7 +114,7 @@ def runCmd(
 
     # handling return value
     ret = process.wait()
-    status = 'success' if ret == 0 else 'failed'
+    status = "success" if ret == 0 else "failed"
     log.info(f"[{shlex.join(cmd)}] {status} return code: {ret}")
 
     # returns
