@@ -108,29 +108,44 @@ jobs:
       package_version: ${{ inputs.rocm_package_version }}
 
   upload_test_status:
-    name: "Upload test job status summary"
+    name: "Upload test job status summary (JSON)"
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: [build_windows_artifacts, test_windows_artifacts, build_windows_python_packages]
 
     steps:
-      - name: Generate job status summary
+      - name: Get Hostname
+        id: hostname
+        shell: pwsh
         run: |
-          echo "Workflow: ${{ github.workflow }}" > ci_windows_summary.txt
-          echo "Run ID: ${{ github.run_id }}" >> ci_windows_summary.txt
-          echo "Run Number: ${{ github.run_number }}" >> ci_windows_summary.txt
-          echo "Commit: ${{ github.sha }}" >> ci_windows_summary.txt
-          echo "Repo: ${{ github.repository }}" >> ci_windows_summary.txt
-          echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> ci_windows_summary.txt
-          echo "" >> ci_windows_summary.txt
-          echo "Job Results:" >> ci_windows_summary.txt
-          echo "----------------------------------------" >> ci_windows_summary.txt
-          echo "build_windows_artifacts: ${{ needs.build_windows_artifacts.result }}" >> ci_windows_summary.txt
-          echo "test_windows_artifacts: ${{ needs.test_windows_artifacts.result }}" >> ci_windows_summary.txt
-          echo "build_windows_python_packages: ${{ needs.build_windows_python_packages.result }}" >> ci_windows_summary.txt
+          $hostname = $env:COMPUTERNAME
+          echo "hostname=$hostname" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Detected hostname: $hostname"
 
-      - name: Upload job status summary
+      - name: Generate job status summary (JSON)
+        shell: pwsh
+        run: |
+          $hostname = $env:hostname
+          New-Item -ItemType Directory -Path "logs" -Force | Out-Null
+          $json = @{
+            workflow = "${{ github.workflow }}"
+            run_id = "${{ github.run_id }}"
+            run_number = "${{ github.run_number }}"
+            commit = "${{ github.sha }}"
+            repo = "${{ github.repository }}"
+            timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            runner_hostname = $hostname
+            jobs = @{
+              build_windows_artifacts = "${{ needs.build_windows_artifacts.result }}"
+              test_windows_artifacts = "${{ needs.test_windows_artifacts.result }}"
+              build_windows_python_packages = "${{ needs.build_windows_python_packages.result }}"
+            }
+          } | ConvertTo-Json -Depth 4
+          $json | Out-File -FilePath "logs/ci_windows_summary_${hostname}.json" -Encoding utf8
+          Write-Host "Generated logs/ci_windows_summary_${hostname}.json"
+
+      - name: Upload job status summary (JSON)
         uses: actions/upload-artifact@v4
         with:
-          name: test-job-status
-          path: ci_windows_summary.txt
+          name: "test-job-status-${{ env.hostname }}"
+          path: "logs/ci_windows_summary_${{ env.hostname }}.json"

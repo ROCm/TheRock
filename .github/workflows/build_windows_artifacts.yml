@@ -110,7 +110,7 @@ jobs:
       - name: Runner health status
         run: |
           ccache --zero-stats
-          python ./build_tools/health_status.py | tee build_health_status.log
+          python ./build_tools/health_status.py
 
       - name: Test build_tools
         run: |
@@ -148,29 +148,92 @@ jobs:
       - name: Build therock-archives and therock-dist
         run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
+      # Save hostname for later use in artifact name
+      - name: Set hostname
+        shell: bash
+        run: |
+          echo "HOSTNAME=$(hostname)" >> $GITHUB_ENV
+
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           mkdir -p build/logs
+
+          echo "Running on host: $HOSTNAME"
+
           if [ -d "${{ env.BUILD_DIR }}" ]; then
-            echo "Build dir:" | tee build/logs/report.log
+            echo "Build dir:"
             echo "------------"
-            ls -lh "${{ env.BUILD_DIR }}" | tee -a build/logs/report.log
-            echo "Artifact Archives:" | tee -a build/logs/report.log
+            ls -lh "${{ env.BUILD_DIR }}"
+            echo "Artifact Archives:"
             echo "------------------"
-            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz | tee -a build/logs/report.log
-            echo "Artifacts:" | tee -a build/logs/report.log
+            ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz
+            echo "Artifacts:"
             echo "----------"
             du -h -d 1 "${{ env.BUILD_DIR }}"/artifacts
-            echo "CCache Stats:" | tee -a build/logs/report.log
+            echo "CCache Stats:"
             echo "-------------"
-            ccache -s | tee -a build/logs/report.log
+            ccache -s
+
+            # Collect artifact info
+            artifact_list=$(ls -lh "${{ env.BUILD_DIR }}"/artifacts/*.tar.xz 2>/dev/null | awk '{print $9 " (" $5 ")"}' | jq -R . | jq -s .)
+            artifact_sizes=$(du -h -d 1 "${{ env.BUILD_DIR }}/artifacts" 2>/dev/null | awk '{print $2 ": " $1}' | jq -R . | jq -s .)
+            sdk_sizes=$(du -h -d 1 "${{ env.BUILD_DIR }}/dist/rocm" 2>/dev/null | awk '{print $2 ": " $1}' | jq -R . | jq -s .)
+
+            # Capture ccache stats
+            ccache_stats=$(ccache -s | jq -R -s .)
+
+            # Determine build outcome
+            build_outcome="success"
           else
-            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report! | tee build/logs/error.log"
-            echo "        This should only happen if the CI is cancelled before the build step."
-            exit 1
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
+            echo "[ERROR] This should only happen if the CI is cancelled before the build step."
+            build_outcome="failed"
+            mkdir -p build/logs
+            echo "[ERROR] Build directory missing" > build/logs/error.log
           fi
+
+          # Build JSON file (always create it)
+          jq -n \
+            --arg workflow "${{ github.workflow }}" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_number "${{ github.run_number }}" \
+            --arg commit "${{ github.sha }}" \
+            --arg repo "${{ github.repository }}" \
+            --arg timestamp "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+            --arg hostname "$HOSTNAME" \
+            --arg build_outcome "$build_outcome" \
+            --argjson artifacts "${artifact_list:-[]}" \
+            --argjson artifact_sizes "${artifact_sizes:-[]}" \
+            --argjson sdk_sizes "${sdk_sizes:-[]}" \
+            --arg ccache_stats "${ccache_stats:-""}" \
+            '{
+              workflow: $workflow,
+              run_id: $run_id,
+              run_number: $run_number,
+              commit: $commit,
+              repo: $repo,
+              timestamp: $timestamp,
+              hostname: $hostname,
+              build_outcome: $build_outcome,
+              build_report: {
+                artifacts: $artifacts,
+                artifact_sizes: $artifact_sizes,
+                sdk_sizes: $sdk_sizes,
+                ccache_stats: $ccache_stats
+              }
+            }' > build/logs/build_report_${HOSTNAME}.json
+
+          echo "Build report saved to build/logs/build_report_${HOSTNAME}.json"
+
+      - name: Upload all logs and JSONs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "windows-build-logs-${{ runner.name || env.HOSTNAME }}"
+          path: "build/logs/"
+          if-no-files-found: warn
 
       - name: "Build size report"
         if: always()
@@ -197,47 +260,9 @@ jobs:
             --build-dir ${{ env.BUILD_DIR }} \
             --upload
 
-      - name: Upload build logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            build/logs/**/*.log
-            build_health_status.log
-          retention-days: 7
-
       - name: Save cache
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.CACHE_DIR }}
           key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
-
-  upload_build_status:
-    name: "Upload build job status summary"
-    if: always()
-    runs-on: ubuntu-latest
-    needs: [build_windows_artifacts]
-    steps:
-      - name: Generate job summary (JSON)
-        run: |
-          cat <<EOF > build_windows_status.json
-          {
-            "workflow": "${{ github.workflow }}",
-            "run_id": "${{ github.run_id }}",
-            "run_number": "${{ github.run_number }}",
-            "commit": "${{ github.sha }}",
-            "repo": "${{ github.repository }}",
-            "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
-            "jobs": {
-              "build_windows_artifacts": "${{ needs.build_windows_artifacts.result }}"
-            }
-          }
-          EOF
-
-      - name: Upload build status summary
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-status
-          path: build_windows_status.json

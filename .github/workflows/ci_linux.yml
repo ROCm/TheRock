@@ -107,75 +107,40 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
 
+  # This uploads logs with high level stats like
+  # Uploads artifact named test-job-status-<hostname> so parallel machines won’t overwrite each other.
   upload_test_status:
-    name: "Upload test job status summary"
+    name: "Upload test job status summary (JSON)"
     if: always()
     runs-on: ubuntu-latest
     needs: [build_portable_linux_artifacts, test_linux_artifacts, build_portable_linux_python_packages]
     steps:
-      - name: Generate job status summary
-        run: |
-          echo "Workflow: ${{ github.workflow }}" > ci_linux_summaryy.txt
-          echo "Run ID: ${{ github.run_id }}" >> ci_linux_summaryy.txt
-          echo "Run Number: ${{ github.run_number }}" >> ci_linux_summaryy.txt
-          echo "Commit: ${{ github.sha }}" >> ci_linux_summaryy.txt
-          echo "Repo: ${{ github.repository }}" >> ci_linux_summaryy.txt
-          echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> ci_linux_summaryy.txt
-          echo "" >> ci_linux_summaryy.txt
-          echo "Job Results:" >> ci_linux_summaryy.txt
-          echo "----------------------------------------" >> ci_linux_summaryy.txt
-          echo "build_portable_linux_artifacts: ${{ needs.build_portable_linux_artifacts.result }}" >> ci_linux_summary.txt
-          echo "test_linux_artifacts:   ${{ needs.test_linux_artifacts.result }}" >> ci_linux_status_summary.txt
-          echo "build_portable_linux_python_packages:   ${{ needs.build_portable_linux_python_packages.result }}" >> ci_linux_status_summary.txt
+      - name: Get Hostname
+        id: hostname
+        run: echo "hostname=$(hostname)" >> $GITHUB_ENV
 
-      - name: Upload job status summary
+      - name: Generate job status summary (JSON)
+        run: |
+          mkdir -p logs
+          cat <<EOF > "logs/ci_linux_summary_${{ env.hostname }}.json"
+          {
+            "workflow": "${{ github.workflow }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "repo": "${{ github.repository }}",
+            "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+            "runner_hostname": "${{ env.hostname }}",
+            "jobs": {
+              "build_portable_linux_artifacts": "${{ needs.build_portable_linux_artifacts.result }}",
+              "test_linux_artifacts": "${{ needs.test_linux_artifacts.result }}",
+              "build_portable_linux_python_packages": "${{ needs.build_portable_linux_python_packages.result }}"
+            }
+          }
+          EOF
+          echo " Generated logs/ci_linux_summary_${{ env.hostname }}.json"
+
+      - name: Upload job status summary (JSON)
         uses: actions/upload-artifact@v4
         with:
-          name: test-job-status
-          path: ci_linux_summaryy.txt
-
-
-
-
-
-
-
-
-
-  # send_logs_to_loki:
-  #   name: "Aggregate & Send Logs to Loki"
-  #   needs: [build_portable_linux_artifacts, test_linux_artifacts, build_portable_linux_python_packages]
-  #   if: always()
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     LOKI_URL: ${{ secrets.LOKI_URL }}
-  #     LOKI_API_KEY: ${{ secrets.LOKI_API_KEY }}
-  #   steps:
-  #     - name: Checkout repo
-  #       uses: actions/checkout@v4
-
-  #     - name: Download all workflow logs
-  #       uses: dawidd6/action-download-artifact@v3
-  #       with:
-  #         path: ./logs
-
-  #     - name: Aggregate all logs
-  #       run: |
-  #         echo "Aggregating all job logs..."
-  #         mkdir -p aggregated
-  #         find ./logs -type f -name "*.log" -exec cat {} \; > aggregated/ci_logs.txt
-  #         echo "--- Log Summary ---"
-  #         wc -l aggregated/ci_logs.txt || true
-  #         head -n 20 aggregated/ci_logs.txt || true
-
-  #     - name: Push logs to Loki
-  #       run: |
-  #         echo "Sending logs to Loki..."
-  #         TIMESTAMP=$(date --utc +%FT%T.%3NZ)
-  #         PAYLOAD=$(jq -n --arg t "$TIMESTAMP" --arg l "$(cat aggregated/ci_logs.txt | sed 's/"/\\"/g')" \
-  #         '{streams: [{stream: {job: "ci_nightly_linux"}, values: [[ $t, $l ]]}]}')
-
-  #         curl -X POST -H "Content-Type: application/json" \
-  #              -H "Authorization: Bearer $LOKI_API_KEY" \
-  #              -d "$PAYLOAD" \
-  #              "$LOKI_URL"
+          name: "test-job-status-${{ env.hostname }}"
+          path: "logs/ci_linux_summary_${{ env.hostname }}.json"
