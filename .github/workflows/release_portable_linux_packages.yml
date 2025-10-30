@@ -154,6 +154,7 @@ jobs:
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
+      MANYLINUX: 1
 
     steps:
       - name: "Checking out repository"
