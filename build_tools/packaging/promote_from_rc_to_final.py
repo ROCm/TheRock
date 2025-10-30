@@ -29,13 +29,16 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
     parser.add_argument(
         "--match-files",
         help="Limits selection in '--input-dir' to files matchings this argument. Use wild cards if needed, e.g. '*rc2*' (default '*' to promote all files in '--input-dir')",
-        default="*"
+        default="*",
     )
     return parser.parse_args(argv)
 
+
 def wheel_change_extra_files(new_dir_path, old_version, new_version):
     # extract "rocm_sdk_core" from /tmp/tmp3swrl25j/wheel/rocm_sdk_core-7.10.0
-    package_name_no_version = str(new_dir_path).rsplit("/", 1)[-1].split(str(new_version))[0][:-1]
+    package_name_no_version = (
+        str(new_dir_path).rsplit("/", 1)[-1].split(str(new_version))[0][:-1]
+    )
 
     # correct capitalization
     # of interest for amdgpu arch: wheels are all lower case
@@ -43,21 +46,26 @@ def wheel_change_extra_files(new_dir_path, old_version, new_version):
     # but inside we have to match to rocm_sdk_libraries_gfx94X-dcgpu/ with a capital "X-dcgpu" instead of "x_dcgpu"
     for dir in glob.glob(str(new_dir_path) + "/*"):
         stripped_dir = str(dir).rsplit("/", 1)[-1]
-        if ( "gfx" in package_name_no_version and "gfx" in stripped_dir
-            and len(package_name_no_version) == len(stripped_dir)):
+        if (
+            "gfx" in package_name_no_version
+            and "gfx" in stripped_dir
+            and len(package_name_no_version) == len(stripped_dir)
+        ):
             package_name_no_version = stripped_dir
             break
 
-
-    files_to_change = [f"{new_dir_path}/{package_name_no_version}/_dist_info.py", ]
+    files_to_change = [
+        f"{new_dir_path}/{package_name_no_version}/_dist_info.py",
+    ]
 
     print("  Changing wheel-specific files that contain the version", end="")
 
     with fileinput.input(files=(files_to_change), encoding="utf-8", inplace=True) as f:
-            for line in f:
-                print(line.replace(str(old_version), str(new_version)), end="")
+        for line in f:
+            print(line.replace(str(old_version), str(new_version)), end="")
 
     print(" ...done")
+
 
 def promote_wheel(filename):
     print(f"Promoting whl from rc to final: {filename}")
@@ -75,14 +83,18 @@ def promote_wheel(filename):
 
     print(f"  Changing to base version: {base_version}")
     new_wheel_path = change_wheel_version_with_hook.change_wheel_version(
-                        pathlib.Path(filename), str(base_version), None,
-                        callback_func=wheel_change_extra_files)
+        pathlib.Path(filename),
+        str(base_version),
+        None,
+        callback_func=wheel_change_extra_files,
+    )
 
     new_wheel = Wheel(new_wheel_path)
     new_version = Version(new_wheel.version)
     print(f"New wheel has {new_version} and path is {new_wheel_path}")
 
-def promote_targz(filename : str):
+
+def promote_targz(filename: str):
     print(f"Found tar.gz: {filename}")
 
     split = filename.removesuffix(".tar.gz").rsplit("/", 1)
@@ -96,7 +108,6 @@ def promote_targz(filename : str):
         targz.close()
         print(" ...done")
 
-
         with open(f"{tmp_dir}/{dir_prefix}/PKG-INFO", "r") as info:
             for line in info.readlines():
                 if "Version" in line:
@@ -107,14 +118,21 @@ def promote_targz(filename : str):
         base_version = version.split("rc", 1)[0]
 
         if any(c.isalpha() for c in base_version):
-            print(f"  Base version extraction not successful and letters still in the version {base_version}.")
-            print( "  Only release candidates (rc) can be promoted! Aborting!")
+            print(
+                f"  Base version extraction not successful and letters still in the version {base_version}."
+            )
+            print("  Only release candidates (rc) can be promoted! Aborting!")
             return
         if base_version == version:
-            print(f"  {version} and {base_version} are the same. Already the base version? Skipping...")
+            print(
+                f"  {version} and {base_version} are the same. Already the base version? Skipping..."
+            )
             return
 
-        print(f"  Editing files to change version from {version} to {base_version}", end="")
+        print(
+            f"  Editing files to change version from {version} to {base_version}",
+            end="",
+        )
 
         files_to_change = [
             f"{tmp_dir}/{dir_prefix}/src/rocm.egg-info/requires.txt",
@@ -123,12 +141,13 @@ def promote_targz(filename : str):
             f"{tmp_dir}/{dir_prefix}/PKG-INFO",
         ]
 
-        with fileinput.input(files=(files_to_change), encoding="utf-8", inplace=True) as f:
+        with fileinput.input(
+            files=(files_to_change), encoding="utf-8", inplace=True
+        ) as f:
             for line in f:
                 print(line.replace(version, base_version), end="")
 
         print(" ...done")
-
 
         print("  Creating new archive for it", end="")
         # rename tmp dir to the new version
@@ -142,7 +161,10 @@ def promote_targz(filename : str):
             tar.add(f"{tmp_dir}/{new_dir_name}", arcname=new_dir_name)
 
         print(f" ...done")
-        print(f"New tar.gz with version {base_version} written to {base_dir}/{new_dir_name}.tar.gz")
+        print(
+            f"New tar.gz with version {base_version} written to {base_dir}/{new_dir_name}.tar.gz"
+        )
+
 
 if __name__ == "__main__":
     p = parse_arguments(sys.argv[1:])

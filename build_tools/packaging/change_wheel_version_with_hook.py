@@ -49,7 +49,9 @@ from packaging.tags import parse_tag
 from collections.abc import Callable
 
 
-def version_replace(v: packaging.version.Version, **kwargs: Any) -> packaging.version.Version:
+def version_replace(
+    v: packaging.version.Version, **kwargs: Any
+) -> packaging.version.Version:
     # yikes :-)
     self = packaging.version.Version.__new__(packaging.version.Version)
     self._version = v._version._replace(**kwargs)
@@ -81,17 +83,23 @@ def wheel_unpack(wheel: Path, dest_dir: Path, name_ver: str) -> None:
         wf.extractall(dest_dir / name_ver)
 
 
-def change_platform_tag(wheel_path: Path, tag: str, parser: email.parser.BytesParser) -> str:
+def change_platform_tag(
+    wheel_path: Path, tag: str, parser: email.parser.BytesParser
+) -> str:
     """Changes the WHEEL file to specify `tag`. Returns a canonicalized copy of that tag."""
     platform_tags = list(parse_tag(tag))
     if len(platform_tags) != 1:
-        raise ValueError(f"Parsed '{tag}' as {len(platform_tags)}; there must be exactly one.")
+        raise ValueError(
+            f"Parsed '{tag}' as {len(platform_tags)}; there must be exactly one."
+        )
     platform_tag = platform_tags[0]
     is_pure = platform_tag.abi == "none"
     if is_pure != (platform_tag.platform == "any"):
         raise ValueError(f"ABI and platform are inconsistent in '{platform_tag}'.")
     if is_pure != platform_tag.interpreter.startswith("py"):
-        raise ValueError(f"Interpreter and platform are inconsistent in '{platform_tag}'.")
+        raise ValueError(
+            f"Interpreter and platform are inconsistent in '{platform_tag}'."
+        )
     with open(wheel_path, "rb") as f:
         msg = parser.parse(f)
     msg.replace_header("Tag", str(platform_tag))
@@ -161,7 +169,8 @@ def change_wheel_version(
         # rename data
         if (dest_dir / new_slug / f"{old_slug}.data").exists():
             shutil.move(
-                dest_dir / new_slug / f"{old_slug}.data", dest_dir / new_slug / f"{new_slug}.data"
+                dest_dir / new_slug / f"{old_slug}.data",
+                dest_dir / new_slug / f"{new_slug}.data",
             )
 
         metadata_path = dest_dir / new_slug / f"{new_slug}.dist-info" / "METADATA"
@@ -190,7 +199,9 @@ def change_wheel_version(
         else:
             # Generate the tags that will be associated with the wheel after it is repacked.
             # `wheel pack` sorts the tags, so we need to do the same if we're not changing it.
-            new_tag = "-".join(".".join(sorted(t.split("."))) for t in old_parts.tag.split("-"))
+            new_tag = "-".join(
+                ".".join(sorted(t.split("."))) for t in old_parts.tag.split("-")
+            )
 
         # wheel pack rewrites the RECORD file
         subprocess.check_output(
