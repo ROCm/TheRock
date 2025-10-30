@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shlex
 import select
 import logging
 import threading
@@ -55,10 +56,10 @@ def runCmd(
 
     # console prints to log all the running cmds for easy repro of test steps
     envStr = ""
-    if env:
+    if env:  # for printing the extra envs
         for key, value in env.items():
             envStr += f"{key}='{value}' "
-    log.info(f'++Exec [{cwd}]$ {envStr}{" ".join(cmd)}')
+    log.info(f'++Exec [{cwd}]$ {envStr}{shlex.join(cmd)}')
 
     # handling extra env variables along with session envs
     if env:
@@ -89,13 +90,13 @@ def runCmd(
 
     # live collection of process stdout / stderr streams
     def _readStream(fd):
-        chunk = fd.read(8196)  # read upto 8k bytes size chunks
+        chunk = fd.read()
         log.debug(chunk)
         return chunk
 
     ret, stdout, stderr = None, b"", b""
     chunk = None
-    while chunk != b"":
+    while chunk != b"":  # loop reading till end of stream
         # select helps in efficient wait on resource events
         readFds = select.select([process.stdout, process.stderr], [], [], timeout)[0]
         if not readFds:
@@ -113,9 +114,8 @@ def runCmd(
 
     # handling return value
     ret = process.wait()
-    log.info(f"[{' '.join(cmd)}] return code: {ret}")
-    if ret == 0:
-        log.error(f"cmd failed: {' '.join(cmd)}")
+    status = 'success' if ret == 0 else 'failed'
+    log.info(f"[{shlex.join(cmd)}] {status} return code: {ret}")
 
     # returns
     if not retOut:
