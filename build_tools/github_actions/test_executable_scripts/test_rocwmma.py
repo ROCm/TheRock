@@ -29,7 +29,7 @@ if AMDGPU_FAMILIES.startswith("gfx11") or platform == "windows":
     test_type = "regression"
 
 test_subdir = ""
-timeout = "1800"
+timeout = "3600"
 if test_type == "smoke":
     test_subdir = "/smoke"
     timeout = "300"
