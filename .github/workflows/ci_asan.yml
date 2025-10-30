@@ -1,7 +1,6 @@
-# This ASAN CI workflow is triggered by:
+# This CI ASAN workflow is triggered by:
 #   - push to main branch
 #   - workflow dispatch
-#
 
 name: CI ASAN
 
@@ -9,15 +8,13 @@ on:
   push:
     branches:
       - main
+      # for testing
+      - users/geomin12/asan-fix
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
-        default: ""
-      windows_amdgpu_families:
-        type: string
-        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
 
 permissions:
@@ -34,6 +31,8 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup.yml
+    with:
+      build_variant: "asan"
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
@@ -67,48 +66,12 @@ jobs:
       contents: read
       id-token: write
 
-  windows_build_and_test:
-    name: Windows::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
-    needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.windows_variants != '[]' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: ${{ fromJSON(needs.setup.outputs.windows_variants) }}
-    uses: ./.github/workflows/ci_windows.yml
-    with:
-      amdgpu_families: ${{ matrix.variant.family }}
-      artifact_group: ${{ matrix.variant.artifact_group }}
-      test_runs_on: ${{ matrix.variant.test-runs-on }}
-      build_variant_label: ${{ matrix.variant.build_variant_label }}
-      build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
-      build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
-      test_labels: ${{ needs.setup.outputs.windows_test_labels }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-      expect_failure: ${{ matrix.variant.expect_failure == true }}
-      use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts == true && 'true' || 'false' }}
-      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      test_type: ${{ needs.setup.outputs.test_type }}
-      sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
-    permissions:
-      contents: read
-      id-token: write
-
-  # build_python_packages:
-  #   name: Build Python Packages
-  #   uses: ./.github/workflows/build_python_packages.yml
-
   ci_summary:
     name: CI Summary
     if: always()
     needs:
       - setup
       - linux_build_and_test
-      - windows_build_and_test
     runs-on: ubuntu-24.04
     steps:
       - name: Output failed jobs

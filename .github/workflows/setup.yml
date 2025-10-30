@@ -2,6 +2,10 @@ name: Setup
 
 on:
   workflow_call:
+    inputs:
+      build_variant:
+        type: string
+        default: "release"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -67,6 +71,7 @@ jobs:
           INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
           WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version

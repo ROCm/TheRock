@@ -122,7 +122,6 @@ jobs:
 
       - name: Build therock-archives and therock-dist
         run: |
-          mkdir -p telemetry
           # Background telemetry loop
           ( while true; do
               echo "--- $(date) ---"
@@ -132,7 +131,7 @@ jobs:
             done ) &
           TELEMETRY_PID=$!
 
-          cmake --build build --target therock-archives therock-dist -- -k 0 -j$(nproc) || true
+          cmake --build build --target therock-archives therock-dist -- -k 0
 
           # Stop telemetry loop
           kill $TELEMETRY_PID || true
