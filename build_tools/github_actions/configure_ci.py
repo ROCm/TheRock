@@ -329,7 +329,7 @@ def matrix_generator(
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     # for testing
-    if is_push:
+    if is_push and base_args.get("branch_name") == "main" or base_args.get("branch_name") == "users/geomin12/asan-fix":
     # if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
@@ -532,6 +532,6 @@ if __name__ == "__main__":
     base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
         "WINDOWS_TEST_LABELS", ""
     )
-    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "Release")
+    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
 
     main(base_args, linux_families, windows_families)
