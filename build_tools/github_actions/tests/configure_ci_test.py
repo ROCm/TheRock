@@ -92,7 +92,7 @@ class ConfigureCITest(unittest.TestCase):
             base_args={
                 "workflow_dispatch_linux_test_labels": "",
                 "workflow_dispatch_windows_test_labels": "",
-                "build_variant": "release"
+                "build_variant": "release",
             },
             families=build_families,
             platform="linux",
@@ -118,9 +118,7 @@ class ConfigureCITest(unittest.TestCase):
             is_workflow_dispatch=True,
             is_push=False,
             is_schedule=False,
-            base_args={
-                "build_variant": "release"
-            },
+            base_args={"build_variant": "release"},
             families=build_families,
             platform="linux",
         )
@@ -130,7 +128,7 @@ class ConfigureCITest(unittest.TestCase):
     def test_valid_linux_pull_request_matrix_generator(self):
         base_args = {
             "pr_labels": '{"labels":[{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"}]}',
-            "build_variant": "release"
+            "build_variant": "release",
         }
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
             is_pull_request=True,
@@ -156,7 +154,7 @@ class ConfigureCITest(unittest.TestCase):
     def test_duplicate_windows_pull_request_matrix_generator(self):
         base_args = {
             "pr_labels": '{"labels":[{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"gfx110X-windows"}]}',
-            "build_variant": "release"
+            "build_variant": "release",
         }
         windows_target_output, windows_test_labels = configure_ci.matrix_generator(
             is_pull_request=True,
@@ -179,7 +177,7 @@ class ConfigureCITest(unittest.TestCase):
     def test_invalid_linux_pull_request_matrix_generator(self):
         base_args = {
             "pr_labels": '{"labels":[{"name":"gfx10000X-linux"},{"name":"gfx110000X-windows"}]}',
-            "build_variant": "release"
+            "build_variant": "release",
         }
         linux_target_output, windows_test_labels = configure_ci.matrix_generator(
             is_pull_request=True,
@@ -216,7 +214,7 @@ class ConfigureCITest(unittest.TestCase):
     def test_valid_test_label_linux_pull_request_matrix_generator(self):
         base_args = {
             "pr_labels": '{"labels":[{"name":"test:hipblaslt"},{"name":"test:rocblas"}]}',
-            "build_variant": "release"
+            "build_variant": "release",
         }
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
             is_pull_request=True,
@@ -238,7 +236,7 @@ class ConfigureCITest(unittest.TestCase):
     def test_invalid_test_label_linux_pull_request_matrix_generator(self):
         base_args = {
             "pr_labels": '{"labels":[{"name":"test:hipchalk"},{"name":"test:rocchalk"}]}',
-            "build_variant": "release"
+            "build_variant": "release",
         }
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
             is_pull_request=True,
@@ -309,9 +307,7 @@ class ConfigureCITest(unittest.TestCase):
             is_workflow_dispatch=False,
             is_push=False,
             is_schedule=True,
-            base_args={
-                "build_variant": "release"
-            },
+            base_args={"build_variant": "release"},
             families={},
             platform="linux",
         )
@@ -327,9 +323,7 @@ class ConfigureCITest(unittest.TestCase):
             is_workflow_dispatch=False,
             is_push=False,
             is_schedule=True,
-            base_args={
-                "build_variant": "release"
-            },
+            base_args={"build_variant": "release"},
             families={},
             platform="windows",
         )
