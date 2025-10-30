@@ -9,13 +9,13 @@ Outputs written to GITHUB_OUTPUT:
     * 'package_targets': JSON list of the form
         [
             {
-                "family": "gfx94X-dcgpu",
+                "amdgpu_family": "gfx94X-dcgpu",
                 "test_machine": "linux-mi300-1gpu-ossci-rocm",
                 "expect_failure": false,
                 "expect_pytorch_failure": false
             },
             {
-                "family": "gfx110X-all",
+                "amdgpu_family": "gfx110X-all",
                 "test_machine": "",
                 "expect_failure": false,
                 "expect_pytorch_failure": true
@@ -40,7 +40,7 @@ jobs:
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
   windows_packages:
-    name: ${{ matrix.target_bundle.family }}::Build Windows
+    name: ${{ matrix.target_bundle.amdgpu_family }}::Build Windows
     runs-on: 'windows-2022'
     needs: [setup_metadata]
     strategy:
