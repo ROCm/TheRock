@@ -121,7 +121,22 @@ jobs:
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-archives and therock-dist
-        run: cmake --build build --target therock-archives therock-dist -- -k 0 -j2
+        run: |
+          mkdir -p telemetry
+          # Background telemetry loop
+          ( while true; do
+              echo "--- $(date) ---" >> telemetry/sys_stats.log
+              free -h >> telemetry/sys_stats.log
+              top -b -n1 | head -20 >> telemetry/sys_stats.log
+              echo >> telemetry/sys_stats.log
+              sleep 10
+            done ) &
+          TELEMETRY_PID=$!
+
+          cmake --build build --target therock-archives therock-dist -- -k 0 -j$(nproc) || true
+
+          # Stop telemetry loop
+          kill $TELEMETRY_PID || true
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
