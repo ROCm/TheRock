@@ -303,7 +303,7 @@ base/
   therock_artifact_base.toml
 runtime/
   [rocr-runtime] -> projects/rocr-runtime
-  [rocminfo] -> projects/rocminfo
+  [rocminfo] -> projects/rocminfo #Do we need this project? Is all the functionality covered by AMD-SMI
   [clr] -> projects/clr
   [hip] -> projects/hip
   [hip-tests] -> projects/hip-tests
@@ -318,6 +318,7 @@ profiler/
   [aqlprofile/] -> projects/aqlprofile
   [sdk/] -> projects/rocprofiler-sdk
   [tracer/] -> projects/roctracer
+#rocm-systems, rocm-compute?
   therock_artifact_rocprofiler-sdk.toml
   therock.cmake
   therock_subprojects.cmake
@@ -332,12 +333,13 @@ shared/
   mxdatagenerator/
   rocroller/
   tensile/
+  common/ #Utilities used by multiple projects e.g. RAII GPU buffer classes
   therock.cmake
   therock_subprojects.cmake
 
 gemmla/
   common/
-    [hipblas-common] -> project/hipblas-common
+    [blas-common] -> project/hipblas-common
     therock.cmake
     therock_subprojects.cmake
     therock_artifact_gemmla-common.toml
@@ -367,10 +369,9 @@ gemmla/
     therock_artifact_gemm-api.toml
 
 kernel-libs/
-  [rocrand] -> projects/rocrand
+  [rocrand] -> projects/rocrand # Should we merge into hiprand?
   [hiprand] -> projects/hiprand
-  [rocfft] -> projects/rocfft
-  [hipfft] -> projects/hipfft
+  [hipfft] -> projects/hipfft #Merge rocFFT into one folder 
   therock.cmake
   therock_subprojects.cmake
   therock_artifact_fft.toml
@@ -381,6 +382,7 @@ compute-libs/
   [hipcub] -> projects/hipcub
   [rocthrust] -> projects/rocthrust
   [composable-kernel] -> projects/composable-kernel (plan TBD, shown for illustration)
+  [libhipxx] (planned prior to 8.0.0)
   therock.cmake
   therock_subprojects.cmake
   therock_artifact_prim.toml
