@@ -93,6 +93,13 @@ jobs:
         with:
           python-version: ${{ inputs.python_versions }}
 
+      - name: Determine optional arguments passed to `build_prod_wheels.py`
+        if: ${{ inputs.rocm_version }}
+        run: |
+          pip install packaging
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version ${{ inputs.rocm_version }}
+
       - name: Build JAX Wheels
         env:
           ROCM_VERSION: ${{ inputs.rocm_version }}
@@ -102,7 +109,7 @@ jobs:
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_versions }}" \
-            --rocm-version="${ROCM_VERSION:0:5}" \
+            --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
 
@@ -116,6 +123,13 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+
+      - name: Rename JAX wheels with ROCm version tag
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          python3 ./build_tools/update_rocm_tag_wheels.py \
+            ${{ env.PACKAGE_DIST_DIR }} \
+            ${{ inputs.rocm_version }}
 
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
