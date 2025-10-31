@@ -21,7 +21,6 @@ envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsolver-test",
-    "--gtest_filter=*known_bug*",
 ]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
