@@ -30,14 +30,16 @@ runs:
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
+        pip install uv
         python build_tools/setup_venv.py ${VENV_DIR} \
-          --activate-in-future-github-actions-steps
+          --activate-in-future-github-actions-steps \
+          --use-uv
 
     - name: Install test requirements
       shell: bash
       run: |
-        pip install -r requirements-test.txt
-        pip freeze
+        uv pip install -r requirements-test.txt
+        uv pip freeze
 
     - name: Install the AWS tool
       if: ${{ runner.os == 'Linux' }}
