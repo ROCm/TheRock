@@ -43,7 +43,6 @@ def runCmd(
     env=None,
     stdin=None,
     timeout=TIMEOUT,
-    retOut=False,
     **kwargs,
 ):
     """Executes Cmd on the current node:
@@ -102,7 +101,7 @@ def runCmd(
         if not readFds:
             msg = f"Reached Timeout of {timeout} sec, Exiting..."
             log.warning(msg)
-            stdout += msg.encode()
+            stdout += msg.encode()  # appending timeout msg to stdout for reporting
             process.kill()
             break
         # live reading of stdout
@@ -117,10 +116,7 @@ def runCmd(
     status = "success" if ret == 0 else "failed"
     log.info(f"[{shlex.join(cmd)}] {status} return code: {ret}")
 
-    # returns
-    if not retOut:
-        return ret
-    return ret, (stdout + stderr).decode()
+    return ret, stdout.decode(), stderr.decode()
 
 
 def runParallel(*funcs):

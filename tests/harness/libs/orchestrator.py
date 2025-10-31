@@ -22,7 +22,7 @@ class Orchestrator(object):
             """Runs an single CTest shard on an assigned GPU with auto retry of failed tests"""
             cmd = ("ctest",)
             for i in range(retries):
-                ret, out = gpu.runCmd(*cmd, *tests, *args, retOut=True, **kwargs)
+                ret, out, _ = gpu.runCmd(*cmd, *tests, *args, **kwargs)
                 if ret == 0:
                     return ret, out
                 tests = (*tests, "--rerun-failed")
