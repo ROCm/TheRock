@@ -46,6 +46,7 @@ therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
 therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu)
@@ -61,34 +62,41 @@ therock_add_amdgpu_target(gfx1010 "AMD RX 5700" FAMILY dgpu-all gfx101X-all gfx1
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 therock_add_amdgpu_target(gfx1011 "AMD Radeon Pro V520" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 
 # gfx103X family
 therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" igpu-all FAMILY gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 
 # gfx110X family
@@ -101,6 +109,7 @@ therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu
 therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu
   EXCLUDE_TARGET_PROJECTS
     rccl  # https://github.com/ROCm/TheRock/issues/150
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
 
 # gfx115X family

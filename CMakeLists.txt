@@ -98,6 +98,7 @@ cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
 therock_enable_external_source("rccl" "${THEROCK_SOURCE_DIR}/comm-libs/rccl" OFF)
 therock_enable_external_source("rccl-tests" "${THEROCK_SOURCE_DIR}/comm-libs/rccl-tests" OFF)
 therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel" OFF)
+therock_enable_external_source("rocWMMA" "${THEROCK_SOURCE_DIR}/math-libs/rocWMMA" OFF)
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
@@ -316,6 +317,20 @@ if(NOT WIN32)
     REQUIRES COMPILER HIP_RUNTIME RAND
   )
   cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL "Enables composable kernel in MIOpen" ON ${THEROCK_ENABLE_COMPOSABLE_KERNEL} OFF)
+endif()
+
+# rocWMMA on Windows is disabled for now.
+if(NOT WIN32)
+  if(ROCWMMA_VALIDATE_WITH_ROCBLAS OR ROCWMMA_BENCHMARK_WITH_ROCBLAS)
+    set(_rocwmma_blas_requirements "BLAS")
+  else()
+    set(_rocwmma_blas_requirements "")
+  endif()
+  therock_add_feature(ROCWMMA
+    GROUP MATH_LIBS
+    DESCRIPTION "Enables rocWMMA"
+    REQUIRES COMPILER HIP_RUNTIME ${_rocwmma_blas_requirements}
+  )
 endif()
 
 # ML-Libs Features.
