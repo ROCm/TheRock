@@ -1,5 +1,3 @@
-boto3==1.39.15
 pytest==8.3.5
 pytest-check==2.5.3
 pytest-timeout==2.4.0
-PyYAML==6.0.2

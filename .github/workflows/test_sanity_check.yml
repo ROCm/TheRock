@@ -84,6 +84,7 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--base-only"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          REQUIREMENTS: "-r requirements-test-base.txt -r requirements-test-pytest.txt"
 
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
