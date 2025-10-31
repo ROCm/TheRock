@@ -254,27 +254,36 @@ framework.
 
 ### Installing PyTorch Python packages
 
-> [!WARNING]
-> This is under **active** development. Compatibility matrix for these wheels is in progress.
->
-> Each `torchaudio` package is compiled against a specific version of `torch`; please refer to the [PyTorch compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix) for compatible versions of torch and torchaudio.
-> The build dates for nightly wheels should also be consistent with each other.
+Using the index pages [listed above](#installing-rocm-python-packages), you can
+also install `torch`, `torchaudio`, and `torchvision`.
 
 > [!NOTE]
-> These installation commands will install the latest versions, including prerelease wheels,
-> by default. Older versions can also be installed from available versions found at
+> By default, pip will install the latest versions of each package. If you want to
+> install older versions take note of the compatibility matrix:
 >
-> - The [nightly releases page](https://rocm.nightlies.amd.com/v2/)
-> - Documentation for [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+> | torch version | torchaudio version | torchvision version |
+> | ------------- | ------------------ | ------------------- |
+> | 2.10          | 2.10               | 0.25                |
+> | 2.9           | 2.9                | 0.24                |
+> | 2.7           | 2.7.1a0            | 0.22.1              |
 >
 > For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
 > ```
 > torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 > ```
+>
+> See also
+>
+> - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+> - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
+> - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+> - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
 
-Using the index pages [listed above](#installing-rocm-python-packages), you can install `torch`, `torchaudio`, and
-`torchvision` instead of `rocm[libraries,devel]`:
+> [!TIP]
+> The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
+> be installed automatically for you and you do not need to explicitly install
+> ROCm first.
 
 #### torch for gfx94X-dcgpu
 
