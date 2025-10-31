@@ -100,7 +100,6 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
                 args.image,
                 "/bin/bash",
                 "/therock/src/build_tools/detail/linux_portable_build_in_container.sh",
-                "--manylinux",
             ]
         )
         cl += rest_args
