@@ -170,9 +170,16 @@ if __name__ == "__main__":
     # Need dynamic load as change_wheel_version needs to be imported via parent directory
     this_dir = pathlib.Path(__file__).resolve().parent
     # ../third_party/change_wheel_version/change_wheel_version.py
-    change_wheel_version_path = this_dir.parent / 'third_party' / 'change_wheel_version' / 'change_wheel_version.py'  
+    change_wheel_version_path = (
+        this_dir.parent
+        / "third_party"
+        / "change_wheel_version"
+        / "change_wheel_version.py"
+    )
 
-    spec = importlib.util.spec_from_file_location("third_party_change_wheel_version", change_wheel_version_path)
+    spec = importlib.util.spec_from_file_location(
+        "third_party_change_wheel_version", change_wheel_version_path
+    )
     change_wheel_version = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(change_wheel_version)
 
