@@ -9,7 +9,7 @@
 #
 
 
-import sys, time
+import sys, time, json, os
 
 sys.dont_write_bytecode = True
 
@@ -73,6 +73,16 @@ def main():
         check_list += linux_only_list
 
     diag_check = check_therock.test_list(check_list).summary
+
+    # Save health summary to a JSON file
+    os.makedirs("build/logs", exist_ok=True)
+    health_data = {
+        "status_summary": diag_check,
+        "runtime_seconds": round(therock_detect_time, 2),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
+    with open("build/logs/health_status.json", "w") as f:
+        json.dump(health_data, f, indent=2)
 
     print("")
     print(device.section_bar(diag_check))
