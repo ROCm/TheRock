@@ -1,0 +1,22 @@
+[components.dbg."systems-tools/stage"]
+[components.dev."systems-tools/stage"]
+include = [
+  "include/**",
+  "lib/cmake/**",
+]
+[components.doc."systems-tools/stage"]
+include = [
+  "share/doc/rdc/**",
+]
+[components.lib."systems-tools/stage"]
+include = [
+  "lib/*.so*",
+  "lib/rdc/**",
+]
+[components.run."systems-tools/stage"]
+include = [
+  "lib/*.so*",
+  "lib/rdc/*.so*",
+  "libexec/rdc/**",
+  "share/rdc/**",
+]
