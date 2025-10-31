@@ -43,3 +43,7 @@ include = [
 # zstd
 [components.dev."third-party/sysdeps/linux/zstd/build/stage"]
 [components.lib."third-party/sysdeps/linux/zstd/build/stage"]
+
+# mesa-fork
+[components.dev."third-party/sysdeps/linux/amd-mesa/build/stage"]
+[components.lib."third-party/sysdeps/linux/amd-mesa/build/stage"]
