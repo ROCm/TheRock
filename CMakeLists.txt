@@ -333,6 +333,12 @@ if(NOT WIN32)
     DESCRIPTION "Enables the hipDNN project"
     REQUIRES COMPILER HIP_RUNTIME
   )
+
+  therock_add_feature(MIOPEN_PLUGIN
+    GROUP ML_LIBS
+    DESCRIPTION "Enables the MIOpen plugin project"
+    REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
+  )
 endif()
 
 # Finalize all feature flags.
