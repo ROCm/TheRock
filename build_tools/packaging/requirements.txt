@@ -1,0 +1,2 @@
+installer==0.7.0
+pkginfo==1.12.1.2
