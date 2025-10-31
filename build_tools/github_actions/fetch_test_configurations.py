@@ -155,7 +155,7 @@ test_matrix = {
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
-        "fetch_artifact_args": "--blas --rand --miopen --tests",
+        "fetch_artifact_args": "",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
