@@ -49,7 +49,7 @@ class PackageInstaller(PackageManagerBase):
         logger.info("Installation complete.")
 
 
-    def _run_install_command(self, pkg_name, use_repo, pkg_path=None):
+    def _run_install_command(self, pkg_name, use_repo):
         """
         Build and run OS-specific install command for a package.
 
@@ -57,42 +57,40 @@ class PackageInstaller(PackageManagerBase):
         :param pkg_path: Full path for local install (required for local)
         :param use_repo: True if installing from repository, else False
         """
+
+
         try:
             if not pkg_name:
-                logger.error("Package name is None — cannot install.")
+                logger.error("Package name is None cannot install.")
                 return
 
-            os_family = self.detect_os_family()
             cmd = None
 
             # Determine command based on source type and OS
-            if not use_repo:
-                if not pkg_path:
-                    logger.error(f"Local pkg_path must be provided for {pkg_name}")
-                    return
+            if self.upload == "pre":
 
-                if os_family == "debian":
-                    cmd = ["sudo", "dpkg", "-i", pkg_path]
-                elif os_family == "redhat":
-                    cmd = ["sudo", "rpm", "-ivh", "--replacepkgs", pkg_path]
-                elif os_family == "suse":
+                if self.os_family == "debian":
+                    cmd = ["sudo", "dpkg", "-i", pkg_name]
+                elif self.os_family == "redhat":
+                    cmd = ["sudo", "rpm", "-ivh", "--replacepkgs", pkg_name]
+                elif self.os_family == "suse":
                     cmd = [
                         "sudo",
                         "zypper",
                         "--non-interactive",
                         "install",
                         "--replacepkgs",
-                        pkg_path,
+                        pkg_name,
                     ]
                 else:
                     logger.error(f"Unsupported OS for local install: {pkg_name}")
                     return
-            else:
-                if os_family == "debian":
+            elif self.upload == "post":
+                if self.os_family == "debian":
                     cmd = ["sudo", "apt-get", "install", "-y", pkg_name]
-                elif os_family == "redhat":
+                elif self.os_family == "redhat":
                     cmd = ["sudo", "yum", "install", "-y", pkg_name]
-                elif os_family == "suse":
+                elif self.os_family == "suse":
                     cmd = ["sudo", "zypper", "--non-interactive", "install", pkg_name]
                 else:
                     logger.error(f"Unsupported OS for repo install: {pkg_name}")
@@ -175,83 +173,13 @@ class PackageInstaller(PackageManagerBase):
             logger.error(f"Error populating repo file: {e}")
             raise
 
-    def _run_install_command(self, pkg_name, use_repo, pkg_path=None):
-        """
-        Build and run OS-specific install command for a package.
 
-        :param pkg_name: Name of the package (base name or full path)
-        :param pkg_path: Full path for local install (required for local)
-        :param use_repo: True if installing from repository, else False
-        """
-        try:
-            if not pkg_name:
-                logger.error("Package name is None — cannot install.")
-                return
-
-            cmd = None
-
-            # Determine command based on source type and OS
-            if not use_repo:
-                if not pkg_path:
-                    logger.error(f"Local pkg_path must be provided for {pkg_name}")
-                    return
-
-                if self.os_family == "debian":
-                    cmd = ["sudo", "dpkg", "-i", pkg_path]
-                elif self.os_family == "redhat":
-                    cmd = ["sudo", "rpm", "-ivh", "--replacepkgs", pkg_path]
-                elif self.os_family == "suse":
-                    cmd = [
-                        "sudo",
-                        "zypper",
-                        "--non-interactive",
-                        "install",
-                        "--replacepkgs",
-                        pkg_path,
-                    ]
-                else:
-                    logger.error(f"Unsupported OS for local install: {pkg_name}")
-                    return
-            else:
-                if self.os_family == "debian":
-                    cmd = ["sudo", "apt-get", "install", "-y", pkg_name]
-                elif self.os_family == "redhat":
-                    cmd = ["sudo", "yum", "install", "-y", pkg_name]
-                elif self.os_family == "suse":
-                    cmd = ["sudo", "zypper", "--non-interactive", "install", pkg_name]
-                else:
-                    logger.error(f"Unsupported OS for repo install: {pkg_name}")
-                    return
-
-            # Double-check cmd was built correctly
-            if not cmd:
-                logger.error(f"No install command generated for {pkg_name}")
-                return
-
-            logger.info(f"Running install command: {' '.join(cmd)}")
-
-            result = subprocess.run(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-            )
-
-            if result.returncode != 0:
-                logger.error(f"Failed to install {pkg_name}:\n{result.stdout}")
-            else:
-                logger.info(f"Installed {pkg_name} successfully")
-
-        except TypeError as e:
-            logger.exception(f"TypeError while installing {pkg_name}: {e}")
-        except FileNotFoundError as e:
-            logger.exception(f"Command not found: {e}")
-        except Exception as e:
-            logger.exception(f"Unexpected exception installing {pkg_name}: {e}")
-
-    def find_packages_for_base(self, dest_dir, derived_name, use_repo):
+    def find_packages_for_base(self, dest_dir, derived_name):
         """
         Look up packages in local directory or return derived name for repo installation.
         """
 
-        if use_repo:
+        if self.upload == "post":
             return derived_name
         else:
             # If local directory has .deb/.rpm files return matches
@@ -273,18 +201,22 @@ class PackageInstaller(PackageManagerBase):
         # Handle dependencies
 
         if self.version_flag:
-            derived_pkgs.extend(self.loader.derive_package_names(pkg,True))
+            derived_name = self.loader.derive_package_names(pkg,True)
+            derived_pkgs.extend(derived_name)
         else:
-            derived_pkgs.extend(self.loader.derive_package_names(pkg,True))
-            derived_pkgs.extend(self.loader.derive_package_names(pkg,False))
+            derived_name = self.loader.derive_package_names(pkg,True)
+            derived_pkgs.extend(derived_name)
+            derived_name = self.loader.derive_package_names(pkg,False)
+            derived_pkgs.extend(derived_name)
+
         for pkg_name in derived_pkgs:
             if self.upload == "pre":
-                derived_name = self.find_packages_for_base(self.dest_dir,pkg,True)
-                logger.info(f" - Installing derived package files for {derived_name}...")
-                self._run_install_command(derived_name, False, self.dest_dir)
+                derived_name = self.find_packages_for_base(self.dest_dir,pkg_name)
+                if derived_name:
+                    for derived_pkg in derived_name:
+                        self._run_install_command(derived_pkg, True)
             elif self.upload == "post":
-                logger.info(f" - Installing derived package files for {pkg_name} from repo...")
-                self._run_install_command(pkg_name, True, self.dest_dir)
+                self._run_install_command(pkg_name, True)
 
 def load_packages_from_json(json_path: str) -> List[PackageInfo]:
     """
