@@ -4,8 +4,9 @@ import argparse
 import json
 from pathlib import Path
 from typing import List
-from .base_manager import PackageManagerBase
-from .package_info import PackageInfo
+from base_manager import PackageManagerBase
+from package_info import PackageInfo
+from utils import logger
 
 
 class PackageUninstaller(PackageManagerBase):
@@ -19,20 +20,20 @@ class PackageUninstaller(PackageManagerBase):
         self.run_id = run_id
 
     def execute(self):
-        print(f"\n=== UNINSTALLATION PHASE ===")
-        print(f"Run ID: {self.run_id}")
-        print(f"ROCm Version: {self.rocm_version}")
-        print(f"Composite Build: {self.composite}")
+        logger.info(f"\n=== UNINSTALLATION PHASE ===")
+        logger.info(f"Run ID: {self.run_id}")
+        logger.info(f"ROCm Version: {self.rocm_version}")
+        logger.info(f"Composite Build: {self.composite}")
 
         # Uninstall in reverse dependency order
         for pkg in reversed(self.packages):
-            print(f"[REMOVE] Uninstalling {pkg.package}")
+            logger.info(f"[REMOVE] Uninstalling {pkg.package}")
             self._remove_package(pkg)
 
-        print("🗑️  Uninstallation complete.")
+        logger.info(" Uninstallation complete.")
 
     def _remove_package(self, pkg: PackageInfo):
-        print(f"   - Removing files and cleaning up {pkg.package}...")
+        logger.info(f"   - Removing files and cleaning up {pkg.package}...")
 
 
 def load_packages_from_json(json_path: str) -> List[PackageInfo]:
