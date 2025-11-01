@@ -13,7 +13,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
-# Sharding (match hipBLASLt: inputs are 1-indexed in GHA, convert to 0-index)
+# Sharding
 env = os.environ.copy()
 env["GTEST_SHARD_INDEX"] = str(int(os.getenv("SHARD_INDEX", "1")) - 1)
 env["GTEST_TOTAL_SHARDS"] = str(int(os.getenv("TOTAL_SHARDS", "1")))
@@ -27,14 +27,22 @@ if THEROCK_BIN_DIR:
 
 BUILD_DIR = Path(os.getenv("THEROCK_BUILD_DIR", THEROCK_DIR / "build"))
 bin_candidates.append(
-    BUILD_DIR / "math-libs" / "BLAS" / "rocRoller" / "build" / "test" / "rocroller-tests"
+    BUILD_DIR
+    / "math-libs"
+    / "BLAS"
+    / "rocRoller"
+    / "build"
+    / "test"
+    / "rocroller-tests"
 )
 
 test_bin = next((p for p in bin_candidates if p.is_file()), None)
 if not test_bin:
-    raise FileNotFoundError(f"rocroller-tests not found in: {', '.join(map(str, bin_candidates))}")
+    raise FileNotFoundError(
+        f"rocroller-tests not found in: {', '.join(map(str, bin_candidates))}"
+    )
 
-# Runtime libs (Linux only; keep CMake clean)
+# Runtime libs
 if platform == "linux":
     THEROCK_DIST_DIR = BUILD_DIR / "core" / "clr" / "dist"
     llvm_libdir = THEROCK_DIST_DIR / "lib" / "llvm" / "lib"  # libomp.so
@@ -56,13 +64,13 @@ if platform == "linux":
             ld_clean.append(p)
     env["LD_LIBRARY_PATH"] = ":".join(ld_clean)
     env["ROCM_PATH"] = str(THEROCK_DIST_DIR)
-    env["HIP_PATH"]  = str(THEROCK_DIST_DIR)
+    env["HIP_PATH"] = str(THEROCK_DIST_DIR)
 
-# TEST_TYPE → gtest filter (same convention as hipBLASLt)
+# TEST_TYPE → gtest filter
 TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
 test_filter_arg = None
 if TEST_TYPE == "smoke":
-    # keep this subset small/fast; adjust later as needed
+    # keep this subset (TODO: add more tests)
     test_filter_arg = "--gtest_filter=ErrorFixtureDeathTest.*:ArgumentLoaderTest.*:AssemblerTest.*:ControlGraphTest.*:CommandTest.*:ComponentTest.*"
 elif TEST_TYPE == "quick":
     test_filter_arg = "--gtest_filter=*quick*"
