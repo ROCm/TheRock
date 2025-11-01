@@ -3,14 +3,14 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
 
-    therock_subproject_fetch(therock-mesa-fork-sources
+    therock_subproject_fetch(therock-amd-mesa-sources
       SOURCE_DIR "${_source_dir}"
       URL "https://github.com/ROCm/mesa-fork/archive/refs/heads/amd-decode-only.zip"
       #URL_HASH "SHA256=3A11654905C595FCA2825D6E259A8086D04A448DCE215B4CB03A49320D9259EC"
       TOUCH "${_download_stamp}"
     )
 
-    therock_cmake_subproject_declare(therock-mesa-fork
+    therock_cmake_subproject_declare(therock-amd-mesa
       EXTERNAL_SOURCE_DIR .
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
@@ -32,7 +32,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
-    therock_cmake_subproject_activate(therock-mesa-fork)
+    therock_cmake_subproject_activate(therock-amd-mesa)
 
     therock_test_validate_shared_lib(
       PATH build/dist/lib/rocm_sysdeps/lib

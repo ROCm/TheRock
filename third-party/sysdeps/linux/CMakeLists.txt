@@ -28,5 +28,5 @@ therock_provide_artifact(sysdeps
     therock-sqlite3
     therock-zlib
     therock-zstd
-    therock-mesa-fork
+    therock-amd-mesa
 )
