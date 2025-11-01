@@ -270,3 +270,46 @@ if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
+
+if(NOT WIN32) # rocWMMA is disabled on Windows: The detected ROCm does not support data type `__hip_fp8_e5m2` or `__hip_fp8_e4m3`.
+  set(_rocWMMA_optional_runtime_deps)
+  set(_rocWMMA_use_rocBLAS OFF)
+
+  if(THEROCK_ENABLE_BLAS AND THEROCK_BUILD_TESTING)
+    set(_rocWMMA_optional_runtime_deps rocBLAS)
+    set(_rocWMMA_use_rocBLAS ON)
+  endif()
+
+  therock_cmake_subproject_declare(rocWMMA
+      EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rocWMMA"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA"
+      CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCWMMA_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DROCWMMA_BUILD_SAMPLES=OFF # memory-hungry
+      -DROCWMMA_BUILD_ASSEMBLY=OFF
+      -DBUILD_OFFLOAD_COMPRESS=OFF
+      -DROCWMMA_CODE_COVERAGE=OFF # clang only
+      -DROCWMMA_BUILD_VALIDATION_TESTS=${THEROCK_BUILD_TESTING}
+      -DROCWMMA_BUILD_BENCHMARK_TESTS=${THEROCK_BUILD_TESTING}
+      -DROCWMMA_BUILD_EXTENDED_TESTS=${THEROCK_BUILD_TESTING}
+      -DROCWMMA_VALIDATE_WITH_ROCBLAS=${_rocWMMA_use_rocBLAS}
+      -DROCWMMA_BENCHMARK_WITH_ROCBLAS=${_rocWMMA_use_rocBLAS}
+      -DUSE_SYSTEM_GOOGLETEST=ON
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+      COMPILER_TOOLCHAIN
+        amd-hip
+      BUILD_DEPS
+        therock-googletest
+        rocm-cmake
+      RUNTIME_DEPS
+        hip-clr
+        ${_rocWMMA_optional_runtime_deps}
+    )
+    therock_cmake_subproject_glob_c_sources(rocFFT
+      SUBDIRS
+        .
+    )
+    therock_cmake_subproject_provide_package(rocWMMA rocWMMA lib/cmake/rocWMMA)
+    therock_cmake_subproject_activate(rocWMMA)
+endif()
