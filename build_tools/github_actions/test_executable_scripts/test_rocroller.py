@@ -71,7 +71,15 @@ TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
 test_filter_arg = None
 if TEST_TYPE == "smoke":
     # keep this subset (TODO: add more tests)
-    test_filter_arg = "--gtest_filter=ErrorFixtureDeathTest.*:ArgumentLoaderTest.*:AssemblerTest.*:ControlGraphTest.*:CommandTest.*:ComponentTest.*"
+    smoke_tests = [
+        "ErrorFixtureDeathTest.*",
+        "ArgumentLoaderTest.*",
+        "AssemblerTest.*",
+        "ControlGraphTest.*",
+        "CommandTest.*",
+        "ComponentTest.*",
+    ]
+    test_filter_arg = "--gtest_filter=" + ":".join(smoke_tests)
 elif TEST_TYPE == "quick":
     test_filter_arg = "--gtest_filter=*quick*"
 
