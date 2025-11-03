@@ -31,6 +31,11 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         help="Limits selection in '--input-dir' to files matchings this argument. Use wild cards if needed, e.g. '*rc2*' (default '*' to promote all files in '--input-dir')",
         default="*",
     )
+    parser.add_argument(
+        "--delete",
+        help="Deletes old file after successful promotion",
+        action="store_true",
+    )
     return parser.parse_args(argv)
 
 
@@ -54,15 +59,57 @@ def wheel_change_extra_files(new_dir_path, old_version, new_version):
             package_name_no_version = stripped_dir
             break
 
-    files_to_change = [
-        f"{new_dir_path}/{package_name_no_version}/_dist_info.py",
-    ]
+    old_rocm_version = (
+        str(old_version)
+        if not "rocm" in str(old_version)
+        else str(old_version).split("+rocm")[-1]
+    )
+    new_rocm_version = (
+        str(new_version)
+        if not "rocm" in str(new_version)
+        else str(new_version).split("+rocm")[-1]
+    )
 
     print("  Changing wheel-specific files that contain the version", end="")
 
+    if not "torch" in str(new_dir_path):  # rocm packages
+        files_to_change = [
+            f"{new_dir_path}/{package_name_no_version}/_dist_info.py",
+        ]
+    elif (
+        "torch" == package_name_no_version
+    ):  # only exactly torch and not triton, torchaudio, ..
+        print("torch")
+        files_to_change = [
+            f"{new_dir_path}/{package_name_no_version}/_rocm_init.py",
+            f"{new_dir_path}/{package_name_no_version}/version.py",
+        ]
+
+        # special handling
+        # we only want to change required-distr matching "rocm"
+        with fileinput.input(
+            files=(
+                f"{new_dir_path}/{package_name_no_version}-{old_version}.dist-info/METADATA"
+            ),
+            encoding="utf-8",
+            inplace=True,
+        ) as f:
+            for line in f:
+                if "Requires-Dist" in line:
+                    if "rocm" in line:
+                        print(line.replace(old_rocm_version, new_rocm_version), end="")
+                        continue
+                print(line, end="")
+    elif not "triton" in package_name_no_version:  # torchaudio, torchvision
+        files_to_change = [
+            f"{new_dir_path}/{package_name_no_version}/version.py",
+        ]
+    else:  # triton
+        return
+
     with fileinput.input(files=(files_to_change), encoding="utf-8", inplace=True) as f:
         for line in f:
-            print(line.replace(str(old_version), str(new_version)), end="")
+            print(line.replace(old_rocm_version, new_rocm_version), end="")
 
     print(" ...done")
 
@@ -75,23 +122,40 @@ def promote_wheel(filename):
     base_version = original_version.base_version
 
     print(f"  Detected version: {original_version}")
-    print(f"  Base version: {base_version}")
 
-    if str(base_version) == str(original_version):
+    if original_version.local:
+        if not "rc" in original_version.local:
+            print("  Only release candidates (rc) can be promoted! Aborting!")
+            return False
+        local_version = str(original_version.local).split("rc", 1)[0]
+    else:
+        if not "rc" in str(original_version):
+            print("  Only release candidates (rc) can be promoted! Aborting!")
+            return False
+        local_version = None
+
+    print(f"  New base version: {base_version}")
+    print(f"  New local version: {local_version}")
+
+    if str(base_version) == str(
+        original_version
+    ) or f"{base_version}+{local_version}" == str(original_version):
         print("  Version is already a release version, skipping")
-        return
+        return False
 
-    print(f"  Changing to base version: {base_version}")
+    print("  Starting to execute version change")
     new_wheel_path = change_wheel_version.change_wheel_version(
         pathlib.Path(filename),
         str(base_version),
-        None,
+        local_version,
         callback_func=wheel_change_extra_files,
     )
+    print("  Version change done")
 
     new_wheel = Wheel(new_wheel_path)
     new_version = Version(new_wheel.version)
     print(f"New wheel has {new_version} and path is {new_wheel_path}")
+    return True
 
 
 def promote_targz(filename: str):
@@ -122,12 +186,12 @@ def promote_targz(filename: str):
                 f"  Base version extraction not successful and letters still in the version {base_version}."
             )
             print("  Only release candidates (rc) can be promoted! Aborting!")
-            return
+            return False
         if base_version == version:
             print(
                 f"  {version} and {base_version} are the same. Already the base version? Skipping..."
             )
-            return
+            return False
 
         print(
             f"  Editing files to change version from {version} to {base_version}",
@@ -164,6 +228,7 @@ def promote_targz(filename: str):
         print(
             f"New tar.gz with version {base_version} written to {base_dir}/{new_dir_name}.tar.gz"
         )
+        return True
 
 
 if __name__ == "__main__":
@@ -183,13 +248,23 @@ if __name__ == "__main__":
     change_wheel_version = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(change_wheel_version)
 
+    print("Parsing arguments", end="")
     p = parse_arguments(sys.argv[1:])
+    print(" ...done")
 
-    for file in glob.glob(str(p.input_dir) + "/" + p.match_files):
+    print(f"Looking for .whl and .tar.gz in {p.input_dir}/{p.match_files}")
+
+    files = glob.glob(str(p.input_dir) + "/" + p.match_files)
+
+    for file in files:
         print("")
         if file.endswith(".whl"):
-            promote_wheel(file)
+            if promote_wheel(file) and p.delete:
+                print(f"Removing old wheel: {file}")
+                os.remove(file)
         elif file.endswith(".tar.gz"):
-            promote_targz(file)
+            if promote_targz(file) and p.delete:
+                print(f"Removing old .tar.gz: {file}")
+                os.remove(file)
         else:
             print(f"File found that cannot be promoted: {file}")
