@@ -19,12 +19,25 @@ except ImportError:
     sys.exit("Error : pyelftools failed to import. Make sure its installed\n")
 
 
-def update_rpath(search_path, excludes):
-    """Function helps to change DT_RUNPATH in libraries and binaries in search_path to DT_RPATH.
-    Its done with the following steps :
-    1. Check all if the file is an ELF except in excludes folder
-    2. Find the DT_RUNPATH tag and its offset from file.
-    3. Toggle the DT_RUNPATH(0x1d) tag byte to DT_RPATH(0xf) and write back to file"""
+def convert_runpath_to_rpath(search_path):
+    """Update ELF binaries and libraries in `search_path` by changing DT_RUNPATH to DT_RPATH.
+
+    This function performs the following steps:
+    1. Iterate through all files in `search_path`, skipping any directories listed in `excludes`.
+    2. Check if each file is an ELF binary.
+    3. Locate the DT_RUNPATH tag and its offset within the file.
+    4. Modify the tag byte from DT_RUNPATH (0x1d) to DT_RPATH (0xf) and write the change back.
+
+    Parameters:
+    search_path : str
+        The root directory to search for ELF files.
+    excludes : list[str]
+        A list of directory names to exclude from processing.
+
+    Returns: None
+    """
+    print(f"convert_runpath_to_rpath {search_path}")
+    excludes = []
     for path, dirs, files in os.walk(search_path, topdown=True, followlinks=True):
         dirs[:] = [d for d in dirs if d not in excludes]
         for filename in files:
@@ -64,7 +77,18 @@ def update_rpath(search_path, excludes):
 
 
 def update_config_file(cfg_path):
-    """Function helps to update rocm llvm config file to default to DT_RPATH."""
+    """Update the ROCm LLVM configuration file to default to DT_RPATH.
+
+    This function modifies the specified configuration file so that
+    DT_RPATH is used as the default instead of DT_RUNPATH.
+
+    Parameters:
+    cfg_path : str
+        Path to the ROCm LLVM configuration file.
+
+    Returns: None
+    """
+
     print("Updating cfg file in", cfg_path)
     config_file_exist = os.path.exists(cfg_path)
     if config_file_exist:
@@ -74,14 +98,14 @@ def update_config_file(cfg_path):
         try:
             # Read contents from file as a single string
             file_string = ""
-            with open(cfg_path, "r") as f:
+            with open(cfg_path, "r", encoding="utf-8") as f:
                 file_string = f.read()
 
             # Use RE package for string replacement
             file_string = re.sub(search_str, replace_str, file_string)
 
             # Write contents back to file. Using mode 'w' truncates the file.
-            with open(cfg_path, "w") as f:
+            with open(cfg_path, "w", encoding="utf-8") as f:
                 f.write(file_string)
         except Exception as ex:
             print("Couldnt update rocm.cfg file. ", ex)
@@ -90,37 +114,28 @@ def update_config_file(cfg_path):
 
 
 def update_compiler_config(search_path):
-    """Function search for rocm llvm config(rocm.cfg) file in the search_path folder.
-    If the config file is not foung search in ROCM_PATH. Once the config file is found,
-    update llvm config to default to DT_RPATH"""
+    """Search for the ROCm LLVM configuration file (rocm.cfg) and update it to default to DT_RPATH.
+
+    This function performs the following steps:
+    1. Look for the `rocm.cfg` file in the specified `search_path` directory.
+    2. If not found, attempt to locate the file in the `ROCM_PATH` environment variable.
+    3. Once the configuration file is found, modify its settings so that DT_RPATH is used as the default.
+
+    Parameters:
+    search_path : str
+        Path to the directory where the function should search for the configuration file.
+
+    Returns:None
+    """
     cfg_file_name = "rocm.cfg"
-    found_cfg = False
     print("Searching for ", cfg_file_name)
     for path, dirs, files in os.walk(search_path):
         # Search for rocm.cfg in the search path and default to DT_RPATH
         if cfg_file_name in files:
             cfg_path = os.path.join(path, cfg_file_name)
             print(" Found cfg file cfg_path")
-            found_cfg = True
             update_config_file(cfg_path)
-            # Continue with the search as there could be cfg files in llvm and llvm/alt
-            continue
-    if found_cfg:
-        return
-    # rocm.cfg config file not found in search path. Search in the ROCM_PATH.
-    print(cfg_file_name, " not found in search_path. Trying to search in ROCM_PATH")
-    try:
-        rocm_path = os.environ["ROCM_PATH"]
-        print(" Found ROCM_PATH trying for rocm.cfg")
-        # There are multiple possible paths for cfg file.
-        # ROCM_PATH/llvm/bin and ROCM_PATH/lib/llvm/bin. Also alt location
-        update_config_file(rocm_path + "/llvm/bin/" + cfg_file_name)
-        update_config_file(rocm_path + "/llvm/alt/bin/" + cfg_file_name)
-        update_config_file(rocm_path + "/lib/llvm/bin/" + cfg_file_name)
-        update_config_file(rocm_path + "/lib/llvm/alt/bin/" + cfg_file_name)
-        # Found config file. Change default DT_RUNPATH setting to DT_RPATH
-    except Exception as ex:
-        print("ROCM_PATH not found ", ex)
+            return
 
 
 def main():
@@ -161,8 +176,7 @@ def main():
         sys.exit(0)
 
     # Find the elf files in the search path and update DT_RUNPATH to DT_RPATH
-    excludes = []
-    update_rpath(args.searchdir, excludes)
+    convert_runpath_to_rpath(args.searchdir)
     # Update rocm clang configs to default to DT_RPATH
     update_compiler_config(args.searchdir)
     print("Done with rpath update")
