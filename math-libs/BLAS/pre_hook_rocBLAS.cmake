@@ -14,7 +14,21 @@ block(SCOPE_FOR VARIABLES)
     set(PS ":")
   endif()
   set(CURRENT_PATH "$ENV{PATH}")
-  set(ENV{PATH} "${THEROCK_TOOLCHAIN_ROOT}/bin${PS}${THEROCK_TOOLCHAIN_ROOT}/lib/llvm/bin${PS}${CURRENT_PATH}")
+
+  # Add paths to rocm_agent_enumerator (Linux) and hipInfo (Windows) too.
+  # TODO: The build system shouldn't depend on device enumeration and the
+  #   `--no-enumerate` flag to TensileCreateLibrary.py should be used in
+  #   `TensileConfig.cmake`. If we do end up keeping this for whatever reason,
+  #   these tools could be found with explicit paths instead of walks up
+  #   from THEROCK_TOOLCHAIN_ROOT and back down into subproject dist folders.
+  set(DEVICE_ENUMERATOR_PATH "")
+  if(WIN32)
+    set(DEVICE_ENUMERATOR_PATH "${THEROCK_TOOLCHAIN_ROOT}/../../hipInfo/dist/bin")
+  else()
+    set(DEVICE_ENUMERATOR_PATH "${THEROCK_TOOLCHAIN_ROOT}/../../rocminfo/dist/bin")
+  endif()
+
+  set(ENV{PATH} "${THEROCK_TOOLCHAIN_ROOT}/bin${PS}${THEROCK_TOOLCHAIN_ROOT}/lib/llvm/bin${PS}${DEVICE_ENUMERATOR_PATH}${PS}${CURRENT_PATH}")
   message(STATUS "Augmented toolchain PATH=$ENV{PATH}")
 endblock()
 
