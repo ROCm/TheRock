@@ -99,7 +99,6 @@ positive_filter.append("*/GPU_VecAddTest_*")
 
 positive_filter.append("*/GPU_KernelTuningNetTest*")
 positive_filter.append("*/GPU_MIOpenDriver*")
-positive_filter.append("*GPU_TestMhaFind20*")
 
 #############################################
 
@@ -113,6 +112,7 @@ negative_filter.append("*/GPU_Softmax*")
 negative_filter.append("*/GPU_Dropout*")
 negative_filter.append("*/GPU_MhaBackward_*")
 negative_filter.append("*/GPU_MhaForward_*")
+negative_filter.append("*GPU_TestMhaFind20*")
 
 
 # For sake of time saving on pre-commit step
