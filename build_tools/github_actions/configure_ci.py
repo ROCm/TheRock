@@ -11,8 +11,10 @@
   * GITHUB_OUTPUT        : path to write workflow output variables.
   * GITHUB_STEP_SUMMARY  : path to write workflow summary output.
   * INPUT_LINUX_AMDGPU_FAMILIES (optional): Comma-separated string of Linux AMD GPU families
+  * LINUX_TEST_LABELS (optional): Comma-separated list of test labels to test
   * LINUX_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Linux tests
   * INPUT_WINDOWS_AMDGPU_FAMILIES (optional): Comma-separated string of Windows AMD GPU families
+  * WINDOWS_TEST_LABELS (optional): Comma-separated list of test labels to test
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
 
@@ -28,8 +30,11 @@
 
   Written to GITHUB_OUTPUT:
   * linux_amdgpu_families : List of valid Linux AMD GPU families to execute build and test jobs
+  * linux_test_labels : List of test names to run on Linux, optionally filtered by PR labels.
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
+  * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
+  * test_type: The type of test that component tests will run (i.e. smoke, full)
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -41,19 +46,24 @@
 import fnmatch
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 from typing import Iterable, List, Optional
 import string
 from amdgpu_family_matrix import (
+    all_build_variants,
     amdgpu_family_info_matrix_presubmit,
     amdgpu_family_info_matrix_postsubmit,
     amdgpu_family_info_matrix_nightly,
     amdgpu_family_info_matrix_all,
 )
+from fetch_test_configurations import test_matrix
 
 from github_actions_utils import *
 
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 # --------------------------------------------------------------------------- #
 # Filtering by modified paths
@@ -79,6 +89,33 @@ def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
         return None
 
 
+def get_therock_submodule_paths() -> Optional[Iterable[str]]:
+    """Returns TheRock submodules paths."""
+    try:
+        response = subprocess.run(
+            ["git", "submodule", "status"],
+            stdout=subprocess.PIPE,
+            check=True,
+            text=True,
+            timeout=60,
+            cwd=THEROCK_DIR,
+        ).stdout.splitlines()
+
+        submodule_paths = []
+        for line in response:
+            submodule_data_array = line.split()
+            # The line will be "{commit-hash} {path} {branch}". We will retrieve the path.
+            submodule_paths.append(submodule_data_array[1])
+        return submodule_paths
+    except TimeoutError:
+        print(
+            "Computing modified files timed out. Not using PR diff to determine"
+            " jobs to run.",
+            file=sys.stderr,
+        )
+        return []
+
+
 # Paths matching any of these patterns are considered to have no influence over
 # build or test workflows so any related jobs can be skipped if all paths
 # modified by a commit/PR match a pattern in this list.
@@ -92,9 +129,9 @@ SKIPPABLE_PATH_PATTERNS = [
     # At time of writing, workflows run in this sequence:
     #   `ci.yml`
     #   `ci_linux.yml`
-    #   `build_linux_packages.yml`
-    #   `test_linux_packages.yml`
-    #   `test_[rocm subproject].yml`
+    #   `build_linux_artifacts.yml`
+    #   `test_artifacts.yml`
+    #   `test_component.yml`
     # If we add external-builds tests there, we can revisit this, maybe leaning
     # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
     # workflows efficient when only nodes closer to the edges of the build graph
@@ -120,9 +157,10 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 GITHUB_WORKFLOWS_CI_PATTERNS = [
     "setup.yml",
     "ci*.yml",
-    "build*package*.yml",
-    "test*packages.yml",
-    "test*.yml",  # This may be too broad, but there are many test workflows.
+    "build*artifact*.yml",
+    "test*artifacts.yml",
+    "test_sanity_check.yml",
+    "test_component.yml",
 ]
 
 
@@ -186,22 +224,29 @@ def get_pr_labels(args) -> List[str]:
     return labels
 
 
-def filter_known_target_names(requested_target_names: List[str]) -> List[str]:
-    """Filters a requested target names list down to known target names."""
-    target_names = []
-    for target_name in requested_target_names:
-        # Standardize on lowercase target names.
+def filter_known_names(requested_names: List[str], name_type: str) -> List[str]:
+    """Filters a requested names list down to known names."""
+    known_references = {
+        "target": amdgpu_family_info_matrix_all,
+        "test": test_matrix,
+    }
+    filtered_names = []
+    if name_type not in known_references:
+        print(f"WARNING: unknown name_type '{name_type}'")
+        return filtered_names
+    for name in requested_names:
+        # Standardize on lowercase names.
         # This helps prevent potential user-input errors.
-        target_name = target_name.lower()
+        name = name.lower()
 
-        if target_name in amdgpu_family_info_matrix_all:
-            target_names.append(target_name)
+        if name in known_references[name_type]:
+            filtered_names.append(name)
         else:
             print(
-                f"WARNING: unknown target name '{target_name}' not found in matrix:\n{amdgpu_family_info_matrix_all}"
+                f"WARNING: unknown {name_type} name '{name}' not found in matrix:\n{known_references[name_type]}"
             )
 
-    return target_names
+    return filtered_names
 
 
 def matrix_generator(
@@ -213,10 +258,15 @@ def matrix_generator(
     families={},
     platform="linux",
 ):
-    """Generates a matrix of "family" and "test-runs-on" parameters based on the workflow inputs."""
+    """
+    Generates a matrix of "family" and "test-runs-on" parameters based on the workflow inputs.
+    Second return value is a list of test names to run, if any.
+    """
 
     # Select target names based on inputs. Targets will be filtered by platform afterwards.
     selected_target_names = []
+    # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
+    selected_test_names = []
 
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
@@ -229,7 +279,28 @@ def matrix_generator(
         translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
         requested_target_names = input_gpu_targets.translate(translator).split()
 
-        selected_target_names.extend(filter_known_target_names(requested_target_names))
+        selected_target_names.extend(
+            filter_known_names(requested_target_names, "target")
+        )
+
+        # If any workflow dispatch test labels are specified, we run full tests for those specific tests
+        workflow_dispatch_test_labels_str = (
+            base_args.get("workflow_dispatch_linux_test_labels", "")
+            if platform == "linux"
+            else base_args.get("workflow_dispatch_windows_test_labels", "")
+        )
+        # (ex: "test:rocprim, test:hipcub" -> ["test:rocprim", "test:hipcub"])
+        workflow_dispatch_test_labels = [
+            test_label.strip()
+            for test_label in workflow_dispatch_test_labels_str.split(",")
+        ]
+
+        requested_test_names = []
+        for label in workflow_dispatch_test_labels:
+            if "test:" in label:
+                _, test_name = label.split(":")
+                requested_test_names.append(test_name)
+        selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
@@ -242,12 +313,19 @@ def matrix_generator(
         # TODO(#1097): This (or the code below) should handle opting in for
         #     a GPU family for only one platform (e.g. Windows but not Linux)
         requested_target_names = []
+        requested_test_names = []
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
             if "gfx" in label:
-                target, _ = label.split("-")
+                target = label.split("-")[0]
                 requested_target_names.append(target)
-        selected_target_names.extend(filter_known_target_names(requested_target_names))
+            if "test:" in label:
+                _, test_name = label.split(":")
+                requested_test_names.append(test_name)
+        selected_target_names.extend(
+            filter_known_names(requested_target_names, "target")
+        )
+        selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_push and base_args.get("branch_name") == "main":
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
@@ -265,19 +343,63 @@ def matrix_generator(
         for key in amdgpu_family_info_matrix_nightly:
             selected_target_names.append(key)
 
-    # Ensure the targets in the list are unique
+    # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
+    unique_test_names = list(set(selected_test_names))
 
     # Expand selected target names back to a matrix.
     matrix_output = []
+    platform_build_variants = all_build_variants.get(platform)
+    assert isinstance(
+        platform_build_variants, dict
+    ), f"Expected build variant {platform} in {all_build_variants}"
     for target_name in unique_target_names:
         # Filter targets to only those matching the requested platform.
         platform_set = amdgpu_family_info_matrix_all.get(target_name)
         if platform in platform_set:
-            matrix_output.append(platform_set.get(platform))
+            platform_info = platform_set.get(platform)
+            assert isinstance(platform_info, dict)
+
+            # Further expand it based on build_variant.
+            build_variant_names = platform_info.get("build_variants")
+            assert isinstance(
+                build_variant_names, list
+            ), f"Expected 'build_variant' in platform: {platform_info}"
+            for build_variant_name in build_variant_names:
+                # Merge platform_info and build_variant_info into a matrix_row.
+                matrix_row = dict(platform_info)
+
+                build_variant_info = platform_build_variants.get(build_variant_name)
+                assert isinstance(
+                    build_variant_info, dict
+                ), f"Expected {build_variant_name} in {platform_build_variants} for {platform_info}"
+
+                # If "skip_presubmit_build" is enabled in `amdgpu_family_matrix.py`, then we skip for presubmit.
+                # This build variant is typically skipped for variants with long build times
+                if is_pull_request and build_variant_info.get(
+                    "skip_presubmit_build", False
+                ):
+                    continue
+
+                # If the build variant level notes expect_failure, set it on the overall row.
+                # But if not, honor what is already there.
+                if build_variant_info.get("expect_failure", False):
+                    matrix_row["expect_failure"] = True
+                del matrix_row["build_variants"]
+                matrix_row.update(build_variant_info)
+
+                # Assign a computed "artifact_group" combining the family and variant.
+                artifact_group = platform_info["family"]
+                build_variant_suffix = build_variant_info["build_variant_suffix"]
+                if build_variant_suffix:
+                    artifact_group += f"-{build_variant_suffix}"
+                matrix_row["artifact_group"] = artifact_group
+
+                matrix_output.append(matrix_row)
 
     print(f"Generated build matrix: {str(matrix_output)}")
-    return matrix_output
+    print(f"Generated test list: {str(unique_test_names)}")
+    return matrix_output, unique_test_names
 
 
 # --------------------------------------------------------------------------- #
@@ -301,7 +423,7 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     print(f"Generating build matrix for Linux: {str(linux_families)}")
-    linux_target_output = matrix_generator(
+    linux_variants_output, linux_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
         is_push,
@@ -313,7 +435,7 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     print(f"Generating build matrix for Windows: {str(windows_families)}")
-    windows_target_output = matrix_generator(
+    windows_variants_output, windows_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
         is_push,
@@ -323,6 +445,8 @@ def main(base_args, linux_families, windows_families):
         platform="windows",
     )
     print("")
+
+    test_type = "smoke"
 
     # In the case of a scheduled run, we always want to build
     if is_schedule:
@@ -335,21 +459,41 @@ def main(base_args, linux_families, windows_families):
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
+        # If the modified path contains any git submodules, we want to run a full test suite.
+        # Otherwise, we just run smoke tests
+        submodule_paths = get_therock_submodule_paths()
+        matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
+        if matching_submodule_paths:
+            print(
+                f"Found changed submodules: {str(matching_submodule_paths)}. Running full tests."
+            )
+            test_type = "full"
+
+        # If any test label is included, run full test suite for specified tests
+        if linux_test_output or windows_test_output:
+            test_type = "full"
+
     gha_append_step_summary(
         f"""## Workflow configure results
 
-* `linux_amdgpu_families`: {str([item.get("family") for item in linux_target_output])}
+* `linux_variants`: {str([item.get("family") for item in linux_variants_output])}
+* `linux_test_labels`: {str([test for test in linux_test_output])}
 * `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
-* `windows_amdgpu_families`: {str([item.get("family") for item in windows_target_output])}
+* `windows_variants`: {str([item.get("family") for item in windows_variants_output])}
+* `windows_test_labels`: {str([test for test in windows_test_output])}
 * `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
+* `test_type`: {test_type}
     """
     )
 
     output = {
-        "linux_amdgpu_families": json.dumps(linux_target_output),
-        "windows_amdgpu_families": json.dumps(windows_target_output),
+        "linux_variants": json.dumps(linux_variants_output),
+        "linux_test_labels": json.dumps(linux_test_output),
+        "windows_variants": json.dumps(windows_variants_output),
+        "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
+        "test_type": test_type,
     }
     gha_set_output(output)
 
@@ -368,7 +512,7 @@ if __name__ == "__main__":
     )
 
     # For now, add default run for gfx94X-linux
-    base_args["pr_labels"] = os.environ.get("PR_LABELS", "[]")
+    base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
     base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
@@ -377,6 +521,12 @@ if __name__ == "__main__":
     )
     base_args["windows_use_prebuilt_artifacts"] = (
         os.environ.get("WINDOWS_USE_PREBUILT_ARTIFACTS") == "true"
+    )
+    base_args["workflow_dispatch_linux_test_labels"] = os.getenv(
+        "LINUX_TEST_LABELS", ""
+    )
+    base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
+        "WINDOWS_TEST_LABELS", ""
     )
 
     main(base_args, linux_families, windows_families)

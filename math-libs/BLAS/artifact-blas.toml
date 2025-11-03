@@ -166,6 +166,7 @@ include = [
   "bin/*_rtest.xml",
   "bin/rocsparse-bench*",
   "bin/rocsparse-test*",
+  "libexec/rocsparse/test/rocsparse_gentest.py",
   "share/rocsparse/test/**",
   "clients/matrices/**"
 ]
@@ -193,6 +194,8 @@ include = [
   "bin/*_rtest.xml",
   "bin/hipsparse-bench*",
   "bin/hipsparse-test*",
+  "libexec/hipsparse/test/hipsparse_gentest.py",
+  "share/hipsparse/test/**",
   "clients/matrices/**"
 ]
 optional = true

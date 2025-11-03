@@ -39,16 +39,16 @@ def amdclangpp():
     _exec("lib/llvm/bin/amdclang++")
 
 
-def amdgpu_arch():
-    _exec("lib/llvm/bin/amdgpu-arch")
-
-
 def amdflang():
     _exec("lib/llvm/bin/amdflang")
 
 
 def amdlld():
     _exec("lib/llvm/bin/amdlld")
+
+
+def amd_smi():
+    _exec("bin/amd-smi")
 
 
 def hipcc():
@@ -61,6 +61,10 @@ def hipconfig():
 
 def hipInfo():
     _exec("bin/hipInfo")
+
+
+def offload_arch():
+    _exec("lib/llvm/bin/offload-arch")
 
 
 def rocm_agent_enumerator():

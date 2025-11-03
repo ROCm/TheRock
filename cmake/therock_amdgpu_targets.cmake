@@ -117,6 +117,8 @@ therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-
 therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all)
 therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all)
 
+# Optional extension targets (used for out of tree target development).
+include(therock_custom_amdgpu_targets OPTIONAL)
 
 # Validates and normalizes AMDGPU target selection cache variables.
 function(therock_validate_amdgpu_targets)

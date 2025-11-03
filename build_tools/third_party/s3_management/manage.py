@@ -38,12 +38,12 @@ ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
     # Note: v2-staging first, in case issues are observed while the script runs
     # and the developer wants to more safely cancel the script.
-    "v2-staging/gfx110X-dgpu",
+    "v2-staging/gfx110X-all",
     "v2-staging/gfx1151",
     "v2-staging/gfx120X-all",
     "v2-staging/gfx94X-dcgpu",
     "v2-staging/gfx950-dcgpu",
-    "v2/gfx110X-dgpu",
+    "v2/gfx110X-all",
     "v2/gfx1151",
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
@@ -287,8 +287,10 @@ class S3Index:
             if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
                 attributes += ' data-requires-python="&gt;=3.10"'
 
+            stripped_key = obj.key.split("/")[-1]
+
             out.append(
-                f'    <a href="/{obj.key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
+                f'    <a href="../{stripped_key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
             )
         # Adding html footer
         out.append('  </body>')

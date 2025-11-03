@@ -1,0 +1,31 @@
+From 0073b08062e6b2beb4bdd308c17bb96050beb765 Mon Sep 17 00:00:00 2001
+From: "Galantsev, Dmitrii" <dmitrii.galantsev@amd.com>
+Date: Thu, 23 Oct 2025 01:56:33 -0500
+Subject: [PATCH] Fix finding librocm-core.so
+
+Allow amdsmi to find librocm-core.so shared library bundled in Python
+packages produced with TheRock.
+---
+ py-interface/amdsmi_interface.py | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/py-interface/amdsmi_interface.py b/py-interface/amdsmi_interface.py
+index 49e2a729..cc5dde3a 100644
+--- a/py-interface/amdsmi_interface.py
++++ b/py-interface/amdsmi_interface.py
+@@ -5218,6 +5218,12 @@ def amdsmi_get_rocm_version()-> Tuple[bool, str]:
+ 
+     try:
+         possible_locations = list()
++        # 0. Relative to amdsmi_interface.py in TheRock:
++        #    `amdsmi_interface.py` is located in
++        #    `_rocm_sdk_core/share/amd_smi/amdsmi`, libraries are in
++        #    `_rocm_sdk_core/lib`.
++        librocm_core_path = Path(__file__).resolve().parent.parent.parent.parent / "lib/librocm-core.so.1"
++        possible_locations.append(librocm_core_path)
+         # 1.
+         rocm_path = os.getenv("ROCM_HOME", os.getenv("ROCM_PATH"))
+         if rocm_path:
+-- 
+2.43.0
+

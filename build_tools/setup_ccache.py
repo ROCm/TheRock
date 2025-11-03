@@ -70,9 +70,11 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
 
     # (TODO:consider https://ccache.dev/manual/4.6.1.html#_storage_interaction)
     # Switch based on cache type.
-    if False:
-        # Placeholder for other cache type switches.
-        ...
+    if args.remote:
+        if not args.remote_storage:
+            raise ValueError(f"Expected --remote-storage with --remote option")
+        lines.append(f"remote_storage = {args.remote_storage}")
+        lines.append(f"remote_only = true")
     else:
         # Default, local.
         local_path: Path = args.local_path
@@ -133,14 +135,13 @@ def run(args: argparse.Namespace):
             )
 
     # Reset statistic counters
-    if args.no_reset_stats == False:
+    if args.reset_stats:
         try:
             proc_ccache = subprocess.run(
                 ["ccache", "--zero-stats"], capture_output=True, text=True
             )
             proc_ccache.check_returncode()
-
-            print(proc_ccache.stdout, end="")
+            print(proc_ccache.stdout, end="", file=sys.stderr)
 
         except subprocess.CalledProcessError:
             print(
@@ -160,10 +161,10 @@ def main(argv: list[str]):
         help="Location of the .ccache directory (defaults to ../.ccache)",
     )
     p.add_argument(
-        "--no-reset-stats",
-        type=bool,
-        default=False,
-        help="If true, prevents zeroing the statistic counters. (default: False)",
+        "--reset-stats",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Zeros statistics counters (default to enabled).",
     )
     command_group = p.add_mutually_exclusive_group()
     command_group.add_argument(
@@ -176,12 +177,15 @@ def main(argv: list[str]):
     type_group.add_argument(
         "--local", action="store_true", help="Use a local cache (default)"
     )
+    type_group.add_argument("--remote", action="store_true", help="Use a remote cache")
 
     p.add_argument(
         "--local-path",
         type=Path,
         help="Use a non-default local ccache directory (defaults to 'local/' in --dir)",
     )
+
+    p.add_argument("--remote-storage", help="Remote storage configuration/URL")
 
     preset_group = p.add_mutually_exclusive_group()
     preset_group.add_argument(

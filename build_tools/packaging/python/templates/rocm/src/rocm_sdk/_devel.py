@@ -83,23 +83,56 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     # Resolve the Python package to its distribution package name and find the
     # RECORD file.
     dist_names = md.packages_distributions()["rocm_sdk_devel"]
-    assert len(dist_names) == 1  # Would only be != 1 for namespace package.
-    dist_name = dist_names[0]
-    dist_files = md.files(dist_name)
+
+    # De-duplication, preserving order (handles purelib/platlib duplicates)
+    seen_dist_names = set()
+    dist_names_list = [
+        d for d in dist_names if not (d in seen_dist_names or seen_dist_names.add(d))
+    ]
+
+    # to preserve fail-fast behavior
+    assert len(dist_names_list) >= 1, (
+        "No distribution candidates found for 'rocm_sdk_devel'. "
+        "Ensure rocm-sdk[devel] is installed in the current environment."
+    )
+    # Try to find candidates until found one with files and a usable RECORD
+    record_pkg_file = None
+    dist_files = None
+    dist_name = None
+
+    for candidate in dist_names_list:
+        candidate_files = md.files(candidate)
+        if candidate_files is None:
+            continue
+
+        # Look for RECORD inside a *.dist-info directory.
+        for record_pkg_file in candidate_files:
+            if (
+                record_pkg_file.name == "RECORD"
+                and record_pkg_file.parent.name.endswith(".dist-info")
+            ):
+                # Found a usable candidate; set dist_name/dist_files
+                dist_name = candidate
+                dist_files = candidate_files
+                break
+
+        if dist_name is not None:
+            break
+
     if dist_files is None:
         raise ImportError(
             "Cannot expand the `rocm-sdk[devel]` package because it was not installed "
             "by a user-mode package manager and is managed by the system. Please "
             "install the `rocm-sdk` in a virtual environment."
         )
-    for record_pkg_file in dist_files:
-        if record_pkg_file.name == "RECORD" and record_pkg_file.parent.name.endswith(
-            ".dist-info"
-        ):
-            break
-    else:
+
+    if dist_name is None or record_pkg_file is None:
+        # We had files for at least one candidate, but did not find RECORD in any
+        # Use the original RECORD error message with the first candidate name
+        # If dist_name is None- fall back to the first name for message context
+        msg_dist_name = dist_name if dist_name is not None else dist_names_list[0]
         raise ImportError(
-            f"No distribution RECORD found for the `{dist_name}` distribution package."
+            f"No distribution RECORD found for the `{msg_dist_name}` distribution package."
         )
 
     # Resolve to a physical file.

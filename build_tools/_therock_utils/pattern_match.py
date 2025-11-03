@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import sys
+import time
 
 
 class RecursiveGlobPattern:
@@ -60,6 +61,11 @@ class MatchPredicate:
 
 
 class PatternMatcher:
+    # Maximum number of attempts to retry removing the destination directory
+    max_attempts: int = 5
+    # Delay between retry attempts in seconds
+    retry_delay_seconds: float = 0.2
+
     def __init__(
         self,
         includes: Sequence[str] = (),
@@ -111,9 +117,27 @@ class PatternMatcher:
         remove_dest: bool = True,
     ):
         if remove_dest and destdir.exists():
-            if verbose:
-                print(f"rmtree {destdir}", file=sys.stderr)
-            shutil.rmtree(destdir)
+            for attempt in range(self.max_attempts):
+                try:
+                    shutil.rmtree(destdir)
+                    if verbose:
+                        print(f"rmtree {destdir}", file=sys.stderr)
+                    break
+                except PermissionError:
+                    wait_time = self.retry_delay_seconds * (attempt + 2)
+                    if verbose:
+                        print(
+                            f"PermissionError calling shutil.rmtree('{destdir}') retrying after {wait_time}s",
+                            file=sys.stderr,
+                        )
+                    time.sleep(wait_time)
+                    if attempt == self.max_attempts - 1:
+                        if verbose:
+                            print(
+                                f"rmtree failed after {self.max_attempts} attempts, failing",
+                                file=sys.stderr,
+                            )
+                        raise
         destdir.mkdir(parents=True, exist_ok=True)
 
         for relpath, direntry in self.matches():

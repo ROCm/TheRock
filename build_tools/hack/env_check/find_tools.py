@@ -174,13 +174,6 @@ class FindGit(FindProgram):
         self.get_version()
 
 
-class FindGitLFS(FindProgram):
-    def __init__(self):
-        super().__init__()
-        self.name = "git-lfs"
-        self.get_version()
-
-
 class FindUV(FindProgram):
     def __init__(self):
         super().__init__()

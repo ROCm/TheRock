@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       s3_subdir:
@@ -37,14 +37,18 @@ on:
       amdgpu_family:
         type: choice
         options:
-          - gfx110X-dgpu
+          - gfx101X-dgpu
+          - gfx103X-dgpu
+          - gfx110X-all
+          - gfx1150
           - gfx1151
           - gfx120X-all
+          - gfx90X-dcgpu
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx1151
       release_type:
-        description: The type of release to build ("nightly", or "dev")
+        description: The type of release to build ("nightly", "prerelease", or "dev")
         type: string
         default: "dev"
       s3_subdir:
@@ -71,18 +75,23 @@ on:
         type: string
         default: ''
 
-
 permissions:
   id-token: write
   contents: read
 
 jobs:
   release:
-    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_version }}
     strategy:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
+        pytorch_version: ["release/2.9", "nightly"]
+        include:
+          - pytorch_version: release/2.9
+            pytorch_patchset: rocm_2.9
+          - pytorch_version: nightly
+            pytorch_patchset: nightly
 
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:
@@ -94,4 +103,6 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
+      pytorch_version: ${{ matrix.pytorch_version }}
+      pytorch_patchset: ${{ matrix.pytorch_patchset }}
       ref: ${{ inputs.ref || '' }}

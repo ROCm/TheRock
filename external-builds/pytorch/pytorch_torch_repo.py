@@ -43,21 +43,24 @@ import repo_management
 
 THIS_MAIN_REPO_NAME = "pytorch"
 THIS_DIR = Path(__file__).resolve().parent
-THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
+
+DEFAULT_ORIGIN = "https://github.com/pytorch/pytorch.git"
+DEFAULT_HASHTAG = "nightly"
+DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
         command_parser.add_argument(
-            "--repo",
+            "--checkout-dir",
             type=Path,
             default=THIS_DIR / THIS_MAIN_REPO_NAME,
-            help="Git repository path",
+            help=f"Directory path where the git repo is cloned into. Default is {THIS_DIR / THIS_MAIN_REPO_NAME}",
         )
         command_parser.add_argument(
             "--patch-dir",
             type=Path,
-            default=THIS_PATCHES_DIR,
+            default=DEFAULT_PATCHES_DIR,
             help="Git repository patch path",
         )
         command_parser.add_argument(
@@ -68,7 +71,7 @@ def main(cl_args: list[str]):
         )
         command_parser.add_argument(
             "--repo-hashtag",
-            default=default_repo_hashtag,
+            default=DEFAULT_HASHTAG,
             help="Git repository ref/tag to checkout",
         )
         command_parser.add_argument(
@@ -77,13 +80,12 @@ def main(cl_args: list[str]):
         )
 
     p = argparse.ArgumentParser("pytorch_torch_repo.py")
-    default_repo_hashtag = "main"
     sub_p = p.add_subparsers(required=True)
     checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
     add_common(checkout_p)
     checkout_p.add_argument(
         "--gitrepo-origin",
-        default="https://github.com/pytorch/pytorch.git",
+        default=DEFAULT_ORIGIN,
         help="git repository url",
     )
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")

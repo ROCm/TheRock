@@ -56,6 +56,11 @@ class ROCmLibrariesTest(unittest.TestCase):
         for so_path in so_paths:
             with self.subTest(msg="Check shared library loads", so_path=so_path):
 
+                if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
+                    # TODO: Library preloads for amdsmi need to be implement.
+                    # Though this is not needed for the amd-smi client.
+                    self.skipTest("Skipping amdsmi test")
+
                 # For Windows compatibility, we first preload libraries (DLLs)
                 # that are not co-located. Specifically this is for
                 # the "libraries" like hipfft, rocblas, etc. which are siblings

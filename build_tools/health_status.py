@@ -39,9 +39,6 @@ def main():
             CheckDisk(device_info=device),
             Check_Max_PATH_LIMIT(device_info=device) if device.is_windows else None,
             CheckGit(),
-            CheckGitLFS(required=False)
-            if device.is_windows
-            else CheckGitLFS(required=True),
             CheckCMake(),
             CheckCCache(required=False),
             CheckNinja(),

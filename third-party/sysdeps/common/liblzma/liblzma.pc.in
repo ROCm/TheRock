@@ -1,0 +1,24 @@
+prefix=${pcfiledir}/../..
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: liblzma
+Description: General purpose data compression library
+Version: @PROJECT_VERSION@
+
+Requires:
+Cflags: -I${includedir}
+Libs: -L${libdir} -llzma
+Libs.private: @PTHREAD_CFLAGS@ @LIBS@
+
+# we use "Libs: -L${libdir} -llzma" because
+# * -l expects a library only ending in ".so" without a version
+# * we have the following file structure:
+#     cmake
+#     pkgconfig
+#     liblzma.so -> librocm_sysdeps_liblzma.so.5
+#     librocm_sysdeps_liblzma.so.5 -> librocm_sysdeps_liblzma.so.5.8.1
+#     librocm_sysdeps_liblzma.so.5.8.1
+#
+# as such when we use our ${libdir} as library path we can use the
+# default name of the library to (hard-)link to our vendored library

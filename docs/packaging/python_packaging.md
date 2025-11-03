@@ -75,15 +75,6 @@ of accidentally referencing too-new glibc symbols).
 
 To install locally built packages you can either
 
-1. Directly install the Python packages by file name:
-
-   ```bash
-   python3 -m venv .venv && source .venv/bin/activate
-   pip install ${HOME}/tmp/packages/dist/rocm-7.0.0.dev0.tar.gz \
-               ${HOME}/tmp/packages/dist/rocm_sdk_core-7.0.0.dev0-py3-none-linux_x86_64.whl
-   # Optionally install rocm_sdk_devel and rocm_sdk_libraries wheels
-   ```
-
 1. Generate a local index using [piprepo](https://pypi.org/project/piprepo/) and
    install using more natural package names:
 
@@ -91,10 +82,27 @@ To install locally built packages you can either
    python3 -m venv .venv && source .venv/bin/activate
    pip install piprepo setuptools
    piprepo build ${HOME}/tmp/packages/dist
-   pip install rocm[libraries,devel]==7.0.0.dev0 \
+   pip install rocm[libraries,devel] \
+     --pre \
      --extra-index-url ${HOME}/tmp/packages/dist/simple \
      --force-reinstall --no-cache-dir
    ```
+
+1. Directly install the Python packages by file name:
+
+   ```bash
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install ${HOME}/tmp/packages/dist/rocm-7.10.0.dev0.tar.gz \
+               ${HOME}/tmp/packages/dist/rocm_sdk_core-7.10.0.dev0-py3-none-linux_x86_64.whl
+   # Optionally install rocm_sdk_devel and rocm_sdk_libraries wheels too
+   ```
+
+> [!TIP]
+> By default, development packages have versions like
+> `7.10.0.dev0`. You can also set an explicit fixed version with the
+> `--version` argument to `build_python_packages.py`. See
+> [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
+> for more version formats.
 
 ## Using Packages from Frameworks
 
