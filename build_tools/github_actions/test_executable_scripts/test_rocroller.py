@@ -54,7 +54,6 @@ if platform == "linux":
         str(test_bin.parent.parent),  # .../rocRoller/build
         str(BUILD_DIR / "math-libs" / "BLAS" / "rocRoller" / "stage" / "lib"),
         str(BUILD_DIR / "math-libs" / "BLAS" / "rocRoller" / "dist" / "lib"),
-        env.get("LD_LIBRARY_PATH", ""),
     ]
     # De-dupe while preserving order
     seen, ld_clean = set(), []
@@ -62,7 +61,6 @@ if platform == "linux":
         if p and p not in seen:
             seen.add(p)
             ld_clean.append(p)
-    env["LD_LIBRARY_PATH"] = ":".join(ld_clean)
     env["ROCM_PATH"] = str(THEROCK_DIST_DIR)
     env["HIP_PATH"] = str(THEROCK_DIST_DIR)
 
