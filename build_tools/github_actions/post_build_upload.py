@@ -47,12 +47,6 @@ def exec(cmd: list[str], cwd: Path):
     subprocess.run(cmd, check=True)
 
 
-def exec_pwsh(cmd: list[str], cwd: Path):
-    cmd = ["powershell.exe", "-c"] + cmd
-    log(f"++ Exec Pwsh [{cwd}]$ {' '.join(cmd)}")
-    subprocess.run(cmd, check=True)
-
-
 def is_windows():
     return platform.system().lower() == "windows"
 
