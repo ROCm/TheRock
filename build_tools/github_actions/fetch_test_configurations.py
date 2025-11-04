@@ -226,6 +226,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 5,
     },
+    # libhipcxx tests
+    "libhipcxx": {
+        "job_name": "libhipcxx",
+        "fetch_artifact_args": "--libhipcxx --tests",
+        "timeout_minutes": 20,
+        "test_script": f"python {_get_script_path('test_libhipcxx.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
