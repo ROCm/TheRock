@@ -102,6 +102,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.rocm_media_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
+    if args.include_math_libraries:
+        projects.extend(args.math_library_projects)
     return projects
 
 
@@ -412,6 +414,12 @@ def main(argv):
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
     parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -523,6 +531,19 @@ def main(argv):
             if is_windows()
             else [
                 "rocm-libraries",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--math-library-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "libhipcxx",
             ]
         ),
     )
