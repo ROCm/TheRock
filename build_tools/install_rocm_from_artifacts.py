@@ -175,6 +175,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.miopen:
             extra_artifacts.append("miopen")
+            # Also need these for runtime kernel compilation.
+            argv.extend("rocrand_dev")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
