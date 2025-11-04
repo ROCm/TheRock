@@ -231,7 +231,8 @@ jobs:
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
       - name: Upload wheels to S3 staging
-        if: ${{ github.repository_owner == 'ROCm' }}
+        if: ${{ !cancelled() }}
+        # if: ${{ github.repository_owner == 'ROCm' }}
         # Using 'cmd' here since PACKAGE_DIST_DIR uses \ in paths instead of /
         shell: cmd
         run: |
@@ -248,6 +249,10 @@ jobs:
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
+
+      - name: Suspend for interactive debugging
+        if: ${{ !cancelled() }}
+        run: sleep 21600
 
   generate_target_to_run:
     name: Generate target_to_run
