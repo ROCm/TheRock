@@ -90,12 +90,11 @@ if(THEROCK_ENABLE_PRIM)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      -DBUILD_TEST=${THEROCK_BUILD_TESTING}
+      -DBUILD_TEST=OFF
     COMPILER_TOOLCHAIN
       amd-hip
     BUILD_DEPS
       rocm-cmake
-      therock-googletest
     RUNTIME_DEPS
       hip-clr
   )
@@ -105,6 +104,44 @@ if(THEROCK_ENABLE_PRIM)
   )
   therock_cmake_subproject_provide_package(rocPRIM rocprim lib/cmake/rocprim)
   therock_cmake_subproject_activate(rocPRIM)
+
+  if(THEROCK_BUILD_TESTING)
+    ##############################################################################
+    # rocPRIM tests
+    ##############################################################################
+
+    # rocPRIM_Tests declared as a separate target to stop the tests from clogging up the critical build path for libs
+    # that depend on rocPRIM
+    therock_cmake_subproject_declare(rocPRIM_Tests
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DHIP_PLATFORM=amd
+        -DROCM_PATH=
+        -DROCM_DIR=
+        -DBUILD_TEST=ON
+        -DUSE_SYSTEM_LIB=ON
+      COMPILER_TOOLCHAIN
+        amd-hip
+      DIR_PREFIX
+        tests_
+      BUILD_DEPS
+        rocm-cmake
+        therock-googletest
+        rocPRIM
+        # rocSPARSE
+        # rocSOLVER
+      RUNTIME_DEPS
+        hip-clr
+    )
+    therock_cmake_subproject_glob_c_sources(rocPRIM_Tests
+      SUBDIRS
+        .
+    )
+    therock_cmake_subproject_activate(rocPRIM_Tests)
+
+  endif()
 
   therock_cmake_subproject_declare(hipCUB
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipcub"
@@ -163,7 +200,7 @@ if(THEROCK_ENABLE_PRIM)
       dev
       doc
       test
-    SUBPROJECT_DEPS rocPRIM hipCUB rocThrust
+    SUBPROJECT_DEPS rocPRIM hipCUB rocThrust rocPRIM_Tests
   )
 endif(THEROCK_ENABLE_PRIM)
 
