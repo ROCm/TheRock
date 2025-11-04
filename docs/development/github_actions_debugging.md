@@ -93,7 +93,7 @@ cd _work/TheRock/TheRock
 export TEATIME_FORCE_INTERACTIVE=1
 
 # Copy the configure command from the "Configure Projects" step
-cmake -B "B:/build" -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DTHEROCK_VERBOSE=ON -DBUILD_TESTING=ON -DCMAKE_C_COMPILER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe" -DCMAKE_LINKER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe" -DTHEROCK_BACKGROUND_BUILD_JOBS=4
+cmake -B "B:/build" -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DTHEROCK_VERBOSE=ON -DBUILD_TESTING=ON -DCMAKE_C_COMPILER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe" -DCMAKE_LINKER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe" -DTHEROCK_BACKGROUND_BUILD_JOBS=4
 
 # Build CMake targets
 # You could also run buildctl.py here to enable/disable specific subprojects
