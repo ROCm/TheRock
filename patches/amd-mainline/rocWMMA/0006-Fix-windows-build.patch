@@ -1,7 +1,7 @@
 From f22e5d6c531dad5aea95de3a2c0c09dd8599a1bd Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Tue, 4 Nov 2025 14:55:39 -0500
-Subject: [PATCH 6/6] Fix windows build
+Subject: [PATCH 6/7] Fix windows build
 
 ---
  CMakeLists.txt | 2 +-

@@ -1,0 +1,28 @@
+From 8853b95b7ab84e63e05a221798bb2ca5478d90c9 Mon Sep 17 00:00:00 2001
+From: Bain Syrowik <bain.syrowik@amd.com>
+Date: Tue, 4 Nov 2025 17:25:49 -0500
+Subject: [PATCH 7/7] Use semicolon list instead of quoted command to fix
+ Windows build
+
+---
+ test/gemm/CMakeLists.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/test/gemm/CMakeLists.txt b/test/gemm/CMakeLists.txt
+index 81f99984..319e35f3 100644
+--- a/test/gemm/CMakeLists.txt
++++ b/test/gemm/CMakeLists.txt
+@@ -29,8 +29,8 @@ include( CMakeDependentOption )
+ cmake_dependent_option( ROCWMMA_VALIDATE_WITH_ROCBLAS "Use rocBLAS for validation" ON "ROCWMMA_BUILD_VALIDATION_TESTS" OFF )
+ cmake_dependent_option( ROCWMMA_BENCHMARK_WITH_ROCBLAS "Include rocBLAS benchmark performance comparisons" OFF "ROCWMMA_BUILD_BENCHMARK_TESTS" OFF )
+ 
+-set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
+-set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CMAKE_COMMAND} -E time")
++set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "\"${CMAKE_COMMAND}\" -E time")
++set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "\"${CMAKE_COMMAND}\" -E time")
+ 
+ if(ROCWMMA_VALIDATE_WITH_ROCBLAS OR ROCWMMA_BENCHMARK_WITH_ROCBLAS)
+   find_package( rocblas REQUIRED PATHS /opt/rocm /opt/rocm/rocblas $ENV{ROCBLAS_DIR} )
+-- 
+2.34.1
+

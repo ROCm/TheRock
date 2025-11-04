@@ -1,7 +1,7 @@
 From 0f5cf420c5426c6eb10fbd87b89bb416d000ac39 Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Thu, 23 Oct 2025 19:31:50 -0400
-Subject: [PATCH 3/6] Export rocWMMA CMake target
+Subject: [PATCH 3/7] Export rocWMMA CMake target
 
 ---
  CMakeLists.txt | 6 ++++++
