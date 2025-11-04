@@ -45,3 +45,7 @@
 	path = base/amdsmi
 	url = https://github.com/ROCm/amdsmi.git
 	branch = amd-staging
+[submodule "libhipcxx"]
+	path = math-libs/libhipcxx
+	url = https://github.com/ROCm/libhipcxx.git
+	branch = main
