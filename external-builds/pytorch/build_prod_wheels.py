@@ -430,6 +430,18 @@ def do_build(args: argparse.Namespace):
     else:
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
 
+    # OpenBLAS path setup
+    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    if not host_math_path.exists():
+        print(
+            "WARNING: Default location of host-math not found. "
+            "Will not build with OpenBLAS support."
+        )
+    else:
+        env["BLAS"] = "OpenBLAS"
+        env["OpenBLAS_HOME"] = str(host_math_path)
+        env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
+
     # Build triton.
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):
@@ -966,7 +978,6 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(

@@ -12,6 +12,7 @@ Optional environment variables:
   - GITHUB_WORKSPACE
 """
 
+import argparse
 import logging
 import os
 from pathlib import Path
@@ -43,7 +44,7 @@ platform_options = {
 }
 
 
-def build_configure():
+def build_configure(manylinux=False):
     logging.info(f"Building package {package_version}")
 
     cmd = [
@@ -69,6 +70,18 @@ def build_configure():
     # Adding platform specific options
     cmd += platform_options.get(PLATFORM, [])
 
+    # Adding manylinux Python executables if --manylinux is set
+    if manylinux:
+        python_executables = (
+            "/opt/python/cp38-cp38/bin/python;"
+            "/opt/python/cp39-cp39/bin/python;"
+            "/opt/python/cp310-cp310/bin/python;"
+            "/opt/python/cp311-cp311/bin/python;"
+            "/opt/python/cp312-cp312/bin/python;"
+            "/opt/python/cp313-cp313/bin/python"
+        )
+        cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
+
     if PLATFORM == "windows":
         # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist
         if not vctools_install_dir:
@@ -85,4 +98,15 @@ def build_configure():
 
 
 if __name__ == "__main__":
-    build_configure()
+    parser = argparse.ArgumentParser(description="Run build configuration")
+    parser.add_argument(
+        "--manylinux",
+        action="store_true",
+        help="Enable manylinux build with multiple Python versions",
+    )
+    args = parser.parse_args()
+
+    # Support both command-line flag and environment variable
+    manylinux = args.manylinux or os.getenv("MANYLINUX") in ["1", "true"]
+
+    build_configure(manylinux=manylinux)

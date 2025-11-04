@@ -6,6 +6,7 @@
 [components.test."math-libs/rocRAND/stage"]
 include = [
   "bin/test_*",
+  "bin/benchmark_*",
   "bin/rocRAND/CTestTestfile.cmake"
 ]
 
