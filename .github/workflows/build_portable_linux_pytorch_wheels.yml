@@ -114,7 +114,6 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
-      HIP_PLATFORM: "amd"  # TODO TODO JUST FOR TESTING! REMOVE AFTERWARDS!!
     outputs:
       cp_version: ${{ env.cp_version }}
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}

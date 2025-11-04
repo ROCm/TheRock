@@ -89,7 +89,7 @@ Output can be used with 'pytest -k <list>'
         type=str,
         default="",
         required=False,
-        help="""Amdgpu family (e.g. "gfx942").
+        help="""AMDGPU family (e.g. "gfx942").
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
     )
     p.add_argument(

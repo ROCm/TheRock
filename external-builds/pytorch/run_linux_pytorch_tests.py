@@ -188,3 +188,4 @@ if __name__ == "__main__":
 
     retcode = pytest.main(pytorch_args)
     print(f"Pytest finished with return code: {retcode}")
+    sys.exit(retcode)  # Lets make the CI fail when pytest has failures
