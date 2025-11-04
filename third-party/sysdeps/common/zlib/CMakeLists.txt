@@ -54,6 +54,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# Apply patch source only on Linux
+set(patch_source_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
+endif()
 # zlib provides a CMakeLists.txt, however, we have to do some post-processing
 # of the libraries in order to prepare them for our use, so we invoke it as
 # a sub-build. We do this uniformly across all platforms because it is easier
@@ -66,6 +72,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     # Provide our own version map with private symbol versions.
     "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/zlib.map"

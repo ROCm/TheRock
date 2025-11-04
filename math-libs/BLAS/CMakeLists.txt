@@ -8,7 +8,7 @@ cmake_path(APPEND _blas_hack_hip_dir lib/llvm OUTPUT_VARIABLE _toolchain_dir)
 # Most libraries need to depend on the profiler, but is conditionally only used
 # on Posix.
 set(optional_profiler_deps)
-if(NOT WIN32)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
@@ -126,6 +126,7 @@ therock_cmake_subproject_declare(hipBLASLt
     -DHIPBLASLT_BUILD_TESTING=${THEROCK_BUILD_TESTING}
     -DHIPBLASLT_ENABLE_ROCROLLER=${_enable_rocRoller}
     -DHIPBLASLT_ENABLE_FETCH=OFF
+    -DHIPBLASLT_ENABLE_THEROCK=ON
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
