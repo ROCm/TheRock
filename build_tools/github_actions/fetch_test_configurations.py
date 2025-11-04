@@ -32,6 +32,7 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
@@ -40,6 +41,7 @@ test_matrix = {
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1702
@@ -49,6 +51,7 @@ test_matrix = {
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
@@ -58,6 +61,7 @@ test_matrix = {
     "hipsolver": {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipsolver.py')}",
         "platform": ["linux", "windows"],
@@ -66,6 +70,7 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
@@ -76,6 +81,7 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
@@ -84,6 +90,7 @@ test_matrix = {
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
@@ -92,6 +99,7 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux", "windows"],
@@ -101,6 +109,7 @@ test_matrix = {
     "hipsparse": {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux"],
@@ -109,6 +118,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
@@ -121,6 +131,7 @@ test_matrix = {
     "rocrand": {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
@@ -129,6 +140,7 @@ test_matrix = {
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
@@ -138,6 +150,7 @@ test_matrix = {
     "rocfft": {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
@@ -147,6 +160,7 @@ test_matrix = {
     "hipfft": {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipfft.py')}",
         "platform": ["linux", "windows"],
@@ -156,6 +170,7 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
@@ -165,6 +180,7 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
+        "requirements": "-r requirements-test-base.txt -r requirements-test-pytest.txt",
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
@@ -174,6 +190,7 @@ test_matrix = {
     "hipdnn": {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
+        "requirements": "-r requirements-test-base.txt",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn.py')}",
         "platform": ["linux"],

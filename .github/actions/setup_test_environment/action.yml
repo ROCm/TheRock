@@ -16,6 +16,9 @@ inputs:
   IS_PR_FROM_FORK:
     type: boolean
     default: false
+  REQUIREMENTS:
+    type: string
+    default: "-r requirements-test-base.txt"
 
 runs:
   using: "composite"
@@ -34,9 +37,12 @@ runs:
           --activate-in-future-github-actions-steps
 
     - name: Install test requirements
+      if: ${{ inputs.REQUIREMENTS != '' }}
       shell: bash
+      env:
+        REQUIREMENTS: ${{ inputs.REQUIREMENTS }}
       run: |
-        pip install -r requirements-test.txt
+        pip install ${REQUIREMENTS}
         pip freeze
 
     - name: Install the AWS tool
