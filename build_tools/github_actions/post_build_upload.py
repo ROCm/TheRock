@@ -55,67 +55,29 @@ def exec_pwsh(cmd: list[str], cwd: Path):
 def is_windows():
     return platform.system().lower() == "windows"
 
-import time
-# Windows uses the Time Service to keep time in sync using NTP
-# but for non-domain joined machines, it does not run frequently
-# https://serverfault.com/questions/791892/time-sync-on-non-domain-joined-servers
-# Previously using `w32tm` or `schtasks` failed due to the Time Service being stopped.
-# Ensure the w32time service is running before running those commands.
-# https://superuser.com/questions/1236850/w32tm-does-not-exist-as-an-installed-service
-def sync_windows_clock():
-    log(f"Current time before time sync {str(datetime.now())}")
-
-    log(f"Suspend for interactive debugging")
-    time.sleep(6*3600)
-
-    log(f"Configuring Windows Time Service to use NTP...")
-
-    exec_pwsh(
-        [
-            "Set-ItemProperty -Path",
-            '"HKLM:\\SYSTEM\\CurrentControlSet\\services\\W32Time\\Config"',
-            '-Name "AnnounceFlags" -Value 5',
-        ],
-        cwd=Path.cwd(),
-    )
-
-    exec_pwsh(
-        [
-            "Set-ItemProperty -Path",
-            '"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\w32time\\TimeProviders\\NtpServer"',
-            '-Name "Enabled" -Value 1',
-        ],
-        cwd=Path.cwd(),
-    )
-
-    exec_pwsh(["Restart-Service w32Time"], cwd=Path.cwd())
-
-    log(f"Querying Windows Time Service source...")
-    exec(["w32tm.exe", "/query", "/source"], cwd=Path.cwd())
-
-    log(f"Syncing Windows Time Service ...")
-    exec(["w32tm.exe", "/resync"], cwd=Path.cwd())
-
-    log(f"Retrieving Windows event logs for the Time Service:")
-
-    exec_pwsh(
-        [
-            "Sleep 1;",
-            "Get-WinEvent -LogName Microsoft-Windows-Time-Service/Operational",
-            "| select-object -First 3",
-            '| % {  echo "[$($_.TimeCreated)] $($_.Message)" }',
-        ],
-        cwd=Path.cwd(),
-        useShlexCmdLogging=False,
-    )
-
-    log(f"Current time after time sync {str(datetime.now())}")
-
 
 def check_aws_cli_available():
     if not shutil.which("aws"):
         log("[ERROR] AWS CLI not found in PATH.")
         sys.exit(1)
+
+    if is_windows():
+        get_time_sync_logs()
+
+
+def get_time_sync_logs():
+    startfile = Path("H:\\start.log")
+    timefile = Path("H:\\time.log")
+    if startfile.is_file() and timefile.is_file():
+        log(f"[*] Checking time sync at: {datetime.now()}")
+        log("[*] Start Time Sync Log:")
+        log(startfile.read_text())
+        log("[*] Time Sync Log:")
+        timef = open(timefile)
+        timelines = timef.readlines()
+        log("".join(timelines[-40:]))
+    else:
+        log("[*] time.log and/or start.log not present in H:")
 
 
 def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None):
@@ -213,11 +175,6 @@ def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
     log("Uploading artifacts to S3")
     build_dir = args.build_dir
     amdgpu_family = args.amdgpu_family
-
-    # AWS upload signatures depend on timestamps and will fail if the time differs by 5mins
-    # This will make sure the Windows machine time is synced
-    if is_windows():
-        sync_windows_clock()
 
     # Uploading artifacts to S3 bucket
     cmd = [
