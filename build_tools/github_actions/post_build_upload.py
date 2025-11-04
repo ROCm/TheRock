@@ -18,14 +18,14 @@ For AWS credentials to upload, reach out to the #rocm-ci channel in the AMD Deve
 
 import argparse
 import os
-import tarfile
-from pathlib import Path
 import platform
 import shlex
 import shutil
 import subprocess
 import sys
-from functools import lru_cache  # <-- added
+import tarfile
+from functools import lru_cache
+from pathlib import Path
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
