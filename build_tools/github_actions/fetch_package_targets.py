@@ -15,7 +15,7 @@ Outputs written to GITHUB_OUTPUT:
                 "expect_pytorch_failure": false
             },
             {
-                "amdgpu_family": "gfx110X-all",
+                "amdgpu_family": "gfx110X-dgpu",
                 "test_machine": "",
                 "expect_failure": false,
                 "expect_pytorch_failure": true
