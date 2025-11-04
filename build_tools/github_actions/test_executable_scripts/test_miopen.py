@@ -178,6 +178,7 @@ smoke_filter = [
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES != "gfx950-dcgpu":
     smoke_filter.append("*DBSync*")
+    positive_filter.append("*DBSync*")
 
 ####################################################
 
