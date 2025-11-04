@@ -17,6 +17,10 @@ benefit from further discussion.
 ## Index
 
 - [RFC0001: BLAS Stack Build Improvements](./RFC0001-BLAS-Stack-Build-Improvements.md)
+- [RFC0002: MonoRepo Gardener Rotations](./RFC0002-MonoRepo-Gardener-Rotations.md)
+- [RFC0003: Build Tree Normalization](./RFC0003-Build-Tree-Normalization.md)
+- [RFC0004: Fusilli+IREE Kernel Provider for hipDNN](./RFC0004-Fusilli-IREE-Kernel-Provider-hipDNN.md)
+- [RFC0005: hipDNN Project Integration](./RFC0005-hipDNN-Project-Integration.md)
 
 ## Adding an RFC
 

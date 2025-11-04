@@ -45,6 +45,22 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-sdk
   ##############################################################################
+  # Detect available Default Python3 version on the system or
+  # use explicitly provided Python3 versions
+  therock_detect_python_versions(_detected_python_executables _detected_python_versions)
+
+  # Use detected versions or fall back to default if none found
+  if(NOT _detected_python_versions)
+    message(FATAL_ERROR "No Python versions detected for rocprofiler-sdk")
+    set(_detected_python_versions_str "")
+  else()
+    message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
+    message(STATUS "Python executables: ${_detected_python_executables}")
+    # Join all detected Python versions into a single string separated by semicolons.
+    # This is a workaround because therock_cmake_subproject_declare does not support passing lists directly.
+    list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-sdk
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
@@ -52,6 +68,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     RUNTIME_DEPS

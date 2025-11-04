@@ -43,35 +43,31 @@ import repo_management
 
 THIS_MAIN_REPO_NAME = "pytorch_audio"
 THIS_DIR = Path(__file__).resolve().parent
-THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
-(
-    DEFAULT_ORIGIN,
-    DEFAULT_HASHTAG,
-    DEFAULT_PATCHSET,
-    HAS_RELATED_COMMIT,
-) = repo_management.read_pytorch_rocm_pins(
-    THIS_DIR / "pytorch",
-    os="centos",
-    project="torchaudio",
-    default_origin="https://github.com/pytorch/audio.git",
-    default_hashtag="main",
-    default_patchset=None,
-)
+DEFAULT_ORIGIN = "https://github.com/pytorch/audio.git"
+DEFAULT_HASHTAG = "nightly"
+DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
+DEFAULT_PATCHSET = None
 
 
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
         command_parser.add_argument(
-            "--repo",
+            "--checkout-dir",
             type=Path,
             default=THIS_DIR / THIS_MAIN_REPO_NAME,
-            help="Git repository path",
+            help=f"Directory path where the git repo is cloned into. Default is {THIS_DIR / THIS_MAIN_REPO_NAME}",
+        )
+        command_parser.add_argument(
+            "--gitrepo-origin",
+            type=str,
+            default=None,
+            help=f"Git repository url. Defaults to the origin in torch/related_commits (see --torch-dir), or '{DEFAULT_ORIGIN}'",
         )
         command_parser.add_argument(
             "--patch-dir",
             type=Path,
-            default=THIS_PATCHES_DIR,
+            default=DEFAULT_PATCHES_DIR,
             help="Git repository patch path",
         )
         command_parser.add_argument(
@@ -82,29 +78,33 @@ def main(cl_args: list[str]):
         )
         command_parser.add_argument(
             "--repo-hashtag",
-            default=DEFAULT_HASHTAG,
-            help="Git repository ref/tag to checkout",
+            type=str,
+            default=None,
+            help=f"Git repository ref/tag to checkout. Defaults to the ref in torch/related_commits (see --torch-dir), or '{DEFAULT_HASHTAG}'",
         )
         command_parser.add_argument(
             "--patchset",
-            default=DEFAULT_PATCHSET,
-            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
+            default=None,
+            help=f"Patch dir subdirectory. Defaults to rocm-custom if torch/related_commits exists (see --torch-dir), or '{DEFAULT_PATCHSET}'",
         )
         command_parser.add_argument(
             "--require-related-commit",
-            action="store_true",
-            help="Require that a related commit was found",
+            action=argparse.BooleanOptionalAction,
+            help="Require that a related commit was found from --torch-dir",
+        )
+        command_parser.add_argument(
+            "--torch-dir",
+            type=Path,
+            default=THIS_DIR / "pytorch",
+            help="Directory of the torch checkout, for loading the related_commits file that can populate alternate default values for --gitrepo-origin, --repo-hashtag, and --patchset. If missing then fallback/upstream defaults will be used",
         )
 
     p = argparse.ArgumentParser("pytorch_audio_repo.py")
     sub_p = p.add_subparsers(required=True)
-    checkout_p = sub_p.add_parser("checkout", help="Clone PyTorch locally and checkout")
-    add_common(checkout_p)
-    checkout_p.add_argument(
-        "--gitrepo-origin",
-        default=DEFAULT_ORIGIN,
-        help="git repository url",
+    checkout_p = sub_p.add_parser(
+        "checkout", help="Clone PyTorch Audio locally and checkout"
     )
+    add_common(checkout_p)
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
     checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
     checkout_p.add_argument(
@@ -132,8 +132,35 @@ def main(cl_args: list[str]):
     save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
-    if args.require_related_commit and not HAS_RELATED_COMMIT:
-        raise ValueError("Could not find torchaudio in pytorch/related_commits")
+
+    # Set default values based on the pin file in the pytorch repo.
+    (
+        default_git_origin,
+        default_git_hashtag,
+        default_patchset,
+        has_related_commit,
+    ) = repo_management.read_pytorch_rocm_pins(
+        args.torch_dir,
+        os="centos",  # Read pins for "centos" on Linux and Windows
+        project="torchaudio",
+        default_origin=DEFAULT_ORIGIN,
+        default_hashtag=DEFAULT_HASHTAG,
+        default_patchset=DEFAULT_PATCHSET,
+    )
+
+    if args.require_related_commit and not has_related_commit:
+        raise ValueError(
+            f"Could not find torchaudio in '{args.torch_dir}/related_commits' (did you mean to set a different --torch-dir?)"
+        )
+
+    # Priority order:
+    #   1. Explicitly set values
+    #   2. Values loaded from the pin in the torch repo
+    #   3. Fallback default values
+    args.gitrepo_origin = args.gitrepo_origin or default_git_origin
+    args.repo_hashtag = args.repo_hashtag or default_git_hashtag
+    args.patchset = args.patchset or default_patchset
+
     args.func(args)
 
 

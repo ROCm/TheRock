@@ -25,10 +25,10 @@ def determine_upload_flag(
     if build_result != "success":
         print("::warning::Build failed. Skipping upload.")
 
-    # 2) Else if there was a test runner AND tests failed or were skipped → upload=false
-    elif test_runs_on and (test_result in ["failure", "skipped"]):
+    # 2) Else if there was a test runner AND tests did not succeed -> upload=false
+    elif test_runs_on and (test_result != "success"):
         print(
-            "::warning::Tests failed or were skipped (runner present). Skipping upload."
+            f"::warning::Runner present and tests were not successful (test_result: {test_result}). Skipping upload."
         )
 
     # 3) Else if BYPASS_TESTS_FOR_RELEASES is not set and there was no test runner → upload=false

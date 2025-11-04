@@ -10,7 +10,7 @@ part of Continuous Delivery (CD) nightly releases. See also the
 > [!WARNING]
 > These instructions assume familiarity with how to use ROCm. Please see
 > https://rocm.docs.amd.com/ for general information about the ROCm software
-> platform.
+> platform. In addition, Linux users, please be aware of the [prerequisites](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access), including enabling GPU access, needed to run ROCm.
 >
 > **Note: these install steps are a substitute for those on that website**.
 
@@ -76,9 +76,10 @@ project layouts.**
 | ---------------------------------- | ---------- | ------------ | ------------------------------------------------------------------ |
 | MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) |
 | MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
-| AMD RX 7800 XT                     | gfx1101    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD RX 7800 XT                     | gfx1101    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
 | AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151)           |
 | AMD RX 9060 / XT                   | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
 | AMD RX 9070 / XT                   | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
@@ -132,7 +133,7 @@ python -m pip install \
   "rocm[libraries,devel]"
 ```
 
-#### rocm for gfx110X-dgpu
+#### rocm for gfx110X-all
 
 Supported devices in this family:
 
@@ -141,12 +142,13 @@ Supported devices in this family:
 | AMD RX 7900 XTX                    | gfx1100    |
 | AMD RX 7800 XT                     | gfx1101    |
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 Install instructions:
 
 ```bash
 python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
   "rocm[libraries,devel]"
 ```
 
@@ -193,7 +195,7 @@ pip freeze | grep rocm
 # rocm==6.5.0rc20250610
 # rocm-sdk-core==6.5.0rc20250610
 # rocm-sdk-devel==6.5.0rc20250610
-# rocm-sdk-libraries-gfx110X-dgpu==6.5.0rc20250610
+# rocm-sdk-libraries-gfx110X-all==6.5.0rc20250610
 ```
 
 You should also see various tools on your `PATH` and in the `bin` directory:
@@ -219,11 +221,12 @@ usage: rocm-sdk {command} ...
 ROCm SDK Python CLI
 
 positional arguments:
-  {path,test,version,targets}
+  {path,test,version,targets,init}
     path                Print various paths to ROCm installation
     test                Run installation tests to verify integrity
     version             Print version information
     targets             Print information about the GPU targets that are supported
+    init                Expand devel contents to initialize rocm[devel]
 
 $ rocm-sdk test
 ...
@@ -234,33 +237,53 @@ $ rocm-sdk targets
 gfx1100;gfx1101;gfx1102
 ```
 
+To initialize the `rocm[devel]` package, use the `rocm-sdk` tool to _eagerly_ expand development
+contents:
+
+```console
+$ rocm-sdk init
+Devel contents expanded to '.venv/lib/python3.12/site-packages/_rocm_sdk_devel'
+```
+
+These contents are useful for using the package outside of Python and _lazily_ expanded on the
+first use when used from Python.
+
 Once you have verified your installation, you can continue to use it for
 standard ROCm development or install PyTorch or another supported Python ML
 framework.
 
 ### Installing PyTorch Python packages
 
-> [!WARNING]
-> This is under **active** development. Compatibility matrix for these wheels is in progress.
->
-> Each `torchaudio` package is compiled against a specific version of `torch`; please refer to the [PyTorch compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix) for compatible versions of torch and torchaudio.
-> The build dates for nightly wheels should also be consistent with each other.
+Using the index pages [listed above](#installing-rocm-python-packages), you can
+also install `torch`, `torchaudio`, and `torchvision`.
 
 > [!NOTE]
-> These installation commands will install the latest versions, including prerelease wheels,
-> by default. Older versions can also be installed from available versions found at
+> By default, pip will install the latest versions of each package. If you want to
+> install older versions take note of the compatibility matrix:
 >
-> - The [nightly releases page](https://rocm.nightlies.amd.com/v2/)
-> - Documentation for [Supported PyTorch versions](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+> | torch version | torchaudio version | torchvision version |
+> | ------------- | ------------------ | ------------------- |
+> | 2.10          | 2.10               | 0.25                |
+> | 2.9           | 2.9                | 0.24                |
+> | 2.7           | 2.7.1a0            | 0.22.1              |
 >
 > For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
 > ```
 > torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 > ```
+>
+> See also
+>
+> - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+> - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
+> - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+> - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
 
-Using the index pages [listed above](#installing-rocm-python-packages), you can install `torch`, `torchaudio`, and
-`torchvision` instead of `rocm[libraries,devel]`:
+> [!TIP]
+> The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
+> be installed automatically for you and you do not need to explicitly install
+> ROCm first.
 
 #### torch for gfx94X-dcgpu
 
@@ -290,7 +313,7 @@ python -m pip install \
   --pre torch torchaudio torchvision
 ```
 
-#### torch for gfx110X-dgpu
+#### torch for gfx110X-all
 
 Supported devices in this family:
 
@@ -299,10 +322,11 @@ Supported devices in this family:
 | AMD RX 7900 XTX                    | gfx1100    |
 | AMD RX 7800 XT                     | gfx1101    |
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
 python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
   --pre torch torchaudio torchvision
 ```
 
@@ -363,19 +387,18 @@ wrapper Python wheels or utility scripts.
 ### Installing release tarballs
 
 Release tarballs are automatically uploaded to AWS S3 buckets.
-The S3 buckets do not yet have index pages.
 
-| S3 bucket                                                                    | Description                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------------- |
-| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/) | Nightly builds from the `main` branch             |
-| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/)         | ⚠️ Development builds from project maintainers ⚠️ |
+| S3 bucket                                                                              | Description                                       |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the `main` branch             |
+| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️ |
 
 After downloading, simply extract the release tarball into place:
 
 ```bash
 mkdir therock-tarball && cd therock-tarball
 # For example...
-wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-dgpu-6.5.0rc20250610.tar.gz
+wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-all-6.5.0rc20250610.tar.gz
 
 mkdir install
 tar -xf *.tar.gz -C install
@@ -452,13 +475,13 @@ Examples:
 - Downloads the version `6.4.0rc20250516` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
 
   ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-dgpu --output-dir build
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-all --output-dir build
   ```
 
 - Downloads the version `6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14` gfx110X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
 
   ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-dgpu
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-all
   ```
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)

@@ -1,10 +1,15 @@
 from __future__ import annotations
 from typing import Literal, Optional, Union, Tuple
 import subprocess
+import sys
+import io
+import platform
+
+# Needed to be able to print the AMD logo (RepoInfo.__logo__())
+if platform.system() == "Windows":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 # Define Color string print.
-
-
 def cstring(
     msg: Union[str],
     color: Union[
@@ -40,15 +45,34 @@ def cstring(
             case "err":
                 r, g, b = (255, 61, 61)
             case "warn":
-                r, g, b = (255, 230, 66)
+                r, g, b = (184, 166, 48)
             case "hint":
-                r, g, b = (150, 255, 255)
+                r, g, b = (115, 201, 201)
             case "pass":
-                r, g, b = (55, 255, 125)
+                r, g, b = (6, 161, 60)
             case _:
                 r, g, b = (255, 255, 255)
 
     return f"\033[38;2;{r};{g};{b}m{msg}\033[0m"
+
+
+def cstring_strip_color(colored_string: str) -> str:
+    """
+    Strips color from a string and returns it.
+    Immediately returns the string if no color is found.
+
+    This is needed if one wants to know the correct length of a colored string,
+    as len(colored_string) also counts the ansi characters describing the color.
+    """
+    import re
+
+    while "\033[38" in colored_string:
+        colored_string = re.sub(
+            r"\033\[38;2;[0-9;]*;[0-9;]*;[0-9;]*m", "", colored_string
+        )
+        colored_string = re.sub(r"\033\[0m", "", colored_string)
+
+    return colored_string
 
 
 def get_regedit(
@@ -117,38 +141,59 @@ class RepoInfo:
         return finder
 
     @staticmethod
-    def __logo__():
+    def __logo__(monospace=False):
 
         """
         ![image](https://upload.wikimedia.org/wikipedia/commons/6/6a/AMD_Logo.png)
         # Advanced Micro Devices Inc.
         """
-
-        print(
-            f"""
-
-
+        if monospace == True:
+            print(
+                f"""
 
 
-    {cstring("   ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
-    {cstring("     ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
-    {cstring("       ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
-    {cstring("                   ◼ ◼ ◼","err")}
-    {cstring("       ◼           ◼ ◼ ◼","err")}\t  Build Environment diagnosis script
-    {cstring("     ◼ ◼           ◼ ◼ ◼","err")}
-    {cstring("   ◼ ◼ ◼           ◼ ◼ ◼","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
-    {cstring("   ◼ ◼ ◼ ◼ ◼ ◼ ◼   ◼ ◼ ◼","err")}
-    {cstring("   ◼ ◼ ◼ ◼ ◼ ◼       ◼ ◼","err")}
-    {cstring("   ◼ ◼ ◼ ◼ ◼           ◼","err")}
 
 
-    """
-        )
+        {cstring("\t\t\t    # # # # # # # # # # #","err")}
+        {cstring("\t\t\t      # # # # # # # # # #","err")}
+        {cstring("\t\t\t        # # # # # # # # #","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
+        {cstring("\t\t\t                    # # #","err")}
+        {cstring("\t\t\t        #           # # #","err")}\t  Build Environment diagnosis script
+        {cstring("\t\t\t      # #           # # #","err")}
+        {cstring("\t\t\t    # # #           # # #","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
+        {cstring("\t\t\t    # # # # # # #   # # #","err")}
+        {cstring("\t\t\t    # # # # # #       # #","err")}
+        {cstring("\t\t\t    # # # # #           #","err")}
+
+
+        """
+            )
+        else:
+            print(
+                f"""
+
+
+
+
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
+        {cstring("\t\t\t      ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}
+        {cstring("\t\t\t        ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼ ◼","err")}\t  {cstring("AMD ROCm/TheRock Project","err")}
+        {cstring("\t\t\t                       ◼ ◼ ◼","err")}
+        {cstring("\t\t\t        ◼             ◼ ◼ ◼","err")}\t  Build Environment diagnosis script
+        {cstring("\t\t\t      ◼ ◼            ◼ ◼ ◼","err")}
+        {cstring("\t\t\t    ◼ ◼ ◼           ◼ ◼ ◼","err")}\t  Version TheRock (current HEAD: {cstring(RepoInfo.head(), "err")})
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼ ◼  ◼ ◼ ◼","err")}
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼ ◼      ◼ ◼","err")}
+        {cstring("\t\t\t    ◼ ◼ ◼ ◼ ◼          ◼","err")}
+
+
+        """
+            )
 
     @staticmethod
     def amdgpu_llvm_target(GPU):
         # Information from https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html
-        from env_check import AMDGPU_LLVM_TARGET
+        from . import AMDGPU_LLVM_TARGET
 
         name_to_gfx = {}
         for gfx, names in AMDGPU_LLVM_TARGET._amdgpu.items():

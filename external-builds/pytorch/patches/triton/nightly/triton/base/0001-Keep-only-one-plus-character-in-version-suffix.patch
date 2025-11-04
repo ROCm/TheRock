@@ -1,4 +1,4 @@
-From b6df9bea10f870c8fe87328b200cabfc117b5372 Mon Sep 17 00:00:00 2001
+From ea9d41bf3cfc1271a31105a6b59a4b6699874a72 Mon Sep 17 00:00:00 2001
 From: Mika Laitio <mika.laitio@amd.com>
 Date: Wed, 6 Aug 2025 01:58:52 -0700
 Subject: [PATCH] Keep only one plus-character in version suffix
@@ -36,10 +36,10 @@ Signed-off-by: Mika Laitio <mika.laitio@amd.com>
  1 file changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/setup.py b/setup.py
-index be40c6eb..f479e90f 100644
+index 8a3007ce4..bdf1c81f5 100644
 --- a/setup.py
 +++ b/setup.py
-@@ -771,8 +771,19 @@ def get_git_version_suffix():
+@@ -775,8 +775,19 @@ def get_git_version_suffix():
          return get_git_commit_hash()
  
  
@@ -59,7 +59,7 @@ index be40c6eb..f479e90f 100644
 +TRITON_VERSION = "3.5.0" + get_triton_version_suffix()
  
  # Dynamically define supported Python versions and classifiers
- MIN_PYTHON = (3, 9)
+ MIN_PYTHON = (3, 10)
 -- 
 2.43.0
 

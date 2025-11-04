@@ -27,7 +27,7 @@ else()
     set(LIBOMPTARGET_ENABLE_DEBUG ON)
     set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
     set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
-    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_SOURCE_DIR}/rocm-systems/projects/rocr-runtime")
+    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
     set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
     # There is an issue with finding the zstd config built by TheRock when zstd
     # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
@@ -35,6 +35,18 @@ else()
     # For now we will switch the priorty for find_package to first search in
     # CONFIG mode.
     set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
+
+    # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
+    if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
+      list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
+      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
+      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "openmp")
+      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
+      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+      set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
+      #TODO: Enable when HWLOC dependency is figured out
+      #set(LIBOMP_USE_HWLOC ON)
+    endif()
   endif()
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
   # with each other" as libomp and generated headers are copied into the original
@@ -49,10 +61,12 @@ set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
 
-# Build the device-libs as part of the core compiler so that clang works by
-# default (as opposed to other components that are *users* of the compiler).
+# Build device-libs and spirv-llvm-translator as part of the core
+# compiler default (as opposed to other components that are *users*
+# of the compiler).
 set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/amd/device-libs")
-set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs" CACHE STRING "Enable extra projects" FORCE)
+set(LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/spirv-llvm-translator")
+set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING "Enable extra projects" FORCE)
 
 # TODO2: This mechanism has races in certain situations, failing to create a
 # symlink. Revisit once devicemanager code is made more robust.
@@ -110,6 +124,7 @@ block()
   # It is empically derived (either configure or ninja invocation will fail
   # on a missing tool).
   set(_llvm_required_tools
+    LLVM_AR
     LLVM_CONFIG
     LLVM_DWARFDUMP
     LLVM_JITLINK
@@ -125,7 +140,6 @@ block()
   if(WIN32)
     # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
     # we might as well build them from source ourselves.
-    list(APPEND _llvm_required_tools "LLVM_AR")
     list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
     list(APPEND _llvm_required_tools "LLVM_LIB")
     list(APPEND _llvm_required_tools "LLVM_RANLIB")
@@ -134,13 +148,14 @@ block()
 
   # Clang tools that are required.
   set(_clang_required_tools
-    AMDGPU_ARCH
     CLANG_HIP
     CLANG_OFFLOAD_BUNDLER
     CLANG_OFFLOAD_PACKAGER
     CLANG_OFFLOAD_WRAPPER
+    CLANG_LINKER_WRAPPER
     CLANG_SHLIB
     DRIVER
+    OFFLOAD_ARCH
   )
   if(WIN32)
     # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
