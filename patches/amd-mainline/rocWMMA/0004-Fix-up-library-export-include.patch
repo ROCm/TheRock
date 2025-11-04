@@ -1,7 +1,7 @@
 From ab6963f4a35766fe6ae74ee7513565007d70f997 Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Fri, 24 Oct 2025 00:31:46 -0400
-Subject: [PATCH 4/5] Fix up library export include
+Subject: [PATCH 4/6] Fix up library export include
 
 ---
  CMakeLists.txt | 1 -
@@ -20,5 +20,5 @@ index 87feca08..3ba86520 100644
  
  rocm_create_package(
 -- 
-2.43.0
+2.34.1
 

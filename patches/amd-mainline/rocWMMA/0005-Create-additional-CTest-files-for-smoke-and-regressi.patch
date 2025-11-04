@@ -1,7 +1,7 @@
 From 5900330d896d2691c87b27aa0e939e9979048f6b Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Fri, 24 Oct 2025 18:49:28 -0400
-Subject: [PATCH 5/5] Create additional CTest files for smoke and regression
+Subject: [PATCH 5/6] Create additional CTest files for smoke and regression
  tests
 
 ---
@@ -64,5 +64,5 @@ index f597a423..0acdaa69 100644
 +    RENAME "CTestTestfile.cmake"
 +)
 -- 
-2.43.0
+2.34.1
 

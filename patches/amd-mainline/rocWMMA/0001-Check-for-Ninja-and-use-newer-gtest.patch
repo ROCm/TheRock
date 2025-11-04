@@ -1,7 +1,7 @@
 From 319e9a4baec910cd4e6ee487d03f3a981b96e2f2 Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Thu, 23 Oct 2025 11:07:41 -0400
-Subject: [PATCH 1/5] Check for Ninja and use newer gtest
+Subject: [PATCH 1/6] Check for Ninja and use newer gtest
 
 ---
  CMakeLists.txt         |  8 ++++++++
@@ -104,5 +104,5 @@ index 530884c4..9d96a441 100644
    target_include_directories(${TEST_TARGET} PRIVATE
                               ${CMAKE_CURRENT_SOURCE_DIR}
 -- 
-2.43.0
+2.34.1
 

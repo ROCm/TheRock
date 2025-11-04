@@ -1,0 +1,25 @@
+From f22e5d6c531dad5aea95de3a2c0c09dd8599a1bd Mon Sep 17 00:00:00 2001
+From: Bain Syrowik <bain.syrowik@amd.com>
+Date: Tue, 4 Nov 2025 14:55:39 -0500
+Subject: [PATCH 6/6] Fix windows build
+
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3ba86520..2af3a278 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -51,7 +51,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ set(CMAKE_CXX_EXTENSIONS OFF)
+ 
+ #Set Clang C++ flags.
+-set(CMAKE_CXX_FLAGS_DEBUG "-g -O2") # clang++ crashes without -O2
++set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O2") # clang++ crashes without -O2
+ set(CMAKE_CXX_FLAGS_MINSIZEREL "-O2 -DNDEBUG") # clang++ failed to build the project with the default -Os
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --driver-mode=g++ -Xclang -fallow-half-arguments-and-returns -D__HIP_HCC_COMPAT_MODE__=1 -Wno-format-nonliteral -parallel-jobs=4 -fclang-abi-compat=17")
+ 
+-- 
+2.34.1
+
