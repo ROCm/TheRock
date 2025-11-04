@@ -9,15 +9,15 @@ Test exclusion can be due to
 ====================================
 EXPECTED INPUT ENVIRONMENT VARIABLES
 ====================================
-INPUT_THEROCK_ROOT_DIR (optional)  - To change the root directory of TheRock
+THEROCK_ROOT_DIR (optional)        - To change the root directory of TheRock
                                    - Otherwise the location is extrapolated from
                                    - the location of this script
-INPUT_AMDGPU_FAMILY    (optional)  - amdgpu_family as to run the tests on
+AMDGPU_FAMILY    (optional)        - amdgpu_family as to run the tests on
                                    - names used as in "TheRock/cmake/therock_amdgpu_targets.cmake"
                                    - if not set, can lead to test failure as not enough tests might be omitted
                                    - if not set: tries to auto-detect which amdgpu arch is available.
                                                  selects the first one returned by amdgpu-arch
-INPUT_PYTORCH_VERSION  (optional)  - PyTorch version used for the tests
+PYTORCH_VERSION  (optional)        - PyTorch version used for the tests
                                    - major.minor version as a string (e.g. "2.10")
                                    - if not set: auto-detection based on pytorch/version.txt
 ====================================
@@ -62,7 +62,7 @@ Additional tests to be skipped can be tuned by PyTorch version and amdgpu family
 """
     )
 
-    amdgpu_family = os.getenv("INPUT_AMDGPU_FAMILY")
+    amdgpu_family = os.getenv("AMDGPU_FAMILY")
     p.add_argument(
         "--amdgpu-family",
         type=str,
@@ -72,7 +72,7 @@ Additional tests to be skipped can be tuned by PyTorch version and amdgpu family
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
     )
 
-    pytorch_version = os.getenv("INPUT_PYTORCH_VERSION")
+    pytorch_version = os.getenv("PYTORCH_VERSION")
     p.add_argument(
         "--pytorch-version",
         type=str,
@@ -84,7 +84,7 @@ Select (potentially) additional tests to be skipped based on the Pytorch version
 If no PyTorch version is given, it is auto-determined by the PyTorch used to run pytest.""",
     )
 
-    env_root_dir = os.getenv("INPUT_THEROCK_ROOT_DIR")
+    env_root_dir = os.getenv("THEROCK_ROOT_DIR")
     p.add_argument(
         "--the-rock-root-dir",
         default=env_root_dir if not env_root_dir == None else "",
@@ -170,7 +170,7 @@ if __name__ == "__main__":
         "--import-mode=importlib",
         f"-k={tests_to_skip}",
         "-v",
-        "-n=0",  # TODO does this need rework?
+        "-numprocesses=0",  # TODO does this need rework? why should we not run this multithreaded?
         # -n numprocesses, --numprocesses=numprocesses
         #         Shortcut for '--dist=load --tx=NUM*popen'.
         #         With 'logical', attempt to detect logical CPU count (requires psutil, falls back to 'auto').
@@ -181,11 +181,11 @@ if __name__ == "__main__":
     if args.no_cache:
         pytorch_args += [
             "-p",
-            "no:cacheprovider",  # disable caching: useful when running in
+            "no:cacheprovider",  # disable caching: useful when running in a container
         ]
 
     # pytorch_args += debug_pytorch_args
 
     retcode = pytest.main(pytorch_args)
     print(f"Pytest finished with return code: {retcode}")
-    sys.exit(retcode)  # Lets make the CI fail when pytest has failures
+    sys.exit(retcode)  # Lets make this script fail when pytest has failures
