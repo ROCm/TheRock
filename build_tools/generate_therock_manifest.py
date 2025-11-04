@@ -130,8 +130,8 @@ def read_rocm_version(repo_root: Path) -> str | None:
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        # Accept both 'rocm-version' and 'rocm_version' just in case.
-        v = data.get("rocm-version") or data.get("rocm_version")
+        # get 'rocm-version'
+        v = data.get("rocm-version")
         if isinstance(v, str):
             v = v.strip()
         return v or None
