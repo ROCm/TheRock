@@ -20,6 +20,7 @@ The script supports the following command-line options:
 | `--rand`          | Flag   | Include random number generator artifacts                              |
 | `--rccl`          | Flag   | Include RCCL artifacts                                                 |
 | `--rocwmma`       | Flag   | Include rocWMMA artifacts                                              |
+| `--libhipcxx`     | Flag   | Include libhipcxx artifacts                                            |
 | `--release`       | String | Release version from nightly or dev tarballs                           |
 | `--run-id`        | String | GitHub CI workflow run ID to install from                              |
 | `--tests`         | Flag   | Include test artifacts for enabled components                          |
