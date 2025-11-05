@@ -6,7 +6,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_subproject_fetch(therock-amd-mesa-sources
       SOURCE_DIR "${_source_dir}"
       URL "https://github.com/ROCm/mesa-fork/archive/refs/heads/amd-decode-only.zip"
-      #URL_HASH "SHA256=3A11654905C595FCA2825D6E259A8086D04A448DCE215B4CB03A49320D9259EC"
+      #URL_HASH ""
       TOUCH "${_download_stamp}"
     )
 
@@ -21,6 +21,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         "-DPATCHELF=${PATCHELF}"
         "-DMESON_BUILD=${MESON_BUILD}"
         "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
+      RUNTIME_DEPS
+        therock-libdrm
       INSTALL_DESTINATION
         lib/rocm_sysdeps
       INTERFACE_LINK_DIRS
@@ -70,10 +72,12 @@ add_custom_target(
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure
         # We generate relocatable, arch neutral directory layouts and use
-        # DESTDIR to install int ot the lib/rocm_sysdeps tree.
+        # DESTDIR to install it to the lib/rocm_sysdeps tree.
         --prefix "/"
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
+        -Dva-libs-path="/lib"
+        -Dallow-fallback-for=libva
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
         # Only enable the decode for rocm
         -Damd-decode-only=true
