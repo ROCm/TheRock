@@ -70,7 +70,7 @@ def get_time_sync_logs():
         log(f"[*] Checking time sync at: {datetime.now()}")
         log("[*] Start Time Sync Log:")
         log(startfile.read_text())
-        log("[*] Time Sync Log:")
+        log("[*] Time Sync Log (last ~50 lines):")
         timef = open(timefile)
         timelines = timef.readlines()
         log("".join(timelines[-51:]))
