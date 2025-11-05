@@ -2,7 +2,7 @@
 r"""Builds production UCCL wheel based on the rocm wheels.
 
 The UCCL project already has a TheRock build target that is currently
-based on the nightly wheels.
+based on the prerelease (or nightly) wheels.
 
 ## Building interactively
 
@@ -27,7 +27,7 @@ Typical usage to build:
 # On Linux, using the default path for the repository:
 python build_prod_wheels.py \
     --output-dir $HOME/tmp/pyout \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu
+    --index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu
 ```
 
 ## Building Linux portable wheels
