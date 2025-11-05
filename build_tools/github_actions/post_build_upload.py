@@ -63,7 +63,6 @@ def check_aws_cli_available():
 def get_time_sync_logs():
     startfile = Path("H:\\start.log")
     timefile = Path("H:\\time.log")
-    
     log("Windows time sync check")
     log("----------------------")
     if startfile.is_file() and timefile.is_file():
