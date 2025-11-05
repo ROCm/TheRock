@@ -82,7 +82,7 @@ elif TEST_TYPE == "quick":
     test_filter_arg = "--gtest_filter=*quick*"
 
 # Append to the existing filter or start a negative-only filter
-# TODO(2030): re-enable these tests once compatible with TheRock
+# TODO(#2030): re-enable these tests once compatible with TheRock
 # https://github.com/ROCm/TheRock/issues/2030
 _excluded = [
     "AssertTest/GPU_AssertTest.GPU_Assert/28",
