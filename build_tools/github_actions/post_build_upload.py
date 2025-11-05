@@ -2,7 +2,7 @@
 
 """
 Usage:
-post_build_upload.py [-h] [--build-dir BUILD_DIR] --amdgpu-family AMDGPU_FAMILY [--run-id RUN_ID] [--upload | --no-upload]
+post_build_upload.py [-h] [--build-dir BUILD_DIR] --artifact-group ARTIFACT_GROUP [--run-id RUN_ID] [--upload | --no-upload]
 
 This script runs after building TheRock, where this script does:
 1. Create log archives
@@ -100,7 +100,7 @@ def create_ninja_log_archive(build_dir: Path):
     log(f"[*] Files Added: {added_count}")
 
 
-def index_log_files(build_dir: Path, amdgpu_family: str):
+def index_log_files(build_dir: Path, artifact_group: str):
     log_dir = build_dir / "logs"
     index_file = log_dir / "index.html"
 
@@ -127,11 +127,11 @@ def index_log_files(build_dir: Path, amdgpu_family: str):
 
     if index_file.exists():
         log(
-            f"[INFO] Rewriting links in '{index_file}' with AMDGPU_FAMILIES={amdgpu_family}..."
+            f"[INFO] Rewriting links in '{index_file}' with ARTIFACT_GROUP={artifact_group}..."
         )
         content = index_file.read_text()
         updated = content.replace(
-            'a href=".."', f'a href="../../index-{amdgpu_family}.html"'
+            'a href=".."', f'a href="../../index-{artifact_group}.html"'
         )
         index_file.write_text(updated)
         log("[INFO] Log index links updated.")
@@ -154,7 +154,7 @@ def create_index_file(args: argparse.Namespace):
 def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
     log("Uploading artifacts to S3")
     build_dir = args.build_dir
-    amdgpu_family = args.amdgpu_family
+    artifact_group = args.artifact_group
 
     # Uploading artifacts to S3 bucket
     cmd = [
@@ -178,7 +178,7 @@ def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
         "s3",
         "cp",
         str(build_dir / "artifacts" / "index.html"),
-        f"{bucket_uri}/index-{amdgpu_family}.html",
+        f"{bucket_uri}/index-{artifact_group}.html",
     ]
     exec(cmd, cwd=Path.cwd())
 
@@ -189,10 +189,10 @@ def get_bucket_info_cached():
     return retrieve_bucket_info()
 
 
-def upload_logs_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
+def upload_logs_to_s3(run_id: str, artifact_group: str, build_dir: Path):
     external_repo_path, bucket = get_bucket_info_cached()
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
-    s3_base_path = f"{bucket_uri}/logs/{amdgpu_family}"
+    s3_base_path = f"{bucket_uri}/logs/{artifact_group}"
 
     log_dir = build_dir / "logs"
 
@@ -229,10 +229,10 @@ def get_manifest_from_build(build_dir: Path):
     return None
 
 
-def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
+def upload_manifest_to_s3(run_id: str, artifact_group: str, build_dir: Path):
     """
     Upload therock_manifest.json to:
-      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<amdgpu_family>/therock_manifest.json
+      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<artifact_group>/therock_manifest.json
     """
     external_repo_path, bucket = get_bucket_info_cached()
     bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
@@ -243,7 +243,7 @@ def upload_manifest_to_s3(run_id: str, amdgpu_family: str, build_dir: Path):
             f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}"
         )
 
-    dest = f"{bucket_uri}/manifests/{amdgpu_family}/therock_manifest.json"
+    dest = f"{bucket_uri}/manifests/{artifact_group}/therock_manifest.json"
     log(f"[INFO] Uploading manifest {manifest} -> {dest}")
     run_aws_cp(manifest, dest, content_type="application/json")
 
@@ -256,18 +256,18 @@ def upload_build_summary(args):
     )
     log(f"Adding links to job summary to bucket {bucket}")
     build_dir = args.build_dir
-    amdgpu_family = args.amdgpu_family
+    artifact_group = args.artifact_group
 
-    log_url = f"{bucket_url}/logs/{amdgpu_family}/index.html"
+    log_url = f"{bucket_url}/logs/{artifact_group}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_url})")
 
     if os.path.exists(build_dir / "artifacts" / "index.html"):
-        artifact_url = f"{bucket_url}/index-{amdgpu_family}.html"
+        artifact_url = f"{bucket_url}/index-{artifact_group}.html"
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
     else:
         log("No artifacts index found. Skipping artifact link.")
 
-    manifest_url = f"{bucket_url}/manifests/{amdgpu_family}/therock_manifest.json"
+    manifest_url = f"{bucket_url}/manifests/{artifact_group}/therock_manifest.json"
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 
@@ -287,7 +287,7 @@ def run(args):
 
     log(f"Indexing log files in {str(args.build_dir)}")
     log("------------------")
-    index_log_files(args.build_dir, args.amdgpu_family)
+    index_log_files(args.build_dir, args.artifact_group)
 
     if args.upload:
         check_aws_cli_available()
@@ -302,11 +302,11 @@ def run(args):
 
         log("Upload log")
         log("----------")
-        upload_logs_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
+        upload_logs_to_s3(args.run_id, args.artifact_group, args.build_dir)
 
         log("Upload manifest")
         log("----------------")
-        upload_manifest_to_s3(args.run_id, args.amdgpu_family, args.build_dir)
+        upload_manifest_to_s3(args.run_id, args.artifact_group, args.build_dir)
 
         log("Upload build summary")
         log("--------------------")
@@ -322,11 +322,11 @@ if __name__ == "__main__":
         help="Build directory containing logs (default: 'build' or $BUILD_DIR)",
     )
     parser.add_argument(
-        "--amdgpu-family",
+        "--artifact-group",
         type=str,
-        default=os.getenv("AMDGPU_FAMILIES"),
+        default=os.getenv("ARTIFACT_GROUP"),
         required=True,
-        help="AMDGPU family name (default: $AMDGPU_FAMILIES)",
+        help="Artifact group to upload (default: $ARTIFACT_GROUP)",
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
     is_ci = str2bool(os.getenv("CI", "false"))

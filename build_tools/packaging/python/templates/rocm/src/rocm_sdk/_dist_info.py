@@ -7,6 +7,7 @@ of bootstrapping, we are including it inline for the moment.
 import importlib.util
 import os
 import subprocess
+from pathlib import Path
 
 
 CACHED_TARGET_FAMILY: str | None = None
@@ -17,11 +18,16 @@ class LibraryEntry:
     distribution."""
 
     def __init__(
-        self, shortname: str, package_name: str, so_pattern: str, dll_pattern: str
+        self,
+        shortname: str,
+        package_name: str,
+        so_pattern: str,
+        dll_pattern: str,
+        posix_relpath="lib",
     ):
         self.shortname = shortname
         self.package = ALL_PACKAGES[package_name]
-        self.posix_relpath = "lib"
+        self.posix_relpath = posix_relpath
         self.windows_relpath = "bin"
         self.so_pattern = so_pattern
         self.dll_pattern = dll_pattern
@@ -97,8 +103,25 @@ class PackageEntry:
 
 
 def discover_current_target_family() -> str | None:
+    """Attempts to query the current target family via the 'offload-arch' tool."""
+
     try:
-        result = subprocess.check_output(["amdgpu-arch"], text=True)
+        import sysconfig
+
+        # offload-arch is expected to be installed in the Python 'scripts'
+        # directory, which will vary depending on the platform and whether or
+        # not a virtual environment is used, for example:
+        #   Linux system:   /usr/local/bin
+        #   Linux venv:     .venv/bin
+        #   Windows system: C:\Users\...\Python313\Scripts
+        #   Windows venv:   .venv\Scripts
+        # It might also be provided by an install of LLVM (e.g. as part of
+        # Visual Studio on Windows), so prepend the scripts dir to PATH.
+        scripts_path = Path(sysconfig.get_path("scripts"))
+        env = os.environ
+        env["PATH"] = str(scripts_path) + os.path.pathsep + env.get("PATH", "")
+        result = subprocess.check_output(["offload-arch"], env=env, text=True)
+
         if result:
             arch_set = set(result.strip().split("\n"))
             suffixes = ["-all", "-dgpu", "-igpu", "-dcgpu"]
@@ -113,12 +136,12 @@ def discover_current_target_family() -> str | None:
                 if arch in AVAILABLE_TARGET_FAMILIES:
                     return arch
     except subprocess.CalledProcessError as e:
-        print(f"[WARNING] amdgpu-arch failed with return code {e.returncode}")
+        print(f"[WARNING] offload-arch failed with return code {e.returncode}")
         print(f"[stderr] {e.output}")
     except FileNotFoundError:
-        print(f"[WARNING] failed to run amdgpu-arch: binary not found.")
+        print(f"[WARNING] failed to run offload-arch: binary not found.")
     except Exception as e:
-        print(f"[WARNING] Unexpected error running amdgpu-arch: {e}")
+        print(f"[WARNING] Unexpected error running offload-arch: {e}")
     return None
 
 
@@ -191,7 +214,20 @@ LibraryEntry("hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll")
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
-
+LibraryEntry(
+    "rocm_sysdeps_liblzma",
+    "core",
+    "librocm_sysdeps_liblzma.so.*",
+    "",
+    "lib/rocm_sysdeps/lib",
+)
+LibraryEntry(
+    "rocm-openblas",
+    "core",
+    "librocm-openblas.so.*",
+    "rocm-openblas*.dll",
+    "lib/host-math/lib",
+)
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
@@ -206,7 +242,6 @@ LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
 # hiprtc-builtins
 # rocblas
 # rocfft
-# rocm-openblas
 # rocrand
 # rocsolver
 # rocsparse

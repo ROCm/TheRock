@@ -72,22 +72,22 @@ class TestROCmSanity:
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
-        # Look up amdgpu arch, e.g. gfx1100, for explicit `--offload-arch`.
+        # Look up offload arch, e.g. gfx1100, for explicit `--offload-arch`.
         # See https://github.com/ROCm/llvm-project/issues/302:
         #   * If this is omitted on Linux, hipcc uses rocm_agent_enumerator.
         #   * If this is omitted on Windows, hipcc uses a default (e.g. gfx906).
         # We include it on both platforms for consistency.
-        amdgpu_arch_executable_file = f"amdgpu-arch{platform_executable_suffix}"
-        amdgpu_arch_path = (
+        offload_arch_executable_file = f"offload-arch{platform_executable_suffix}"
+        offload_arch_path = (
             THEROCK_BIN_DIR
             / ".."
             / "lib"
             / "llvm"
             / "bin"
-            / amdgpu_arch_executable_file
+            / offload_arch_executable_file
         ).resolve()
-        process = run_command([str(amdgpu_arch_path)])
-        amdgpu_arch = process.stdout.splitlines()[0]
+        process = run_command([str(offload_arch_path)])
+        offload_arch = process.stdout.splitlines()[0]
 
         # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
@@ -97,7 +97,7 @@ class TestROCmSanity:
                 str(THIS_DIR / "hipcc_check.cpp"),
                 "-Xlinker",
                 f"-rpath={THEROCK_BIN_DIR}/../lib/",
-                f"--offload-arch={amdgpu_arch}",
+                f"--offload-arch={offload_arch}",
                 "-o",
                 hipcc_check_executable_file,
             ],

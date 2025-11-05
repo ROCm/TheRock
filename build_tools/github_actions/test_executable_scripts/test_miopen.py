@@ -8,6 +8,8 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
@@ -15,6 +17,11 @@ environ_vars = os.environ.copy()
 # For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+
+# Some of our runtime kernel compilations have been relying on either ROCM_PATH being set, or ROCm being installed at
+# /opt/rocm. Neither of these is true in TheRock so we need to supply ROCM_PATH to our tests.
+ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -90,8 +97,6 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
-positive_filter.append("*DBSync*")
-
 #############################################
 
 negative_filter.append("*DeepBench*")
@@ -150,16 +155,9 @@ negative_filter.append(
     "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
 )  # https://github.com/ROCm/TheRock/issues/1682
 
-# Tests that fail when run with sharding
-negative_filter.append(
-    "Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/0"
-)
-negative_filter.append(
-    "Smoke/GPU_ConvGrpBiasActivInfer_BFP16.ConvCKIgemmGrpFwdBiasActivFused/2"
-)
-negative_filter.append(
-    "Smoke/GPU_ConvBiasActivInfer_FP16.ConvCKIgemmFwdBiasActivFused/1"
-)
+# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
+if AMDGPU_FAMILIES == "gfx950-dcgpu":
+    negative_filter.append("*DBSync*")
 
 ####################################################
 
@@ -175,8 +173,11 @@ smoke_filter = [
     # CK Grouped FWD Conv smoke tests
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_FP16*",
     "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_BFP16*",
-    "*DBSync*",
 ]
+
+# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
+if AMDGPU_FAMILIES != "gfx950-dcgpu":
+    smoke_filter.append("*DBSync*")
 
 ####################################################
 

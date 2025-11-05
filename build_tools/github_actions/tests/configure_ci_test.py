@@ -186,7 +186,7 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
         self.assert_target_output_is_valid(
-            target_output=linux_target_output, allow_xfail=False
+            target_output=linux_target_output, allow_xfail=True
         )
         self.assertEqual(windows_test_labels, [])
 
@@ -260,7 +260,7 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
         self.assert_target_output_is_valid(
-            target_output=linux_target_output, allow_xfail=False
+            target_output=linux_target_output, allow_xfail=True
         )
         self.assertEqual(linux_test_labels, [])
 

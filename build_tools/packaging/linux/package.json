@@ -208,7 +208,6 @@
     "Artifact_Subdir": "amd-llvm",
     "Gfxarch": "False",
     "Disable_DWZ": "True"
-
   },
   {
     "Package": "rocm-llvm-devel",
@@ -468,7 +467,7 @@
       "hip-runtime-amd",
       "rocm-llvm",
       "rocm-core",
-      "hsa-rocr-dev",
+      "hsa-rocr-devel",
       "hipcc"
     ],
     "RPMRequires": [
@@ -589,7 +588,6 @@
     "Artifact": "hipify",
     "Artifact_Subdir": "hipify",
     "Gfxarch": "False"
-
   },
   {
     "Package": "hsa-rocr",
@@ -810,7 +808,7 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "roctracer",
-      "hsa-rocr-dev",
+      "hsa-rocr-devel",
       "rocm-core"
     ],
     "RPMRequires": [
@@ -1691,7 +1689,7 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "rocprim-dev",
+      "rocprim-devel",
       "rocm-core"
     ],
     "RPMRequires": [

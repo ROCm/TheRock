@@ -13,6 +13,8 @@ include = [
 [components.test."math-libs/rocFFT/stage"]
 include = [
   "bin/rocfft-test*",
+  "bin/rocfft-bench*",
+  "bin/dyna-rocfft-bench*",
 ]
 
 # hipFFT

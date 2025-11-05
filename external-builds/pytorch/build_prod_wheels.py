@@ -142,6 +142,8 @@ LINUX_LIBRARY_PRELOADS = [
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
+    "rocm_sysdeps_liblzma",
+    "rocm-openblas",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -156,6 +158,7 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipsolver",
     "hipblaslt",
     "miopen",
+    "rocm-openblas",
 ]
 
 
@@ -312,7 +315,7 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     current = env.get(flagname, "")
     append = ""
     for compiler_flag in compiler_flags:
-        append += f" {compiler_flag}"
+        append += f"{compiler_flag} "
     env[flagname] = f"{current}{append}"
     print(f"-- Appended {flagname}+={append}")
 
@@ -404,8 +407,8 @@ def do_build(args: argparse.Namespace):
         env.update(
             {
                 # Workaround GCC12 compiler flags.
-                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
         )
 
@@ -428,6 +431,18 @@ def do_build(args: argparse.Namespace):
         )
     else:
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+
+    # OpenBLAS path setup
+    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    if not host_math_path.exists():
+        print(
+            "WARNING: Default location of host-math not found. "
+            "Will not build with OpenBLAS support."
+        )
+    else:
+        env["BLAS"] = "OpenBLAS"
+        env["OpenBLAS_HOME"] = str(host_math_path)
+        env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
     # Build triton.
     triton_requirement = None
@@ -605,47 +620,54 @@ def do_build_pytorch(
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.10 and higher Pytorch version
+    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.8 and higher Pytorch version
     ## https://github.com/ROCm/TheRock/issues/1619
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if pytorch_build_version_parsed.release < (2, 10):
-            env["USE_FBGEMM_GENAI"] = "ON"
+        if args.enable_pytorch_fbgemm_genai_linux is None:
+            # Default behavior — based on PyTorch version
+            if pytorch_build_version_parsed.release < (2, 8):
+                use_fbgemm_genai = "ON"
+            else:
+                use_fbgemm_genai = "OFF"
             print(
-                f"FBGEMM_GENAI enabled (PyTorch < 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
+                f"FBGEMM_GENAI default behavior based on PyTorch version: {use_fbgemm_genai}"
             )
         else:
-            env["USE_FBGEMM_GENAI"] = (
-                "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
-            )
-            print(
-                f"FBGEMM_GENAI enabled (PyTorch >= 2.10, Linux): {env['USE_FBGEMM_GENAI'] == 'ON'}"
-            )
+            # Explicit override: user has set the flag to true/false
+            use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
+            print(f"FBGEMM_GENAI override set by flag: {use_fbgemm_genai}")
 
-        # Enabling/Disabling Flash attention based on Pytorch version in Linux
-        if pytorch_build_version_parsed.release < (2, 10):
-            env.update(
-                {
-                    "USE_FLASH_ATTENTION": "1",
-                    "USE_MEM_EFF_ATTENTION": "1",
-                }
-            )
+        env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
+        print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
+
+        if args.enable_pytorch_flash_attention_linux is None:
+            # Default behavior — determined by if triton is build
+            use_flash_attention = "ON" if triton_requirement else "OFF"
             print(
-                f"Flash Attention enabled (PyTorch < 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
+                f"Flash Attention default behavior (based on triton): {use_flash_attention}"
             )
         else:
-            use_flash_attention = (
-                "1" if args.enable_pytorch_flash_attention_linux else "0"
-            )
-            env.update(
-                {
-                    "USE_FLASH_ATTENTION": use_flash_attention,
-                    "USE_MEM_EFF_ATTENTION": use_flash_attention,
-                }
-            )
-            print(
-                f"Flash Attention enabled (PyTorch >= 2.10, Linux): {env['USE_FLASH_ATTENTION'] == '1'}"
-            )
+            # Explicit override: user has set the flag to true/false
+            if args.enable_pytorch_flash_attention_linux:
+                assert (
+                    triton_requirement
+                ), "Must build with triton if wanting to use flash attention"
+                use_flash_attention = "ON"
+            else:
+                use_flash_attention = "OFF"
+
+            print(f"Flash Attention override set by flag: {use_flash_attention}")
+
+        env.update(
+            {
+                "USE_FLASH_ATTENTION": use_flash_attention,
+                "USE_MEM_EFF_ATTENTION": use_flash_attention,
+            }
+        )
+        print(
+            f"Flash Attention and Memory efficiency enabled: {env['USE_FLASH_ATTENTION'] == 'ON'}"
+        )
 
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
@@ -709,6 +731,10 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+
+        # needed to find liblzma packaged by rocm as sysdep to build aotriton
+        os.environ["PKG_CONFIG_PATH"] = f"{sysdeps_dir / 'lib' / 'pkgconfig'}"
+        os.environ["LD_LIBRARY_PATH"] = f"{sysdeps_dir / 'lib'}"
 
     print("+++ Uninstalling pytorch:")
     exec(
@@ -954,7 +980,6 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
