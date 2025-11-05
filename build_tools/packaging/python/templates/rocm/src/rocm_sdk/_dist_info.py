@@ -221,7 +221,7 @@ LibraryEntry(
     "",
     "lib/rocm_sysdeps/lib",
 )
-
+LibraryEntry("rocm-openblas", "core", "librocm-openblas.so.*", "rocm-openblas*.dll")
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
@@ -236,7 +236,6 @@ LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
 # hiprtc-builtins
 # rocblas
 # rocfft
-# rocm-openblas
 # rocrand
 # rocsolver
 # rocsparse
