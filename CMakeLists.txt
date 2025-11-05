@@ -343,8 +343,8 @@ if(NOT WIN32)
 
   therock_add_feature(FUSILLI_PLUGIN
     GROUP FUSILLI_PLUGIN
-    DESCRIPTION "Enables the MIOpen plugin project"
-    REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
+    DESCRIPTION "Enables the Fusilli plugin project"
+    REQUIRES COMPILER HIPDNN HIP_RUNTIME
   )
 endif()
 
