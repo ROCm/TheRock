@@ -40,7 +40,7 @@ class FetchPackageTargetsTest(unittest.TestCase):
         self.assertTrue(all("amdgpu_family" in t for t in targets))
         # Standard targets have suffixes and may use X for a family.
         self.assertTrue(any("gfx94X-dcgpu" == t["amdgpu_family"] for t in targets))
-        self.assertTrue(any("gfx110X-all" == t["amdgpu_family"] for t in targets))
+        self.assertTrue(any("gfx110X-dgpu" == t["amdgpu_family"] for t in targets))
 
     def test_windows_single_family(self):
         args = {
@@ -61,7 +61,7 @@ class FetchPackageTargetsTest(unittest.TestCase):
         self.assertTrue(all("amdgpu_family" in t for t in targets))
         # dcgpu targets are Linux only.
         self.assertFalse(any("gfx94X-dcgpu" == t["amdgpu_family"] for t in targets))
-        self.assertTrue(any("gfx110X-all" == t["amdgpu_family"] for t in targets))
+        self.assertTrue(any("gfx110X-dgpu" == t["amdgpu_family"] for t in targets))
         self.assertTrue(any("gfx120X-all" == t["amdgpu_family"] for t in targets))
 
 

@@ -5,7 +5,7 @@ Example usage:
 
     # Build for a specific family. Note that all options after the "--" are
     # passed verbatim to CMake.
-    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
+    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 
     # Build with podman vs docker.
     python linux_build_portable.py --docker=podman
@@ -100,7 +100,6 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
                 args.image,
                 "/bin/bash",
                 "/therock/src/build_tools/detail/linux_portable_build_in_container.sh",
-                "--manylinux",
             ]
         )
         cl += rest_args

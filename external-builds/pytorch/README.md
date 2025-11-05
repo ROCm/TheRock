@@ -155,7 +155,7 @@ mix/match build steps.
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
     --output-dir $HOME/tmp/pyout
   ```
 
@@ -163,7 +163,7 @@ mix/match build steps.
 
   ```batch
   python build_prod_wheels.py build ^
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ ^
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision ^
@@ -221,7 +221,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   build_prod_wheels.py
-      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
       install-rocm
   ```
 
@@ -230,12 +230,12 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   ```bash
   # From therock-nightly-python
   python -m pip install \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
     rocm[libraries,devel]
 
   # OR from therock-dev-python
   python -m pip install \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-all/ \
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
     rocm[libraries,devel]
   ```
 
@@ -249,7 +249,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   mkdir $HOME/.therock/17123441166/artifacts
   python ./build_tools/fetch_artifacts.py \
     --run-id=17123441166 \
-    --target=gfx110X-all \
+    --target=gfx110X-dgpu \
     --output-dir=$HOME/.therock/17123441166/artifacts
 
   python ./build_tools/build_python_packages.py \
