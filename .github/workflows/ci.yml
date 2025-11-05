@@ -70,11 +70,11 @@ jobs:
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
     needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.linux_variants != '[]' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
+    # if: >-
+    #   ${{
+    #     needs.setup.outputs.linux_variants != '[]' &&
+    #     needs.setup.outputs.enable_build_jobs == 'true'
+    #   }}
     strategy:
       fail-fast: false
       matrix:
@@ -102,11 +102,11 @@ jobs:
   windows_build_and_test:
     name: Windows::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
     needs: setup
-    if: >-
-      ${{
-        needs.setup.outputs.windows_variants != '[]' &&
-        needs.setup.outputs.enable_build_jobs == 'true'
-      }}
+    # if: >-
+    #   ${{
+    #     needs.setup.outputs.windows_variants != '[]' &&
+    #     needs.setup.outputs.enable_build_jobs == 'true'
+    #   }}
     strategy:
       fail-fast: false
       matrix:
