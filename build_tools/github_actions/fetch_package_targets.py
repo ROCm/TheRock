@@ -15,7 +15,7 @@ Outputs written to GITHUB_OUTPUT:
                 "expect_pytorch_failure": false
             },
             {
-                "amdgpu_family": "gfx110X-all",
+                "amdgpu_family": "gfx110X-dgpu",
                 "test_machine": "",
                 "expect_failure": false,
                 "expect_pytorch_failure": true
@@ -60,6 +60,7 @@ from github_actions_utils import *
 def determine_package_targets(args):
     amdgpu_families = args.get("AMDGPU_FAMILIES")
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
+    test_harness_target_fetch = args.get("TEST_HARNESS_TARGET_FETCH", False)
 
     matrix = amdgpu_family_info_matrix_all
     family_matrix = amdgpu_family_info_matrix_all
@@ -89,6 +90,17 @@ def determine_package_targets(args):
 
         family = platform_for_key.get("family")
         test_machine = platform_for_key.get("test-runs-on")
+        sanity_check_only_for_family = platform_for_key.get(
+            "sanity_check_only_for_family", False
+        )
+
+        # Due to the long test times for the test harness, we only want to use highly available test machines.
+        # TODO(#1920): Remove this logic and use direct communication with test machines (instead of using GH runners)
+        if (test_harness_target_fetch and not test_machine) or (
+            test_harness_target_fetch and sanity_check_only_for_family
+        ):
+            continue
+
         expect_failure = platform_for_key.get("expect_failure", False)
         expect_pytorch_failure = platform_for_key.get("expect_pytorch_failure", False)
 
@@ -113,4 +125,5 @@ if __name__ == "__main__":
     args = {}
     args["AMDGPU_FAMILIES"] = os.getenv("AMDGPU_FAMILIES")
     args["THEROCK_PACKAGE_PLATFORM"] = os.getenv("THEROCK_PACKAGE_PLATFORM")
+    args["TEST_HARNESS_TARGET_FETCH"] = str2bool(os.getenv("TEST_HARNESS_TARGET_FETCH"))
     main(args)

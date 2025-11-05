@@ -140,6 +140,9 @@ def upload_missing_whls(
         # Skip iphonesimulator packages
         if "iphonesimulator" in pkg:
             continue
+        # Skip riscv64 packages
+        if "riscv64" in pkg:
+            continue
         # Skip unsupported Python version
         if "cp39" in pkg:
             continue
@@ -184,7 +187,7 @@ def main() -> None:
     SUBFOLDERS =  [
         "gfx101X-dgpu",
         "gfx103X-dgpu",
-        "gfx110X-all",
+        "gfx110X-dgpu",
         "gfx1150",
         "gfx1151",
         "gfx120X-all",

@@ -51,7 +51,8 @@ the names are updated to use -dev.
 ## RPATH Packages
 
 The RUNPATH in binaries and libraries will be replaced with RPATH if
-the --rpath-pkg option is enabled in the build arguments.
+the --rpath-pkg option is enabled in the build arguments. This option creates
+only versioned packages
 
 ## Fields in package.json
 
@@ -133,6 +134,7 @@ RPM package:<br>
    --target gfx94X-dcgpu \
    --dest-dir ./OUTPUT_PKG \
    --rocm-version 7.1.0 \
+   --version-suffix build_type \
    --pkg-type rpm
 ```
 
@@ -144,6 +146,7 @@ Debian package:<br>
    --target gfx94X-dcgpu \
    --dest-dir ./OUTPUT_PKG \
    --rocm-version 7.1.0 \
+   --version-suffix build_type \
    --pkg-type deb
 ```
 
@@ -156,17 +159,6 @@ Debian RPATH package:<br>
    --dest-dir ./OUTPUT_PKG \
    --rocm-version 7.1.0 \
    --pkg-type deb \
+   --version-suffix build_type \
    --rpath-pkg True
-```
-
-Debian package with Version suffix:<br>
-
-```bash
-./build_package.py \
-   --artifacts-dir ./ARTIFACTS_DIR \
-   --target gfx94X-dcgpu \
-   --dest-dir ./OUTPUT_PKG \
-   --rocm-version 7.1.0 \
-   --pkg-type deb \
-   --version-suffix crdnnh.17421247050
 ```

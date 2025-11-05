@@ -11,12 +11,14 @@ create RPM and DEB packages and upload to artifactory server
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR  \
         --target gfx94X-dcgpu \
         --dest-dir ./OUTPUT_PKGDIR \
-        --rocm-version 7.1.0
-        --pkg-type deb (or rpm)
+        --rocm-version 7.1.0 \
+        --pkg-type deb (or rpm) \
+        --version-suffix build_type (daily/master/nightly/release)
 ```
 """
 
 import argparse
+import copy
 import glob
 import os
 import platform
@@ -30,6 +32,7 @@ from email.utils import format_datetime
 from jinja2 import Environment, FileSystemLoader, Template
 from packaging_utils import *
 from pathlib import Path
+from runpath_to_rpath import *
 
 
 # User inputs required for packaging
@@ -56,8 +59,8 @@ class PackageConfig:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 # Directory for debian and RPM packaging
-DEBIAN_CONTENTS_DIR = Path.cwd() / "DEB"
-RPM_CONTENTS_DIR = Path.cwd() / "RPM"
+DEBIAN_CONTENTS_DIR = None
+RPM_CONTENTS_DIR = None
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm"
 
@@ -77,7 +80,10 @@ def create_deb_package(pkg_name, config: PackageConfig):
     print_function_name()
     print(f"Package Name: {pkg_name}")
 
-    create_nonversioned_deb_package(pkg_name, config)
+    # Non-versioned packages are not required for RPATH packages
+    if not config.enable_rpath:
+        create_nonversioned_deb_package(pkg_name, config)
+
     create_versioned_deb_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
     clean_debian_build_dir()
@@ -284,17 +290,16 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     print_function_name()
     control_file = Path(deb_dir) / "control"
 
-    pkg_name = update_package_name(pkg_info.get("Package"), config)
+    pkg_name = pkg_info.get("Package")
 
     if config.versioned_pkg:
         depends_list = pkg_info.get("DEBDepends", [])
-        depends = convert_to_versiondependency(depends_list, config)
     else:
-        depends = pkg_name + config.rocm_version
-    # Note: The dev package name update should be done after version dependency
-    # Package.json maintains development package name as devel
-    depends = depends.replace("-devel", "-dev")
+        depends_list = [pkg_name]
 
+    depends = convert_to_versiondependency(depends_list, config)
+
+    pkg_name = update_package_name(pkg_name, config)
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_control.j2")
     # Prepare your context dictionary
@@ -428,7 +433,10 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     """
     print_function_name()
     print(f"Package Name: {pkg_name}")
-    create_nonversioned_rpm_package(pkg_name, config)
+
+    if not config.enable_rpath:
+        create_nonversioned_rpm_package(pkg_name, config)
+
     create_versioned_rpm_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
     clean_rpm_build_dir()
@@ -459,7 +467,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         rpmrecommends = convert_to_versiondependency(recommends_list, config)
 
         requires_list = pkginfo.get("RPMRequires", [])
-        requires = convert_to_versiondependency(requires_list, config)
 
         # Get the packages included by the composite package
         pkg_list = pkginfo.get("Includes")
@@ -481,7 +488,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
                 convert_runpath_to_rpath(path)
     else:
         rpmrecommends = ""
-        requires = pkg_name + config.rocm_version
+        requires_list = [pkg_name]
+
+    requires = convert_to_versiondependency(requires_list, config)
     # Update package name with version details and gfxarch
     pkg_name = update_package_name(pkg_name, config)
 
@@ -502,6 +511,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "install_prefix": config.install_prefix,
         "requires": requires,
         "rpmrecommends": rpmrecommends,
+        "disable_debug_package": is_debug_package_disabled(pkginfo),
         "sourcedir_list": sourcedir_list,
     }
 
@@ -568,29 +578,6 @@ def move_packages_to_destination(pkg_name, config: PackageConfig):
             shutil.move(file_path, config.dest_dir)
 
 
-def convert_runpath_to_rpath(package_dir):
-    """Invoke the `runpath_to_rpath.py` script to convert RUNPATH to RPATH.
-
-    Parameters:
-    package_dir : Package contents directory
-
-    Returns: None
-    """
-    print_function_name()
-    try:
-        subprocess.run(["python3", "runpath_to_rpath.py", package_dir], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error: Script failed with exit code {e.returncode}")
-        print(f"Command: {e.cmd}")
-        sys.exit(e.returncode)
-    except FileNotFoundError as e:
-        print(f"Error: Python or script not found. Check your paths. {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        sys.exit(1)
-
-
 def update_package_name(pkg_name, config: PackageConfig):
     """Update the package name by adding ROCm version and graphics architecture.
 
@@ -612,7 +599,7 @@ def update_package_name(pkg_name, config: PackageConfig):
         pkg_suffix = ""
 
     if config.enable_rpath:
-        pkg_suffix = f"-rpath{config.rocm_version}"
+        pkg_suffix = f"-rpath{pkg_suffix}"
 
     if check_for_gfxarch(pkg_name):
         # Remove -dcgpu from gfx_arch
@@ -658,10 +645,14 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
     Returns: A string of comma separated versioned packages
     """
     print_function_name()
+    # This function is to add Version dependency
+    # Make sure the flag is set to True
 
+    local_config = copy.deepcopy(config)
+    local_config.versioned_pkg = True
     pkg_list = get_package_list()
     updated_depends = [
-        f"{update_package_name(pkg,config)}" if pkg in pkg_list else pkg
+        f"{update_package_name(pkg,local_config)}" if pkg in pkg_list else pkg
         for pkg in dependency_list
     ]
     depends = ", ".join(updated_depends)
@@ -683,7 +674,7 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
     print_function_name()
 
     pkg_info = get_package_info(pkg_name)
-    is_composite = is_key_defined(pkg_info, "composite")
+    is_composite = is_composite_package(pkg_info)
     sourcedir_list = []
     component_list = pkg_info.get("Components", [])
     artifact_prefix = pkg_info.get("Artifact")
@@ -734,11 +725,11 @@ def parse_input_package_list(pkg_name):
 
     for entry in data:
         # Skip if packaging is disabled
-        if is_key_defined(entry, "disablepackaging"):
+        if is_packaging_disabled(entry):
             continue
 
         name = entry.get("Package")
-        is_composite = is_key_defined(entry, "composite")
+        is_composite = is_composite_package(entry)
 
         # Loop through each type in pkg_name
         for pkg in pkg_name:
@@ -754,49 +745,6 @@ def parse_input_package_list(pkg_name):
 
     print(f"pkg_list:\n  {pkg_list}")
     return pkg_list
-
-
-# TODO: The function is not at all required.
-# This will be triggered independently
-# Wil be removing soon. Keeping it for testing purpose
-def download_and_extract_artifacts(run_id, gfxarch):
-    """Download and extract artifacts from a given Github run ID
-
-    Parameters:
-    run_id : GitHub run ID to retrieve artifacts from
-    gfxarch: Graphics architecture
-
-    Returns: None
-    """
-    print_function_name()
-    gfxarch_params = gfxarch + "-dcgpu"
-    fetch_script = (SCRIPT_DIR / ".." / ".." / "fetch_artifacts.py").resolve()
-    try:
-        subprocess.run(
-            [
-                "python3",
-                str(fetch_script),
-                "--run-id",
-                run_id,
-                "--target",
-                gfxarch_params,
-                "--extract",
-                "--output-dir",
-                ARTIFACTS_DIR,
-            ],
-            check=True,
-        )
-        print("Artifacts fetched successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error: Artifacts fetch failed with exit code {e.returncode}")
-        print(f"Command: {e.cmd}")
-        sys.exit(e.returncode)
-    except FileNotFoundError as e:
-        print("Error: Python or script not found. Check your paths. {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        sys.exit(1)
 
 
 def clean_rpm_build_dir():
@@ -836,7 +784,7 @@ def clean_package_build_dir(artifacts_dir):
     clean_rpm_build_dir()
     clean_debian_build_dir()
 
-    PYCACHE_DIR = "__pycache__"
+    PYCACHE_DIR = Path(SCRIPT_DIR) / "__pycache__"
     if os.path.exists(PYCACHE_DIR) and os.path.isdir(PYCACHE_DIR):
         shutil.rmtree(PYCACHE_DIR)
         print(f"Removed directory: {PYCACHE_DIR}")
@@ -847,6 +795,12 @@ def clean_package_build_dir(artifacts_dir):
 
 
 def run(args: argparse.Namespace):
+    # Set the global variables
+    dest_dir = Path(args.dest_dir).expanduser().resolve()
+    global DEBIAN_CONTENTS_DIR, RPM_CONTENTS_DIR
+    DEBIAN_CONTENTS_DIR = dest_dir / "DEB"
+    RPM_CONTENTS_DIR = dest_dir / "RPM"
+
     # Clean the packaging build directories
     clean_package_build_dir("")
     # Append rocm version to default install prefix
@@ -857,7 +811,7 @@ def run(args: argparse.Namespace):
     # Populate package config details from user arguments
     config = PackageConfig(
         artifacts_dir=Path(args.artifacts_dir).resolve(),
-        dest_dir=Path(args.dest_dir).resolve(),
+        dest_dir=dest_dir,
         pkg_type=args.pkg_type,
         rocm_version=args.rocm_version,
         version_suffix=args.version_suffix,
@@ -912,36 +866,36 @@ def main(argv: list[str]):
         required=True,
         help="Choose the package format to be generated: DEB or RPM",
     )
-    p.add_argument(
-        "--run-id",
-        type=str,
-        help="Specify the artifacts run-id",
-    )
 
     p.add_argument(
-        "--rocm-version", type=str, default="9.9.9", help="ROCm Release version"
+        "--rocm-version", type=str, required=True, help="ROCm Release version"
     )
 
     p.add_argument(
         "--version-suffix",
-        default="crdnnh",
+        type=str,
+        required=True,
         help="Version suffix to append to package names",
     )
+
     p.add_argument(
         "--install-prefix",
         default=f"{DEFAULT_INSTALL_PREFIX}",
         help="Base directory where package will be installed",
     )
+
     p.add_argument(
         "--rpath-pkg",
         action="store_true",
         help="Enable rpath-pkg mode",
     )
+
     p.add_argument(
         "--clean-build",
         action="store_true",
         help="Clean the packaging environment",
     )
+
     p.add_argument(
         "--pkg-names",
         nargs="+",

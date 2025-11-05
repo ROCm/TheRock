@@ -56,12 +56,12 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-all/
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -99,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -144,6 +144,7 @@ LINUX_LIBRARY_PRELOADS = [
     "hipblaslt",
     "miopen",
     "rocm_sysdeps_liblzma",
+    "rocm-openblas",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -159,6 +160,7 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipsolver",
     "hipblaslt",
     "miopen",
+    "rocm-openblas",
 ]
 
 
@@ -431,6 +433,18 @@ def do_build(args: argparse.Namespace):
         )
     else:
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+
+    # OpenBLAS path setup
+    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    if not host_math_path.exists():
+        print(
+            "WARNING: Default location of host-math not found. "
+            "Will not build with OpenBLAS support."
+        )
+    else:
+        env["BLAS"] = "OpenBLAS"
+        env["OpenBLAS_HOME"] = str(host_math_path)
+        env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
     # Build triton.
     triton_requirement = None
@@ -968,7 +982,6 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
