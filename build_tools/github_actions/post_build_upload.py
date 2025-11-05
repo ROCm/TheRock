@@ -63,6 +63,9 @@ def check_aws_cli_available():
 def get_time_sync_logs():
     startfile = Path("H:\\start.log")
     timefile = Path("H:\\time.log")
+    
+    log("Windows time sync check")
+    log("----------------------")
     if startfile.is_file() and timefile.is_file():
         log(f"[*] Checking time sync at: {datetime.now()}")
         log("[*] Start Time Sync Log:")
@@ -70,7 +73,7 @@ def get_time_sync_logs():
         log("[*] Time Sync Log:")
         timef = open(timefile)
         timelines = timef.readlines()
-        log("".join(timelines[-40:]))
+        log("".join(timelines[-51:]))
     else:
         log("[*] time.log and/or start.log not present in H:")
 
