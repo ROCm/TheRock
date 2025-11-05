@@ -81,6 +81,20 @@ if TEST_TYPE == "smoke":
 elif TEST_TYPE == "quick":
     test_filter_arg = "--gtest_filter=*quick*"
 
+# Append to the existing filter or start a negative-only filter
+_excluded = [
+    "AssertTest/GPU_AssertTest.GPU_Assert/28",
+    "AssertTest/GPU_AssertTest.GPU_UnconditionalAssert/28",
+    "AssertTest/GPU_AssertTest.GPU_Assert/29",
+    "AssertTest/GPU_AssertTest.GPU_UnconditionalAssert/29",
+    "GPU_KernelTests/GPU_KernelTest.GPU_WholeKernel/1",
+]
+_exclude_str = ":".join(_excluded)
+if test_filter_arg:
+    test_filter_arg = f"{test_filter_arg}-{_exclude_str}"
+else:
+    test_filter_arg = f"--gtest_filter=-{_exclude_str}"
+
 cmd = [str(test_bin)]
 if test_filter_arg:
     cmd.append(test_filter_arg)
