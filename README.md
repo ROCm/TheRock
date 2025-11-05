@@ -136,7 +136,7 @@ In case you don't have an existing ROCm/HIP installation from which you can run 
 
 You can install the `rocm` Python package for any architecture inside a venv and run `offload-arch` from there:
 
-1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv`
+1. `python build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-dgpu --packages rocm .tmpvenv`
 1. `.tmpvenv/bin/offload-arch` on Linux, `.tmpvenv\Scripts\offload-arch` on Windows
 1. `rm -rf .tmpvenv`
 
@@ -215,7 +215,7 @@ See instructions in the next section for [Linux](#ccache-usage-on-linux) and [Wi
 Otherwise, ROCm/HIP can be configured and build with just the following commands:
 
 ```bash
-cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
 cmake --build build
 ```
 
@@ -241,7 +241,7 @@ Example:
 # Any shell used to build must eval setup_ccache.py to set environment
 # variables.
 eval "$(./build_tools/setup_ccache.py)"
-cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   .
