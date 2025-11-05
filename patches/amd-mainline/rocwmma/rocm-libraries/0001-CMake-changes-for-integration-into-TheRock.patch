@@ -1,7 +1,7 @@
 From bcf6637ae55feb7d0340186fa985730f780dc2eb Mon Sep 17 00:00:00 2001
 From: Bain Syrowik <bain.syrowik@amd.com>
 Date: Tue, 28 Oct 2025 13:02:46 -0400
-Subject: [PATCH] CMake changes for integration into TheRock
+Subject: [PATCH 1/2] CMake changes for integration into TheRock
 
 ---
  projects/rocwmma/CMakeLists.txt         | 13 +++++

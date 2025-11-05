@@ -24,9 +24,9 @@ logging.basicConfig(level=logging.INFO)
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
-# Only run regression test set for Windows or gfx11XX
-if AMDGPU_FAMILIES.startswith("gfx11") or platform == "windows":
-    test_type = "regression"
+## Only run regression test set for Windows or gfx11XX
+#if AMDGPU_FAMILIES.startswith("gfx11") or platform == "windows":
+#    test_type = "regression"
 
 test_subdir = ""
 timeout = "3600"
