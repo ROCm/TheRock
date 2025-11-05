@@ -13,9 +13,12 @@ include = [
   "bin/simple_*",
   "bin/perf_*",
   "bin/hipRTC_gemm",
+  "bin/hipRTC_gemm.exe", # Windows
   # Tests
   "bin/*_test",
   "bin/*-validate",
+  "bin/*_test.exe", # Windows
+  "bin/*-validate.exe", # Windows
   "bin/rocwmma/CTestTestfile.cmake",
   "bin/rocwmma/*/CTestTestfile.cmake",
 ]
