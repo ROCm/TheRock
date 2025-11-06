@@ -5,8 +5,8 @@ Usage:
 post_build_upload.py [-h]
   --artifact-group ARTIFACT_GROUP
   [--build-dir BUILD_DIR]
+  [--upload | --no-upload] (default enabled if the `CI` env var is set)
   [--run-id RUN_ID]
-  [--upload | --no-upload]
 
 This script runs after building TheRock, where this script does:
   1. Create log archives
@@ -285,14 +285,14 @@ if __name__ == "__main__":
         default=Path(os.getenv("BUILD_DIR", "build")),
         help="Build directory containing logs, artifacts, etc. (default: 'build' or $BUILD_DIR)",
     )
-    parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
     is_ci = str2bool(os.getenv("CI", "false"))
     parser.add_argument(
         "--upload",
         default=is_ci,
-        help="Enable upload steps",
+        help="Enable upload steps (default enabled if $CI is set)",
         action=argparse.BooleanOptionalAction,
     )
+    parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
     args = parser.parse_args()
 
     # Check preconditions for provided arguments before proceeding.
