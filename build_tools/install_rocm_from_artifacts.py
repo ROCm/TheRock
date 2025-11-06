@@ -176,7 +176,7 @@ def retrieve_artifacts_by_run_id(args):
         if args.miopen:
             extra_artifacts.append("miopen")
             # We need bin/MIOpenDriver executable for tests
-            extra_artifacts.append("miopen_run")
+            argv.append("miopen_run")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
