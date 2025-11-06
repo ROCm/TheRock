@@ -44,14 +44,14 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-all",
+            "family": "gfx110X-dgpu",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
-            "family": "gfx110X-all",
+            "family": "gfx110X-dgpu",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },

@@ -30,7 +30,7 @@ on:
         options:
           - gfx101X-dgpu
           - gfx103X-dgpu
-          - gfx110X-all
+          - gfx110X-dgpu
           - gfx1150
           - gfx1151
           - gfx120X-all
@@ -66,7 +66,7 @@ jobs:
   build_jax_wheels:
     strategy:
       matrix:
-        jax_ref: [master]
+        jax_ref: [rocm-jaxlib-v0.7.1]
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
