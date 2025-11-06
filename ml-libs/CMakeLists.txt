@@ -139,7 +139,7 @@ if(THEROCK_ENABLE_MIOPEN)
       ${THEROCK_BUNDLED_SQLITE3}
       ${optional_profiler_deps}
   )
-
+  therock_cmake_subproject_provide_package(MIOpen miopen lib/cmake/miopen)
   therock_cmake_subproject_activate(MIOpen)
 
   therock_provide_artifact(miopen
@@ -191,6 +191,9 @@ if(THEROCK_ENABLE_HIPDNN)
   SUBDIRS
     .
   )
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_sdk lib/cmake/hipdnn_sdk)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_frontend lib/cmake/hipdnn_frontend)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_backend lib/cmake/hipdnn_backend)
   therock_cmake_subproject_activate(hipDNN)
 
   therock_provide_artifact(hipdnn
@@ -206,3 +209,48 @@ if(THEROCK_ENABLE_HIPDNN)
       hipDNN
   )
 endif(THEROCK_ENABLE_HIPDNN)
+
+if(THEROCK_ENABLE_MIOPEN_PLUGIN)
+  ##############################################################################
+  # hipDNN MIOpen plugin
+  ##############################################################################
+
+  therock_cmake_subproject_declare(MIOpen_plugin
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/plugins/miopen_legacy_plugin"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopen_plugin"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      hipDNN
+      therock-googletest
+      therock-flatbuffers
+      therock-nlohmann-json
+      therock-fmt
+      therock-spdlog
+    RUNTIME_DEPS
+      MIOpen
+  )
+  therock_cmake_subproject_glob_c_sources(MIOpen_plugin
+  SUBDIRS
+    .
+  )
+  therock_cmake_subproject_activate(MIOpen_plugin)
+
+  therock_provide_artifact(miopen-plugin
+    DESCRIPTOR artifact-miopen-plugin.toml
+    COMPONENTS
+      dbg
+      lib
+      test
+    SUBPROJECT_DEPS
+      MIOpen_plugin
+  )
+endif(THEROCK_ENABLE_MIOPEN_PLUGIN)
