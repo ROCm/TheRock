@@ -27,6 +27,8 @@ on:
         type: string
       test_type:
         type: string
+      test_harness:
+        type: boolean
       sanity_check_only_for_family:
         type: boolean
 
@@ -75,7 +77,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
         inputs.expect_failure == false &&
-        github.event_name != 'schedule'
+        inputs.test_harness == false
       }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
@@ -104,7 +106,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
         inputs.expect_failure == false &&
-        github.event_name == 'schedule'
+        inputs.test_harness == true
       }}
     uses: ./.github/workflows/test_harness.yml
     with:
