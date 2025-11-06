@@ -18,7 +18,7 @@ cmd = [
     "--parallel",
     "8",
     "--timeout",
-    "900",
+    "600",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
