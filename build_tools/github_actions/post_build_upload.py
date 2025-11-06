@@ -32,12 +32,12 @@ import tarfile
 
 from github_actions_utils import *
 
+THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+PLATFORM = platform.system().lower()
+
 # Importing indexer.py
 sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
 import indexer
-
-THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
-PLATFORM = platform.system().lower()
 
 
 def log(*args):
