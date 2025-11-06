@@ -60,15 +60,26 @@ def check_aws_cli_available():
         get_time_sync_logs()
 
 
+# This method will output logs of the Windows Time Service and is meant 
+# to help debug spurious AWS auth issues caused by time differences when
+# uploading with the AWS CLI tool. For context, see this issue and PR:
+# https://github.com/ROCm/TheRock/issues/875
+# https://github.com/ROCm/TheRock/pull/1581#issuecomment-3490177590
 def get_time_sync_logs():
+    # Logs are from `w32tm` run in Windows HostProcess containers on Azure VMs 
+    # with `/query /status` and `/stripchart /computer:time.aws.com /dataonly`
+    # and are mounted via the readonly H: drive for Github Runner Pods to access
     startfile = Path("H:\\start.log")
     timefile = Path("H:\\time.log")
+
     log("Windows time sync check")
     log("----------------------")
     if startfile.is_file() and timefile.is_file():
         log(f"[*] Checking time sync at: {datetime.now()}")
+
         log("[*] Start Time Sync Log:")
         log(startfile.read_text())
+
         log("[*] Time Sync Log (last ~50 lines):")
         timef = open(timefile)
         timelines = timef.readlines()
