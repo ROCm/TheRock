@@ -218,7 +218,7 @@ def upload_manifest_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str)
 
 
 def write_gha_build_summary(artifact_group: str, bucket_url: str):
-    log(f"Adding links to job summary to bucket {bucket}")
+    log(f"Adding links to job summary to bucket {bucket_url}")
 
     log_index_url = f"{bucket_url}/logs/{artifact_group}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_index_url})")
