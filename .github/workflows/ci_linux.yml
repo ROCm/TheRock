@@ -65,6 +65,7 @@ jobs:
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
     # If we are expecting a build failure, do not run tests to save machine capacity
+    # If non-nightly scheduled jobs
     if: >-
       ${{
         !failure() &&
@@ -73,9 +74,39 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        inputs.expect_failure == false
+        inputs.expect_failure == false &&
+        github.event_name != 'schedule'
       }}
     uses: ./.github/workflows/test_artifacts.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+      sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+
+  test_linux_artifacts_with_harness:
+    needs: [build_portable_linux_artifacts]
+    name: Test Artifacts with Harness
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.concurrency.
+    # If we are expecting a build failure, do not run tests to save machine capacity
+    # If nightly scheduled jobs
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        github.event_name == 'schedule'
+      }}
+    uses: ./.github/workflows/test_harness.yml
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
