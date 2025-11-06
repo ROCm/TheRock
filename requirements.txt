@@ -11,8 +11,5 @@ pytest-cmake==0.13.0
 joblib>=1.4.2
 msgpack>=1.1.0
 
-# rocprofiler-compute deps
--r rocm-systems/projects/rocprofiler-compute/requirements.txt
-
 # AWS Redshift connector
 redshift_connector==2.1.8
