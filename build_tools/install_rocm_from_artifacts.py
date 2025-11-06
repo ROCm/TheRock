@@ -15,7 +15,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--output-dir OUTPUT_DIR]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
     [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--prim | --no-prim]
-    [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
+    [--rand | --no-rand] [--rccl | --no-rccl] [--libhipcxx | --no-libhipcxx] [--tests | --no-tests] [--base-only]
 
 Examples:
 - Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 14474448215
@@ -161,7 +161,7 @@ def retrieve_artifacts_by_run_id(args):
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
-        [args.blas, args.fft, args.hipdnn, args.miopen, args.prim, args.rand, args.rccl]
+        [args.blas, args.fft, args.hipdnn, args.miopen, args.prim, args.rand, args.rccl, args.libhipcxx]
     ):
         argv.extend(base_artifact_patterns)
 
@@ -181,6 +181,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
+        if args.libhipcxx:
+            extra_artifacts.append("libhipcxx")
 
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
@@ -352,6 +354,13 @@ def main(argv):
         "--rccl",
         default=False,
         help="Include 'rccl' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--libhipcxx",
+        default=False,
+        help="Include 'libhipcxx' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

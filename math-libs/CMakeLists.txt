@@ -270,3 +270,56 @@ if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
+
+if(THEROCK_ENABLE_LIBHIPCXX)
+  ##############################################################################
+  # libhipcxx
+  ##############################################################################
+
+  therock_cmake_subproject_declare(libhipcxx
+    # FIXME: use this after moving rocWMMA to rocm-libraries
+    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocWMMA"
+    EXTERNAL_SOURCE_DIR "${THEROCK_LIBHIPCXX_SOURCE_DIR}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DROCWMMA_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
+      "-DROCWMMA_VALIDATE_WITH_ROCBLAS=$<BOOL:${THEROCK_ENABLE_BLAS}>"
+      "-DROCWMMA_BENCHMARK_WITH_ROCBLAS=$<AND:$<BOOL:${THEROCK_ENABLE_BLAS}>,$<BOOL:${THEROCK_ROCWMMA_ENABLE_BENCHMARKS}>>"
+      "-DROCWMMA_BUILD_BENCHMARK_TESTS=${THEROCK_ROCWMMA_ENABLE_BENCHMARKS}"
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+      -DROCWMMA_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      # therock-googletest
+      # ${ROCWMMA_BLAS_OPTIONAL_DEP}
+      # ${ROCWMMA_ROCM_SMI_OPTIONAL_DEP}
+    RUNTIME_DEPS
+      hip-clr
+      # ${ROCWMMA_BLAS_OPTIONAL_DEP}
+      # ${ROCWMMA_ROCM_SMI_OPTIONAL_DEP}
+  )
+  therock_cmake_subproject_glob_c_sources(libhipcxx
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_activate(libhipcxx)
+
+  therock_provide_artifact(libhipcxx
+    DESCRIPTOR artifact-libhipcxx.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      libhipcxx
+  )
+endif(THEROCK_ENABLE_LIBHIPCXX)
