@@ -51,10 +51,11 @@ def exec(cmd: list[str], cwd: Path):
 
 
 def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None):
+    cmd = ["aws", "s3", "cp", str(source_path), s3_destination]
+    # Report once per second. Default progress is every 1MB (1000s of log lines).
+    cmd.append("--progress-frequency=1")
     if source_path.is_dir():
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
-    else:
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination]
+        cmd.append("--recursive")
 
     if content_type:
         cmd += ["--content-type", content_type]
