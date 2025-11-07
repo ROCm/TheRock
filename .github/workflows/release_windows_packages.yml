@@ -268,16 +268,12 @@ jobs:
             exit 1  # Stop the CI as build did not happen
           fi
 
-      # TODO(#1522): upload to therock-${{ env.RELEASE_TYPE }}-artifacts instead of therock-artifacts
-      #   therock-dev-artifacts
-      #   therock-nightly-artifacts
-      #   therock-prerelease-artifacts
-      - name: Configure AWS Credentials for non-forked repos
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+      - name: Configure AWS Credentials
+        if: ${{ github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
 
       - name: Post Build Upload
         if: always()
@@ -287,13 +283,6 @@ jobs:
             --artifact-group "${{ matrix.target_bundle.amdgpu_family }}" \
             --build-dir ${{ env.BUILD_DIR }} \
             --upload
-
-      - name: Configure AWS Credentials
-        if: ${{ github.repository_owner == 'ROCm' }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
 
       - name: Upload Releases to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}
