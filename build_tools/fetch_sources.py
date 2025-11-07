@@ -92,6 +92,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.system_projects)
     if args.include_compilers:
         projects.extend(args.compiler_projects)
+    if args.include_debug_tools:
+        projects.extend(args.debug_tools)
     if args.include_rocm_libraries:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
@@ -424,6 +426,12 @@ def main(argv):
         help="Include compilers",
     )
     parser.add_argument(
+        "--include-debug-tools",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include ROCm debugging tools",
+    )
+    parser.add_argument(
         "--include-rocm-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -526,6 +534,14 @@ def main(argv):
                 "rocm-libraries",
             ]
         ),
+    )
+    parser.add_argument(
+        "--debug-tools",
+        nargs="+",
+        type=str,
+        default=[
+            "amd-dbgapi",
+        ],
     )
     args = parser.parse_args(argv)
 

@@ -1,0 +1,5 @@
+# amd-dbgapi
+[components.dbg."debug-tools/amd-dbgapi/stage"]
+[components.dev."debug-tools/amd-dbgapi/stage"]
+[components.doc."debug-tools/amd-dbgapi/stage"]
+[components.lib."debug-tools/amd-dbgapi/stage"]

@@ -57,3 +57,7 @@
 	path = iree-libs/fusilli
 	url = https://github.com/iree-org/fusilli.git
 	branch = main
+[submodule "amd-dbgapi"]
+	path = debug-tools/amd-dbgapi
+	url = https://github.com/ROCm/ROCdbgapi.git
+	branch = amd-staging
