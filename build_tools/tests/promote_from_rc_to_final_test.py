@@ -8,7 +8,6 @@ import tempfile
 from packaging.version import Version
 from pkginfo import Wheel
 import subprocess
-import tqdm
 import urllib
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "packaging"))
