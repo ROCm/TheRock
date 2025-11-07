@@ -187,6 +187,15 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # MIOpen plugin tests
+    "miopen_plugin": {
+        "job_name": "miopen_plugin",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
