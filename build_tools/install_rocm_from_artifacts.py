@@ -184,6 +184,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.miopen:
             extra_artifacts.append("miopen")
+            argv.extend("rand_dev")
         if args.miopen_plugin:
             extra_artifacts.append("miopen-plugin")
         if args.prim:
