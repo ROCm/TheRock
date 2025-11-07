@@ -11,6 +11,28 @@ import os
 import glob
 import importlib.util
 
+# Need dynamic load as change_wheel_version needs to be imported via parent directory
+this_file = pathlib.Path(__file__).resolve()
+build_tools_dir = this_file.parent.parent
+# ../third_party/change_wheel_version/change_wheel_version.py
+change_wheel_version_path = (
+    build_tools_dir
+    / "third_party"
+    / "change_wheel_version"
+    / "change_wheel_version.py"
+)
+
+spec = importlib.util.spec_from_file_location(
+    "third_party_change_wheel_version", change_wheel_version_path
+)
+change_wheel_version = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(change_wheel_version)
+
+assert hasattr(change_wheel_version, "change_wheel_version"), (
+"change_wheel_version module does not expose change_wheel_version function"
+)
+
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser(
@@ -123,12 +145,13 @@ def promote_wheel(filename):
 
     print(f"  Detected version: {original_version}")
 
-    if original_version.local:
+    if original_version.local:  # torch packages
         if not "rc" in original_version.local:
             print("  Only release candidates (rc) can be promoted! Aborting!")
             return False
         local_version = str(original_version.local).split("rc", 1)[0]
-    else:
+        base_version = original_version.public
+    else:  # rocm packages
         if not "rc" in str(original_version):
             print("  Only release candidates (rc) can be promoted! Aborting!")
             return False
@@ -137,9 +160,7 @@ def promote_wheel(filename):
     print(f"  New base version: {base_version}")
     print(f"  New local version: {local_version}")
 
-    if str(base_version) == str(
-        original_version
-    ) or f"{base_version}+{local_version}" == str(original_version):
+    if str(base_version) == str(original_version) or f"{base_version}+{local_version}" == str(original_version):
         print("  Version is already a release version, skipping")
         return False
 
@@ -231,40 +252,28 @@ def promote_targz(filename: str):
         return True
 
 
-if __name__ == "__main__":
-    # Need dynamic load as change_wheel_version needs to be imported via parent directory
-    this_dir = pathlib.Path(__file__).resolve().parent
-    # ../third_party/change_wheel_version/change_wheel_version.py
-    change_wheel_version_path = (
-        this_dir.parent
-        / "third_party"
-        / "change_wheel_version"
-        / "change_wheel_version.py"
-    )
+def main(input_dir, match_files="/*", delete=False):
+    print(f"Looking for .whl and .tar.gz in {input_dir}/{match_files}")
 
-    spec = importlib.util.spec_from_file_location(
-        "third_party_change_wheel_version", change_wheel_version_path
-    )
-    change_wheel_version = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(change_wheel_version)
-
-    print("Parsing arguments", end="")
-    p = parse_arguments(sys.argv[1:])
-    print(" ...done")
-
-    print(f"Looking for .whl and .tar.gz in {p.input_dir}/{p.match_files}")
-
-    files = glob.glob(str(p.input_dir) + "/" + p.match_files)
+    files = glob.glob(str(input_dir) + "/" + match_files)
 
     for file in files:
         print("")
         if file.endswith(".whl"):
-            if promote_wheel(file) and p.delete:
+            if promote_wheel(file) and delete:
                 print(f"Removing old wheel: {file}")
                 os.remove(file)
         elif file.endswith(".tar.gz"):
-            if promote_targz(file) and p.delete:
+            if promote_targz(file) and delete:
                 print(f"Removing old .tar.gz: {file}")
                 os.remove(file)
         else:
             print(f"File found that cannot be promoted: {file}")
+
+
+if __name__ == "__main__":
+    print("Parsing arguments", end="")
+    p = parse_arguments(sys.argv[1:])
+    print(" ...done")
+
+    main(p.input_dir, p.match_files, p.delete)
