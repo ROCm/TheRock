@@ -10,7 +10,7 @@ from pkginfo import Wheel
 import subprocess
 import urllib
 
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "packaging"))
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent / "packaging"))
 import promote_from_rc_to_final
 
 def checkPromotedFileNames(dir_path, platform):
