@@ -169,8 +169,8 @@ if __name__ == "__main__":
         "--continue-on-collection-errors",
         "--import-mode=importlib",
         f"-k={tests_to_skip}",
+        "--numprocesses=0",  # TODO does this need rework? why should we not run this multithreaded?
         "-v",
-        "-numprocesses=0",  # TODO does this need rework? why should we not run this multithreaded?
         # -n numprocesses, --numprocesses=numprocesses
         #         Shortcut for '--dist=load --tx=NUM*popen'.
         #         With 'logical', attempt to detect logical CPU count (requires psutil, falls back to 'auto').
