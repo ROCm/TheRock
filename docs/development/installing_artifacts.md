@@ -8,6 +8,7 @@ The script supports the following command-line options:
 
 | Option              | Type   | Description                                                                              |
 | ------------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `--amd-dbgapi`      | Flag   | Include the ROCm debugger API artifacts                                                  |
 | `--amdgpu-family`   | String | AMD GPU family target (required)                                                         |
 | `--base-only`       | Flag   | Include only base artifacts (minimal installation)                                       |
 | `--blas`            | Flag   | Include BLAS artifacts                                                                   |
