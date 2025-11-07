@@ -16,10 +16,7 @@ this_file = pathlib.Path(__file__).resolve()
 build_tools_dir = this_file.parent.parent
 # ../third_party/change_wheel_version/change_wheel_version.py
 change_wheel_version_path = (
-    build_tools_dir
-    / "third_party"
-    / "change_wheel_version"
-    / "change_wheel_version.py"
+    build_tools_dir / "third_party" / "change_wheel_version" / "change_wheel_version.py"
 )
 
 spec = importlib.util.spec_from_file_location(
@@ -29,9 +26,9 @@ change_wheel_version = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(change_wheel_version)
 
-assert hasattr(change_wheel_version, "change_wheel_version"), (
-"change_wheel_version module does not expose change_wheel_version function"
-)
+assert hasattr(
+    change_wheel_version, "change_wheel_version"
+), "change_wheel_version module does not expose change_wheel_version function"
 
 
 def parse_arguments(argv):
@@ -160,7 +157,9 @@ def promote_wheel(filename):
     print(f"  New base version: {base_version}")
     print(f"  New local version: {local_version}")
 
-    if str(base_version) == str(original_version) or f"{base_version}+{local_version}" == str(original_version):
+    if str(base_version) == str(
+        original_version
+    ) or f"{base_version}+{local_version}" == str(original_version):
         print("  Version is already a release version, skipping")
         return False
 
