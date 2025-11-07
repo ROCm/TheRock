@@ -56,3 +56,7 @@
 [submodule "rocm-kpack"]
 	path = base/rocm-kpack
 	url = https://github.com/ROCm/rocm-kpack.git
+[submodule "amd-dbgapi"]
+	path = debug-tools/amd-dbgapi
+	url = https://github.com/ROCm/ROCdbgapi.git
+	branch = amd-staging
