@@ -59,7 +59,7 @@ def exec(cmd: list[str], cwd: Path):
 def write_time_sync_log():
     if platform.system().lower() != "windows":
         log("[*] Current OS not windows, Skipping.")
-        return        
+        return
 
     # Logs are from `w32tm` run in Windows HostProcess containers on Azure VMs
     # with `/query /status` and `/stripchart /computer:time.aws.com /dataonly`
