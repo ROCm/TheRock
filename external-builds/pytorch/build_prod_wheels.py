@@ -393,6 +393,15 @@ def do_build(args: argparse.Namespace):
                 addl_triton_env = json.load(f)
                 print(f"-- Additional triton build env vars: {addl_triton_env}")
             env.update(addl_triton_env)
+        # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
+        # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
+        # trition) may pick up TheRock's LLVM instead of triton's.
+        # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
+        # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
+        # See also https://github.com/ROCm/TheRock/issues/1999.
+        env[
+            "TRITON_APPEND_CMAKE_ARGS"
+        ] = "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
 
     if is_windows:
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
