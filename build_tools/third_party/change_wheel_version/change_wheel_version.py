@@ -1,34 +1,3 @@
-# MIT License
-
-# Copyright (c) 2023 hauntsaninja
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-#################################################################################
-# original version from https://github.com/hauntsaninja/change_wheel_version
-# (commit e28436ebdb6fe5a81cd29922f7276d00675d1bd3, Sep 13, 2024)
-#
-# modified to allow a hook to update the version in other files part of the wheel
-# modified parts are marked with " # AMD-added "
-#################################################################################
-
-
 import argparse
 import email.parser
 import email.policy
@@ -45,13 +14,8 @@ import installer.utils
 import packaging.version
 from packaging.tags import parse_tag
 
-# AMD-added
-from collections.abc import Callable
 
-
-def version_replace(
-    v: packaging.version.Version, **kwargs: Any
-) -> packaging.version.Version:
+def version_replace(v: packaging.version.Version, **kwargs: Any) -> packaging.version.Version:
     # yikes :-)
     self = packaging.version.Version.__new__(packaging.version.Version)
     self._version = v._version._replace(**kwargs)
@@ -83,23 +47,17 @@ def wheel_unpack(wheel: Path, dest_dir: Path, name_ver: str) -> None:
         wf.extractall(dest_dir / name_ver)
 
 
-def change_platform_tag(
-    wheel_path: Path, tag: str, parser: email.parser.BytesParser
-) -> str:
+def change_platform_tag(wheel_path: Path, tag: str, parser: email.parser.BytesParser) -> str:
     """Changes the WHEEL file to specify `tag`. Returns a canonicalized copy of that tag."""
     platform_tags = list(parse_tag(tag))
     if len(platform_tags) != 1:
-        raise ValueError(
-            f"Parsed '{tag}' as {len(platform_tags)}; there must be exactly one."
-        )
+        raise ValueError(f"Parsed '{tag}' as {len(platform_tags)}; there must be exactly one.")
     platform_tag = platform_tags[0]
     is_pure = platform_tag.abi == "none"
     if is_pure != (platform_tag.platform == "any"):
         raise ValueError(f"ABI and platform are inconsistent in '{platform_tag}'.")
     if is_pure != platform_tag.interpreter.startswith("py"):
-        raise ValueError(
-            f"Interpreter and platform are inconsistent in '{platform_tag}'."
-        )
+        raise ValueError(f"Interpreter and platform are inconsistent in '{platform_tag}'.")
     with open(wheel_path, "rb") as f:
         msg = parser.parse(f)
     msg.replace_header("Tag", str(platform_tag))
@@ -115,7 +73,6 @@ def change_wheel_version(
     local_version: Optional[str],
     allow_same_version: bool = False,
     platform_tag: Optional[str] = None,
-    callback_func: Optional[Callable] = None,  # AMD-added
 ) -> Path:
     old_parts = installer.utils.parse_wheel_filename(wheel.name)
     old_version = packaging.version.Version(old_parts.version)
@@ -157,10 +114,6 @@ def change_wheel_version(
         # copy everything over
         shutil.move(dest_dir / old_slug, dest_dir / new_slug)
 
-        # AMD-added
-        if callback_func != None:
-            callback_func(dest_dir / new_slug, old_version, new_version)
-
         # rename dist-info
         shutil.move(
             dest_dir / new_slug / f"{old_slug}.dist-info",
@@ -169,8 +122,7 @@ def change_wheel_version(
         # rename data
         if (dest_dir / new_slug / f"{old_slug}.data").exists():
             shutil.move(
-                dest_dir / new_slug / f"{old_slug}.data",
-                dest_dir / new_slug / f"{new_slug}.data",
+                dest_dir / new_slug / f"{old_slug}.data", dest_dir / new_slug / f"{new_slug}.data"
             )
 
         metadata_path = dest_dir / new_slug / f"{new_slug}.dist-info" / "METADATA"
@@ -199,9 +151,7 @@ def change_wheel_version(
         else:
             # Generate the tags that will be associated with the wheel after it is repacked.
             # `wheel pack` sorts the tags, so we need to do the same if we're not changing it.
-            new_tag = "-".join(
-                ".".join(sorted(t.split("."))) for t in old_parts.tag.split("-")
-            )
+            new_tag = "-".join(".".join(sorted(t.split("."))) for t in old_parts.tag.split("-"))
 
         # wheel pack rewrites the RECORD file
         subprocess.check_output(
