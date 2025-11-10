@@ -1,8 +1,9 @@
+#!/usr/bin/env python
+
 import argparse
 import shutil
 import sys
 import os
-import glob
 from pathlib import Path
 import tempfile
 from packaging.version import Version
@@ -10,11 +11,11 @@ from pkginfo import Wheel
 import subprocess
 import urllib
 
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent / "packaging"))
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import promote_from_rc_to_final
 
 
-def checkPromotedFileNames(dir_path, platform):
+def checkPromotedFileNames(dir_path: Path, platform: str) -> tuple[bool, str]:
     if platform == "linux":
         expected_promoted_pkgs = [
             "rocm-7.9.0.tar.gz",
@@ -39,8 +40,8 @@ def checkPromotedFileNames(dir_path, platform):
         ]
 
     # get files and strip path from them
-    files = glob.glob(dir_path + "/*")
-    files = [file.rsplit("/", 1)[-1] for file in files]
+    files = dir_path.glob("*")
+    files = [file.name for file in files]
 
     if len(files) != len(expected_promoted_pkgs):
         return (
@@ -55,8 +56,10 @@ def checkPromotedFileNames(dir_path, platform):
     return True, ""
 
 
-def checkAllWheelsSameVersion(dir_path, expected_version):
-    for file in glob.glob(dir_path + "/*.whl"):
+def checkAllWheelsSameVersion(
+    dir_path: Path, expected_version: Version
+) -> tuple[bool, str]:
+    for file in dir_path.glob("*.whl"):
         wheel = Wheel(file)
         version = Version(wheel.version)
 
@@ -75,9 +78,9 @@ def checkAllWheelsSameVersion(dir_path, expected_version):
     return True, ""
 
 
-def checkInstallation(dir_path):
+def checkInstallation(dir_path: Path) -> tuple[bool, str]:
     try:
-        packages = glob.glob(dir_path + "/*")
+        packages = list(dir_path.glob("*"))
         proc = subprocess.run(
             ["pip", "install"] + packages,
             capture_output=True,
@@ -89,7 +92,9 @@ def checkInstallation(dir_path):
     return True, ""
 
 
-def checkPromoteEverything(dir_path, expected_version, platform):
+def checkPromoteEverything(
+    dir_path: Path, expected_version: Version, platform: str
+) -> tuple[bool, str]:
     print("")
     print(
         "================================================================================="
@@ -101,9 +106,10 @@ def checkPromoteEverything(dir_path, expected_version, platform):
     success = False
     with tempfile.TemporaryDirectory(
         prefix="PromoteRcToFinalTest-PromoteEverything-"
-    ) as tmp_dir:
+    ) as tmp:
+        tmp_dir = Path(tmp)
         # make a copy in a separate dir to not pollute it
-        for file in glob.glob(dir_path + "/*"):
+        for file in dir_path.glob("*"):
             shutil.copy2(file, tmp_dir)
 
         promote_from_rc_to_final.main(tmp_dir, delete=True)
@@ -139,7 +145,9 @@ def checkPromoteEverything(dir_path, expected_version, platform):
     return success
 
 
-def checkPromoteOnlyRocm(dir_path, expected_version, platform):  # should fail
+def checkPromoteOnlyRocm(
+    dir_path: Path, expected_version: Version, platform: str
+) -> bool:  # should fail
     print("")
     print(
         "================================================================================="
@@ -151,12 +159,13 @@ def checkPromoteOnlyRocm(dir_path, expected_version, platform):  # should fail
     success = False
     with tempfile.TemporaryDirectory(
         prefix="PromoteRcToFinalTest-PromoteOnlyRocm-"
-    ) as tmp_dir:
+    ) as tmp:
+        tmp_dir = Path(tmp)
         # make a copy in a separate dir to not pollute it
-        for file in glob.glob(dir_path + "/*"):
+        for file in dir_path.glob("*"):
             shutil.copy2(file, tmp_dir)
 
-        promote_from_rc_to_final.main(tmp_dir, match_files="/rocm*", delete=True)
+        promote_from_rc_to_final.main(tmp_dir, match_files="rocm*", delete=True)
 
         success = True
 
@@ -194,7 +203,9 @@ def checkPromoteOnlyRocm(dir_path, expected_version, platform):  # should fail
     return success
 
 
-def checkPromoteOnlyTorch(dir_path, expected_version, platform):  # should fail
+def checkPromoteOnlyTorch(
+    dir_path: Path, expected_version: Version, platform: str
+) -> bool:  # should fail
     print("")
     print(
         "================================================================================="
@@ -206,12 +217,13 @@ def checkPromoteOnlyTorch(dir_path, expected_version, platform):  # should fail
     success = False
     with tempfile.TemporaryDirectory(
         prefix="PromoteRcToFinalTest-PromoteOnlyTorch-"
-    ) as tmp_dir:
+    ) as tmp:
+        tmp_dir = Path(tmp)
         # make a copy in a separate dir to not pollute it
-        for file in glob.glob(dir_path + "/*"):
+        for file in dir_path.glob("*"):
             shutil.copy2(file, tmp_dir)
 
-        promote_from_rc_to_final.main(tmp_dir, match_files="/*torch*", delete=True)
+        promote_from_rc_to_final.main(tmp_dir, match_files="*torch*", delete=True)
 
         success = True
 
@@ -262,9 +274,8 @@ if __name__ == "__main__":
     p = parser.parse_args(sys.argv[1:])
     platform = p.platform
     # make tmpdir
-    with tempfile.TemporaryDirectory(
-        prefix=f"PromoteRcToFinalTest-{platform}-"
-    ) as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix=f"PromoteRcToFinalTest-{platform}-") as tmp:
+        tmp_dir = Path(tmp)
         if platform == "linux":
             # download some version
             URL = "https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu/"
@@ -305,7 +316,7 @@ if __name__ == "__main__":
             url_safe_encoding = URL + urllib.parse.quote(package)
             print(url_safe_encoding)
             subprocess.run(
-                ["curl", "--output", tmp_dir + "/" + package, url_safe_encoding],
+                ["curl", "--output", tmp_dir / package, url_safe_encoding],
                 check=True,
             )
 
