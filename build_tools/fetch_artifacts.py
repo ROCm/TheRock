@@ -8,11 +8,11 @@ download artifacts then unpack them into a usable install directory.
 Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   pip install boto3
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080
+    --run-id 15685736080 --artifact-group gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
 
 Include/exclude regular expressions can be given to control what is downloaded:
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080 \
+    --run-id 15685736080 --artifact-group gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
     amd-llvm base 'core-(hip|runtime)' sysdeps \
     --exclude _dbg_
 

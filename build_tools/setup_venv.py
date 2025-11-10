@@ -13,11 +13,11 @@ There are a few modes this can be used in:
     python setup_venv.py .venv
     ```
 
-* To install the latest nightly rocm packages for gfx110X-all into the venv:
+* To install the latest nightly rocm packages for gfx110X-dgpu into the venv:
 
     ```
     python setup_venv.py .venv --packages rocm[libraries,devel] \
-        --index-name nightly --index-subdir gfx110X-all
+        --index-name nightly --index-subdir gfx110X-dgpu
     ```
 
     This is roughly equivalent to:
@@ -26,7 +26,7 @@ There are a few modes this can be used in:
     python -m venv .venv
     source .venv/bin/activate
     python -m pip install --upgrade pip
-    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
+    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-dgpu
     deactivate
     ```
 """
@@ -77,7 +77,7 @@ def find_venv_python(venv_path: Path) -> Path | None:
     return None
 
 
-def create_venv(venv_dir: Path):
+def create_venv(venv_dir: Path, py_cmd: list[str]):
     cwd = Path.cwd()
 
     log(f"Creating venv at '{venv_dir}'")
@@ -98,7 +98,7 @@ def create_venv(venv_dir: Path):
         log(f"  Found existing python executable at '{python_exe}', skipping creation")
         log("  Run again with --clean to clear the existing directory instead")
     else:
-        exec([sys.executable, "-m", "venv", str(venv_dir)])
+        exec(py_cmd + ["venv", str(venv_dir)])
 
 
 def upgrade_pip(python_exe: Path):
@@ -106,10 +106,8 @@ def upgrade_pip(python_exe: Path):
     exec([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
 
 
-def install_packages(args: argparse.Namespace):
+def install_packages(args: argparse.Namespace, py_cmd: list[str]):
     log("")
-
-    python_exe = find_venv_python(args.venv_dir)
 
     if args.index_name:
         index_url = INDEX_URLS_MAP[args.index_name]
@@ -117,14 +115,7 @@ def install_packages(args: argparse.Namespace):
         index_url = args.index_url
     index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
 
-    command = [
-        str(python_exe),
-        "-m",
-        "pip",
-        "install",
-        f"--index-url={index_url}",
-        args.packages,
-    ]
+    command = py_cmd + [f"--index-url={index_url}", args.packages]
     if args.disable_cache:
         command.append("--no-cache-dir")
     exec(command)
@@ -201,17 +192,25 @@ def log_activate_instructions(venv_dir: Path):
 
 def run(args: argparse.Namespace):
     venv_dir = args.venv_dir
+    # selects uv if available
+    py_cmd = ["uv"] if args.use_uv else [sys.executable, "-m"]
 
     if args.clean and venv_dir.exists():
         log(f"Clearing existing venv_dir '{venv_dir}'")
         shutil.rmtree(venv_dir)
 
-    create_venv(venv_dir)
-    python_exe = find_venv_python(venv_dir)
+    create_venv(venv_dir, py_cmd)
 
-    upgrade_pip(python_exe)
+    # if not using uv, replace the python exe in py_cmd with the venv python
+    python_exe = find_venv_python(venv_dir)
+    if not args.use_uv:
+        py_cmd = [str(python_exe), "-m", "pip", "install"]
+        upgrade_pip(python_exe)
+    else:
+        py_cmd = ["uv", "pip", "install", "--python", str(python_exe)]
+
     if args.packages:
-        install_packages(args)
+        install_packages(args, py_cmd)
 
     if args.activate_in_future_github_actions_steps:
         activate_venv_in_gha(venv_dir)
@@ -242,6 +241,11 @@ def main(argv: list[str]):
         "--activate-in-future-github-actions-steps",
         action=argparse.BooleanOptionalAction,
         help="Attempts to activate the venv persistently when running in a GitHub Action. This is less reliable than running the official activate command",
+    )
+    general_options.add_argument(
+        "--use-uv",
+        action=argparse.BooleanOptionalAction,
+        help="Uses uv instead of pip/venv, see more at: https://docs.astral.sh/uv/",
     )
 
     install_options = p.add_argument_group("Install options")
@@ -277,7 +281,7 @@ def main(argv: list[str]):
     if not all_subdir_sets_congruent and subdirs:
         index_subdir_help += ". Available options per index: " + str(subdirs)
     elif not subdirs:
-        index_subdir_help += ", such as 'gfx110X-all'"
+        index_subdir_help += ", such as 'gfx110X-dgpu'"
     else:
         index_subdir_help += "."
 

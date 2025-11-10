@@ -56,12 +56,12 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-all/
+    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -99,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -138,11 +138,13 @@ LINUX_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
     "rocm_sysdeps_liblzma",
+    "rocm-openblas",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -154,9 +156,11 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "hipblaslt",
     "miopen",
+    "rocm-openblas",
 ]
 
 
@@ -391,6 +395,15 @@ def do_build(args: argparse.Namespace):
                 addl_triton_env = json.load(f)
                 print(f"-- Additional triton build env vars: {addl_triton_env}")
             env.update(addl_triton_env)
+        # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
+        # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
+        # trition) may pick up TheRock's LLVM instead of triton's.
+        # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
+        # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
+        # See also https://github.com/ROCm/TheRock/issues/1999.
+        env[
+            "TRITON_APPEND_CMAKE_ARGS"
+        ] = "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
 
     if is_windows:
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"

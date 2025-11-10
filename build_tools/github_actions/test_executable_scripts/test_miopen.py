@@ -97,6 +97,14 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
+positive_filter.append("*/GPU_Bwd_Mha_*")
+positive_filter.append("*/GPU_Fwd_Mha_*")
+positive_filter.append("*/GPU_Softmax*")
+positive_filter.append("*/GPU_Dropout*")
+positive_filter.append("*/GPU_MhaBackward_*")
+positive_filter.append("*/GPU_MhaForward_*")
+negative_filter.append("*GPU_TestMhaFind20*")
+
 #############################################
 
 negative_filter.append("*DeepBench*")
@@ -105,16 +113,6 @@ negative_filter.append("*MIOpenTestConv*")
 # Failing tests
 negative_filter.append("*/GPU_KernelTuningNetTest*")
 negative_filter.append("*/GPU_MIOpenDriver*")
-negative_filter.append("*GPU_TestMhaFind20*")
-
-# Failing because of  fatal error: 'rocrand/rocrand_xorwow.h' file not found
-negative_filter.append("*/GPU_Bwd_Mha_*")
-negative_filter.append("*/GPU_Fwd_Mha_*")
-negative_filter.append("*/GPU_Softmax*")
-negative_filter.append("*/GPU_Dropout*")
-negative_filter.append("*/GPU_MhaBackward_*")
-negative_filter.append("*/GPU_MhaForward_*")
-
 
 # For sake of time saving on pre-commit step
 ####################################################
@@ -178,6 +176,7 @@ smoke_filter = [
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES != "gfx950-dcgpu":
     smoke_filter.append("*DBSync*")
+    positive_filter.append("*DBSync*")
 
 ####################################################
 

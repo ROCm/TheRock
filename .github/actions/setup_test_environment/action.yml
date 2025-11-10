@@ -25,19 +25,29 @@ runs:
       with:
         python-version: 3.12
 
+    - name: "Install UV"
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          powershell -Command "irm https://astral.sh/uv/install.ps1 | iex"
+        else
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+        fi
+
     - name: Create Python venv
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
         python build_tools/setup_venv.py ${VENV_DIR} \
-          --activate-in-future-github-actions-steps
+          --activate-in-future-github-actions-steps \
+          --use-uv
 
     - name: Install test requirements
       shell: bash
       run: |
-        pip install -r requirements-test.txt
-        pip freeze
+        uv pip install -r requirements-test.txt
+        uv pip freeze
 
     - name: Install the AWS tool
       if: ${{ runner.os == 'Linux' }}

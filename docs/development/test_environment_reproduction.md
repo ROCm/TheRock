@@ -28,7 +28,7 @@ $ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 `install_rocm_from_artifacts.py` parameters
 
 - CI_RUN_ID is sourced from the CI run (ex: https://github.com/ROCm/TheRock/actions/runs/16948046392 -> CI_RUN_ID = 16948046392)
-- GPU_FAMILY is the LLVM target name (ex: gfx94X-dcgpu, gfx1151, gfx110X-all)
+- GPU_FAMILY is the LLVM target name (ex: gfx94X-dcgpu, gfx1151, gfx110X-dgpu)
 - GITHUB_REPO is the GitHub repository that this CI run was executed. (ex: ROCm/rocm-libraries, ROCm/rccl)
 
 To view which python test wrappers we have, please checkout [`test_executable_scripts/`](https://github.com/ROCm/TheRock/tree/main/build_tools/github_actions/test_executable_scripts)
