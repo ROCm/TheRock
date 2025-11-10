@@ -480,7 +480,6 @@ add_subdirectory(core)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
-add_subdirectory(systems-tools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)

@@ -22,7 +22,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       "-DSOURCE_DIR=${_source_dir}"
       "-DPATCHELF=${PATCHELF}"
       "-DTHEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "-DTHEROCK_BINARY_DIR=${THEROCK_BINARY_DIR}"
       "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
     RUNTIME_DEPS
       therock-zlib
@@ -66,14 +65,22 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-# Set paths to find the already-built zlib
-set(ZLIB_ROOT "${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps")
-set(ZLIB_INCLUDE_DIR "${ZLIB_ROOT}/include")
-set(ZLIB_LIBRARY "${ZLIB_ROOT}/lib/libz.so")
+find_package(ZLIB REQUIRED CONFIG)
 
-message(STATUS "Using zlib from: ${ZLIB_ROOT}")
-message(STATUS "ZLIB_INCLUDE_DIR: ${ZLIB_INCLUDE_DIR}")
-message(STATUS "ZLIB_LIBRARY: ${ZLIB_LIBRARY}")
+if(NOT TARGET ZLIB::ZLIB)
+  message(FATAL_ERROR "ZLIB::ZLIB target not found. Please ensure therock-zlib is built first.")
+endif()
+
+get_target_property(ZLIB_INCLUDE_DIR ZLIB::ZLIB INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(ZLIB_LIBRARY ZLIB::ZLIB IMPORTED_LOCATION)
+
+get_filename_component(ZLIB_LIB_DIR "${ZLIB_LIBRARY}" DIRECTORY)
+get_filename_component(ZLIB_ROOT "${ZLIB_LIB_DIR}/.." ABSOLUTE)
+
+message(STATUS "Found ZLIB via find_package()")
+message(STATUS "  ZLIB_ROOT: ${ZLIB_ROOT}")
+message(STATUS "  ZLIB_INCLUDE_DIR: ${ZLIB_INCLUDE_DIR}")
+message(STATUS "  ZLIB_LIBRARY: ${ZLIB_LIBRARY}")
 
 add_custom_target(
   build ALL
@@ -116,8 +123,7 @@ add_custom_target(
       "-DgRPC_INSTALL=ON"
       "-DCMAKE_INSTALL_LIBDIR=lib"
       # Set RPATH for installed libraries and executables
-      # $ORIGIN for libs, $ORIGIN/../lib for bins (protoc, grpc_cpp_plugin)
-      "-DCMAKE_INSTALL_RPATH=\$ORIGIN:\$ORIGIN/../lib"
+      "-DCMAKE_INSTALL_RPATH=\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../../../../../zlib/build/stage/lib/rocm_sysdeps/lib"
       "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON"
       # Add build-time RPATH to find zlib during gRPC build/test phase
       # This is separate from install RPATH and only used during build
@@ -127,16 +133,6 @@ add_custom_target(
     "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b" -j "${PAR_JOBS}"
   COMMAND
     "${CMAKE_COMMAND}" --install "${CMAKE_CURRENT_BINARY_DIR}/b"
-  COMMAND
-    # Copy zlib shared libraries to gRPC's lib directory so grpc_cpp_plugin can find it via RPATH
-    # This makes each stage directory self-contained for tools execution
-    # Use shell globbing to copy all zlib .so* files (handles symlinks and actual files)
-    bash -c "cp -L ${ZLIB_ROOT}/lib/librocm_sysdeps_z.so* ${CMAKE_INSTALL_PREFIX}/lib/ 2>/dev/null || true"
-  COMMAND
-    # Also create the libz.so symlink for compatibility
-    "${CMAKE_COMMAND}" -E create_symlink
-      "librocm_sysdeps_z.so.1"
-      "${CMAKE_INSTALL_PREFIX}/lib/libz.so"
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"

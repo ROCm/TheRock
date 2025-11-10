@@ -1,0 +1,25 @@
+# RDC (ROCm Data Center Tool)
+# Data center management and monitoring tool
+
+[components.dbg."profiler/rdc/stage"]
+[components.dev."profiler/rdc/stage"]
+include = [
+  "include/**",
+  "lib/cmake/**",
+  "lib/rdc/grpc/**",
+]
+[components.doc."profiler/rdc/stage"]
+include = [
+  "share/doc/rdc/**",
+]
+[components.lib."profiler/rdc/stage"]
+include = [
+  "lib/*.so*",
+  "lib/rdc/*.so*",
+]
+[components.run."profiler/rdc/stage"]
+include = [
+  "bin/**",
+  "libexec/rdc/**",
+  "share/rdc/**",
+]
