@@ -166,7 +166,7 @@ def retrieve_bucket_info(
     artifacts split across several buckets:
       * therock-ci-artifacts
       * therock-ci-artifacts-external
-      * therock-artifacts-internal (possibly unused)
+      * therock-artifacts-internal
       * therock-dev-artifacts
       * therock-nightly-artifacts
       * therock-release-artifacts
@@ -230,9 +230,10 @@ def retrieve_bucket_info(
         if external_repo == "":
             bucket = "therock-ci-artifacts"
         elif (
-            repo_name == "therock-releases" and owner == "ROCm" and not is_pr_from_fork
+            repo_name == "therock-releases-internal"
+            and owner == "ROCm"
+            and not is_pr_from_fork
         ):
-            # This may be unused? Consider deleting.
             bucket = "therock-artifacts-internal"
         else:
             bucket = "therock-ci-artifacts-external"
