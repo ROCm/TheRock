@@ -375,8 +375,6 @@ therock_validate_amdgpu_targets()
 # Global setup
 ################################################################################
 
-set(Python3_FIND_VIRTUALENV "FIRST" CACHE STRING "Allowed values are FIRST, ONLY and STANDARD.")
-
 # Some sub-projects need Python. Make sure it is found consistently.
 find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
 
