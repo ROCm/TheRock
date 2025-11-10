@@ -117,16 +117,6 @@ if [[ $INSTALL_DEPS == true ]]; then
 fi
 
 # ----------------------------------------------------------------------
-# Link local rocm-libraries
-# ----------------------------------------------------------------------
-git submodule sync # sync .git/config and .gitmodules, undoing any previous customization
-if [[ $LOCAL_ROCM_LIBRARIES == true ]]; then
-  # update git config in .git/config, this will override submodule for local build
-  git config submodule.rocm-libraries.url /home/astgeorg/Dev/c++/rocm-libraries
-fi
-echo "Using rocm-libraries from $(git config --get submodule.rocm-libraries.url)"
-
-# ----------------------------------------------------------------------
 # Build
 # ----------------------------------------------------------------------
 # should upgrade environment if it already exists, harmless I would assume?
@@ -136,8 +126,36 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Fetch submodules
+# ----------------------------------------------------------------------
+# Configure submodules
+# ----------------------------------------------------------------------
+
+# Fetch stock submodules
 python3 ./build_tools/fetch_sources.py
+
+# Override rocm-libraries with local path if requested
+if [[ $LOCAL_ROCM_LIBRARIES == true ]]; then
+  echo "Configuring rocm-libraries to use local path..."
+
+  # Initialize the submodule if not already done
+  git submodule update --init rocm-libraries
+
+  # Update the submodule to point to local path
+  # Add or update the local remote (set-url works whether remote exists or not)
+  (cd rocm-libraries && git remote remove local 2>/dev/null || true)
+  (cd rocm-libraries && git remote add local /home/astgeorg/Dev/c++/rocm-libraries)
+
+  # Fetch latest from local path and checkout the current branch's HEAD
+  # This makes the submodule use whatever you have committed locally
+  LOCAL_BRANCH=$(cd /home/astgeorg/Dev/c++/rocm-libraries && git branch --show-current)
+  echo "Updating rocm-libraries to latest commit from local branch: $LOCAL_BRANCH..."
+  (cd rocm-libraries && git fetch local && git checkout "local/$LOCAL_BRANCH")
+
+  # Show which commit we're now using
+  ROCM_COMMIT=$(cd rocm-libraries && git rev-parse --short HEAD)
+  echo "rocm-libraries now at commit: $ROCM_COMMIT"
+fi
+
 
 # Overwrite CMakePresetsLocal.json with local configurations
 cat > CMakeUserPresets.json << EOF
