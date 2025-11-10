@@ -179,6 +179,7 @@ def initialize():
     'hipfft',
     'hiprand',
     'hipsparse',
+    'hipsparselt',
     'hipsolver',
     'rccl',
     'hipblaslt',

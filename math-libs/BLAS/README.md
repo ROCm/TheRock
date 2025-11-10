@@ -10,6 +10,7 @@ user-level API libraries:
 - hipBLAS
 - hipSOLVER
 - hipSPARSE
+- hipSPARSELt
 
 Currently, all component libraries are built individually, but a future rework
 will nest them all under the same CMake project for better optimization of the
