@@ -185,6 +185,7 @@ option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABL
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
+option(THEROCK_ENABLE_FUSILLI_PLUGIN "Build fusilli plugin" OFF)
 
 # Host Math Features.
 therock_add_feature(HOST_BLAS
@@ -339,6 +340,12 @@ if(NOT WIN32)
     DESCRIPTION "Enables the MIOpen plugin project"
     REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
   )
+
+  therock_add_feature(FUSILLI_PLUGIN
+    GROUP FUSILLI_PLUGIN
+    DESCRIPTION "Enables the Fusilli plugin project"
+    REQUIRES COMPILER HIPDNN HIP_RUNTIME
+  )
 endif()
 
 # Finalize all feature flags.
@@ -462,6 +469,13 @@ add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
+
+# IREE and Fusilli are required by the Fusilli plugin
+if(THEROCK_ENABLE_FUSILLI_PLUGIN)
+  add_subdirectory(third-party/iree)
+  add_subdirectory(third-party/fusilli)
+endif()
+
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)

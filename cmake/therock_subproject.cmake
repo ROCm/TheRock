@@ -203,7 +203,7 @@ endfunction()
 #   further configure the sub-project.
 # USE_DIST_AMDGPU_TARGETS: Use the dist GPU targets vs the shard specific GPU
 #   targets. Typically this is set on runtime components that are intended to
-#    work for all supported targets, whereas it is ommitted for components which
+#    work for all supported targets, whereas it is omitted for components which
 #    are meant to be built only for the given targets (typically for kernel
 #    libraries).
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
@@ -244,9 +244,9 @@ endfunction()
 #   super-project specified C/C++ compiler. This will add an implicit dep on
 #   the named compiler sub-project and reconfigure CMAKE_C(XX)_COMPILER options.
 #   Only a fixed set of supported toolchains are supported (currently
-#   "amd-llvm").
+#   "amd-llvm" and "amd-hip").
 # BACKGROUND_BUILD: Option to indicate that the subproject does low concurrency,
-#   high latency build steps. It will be run in the backgroun in a job pool that
+#   high latency build steps. It will be run in the background in a job pool that
 #   allows some overlapping of work (controlled by
 #   THEROCK_BACKGROUND_BUILD_JOBS).
 # CMAKE_LISTS_RELPATH: Relative path within the source directory to the
