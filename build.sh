@@ -17,7 +17,7 @@ fi
 # Variables that control build
 # ----------------------------------------------------------------------
 # Whether to use local path for rocm-libraries
-LOCAL_ROCM_LIBRARIES=false
+LOCAL_ROCM_LIBRARIES=true
 
 # rocm_agent_enumerator prints gfx number for each device, head -n 1 selects first line
 THEROCK_ASIC=$(rocm_agent_enumerator | head -n 1)
@@ -86,16 +86,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ----------------------------------------------------------------------
-# Link local rocm-libraries
-# ----------------------------------------------------------------------
-git submodule sync # sync .git/config and .gitmodules, undoing any previous customization
-if [[ $LOCAL_ROCM_LIBRARIES == true ]]; then
-  # update git config in .git/config, this will override submodule for local build
-  git config submodule.rocm-libraries.url /home/astgeorg/Dev/c++/rocm-libraries
-fi
-echo "Using rocm-libraries from $(git config --get submodule.rocm-libraries.url)"
-
-# ----------------------------------------------------------------------
 # apt-get install build dependencies (such as patchelf)
 # ----------------------------------------------------------------------
 if [[ $INSTALL_DEPS == true ]]; then
@@ -127,6 +117,16 @@ if [[ $INSTALL_DEPS == true ]]; then
 fi
 
 # ----------------------------------------------------------------------
+# Link local rocm-libraries
+# ----------------------------------------------------------------------
+git submodule sync # sync .git/config and .gitmodules, undoing any previous customization
+if [[ $LOCAL_ROCM_LIBRARIES == true ]]; then
+  # update git config in .git/config, this will override submodule for local build
+  git config submodule.rocm-libraries.url /home/astgeorg/Dev/c++/rocm-libraries
+fi
+echo "Using rocm-libraries from $(git config --get submodule.rocm-libraries.url)"
+
+# ----------------------------------------------------------------------
 # Build
 # ----------------------------------------------------------------------
 # should upgrade environment if it already exists, harmless I would assume?
@@ -135,6 +135,9 @@ python3 -m venv .venv --prompt the-rock
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+
+# Fetch submodules
+python3 ./build_tools/fetch_sources.py
 
 # Overwrite CMakePresetsLocal.json with local configurations
 cat > CMakeUserPresets.json << EOF

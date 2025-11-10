@@ -470,9 +470,10 @@ add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
 
-# IREE is required by the Fusilli plugin
+# IREE and Fusilli are required by the Fusilli plugin
 if(THEROCK_ENABLE_FUSILLI_PLUGIN)
   add_subdirectory(third-party/iree)
+  add_subdirectory(third-party/fusilli)
 endif()
 
 # Note that rocprofiler-register is in base and is what higher level clients
