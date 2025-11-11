@@ -404,15 +404,18 @@ class SystemInfo:
             )
 
             ccache.append([proc.stdout.splitlines()])
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, FileNotFoundError):
             ccache.append(["Ccache not detected!"])
             ccache.append([""])
             return ccache
 
-        proc = subprocess.run(
-            ["ccache", "--show-config"], capture_output=True, text=True, check=True
-        )
-        ccache.append([proc.stdout.splitlines()])
+        try:
+            proc = subprocess.run(
+                ["ccache", "--show-config"], capture_output=True, text=True, check=True
+            )
+            ccache.append([proc.stdout.splitlines()])
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            ccache.append([""])
 
         return ccache
 

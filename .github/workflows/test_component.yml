@@ -84,7 +84,7 @@ jobs:
 
       - name: Runner health status
         run: |
-          ./build_tools/health_status.py
+          python ./build_tools/health_status.py
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
