@@ -25,6 +25,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       "-DBUILD_SHARED_LIBS=ON"
     BUILD_DEPS
       amd-llvm
+      therock-simde
     RUNTIME_DEPS
       rocprofiler-register
       ${THEROCK_BUNDLED_ELFUTILS}
@@ -131,6 +132,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       ${HIP_CLR_CMAKE_ARGS}
     BUILD_DEPS
       rocm-cmake
+      therock-simde
     RUNTIME_DEPS
       amd-llvm
       amd-comgr

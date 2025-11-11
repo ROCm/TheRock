@@ -100,6 +100,16 @@ Provides the `libnuma` library. Tools are not included in bundled sysdeps.
   a hard-coded dep on `numa::numa`, which seems to vary across systems)
 - Alternatives: `pkg_check_modules(NUMA numa)`
 
+## simde
+
+SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics.
+
+- Canonical method: `pkg_check_modules(simde REQUIRED IMPORTED_TARGET simde)`
+- Import library: `PkgConfig::simde`
+- Vars: `simde_INCLUDE_DIRS`
+- Alternatives: none
+- Note: Header-only library, provides portable SIMD intrinsics (SSE, AVX, NEON, etc.)
+
 ## sqlite3
 
 - Canonical method: `find_package(SQLite3)`
