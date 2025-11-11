@@ -339,9 +339,9 @@ process_files(
 
 > [!WARNING]
 > Bash is **strongly discouraged** for nontrivial usage in .yml GitHub Actions
-> workflow files and script files. Prefer to use Python scripts in most cases.
+> workflow files and script files.
 >
-> Writing safe and portable bash scripts is very challenging.
+> Prefer to use Python scripts in most cases.
 
 We follow some of the guidelines at
 https://google.github.io/styleguide/shellguide.html, notably:
