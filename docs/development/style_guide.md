@@ -484,12 +484,6 @@ on:
         default: ""  # Empty string handled gracefully in workflow logic
 ```
 
-### Minimize permissions
-
-Use minimal permissions to limit security exposure.
-
-(read access, no secrets for runs from forks)
-
 ### Separate build and test stages
 
 Use CPU runners to build from source and pass artifacts to test runners.
