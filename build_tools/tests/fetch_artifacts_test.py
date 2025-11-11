@@ -21,7 +21,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
     @patch("fetch_artifacts.paginator")
     def testListS3Artifacts_Found(self, mock_paginator):
         bucket_info = BucketMetadata(
-            "ROCm-TheRock/", "therock-artifacts", "123", "linux"
+            "ROCm-TheRock/", "therock-ci-artifacts", "123", "linux"
         )
         mock_paginator.paginate.return_value = [
             {
@@ -46,7 +46,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
     @patch("fetch_artifacts.paginator")
     def testListS3Artifacts_NotFound(self, mock_paginator):
         bucket_info = BucketMetadata(
-            "ROCm-TheRock/", "therock-artifacts", "123", "linux"
+            "ROCm-TheRock/", "therock-ci-artifacts", "123", "linux"
         )
         mock_paginator.paginate.side_effect = ClientError(
             error_response={
