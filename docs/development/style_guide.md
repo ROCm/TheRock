@@ -66,27 +66,50 @@ extend PEP 8 for our projects.
 
 ## GitHub Actions guidelines
 
-______________________________________________________________________
+### Pin action versions
 
-______________________________________________________________________
+Pin actions to specific commit SHAs or version tags for security and reproducibility.
 
-______________________________________________________________________
+### Prefer Python scripts over inline Bash
+
+Use Python scripts instead of inlined bash or bash scripts in workflow files.
+
+### Use safe defaults for inputs
+
+Workflow inputs should have safe default values that work in common scenarios.
+
+### Minimize permissions
+
+Use minimal permissions (read access, no secrets for runs from forks) to limit security exposure.
+
+### Separate build and test stages
+
+Use CPU runners for builds, separate build and test actions to optimize resource usage.
+
+### Add helpful logging
+
+Add logging where it helps with debugging and understanding workflow execution.
+
+### Keep Windows and Linux workflows in sync
+
+Maintain consistency between Windows and Linux workflow implementations.
+
+### Build minimal containers
+
+Build dependencies from source and bundle them instead of installing -dev packages in build dockerfiles (keep minimal).
+
+### Use qualified variable names
+
+Variable naming should qualify context/usage (e.g., `rocm_package_version` instead of `version`).
+
+### Design for local use first
+
+Write for local/developer use first, then have CI/CD follow documented steps.
 
 ## Appendix (move these into sections)
 
 ✅❌
 
-- Pin actions
-- Use python scripts instead of inlined bash or bash scripts
-- Safe defaults for inputs
-- Minimal permissions (read access, no secrets for runs from forks)
-- Use cpu runners for builds, separate build and test actions
-- Add logging where it helps
-- Keep windows and Linux in sync
-- Build dependencies from source and bundle them instead of installing -dev packages in build dockerfiles (keep minimal)
-- Variable naming: qualify context/usage "rocm_package_version" instead of "version"
-- Explicit is better than implicit, no magic
 - Prefer to work with upstream more than downstream (e.g. PyTorch build scripts)
 - Versions: consistency, compatibility with the ecosystem (can CUDA/CPU packages be installed concurrently with ROCm packages?)
 - Path handling with pathlib, relative to script path in repository
-- Write for local/developer use first, then have CI/CD follow documented steps
