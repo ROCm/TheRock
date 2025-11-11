@@ -56,7 +56,7 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
     # Join S3 bucket and log path cleanly by trimming slashes to avoid double “//”.
     # Example: "s3://bucket//logs/" → "s3://bucket/logs/"
     # Resulting upload path:
-    # s3://therock-artifacts-external/ROCm-rccl/18718690315-linux/logs/gfx950-dcgpu/index_rccl_test_report.html
+    # s3://therock-ci-artifacts-external/ROCm-rccl/18718690315-linux/logs/gfx950-dcgpu/index_rccl_test_report.html
     dest_uri = f"{bucket_uri.rstrip('/')}/{log_destination.lstrip('/')}"
     logging.info(
         "Uploading HTML reports from %s to %s",
