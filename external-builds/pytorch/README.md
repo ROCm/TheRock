@@ -28,13 +28,13 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature              | Linux support                                                                                                                         | Windows support                                                                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| torch                          | ✅ Supported                                                                                                                          | ✅ Supported                                                                                                                          |
-| torchaudio                     | ✅ Supported                                                                                                                          | ✅ Supported                                                                                                                          |
-| torchvision                    | ✅ Supported                                                                                                                          | ✅ Supported                                                                                                                          |
-| Flash attention via [ao]triton | ✅ Supported                                                                                                                          | ✅ Supported since torch 2.9                                                                                                          |
-| FBGEMM GenAI                   | ✅ Supported for torch 2.7<br>❌ Not yet supported for newer versions (see [Issue#2056](https://github.com/ROCm/TheRock/issues/2056)) | ✅ Supported for torch 2.7<br>❌ Not yet supported for newer versions (see [Issue#2056](https://github.com/ROCm/TheRock/issues/2056)) |
+| Project / feature              | Linux support                                                                                                                         | Windows support              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| torch                          | ✅ Supported                                                                                                                          | ✅ Supported                 |
+| torchaudio                     | ✅ Supported                                                                                                                          | ✅ Supported                 |
+| torchvision                    | ✅ Supported                                                                                                                          | ✅ Supported                 |
+| Flash attention via [ao]triton | ✅ Supported                                                                                                                          | ✅ Supported since torch 2.9 |
+| FBGEMM GenAI                   | ✅ Supported for torch 2.7<br>❌ Not yet supported for newer versions (see [Issue#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported             |
 
 ### Supported PyTorch versions
 
