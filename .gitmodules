@@ -48,4 +48,4 @@
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
-	branch = main
+	branch = release/rocmds-25.10
