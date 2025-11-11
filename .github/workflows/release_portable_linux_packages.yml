@@ -211,7 +211,7 @@ jobs:
 
       - name: Grant ownership over output directory
         run: |
-          sudo chown -R ${USER} ${{ env.OUTPUT_DIR }}
+          sudo chown -R $(whoami) ${{ env.OUTPUT_DIR }}
 
       - name: Build Report
         if: ${{ !cancelled() }}
