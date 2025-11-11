@@ -73,8 +73,8 @@ Pin actions to specific commit SHAs for security and reproducibility.
 ❌ **Bad:** Using unpinned or branch references
 
 ```yaml
-- uses: actions/checkout@main              # Branch can change unexpectedly
-- uses: actions/setup-python@v6.0.0        # Tag can be moved
+- uses: actions/checkout@main  # Branches are regularly updated
+- uses: actions/setup-python@v6.0.0  # Tags can be moved (even for releases)
 ```
 
 ✅ **Good:** Pin to specific commit SHA with the semantic version tag in a comment
@@ -85,12 +85,27 @@ Pin actions to specific commit SHAs for security and reproducibility.
 ```
 
 > [!TIP]
-> Use [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot)
+> We use
+> [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot)
 > to automatically update pinned actions while maintaining security.
 
 ### Prefer Python scripts over inline Bash
 
-Use Python scripts instead of inlined bash or bash scripts in workflow files.
+Where possible, put workflow logic in Python scripts.
+
+Python scripts have several benefits:
+
+- **Testable:** Can be tested locally and with unit tests
+- **Debuggable:** Easier to debug with standard Python tools
+- **Portable:** Works consistently across platforms (Linux/Windows/macOS)
+- **Maintainable:** Better error handling and logging support
+- **Modular:** Functions can be shared across multiple scripts
+
+> [!TIP]
+> Use your judgement for what logic is trivial enough to stay in bash.
+>
+> Some signs of complicated bash are _conditionals_, _loops_, _regex_,
+> _piping command output_, and _string manipulation_.
 
 ❌ **Bad:** Complex inline bash logic
 
@@ -109,7 +124,7 @@ Use Python scripts instead of inlined bash or bash scripts in workflow files.
     done
 ```
 
-✅ **Good:** Dedicated Python script with error handling
+✅ **Good:** Dedicated Python script
 
 ```yaml
 - name: Process artifacts
@@ -120,17 +135,15 @@ Use Python scripts instead of inlined bash or bash scripts in workflow files.
       --install-dir install
 ```
 
-Python scripts have several benefits:
-
-- **Testable:** Can be tested locally and with unit tests
-- **Debuggable:** Easier to debug with standard Python tools
-- **Portable:** Works consistently across platforms (Linux/Windows/macOS)
-- **Maintainable:** Better error handling and logging support
-- **Modular:** Functions can be shared across multiple scripts
-
 ### Use safe defaults for inputs
 
 Workflow inputs should have safe default values that work in common scenarios.
+
+Good defaults should:
+
+- **Work without configuration:** Safe defaults that won't trigger production changes
+- **Be well-documented:** Clear descriptions explaining when to override
+- **Fail safely:** Prefer dev/test behavior over production releases
 
 ❌ **Bad:** Unsafe defaults that could trigger unintended releases
 
@@ -145,7 +158,7 @@ on:
           - dev
           - nightly
           - stable
-        default: nightly  # Unsafe: could automatically publish to production
+        default: nightly  # Unsafe: publishes to production
 ```
 
 ✅ **Good:** Safe defaults that require explicit intent
@@ -169,19 +182,69 @@ on:
         default: ""  # Empty string handled gracefully in workflow logic
 ```
 
-Good defaults should:
-
-- **Work without configuration:** Safe defaults that won't trigger production changes
-- **Be well-documented:** Clear descriptions explaining when to override
-- **Fail safely:** Prefer dev/test behavior over production releases
-
 ### Minimize permissions
 
-Use minimal permissions (read access, no secrets for runs from forks) to limit security exposure.
+Use minimal permissions to limit security exposure.
+
+(read access, no secrets for runs from forks)
 
 ### Separate build and test stages
 
-Use CPU runners for builds, separate build and test actions to optimize resource usage.
+Use CPU runners to build from source and pass artifacts to test runners.
+
+Benefits of separation:
+
+- **Cost optimization:** GPU runners are expensive; use them only when needed
+- **Parallelization:** Multiple test jobs can share build artifacts
+- **Packaging enforcement:** Testing in this way enforces that build artifacts
+  are installable and usable on other machines
+
+❌ **Bad:** Building and testing on expensive GPU runners
+
+```yaml
+jobs:
+  build_and_test:
+    name: Build and Test
+    runs-on: linux-mi325-1gpu-ossci-rocm  # Expensive GPU runner
+    steps:
+      # ...
+
+      - name: Build ROCm artifacts
+        run: |
+          cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx942
+          cmake --build build
+
+      - name: Run tests on GPU
+        run: build_tools/github_actions/test_executable_scripts/test_hipblas.py
+```
+
+✅ **Good:** Separate build on CPU runners and test on GPU runners
+
+```yaml
+jobs:
+  build_artifacts:
+    name: Build Artifacts
+    runs-on: azure-linux-scale-rocm  # Dedicated CPU runner pool for builds
+    steps:
+      # ...
+
+      - name: Build ROCm artifacts
+        run: |
+          cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx942
+          cmake --build build
+
+      # ... Upload artifacts, logs, etc.
+
+  test_artifacts:
+    name: Test Artifacts
+    needs: build_artifacts
+    runs-on: linux-mi325-1gpu-ossci-rocm  # Expensive GPU runner only for tests
+    steps:
+      # ... Download artifacts, setup test environment, etc.
+
+      - name: Run tests on GPU
+        run: build_tools/github_actions/test_executable_scripts/test_hipblas.py
+```
 
 ## Appendix (move these into sections)
 
