@@ -760,6 +760,12 @@ function(therock_cmake_subproject_activate target_name)
   _therock_cmake_subproject_get_stage_dirs(
     _dist_source_dirs "${target_name}" ${_runtime_deps})
 
+  # Map THEROCK_VERBOSE to fileset_tool.py
+  set(_fileset_verbose_arg "")
+  if(THEROCK_VERBOSE)
+    set(_fileset_verbose_arg --verbose)
+  endif()
+
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
