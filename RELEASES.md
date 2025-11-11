@@ -263,6 +263,7 @@ also install `torch`, `torchaudio`, and `torchvision`.
 > | ------------- | ------------------ | ------------------- |
 > | 2.10          | 2.10               | 0.25                |
 > | 2.9           | 2.9                | 0.24                |
+> | 2.8           | 2.8                | 0.23                |
 > | 2.7           | 2.7.1a0            | 0.22.1              |
 >
 > For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
