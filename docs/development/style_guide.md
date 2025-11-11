@@ -278,6 +278,63 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 ```
 
+### Use named arguments for complicated function signatures
+
+Using positional arguments for functions that accept many arguments is error
+prone. Use keyword arguments to make function calls explicit and
+self-documenting.
+
+Benefits:
+
+- **Readability:** Clear what each argument represents at the call site
+- **Safety:** Prevents accidentally swapping arguments of the same type
+- **Maintainability:** Function signature can evolve without breaking calls
+
+> [!TIP]
+> Consider using named arguments when:
+>
+> - Function has more than 2-3 parameters
+> - Multiple parameters have the same type (especially booleans)
+> - The meaning of arguments isn't obvious from context
+
+❌ **Bad:** Positional arguments are error prone
+
+```python
+# What do these values mean? Easy to mix up the order
+result = build_artifacts(
+    "gfx942",
+    True,
+    False,
+    "/tmp/build",
+    ["rocblas", "hipblas"],
+)
+
+# Even worse: easy to swap boolean flags
+process_files(input_dir, output_dir, True, False, True)
+```
+
+✅ **Good:** Named arguments are clear and safe
+
+```python
+# Intent is immediately clear
+result = build_artifacts(
+    amdgpu_family="gfx942",
+    enable_testing=True,
+    use_ccache=False,
+    build_dir="/tmp/build",
+    components=["rocblas", "hipblas"],
+)
+
+# Flags are self-documenting
+process_files(
+    input_dir=input_dir,
+    output_dir=output_dir,
+    overwrite=True,
+    validate=False,
+    compress=True,
+)
+```
+
 ## Bash guidelines
 
 > [!WARNING]
