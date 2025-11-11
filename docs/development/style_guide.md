@@ -66,17 +66,114 @@ extend PEP 8 for our projects.
 
 ## GitHub Actions guidelines
 
-### Pin action versions
+### Pin action versions to commit SHAs
 
-Pin actions to specific commit SHAs or version tags for security and reproducibility.
+Pin actions to specific commit SHAs for security and reproducibility.
+
+❌ **Bad:** Using unpinned or branch references
+
+```yaml
+- uses: actions/checkout@main              # Branch can change unexpectedly
+- uses: actions/setup-python@v6.0.0        # Tag can be moved
+```
+
+✅ **Good:** Pin to specific commit SHA with the semantic version tag in a comment
+
+```yaml
+- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+- uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349  # v3.7.1
+```
+
+> [!TIP]
+> Use [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot)
+> to automatically update pinned actions while maintaining security.
 
 ### Prefer Python scripts over inline Bash
 
 Use Python scripts instead of inlined bash or bash scripts in workflow files.
 
+❌ **Bad:** Complex inline bash logic
+
+```yaml
+- name: Process artifacts
+  shell: bash
+  run: |
+    for family in $(echo "${{ inputs.amdgpu_families }}" | tr ',' ' '); do
+      if [[ -f "artifacts/${family}/rocm.tar.gz" ]]; then
+        tar -xzf "artifacts/${family}/rocm.tar.gz" -C "install/${family}"
+        echo "Extracted ${family}"
+      else
+        echo "::error::Missing artifact for ${family}"
+        exit 1
+      fi
+    done
+```
+
+✅ **Good:** Dedicated Python script with error handling
+
+```yaml
+- name: Process artifacts
+  run: |
+    python build_tools/process_artifacts.py \
+      --families "${{ inputs.amdgpu_families }}" \
+      --artifact-dir artifacts \
+      --install-dir install
+```
+
+Python scripts have several benefits:
+
+- **Testable:** Can be tested locally and with unit tests
+- **Debuggable:** Easier to debug with standard Python tools
+- **Portable:** Works consistently across platforms (Linux/Windows/macOS)
+- **Maintainable:** Better error handling and logging support
+- **Modular:** Functions can be shared across multiple scripts
+
 ### Use safe defaults for inputs
 
 Workflow inputs should have safe default values that work in common scenarios.
+
+❌ **Bad:** Unsafe defaults that could trigger unintended releases
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        type: choice
+        description: "Type of release to create"
+        options:
+          - dev
+          - nightly
+          - stable
+        default: nightly  # Unsafe: could automatically publish to production
+```
+
+✅ **Good:** Safe defaults that require explicit intent
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        type: choice
+        description: "Type of release to create"
+        options:
+          - dev
+          - nightly
+          - stable
+        default: dev  # Safe: development releases don't affect production
+
+      amdgpu_families:
+        type: string
+        description: "GPU families to build (comma-separated). Leave empty for default set."
+        default: ""  # Empty string handled gracefully in workflow logic
+```
+
+Good defaults should:
+
+- **Work without configuration:** Safe defaults that won't trigger production changes
+- **Be well-documented:** Clear descriptions explaining when to override
+- **Fail safely:** Prefer dev/test behavior over production releases
 
 ### Minimize permissions
 
@@ -85,26 +182,6 @@ Use minimal permissions (read access, no secrets for runs from forks) to limit s
 ### Separate build and test stages
 
 Use CPU runners for builds, separate build and test actions to optimize resource usage.
-
-### Add helpful logging
-
-Add logging where it helps with debugging and understanding workflow execution.
-
-### Keep Windows and Linux workflows in sync
-
-Maintain consistency between Windows and Linux workflow implementations.
-
-### Build minimal containers
-
-Build dependencies from source and bundle them instead of installing -dev packages in build dockerfiles (keep minimal).
-
-### Use qualified variable names
-
-Variable naming should qualify context/usage (e.g., `rocm_package_version` instead of `version`).
-
-### Design for local use first
-
-Write for local/developer use first, then have CI/CD follow documented steps.
 
 ## Appendix (move these into sections)
 
