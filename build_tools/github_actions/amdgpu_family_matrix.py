@@ -147,6 +147,14 @@ amdgpu_family_info_matrix_nightly = {
             "expect_pytorch_failure": True,
         },
     },
+    "gfx110x": {
+        "windows": {
+            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            "family": "gfx110X-dgpu",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+        },
+    },
     "gfx1150": {
         "linux": {
             "test-runs-on": "",
