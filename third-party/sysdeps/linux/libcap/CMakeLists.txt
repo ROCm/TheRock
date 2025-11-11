@@ -55,15 +55,34 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# Set variable for reused path to improve code maintainability
+set(_libcap_source_dir "${CMAKE_CURRENT_BINARY_DIR}/s")
+
+# Safety check: Prevent accidental deletion of system directories with 'rm -rf'
+# Two-layer protection:
+#   1. Blacklist: Reject critical system paths (/, /usr, /usr/local)
+#   2. Whitelist: Require path contains "build" (typical build directory pattern)
+# This allows flexibility for developers (e.g., /home/user/project/build) while
+# preventing accidental deletion of system directories or non-build paths.
+if(CMAKE_INSTALL_PREFIX STREQUAL "/" OR
+   CMAKE_INSTALL_PREFIX STREQUAL "/usr" OR
+   CMAKE_INSTALL_PREFIX STREQUAL "/usr/local" OR
+   NOT CMAKE_INSTALL_PREFIX MATCHES "/build")
+  message(FATAL_ERROR
+    "libcap: CMAKE_INSTALL_PREFIX appears to be outside a build directory.\n"
+    "  CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}\n"
+    "This is dangerous with 'rm -rf'. Please ensure it's within a build directory.")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${_libcap_source_dir}"
   COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${_libcap_source_dir}"
   COMMAND
-    make -C "${CMAKE_CURRENT_BINARY_DIR}/s/libcap"
+    make -C "${_libcap_source_dir}/libcap"
       -j "${PAR_JOBS}"
       prefix="${CMAKE_INSTALL_PREFIX}"
       lib=lib
@@ -71,7 +90,7 @@ add_custom_target(
       PAM_CAP=no
       RAISE_SETFCAP=no
   COMMAND
-    make -C "${CMAKE_CURRENT_BINARY_DIR}/s/libcap"
+    make -C "${_libcap_source_dir}/libcap"
       install
       prefix="${CMAKE_INSTALL_PREFIX}"
       lib=lib

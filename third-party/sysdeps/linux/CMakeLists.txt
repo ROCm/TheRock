@@ -10,7 +10,6 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_B
 
 # System deps that depend on the above.
 add_subdirectory(elfutils)
-add_subdirectory(grpc)
 
 therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
@@ -23,7 +22,6 @@ therock_provide_artifact(sysdeps
   SUBPROJECT_DEPS
     therock-bzip2
     therock-elfutils
-    therock-grpc
     therock-libcap
     therock-libdrm
     therock-liblzma

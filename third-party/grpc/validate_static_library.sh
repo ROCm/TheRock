@@ -1,9 +1,5 @@
 #!/bin/bash
 # Validates static library archives are well-formed and can be linked.
-# This script performs comprehensive validation including:
-# 1. Archive format validation
-# 2. Symbol completeness check
-# 3. Actual linkage test to ensure the library can be used
 
 set -e
 

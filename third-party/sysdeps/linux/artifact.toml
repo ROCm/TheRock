@@ -43,3 +43,7 @@ include = [
 # zstd
 [components.dev."third-party/sysdeps/linux/zstd/build/stage"]
 [components.lib."third-party/sysdeps/linux/zstd/build/stage"]
+
+# libcap
+[components.dev."third-party/sysdeps/linux/libcap/build/stage"]
+[components.lib."third-party/sysdeps/linux/libcap/build/stage"]

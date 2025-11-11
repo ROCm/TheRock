@@ -36,3 +36,8 @@ if(THEROCK_BUNDLE_SYSDEPS)
     add_subdirectory(sysdeps/windows)
   endif()
 endif()
+
+# gRPC (static library) depends on zlib from sysdeps
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_subdirectory(grpc)
+endif()

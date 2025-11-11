@@ -2,23 +2,11 @@
 set -e
 
 PREFIX="${1:?Expected install prefix argument}"
-PATCHELF="${PATCHELF:-patchelf}"
 THEROCK_SOURCE_DIR="${THEROCK_SOURCE_DIR:?THEROCK_SOURCE_DIR not defined}"
-Python3_EXECUTABLE="${Python3_EXECUTABLE:?Python3_EXECUTABLE not defined}"
 
-# Patch all shared libraries in lib/ with rocm_sysdeps_ prefix
-# This includes gRPC, protobuf, abseil, re2, cares, and ssl libraries
-echo "Patching shared libraries in $PREFIX/lib"
-
-# Find all .so files and patch them
-find "$PREFIX/lib" -name "*.so*" -type f | while read -r sofile; do
-  if file "$sofile" | grep -q "ELF.*shared object"; then
-    echo "Processing: $sofile"
-    "$Python3_EXECUTABLE" "$THEROCK_SOURCE_DIR/build_tools/patch_linux_so.py" \
-      --patchelf "${PATCHELF}" --add-prefix rocm_sysdeps_ \
-      "$sofile"
-  fi
-done
+# NOTE: gRPC is built as static libraries (.a), not shared libraries (.so).
+# SONAME rewriting is not needed for static libraries.
+# Only .pc and .cmake file modifications are necessary for relocatability.
 
 # Update .pc files to use relative paths
 if [ -d "$PREFIX/lib/pkgconfig" ]; then

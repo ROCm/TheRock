@@ -8,11 +8,17 @@ Python3_EXECUTABLE="${Python3_EXECUTABLE:?Python3_EXECUTABLE not defined}"
 
 "$Python3_EXECUTABLE" "$THEROCK_SOURCE_DIR/build_tools/patch_linux_so.py" \
   --patchelf "${PATCHELF}" --add-prefix rocm_sysdeps_ \
-  $PREFIX/lib/libcap.so \
-  $PREFIX/lib/libpsx.so
+  "$PREFIX/lib/libcap.so" \
+  "$PREFIX/lib/libpsx.so"
 
 # pc files are not output with a relative prefix. Sed it to relative.
-sed -i -E 's|^prefix=.+|prefix=${pcfiledir}/../..|' $PREFIX/lib/pkgconfig/*.pc
-sed -i -E 's|^exec_prefix=.+|exec_prefix=${pcfiledir}/../..|' $PREFIX/lib/pkgconfig/*.pc
-sed -i -E 's|^libdir=.+|libdir=${prefix}/lib|' $PREFIX/lib/pkgconfig/*.pc
-sed -i -E 's|^includedir=.+|includedir=${prefix}/include|' $PREFIX/lib/pkgconfig/*.pc
+if [ -d "$PREFIX/lib/pkgconfig" ]; then
+  for pcfile in "$PREFIX/lib/pkgconfig"/*.pc; do
+    if [ -f "$pcfile" ]; then
+      sed -i -E 's|^prefix=.+|prefix=${pcfiledir}/../..|' "$pcfile"
+      sed -i -E 's|^exec_prefix=.+|exec_prefix=${pcfiledir}/../..|' "$pcfile"
+      sed -i -E 's|^libdir=.+|libdir=${prefix}/lib|' "$pcfile"
+      sed -i -E 's|^includedir=.+|includedir=${prefix}/include|' "$pcfile"
+    fi
+  done
+fi
