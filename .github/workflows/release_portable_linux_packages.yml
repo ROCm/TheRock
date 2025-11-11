@@ -209,6 +209,10 @@ jobs:
             -- \
             "--version=${{ needs.setup_metadata.outputs.version }}"
 
+      - name: Grant ownership over output directory
+        run: |
+          sudo chown -R ${USER} ${{ env.OUTPUT_DIR }}
+
       - name: Build Report
         if: ${{ !cancelled() }}
         run: |
