@@ -1,6 +1,36 @@
 #!/usr/bin/env python
+"""Promotes release candidate packages to final releases.
+
+This script removes release candidate (rc) suffixes from package versions, such
+as promoting 7.10.0rc1 to 7.10.0. It handles both Python wheels (.whl) and
+source distributions (.tar.gz). This only updates the version strings in the packages but
+does not change any other package content.
+
+PREREQUISITES:
+  - pip install -r ./build_tools/packaging/requirements.txt
+
+SIDE EFFECTS:
+  - Creates NEW promoted package files side-by-side with the original files
+  - By default, DOES NOT delete original RC files (safe to run with no --delete flag)
+  - With --delete-old-on-success flag, removes original RC files after promotion
+  - If no arguments are given, it will promote all RC packages in the current directory.
+
+TYPICAL USAGE:
+  # Promote all RC packages in a directory (keeps original RC files):
+  python ./build_tools/packaging/promote_from_rc_to_final.py --input-dir=./release_candidates/rc1/
+
+  # Promote and delete original RC files on success:
+  python ./build_tools/packaging/promote_from_rc_to_final.py --input-dir=./release_candidates/rc1/ --delete-old-on-success
+
+  # Promote only specific files matching a pattern:
+  python ./build_tools/packaging/promote_from_rc_to_final.py --input-dir=./release_candidates/ --match-files='*rc2*'
+
+TESTING:
+  python ./build_tools/packaging/tests/promote_from_rc_to_final_test.py
+"""
 
 import argparse
+import shutil
 from packaging.version import Version
 import pathlib
 from pkginfo import Wheel
@@ -45,6 +75,7 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         "--input-dir",
         help="Path to the directory that contains .whl and .tar.gz files to promote",
         type=pathlib.Path,
+        required=True,
     )
     parser.add_argument(
         "--match-files",
@@ -56,6 +87,7 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         help="Deletes old file after successful promotion",
         action="store_true",
     )
+
     return parser.parse_args(argv)
 
 
@@ -63,7 +95,6 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
     # extract "rocm_sdk_core" from /tmp/tmp3swrl25j/wheel/rocm_sdk_core-7.10.0
     package_name_no_version = new_dir_path.name.split(str(new_version))[0][:-1]
 
-    print("BEFORE package_name_no_version:", package_name_no_version)
     # correct capitalization and hyphenation
     # of interest for amdgpu arch: wheels are all lower case
     # (e.g.  rocm_sdk_libraries_gfx94x_dcgpu-7.10.0rc1-py3-none-linux_x86_64.whl)
@@ -74,7 +105,6 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
             if len(file.name) == len(package_name_no_version):
                 package_name_no_version = file.name
 
-    print("AFTER package_name_no_version:", package_name_no_version)
     old_rocm_version = (
         str(old_version)
         if not "rocm" in str(old_version)
@@ -172,7 +202,8 @@ def promote_wheel(filename: pathlib.Path):
     return True
 
 
-def promote_targz(filename: pathlib.Path):
+# TODO TODO use Version and offer option to switch from "rc" to other release suffixes like "dev" or "a"
+def promote_targz_sdist(filename: pathlib.Path):
     print(f"Found tar.gz: {filename}")
 
     base_dir = filename.parent
@@ -247,6 +278,28 @@ def promote_targz(filename: pathlib.Path):
         return True
 
 
+def promote_targz_tarball(filename: pathlib.Path, delete: bool):
+    old_name = filename.name.removesuffix(".tar.gz")
+    old_version = Version(old_name.split("-")[-1])
+    new_version = Version(old_version.base_version)
+    new_name = old_name.replace(str(old_version), str(new_version)) + ".tar.gz"
+
+    print(f"Promoting tarball from rc to final: {filename.name}")
+    print(f"  Detected version: {old_version}")
+    print(f"  New version: {new_version}")
+
+    if delete:
+        os.rename(filename, filename.parent / new_name)
+        print(f"  Rename {filename.name} to {new_name}", end="")
+    else:
+        print(f"  Copy {filename.name} to {new_name}", end="")
+        shutil.copy2(filename, filename.parent / new_name)
+        print(" ...done")
+
+    print(f"Repacked {filename.name} as release {filename.parent}/{new_name}")
+    return True
+
+
 def main(input_dir: pathlib.Path, match_files: str = "*", delete: bool = False) -> None:
     print(f"Looking for .whl and .tar.gz in {input_dir}/{match_files}")
 
@@ -262,9 +315,12 @@ def main(input_dir: pathlib.Path, match_files: str = "*", delete: bool = False) 
                 print(f"Removing old wheel: {file}")
                 os.remove(file)
         elif file.suffixes[-1] == ".gz" and file.suffixes[-2] == ".tar":
-            if promote_targz(file) and delete:
-                print(f"Removing old .tar.gz: {file}")
-                os.remove(file)
+            if file.name.startswith("therock-dist"):
+                promote_targz_tarball(file, delete)
+            else:
+                if promote_targz_sdist(file) and delete:
+                    print(f"Removing old sdist .tar.gz: {file}")
+                    os.remove(file)
         else:
             print(f"File found that cannot be promoted: {file}")
 
