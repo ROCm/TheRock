@@ -19,10 +19,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   therock_subproject_fetch(therock-simde-sources
     SOURCE_DIR "${_source_dir}"
-    # TODO: Mirror to https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/simde-${SIMDE_VERSION}.tar.gz
     # Originally from: https://github.com/simd-everywhere/simde/archive/refs/tags/v${SIMDE_VERSION}.tar.gz
     # NOTE: Version must match SIMDE_VERSION variable above
-    URL https://github.com/simd-everywhere/simde/archive/refs/tags/v${SIMDE_VERSION}.tar.gz
+    URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/simde-${SIMDE_VERSION}.tar.gz
     URL_HASH SHA256=ed2a3268658f2f2a9b5367628a85ccd4cf9516460ed8604eed369653d49b25fb
     TOUCH "${_download_stamp}"
   )
