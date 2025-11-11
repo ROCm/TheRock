@@ -1,6 +1,12 @@
 # Dual-mode CMakeLists.txt for simde (meson-based)
 # Section 1: Super-project integration (when included from TheRock)
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  # simde uses meson for installation - detect it here in super-project context
+  find_program(MESON_BUILD meson)
+  if(NOT MESON_BUILD)
+    message(FATAL_ERROR "Building simde requires meson (install with: pip install meson)")
+  endif()
+
   # Fetch the simde source tarball
   set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
   set(_download_stamp "${_source_dir}/download.stamp")
@@ -40,6 +46,7 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(SIMDE_BUILD)
 
+# MESON_BUILD is passed in from super-project
 if(NOT MESON_BUILD)
   message(FATAL_ERROR "Missing MESON_BUILD from super-project")
 endif()
