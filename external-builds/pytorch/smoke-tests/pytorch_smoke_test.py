@@ -1,9 +1,17 @@
 import torch
 import pytest
+import logging
 
 
 class TestROCmAvailability:
     def test_rocm_available(self):
+        logging.basicConfig(level=logging.INFO)
+        if torch.cuda.is_available():
+            cnt_gpu = torch.cuda.device_count()
+            logging.info("GPU count visible for pytorch: " + str(cnt_gpu))
+            for ii in range(cnt_gpu):
+                gpu_name = torch.cuda.get_device_name(ii)
+                logging.info("GPU[" + str(ii) + "]: " + gpu_name)
         assert (
             torch.cuda.is_available()
         ), "ROCm is not available or not detected by PyTorch"
