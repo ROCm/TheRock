@@ -76,6 +76,16 @@ jobs:
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
+      # safe.directory must be set before Runner Health Status
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: |
+          python ./build_tools/health_status.py
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
