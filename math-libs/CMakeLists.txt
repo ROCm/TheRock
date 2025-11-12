@@ -130,8 +130,6 @@ if(THEROCK_ENABLE_PRIM)
         rocm-cmake
         therock-googletest
         rocPRIM
-        # rocSPARSE
-        # rocSOLVER
       RUNTIME_DEPS
         hip-clr
     )
