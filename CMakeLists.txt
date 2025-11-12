@@ -295,7 +295,7 @@ therock_add_feature(FFT
 )
 therock_add_feature(SPARSE
   GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
+  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse)"
   REQUIRES COMPILER HIP_RUNTIME BLAS PRIM ${_optional_profiler_requirements}
 )
 if(NOT WIN32)
@@ -318,6 +318,19 @@ if(NOT WIN32)
   cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL "Enables composable kernel in MIOpen" ON ${THEROCK_ENABLE_COMPOSABLE_KERNEL} OFF)
 endif()
 
+cmake_dependent_option(THEROCK_ROCWMMA_USE_ROCBLAS "Enables rocBLAS validation in rocWMMA" ON "THEROCK_ENABLE_ROCWMMA;THEROCK_ENABLE_BLAS" OFF)
+cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS "Enables building rocWMMA benchmarks" OFF "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
+if(THEROCK_ROCWMMA_USE_ROCBLAS)
+  set(_rocwmma_blas_requirements "BLAS")
+else()
+  set(_rocwmma_blas_requirements "")
+endif()
+therock_add_feature(ROCWMMA
+  GROUP MATH_LIBS
+  DESCRIPTION "Enables rocWMMA"
+  REQUIRES COMPILER HIP_RUNTIME ${_rocwmma_blas_requirements}
+)
+
 # ML-Libs Features.
 therock_add_feature(MIOPEN
   GROUP ML_LIBS
@@ -332,6 +345,12 @@ if(NOT WIN32)
     GROUP ML_LIBS
     DESCRIPTION "Enables the hipDNN project"
     REQUIRES COMPILER HIP_RUNTIME
+  )
+
+  therock_add_feature(MIOPEN_PLUGIN
+    GROUP ML_LIBS
+    DESCRIPTION "Enables the MIOpen plugin project"
+    REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
   )
 endif()
 
