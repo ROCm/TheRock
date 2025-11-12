@@ -13,8 +13,9 @@ discussion: [TBD - Add GitHub issue/PR link]
 RDC (ROCm Data Center Tool) is a datacenter GPU monitoring and administration tool that provides telemetry, diagnostics, and management capabilities for AMD GPUs. Currently distributed only through system packages (DEB/RPM), RDC needs to be integrated into TheRock to create portable, distribution-neutral builds suitable for containerized deployments.
 
 RDC operates in two distinct modes:
+
 1. **Embedded Mode**: Direct library access for in-process GPU monitoring
-2. **Standalone Mode**: Client-server architecture with rdcd daemon and rdci CLI
+1. **Standalone Mode**: Client-server architecture with rdcd daemon and rdci CLI
 
 This RFC defines how to integrate RDC into TheRock's build system with gRPC statically linked for the standalone components, ensuring portability across Linux distributions without runtime dependency conflicts.
 
@@ -24,26 +25,26 @@ RDC produces the following build artifacts:
 
 #### Core Libraries (Always Built)
 
-| Artifact | Size | Mode | Direct Dependencies | Purpose |
-|----------|------|------|-------------------|---------|
-| **librdc_bootstrap.so** | ~200KB | All | pthread, dl | Plugin loader, core utilities |
-| **librdc.so** | ~2MB | All | rdc_bootstrap, pthread, amd_smi, libcap | Main RDC functionality, embedded mode |
+| Artifact                | Size   | Mode | Direct Dependencies                     | Purpose                               |
+| ----------------------- | ------ | ---- | --------------------------------------- | ------------------------------------- |
+| **librdc_bootstrap.so** | ~200KB | All  | pthread, dl                             | Plugin loader, core utilities         |
+| **librdc.so**           | ~2MB   | All  | rdc_bootstrap, pthread, amd_smi, libcap | Main RDC functionality, embedded mode |
 
 #### Standalone Mode Only
 
-| Artifact | Size | Mode | Direct Dependencies | Purpose |
-|----------|------|------|-------------------|---------|
-| **librdc_client.so** | ~500KB | Standalone | rdc_bootstrap, pthread, rt, **gRPC::grpc++**, dl | gRPC client library |
-| **rdcd** | ~2MB | Standalone | pthread, rt, **gRPC::grpc++**, libcap, dl, amd_smi, rdc_bootstrap | Daemon server |
-| **rdci** | ~1MB | Standalone | pthread, dl, **gRPC::grpc++**, rdc_bootstrap | CLI client |
+| Artifact             | Size   | Mode       | Direct Dependencies                                               | Purpose             |
+| -------------------- | ------ | ---------- | ----------------------------------------------------------------- | ------------------- |
+| **librdc_client.so** | ~500KB | Standalone | rdc_bootstrap, pthread, rt, **gRPC::grpc++**, dl                  | gRPC client library |
+| **rdcd**             | ~2MB   | Standalone | pthread, rt, **gRPC::grpc++**, libcap, dl, amd_smi, rdc_bootstrap | Daemon server       |
+| **rdci**             | ~1MB   | Standalone | pthread, dl, **gRPC::grpc++**, rdc_bootstrap                      | CLI client          |
 
 #### Optional Plugin Modules
 
-| Artifact | Size | Build Flag | Direct Dependencies | Purpose |
-|----------|------|------------|-------------------|---------|
-| **librdc_rocr.so** | ~1MB | BUILD_RUNTIME=ON | rdc, rdc_bootstrap, hsa-runtime64, pthread, dl | ROCr diagnostics |
+| Artifact           | Size   | Build Flag        | Direct Dependencies                                  | Purpose              |
+| ------------------ | ------ | ----------------- | ---------------------------------------------------- | -------------------- |
+| **librdc_rocr.so** | ~1MB   | BUILD_RUNTIME=ON  | rdc, rdc_bootstrap, hsa-runtime64, pthread, dl       | ROCr diagnostics     |
 | **librdc_rocp.so** | ~500KB | BUILD_PROFILER=ON | hsa-runtime64, rocprofiler-sdk, pthread, dl, amd_smi | Profiler integration |
-| **librdc_rvs.so** | ~200KB | BUILD_RVS=ON | rdc, rdc_bootstrap, rvs, pthread, dl | Validation suite |
+| **librdc_rvs.so**  | ~200KB | BUILD_RVS=ON      | rdc, rdc_bootstrap, rvs, pthread, dl                 | Validation suite     |
 
 The critical observation is that **embedded mode requires only ~2.2MB** of libraries (no gRPC), while **standalone mode adds ~45MB** of gRPC dependencies.
 
@@ -52,6 +53,7 @@ The critical observation is that **embedded mode requires only ~2.2MB** of libra
 RDC will use static linking for gRPC dependencies to ensure maximum portability:
 
 #### Static-Linked Architecture
+
 ```
 portable-rdc/
 ├── bin/
@@ -70,6 +72,7 @@ portable-rdc/
 ```
 
 **Static Linking Rationale:**
+
 - Avoids SONAME conflicts with system gRPC libraries
 - Eliminates need for symbol versioning management
 - More portable across glibc versions
@@ -78,6 +81,7 @@ portable-rdc/
 
 **Future Optimization (Post-Initial Implementation):**
 Create a "busy-box" style `librdc_grpc.so` containing:
+
 - `rdcd_main()` and `rdci_main()` entry points
 - All gRPC dependencies statically linked with hidden visibility
 - Light-weight executable shims that call into the shared library
@@ -86,44 +90,50 @@ Create a "busy-box" style `librdc_grpc.so` containing:
 ### Goals
 
 1. Integrate RDC into TheRock build system under `dctools/` directory
-2. Add gRPC to TheRock's third-party dependencies for static linking
-3. Create portable, distribution-neutral builds of all RDC components
-4. Build both embedded and standalone modes from the outset
-5. Maintain compatibility with existing system package installations
+1. Add gRPC to TheRock's third-party dependencies for static linking
+1. Create portable, distribution-neutral builds of all RDC components
+1. Build both embedded and standalone modes from the outset
+1. Maintain compatibility with existing system package installations
 
 ### Non-Goals
 
 1. Replacing the system package distribution
-2. Modifying the core RDC architecture or APIs
-3. Supporting Windows or macOS (Linux x86_64 only initially)
-4. Python wheel packaging (deferred to future work)
+1. Modifying the core RDC architecture or APIs
+1. Supporting Windows or macOS (Linux x86_64 only initially)
+1. Python wheel packaging (deferred to future work)
 
 ## Dependencies
 
 ### Embedded Mode Dependencies
+
 - **amd-smi-lib** (>=26.0.0): Required for GPU telemetry/monitoring
 - **libcap**: Linux capabilities for privileged operations
 - **pthread, rt, dl**: Standard system libraries
 
 ### Standalone Mode Dependencies
+
 The standalone mode (rdcd daemon and rdci CLI) requires gRPC v1.67.1 and its transitive dependencies:
 
 #### gRPC Stack (~40-50MB total)
+
 - **libgrpc++.so.1.67** (~5MB): C++ gRPC library
 - **libgrpc.so.41** (~10MB): Core gRPC C library
 - **libprotobuf.so.3.25** (~3MB): Protocol buffer runtime
-- **libabsl_*.so** (~20MB): 15+ Abseil libraries (strings, time, synchronization, etc.)
-- **libupb*.so** (~2MB): Micro-protobuf implementation
+- **libabsl\_\*.so** (~20MB): 15+ Abseil libraries (strings, time, synchronization, etc.)
+- **libupb*.so*\* (~2MB): Micro-protobuf implementation
 - **libre2.so** (~500KB): Regular expression engine
 - **System libraries**: OpenSSL (libssl, libcrypto), zlib
 
 #### Version Requirement Rationale
+
 RDC specifically requires gRPC v1.67.1 due to:
+
 - Clang 18+ ABI compatibility fixes in Abseil
 - Protobuf 27.x+ requirement
 - Symbol versioning improvements for manylinux environments
 
 ### Optional Module Dependencies
+
 - **hsa-runtime64**: Required for librdc_rocr.so (ROCr diagnostics)
 - **rocprofiler-sdk** (>=1.1.0): Required for librdc_rocp.so (profiler integration)
 - **rvs**: Required for librdc_rvs.so (validation suite)
@@ -187,6 +197,7 @@ add_dependencies(therock-third-party therock-grpc)
 **Options for SSL handling:**
 
 1. **Option A: Use BoringSSL (Recommended)**
+
    - Built statically from gRPC's git submodule
    - Google's fork of OpenSSL, designed for static linking
    - No licensing concerns (ISC license)
@@ -194,14 +205,16 @@ add_dependencies(therock-third-party therock-grpc)
    - Self-contained, no system dependency
    - Trade-off: Increases binary size by ~2-3MB
 
-2. **Option B: Add OpenSSL to TheRock sysdeps**
+1. **Option B: Add OpenSSL to TheRock sysdeps**
+
    - Build OpenSSL as shared library with custom SONAME
    - Apply symbol versioning patches for isolation
    - Distribute with ROCm as `librocm_ssl.so`
    - Complex but follows ROCm precedent (see libdrm)
    - Trade-off: Significant maintenance burden
 
-3. **Option C: Require system OpenSSL (Not portable)**
+1. **Option C: Require system OpenSSL (Not portable)**
+
    - Use `-DgRPC_SSL_PROVIDER=package`
    - Fails portability goal
    - Not recommended for TheRock
@@ -209,6 +222,7 @@ add_dependencies(therock-third-party therock-grpc)
 **Decision:** Use Option A (BoringSSL) for initial implementation. RDC commonly runs in insecure mode for development/testing (using the `-u` flag), making the SSL dependency overhead acceptable for the portability gained.
 
 **Key Points:**
+
 - `BUILD_SHARED_LIBS=OFF` ensures gRPC and all dependencies built as static
 - Using "module" provider for most dependencies ensures consistency
 - BoringSSL statically linked and symbols hidden
@@ -232,6 +246,7 @@ therock_cmake_subproject_declare(therock-grpc
 ```
 
 **Important Notes:**
+
 - gRPC and all its dependencies (protobuf, abseil, BoringSSL) must be built with hidden visibility
 - This ensures symbols are hidden when statically linked into any binary
 - If gRPC doesn't have explicit visibility control knobs, it may need to be patched
@@ -240,6 +255,7 @@ therock_cmake_subproject_declare(therock-grpc
 
 **Verification:**
 After building, verify symbol visibility:
+
 ```bash
 nm -C librdc_client.so | grep -c " T grpc::"  # Should be 0 or very few
 ```
@@ -247,6 +263,7 @@ nm -C librdc_client.so | grep -c " T grpc::"  # Should be 0 or very few
 ### Build Structure in TheRock
 
 #### Option 1: Monolithic Build (Recommended Initially)
+
 Keep RDC as a single subproject with conditional features:
 
 ```cmake
@@ -269,6 +286,7 @@ therock_cmake_subproject_declare(rdc
 
 **RDC Modernization Note:**
 RDC's CMakeLists.txt should be updated to use modern CMake package discovery:
+
 ```cmake
 # Replace this pattern in RDC:
 find_package(gRPC ${GRPC_DESIRED_VERSION} HINTS ${GRPC_ROOT} CONFIG REQUIRED)
@@ -279,7 +297,9 @@ find_package(gRPC REQUIRED CONFIG)
 ```
 
 #### Option 2: Split Subprojects (Future Consideration)
+
 If build complexity warrants, split into:
+
 - `rdc-embedded`: Core libraries without gRPC
 - `rdc-standalone`: Daemon/CLI with static gRPC
 
@@ -302,37 +322,43 @@ therock/
 ### Important Implementation Notes
 
 1. **gRPC Static Build Confirmation**:
+
    - Building gRPC with `-DBUILD_SHARED_LIBS=OFF` will automatically build all dependencies (protobuf, abseil, re2, etc.) as static libraries when using the "module" provider
    - This has been confirmed to work correctly in gRPC v1.67.1
 
-2. **Symbol Duplication Awareness**:
+1. **Symbol Duplication Awareness**:
+
    - Recent gRPC versions (1.64.0+) have known issues with symbol duplication in static builds
    - Must use `-Wl,--exclude-libs=ALL` to prevent symbol pollution
    - Test thoroughly for "multiple definition" linker errors
 
-3. **Future ODR Considerations**:
+1. **Future ODR Considerations**:
+
    - If protobuf, abseil, or other gRPC dependencies ever need standalone use in TheRock, they MUST be added as separate third-party dependencies
    - Current approach assumes gRPC is the sole consumer of these libraries
    - Document this constraint prominently in the gRPC third-party CMakeLists.txt
 
-4. **RDC Insecure Mode Support**:
+1. **RDC Insecure Mode Support**:
+
    - RDC extensively supports running without SSL/TLS via the `-u` flag
    - Common for development, testing, and trusted network deployments
    - SSL library still required at build time but not used at runtime in this mode
    - This reduces the practical impact of the SSL dependency
 
-
 ## Alternatives Considered
 
 ### Alternative 1: Vendor Shared gRPC Libraries
+
 **Approach**: Bundle gRPC as shared libraries with custom SONAME and symbol versioning.
 
 **Pros**:
+
 - Smaller individual binary sizes
 - Shared code between rdcd, rdci, and librdc_client.so
 - Easier to update gRPC independently
 
 **Cons**:
+
 - Complex SONAME management to avoid conflicts
 - Symbol versioning prone to errors
 - RPATH complexity for finding bundled libraries
@@ -341,14 +367,17 @@ therock/
 **Decision**: Rejected in favor of static linking for simplicity and portability
 
 ### Alternative 2: Use System gRPC
+
 **Approach**: Require users to install gRPC from their distribution.
 
 **Pros**:
+
 - No vendoring needed
 - Reduces distribution size
 - Leverages system package management
 
 **Cons**:
+
 - Most distributions lack gRPC 1.67.1
 - Version incompatibility issues
 - Not portable across distributions
@@ -357,14 +386,17 @@ therock/
 **Decision**: Rejected for portable distribution
 
 ### Alternative 3: Embedded-Only Mode
+
 **Approach**: Build only embedded mode, exclude standalone entirely.
 
 **Pros**:
+
 - No gRPC dependency at all
 - Tiny footprint (~2.2MB)
 - Simple build and distribution
 
 **Cons**:
+
 - No daemon capability (rdcd)
 - No CLI tool (rdci)
 - No remote monitoring
@@ -380,20 +412,25 @@ therock/
 ## Migration Path
 
 ### For Existing System Package Users
+
 No changes required. System packages continue to work as before. The TheRock build will produce compatible binaries that can be packaged using existing DEB/RPM infrastructure.
 
 ### For Containerized Deployments
+
 The statically-linked binaries will be fully portable across Linux distributions with glibc ≥2.17, enabling simple tarball distribution for container images.
 
 ## Open Questions
 
 1. **Module inclusion policy**: Which optional modules to include by default?
+
    - Recommendation: Include librdc_rocr.so by default, make librdc_rocp.so and librdc_rvs.so optional
 
-2. **Binary size optimization**: Should we prioritize the "busy-box" optimization immediately?
+1. **Binary size optimization**: Should we prioritize the "busy-box" optimization immediately?
+
    - Recommendation: Defer to post-initial implementation, ship working solution first
 
-3. **BoringSSL vs OpenSSL sysdep**: Should we reconsider if SSL usage becomes more critical?
+1. **BoringSSL vs OpenSSL sysdep**: Should we reconsider if SSL usage becomes more critical?
+
    - Current decision: BoringSSL for simplicity, given RDC's common use of insecure mode
    - Re-evaluate if other ROCm components need SSL/TLS functionality
 
@@ -402,12 +439,12 @@ The statically-linked binaries will be fully portable across Linux distributions
 This RFC establishes the integration of RDC into TheRock with the following key decisions:
 
 1. **Add gRPC to TheRock third-party** built as static libraries with BoringSSL
-2. **Static link gRPC** into RDC standalone components with hidden visibility
-3. **Use BoringSSL** bundled with gRPC to avoid OpenSSL dependency complexity
-4. **Build all modes** (embedded and standalone) from the outset
-5. **Use dctools/ directory** for datacenter tool organization
-6. **Defer Python packaging** to future work
-7. **Single monolithic build** initially, with option to split later if needed
+1. **Static link gRPC** into RDC standalone components with hidden visibility
+1. **Use BoringSSL** bundled with gRPC to avoid OpenSSL dependency complexity
+1. **Build all modes** (embedded and standalone) from the outset
+1. **Use dctools/ directory** for datacenter tool organization
+1. **Defer Python packaging** to future work
+1. **Single monolithic build** initially, with option to split later if needed
 
 The approach prioritizes portability and distribution simplicity over binary size, accepting larger executables (50MB each for rdcd/rdci/librdc_client.so) in exchange for avoiding runtime dependency management complexity. The use of BoringSSL provides a self-contained solution without system SSL dependencies, which is acceptable given RDC's extensive support for insecure mode in development environments.
 
