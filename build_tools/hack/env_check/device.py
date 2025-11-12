@@ -209,15 +209,35 @@ class SystemInfo:
         if self.is_windows:
             gpu_status_list = []
 
-            gpu_result = subprocess.run(
-                ["wmic", "path", "win32_VideoController", "get", "Name"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-            )
-            gpu_result_lines = [
-                line.strip() for line in gpu_result.stdout.splitlines() if line.strip()
-            ]
+            try:
+                gpu_result = subprocess.run(
+                    ["wmic", "path", "win32_VideoController", "get", "Name"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                )
+                gpu_result_lines = [
+                    line.strip() for line in gpu_result.stdout.splitlines() if line.strip()
+                ]
+            except FileNotFoundError:
+                # wmic not found, try PowerShell fallback
+                try:
+                    ps_cmd = [
+                        "powershell",
+                        "-Command",
+                        "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"
+                    ]
+                    gpu_result = subprocess.run(
+                        ps_cmd,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
+                    gpu_result_lines = [
+                        line.strip() for line in gpu_result.stdout.splitlines() if line.strip()
+                    ]
+                except Exception:
+                    return []
             gpu_count = len(gpu_result_lines[1:]) if len(gpu_result_lines) > 1 else []
 
             for i in range(0, gpu_count):
@@ -404,18 +424,15 @@ class SystemInfo:
             )
 
             ccache.append([proc.stdout.splitlines()])
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        except subprocess.CalledProcessError:
             ccache.append(["Ccache not detected!"])
             ccache.append([""])
             return ccache
 
-        try:
-            proc = subprocess.run(
-                ["ccache", "--show-config"], capture_output=True, text=True, check=True
-            )
-            ccache.append([proc.stdout.splitlines()])
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            ccache.append([""])
+        proc = subprocess.run(
+            ["ccache", "--show-config"], capture_output=True, text=True, check=True
+        )
+        ccache.append([proc.stdout.splitlines()])
 
         return ccache
 
