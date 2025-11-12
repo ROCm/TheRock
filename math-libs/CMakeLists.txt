@@ -114,7 +114,7 @@ if(THEROCK_ENABLE_PRIM)
     # that depend on rocPRIM
     therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
@@ -124,8 +124,6 @@ if(THEROCK_ENABLE_PRIM)
         -DUSE_SYSTEM_LIB=ON
       COMPILER_TOOLCHAIN
         amd-hip
-      DIR_PREFIX
-        tests_
       BUILD_DEPS
         rocm-cmake
         therock-googletest
