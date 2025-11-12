@@ -181,6 +181,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
+        if args.rocprofiler-compute:
+            extra_artifacts.append("rocprofiler-compute")
 
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
@@ -353,6 +355,13 @@ def main(argv):
         default=False,
         help="Include 'rccl' artifacts",
         action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocprofiler-compute",
+        default=False,
+        help="Include 'rocprofiler-compute' artifacts",
+        action=argparse.BooleanOptionalAction
     )
 
     artifacts_group.add_argument(
