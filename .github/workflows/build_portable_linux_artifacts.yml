@@ -64,7 +64,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:8c1e158ecac63d4cb47c012d44ee4c9d792110719401038da2c79505d758b44a
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64:stage-rocprofiler-systems@sha256:97f0cf3fde1a3094946513d67a42524182bae587a5f08a30ec675f398f123ffb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini

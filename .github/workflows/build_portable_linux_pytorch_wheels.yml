@@ -108,7 +108,7 @@ jobs:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:8c1e158ecac63d4cb47c012d44ee4c9d792110719401038da2c79505d758b44a
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64:stage-rocprofiler-systems@sha256:97f0cf3fde1a3094946513d67a42524182bae587a5f08a30ec675f398f123ffb
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
