@@ -105,6 +105,46 @@ Benefits:
 > ["Corresponding tools" documentation](https://docs.python.org/3/library/pathlib.html#corresponding-tools)
 > for a table mapping from various `os` functions to `Path` equivalents.
 
+### Don't make assumptions about the current working directory
+
+Scripts should be runnable from the repository root, their script subdirectory,
+and other locations. They should not assume any particular current working
+directory.
+
+Benefits:
+
+- **Location-independent:** Script works from any directory
+- **Explicit:** Clear where files are relative to the script
+- **CI-friendly:** Works in CI environments with varying working directories,
+  especially when scripts and workflows are used in other repositories
+
+❌ **Bad:** Assuming script runs from a specific directory
+
+```python
+from pathlib import Path
+
+# Assumes script is run from repository root
+config_file = Path("build_tools/config.json")
+
+# Assumes script is run from its own directory
+data_file = Path("../data/artifacts.tar.gz")
+```
+
+✅ **Good:** Paths relative to the script location
+
+```python
+from pathlib import Path
+
+# Establish script's location as reference point
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent
+
+# Build paths relative to script location
+config_file = THIS_SCRIPT_DIR / "config.json"
+# Build paths relative to repository root
+version_file = THEROCK_DIR / "version.json"
+```
+
 ### Use `argparse` for CLI flags
 
 Use [`argparse`](https://docs.python.org/3/library/argparse.html) for
