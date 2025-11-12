@@ -221,13 +221,20 @@ LibraryEntry(
     "",
     "lib/rocm_sysdeps/lib",
 )
-
+LibraryEntry(
+    "rocm-openblas",
+    "core",
+    "librocm-openblas.so.*",
+    "rocm-openblas*.dll",
+    "lib/host-math/lib",
+)
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
 LibraryEntry("hiprand", "libraries", "libhiprand.so*", "hiprand*.dll")
 LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
+LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
@@ -236,7 +243,6 @@ LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
 # hiprtc-builtins
 # rocblas
 # rocfft
-# rocm-openblas
 # rocrand
 # rocsolver
 # rocsparse

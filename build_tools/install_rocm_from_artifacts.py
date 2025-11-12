@@ -14,8 +14,8 @@ python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
-    [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--prim | --no-prim]
-    [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
+    [--blas | --no-blas] [--fft | --no-fft] [--hipdnn | --no-hipdnn] [--miopen | --no-miopen] [--miopen-plugin | --no-miopen-plugin]
+    [--prim | --no-prim] [--rand | --no-rand] [--rccl | --no-rccl] [--tests | --no-tests] [--base-only]
 
 Examples:
 - Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 14474448215
@@ -32,7 +32,7 @@ Examples:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0rc20250416 \
-        --amdgpu-family gfx110X-all \
+        --amdgpu-family gfx110X-dgpu \
         --output-dir build
     ```
 - Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
@@ -161,7 +161,16 @@ def retrieve_artifacts_by_run_id(args):
     if args.base_only:
         argv.extend(base_artifact_patterns)
     elif any(
-        [args.blas, args.fft, args.hipdnn, args.miopen, args.prim, args.rand, args.rccl]
+        [
+            args.blas,
+            args.fft,
+            args.hipdnn,
+            args.miopen,
+            args.miopen_plugin,
+            args.prim,
+            args.rand,
+            args.rccl,
+        ]
     ):
         argv.extend(base_artifact_patterns)
 
@@ -175,6 +184,9 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn")
         if args.miopen:
             extra_artifacts.append("miopen")
+            argv.extend("rand_dev")
+        if args.miopen_plugin:
+            extra_artifacts.append("miopen-plugin")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
@@ -331,6 +343,13 @@ def main(argv):
         "--miopen",
         default=False,
         help="Include 'miopen' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--miopen-plugin",
+        default=False,
+        help="Include 'miopen-plugin' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
