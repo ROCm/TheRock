@@ -193,8 +193,8 @@ In the `retrieve_artifacts_by_run_id` function, add your component to the condit
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
-        if args.rocprofiler-compute:
-            extra_artifacts.append("rocprofiler-compute")
+        if args.rocprofiler:
+            extra_artifacts.append("rocprofiler")
         if args.newcomponent:
             extra_artifacts.append("newcomponent")
 
