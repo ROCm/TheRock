@@ -110,9 +110,9 @@ if(THEROCK_ENABLE_PRIM)
     # rocPRIM tests
     ##############################################################################
 
-    # rocPRIM_Tests declared as a separate target to stop the tests from clogging up the critical build path for libs
+    # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
     # that depend on rocPRIM
-    therock_cmake_subproject_declare(rocPRIM_Tests
+    therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
       BACKGROUND_BUILD
@@ -135,11 +135,11 @@ if(THEROCK_ENABLE_PRIM)
       RUNTIME_DEPS
         hip-clr
     )
-    therock_cmake_subproject_glob_c_sources(rocPRIM_Tests
+    therock_cmake_subproject_glob_c_sources(rocPRIM_tests
       SUBDIRS
         .
     )
-    therock_cmake_subproject_activate(rocPRIM_Tests)
+    therock_cmake_subproject_activate(rocPRIM_tests)
 
   endif()
 
@@ -200,7 +200,7 @@ if(THEROCK_ENABLE_PRIM)
       dev
       doc
       test
-    SUBPROJECT_DEPS rocPRIM hipCUB rocThrust rocPRIM_Tests
+    SUBPROJECT_DEPS rocPRIM hipCUB rocThrust rocPRIM_tests
   )
 endif(THEROCK_ENABLE_PRIM)
 
