@@ -217,7 +217,9 @@ class SystemInfo:
                     encoding="utf-8",
                 )
                 gpu_result_lines = [
-                    line.strip() for line in gpu_result.stdout.splitlines() if line.strip()
+                    line.strip()
+                    for line in gpu_result.stdout.splitlines()
+                    if line.strip()
                 ]
             except FileNotFoundError:
                 # wmic not found, try PowerShell fallback
@@ -225,7 +227,7 @@ class SystemInfo:
                     ps_cmd = [
                         "powershell",
                         "-Command",
-                        "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"
+                        "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name",
                     ]
                     gpu_result = subprocess.run(
                         ps_cmd,
@@ -234,7 +236,9 @@ class SystemInfo:
                         encoding="utf-8",
                     )
                     gpu_result_lines = [
-                        line.strip() for line in gpu_result.stdout.splitlines() if line.strip()
+                        line.strip()
+                        for line in gpu_result.stdout.splitlines()
+                        if line.strip()
                     ]
                 except Exception:
                     return []
