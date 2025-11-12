@@ -175,6 +175,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_MIOPEN=ON`        | Enables MIOpen                                |
 | `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON` | Enables MIOpen_plugin                         |
 | `-DTHEROCK_ENABLE_HIPDNN=ON`        | Enables hipDNN                                |
+| `-DTHEROCK_ENABLE_ROCWMMA=ON`       | Enables rocWMMA                               |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
