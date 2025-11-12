@@ -1,5 +1,9 @@
 # Use LLVM tools for stripping / objcopy
+{% if disable_rpm_strip %}
+%global __strip   /bin/true
+{% else %}
 %global __strip   /usr/bin/llvm-strip
+{% endif %}
 %global __objcopy /usr/bin/llvm-objcopy
 
 

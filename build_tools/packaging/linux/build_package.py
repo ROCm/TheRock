@@ -261,7 +261,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """
     print_function_name()
     rules_file = Path(deb_dir) / "rules"
-    disable_dh_strip = is_key_defined(pkg_info, "Disable_DH_STRIP")
+    disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
@@ -511,6 +511,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "install_prefix": config.install_prefix,
         "requires": requires,
         "rpmrecommends": rpmrecommends,
+        "disable_rpm_strip": is_rpm_stripping_disabled(pkginfo),
         "disable_debug_package": is_debug_package_disabled(pkginfo),
         "sourcedir_list": sourcedir_list,
     }
