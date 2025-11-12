@@ -124,7 +124,7 @@ if(THEROCK_ENABLE_PRIM)
     RUNTIME_DEPS
       hip-clr
   )
-  therock_cmake_subproject_glob_c_sources(rocPRIM
+  therock_cmake_subproject_glob_c_sources(hipCUB
     SUBDIRS
       .
   )
