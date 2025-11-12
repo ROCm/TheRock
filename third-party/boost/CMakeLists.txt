@@ -1,13 +1,19 @@
 # Installs a limited subset of boost sufficient to build ROCM subprojects.
 # Currently, this includes:
 #   atomic
+#   chrono
+#   date_time
 #   filesystem
 #   multi_index
 #   system
+#   thread
+#   timer
 #   Static libraries only
 #   Release build
 #   Multithreaded
 # See cmake_project/CMakeLists.txt for details.
+
+
 set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
 set(_download_stamp "${_source_dir}/download.stamp")
 
@@ -28,7 +34,7 @@ therock_cmake_subproject_declare(therock-boost
   OUTPUT_ON_FAILURE
   CMAKE_ARGS
     "-DBOOST_SOURCE_DIR=${_source_dir}"
-    "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,multi_index,system"
+    "-DTHEROCK_BOOST_LIBRARIES=atomic,chrono,date_time,filesystem,multi_index,system,thread,timer"
   EXTRA_DEPENDS
     "${_download_stamp}"
 )
@@ -40,9 +46,13 @@ set(_boost_version 1.87.0)
 # kept in sync with above library list.
 therock_cmake_subproject_provide_package(therock-boost Boost "lib/cmake/Boost-${_boost_version}")
 therock_cmake_subproject_provide_package(therock-boost boost_atomic "lib/cmake/boost_atomic-${_boost_version}")
+therock_cmake_subproject_provide_package(therock-boost boost_chrono "lib/cmake/boost_chrono-${_boost_version}")
+therock_cmake_subproject_provide_package(therock-boost boost_date_time "lib/cmake/boost_date_time-${_boost_version}")
 therock_cmake_subproject_provide_package(therock-boost boost_filesystem "lib/cmake/boost_filesystem-${_boost_version}")
 therock_cmake_subproject_provide_package(therock-boost boost_headers "lib/cmake/boost_headers-${_boost_version}")
 therock_cmake_subproject_provide_package(therock-boost boost_system "lib/cmake/boost_system-${_boost_version}")
+therock_cmake_subproject_provide_package(therock-boost boost_thread "lib/cmake/boost_thread-${_boost_version}")
+therock_cmake_subproject_provide_package(therock-boost boost_timer "lib/cmake/boost_timer-${_boost_version}")
 therock_cmake_subproject_activate(therock-boost)
 
 add_dependencies(therock-third-party therock-boost)

@@ -99,12 +99,11 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DHIP_PLATFORM=amd
       -DCMAKE_C_COMPILER=gcc
       -DCMAKE_CXX_COMPILER=g++
-      -DROCPROFSYS_USE_ROCM=ON
-      -DROCPROFSYS_BUILD_ELFUTILS=ON
-      -DROCPROFSYS_BUILD_TBB=ON
-      -DROCPROFSYS_BUILD_LIBIBERTY=ON
-      -DROCPROFSYS_BUILD_BOOST=ON
-      -DROCPROFSYS_BUILD_DYNINST=ON
+      # -DROCPROFSYS_BUILD_ELFUTILS=ON
+      # -DROCPROFSYS_BUILD_TBB=ON
+      # -DROCPROFSYS_BUILD_LIBIBERTY=ON
+      # -DROCPROFSYS_BUILD_BOOST=ON
+      # -DROCPROFSYS_BUILD_DYNINST=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     RUNTIME_DEPS
@@ -113,7 +112,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
       hip-clr
       rocprofiler-register
       amdsmi
+      therock-dyninst
       ${_rocprofiler_sdk_optional_deps}
+      therock-nlohmann-json
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
   )
