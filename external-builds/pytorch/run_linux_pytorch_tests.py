@@ -190,8 +190,15 @@ def detect_amdgpu_family(amdgpu_family: str = "") -> Optional[str]:
 
     try:
         # Find executable in current python env
-        print(f"Searching for amdgpu-arch in subdirectories of {Path(sys.executable).parent.parent}")
-        proc = subprocess.run(["find", Path(sys.executable).parent.parent, "-name", "amdgpu-arch"], capture_output=True, text=True, check=False)
+        print(
+            f"Searching for amdgpu-arch in subdirectories of {Path(sys.executable).parent.parent}"
+        )
+        proc = subprocess.run(
+            ["find", Path(sys.executable).parent.parent, "-name", "amdgpu-arch"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         amdgpu_arch_cmd = proc.stdout.strip()
         proc = subprocess.run(
             [amdgpu_arch_cmd], capture_output=True, text=True, check=False
