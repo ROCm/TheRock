@@ -235,7 +235,9 @@ def filter_known_names(
         target_matrix: For 'target' type, the specific family matrix to use. Required for 'target' type.
     """
     if name_type == "target":
-        assert target_matrix is not None, "target_matrix must be provided for 'target' name_type"
+        assert (
+            target_matrix is not None
+        ), "target_matrix must be provided for 'target' name_type"
         known_references = {"target": target_matrix}
     else:
         known_references = {"test": test_matrix}

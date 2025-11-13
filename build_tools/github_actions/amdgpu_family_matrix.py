@@ -195,4 +195,3 @@ def get_all_families_for_trigger_types(trigger_types):
                     result[family_name] = family_config
 
     return result
-
