@@ -29,6 +29,11 @@ on:
         default: false
       extra_cmake_options:
         type: string
+      # TODO remove late the default when switchting to using the new_setup.yml
+      container_image:
+        type: string
+        required: false
+        default: 'ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b'
 
   workflow_call:
     inputs:
@@ -49,6 +54,11 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      # TODO remove late the default when switchting to using the new_setup.yml
+      container_image:
+        type: string
+        required: false
+        default: 'ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:2f3ebd0beb04c449fdb36933e54bdc69483b914fb9005594d3fc9444c206b54b'
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -64,7 +74,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd
+      image: ${{ inputs.container_image }}
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
