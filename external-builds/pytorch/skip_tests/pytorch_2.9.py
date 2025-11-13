@@ -117,7 +117,7 @@ skip_tests = {
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
         ],
         "binary_ufuncs": [
-            # Skip entire BinaryUFuncs class - all tests in this class fail
+            # Skip entire BinaryUFuncsCUDA class - all tests in this class fail
             "TestBinaryUfuncsCUDA",
         ],
     },
