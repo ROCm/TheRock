@@ -1,61 +1,105 @@
 #!/usr/bin/env python3
-"""Runs pytest for PyTorch unit tests with additional test exclusion
+"""PyTorch ROCm Pytest Runner with additional test exclusion capabilities.
 
-Test exclusion can be due to
-- amdgpu family
-- pytorch version
-- general failures not yet upstream
+This script runs PyTorch unit tests using pytest with additional test exclusion
+capabilities tailored for AMD ROCm GPUs.
 
-====================================
-EXPECTED INPUT ENVIRONMENT VARIABLES
-====================================
-THEROCK_ROOT_DIR (optional)        - To change the root directory of TheRock
-                                   - Otherwise the location is extrapolated from
-                                   - the location of this script
-AMDGPU_FAMILY    (optional)        - amdgpu_family as to run the tests on
-                                   - names used as in "TheRock/cmake/therock_amdgpu_targets.cmake"
-                                   - if not set, can lead to test failure as not enough tests might be omitted
-                                   - if not set: tries to auto-detect which amdgpu arch is available.
-                                                 selects the first one returned by amdgpu-arch
-PYTORCH_VERSION  (optional)        - PyTorch version used for the tests
-                                   - major.minor version as a string (e.g. "2.10")
-                                   - if not set: auto-detection based on pytorch/version.txt
-====================================
+Test Exclusion Criteria
+------------------------
+Tests may be skipped based on:
+- AMDGPU family compatibility (e.g., gfx942, gfx1151)
+- PyTorch version-specific issues
+- Known failures not yet upstreamed to PyTorch
+
+Environment Variables
+---------------------
+THEROCK_ROOT_DIR : str, optional
+                   Root directory of TheRock project.
+                   If not set, auto-detected from script location.
+AMDGPU_FAMILY :     str, optional
+                    Target AMDGPU family for testing (e.g., "gfx942", "gfx94X").
+                    Names should match those in "TheRock/cmake/therock_amdgpu_targets.cmake".
+                    Supports wildcards (e.g., "gfx94X" matches any gfx94* architecture).
+                    If not set, auto-detects from available hardware using amdgpu-arch.
+PYTORCH_VERSION :   str, optional
+                    PyTorch version for version-specific test filtering (e.g., "2.10").
+                    Format: "major.minor" as string.
+                    If not set, auto-detects from installed PyTorch package.
+
+Usage Examples
+--------------
+Basic usage (auto-detect everything):
+    $ python run_linux_pytorch_tests.py
+
+Debug mode (run only skipped tests):
+    $ python run_linux_pytorch_tests.py --debug
+
+Custom test selection with pytest -k:
+    $ python run_linux_pytorch_tests.py -k "test_nn and not test_dropout"
+
+Disable pytest cache (useful in containers):
+    $ python run_linux_pytorch_tests.py --no-cache
+
+Exit Codes
+----------
+0 : All tests passed
+1 : Test failures or collection errors
+Other : Pytest-specific error codes
+
+Side-effects
+-----
+- This script modifies PYTHONPATH and sys.path to include PyTorch test directory
+- Creates a temporary MIOpen cache directory for each run
+- Runs tests sequentially (--numprocesses=0) by default
 """
 
-import sys
+import argparse
 import os
+import subprocess
+import sys
 import tempfile
 
 from skip_tests.create_skip_tests import *
 from importlib.metadata import version
-import pytest
 from pathlib import Path
+from typing import Optional
 
-import subprocess
+import pytest
 
 
-def setup_env(pytorch_dir):
+def setup_env(pytorch_dir: str) -> None:
+    """Set up environment variables required for PyTorch testing with ROCm.
+
+    Args:
+        pytorch_dir: Path to the PyTorch directory containing test files.
+
+    Side effects:
+        - Sets multiple environment variables for PyTorch testing
+        - Creates a temporary directory for MIOpen cache
+        - Modifies sys.path to include the test directory
+    """
     os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
     os.environ["PYTORCH_TEST_WITH_ROCM"] = "1"
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
     os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
+
     old_pythonpath = os.getenv("PYTHONPATH", "")
     test_dir = f"{pytorch_dir}/test"
-    if old_pythonpath != "":
+
+    if old_pythonpath:
         os.environ["PYTHONPATH"] = f"{test_dir}:{old_pythonpath}"
     else:
-        os.environ["PYTHONPATH"] = f"{test_dir}"
+        os.environ["PYTHONPATH"] = test_dir
 
-    # we need to force update the PYTHONPATH to be part of the sys path
-    # otherwise our current python process that will run pytest will NOT
+    # Force update the PYTHONPATH to be part of the sys path
+    # Otherwise our current python process that will run pytest will NOT
     # find it and pytest will crash!
     if test_dir not in sys.path:
         sys.path.insert(0, test_dir)
 
 
-def cmd_arguments(argv: list[str]):
-    p = argparse.ArgumentParser(
+def cmd_arguments(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
         description="""
 Runs PyTorch pytest for AMD GPUs. Skips additional tests compared to upstream.
 Additional tests to be skipped can be tuned by PyTorch version and amdgpu family.
@@ -63,37 +107,37 @@ Additional tests to be skipped can be tuned by PyTorch version and amdgpu family
     )
 
     amdgpu_family = os.getenv("AMDGPU_FAMILY")
-    p.add_argument(
+    parser.add_argument(
         "--amdgpu-family",
         type=str,
-        default=amdgpu_family if not amdgpu_family == None else "",
+        default=amdgpu_family if amdgpu_family is not None else "",
         required=False,
         help="""Amdgpu family (e.g. "gfx942").
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
     )
 
     pytorch_version = os.getenv("PYTORCH_VERSION")
-    p.add_argument(
+    parser.add_argument(
         "--pytorch-version",
         type=str,
-        default=pytorch_version if not pytorch_version == None else "",
+        default=pytorch_version if pytorch_version is not None else "",
         required=False,
-        help="""Pytorch version (e.g. "2.7" or "all).
+        help="""Pytorch version (e.g. "2.7" or "all").
 Select (potentially) additional tests to be skipped based on the Pytorch version.
 'All' is also possible. Then all skip tests for all pytorch versions are included.
 If no PyTorch version is given, it is auto-determined by the PyTorch used to run pytest.""",
     )
 
     env_root_dir = os.getenv("THEROCK_ROOT_DIR")
-    p.add_argument(
+    parser.add_argument(
         "--the-rock-root-dir",
-        default=env_root_dir if not env_root_dir == None else "",
+        default=env_root_dir if env_root_dir is not None else "",
         required=False,
         help="""Overwrites the root directory of TheRock.
 By default TheRock root dir is determined based on this script's location.""",
     )
 
-    p.add_argument(
+    parser.add_argument(
         "--debug",
         default=False,
         required=False,
@@ -101,14 +145,14 @@ By default TheRock root dir is determined based on this script's location.""",
         help="""Inverts the selection. Only runs skipped tests.""",
     )
 
-    p.add_argument(
+    parser.add_argument(
         "-k",
         default="",
         required=False,
         help="""Overwrites the pytest -k option that decides which tests should be run or skipped""",
     )
 
-    p.add_argument(
+    parser.add_argument(
         "--no-cache",
         default=False,
         required=False,
@@ -116,44 +160,134 @@ By default TheRock root dir is determined based on this script's location.""",
         help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
     )
 
-    args = p.parse_args(argv)
+    args = parser.parse_args(argv)
     return args
 
 
-if __name__ == "__main__":
+def detect_amdgpu_family(amdgpu_family: str = "") -> Optional[str]:
+    """Auto-detect or validate the AMDGPU family using the amdgpu-arch command.
+
+    This function supports three modes of operation:
+    1. If amdgpu_family is a specific GPU arch (e.g., "gfx1151"), returns it as-is
+    2. If amdgpu_family is a family with wildcard (e.g., "gfx94X"), returns first match of amdgpu-arch output
+    3. If amdgpu_family is empty, auto-detects from the first available GPU
+
+
+    Returns:
+        The detected or validated AMDGPU family string, or None if detection fails.
+    """
+    # Check if amdgpu_family is already set.
+    # If it is a family with wildcard, extract prefix for partial matching
+    partial_match = ""
+    if amdgpu_family:
+        family_part = amdgpu_family.split("-")[0]
+        if family_part.upper().endswith("X"):
+            # Extract prefix for partial matching (e.g., "gfx94X" -> "gfx94")
+            partial_match = family_part[:-1]
+        else:
+            # Already a specific GPU arch, return as-is
+            return amdgpu_family
+
+    try:
+        proc = subprocess.run(
+            ["amdgpu-arch"], capture_output=True, text=True, check=False
+        )
+
+        if proc.returncode != 0 or proc.stderr:
+            print(f"[ERROR] AMDGPU arch auto-detection FAILED: {proc.stderr}")
+            return None
+
+        available_gpus = [
+            line.strip() for line in proc.stdout.split("\n") if line.strip()
+        ]
+
+        if not available_gpus:
+            print("[ERROR] No AMD GPUs detected by amdgpu-arch")
+            return None
+
+        if amdgpu_family == "":
+            # Auto-detect: use first available GPU
+            detected_gpu = available_gpus[0]
+            print(
+                f"AMDGPU Arch auto-detected (based on GPU at index 0): {detected_gpu}"
+            )
+            return detected_gpu
+        else:
+            # Wildcard match: find first GPU matching the partial pattern
+            for gpu in available_gpus:
+                if partial_match in gpu:
+                    print(
+                        f"AMDGPU Arch auto-detected (based on partial match '{partial_match}'): {gpu}"
+                    )
+                    return gpu
+
+            print(
+                f"[ERROR] No GPU found matching pattern '{partial_match}'. GPUs found: {available_gpus}"
+            )
+            sys.exit(1)
+
+    except FileNotFoundError:
+        print("[ERROR] amdgpu-arch command not found. Is ROCm installed?")
+        sys.exit(1)
+    except Exception as e:
+        print(f"[ERROR] Unexpected error during AMDGPU detection: {e}")
+        sys.exit(1)
+
+
+def detect_pytorch_version() -> str:
+    """Auto-detect the PyTorch version from the installed package.
+
+    Returns:
+        The detected PyTorch version as major.minor (e.g., "2.7").
+    """
+    # Get version, remove build suffix (+rocm, +cpu, etc.) and patch version
+    return version("torch").rsplit("+", 1)[0].rsplit(".", 1)[0]
+
+
+def determine_root_dir(provided_root: str) -> Path:
+    """Determine the TheRock root directory.
+
+    Args:
+        provided_root: User-provided root directory path, or empty string.
+
+    Returns:
+        Path object representing the TheRock root directory.
+    """
+    if provided_root:
+        return Path(provided_root)
+
+    # Autodetect root dir via path of the script
+    # We are in <TheRock Root Dir>/external-builds/pytorch
+    script_dir = Path(__file__).resolve().parent
+    return script_dir.parent.parent
+
+
+def main() -> int:
+    """Main entry point for the PyTorch test runner.
+
+    Returns:
+        Exit code from pytest (0 for success, non-zero for failures).
+    """
     args = cmd_arguments(sys.argv[1:])
 
-    root_dir = args.the_rock_root_dir
-    # autodetect root dir via path of the script
-    if root_dir == "":
-        script_dir = Path(__file__).resolve().parent
-        # we are in <TheRock Root Dir>/external-builds/pytorch
-        root_dir = script_dir.parent.parent
+    # Determine root directory
+    root_dir = determine_root_dir(args.the_rock_root_dir)
 
-    amdgpu_family = args.amdgpu_family
-    print("amdgpu_family", amdgpu_family)
-    # try auto determine amdgpu_arch
-    if amdgpu_family == "":
-        proc = subprocess.run(["amdgpu-arch"], capture_output=True, text=True)
-        if len(proc.stderr) == 0 and proc.returncode == 0:  # must have been successful
-            amdgpu_family = proc.stdout.split("/n")[0]
-            print(f"AMDGPU Arch auto-detected: {amdgpu_family}")
-        else:
-            print(f"AMDGPU arch auto-detectiong FAILED: {proc.stderr}")
-    if "GFX94X" in amdgpu_family.upper():
-        amdgpu_family = "gfx942"
+    # Determine AMDGPU family
+    amdgpu_family = detect_amdgpu_family(args.amdgpu_family)
+    print(f"Using AMDGPU family: {amdgpu_family}")
 
+    # Determine PyTorch version
     pytorch_version = args.pytorch_version
-    # auto detect version by reading version string from pytorch/version.txt
-    if pytorch_version == "":
-        pytorch_version = version("torch").rsplit("+", 1)[0].rsplit(".", 1)[0]
+    if not pytorch_version:
+        pytorch_version = detect_pytorch_version()
+    print(f"Using PyTorch version: {pytorch_version}")
 
+    # Get tests to skip
     tests_to_skip = get_tests(amdgpu_family, pytorch_version, not args.debug)
 
-    # Debugging: Get lists of tests always skipped and only run on those
-    # tests_to_skip = skipped_tests.get_tests(amdgpu_family, pytorch_version, False)
-
-    if not args.k == "":
+    # Allow manual override of test selection
+    if args.k:
         tests_to_skip = args.k
 
     pytorch_dir = f"{root_dir}/external-builds/pytorch/pytorch"
@@ -164,12 +298,12 @@ if __name__ == "__main__":
         f"{pytorch_dir}/test/test_torch.py",
         f"{pytorch_dir}/test/test_cuda.py",
         f"{pytorch_dir}/test/test_unary_ufuncs.py",
-        # f"{pytorch_dir}/test/test_binary_ufuncs.py",
+        f"{pytorch_dir}/test/test_binary_ufuncs.py",
         f"{pytorch_dir}/test/test_autograd.py",
         "--continue-on-collection-errors",
         "--import-mode=importlib",
         f"-k={tests_to_skip}",
-        "--numprocesses=0",  # TODO does this need rework? why should we not run this multithreaded?
+        # "-n 0",  # TODO does this need rework? why should we not run this multithreaded? this does not seem to exist?
         "-v",
         # -n numprocesses, --numprocesses=numprocesses
         #         Shortcut for '--dist=load --tx=NUM*popen'.
@@ -181,11 +315,14 @@ if __name__ == "__main__":
     if args.no_cache:
         pytorch_args += [
             "-p",
-            "no:cacheprovider",  # disable caching: useful when running in a container
+            "no:cacheprovider",  # Disable caching: useful when running in a container
         ]
-
-    # pytorch_args += debug_pytorch_args
 
     retcode = pytest.main(pytorch_args)
     print(f"Pytest finished with return code: {retcode}")
-    sys.exit(retcode)  # Lets make this script fail when pytest has failures
+    return retcode
+
+
+if __name__ == "__main__":
+    # Lets make this script return pytest exit code (success or failure)
+    sys.exit(main())

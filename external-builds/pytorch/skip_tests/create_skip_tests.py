@@ -1,90 +1,166 @@
 #!/usr/bin/env python3
+"""PyTorch Test Skip List Generator.
 
-"""Creates a list of tests to be skipped usable for pytest.
+Creates a list of tests to be skipped or the only ones to be run on for PyTorch's pytest.
 
-Can also create the inverse: a list of tests on which pytest should only be run on
+Key Features
+------------
+- AMDGPU family-specific test filtering
+- PyTorch version-specific test filtering
+- Can generate both skip lists and include lists
+- Supports standalone CLI usage and programmatic API
 
-- Can run standalone
-- If called within python, use get_tests()
+Module Structure
+----------------
+The module expects skip test definitions in the following files:
+- generic.py: Common tests to skip across all configurations
+- pytorch_<version>.py: Version-specific tests (e.g., pytorch_2.7.py)
+
+For additional information have a look at the README.md file in this directory.
+
+Usage Examples
+--------------
+Programmatic usage:
+    # Create a list of tests to be skipped as they are known to be failing on gfx942 and PyTorch 2.7
+    from create_skip_tests import get_tests
+    skip_expr = get_tests("gfx942", "2.7", create_skip_list=True)
+    # Use skip_expr with pytest: pytest -k "{skip_expr}"
+
+Command-line usage:
+    Run all test excluding known failures for gfx942 and PyTorch 2.7:
+    $ python create_skip_tests.py --amdgpu_family gfx942 --pytorch_version 2.7
+
+    Run all tests that are normally skipped for gfx942 and all pytorch versions:
+    $ python create_skip_tests.py --amdgpu_family gfx942 --pytorch_version all --include-tests
+
 """
 
 import argparse
-import sys
-
 import glob
 import importlib.util
 import os
+import sys
+from typing import Dict, List
 
 
-def import_skip_tests(pytorch_version=""):
+def import_skip_tests(pytorch_version: str = "") -> Dict[str, Dict]:
+    """Dynamically load test skip definitions from configuration files.
+
+    Loads skip test definitions from:
+    - generic.py (always loaded)
+    - pytorch_<version>.py (if version specified)
+    - pytorch_*.py (all version files if version="all")
+
+    Args:
+        pytorch_version: PyTorch version string (e.g., "2.7", "all", or "").
+            - "" (empty): Load only generic.py
+            - "all": Load generic.py and all pytorch_*.py files
+            - Specific version: Load generic.py and pytorch_<version>.py
+
+    Returns:
+        Dictionary mapping module names to their skip_tests dictionaries.
+        Format: {"generic": {...}, "pytorch_2.7": {...}}
+
     """
-    Dynamic loading of all files required for skipping tests. This includes,
-    skip_tests/generic.py and all skip_tests/pytorch_<version>.py files
-    """
-
     this_script_dir = os.path.dirname(os.path.abspath(__file__))
 
     files = [os.path.join(this_script_dir, "generic.py")]
     if pytorch_version == "all":
         files += glob.glob(os.path.join(this_script_dir, "pytorch_*.py"))
-    elif not pytorch_version == "":
+    elif pytorch_version:
         files += [os.path.join(this_script_dir, f"pytorch_{pytorch_version}.py")]
 
-    dict_skipt_tests = {}
+    dict_skip_tests = {}
 
     for full_path in files:
-        # get filename without .py extension
+        # Get filename without .py extension
         module_name = os.path.basename(full_path)[:-3]
 
         try:
             spec = importlib.util.spec_from_file_location(module_name, full_path)
+            if spec is None or spec.loader is None:
+                print(
+                    f"[WARNING] Could not create module spec for {module_name} at {full_path}",
+                    file=sys.stderr,
+                )
+                continue
+
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
 
-            dict_skipt_tests[module_name] = getattr(module, "skip_tests")
+            dict_skip_tests[module_name] = getattr(module, "skip_tests")
         except (ImportError, FileNotFoundError, AttributeError) as ex:
             msg_pytorch = ""
             if "pytorch" in module_name:
-                msg_pytorch = f" and given pytorch_version {pytorch_version}"
+                msg_pytorch = f" for PyTorch version {pytorch_version}"
             print(
-                f"Create_skip_tests.py: Failed to import module {module_name}{msg_pytorch} with path {full_path} : {ex}",
+                f"[WARNING] In create_skip_tests.py: Failed to import module {module_name}{msg_pytorch} "
+                f"from {full_path}: {type(ex).__name__}: {ex}",
                 file=sys.stderr,
             )
-            # sys.exit(1)  # TODO do we want to exit? means each new pytorch version we would have to add a new file
+            # Continue processing other files instead of failing completely
+            # This allows running tests even if some version-specific files are missing
 
-    return dict_skipt_tests
+    return dict_skip_tests
 
 
-def create_list(amdgpu_family="", pytorch_version=""):
+def create_list(amdgpu_family: str = "", pytorch_version: str = "") -> List[str]:
+    """Create a list of test names based on filters.
+
+    Aggregates test names from all applicable skip test definitions based on
+    the specified AMDGPU family and PyTorch version.
+
+    Args:
+        amdgpu_family: Target AMDGPU family (e.g., "gfx942", "gfx1151").
+            Tests marked for this family will be included.
+        pytorch_version: PyTorch version for filtering (e.g., "2.7", "all", "").
+            Determines which pytorch_*.py files are loaded.
+
+    Returns:
+        List of unique test names that match the specified filters.
+        Duplicates are automatically removed.
+
+    Notes:
+        - Always includes tests from the "common" filter
+        - Includes tests from the specified amdgpu_family filter (if provided)
+
+
+    Examples:
+        >>> tests = create_list("gfx942", "2.7")
+        >>> # Returns: ["test_dropout", "test_conv2d", ...]
+    """
     selected_tests = []
 
+    # Define filters: always include "common", plus specific AMDGPU family
     filters = ["common"]
-    filters += [amdgpu_family]
+    if amdgpu_family:
+        filters.append(amdgpu_family)
 
-    # load skip_tests only generic and (pytorch_<version> or "all" pytorch versions)
-    dict_skipt_tests = import_skip_tests(pytorch_version)
+    # Load skip_tests from generic.py and (pytorch_<version> or "all" pytorch versions)
+    dict_skip_tests = import_skip_tests(pytorch_version)
 
-    # loop over skip_tests of generic.py and pytorch_<version>.py
-    for skip_test_module_name, skip_tests in dict_skipt_tests.items():
-        for filter in filters:
-            if filter in skip_tests.keys():
-                for pytorch_test_module in skip_tests[filter].keys():
-                    selected_tests += skip_tests[filter][pytorch_test_module]
+    # Loop over all loaded skip_tests dictionaries from the different pytorch versions
+    for skip_test_module_name, skip_tests in dict_skip_tests.items():
+        # Apply each filter (common, amdgpu_family)
+        for filter_name in filters:
+            if filter_name in skip_tests:
+                # For each pytorch test module (e.g., test_nn, test_torch) add all the tests
+                for pytorch_test_module in skip_tests[filter_name].keys():
+                    selected_tests += skip_tests[filter_name][pytorch_test_module]
 
-    # remove duplicates
-    selected_tests = list(set(selected_tests))
-    return selected_tests
+    # Remove duplicates and return
+    return list(set(selected_tests))
 
 
-def cmd_arguments(argv: list[str]):
-    p = argparse.ArgumentParser(
+def cmd_arguments(argv: List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
         description="""
-Prints a list of tests that should be skipped.
-Output can be used with 'pytest -k <list>'
+Generates a list of tests to skip (or include) for pytest.
+Output is a pytest -k expression that can be used directly with pytest.
 """
     )
-    p.add_argument(
+    parser.add_argument(
         "--amdgpu_family",
         type=str,
         default="",
@@ -92,44 +168,65 @@ Output can be used with 'pytest -k <list>'
         help="""AMDGPU family (e.g. "gfx942").
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
     )
-    p.add_argument(
+    parser.add_argument(
         "--pytorch_version",
         type=str,
         default="",
         required=False,
-        help="""Pytorch version (e.g. "2.7" or "all).
-Select (potentially) additional tests to be skipped based on the Pytorch version.
-'All' is also possible. Then all skip tests for all pytorch versions are included.""",
+        help="""PyTorch version (e.g. "2.7" or "all").
+Select (potentially) additional tests to be skipped based on the PyTorch version.
+'all' includes skip tests for all pytorch versions.""",
     )
-    p.add_argument(
+    parser.add_argument(
         "--include-tests",
         default=False,
         required=False,
         action=argparse.BooleanOptionalAction,
-        help="""Overwrites the default behavior of this program and creates a list of tests that should be run.
+        help="""Invert behavior: create a list of tests to include (run) instead of skip.
 Output can be used with 'pytest -k <list>'""",
     )
-    args = p.parse_args(argv)
+    args = parser.parse_args(argv)
     return args
 
 
-def get_tests(amdgpu_family="", pytorch_version="", create_skip_list=True):
-    if create_skip_list == True:
-        print(
-            f"Creating list of tests to be skipped for amdgpu_family {amdgpu_family} and PyTorch verison {pytorch_version}... ",
-            end="",
-        )
-    else:
-        print(
-            "Creating list of tests to be included for amdgpu_family {amdgpu_family} and PyTorch verison {pytorch_version}... ",
-            end="",
-        )
+def get_tests(
+    amdgpu_family: str = "", pytorch_version: str = "", create_skip_list: bool = True
+) -> str:
+    """Generate a pytest -k expression for test filtering.
 
+    This is the main API function for programmatic use. It creates a pytest -k
+    compatible expression that either skips or includes the specified tests.
+
+    Args:
+        amdgpu_family: Target AMDGPU family (e.g., "gfx942", "gfx1151").
+            Determines which family-specific tests to filter.
+        pytorch_version: PyTorch version (e.g., "2.7", "all", "").
+            Determines which version-specific test files to load.
+        create_skip_list: If True, create a skip list (default).
+            If False, create an include list (only run specified tests).
+
+    Returns:
+        A pytest -k compatible expression string.
+        - Skip list format: "not test1 and not test2 and not test3"
+        - Include list format: "test1 or test2 or test3"
+
+    """
+    list_type = "skipped" if create_skip_list else "included"
+    print(
+        f"Creating list of tests to be {list_type} for AMDGPU family '{amdgpu_family}' "
+        f"and PyTorch version '{pytorch_version}'... ",
+        end="",
+    )
+
+    # Get the list of test names
     tests = create_list(amdgpu_family=amdgpu_family, pytorch_version=pytorch_version)
 
-    if create_skip_list == True:  # skip list
+    # Format as pytest -k expression
+    if create_skip_list:
+        # Skip list: "not test1 and not test2 and not test3"
         expr = "not " + " and not ".join(tests)
-    else:  # include list
+    else:
+        # Include list: "test1 or test2 or test3"
         expr = " or ".join(tests)
 
     print("done")
@@ -139,5 +236,5 @@ def get_tests(amdgpu_family="", pytorch_version="", create_skip_list=True):
 if __name__ == "__main__":
     args = cmd_arguments(sys.argv[1:])
 
-    tests = get_tests(args.amdgpu_family, args.pytorch_version, args.include_tests)
+    tests = get_tests(args.amdgpu_family, args.pytorch_version, not args.include_tests)
     print(tests)
