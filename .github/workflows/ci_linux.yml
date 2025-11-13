@@ -106,3 +106,41 @@ jobs:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
+
+  # This uploads logs with high level stats like
+  # Uploads artifact named test-job-status-<hostname> so parallel machines won’t overwrite each other.
+  upload_test_status:
+    name: "Upload test job status summary (JSON)"
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [build_portable_linux_artifacts, test_linux_artifacts, build_portable_linux_python_packages]
+    steps:
+      - name: Get Hostname
+        id: hostname
+        run: echo "hostname=$(hostname)" >> $GITHUB_ENV
+
+      - name: Generate job status summary (JSON)
+        run: |
+          mkdir -p logs
+          cat <<EOF > "logs/ci_linux_summary_${{ env.hostname }}.json"
+          {
+            "workflow": "${{ github.workflow }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "repo": "${{ github.repository }}",
+            "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+            "runner_hostname": "${{ env.hostname }}",
+            "jobs": {
+              "build_portable_linux_artifacts": "${{ needs.build_portable_linux_artifacts.result }}",
+              "test_linux_artifacts": "${{ needs.test_linux_artifacts.result }}",
+              "build_portable_linux_python_packages": "${{ needs.build_portable_linux_python_packages.result }}"
+            }
+          }
+          EOF
+          echo " Generated logs/ci_linux_summary_${{ env.hostname }}.json"
+
+      - name: Upload job status summary (JSON)
+        uses: actions/upload-artifact@v4
+        with:
+          name: "test-job-status-${{ env.hostname }}"
+          path: "logs/ci_linux_summary_${{ env.hostname }}.json"
