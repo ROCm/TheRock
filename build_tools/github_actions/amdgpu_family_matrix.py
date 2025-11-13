@@ -174,6 +174,7 @@ amdgpu_family_info_matrix_nightly = {
     },
 }
 
+
 def get_all_families_for_trigger_types(trigger_types):
     """
     Returns a combined family matrix for the specified trigger types.
@@ -181,9 +182,9 @@ def get_all_families_for_trigger_types(trigger_types):
     """
     result = {}
     matrix_map = {
-        'presubmit': amdgpu_family_info_matrix_presubmit,
-        'postsubmit': amdgpu_family_info_matrix_postsubmit,
-        'nightly': amdgpu_family_info_matrix_nightly,
+        "presubmit": amdgpu_family_info_matrix_presubmit,
+        "postsubmit": amdgpu_family_info_matrix_postsubmit,
+        "nightly": amdgpu_family_info_matrix_nightly,
     }
 
     for trigger_type in trigger_types:

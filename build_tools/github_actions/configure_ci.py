@@ -225,7 +225,9 @@ def get_pr_labels(args) -> List[str]:
     return labels
 
 
-def filter_known_names(requested_names: List[str], name_type: str, target_matrix=None) -> List[str]:
+def filter_known_names(
+    requested_names: List[str], name_type: str, target_matrix=None
+) -> List[str]:
     """Filters a requested names list down to known names.
 
     Args:
@@ -282,17 +284,17 @@ def matrix_generator(
     # Determine which trigger types are active for proper matrix lookup
     active_trigger_types = []
     if is_pull_request:
-        active_trigger_types.append('presubmit')
+        active_trigger_types.append("presubmit")
     if is_push and base_args.get("branch_name") == "main":
-        active_trigger_types.extend(['presubmit', 'postsubmit'])
+        active_trigger_types.extend(["presubmit", "postsubmit"])
     if is_schedule:
-        active_trigger_types.append('nightly')
+        active_trigger_types.append("nightly")
 
     # Get the appropriate family matrix based on active triggers
     # For workflow_dispatch and PR labels, we need to check all matrices
     if is_workflow_dispatch or (is_pull_request and len(active_trigger_types) > 0):
         # For workflow_dispatch, check all possible matrices
-        lookup_trigger_types = ['presubmit', 'postsubmit', 'nightly']
+        lookup_trigger_types = ["presubmit", "postsubmit", "nightly"]
         lookup_matrix = get_all_families_for_trigger_types(lookup_trigger_types)
         print(f"Using family matrix for trigger types: {lookup_trigger_types}")
     elif active_trigger_types:
