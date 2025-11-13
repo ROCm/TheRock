@@ -114,8 +114,8 @@ jobs:
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
-          echo "tmp_cloudfront_url=https://d25kgig7rdsyks.cloudfront.net/v2" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://d25kgig7rdsyks.cloudfront.net/v2-staging" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.devreleases.amd.com/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.devreleases.amd.com/v2-staging" >> $GITHUB_ENV
           echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
 
       - name: Generate release information

@@ -235,7 +235,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   # OR from therock-dev-python
   python -m pip install \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-dgpu/ \
     rocm[libraries,devel]
   ```
 
