@@ -655,8 +655,11 @@ def do_build_pytorch(
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
+            if "gfx103" in env["PYTORCH_ROCM_ARCH"]:
+                # no aotriton support for gfx103X
+                use_flash_attention = "OFF"
             print(
-                f"Flash Attention default behavior (based on triton): {use_flash_attention}"
+                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
