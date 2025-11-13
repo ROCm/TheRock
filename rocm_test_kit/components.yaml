@@ -1,0 +1,317 @@
+# ROCm Component Test Configuration
+# Defines all testable components and their properties
+
+components:
+  # BLAS & Linear Algebra Libraries
+  rocblas:
+    name: "rocBLAS"
+    category: "blas"
+    description: "ROCm Basic Linear Algebra Subprograms"
+    test_script: "test_rocblas.py"
+    test_type: "gtest"
+    priority: "high"
+    supports_sharding: true
+    estimated_time_smoke: "5m"
+    estimated_time_full: "30m"
+
+  hipblas:
+    name: "hipBLAS"
+    category: "blas"
+    description: "Portable BLAS interface"
+    test_script: "test_hipblas.py"
+    test_type: "gtest"
+    priority: "high"
+    supports_sharding: true
+    estimated_time_smoke: "5m"
+    estimated_time_full: "25m"
+
+  hipblaslt:
+    name: "hipBLASLt"
+    category: "blas"
+    description: "BLAS-like extensions for batched operations"
+    test_script: "test_hipblaslt.py"
+    test_type: "gtest"
+    priority: "medium"
+    supports_sharding: true
+    estimated_time_smoke: "3m"
+    estimated_time_full: "20m"
+
+  rocsolver:
+    name: "rocSOLVER"
+    category: "solver"
+    description: "ROCm LAPACK implementation"
+    test_script: "test_rocsolver.py"
+    test_type: "gtest"
+    priority: "high"
+    supports_sharding: true
+    estimated_time_smoke: "5m"
+    estimated_time_full: "30m"
+
+  hipsolver:
+    name: "hipSOLVER"
+    category: "solver"
+    description: "Portable LAPACK interface"
+    test_script: "test_hipsolver.py"
+    test_type: "gtest"
+    priority: "high"
+    supports_sharding: false
+    estimated_time_smoke: "3m"
+    estimated_time_full: "15m"
+
+  # Sparse Libraries
+  rocsparse:
+    name: "rocSPARSE"
+    category: "sparse"
+    description: "ROCm sparse linear algebra"
+    test_script: "test_rocsparse.py"
+    test_type: "gtest"
+    priority: "high"
+    supports_sharding: true
+    max_shards: 6
+    estimated_time_smoke: "10m"
+    estimated_time_full: "60m"
+
+  hipsparse:
+    name: "hipSPARSE"
+    category: "sparse"
+    description: "Portable sparse BLAS interface"
+    test_script: "test_hipsparse.py"
+    test_type: "gtest"
+    priority: "medium"
+    supports_sharding: false
+    estimated_time_smoke: "5m"
+    estimated_time_full: "25m"
+
+  hipsparselt:
+    name: "hipSPARSELt"
+    category: "sparse"
+    description: "Sparse matrix-matrix multiplication"
+    test_script: "test_hipsparselt.py"
+    test_type: "gtest"
+    priority: "low"
+    supports_sharding: false
+    estimated_time_smoke: "2m"
+    estimated_time_full: "10m"
+
+  # Primitives & Algorithms
+  rocprim:
+    name: "rocPRIM"
+    category: "primitives"
+    description: "ROCm parallel primitives"
+    test_script: "test_rocprim.py"
+    test_type: "ctest"
+    priority: "high"
+    supports_sharding: false
+    estimated_time_smoke: "5m"
+    estimated_time_full: "30m"
+
+  hipcub:
+    name: "hipCUB"
+    category: "primitives"
+    description: "Portable parallel primitives"
+    test_script: "test_hipcub.py"
+    test_type: "ctest"
+    priority: "medium"
+    supports_sharding: false
+    estimated_time_smoke: "5m"
+    estimated_time_full: "25m"
+
+  rocthrust:
+    name: "rocThrust"
+    category: "primitives"
+    description: "ROCm parallel algorithms library"
+    test_script: "test_rocthrust.py"
+    test_type: "ctest"
+    priority: "medium"
+    supports_sharding: false
+    estimated_time_smoke: "3m"
+    estimated_time_full: "20m"
+
+  # Random Number Generation
+  rocrand:
+    name: "rocRAND"
+    category: "random"
+    description: "ROCm random number generation"
+    test_script: "test_rocrand.py"
+    test_type: "ctest"
+    priority: "medium"
+    supports_sharding: false
+    estimated_time_smoke: "3m"
+    estimated_time_full: "15m"
+
+  hiprand:
+    name: "hipRAND"
+    category: "random"
+    description: "Portable random number generation"
+    test_script: "test_hiprand.py"
+    test_type: "gtest"
+    priority: "low"
+    supports_sharding: false
+    estimated_time_smoke: "2m"
+    estimated_time_full: "10m"
+
+  # FFT Libraries
+  rocfft:
+    name: "rocFFT"
+    category: "fft"
+    description: "ROCm Fast Fourier Transform"
+    test_script: "test_rocfft.py"
+    test_type: "gtest"
+    priority: "high"
+    supports_sharding: true
+    estimated_time_smoke: "5m"
+    estimated_time_full: "30m"
+
+  hipfft:
+    name: "hipFFT"
+    category: "fft"
+    description: "Portable FFT interface"
+    test_script: "test_hipfft.py"
+    test_type: "gtest"
+    priority: "medium"
+    supports_sharding: false
+    estimated_time_smoke: "3m"
+    estimated_time_full: "15m"
+
+  # Deep Learning
+  miopen:
+    name: "MIOpen"
+    category: "deep_learning"
+    description: "ROCm deep learning primitives"
+    test_script: "test_miopen.py"
+    test_type: "gtest"
+    priority: "high"
+    supports_sharding: true
+    estimated_time_smoke: "10m"
+    estimated_time_full: "60m"
+
+  miopen_plugin:
+    name: "MIOpen Plugin"
+    category: "deep_learning"
+    description: "MIOpen plugin tests"
+    test_script: "test_miopen_plugin.py"
+    test_type: "gtest"
+    priority: "low"
+    supports_sharding: false
+    estimated_time_smoke: "2m"
+    estimated_time_full: "10m"
+
+  hipdnn:
+    name: "hipDNN"
+    category: "deep_learning"
+    description: "Portable DNN interface"
+    test_script: "test_hipdnn.py"
+    test_type: "gtest"
+    priority: "low"
+    supports_sharding: false
+    estimated_time_smoke: "3m"
+    estimated_time_full: "15m"
+
+  # Communication
+  rccl:
+    name: "RCCL"
+    category: "communication"
+    description: "ROCm Communication Collectives Library"
+    test_script: "test_rccl.py"
+    test_type: "pytest"
+    priority: "high"
+    supports_sharding: false
+    estimated_time_smoke: "5m"
+    estimated_time_full: "20m"
+
+  # Other
+  rocwmma:
+    name: "rocWMMA"
+    category: "matrix"
+    description: "ROCm Warp Matrix Multiply Accumulate"
+    test_script: "test_rocwmma.py"
+    test_type: "gtest"
+    priority: "medium"
+    supports_sharding: false
+    estimated_time_smoke: "3m"
+    estimated_time_full: "15m"
+
+  rocroller:
+    name: "rocRoller"
+    category: "tools"
+    description: "ROCm rolling test suite"
+    test_script: "test_rocroller.py"
+    test_type: "custom"
+    priority: "low"
+    supports_sharding: false
+    estimated_time_smoke: "2m"
+    estimated_time_full: "10m"
+
+# Test categories for grouped execution
+categories:
+  blas:
+    name: "BLAS Libraries"
+    description: "Basic Linear Algebra Subprograms"
+    components: ["rocblas", "hipblas", "hipblaslt"]
+
+  solver:
+    name: "Solver Libraries"
+    description: "LAPACK and linear system solvers"
+    components: ["rocsolver", "hipsolver"]
+
+  sparse:
+    name: "Sparse Libraries"
+    description: "Sparse matrix operations"
+    components: ["rocsparse", "hipsparse", "hipsparselt"]
+
+  primitives:
+    name: "Primitive Libraries"
+    description: "Parallel primitives and algorithms"
+    components: ["rocprim", "hipcub", "rocthrust"]
+
+  random:
+    name: "Random Number Generation"
+    description: "Random number generators"
+    components: ["rocrand", "hiprand"]
+
+  fft:
+    name: "FFT Libraries"
+    description: "Fast Fourier Transform"
+    components: ["rocfft", "hipfft"]
+
+  deep_learning:
+    name: "Deep Learning"
+    description: "Deep learning primitives and frameworks"
+    components: ["miopen", "miopen_plugin", "hipdnn"]
+
+  communication:
+    name: "Communication Libraries"
+    description: "Multi-GPU communication"
+    components: ["rccl"]
+
+  all:
+    name: "All Components"
+    description: "Complete ROCm stack test"
+    components: ["rocblas", "hipblas", "hipblaslt", "rocsolver", "hipsolver",
+                 "rocsparse", "hipsparse", "hipsparselt", "rocprim", "hipcub",
+                 "rocthrust", "rocrand", "hiprand", "rocfft", "hipfft",
+                 "miopen", "miopen_plugin", "hipdnn", "rccl", "rocwmma", "rocroller"]
+
+# Quick test presets
+presets:
+  quick:
+    name: "Quick Test"
+    description: "Essential components only (5-10 minutes)"
+    components: ["rocblas", "hipblas", "rocsolver", "rocprim", "miopen"]
+    test_type: "smoke"
+
+  core:
+    name: "Core Libraries"
+    description: "Core ROCm libraries (15-20 minutes)"
+    components: ["rocblas", "hipblas", "rocsolver", "hipsolver", "rocprim",
+                 "rocfft", "miopen", "rccl"]
+    test_type: "smoke"
+
+  full:
+    name: "Full Test Suite"
+    description: "All components, full tests (2-4 hours)"
+    components: ["rocblas", "hipblas", "hipblaslt", "rocsolver", "hipsolver",
+                 "rocsparse", "hipsparse", "hipsparselt", "rocprim", "hipcub",
+                 "rocthrust", "rocrand", "hiprand", "rocfft", "hipfft",
+                 "miopen", "miopen_plugin", "hipdnn", "rccl", "rocwmma", "rocroller"]
+    test_type: "full"
