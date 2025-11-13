@@ -87,7 +87,7 @@ function(therock_reparse_super_project_find_package superproject_path package_na
   cmake_parse_arguments(PARSE_ARGV 1 UNUSED
     "BYPASS_PROVIDER;CONFIG;MODULE;NO_DEFAULT_PATH;NO_CMAKE_PATH;NO_CMAKE_ENVIRONMENT_PATH;NO_SYSTEM_ENVIRONMENT_PATH;NO_CMAKE_PACKAGE_REGISTRY"
     ""
-    "HINTS;PATHS"
+    "HINTS;PATHS;COMPONENTS;OPTIONAL_COMPONENTS"
   )
   if(NOT superproject_path)
     message(FATAL_ERROR "Super-project package path not found for ${package_name}")
@@ -95,6 +95,16 @@ function(therock_reparse_super_project_find_package superproject_path package_na
 
   # The signature of MODULE vs DEFAULT mode is different, so switch.
   set(_rewritten ${UNUSED_UNPARSED_ARGUMENTS})
+
+  # Preserve COMPONENTS and OPTIONAL_COMPONENTS if they were specified. Some packages
+  # (e.g. Boost) require these to be specified in the find_package signature.
+  if(UNUSED_COMPONENTS)
+    list(APPEND _rewritten COMPONENTS ${UNUSED_COMPONENTS})
+  endif()
+  if(UNUSED_OPTIONAL_COMPONENTS)
+    list(APPEND _rewritten OPTIONAL_COMPONENTS ${UNUSED_OPTIONAL_COMPONENTS})
+  endif()
+
   # Some very old code uses explicit MODULE mode, which forces the basic
   # signature (*cough* old FindHIP based junk). In this mode, there is no way
   # to explicitly indicate a search path in the signature (and other options
