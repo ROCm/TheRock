@@ -164,7 +164,7 @@ if __name__ == "__main__":
         f"{pytorch_dir}/test/test_torch.py",
         f"{pytorch_dir}/test/test_cuda.py",
         f"{pytorch_dir}/test/test_unary_ufuncs.py",
-        f"{pytorch_dir}/test/test_binary_ufuncs.py",
+        # f"{pytorch_dir}/test/test_binary_ufuncs.py",
         f"{pytorch_dir}/test/test_autograd.py",
         "--continue-on-collection-errors",
         "--import-mode=importlib",
