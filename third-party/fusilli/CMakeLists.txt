@@ -12,8 +12,6 @@ therock_cmake_subproject_declare(therock-fusilli
   BUILD_DEPS
     therock-iree-runtime
     therock-catch2
-  RUNTIME_DEPS
-    therock-iree-runtime
   CMAKE_ARGS
     -DFUSILLI_BUILD_TESTS=OFF
     -DFUSILLI_BUILD_BENCHMARKS=OFF
@@ -22,7 +20,7 @@ therock_cmake_subproject_declare(therock-fusilli
     -DFUSILLI_ENABLE_LOGGING=OFF
     -DFUSILLI_ENABLE_CLANG_TIDY=OFF
 )
-therock_cmake_subproject_provide_package(therock-fusilli fusilli lib/cmake/fusilli)
+therock_cmake_subproject_provide_package(therock-fusilli Fusilli lib/cmake/fusilli)
 therock_cmake_subproject_activate(therock-fusilli)
 
 add_dependencies(therock-third-party therock-fusilli)

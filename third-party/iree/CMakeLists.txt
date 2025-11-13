@@ -23,6 +23,9 @@ therock_cmake_subproject_declare(therock-iree-runtime
     hip-clr
   RUNTIME_DEPS
     hip-clr
+  INSTALL_COMPONENTS
+    IREEDevLibraries-Runtime
+    IREECMakeExports
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     # Clears a ROCM_PATH/DIR environment variable, preventing the build
