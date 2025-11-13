@@ -61,7 +61,7 @@ build_prod_wheels.py \
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-dgpu/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
