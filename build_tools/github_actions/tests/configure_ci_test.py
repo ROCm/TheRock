@@ -72,7 +72,13 @@ class ConfigureCITest(unittest.TestCase):
 
     def test_filter_known_target_names(self):
         requested_target_names = ["gfx110X", "abcdef"]
-        target_names = configure_ci.filter_known_names(requested_target_names, "target")
+        # Use all trigger types to get a comprehensive matrix for testing
+        test_matrix = configure_ci.get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
+        target_names = configure_ci.filter_known_names(
+            requested_target_names, "target", test_matrix
+        )
         self.assertIn("gfx110x", target_names)
         self.assertNotIn("abcdef", target_names)
 
@@ -282,18 +288,20 @@ class ConfigureCITest(unittest.TestCase):
         self.assertEqual(windows_test_labels, [])
 
     def test_linux_branch_push_matrix_generator(self):
+        # Push to non-main branches should raise AssertionError
+        # as the CI workflow only triggers on main branch pushes
         base_args = {"branch_name": "test_branch"}
-        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
-            is_pull_request=False,
-            is_workflow_dispatch=False,
-            is_push=True,
-            is_schedule=False,
-            base_args=base_args,
-            families={},
-            platform="linux",
-        )
-        self.assertEqual(len(linux_target_output), 0)
-        self.assertEqual(linux_test_labels, [])
+        with self.assertRaises(AssertionError) as context:
+            configure_ci.matrix_generator(
+                is_pull_request=False,
+                is_workflow_dispatch=False,
+                is_push=True,
+                is_schedule=False,
+                base_args=base_args,
+                families={},
+                platform="linux",
+            )
+        self.assertIn("Unreachable code", str(context.exception))
 
     def test_linux_schedule_matrix_generator(self):
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
