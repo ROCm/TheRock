@@ -305,13 +305,9 @@ def new_matrix_generator(
                             data[taskLabel[mask]["label"]][key] = gpu_matrix[platform][
                                 target
                             ][label][key]
-
-                if (
-                    len(data.keys()) > 1
-                ):  # more than amdgpu_family means we want to run it
-                    platform_matrix += [data]
-                # if gpu_matrix[target][plat_str]["release"]["push_on_success"]:
-                #     platform_matrix[taskLabel[TaskMask.RELEASE]["label"]][target] =
+            # more than amdgpu_family as entry means we want to add it
+            if len(data.keys()) > 1:
+                platform_matrix += [data]
         full_matrix[plat_str] = platform_matrix
 
     print("done")
@@ -324,7 +320,10 @@ def get_github_event_args():
     github_event_args["branch_name"] = os.environ.get(
         "GITHUB_REF", "not/a/notaref"
     ).split("/")[-1]
-    github_event_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
+    # TODO TODO Remove after testing
+    github_event_args["github_event_name"] = os.environ.get(
+        "GITHUB_EVENT_NAME", "workflow_dispatch"
+    )
     # github_event_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     github_event_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     github_event_args["linux_use_prebuilt_artifacts"] = (
@@ -394,6 +393,7 @@ def get_requested_amdgpu_families(github_event_args):
 
 
 def getTaskMask(github_event_args):
+    enable_build_jobs = True
     if github_event_args["force_build"].upper() in ["YES", "ON", "TRUE"]:
         enable_build_jobs = True
     else:
