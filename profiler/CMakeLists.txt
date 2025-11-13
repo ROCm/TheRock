@@ -181,6 +181,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBPROJECT_DEPS
       aqlprofile
       rocprofiler-sdk
+      rocprofiler-compute
       roctracer
       ${_rocprofiler_sdk_optional_deps}
   )
