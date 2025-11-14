@@ -114,8 +114,8 @@ jobs:
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
-          echo "tmp_cloudfront_url=https://d25kgig7rdsyks.cloudfront.net/v2" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://d25kgig7rdsyks.cloudfront.net/v2-staging" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.devreleases.amd.com/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.devreleases.amd.com/v2-staging" >> $GITHUB_ENV
           echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
 
       - name: Generate release information
@@ -273,7 +273,18 @@ jobs:
         uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
+          special-characters-workaround: true
+
+      # TODO: upload logs even if the build fails (separate from artifact upload?)
+      - name: Post Build Upload
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          python3 build_tools/github_actions/post_build_upload.py \
+            --run-id ${{ github.run_id }} \
+            --artifact-group "${{ matrix.target_bundle.amdgpu_family }}" \
+            --build-dir ${{ env.BUILD_DIR }} \
+            --upload
 
       - name: Upload Releases to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}

@@ -56,12 +56,12 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-all/
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-dgpu/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -99,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -138,10 +138,13 @@ LINUX_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
+    "rocm_sysdeps_liblzma",
+    "rocm-openblas",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -153,9 +156,11 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "hipblaslt",
     "miopen",
+    "rocm-openblas",
 ]
 
 
@@ -312,7 +317,7 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     current = env.get(flagname, "")
     append = ""
     for compiler_flag in compiler_flags:
-        append += f" {compiler_flag}"
+        append += f"{compiler_flag} "
     env[flagname] = f"{current}{append}"
     print(f"-- Appended {flagname}+={append}")
 
@@ -390,6 +395,15 @@ def do_build(args: argparse.Namespace):
                 addl_triton_env = json.load(f)
                 print(f"-- Additional triton build env vars: {addl_triton_env}")
             env.update(addl_triton_env)
+        # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
+        # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
+        # trition) may pick up TheRock's LLVM instead of triton's.
+        # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
+        # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
+        # See also https://github.com/ROCm/TheRock/issues/1999.
+        env[
+            "TRITON_APPEND_CMAKE_ARGS"
+        ] = "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
 
     if is_windows:
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
@@ -404,8 +418,8 @@ def do_build(args: argparse.Namespace):
         env.update(
             {
                 # Workaround GCC12 compiler flags.
-                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
         )
 
@@ -428,6 +442,18 @@ def do_build(args: argparse.Namespace):
         )
     else:
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+
+    # OpenBLAS path setup
+    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    if not host_math_path.exists():
+        print(
+            "WARNING: Default location of host-math not found. "
+            "Will not build with OpenBLAS support."
+        )
+    else:
+        env["BLAS"] = "OpenBLAS"
+        env["OpenBLAS_HOME"] = str(host_math_path)
+        env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
     # Build triton.
     triton_requirement = None
@@ -615,7 +641,9 @@ def do_build_pytorch(
                 use_fbgemm_genai = "ON"
             else:
                 use_fbgemm_genai = "OFF"
-            print(f"FBGEMM_GENAI default behavior based on version: {use_fbgemm_genai}")
+            print(
+                f"FBGEMM_GENAI default behavior based on PyTorch version: {use_fbgemm_genai}"
+            )
         else:
             # Explicit override: user has set the flag to true/false
             use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
@@ -625,19 +653,24 @@ def do_build_pytorch(
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
         if args.enable_pytorch_flash_attention_linux is None:
-            # Default behavior — determined by PyTorch version
-            if pytorch_build_version_parsed.release < (2, 8):
-                use_flash_attention = "ON"
-            else:
+            # Default behavior — determined by if triton is build
+            use_flash_attention = "ON" if triton_requirement else "OFF"
+            if "gfx103" in env["PYTORCH_ROCM_ARCH"]:
+                # no aotriton support for gfx103X
                 use_flash_attention = "OFF"
             print(
-                f"Flash Attention default behavior based on pytorch version: {use_flash_attention}"
+                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
-            use_flash_attention = (
-                "ON" if args.enable_pytorch_flash_attention_linux else "0FF"
-            )
+            if args.enable_pytorch_flash_attention_linux:
+                assert (
+                    triton_requirement
+                ), "Must build with triton if wanting to use flash attention"
+                use_flash_attention = "ON"
+            else:
+                use_flash_attention = "OFF"
+
             print(f"Flash Attention override set by flag: {use_flash_attention}")
 
         env.update(
@@ -712,6 +745,10 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+
+        # needed to find liblzma packaged by rocm as sysdep to build aotriton
+        os.environ["PKG_CONFIG_PATH"] = f"{sysdeps_dir / 'lib' / 'pkgconfig'}"
+        os.environ["LD_LIBRARY_PATH"] = f"{sysdeps_dir / 'lib'}"
 
     print("+++ Uninstalling pytorch:")
     exec(
@@ -957,7 +994,6 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(

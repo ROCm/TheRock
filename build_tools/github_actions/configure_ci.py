@@ -57,7 +57,7 @@ from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
     amdgpu_family_info_matrix_postsubmit,
     amdgpu_family_info_matrix_nightly,
-    amdgpu_family_info_matrix_all,
+    get_all_families_for_trigger_types,
 )
 from fetch_test_configurations import test_matrix
 
@@ -225,12 +225,24 @@ def get_pr_labels(args) -> List[str]:
     return labels
 
 
-def filter_known_names(requested_names: List[str], name_type: str) -> List[str]:
-    """Filters a requested names list down to known names."""
-    known_references = {
-        "target": amdgpu_family_info_matrix_all,
-        "test": test_matrix,
-    }
+def filter_known_names(
+    requested_names: List[str], name_type: str, target_matrix=None
+) -> List[str]:
+    """Filters a requested names list down to known names.
+
+    Args:
+        requested_names: List of names to filter
+        name_type: Type of name ('target' or 'test')
+        target_matrix: For 'target' type, the specific family matrix to use. Required for 'target' type.
+    """
+    if name_type == "target":
+        assert (
+            target_matrix is not None
+        ), "target_matrix must be provided for 'target' name_type"
+        known_references = {"target": target_matrix}
+    else:
+        known_references = {"test": test_matrix}
+
     filtered_names = []
     if name_type not in known_references:
         print(f"WARNING: unknown name_type '{name_type}'")
@@ -269,6 +281,36 @@ def matrix_generator(
     # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
     selected_test_names = []
 
+    # Determine which trigger types are active for proper matrix lookup
+    active_trigger_types = []
+    if is_pull_request:
+        active_trigger_types.append("presubmit")
+    if is_push and base_args.get("branch_name") == "main":
+        active_trigger_types.extend(["presubmit", "postsubmit"])
+    if is_schedule:
+        active_trigger_types.append("nightly")
+
+    # Get the appropriate family matrix based on active triggers
+    # For workflow_dispatch and PR labels, we need to check all matrices
+    if is_workflow_dispatch or is_pull_request:
+        # For workflow_dispatch, check all possible matrices
+        lookup_trigger_types = ["presubmit", "postsubmit", "nightly"]
+        lookup_matrix = get_all_families_for_trigger_types(lookup_trigger_types)
+        print(f"Using family matrix for trigger types: {lookup_trigger_types}")
+    elif active_trigger_types:
+        lookup_matrix = get_all_families_for_trigger_types(active_trigger_types)
+        print(f"Using family matrix for trigger types: {active_trigger_types}")
+    else:
+        # This code path should never be reached in production workflows
+        # as they only trigger on main branch pushes, PRs, workflow_dispatch, or schedule.
+        # If this error is raised, it indicates an unexpected trigger combination.
+        raise AssertionError(
+            f"Unreachable code: no trigger types determined. "
+            f"is_pull_request={is_pull_request}, is_workflow_dispatch={is_workflow_dispatch}, "
+            f"is_push={is_push}, is_schedule={is_schedule}, "
+            f"branch_name={base_args.get('branch_name')}"
+        )
+
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
 
@@ -281,7 +323,7 @@ def matrix_generator(
         requested_target_names = input_gpu_targets.translate(translator).split()
 
         selected_target_names.extend(
-            filter_known_names(requested_target_names, "target")
+            filter_known_names(requested_target_names, "target", lookup_matrix)
         )
 
         # If any workflow dispatch test labels are specified, we run full tests for those specific tests
@@ -318,13 +360,13 @@ def matrix_generator(
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
             if "gfx" in label:
-                target, _ = label.split("-")
+                target = label.split("-")[0]
                 requested_target_names.append(target)
             if "test:" in label:
                 _, test_name = label.split(":")
                 requested_test_names.append(test_name)
         selected_target_names.extend(
-            filter_known_names(requested_target_names, "target")
+            filter_known_names(requested_target_names, "target", lookup_matrix)
         )
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
@@ -356,7 +398,8 @@ def matrix_generator(
     ), f"Expected build variant {platform} in {all_build_variants}"
     for target_name in unique_target_names:
         # Filter targets to only those matching the requested platform.
-        platform_set = amdgpu_family_info_matrix_all.get(target_name)
+        # Use the trigger-appropriate lookup matrix
+        platform_set = lookup_matrix.get(target_name)
         if platform in platform_set:
             platform_info = platform_set.get(platform)
             assert isinstance(platform_info, dict)
@@ -385,7 +428,6 @@ def matrix_generator(
                 # If the build variant level notes expect_failure, set it on the overall row.
                 # But if not, honor what is already there.
                 if build_variant_info.get("expect_failure", False):
-                    del build_variant_info["expect_failure"]
                     matrix_row["expect_failure"] = True
                 del matrix_row["build_variants"]
                 matrix_row.update(build_variant_info)

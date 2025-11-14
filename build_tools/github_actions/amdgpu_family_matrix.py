@@ -43,14 +43,14 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-all",
+            "family": "gfx110X-dgpu",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
-            "family": "gfx110X-all",
+            "family": "gfx110X-dgpu",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -75,9 +75,7 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            # Networking issue: https://github.com/ROCm/TheRock/issues/1660
-            # Label is "linux-mi355-1gpu-ossci-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -103,20 +101,21 @@ amdgpu_family_info_matrix_postsubmit = {
 amdgpu_family_info_matrix_nightly = {
     "gfx90x": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx90X-gpu-rocm",
             "family": "gfx90X-dcgpu",
-            "expect_failure": False,
+            "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
+        # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
-            "expect_failure": False,
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {
+        # TODO(#1926): Resolve bgemm kernel hip file generation error, to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
@@ -124,10 +123,10 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
+        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": False,
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
@@ -137,16 +136,27 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-rx6950-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "expect_failure": False,
             "sanity_check_only_for_family": True,
-            "expect_pytorch_failure": True,
         },
+        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "expect_failure": False,
             "expect_pytorch_failure": True,
+        },
+    },
+    "gfx110x": {
+        "linux": {
+            "test-runs-on": "linux-gfx1101-gpu-rocm",
+            "family": "gfx110X-dgpu",
+            "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
+        },
+        "windows": {
+            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            "family": "gfx110X-dgpu",
+            "build_variants": ["release"],
         },
     },
     "gfx1150": {
@@ -154,19 +164,33 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx1150",
             "build_variants": ["release"],
-            "expect_failure": False,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
             "build_variants": ["release"],
-            "expect_failure": False,
         },
     },
 }
 
-amdgpu_family_info_matrix_all = (
-    amdgpu_family_info_matrix_presubmit
-    | amdgpu_family_info_matrix_postsubmit
-    | amdgpu_family_info_matrix_nightly
-)
+
+def get_all_families_for_trigger_types(trigger_types):
+    """
+    Returns a combined family matrix for the specified trigger types.
+    trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
+    """
+    result = {}
+    matrix_map = {
+        "presubmit": amdgpu_family_info_matrix_presubmit,
+        "postsubmit": amdgpu_family_info_matrix_postsubmit,
+        "nightly": amdgpu_family_info_matrix_nightly,
+    }
+
+    for trigger_type in trigger_types:
+        if trigger_type in matrix_map:
+            for family_name, family_config in matrix_map[trigger_type].items():
+                # Only add if not already present (first occurrence wins)
+                if family_name not in result:
+                    result[family_name] = family_config
+
+    return result

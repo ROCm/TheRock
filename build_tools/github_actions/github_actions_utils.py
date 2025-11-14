@@ -112,10 +112,14 @@ def gha_get_request_headers():
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    # If GITHUB_TOKEN environment variable is available, include it in the API request to avoid a lower rate limit
+
+    # If GITHUB_TOKEN environment variable is available, include it in the API
+    # request to avoid a lower rate limit
     gh_token = os.getenv("GITHUB_TOKEN", "")
     if gh_token:
         headers["Authorization"] = f"Bearer {gh_token}"
+    else:
+        _log(f"Warning: GITHUB_TOKEN not set, requests may be rate limited")
 
     return headers
 
@@ -159,10 +163,13 @@ def retrieve_bucket_info(
     """Given a github repository and a workflow run, retrieves bucket information.
 
     This is intended to segment artifacts by repository and trust level, with
-    artifacts split across three buckets:
-      * therock-artifacts
+    artifacts split across several buckets:
+      * therock-ci-artifacts
+      * therock-ci-artifacts-external
       * therock-artifacts-internal
-      * therock-artifacts-external
+      * therock-dev-artifacts
+      * therock-nightly-artifacts
+      * therock-release-artifacts
 
     Typically while run as a continious CI/CD pipeline, this function should
     return the same bucket information for each stage of the pipeline. While
@@ -215,12 +222,21 @@ def retrieve_bucket_info(
         else f"{owner}-{repo_name}/"
     )
 
-    if external_repo == "":
-        bucket = "therock-artifacts"
-    elif repo_name == "therock-releases" and owner == "ROCm" and not is_pr_from_fork:
-        bucket = "therock-artifacts-internal"
+    release_type = os.getenv("RELEASE_TYPE")
+    if release_type:
+        _log(f"  (implicit) RELEASE_TYPE: {release_type}")
+        bucket = f"therock-{release_type}-artifacts"
     else:
-        bucket = "therock-artifacts-external"
+        if external_repo == "":
+            bucket = "therock-ci-artifacts"
+        elif (
+            repo_name == "therock-releases-internal"
+            and owner == "ROCm"
+            and not is_pr_from_fork
+        ):
+            bucket = "therock-artifacts-internal"
+        else:
+            bucket = "therock-ci-artifacts-external"
 
     _log("Retrieved bucket info:")
     _log(f"  external_repo: {external_repo}")

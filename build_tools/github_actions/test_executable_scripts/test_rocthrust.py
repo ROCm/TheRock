@@ -86,8 +86,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--exclude-regex",
-    "^copy.hip$|scan.hip",
     "--timeout",
     "300",
     "--repeat",

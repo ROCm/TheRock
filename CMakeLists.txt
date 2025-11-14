@@ -18,6 +18,7 @@ include(CMakeDependentOption)
 include(ExternalProject)
 include(therock_globals)
 include(therock_default_targets)
+include(therock_detect_python_versions)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
@@ -77,6 +78,9 @@ option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds in
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
+
+# List of python executables to use for multi-version python builds
+set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "Build for multiple python versions in supported projects (default to Python3_EXECUTABLE if empty)")
 
 # Source settings.
 # Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
@@ -231,6 +235,12 @@ therock_add_feature(HIP_RUNTIME
   REQUIRES COMPILER ${_hip_runtime_platform_requirements}
 )
 
+therock_add_feature(OCL_RUNTIME
+  GROUP CORE
+  DESCRIPTION "Enables the OCL runtime"
+  REQUIRES COMPILER ${_hip_runtime_platform_requirements}
+)
+
 # Profiler Features.
 if(THEROCK_FLAG_INCLUDE_PROFILER)
   therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
@@ -285,7 +295,7 @@ therock_add_feature(FFT
 )
 therock_add_feature(SPARSE
   GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
+  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse)"
   REQUIRES COMPILER HIP_RUNTIME BLAS PRIM ${_optional_profiler_requirements}
 )
 if(NOT WIN32)
@@ -308,6 +318,19 @@ if(NOT WIN32)
   cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL "Enables composable kernel in MIOpen" ON ${THEROCK_ENABLE_COMPOSABLE_KERNEL} OFF)
 endif()
 
+cmake_dependent_option(THEROCK_ROCWMMA_USE_ROCBLAS "Enables rocBLAS validation in rocWMMA" ON "THEROCK_ENABLE_ROCWMMA;THEROCK_ENABLE_BLAS" OFF)
+cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS "Enables building rocWMMA benchmarks" OFF "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
+if(THEROCK_ROCWMMA_USE_ROCBLAS)
+  set(_rocwmma_blas_requirements "BLAS")
+else()
+  set(_rocwmma_blas_requirements "")
+endif()
+therock_add_feature(ROCWMMA
+  GROUP MATH_LIBS
+  DESCRIPTION "Enables rocWMMA"
+  REQUIRES COMPILER HIP_RUNTIME ${_rocwmma_blas_requirements}
+)
+
 # ML-Libs Features.
 therock_add_feature(MIOPEN
   GROUP ML_LIBS
@@ -322,6 +345,12 @@ if(NOT WIN32)
     GROUP ML_LIBS
     DESCRIPTION "Enables the hipDNN project"
     REQUIRES COMPILER HIP_RUNTIME
+  )
+
+  therock_add_feature(MIOPEN_PLUGIN
+    GROUP ML_LIBS
+    DESCRIPTION "Enables the MIOpen plugin project"
+    REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
   )
 endif()
 
@@ -389,6 +418,7 @@ endif()
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
 set(THEROCK_BUNDLED_LIBDRM)
+set(THEROCK_BUNDLED_LIBLZMA)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
@@ -408,6 +438,7 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
+    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)

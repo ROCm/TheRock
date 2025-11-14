@@ -27,6 +27,7 @@ project wide:
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
   - `THEROCK_BUNDLED_LIBDRM`
+  - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
   - `THEROCK_BUNDLED_ZLIB`
@@ -83,6 +84,12 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Import library: `PkgConfig::DRM_AMDGPU`
 - Vars: `DRM_AMDGPU_INCLUDE_DIRS`
 
+## liblzma
+
+- Canonical method: `find_package(LibLZMA)`
+- Import library: `LibLZMA::LibLZMA`
+- Alternatives: `pkg_check_modules(LZMA liblzma)`
+
 ### numactl
 
 Provides the `libnuma` library. Tools are not included in bundled sysdeps.
@@ -92,6 +99,16 @@ Provides the `libnuma` library. Tools are not included in bundled sysdeps.
 - Vars: `NUMA_INCLUDE_DIRS`, `NUMA_INCLUDE_LIBRARIES` (can be used to avoid
   a hard-coded dep on `numa::numa`, which seems to vary across systems)
 - Alternatives: `pkg_check_modules(NUMA numa)`
+
+## simde
+
+SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics.
+
+- Canonical method: `pkg_check_modules(simde REQUIRED IMPORTED_TARGET simde)`
+- Import library: `PkgConfig::simde`
+- Vars: `simde_INCLUDE_DIRS`
+- Alternatives: none
+- Note: Header-only library, provides portable SIMD intrinsics (SSE, AVX, NEON, etc.)
 
 ## sqlite3
 
