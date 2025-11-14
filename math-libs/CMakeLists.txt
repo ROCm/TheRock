@@ -289,6 +289,8 @@ if(THEROCK_ENABLE_ROCWMMA)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocwmma"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA"
     BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx1100  # TODO: Fix rocwmma to accept an empty target list.
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
