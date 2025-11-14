@@ -1,7 +1,3 @@
-# This CI ASAN workflow is triggered by:
-#   - push to main branch
-#   - workflow dispatch
-
 name: CI ASAN
 
 on:
@@ -63,23 +59,3 @@ jobs:
     permissions:
       contents: read
       id-token: write
-
-  ci_summary:
-    name: CI Summary
-    if: always()
-    needs:
-      - setup
-      - linux_build_and_test
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Output failed jobs
-        run: |
-          echo '${{ toJson(needs) }}'
-          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
-            | jq --raw-output \
-            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
-          )"
-          if [[ "${FAILED_JOBS}" != "" ]]; then
-            echo "The following jobs failed: ${FAILED_JOBS}"
-            exit 1
-          fi
