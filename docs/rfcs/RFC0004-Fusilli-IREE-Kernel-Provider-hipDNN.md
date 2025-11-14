@@ -57,7 +57,7 @@ From a code organization standpoint, there are three components to reason about:
 1. Fusilli-Plugin. The hipDNN engine plugin for Fusilli. This specializes Fusilli for use within
    hipDNN specifically for AMD GPUs. Currently it is being developed
    [here](https://github.com/nod-ai/shark-ai/tree/main/fusilli-plugin), and has
-   began a migration to
+   begun a migration to
    [rocm-libraries](https://github.com/ROCm/rocm-libraries/tree/develop/projects/fusilli-plugin).
    In addition to Fusilli's dependencies, the plugin also depends on HIP, hipDNN
    frontend/SDK and hipDNN's dependencies transitively.
@@ -65,14 +65,15 @@ From a code organization standpoint, there are three components to reason about:
 ### Short term plan
 
 The immediate goal is to build the hipDNN engine plugin (i.e., component 3
-above) in `TheRock`, its dependencies require all three components to be part of
-the build. IREE is a large dep, the desire is to keep it an optional component,
-not built by default, therefore IREEs `TheRock` build and all dependent projects
+above) in `TheRock`. The plugin's dependencies require all three components to be part of
+the build. IREE is a large dependency; the desire is to keep it an optional component
+not built by default. Therefore IREE's `TheRock` build and all dependent projects
 (Fusilli, Fusilli-Plugin) will be gated behind a CMake option
 `THEROCK_ENABLE_BUILD_IREE_LIBS`
 
 For the various build scripts, this RFC proposes a new top level directory
-`iree-libs`, gated in the top level `CMakeLists.txt`.
+`iree-libs`, gated in the top level `CMakeLists.txt`. Note: `iree-libs` name is
+subject to change, we need a name, so `iree-libs` is a placeholder for the RFC.
 
 ```diff
  add_subdirectory(comm-libs)
@@ -119,18 +120,23 @@ otherwise treat it as a fairly standard `therock_cmake_subproject_declare`.
     ...
 ```
 
-IREE will only fetch submodules necessary to build the runtime. that's
+IREE will only fetch submodules necessary to build the runtime. That's
 currently sufficient for Fusilli as it uses the `iree-compile` binary (typically
 made available through a pip-install) for compilation. Longer term Fusilli may
-move towards using IREE compiler's C-API + `libIREECompiler.so` - this is also
-addressed in the "Long term requirements" section below.
+move towards using IREE compiler's C-API + `libIREECompiler.so` built in
+`TheRock` or it could pick up an `iree-compile` also built in `TheRock` - this
+is also addressed in the "Long term requirements" section below.
+
+Question: How can the `iree-compile` dependency be expressed in `TheRock`? Can
+the `iree-compile` dependency be pulled in as part of `TheRock` build, or the
+`iree-compiler` pip dependency be added to the final `TheRock` pip package?
 
 The IREE runtime builds as a series of `.a` archives which are intended to be
 linked into a final executable with LTO style optimization.
 
 #### `fusilli`
 
-Fusilli will move to `iree-org` as a standalone repo under Linux Foundation governance.
+Fusilli is moving to `iree-org` as a standalone repo under Linux Foundation governance.
 
 As Fusilli is a header only library with no submodules, it can be vendored similarly to
 other third party deps in `TheRock`.
@@ -161,7 +167,7 @@ and
 [`shark-ai`](https://github.com/nod-ai/shark-ai/tree/b33f16e77ef00b4c9378fcd5edd3123d72fdcb68/fusilli-plugin). It will complete its move to `rocm-libraries`.
 
 Fusilli-Plugin takes a build time dependency on `therock-fusilli` and
-`therock-iree-runtime` (a runtime dep on IREE will be required when it uses
+`therock-iree-runtime` (a runtime dependency on IREE will be required when it uses
 `libIREECompiler.so`), but otherwise builds as any other project in `TheRock`.
 
 The expected build artifact from the plugin integration is a self-contained
