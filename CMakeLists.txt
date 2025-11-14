@@ -338,21 +338,17 @@ therock_add_feature(MIOPEN
   REQUIRES COMPILER HIP_RUNTIME BLAS RAND ${_optional_profiler_requirements}
 )
 
-# hipDNN on Windows is disabled for now, but will be enabled in a follow-up change.
-# Windows support issue tracked at: https://github.com/ROCm/TheRock/issues/1822
-if(NOT WIN32)
-  therock_add_feature(HIPDNN
-    GROUP ML_LIBS
-    DESCRIPTION "Enables the hipDNN project"
-    REQUIRES COMPILER HIP_RUNTIME
-  )
+therock_add_feature(HIPDNN
+  GROUP ML_LIBS
+  DESCRIPTION "Enables the hipDNN project"
+  REQUIRES COMPILER HIP_RUNTIME
+)
 
-  therock_add_feature(MIOPEN_PLUGIN
-    GROUP ML_LIBS
-    DESCRIPTION "Enables the MIOpen plugin project"
-    REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
-  )
-endif()
+therock_add_feature(MIOPEN_PLUGIN
+  GROUP ML_LIBS
+  DESCRIPTION "Enables the MIOpen plugin project"
+  REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
+)
 
 # Finalize all feature flags.
 therock_finalize_features()
