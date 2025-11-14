@@ -9,12 +9,9 @@ on:
         type: string
         default: gfx94X-dcgpu
       artifact_run_id:
-        description: workflow run id to download the artifacts from. If artifact_location is passed run_id wont be used
+        description: workflow run id to download the artifacts from.
+        required: true
         type: string
-      artifact_location:
-        description: location of the downloaded artifact.
-        type: string
-        required: false
       rocm_version:
         description: ROCm version to append to the package( Like 8.0.0 or 8.1.0).
         required: true
@@ -67,7 +64,7 @@ jobs:
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || github.event.inputs.package_suffix != '' && github.event.inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
-      ARTIFACTS_DIR: ${{ inputs.artifact_location || format('{0}/output/artifacts', github.workspace) }}
+      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -87,19 +84,8 @@ jobs:
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
 
-
-      - name: Download artifact if called by another workflow
-        if: ${{ github.event_name == 'workflow_call' && (inputs.artifact_location || '') != '' }}
-        uses: actions/download-artifact@v4
-        with:
-          # This is the artifact generated from another build workflow passed through
-          name: output-files-${{ inputs.artifact_group }}
-          path: ${{ env.ARTIFACTS_DIR }}
-
       - name: Fetch Artifacts
-        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.artifact_location || '') == '' }}
         run: |
-          echo "artifact_location is not paased fetching artifact using run_id"
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
           python ./build_tools/fetch_artifacts.py \
             --run-id=${{ env.ARTIFACT_RUN_ID }} \
@@ -111,13 +97,22 @@ jobs:
         id: build-packages
         run: |
           echo "Building ${{ inputs.native_package_type }} packages for ${{ inputs.artifact_group }} ${{ inputs.artifact_run_id }}"
-          python ./build_tools/packaging/linux/build_package.py \
-            --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --rocm-version  ${{ inputs.rocm_version }} \
-            --target  ${{ inputs.artifact_group }} \
-            --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
-            --pkg-type ${{ inputs.native_package_type }} \
-            --version-suffix ${{ env.PACKAGE_SUFFIX }}
+          if [ -z "$PACKAGE_SUFFIX" ]; then
+            python ./build_tools/packaging/linux/build_package.py \
+              --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
+              --rocm-version  ${{ inputs.rocm_version }} \
+              --target  ${{ inputs.artifact_group }} \
+              --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
+              --pkg-type ${{ inputs.native_package_type }}
+          else
+            python ./build_tools/packaging/linux/build_package.py \
+              --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
+              --rocm-version  ${{ inputs.rocm_version }} \
+              --target  ${{ inputs.artifact_group }} \
+              --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
+              --pkg-type ${{ inputs.native_package_type }} \
+              --version-suffix ${{ env.PACKAGE_SUFFIX }}
+          fi
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
