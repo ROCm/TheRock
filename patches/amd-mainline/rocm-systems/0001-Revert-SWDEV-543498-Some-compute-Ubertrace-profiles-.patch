@@ -4,7 +4,8 @@ Date: Fri, 14 Nov 2025 12:28:29 -0500
 Subject: [PATCH] Revert "SWDEV-543498 - Some compute Ubertrace profiles are
  missing queue timing data (#1146)"
 
-This reverts commit 63a991a8b968f155e59ed46ff5654c4e086cb90d.
+This reverts commit 63a991a8b968f155e59ed46ff5654c4e086cb90d
+and commit 60cd210dac7e7a7830f56defcdc42e8a2c3cc57e.
 ---
  .../rocclr/device/pal/palubercapturemgr.cpp   | 49 +------------------
  .../rocclr/device/pal/palubercapturemgr.hpp   |  7 ---
