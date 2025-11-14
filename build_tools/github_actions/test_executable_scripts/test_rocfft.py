@@ -21,16 +21,17 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    test_filter = ["--smoketest"]
-else:
-    # "--test_prob" is the probability that a given test will run.
-    # Due to the large number of tests for rocFFT, we only run a subset.
-    test_filter = [
-        "--gtest_filter=-*multi_gpu*",
-        "--test_prob",
-        "0.02",
-    ]
+if test_type != "full":
+    if test_type == "smoke":
+        test_filter = ["--smoketest"]
+    else:
+        # "--test_prob" is the probability that a given test will run.
+        # Due to the large number of tests for rocFFT, we only run a subset.
+        test_filter = [
+            "--gtest_filter=-*multi_gpu*",
+            "--test_prob",
+            "0.02",
+        ]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

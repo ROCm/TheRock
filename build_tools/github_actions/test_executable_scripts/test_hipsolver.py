@@ -23,18 +23,18 @@ logging.basicConfig(level=logging.INFO)
 
 tests_to_exclude = [
     "*known_bug*",
-    "*HEEVD*float_complex*",
-    "*HEEVJ*float_complex*",
-    "*HEGVD*float_complex*",
-    "*HEGVJ*float_complex*",
-    "*HEEVDX*float_complex*",
-    "*SYTRF*float_complex*",
-    "*HEEVD*double_complex*",
-    "*HEEVJ*double_complex*",
-    "*HEGVD*double_complex*",
-    "*HEGVJ*double_complex*",
-    "*HEEVDX*double_complex*",
-    "*SYTRF*double_complex*",
+#    "*HEEVD*float_complex*",
+#    "*HEEVJ*float_complex*",
+#    "*HEGVD*float_complex*",
+#    "*HEGVJ*float_complex*",
+#    "*HEEVDX*float_complex*",
+#    "*SYTRF*float_complex*",
+#    "*HEEVD*double_complex*",
+#    "*HEEVJ*double_complex*",
+#    "*HEGVD*double_complex*",
+#    "*HEGVJ*double_complex*",
+#    "*HEEVDX*double_complex*",
+#    "*SYTRF*double_complex*",
 ]
 
 exclusion_list = ":".join(tests_to_exclude)
