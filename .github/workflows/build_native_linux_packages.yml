@@ -3,28 +3,33 @@ name: Build Native Linux Packages
 on:
   workflow_call:
     inputs:
-      amdgpu_family:
-        description: gfx arch for creating the artifact fetch url
+      artifact_group:
+        description: gfx arch group for the s3 server
         required: true
         type: string
+        default: gfx94X-dcgpu
       artifact_run_id:
-        description: workflow run id to download the artifacts from
+        description: workflow run id to download the artifacts from. If artifact_location is passed run_id wont be used
         type: string
+      artifact_location:
+        description: location of the downloaded artifact.
+        type: string
+        required: false
       rocm_version:
         description: ROCm version to append to the package( Like 8.0.0 or 8.1.0).
         required: true
         type: string
-      package_type:
+      native_package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
         type: string
       package_suffix:
-        description: The suffix to be added to package name(build_no or master or rc or combiantion).
+        description: The suffix to be added to package name(asan or static).
         required: false
         type: string
   workflow_dispatch:
     inputs:
-      amdgpu_family:
+      artifact_group:
         type: string
         default: gfx94X-dcgpu
       artifact_run_id:
@@ -34,7 +39,7 @@ on:
         description: ROCm version to append to the package( Like 8.0.0 or 8.1.0)
         type: string
         default: "0.0.1"
-      package_type:
+      native_package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
         type: choice
@@ -43,9 +48,9 @@ on:
           - deb
         default: "rpm"
       package_suffix:
-        description: The suffix to be added to package name(build_no or master or rc or combiantion).
-        type: false
-        default: "test"
+        description: The suffix to be added to package name(asan or static).
+        type: string
+        required: false
 
 permissions:
   id-token: write
@@ -60,9 +65,9 @@ jobs:
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
-      PACKAGE_SUFFIX: ${{ (inputs.package_suffix || github.event.inputs.package_suffix || 'test') }}.${{ inputs.artifact_run_id || github.run_id }}
+      PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || github.event.inputs.package_suffix != '' && github.event.inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
-      ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
+      ARTIFACTS_DIR: ${{ inputs.artifact_location || format('{0}/output/artifacts', github.workspace) }}
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -82,25 +87,36 @@ jobs:
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
 
+
+      - name: Download artifact if called by another workflow
+        if: ${{ github.event_name == 'workflow_call' && (inputs.artifact_location || '') != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          # This is the artifact generated from another build workflow passed through
+          name: output-files-${{ inputs.artifact_group }}
+          path: ${{ env.ARTIFACTS_DIR }}
+
       - name: Fetch Artifacts
+        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.artifact_location || '') == '' }}
         run: |
+          echo "artifact_location is not paased fetching artifact using run_id"
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
           python ./build_tools/fetch_artifacts.py \
             --run-id=${{ env.ARTIFACT_RUN_ID }} \
             --run-github-repo="ROCm/TheRock" \
-            --target=${{ inputs.amdgpu_family }} \
+            --artifact-group=${{ inputs.artifact_group }} \
             --output-dir=${{ env.ARTIFACTS_DIR }}
 
       - name: Build Packages
         id: build-packages
         run: |
-          echo "Building ${{ inputs.package_type }} packages for ${{ inputs.amdgpu_family }} ${{ inputs.artifact_run_id }}"
+          echo "Building ${{ inputs.native_package_type }} packages for ${{ inputs.artifact_group }} ${{ inputs.artifact_run_id }}"
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
             --rocm-version  ${{ inputs.rocm_version }} \
-            --target  ${{ inputs.amdgpu_family }} \
+            --target  ${{ inputs.artifact_group }} \
             --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
-            --pkg-type ${{ inputs.package_type }} \
+            --pkg-type ${{ inputs.native_package_type }} \
             --version-suffix ${{ env.PACKAGE_SUFFIX }}
 
       - name: Install AWS CLI
@@ -119,5 +135,5 @@ jobs:
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type ${{ inputs.package_type }} \
             --s3-bucket therock-deb-rpm-test \
-            --amdgpu-family ${{ inputs.amdgpu_family }} \
+            --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }}

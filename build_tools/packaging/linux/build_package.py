@@ -194,13 +194,9 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
     name = name_part.strip()
     email = email_part.replace(">", "").strip()
     # version is used along with package name
-    version = (
-        config.rocm_version
-        + "."
-        + version_to_str(config.rocm_version)
-        + "-"
-        + config.version_suffix
-    )
+    version = str(config.rocm_version)
+    if config.version_suffix:
+        version += f"-{str(config.version_suffix)}"
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_changelog.j2")
@@ -457,7 +453,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     pkginfo = get_package_info(pkg_name)
     # populate packge version details
-    version = f"{config.rocm_version}.{version_to_str(config.rocm_version)}"
+    version = f"{config.rocm_version}"
     # TBD: Whether to use component version details?
     #    version = pkginfo.get("Version")
 
@@ -874,7 +870,6 @@ def main(argv: list[str]):
     p.add_argument(
         "--version-suffix",
         type=str,
-        required=True,
         help="Version suffix to append to package names",
     )
 
