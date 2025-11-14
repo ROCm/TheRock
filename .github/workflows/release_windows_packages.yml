@@ -274,6 +274,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
+          special-characters-workaround: true
 
       # TODO: upload logs even if the build fails (separate from artifact upload?)
       - name: Post Build Upload

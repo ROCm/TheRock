@@ -186,6 +186,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          special-characters-workaround: true
 
       - name: Post Build Upload
         if: always()
