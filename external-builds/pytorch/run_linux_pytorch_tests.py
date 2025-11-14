@@ -50,6 +50,7 @@ Side-effects
 -----
 - This script modifies PYTHONPATH and sys.path to include PyTorch test directory
 - Creates a temporary MIOpen cache directory for each run
+- Sets HIP_VISIBLE_DEVICES environment variable to select specific GPU(s) for testing
 - Runs tests sequentially (--numprocesses=0) by default
 """
 
@@ -62,7 +63,6 @@ import tempfile
 from skip_tests.create_skip_tests import *
 from importlib.metadata import version
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
@@ -164,32 +164,26 @@ By default TheRock root dir is determined based on this script's location.""",
     return args
 
 
-def detect_amdgpu_family(amdgpu_family: str = "") -> Optional[str]:
-    """Auto-detect or validate the AMDGPU family using the amdgpu-arch command.
+def detect_amdgpu_family(amdgpu_family: str = "") -> list[str]:
+    """Detect and configure AMDGPU family using amdgpu-arch command.
 
-    This function supports three modes of operation:
-    1. If amdgpu_family is a specific GPU arch (e.g., "gfx1151"), returns it as-is
-    2. If amdgpu_family is a family with wildcard (e.g., "gfx94X"), returns first match of amdgpu-arch output
-    3. If amdgpu_family is empty, auto-detects from the first available GPU
+    This function always queries amdgpu-arch to get available GPUs and sets
+    HIP_VISIBLE_DEVICES to select the appropriate GPU(s) for testing.
 
+    Args:
+        amdgpu_family: AMDGPU family string. Can be:
+            - Empty string (default): Auto-detect and use first GPU (index 0)
+            - Specific arch (e.g., "gfx1151"): Find and use matching GPU
+            - Wildcard family (e.g., "gfx94X"): Find all matching GPUs
 
     Returns:
-        The detected or validated AMDGPU family string, or None if detection fails.
-    """
-    # Check if amdgpu_family is already set.
-    # If it is a family with wildcard, extract prefix for partial matching
-    partial_match = ""
-    if amdgpu_family:
-        family_part = amdgpu_family.split("-")[0]
-        if family_part.upper().endswith("X"):
-            # Extract prefix for partial matching (e.g., "gfx94X" -> "gfx94")
-            partial_match = family_part[:-1]
-        else:
-            # Already a specific GPU arch, return as-is
-            return amdgpu_family
+        List of detected AMDGPU family strings. Exits on failure.
 
+    Side effects:
+        Sets HIP_VISIBLE_DEVICES environment variable to comma-separated GPU indices.
+    """
     try:
-        # Find executable in current python env
+        # Find amdgpu-arch executable in current python environment
         print(
             f"Searching for amdgpu-arch in subdirectories of {Path(sys.executable).parent.parent}"
         )
@@ -199,14 +193,21 @@ def detect_amdgpu_family(amdgpu_family: str = "") -> Optional[str]:
             text=True,
             check=False,
         )
-        amdgpu_arch_cmd = proc.stdout.strip()
+        # There might be 2 matches: rocm_sdk_core and rocm_sdk_devel, so just take the first one
+        amdgpu_arch_cmd = proc.stdout.split("\n")[0].strip()
+
+        if not amdgpu_arch_cmd:
+            print("[ERROR] amdgpu-arch command not found in Python environment")
+            sys.exit(1)
+
+        # Query available GPUs
         proc = subprocess.run(
             [amdgpu_arch_cmd], capture_output=True, text=True, check=False
         )
 
-        if proc.returncode != 0 or proc.stderr:
-            print(f"[ERROR] AMDGPU arch auto-detection FAILED: {proc.stderr}")
-            return None
+        if proc.returncode != 0 or proc.stderr:  # or proc.stdout == "\n":
+            print(f"[ERROR] AMDGPU arch detection FAILED: {proc.stderr}")
+            sys.exit(1)
 
         available_gpus = [
             line.strip() for line in proc.stdout.split("\n") if line.strip()
@@ -214,31 +215,69 @@ def detect_amdgpu_family(amdgpu_family: str = "") -> Optional[str]:
 
         if not available_gpus:
             print("[ERROR] No AMD GPUs detected by amdgpu-arch")
-            return None
-
-        if amdgpu_family == "":
-            # Auto-detect: use first available GPU
-            detected_gpu = available_gpus[0]
-            print(
-                f"AMDGPU Arch auto-detected (based on GPU at index 0): {detected_gpu}"
-            )
-            return detected_gpu
-        else:
-            # Wildcard match: find first GPU matching the partial pattern
-            for gpu in available_gpus:
-                if partial_match in gpu:
-                    print(
-                        f"AMDGPU Arch auto-detected (based on partial match '{partial_match}'): {gpu}"
-                    )
-                    return gpu
-
-            print(
-                f"[ERROR] No GPU found matching pattern '{partial_match}'. GPUs found: {available_gpus}"
-            )
             sys.exit(1)
 
-    except FileNotFoundError:
-        print("[ERROR] amdgpu-arch command not found. Is ROCm installed?")
+        print(f"Available AMD GPUs: {available_gpus}")
+
+        # Determine which GPU to use based on input
+        selected_gpu_indices = []
+        selected_gpu_archs = []
+
+        if not amdgpu_family:
+            # Mode 1: Auto-detect - use first available GPU
+            selected_gpu_indices = [0]
+            selected_gpu_archs = [available_gpus[0]]
+            print(
+                f"AMDGPU Arch auto-detected (using GPU at index 0): {selected_gpu_archs}"
+            )
+        elif amdgpu_family.split("-")[0].upper().endswith("X"):
+            # Mode 2: Wildcard match (e.g., "gfx94X" matches "gfx942", "gfx940", etc.)
+            family_part = amdgpu_family.split("-")[0]
+            partial_match = family_part[:-1]  # Remove the 'X'
+
+            for idx, gpu in enumerate(available_gpus):
+                if partial_match in gpu:
+                    selected_gpu_indices += [idx]
+                    selected_gpu_archs += [gpu]
+            print(
+                f"AMDGPU Arch detected via wildcard match '{partial_match}': "
+                f"{selected_gpu_archs} (GPU indices {selected_gpu_indices})"
+            )
+
+            if len(selected_gpu_archs) == 0:
+                print(
+                    f"[ERROR] No GPU found matching wildcard pattern '{amdgpu_family}'. "
+                    f"Available GPUs: {available_gpus}"
+                )
+                sys.exit(1)
+        else:
+            # Mode 3: Specific GPU arch - validate it exists in available GPUs
+            for idx, gpu in enumerate(available_gpus):
+                if gpu == amdgpu_family or amdgpu_family in gpu:
+                    selected_gpu_indices += [idx]
+                    selected_gpu_archs += [gpu]
+                    print(
+                        f"AMDGPU Arch validated: {selected_gpu_archs} "
+                        f"(GPU indices {selected_gpu_indices})"
+                    )
+                    break
+
+            if selected_gpu_archs is None:
+                print(
+                    f"[ERROR] Requested GPU '{amdgpu_family}' not found in available GPUs. "
+                    f"Available GPUs: {available_gpus}"
+                )
+                sys.exit(1)
+
+        # Set HIP_VISIBLE_DEVICES to select the specific GPU
+        str_indices = ",".join(str(idx) for idx in selected_gpu_indices)
+        os.environ["HIP_VISIBLE_DEVICES"] = str_indices
+        print(f"Set HIP_VISIBLE_DEVICES={str_indices}")
+
+        return selected_gpu_archs
+
+    except FileNotFoundError as e:
+        print(f"[ERROR] Command not found: {e}")
         sys.exit(1)
     except Exception as e:
         print(f"[ERROR] Unexpected error during AMDGPU detection: {e}")

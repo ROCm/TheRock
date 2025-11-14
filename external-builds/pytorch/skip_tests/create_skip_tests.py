@@ -23,15 +23,21 @@ Usage Examples
 Programmatic usage:
     # Create a list of tests to be skipped as they are known to be failing on gfx942 and PyTorch 2.7
     from create_skip_tests import get_tests
-    skip_expr = get_tests("gfx942", "2.7", create_skip_list=True)
+    skip_expr = get_tests(["gfx942"], "2.7", create_skip_list=True)
     # Use skip_expr with pytest: pytest -k "{skip_expr}"
+
+    # Skip tests for multiple GPU families
+    skip_expr = get_tests(["gfx1011", "gfx1012"], "2.7", create_skip_list=True)
 
 Command-line usage:
     Run all test excluding known failures for gfx942 and PyTorch 2.7:
-    $ python create_skip_tests.py --amdgpu_family gfx942 --pytorch_version 2.7
+    $ python create_skip_tests.py --amdgpu-family gfx942 --pytorch-version 2.7
+
+    Run tests excluding failures for multiple GPU families:
+    $ python create_skip_tests.py --amdgpu-family "gfx1011,gfx1012" --pytorch-version 2.7
 
     Run all tests that are normally skipped for gfx942 and all pytorch versions:
-    $ python create_skip_tests.py --amdgpu_family gfx942 --pytorch_version all --include-tests
+    $ python create_skip_tests.py --amdgpu-family gfx942 --pytorch-version all --include-tests
 
 """
 
@@ -105,14 +111,14 @@ def import_skip_tests(pytorch_version: str = "") -> Dict[str, Dict]:
     return dict_skip_tests
 
 
-def create_list(amdgpu_family: str = "", pytorch_version: str = "") -> List[str]:
+def create_list(amdgpu_family: list[str] = [], pytorch_version: str = "") -> List[str]:
     """Create a list of test names based on filters.
 
     Aggregates test names from all applicable skip test definitions based on
     the specified AMDGPU family and PyTorch version.
 
     Args:
-        amdgpu_family: Target AMDGPU family (e.g., "gfx942", "gfx1151").
+        amdgpu_family: Target AMDGPU families (e.g., ["gfx942", "gfx1151"]).
             Tests marked for this family will be included.
         pytorch_version: PyTorch version for filtering (e.g., "2.7", "all", "").
             Determines which pytorch_*.py files are loaded.
@@ -127,15 +133,14 @@ def create_list(amdgpu_family: str = "", pytorch_version: str = "") -> List[str]
 
 
     Examples:
-        >>> tests = create_list("gfx942", "2.7")
+        >>> tests = create_list(["gfx942", "gfx1151"], "2.7")
         >>> # Returns: ["test_dropout", "test_conv2d", ...]
     """
     selected_tests = []
 
-    # Define filters: always include "common", plus specific AMDGPU family
+    # Define filters: always include "common", plus specific AMDGPU families
     filters = ["common"]
-    if amdgpu_family:
-        filters.append(amdgpu_family)
+    filters += amdgpu_family
 
     # Load skip_tests from generic.py and (pytorch_<version> or "all" pytorch versions)
     dict_skip_tests = import_skip_tests(pytorch_version)
@@ -153,7 +158,7 @@ def create_list(amdgpu_family: str = "", pytorch_version: str = "") -> List[str]
     return list(set(selected_tests))
 
 
-def cmd_arguments(argv: List[str]) -> argparse.Namespace:
+def parse_arguments(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="""
 Generates a list of tests to skip (or include) for pytest.
@@ -161,15 +166,15 @@ Output is a pytest -k expression that can be used directly with pytest.
 """
     )
     parser.add_argument(
-        "--amdgpu_family",
+        "--amdgpu-family",
         type=str,
         default="",
         required=False,
-        help="""AMDGPU family (e.g. "gfx942").
+        help="""AMDGPU family (e.g. "gfx942" or "gfx942, gfx1151").
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
     )
     parser.add_argument(
-        "--pytorch_version",
+        "--pytorch-version",
         type=str,
         default="",
         required=False,
@@ -190,7 +195,9 @@ Output can be used with 'pytest -k <list>'""",
 
 
 def get_tests(
-    amdgpu_family: str = "", pytorch_version: str = "", create_skip_list: bool = True
+    amdgpu_family: list[str] = [],
+    pytorch_version: str = "",
+    create_skip_list: bool = True,
 ) -> str:
     """Generate a pytest -k expression for test filtering.
 
@@ -198,8 +205,9 @@ def get_tests(
     compatible expression that either skips or includes the specified tests.
 
     Args:
-        amdgpu_family: Target AMDGPU family (e.g., "gfx942", "gfx1151").
-            Determines which family-specific tests to filter.
+        amdgpu_family: List of target AMDGPU families (e.g., ["gfx942"], ["gfx1011", "gfx1012"]).
+            Determines which family-specific tests to filter. Tests matching any of the
+            specified families will be included in the filter.
         pytorch_version: PyTorch version (e.g., "2.7", "all", "").
             Determines which version-specific test files to load.
         create_skip_list: If True, create a skip list (default).
@@ -234,7 +242,11 @@ def get_tests(
 
 
 if __name__ == "__main__":
-    args = cmd_arguments(sys.argv[1:])
+    args = parse_arguments(sys.argv[1:])
 
-    tests = get_tests(args.amdgpu_family, args.pytorch_version, not args.include_tests)
+    amdgpu_family = [
+        family.strip() for family in args.amdgpu_family.split(",") if args.amdgpu_family
+    ]
+
+    tests = get_tests(amdgpu_family, args.pytorch_version, not args.include_tests)
     print(tests)
