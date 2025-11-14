@@ -1,0 +1,21 @@
+# hipTensor
+[components.dbg."math-libs/hipTensor/stage"]
+optional = true
+
+[components.dev."math-libs/hipTensor/stage"]
+optional = true
+include = [
+  "include/hipTensor/*",
+]
+
+[components.lib."math-libs/hipTensor/stage"]
+optional = true
+
+[components.test."math-libs/hipTensor/stage"]
+optional = true
+include = [
+  # Samples
+  "bin/simple_*",
+  # Tests
+  "bin/*_test*",
+]

@@ -354,6 +354,16 @@ if(NOT WIN32)
   )
 endif()
 
+# hipTensor on Windows is disabled for now, but it is planned to be enabled in the future.
+# Windows support issue tracked at: https://github.com/ROCm/TheRock/issues/2068
+if(NOT WIN32)
+  therock_add_feature(HIPTENSOR
+    GROUP MATH_LIBS
+    DESCRIPTION "Enables the hipTensor project"
+    REQUIRES COMPILER COMPOSABLE_KERNEL
+  )
+endif()
+
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()

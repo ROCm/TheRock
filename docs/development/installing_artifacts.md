@@ -13,6 +13,7 @@ The script supports the following command-line options:
 | `--blas`          | Flag   | Include BLAS artifacts                                                 |
 | `--fft`           | Flag   | Include FFT artifacts                                                  |
 | `--hipdnn`        | Flag   | Include hipDNN artifacts                                               |
+| `--hiptensor`     | Flag   | Include hipTensor artifacts                                            |
 | `--input-dir`     | String | Existing TheRock directory to copy from                                |
 | `--miopen`        | Flag   | Include MIOpen artifacts                                               |
 | `--output-dir`    | Path   | Output directory for TheRock installation (default: `./therock-build`) |
