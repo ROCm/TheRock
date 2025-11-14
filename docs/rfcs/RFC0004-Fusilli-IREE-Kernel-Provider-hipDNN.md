@@ -130,8 +130,7 @@ linked into a final executable with LTO style optimization.
 
 #### `fusilli`
 
-Fusilli will move under `iree-org` governance in a standalone repo (presumably
-named `fusilli`).
+Fusilli will move to `iree-org` as a standalone repo under Linux Foundation governance.
 
 As Fusilli is a header only library with no submodules, it can be vendored similarly to
 other third party deps in `TheRock`.
@@ -168,11 +167,6 @@ Fusilli-Plugin takes a build time dependency on `therock-fusilli` and
 The expected build artifact from the plugin integration is a self-contained
 `libfusilliplugin.so`, built with Fusilli headers, and linking IREE runtime
 libraries with LTO style optimizations.
-
-Question: Once build tree is normalized per RFC0003, Fusilli-Plugin would
-ideally live under `dnn-providers`. It could be moved, or a small shim component
-taking a runtime dep on `therock-fusilli-plugin` could be placed in
-`dnn-providers`? What's preferable?
 
 ### Long term requirements
 
