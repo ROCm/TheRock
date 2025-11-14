@@ -23,6 +23,17 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -57,6 +68,21 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+      jax_ref:
+        description: Branch/tag/sha of rocm/rocm-jax to build
+        type: string
+        default: "rocm-jaxlib-v0.7.1"
 
 permissions:
   id-token: write
@@ -72,16 +98,21 @@ jobs:
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+    outputs:
+      jax_whl_list: ${{ steps.jax_wheel_list.outputs.jax_whl_list }}
     steps:
-      - name: Checkout TheRock
+      - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Checkout JAX
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ matrix.jax_ref }}
+          ref: ${{ inputs.jax_ref || matrix.jax_ref }}
 
       - name: Configure Git Identity
         run: |
@@ -117,6 +148,13 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
 
+      - name: jax wheel list
+        id: jax_wheel_list
+        run: |
+          export jax_whl_list="$(python3 ./build_tools/mapping_built_jax_wheels.py --dir "${{ env.PACKAGE_DIST_DIR }}")"
+          echo "jax_whl_list=${jax_whl_list}" >> "$GITHUB_OUTPUT"
+          echo "${jax_whl_list}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
@@ -130,3 +168,23 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+
+  test_jax_wheels:
+    name: Test JAX wheels | ${{ inputs.amdgpu_family }}
+    needs: [build_jax_wheels]
+    if: ${{ github.repository_owner == 'ROCm' }}
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    uses: ./.github/workflows/test_linux_jax_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      release_type: ${{ inputs.release_type }}
+      package_index_url: ${{ inputs.cloudfront_staging_url }}
+      rocm_version: ${{ inputs.rocm_version }}
+      tar_url: ${{ inputs.tar_url }}
+      python_versions: ${{ inputs.python_versions }}
+      jax_ref: rocm-jaxlib-v0.7.1
+      jax_whl_list: ${{ needs.build_jax_wheels.outputs.jax_whl_list }}
+      test_runs_on: "linux-mi325-1gpu-ossci-rocm"
