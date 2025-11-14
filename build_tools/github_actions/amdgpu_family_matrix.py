@@ -149,7 +149,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
+            "test-runs-on": "linux-gfx1101-gpu-rocm",
             "family": "gfx110X-dgpu",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
