@@ -8,10 +8,9 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build pl
 
 TheRock includes:
 
-- Nightly releases of ROCm and PyTorch
+- Nightly releases of ROCm, PyTorch and Jax
 - A CMake super-project for HIP and ROCm source builds
-- Support for building PyTorch with ROCm from source
-  - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
+- Support for building PyTorch and JAX with ROCm from source
 - Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
 - Comprehensive CI/CD pipelines for building, testing, and releasing supported components
@@ -20,16 +19,17 @@ TheRock includes:
 
 > [!IMPORTANT]
 > See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-> ROCm and PyTorch packages.
+> ROCm, PyTorch and Jax packages.
 
 ### Nightly release status
 
 Packages and Python wheels:
 
-| Platform |                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages |
-| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Portable Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) |
-| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) |                      [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |
+| Platform | Prebuilt tarballs and ROCm Python packages | PyTorch Python packages | JAX Python Packages |
+| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Portable Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) | [![Build Linux JAX Wheels](https://github.com/ROCm/TheRock/actions/workflows/build_linux_jax_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_linux_jax_wheels.yml?query=branch%3Amain) |
+| Windows  | [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) | [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |  |
+
 
 ## Building from source
 

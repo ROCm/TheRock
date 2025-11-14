@@ -22,6 +22,8 @@ Table of contents:
   - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
+  - [Installing JAX Python packages](#installing-jax-python-packages)
+  - [Using JAX Python packages](#using-jax-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
   - [Installing release tarballs](#installing-release-tarballs)
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
@@ -374,6 +376,111 @@ print(torch.cuda.get_device_name(0))
 See also the
 [Testing the PyTorch installation](https://rocm.docs.amd.com/projects/install-on-linux/en/develop/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation)
 instructions in the AMD ROCm documentation.
+
+### Installing JAX Python packages
+
+Using the index pages [listed above](#installing-rocm-python-packages), you can
+also install `jaxlib`, `jax-rocm7-plugin`, and `jax-rocm7-pjrt`.
+
+> [!NOTE]
+> By default, pip will install the latest versions of each package. If you want to
+> install older versions take note of the compatibility matrix:
+>
+> | jaxlib version | jax-rocm7-plugin version | jax-rocm7-pjrt version |
+> | ------------- | ------------------ | ------------------- |
+> | 0.7.1         | 0.7.1               | 0.7.1              |
+>
+> For example, `jax` 0.7.1 and compatible wheels can be installed by specifying
+>
+> ```
+> jax-rocm7-plugin==0.7.1 jax-rocm7-pjrt==0.7.1 jaxlib==0.7.1
+> ```
+>
+> See also
+>
+> - [Supported Jax versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/jax#supported-jax-versions)
+> - [Installing previous versions of Jax](https://github.com/ROCm/rocm-jax/releases/)
+
+> [!TIP]
+> The `jax` packages depend on `rocm[libraries]`, so ROCm packages should
+> be installed First.
+> [!NOTE]
+> We will update the installation of ROCm automalically soon just by installing jax wheels.
+
+
+#### jax for gfx94X-dcgpu
+
+Supported devices in this family:
+
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI300A/MI300X | gfx942     |
+
+```bash
+python -m pip install \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
+  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
+```
+
+#### jax for gfx950-dcgpu
+
+Supported devices in this family:
+
+| Product Name  | GFX Target |
+| ------------- | ---------- |
+| MI350X/MI355X | gfx950     |
+
+```bash
+python -m pip install \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
+  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
+```
+
+#### jax for gfx110X-dgpu
+
+Supported devices in this family:
+
+| Product Name                       | GFX Target |
+| ---------------------------------- | ---------- |
+| AMD RX 7900 XTX                    | gfx1100    |
+| AMD RX 7800 XT                     | gfx1101    |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+
+```bash
+python -m pip install \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
+```
+
+#### jax for gfx1151
+
+Supported devices in this family:
+
+| Product Name        | GFX Target |
+| ------------------- | ---------- |
+| AMD Strix Halo iGPU | gfx1151    |
+
+```bash
+python -m pip install \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
+  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
+```
+
+#### jax for gfx120X-all
+
+Supported devices in this family:
+
+| Product Name     | GFX Target |
+| ---------------- | ---------- |
+| AMD RX 9060 / XT | gfx1200    |
+| AMD RX 9070 / XT | gfx1201    |
+
+```bash
+python -m pip install \
+  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
+  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
+```
+
 
 ## Installing from tarballs
 
