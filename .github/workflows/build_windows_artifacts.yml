@@ -11,8 +11,8 @@ on:
         default: gfx1151
       build_variant_label:
         type: string
-        description: "A label for the build variant (ex: 'Release', 'ASAN')"
-        default: "Release"
+        description: "A label for the build variant (ex: 'release', 'asan')"
+        default: "release"
       build_variant_suffix:
         type: string
         description: "The build variant suffix (ex: 'asan' suffix -> 'gfx94X-dcgpu-asan')"

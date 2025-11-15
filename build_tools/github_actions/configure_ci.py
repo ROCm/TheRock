@@ -17,6 +17,7 @@
   * WINDOWS_TEST_LABELS (optional): Comma-separated list of test labels to test
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
+  * BUILD_VARIANT (optional): The build variant to run (ex: release, asan)
 
   Environment variables (for pull requests):
   * PR_LABELS (optional) : JSON list of PR label names.
@@ -409,6 +410,13 @@ def matrix_generator(
                 build_variant_names, list
             ), f"Expected 'build_variant' in platform: {platform_info}"
             for build_variant_name in build_variant_names:
+                # We have custom build variants for specific CI flows.
+                # For CI, we use the release build variant (for PRs, pushes to main, nightlies)
+                # For CI ASAN, we use the ASAN build variant (for pushes to main)
+                # In the case that the build variant is not requested, we skip it
+                if build_variant_name != base_args.get("build_variant"):
+                    continue
+
                 # Merge platform_info and build_variant_info into a matrix_row.
                 matrix_row = dict(platform_info)
 
@@ -416,13 +424,6 @@ def matrix_generator(
                 assert isinstance(
                     build_variant_info, dict
                 ), f"Expected {build_variant_name} in {platform_build_variants} for {platform_info}"
-
-                # If "skip_presubmit_build" is enabled in `amdgpu_family_matrix.py`, then we skip for presubmit.
-                # This build variant is typically skipped for variants with long build times
-                if is_pull_request and build_variant_info.get(
-                    "skip_presubmit_build", False
-                ):
-                    continue
 
                 # If the build variant level notes expect_failure, set it on the overall row.
                 # But if not, honor what is already there.
@@ -571,5 +572,6 @@ if __name__ == "__main__":
     base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
         "WINDOWS_TEST_LABELS", ""
     )
+    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
 
     main(base_args, linux_families, windows_families)
