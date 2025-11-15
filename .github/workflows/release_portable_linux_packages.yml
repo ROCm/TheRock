@@ -322,3 +322,20 @@ jobs:
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
           key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+
+  build_native_package:
+    name : Build Native Packages
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
+    uses: ./.github/workflows/build_native_linux_packages.yml
+    with:
+      artifact_group: ${{ matrix.target_bundle.amdgpu_family }}
+      rocm_version: ${{ needs.setup_metadata.outputs.version }}
+      artifact_run_id: ${{ github.run_id }}
+      native_package_type: 'rpm'
+    needs: [setup_metadata, portable_linux_packages]

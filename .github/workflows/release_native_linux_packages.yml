@@ -56,11 +56,10 @@ jobs:
     name: Release Native Linux Package
     strategy:
       fail-fast: false
-
     uses: ./.github/workflows/build_native_linux_packages.yml
     with:
-      amdgpu_family: ${{ inputs.amdgpu_family }}
+      artifact_group: ${{ inputs.amdgpu_family }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       rocm_version: ${{ inputs.rocm_version }}
-      package_type: ${{ inputs.package_type }}
+      native_package_type: ${{ inputs.package_type }}
       package_suffix: ${{ inputs.package_suffix }}
