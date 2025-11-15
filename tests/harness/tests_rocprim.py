@@ -6,5 +6,5 @@ class TestRocPrim:
 
     def test_rocprim(self, orch, therock_path, result):
         """A Test case to verify rocprim"""
-        result.testVerdict = orch.runCtest(cwd=f"{therock_path}/bin/rocprim")
-        assert result.testVerdict
+        result.verdict = orch.runCtest(cwd=f"{therock_path}/bin/rocprim")
+        assert result.verdict

@@ -8,9 +8,9 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import gha_append_step_summary
+# THEROCK_DIR = Path(__file__).resolve().parent.parent.parent.parent
+# sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+# from github_actions_utils import gha_append_step_summary
 
 
 class Table:
@@ -53,4 +53,4 @@ class Report(object):
         # tables
         for table in self.tables:
             log.info(table.pprint())
-            gha_append_step_summary(table.pprint())
+            # gha_append_step_summary(table.pprint())

@@ -115,6 +115,13 @@ amdgpu_family_info_matrix_nightly = {
             "expect_pytorch_failure": True,
         },
     },
+    "gfx94x": {
+        "linux": {
+            "test-runs-on": "linux-mi325-8gpu-ossci-rocm",
+            "family": "gfx94X-dcgpu",
+            "build_variants": ["release"],
+        }
+    },
     "gfx101x": {
         # TODO(#1926): Resolve bgemm kernel hip file generation error, to enable PyTorch builds
         "linux": {
