@@ -11,6 +11,8 @@ therock_cmake_subproject_declare(therock-spdlog
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   BUILD_DEPS
     therock-fmt
   CMAKE_ARGS
