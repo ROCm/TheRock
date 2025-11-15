@@ -88,6 +88,36 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
   ##############################################################################
+  # rocprofiler-compute
+  ##############################################################################
+  therock_cmake_subproject_declare(rocprofiler-compute
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    RUNTIME_DEPS
+      rocprofiler-sdk
+      aqlprofile
+      hip-clr
+      rocprofiler-register
+      ${_rocprofiler_sdk_optional_deps}
+      ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_SQLITE3}
+    )
+    therock_cmake_subproject_glob_c_sources(rocprofiler-compute
+      SUBDIRS .
+    )
+
+    therock_cmake_subproject_activate(rocprofiler-compute)
+
+  ##############################################################################
   # roctracer
   # This is a very old, deprecated library with a number of quirks. Long term,
   # everything is supposed to migrate to rocprofiler-sdk, which has runtime
@@ -134,6 +164,24 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBPROJECT_DEPS
       aqlprofile
       rocprofiler-sdk
+      roctracer
+      ${_rocprofiler_sdk_optional_deps}
+  )
+
+  therock_provide_artifact(rocprofiler-compute
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-rocprofiler-compute.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      aqlprofile
+      rocprofiler-sdk
+      rocprofiler-compute
       roctracer
       ${_rocprofiler_sdk_optional_deps}
   )

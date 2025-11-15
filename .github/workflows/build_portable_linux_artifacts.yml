@@ -110,6 +110,10 @@ jobs:
         run: |
           ./build_tools/fetch_sources.py --jobs 12
 
+      - name: Install external python deps
+        run: |
+          pip install -r requirements-external.txt
+
       - name: Configure Projects
         env:
           cmake_preset: ${{ inputs.build_variant_cmake_preset }}
