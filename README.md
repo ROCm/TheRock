@@ -161,6 +161,7 @@ minimal build):
 | Component flag                      | Description                                   |
 | ----------------------------------- | --------------------------------------------- |
 | `-DTHEROCK_ENABLE_COMPILER=ON`      | Enables the GPU+host compiler toolchain       |
+| `-DTHEROCK_ENABLE_FLANG=ON`         | Enables Flang                                 |
 | `-DTHEROCK_ENABLE_HIPIFY=ON`        | Enables the hipify tool                       |
 | `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`  | Enables the core runtime components and tools |
 | `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`   | Enables the HIP runtime components            |
