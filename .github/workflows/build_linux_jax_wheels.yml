@@ -57,6 +57,10 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      jax_ref:
+        description: JAX ref to checkout
+        type: string
+        default: "rocm-jaxlib-v0.7.1"
 
 permissions:
   id-token: write
@@ -102,7 +106,7 @@ jobs:
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_versions }}" \
-            --rocm-version="${ROCM_VERSION:0:5}" \
+            --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
 
