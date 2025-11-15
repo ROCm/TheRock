@@ -1,6 +1,7 @@
 name: TheRock Repository Diff Report
 
 on:
+  push:
   workflow_dispatch:
     inputs:
       start_commit:
