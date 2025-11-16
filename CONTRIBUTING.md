@@ -118,3 +118,8 @@ possibly cleaned up by repository maintainers.
 > - Triggering custom workflows such as "dev" release builds using
 >   [workflow_dispatch](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 >   and running on our self-hosted GitHub Actions runners
+
+### Style guide
+
+We have a project-wide style guide with recommendations at
+[`docs/development/style_guide.md`](docs/development/style_guide.md).

@@ -9,6 +9,7 @@
 - [Git chores](git_chores.md)
 - [GitHub Actions Debugging](github_actions_debugging.md)
 - [Installing Artifacts](installing_artifacts.md)
+- [Style Guide](style_guide.md)
 - [Test Debugging](test_debugging.md)
 - [Test Environment Reproduction](test_environment_reproduction.md)
 - [Windows Support](windows_support.md)
