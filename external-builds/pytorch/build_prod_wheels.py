@@ -130,6 +130,7 @@ is_windows = platform.system() == "Windows"
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
     "amdhip64",
+    "rocprofiler-sdk",
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
     "roctracer64",  # Linux only for the moment.
     "roctx64",  # Linux only for the moment.
