@@ -137,23 +137,48 @@ python3 ./build_tools/fetch_sources.py
 if [[ $LOCAL_ROCM_LIBRARIES == true ]]; then
   echo "Configuring rocm-libraries to use local path..."
 
+  # Check for uncommitted changes in local rocm-libraries
+  LOCAL_ROCM_PATH="/home/astgeorg/Dev/c++/rocm-libraries"
+  if ! git -C "$LOCAL_ROCM_PATH" diff-index --quiet HEAD --; then
+    echo "Error: Uncommitted changes detected in $LOCAL_ROCM_PATH"
+    echo "Please commit or stash your changes before running this script."
+    exit 1
+  fi
+
+  # Get current branch from local rocm-libraries
+  LOCAL_BRANCH=$(cd "$LOCAL_ROCM_PATH" && git branch --show-current)
+  echo "Local rocm-libraries branch: $LOCAL_BRANCH"
+
+  # Push current branch to origin
+  echo "Pushing $LOCAL_BRANCH to origin..."
+  (cd "$LOCAL_ROCM_PATH" && git push origin "$LOCAL_BRANCH")
+
   # Initialize the submodule if not already done
   git submodule update --init rocm-libraries
 
-  # Update the submodule to point to local path
-  # Add or update the local remote (set-url works whether remote exists or not)
-  (cd rocm-libraries && git remote remove local 2>/dev/null || true)
-  (cd rocm-libraries && git remote add local /home/astgeorg/Dev/c++/rocm-libraries)
+  # Configure AaronStGeorge remote in submodule
+  (cd rocm-libraries && git remote remove AaronStGeorge || true)
+  (cd rocm-libraries && git remote add AaronStGeorge git@github.com:AaronStGeorge/rocm-libraries.git)
 
-  # Fetch latest from local path and checkout the current branch's HEAD
-  # This makes the submodule use whatever you have committed locally
-  LOCAL_BRANCH=$(cd /home/astgeorg/Dev/c++/rocm-libraries && git branch --show-current)
-  echo "Updating rocm-libraries to latest commit from local branch: $LOCAL_BRANCH..."
-  (cd rocm-libraries && git fetch local && git checkout "local/$LOCAL_BRANCH")
+  # Fetch and checkout the branch from AaronStGeorge
+  echo "Updating rocm-libraries to latest commit from remote branch: $LOCAL_BRANCH..."
+  (cd rocm-libraries && git fetch AaronStGeorge && git checkout "AaronStGeorge/$LOCAL_BRANCH")
+
+  # Verify both repositories are on the same commit
+  LOCAL_COMMIT=$(cd "$LOCAL_ROCM_PATH" && git rev-parse HEAD)
+  SUBMODULE_COMMIT=$(cd rocm-libraries && git rev-parse HEAD)
+
+  if [[ "$LOCAL_COMMIT" != "$SUBMODULE_COMMIT" ]]; then
+    echo "Error: Commit mismatch between local and submodule!"
+    echo "Local rocm-libraries commit: $LOCAL_COMMIT"
+    echo "Submodule commit: $SUBMODULE_COMMIT"
+    echo "This should not happen - please investigate."
+    exit 1
+  fi
 
   # Show which commit we're now using
   ROCM_COMMIT=$(cd rocm-libraries && git rev-parse --short HEAD)
-  echo "rocm-libraries now at commit: $ROCM_COMMIT"
+  echo "rocm-libraries now at commit: $ROCM_COMMIT (verified match with local)"
 fi
 
 
@@ -171,13 +196,12 @@ cat > CMakeUserPresets.json << EOF
         "PATH": "\${sourceDir}/.venv/bin:$PATH"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_BUILD_TYPE": "Debug",
         "amd-llvm_BUILD_TYPE": "Release",
         "THEROCK_ENABLE_ALL": "OFF",
         "THEROCK_ENABLE_FUSILLI_PLUGIN": "ON",
         "Python3_EXECUTABLE": "$PWD/.venv/bin/python",
         "THEROCK_SPLIT_DEBUG_INFO": "ON",
-        "THEROCK_MINIMAL_DEBUG_INFO": "ON",
         "THEROCK_QUIET_INSTALL": "OFF",
         "CMAKE_INSTALL_PREFIX": "..",
         "THEROCK_AMDGPU_FAMILIES": "$THEROCK_ASIC"
