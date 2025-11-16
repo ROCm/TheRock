@@ -184,6 +184,7 @@ option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_E
 option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_SYS_TOOLS "Enable building of system tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
@@ -258,6 +259,16 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
 else()
   # No profiler SDK on Windows.
   set(_optional_profiler_requirements "")
+endif()
+
+# Systems Tools Features
+if(NOT WIN32)
+  # RDC is Linux-only and requires rocprofiler-sdk v3
+  therock_add_feature(RDC
+    GROUP SYS_TOOLS
+    DESCRIPTION "Enables ROCm Data Center Tool (RDC)"
+    REQUIRES CORE_RUNTIME ROCPROFV3
+  )
 endif()
 
 # Comm-libs Features.
@@ -418,6 +429,8 @@ endif()
 
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
+set(THEROCK_BUNDLED_GRPC)
+set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
 set(THEROCK_BUNDLED_NUMACTL)
@@ -438,6 +451,8 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_GRPC therock-grpc)
+    set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
