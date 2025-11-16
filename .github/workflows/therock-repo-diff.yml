@@ -2,6 +2,8 @@ name: TheRock Repository Diff Report
 
 on:
   push:
+    branches:
+      - 'amd/hsivasun/submodule-reports'
   workflow_dispatch:
     inputs:
       start_commit:
@@ -25,25 +27,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set commit parameters
+        id: commits
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Use your test commits when triggered by push
+            echo "start_commit=0ae0df6719a6e2096d221d6a61326d8494fa050b" >> $GITHUB_OUTPUT
+            echo "end_commit=c834dd20feb0d7228c8a4af4790bb8ed54d8a26c" >> $GITHUB_OUTPUT
+            echo "workflow_mode=false" >> $GITHUB_OUTPUT
+            echo "Using default test commits for push trigger"
+          else
+            # Use inputs when triggered manually
+            echo "start_commit=${{ github.event.inputs.start_commit }}" >> $GITHUB_OUTPUT
+            echo "end_commit=${{ github.event.inputs.end_commit }}" >> $GITHUB_OUTPUT
+            echo "workflow_mode=${{ github.event.inputs.workflow_mode }}" >> $GITHUB_OUTPUT
+            echo "Using manual inputs for workflow_dispatch"
+          fi
+
       - name: Run TheRock Repository Diff Analysis
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
           cd .github/scripts
           echo "Starting TheRock repository diff analysis..."
-          echo "Start: ${{ github.event.inputs.start_commit }}"
-          echo "End: ${{ github.event.inputs.end_commit }}"
-          echo "Workflow Mode: ${{ github.event.inputs.workflow_mode }}"
+          echo "Start: ${{ steps.commits.outputs.start_commit }}"
+          echo "End: ${{ steps.commits.outputs.end_commit }}"
+          echo "Workflow Mode: ${{ steps.commits.outputs.workflow_mode }}"
 
-          if [ "${{ github.event.inputs.workflow_mode }}" = "true" ]; then
+          if [ "${{ steps.commits.outputs.workflow_mode }}" = "true" ]; then
             python3 repo-diff.py \
-              --start "${{ github.event.inputs.start_commit }}" \
-              --end "${{ github.event.inputs.end_commit }}" \
+              --start "${{ steps.commits.outputs.start_commit }}" \
+              --end "${{ steps.commits.outputs.end_commit }}" \
               --workflow-mode
           else
             python3 repo-diff.py \
-              --start "${{ github.event.inputs.start_commit }}" \
-              --end "${{ github.event.inputs.end_commit }}"
+              --start "${{ steps.commits.outputs.start_commit }}" \
+              --end "${{ steps.commits.outputs.end_commit }}"
           fi
 
       - name: Generate job summary
@@ -54,9 +73,10 @@ jobs:
           echo "## TheRock Repository Diff Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Analysis Period:**" >> $GITHUB_STEP_SUMMARY
-          echo "- **Start Commit:** \`${{ github.event.inputs.start_commit }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **End Commit:** \`${{ github.event.inputs.end_commit }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Workflow Mode:** ${{ github.event.inputs.workflow_mode }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Start Commit:** \`${{ steps.commits.outputs.start_commit }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **End Commit:** \`${{ steps.commits.outputs.end_commit }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow Mode:** ${{ steps.commits.outputs.workflow_mode }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ -f "TheRockReport.html" ]; then
