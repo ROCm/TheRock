@@ -1,7 +1,17 @@
 #!/bin/bash
 # Validates static library archives are well-formed and can be linked.
+# This script performs comprehensive validation including:
+# 1. Archive format validation
+# 2. Symbol completeness check
+# 3. Actual linkage test to ensure the library can be used
 
 set -e
+
+AR_BIN="${GRPC_VALIDATE_AR:-${AR:-ar}}"
+NM_BIN="${GRPC_VALIDATE_NM:-${NM:-nm}}"
+CXX_BIN="${GRPC_VALIDATE_CXX:-${CXX:-g++}}"
+FILE_BIN="${GRPC_VALIDATE_FILE:-file}"
+CXXFILT_BIN="${GRPC_VALIDATE_CXXFILT:-c++filt}"
 
 GRPC_LIBS=()
 LIB_DIR=""
@@ -23,7 +33,7 @@ for lib_path in "$@"; do
     fi
 
     # Step 1: Check if it's a valid ar archive
-    if ! ar t "$lib_path" > /tmp/ar_output_$$ 2>&1; then
+    if ! "${AR_BIN}" t "$lib_path" > /tmp/ar_output_$$ 2>&1; then
         echo " : FAILED"
         echo "  Error: Invalid archive format: $lib_path" >&2
         cat /tmp/ar_output_$$ >&2
@@ -41,9 +51,9 @@ for lib_path in "$@"; do
         exit 1
     fi
 
-    # Step 2: Validate object file format (ELF x86-64 only)
-    first_object=$(ar t "$lib_path" | head -1)
-    obj_info=$(ar p "$lib_path" "$first_object" 2>/dev/null | file -)
+    # Step 2: Validate object file format (ELF relocatable)
+    first_object=$("${AR_BIN}" t "$lib_path" | head -1)
+    obj_info=$("${AR_BIN}" p "$lib_path" "$first_object" 2>/dev/null | "${FILE_BIN}" -)
 
     # Check for ELF relocatable format
     if ! echo "$obj_info" | grep -q "ELF.*relocatable"; then
@@ -53,16 +63,8 @@ for lib_path in "$@"; do
         exit 1
     fi
 
-    # Only support x86-64 architecture
-    if ! echo "$obj_info" | grep -q "x86-64"; then
-        echo " : FAILED"
-        echo "  Error: Only x86-64 architecture is supported" >&2
-        echo "  Got: $obj_info" >&2
-        exit 1
-    fi
-
     # Step 3: Check symbols
-    if ! nm --defined-only "$lib_path" > /tmp/nm_output_$$ 2>&1; then
+    if ! "${NM_BIN}" --defined-only "$lib_path" > /tmp/nm_output_$$ 2>&1; then
         echo " : FAILED"
         echo "  Error: Cannot read symbols from archive: $lib_path" >&2
         cat /tmp/nm_output_$$ >&2
@@ -81,7 +83,7 @@ for lib_path in "$@"; do
     fi
 
     # Step 4: Check for exported global symbols (functions and data)
-    exported_count=$(nm --extern-only "$lib_path" 2>/dev/null | grep -c " [TDW] " || true)
+    exported_count=$("${NM_BIN}" --extern-only "$lib_path" 2>/dev/null | grep -c " [TDW] " || true)
     if [ "$exported_count" -eq 0 ]; then
         echo " : FAILED"
         echo "  Error: No exported symbols found: $lib_path" >&2
@@ -114,10 +116,10 @@ if [ "$HAS_GRPCXX" = true ] && [ "$HAS_GRPC" = true ]; then
         basename=$(basename "$lib")
         if [[ "$basename" == libgrpc.a ]] || [[ "$basename" == libgrpc-*.a ]]; then
             # Find grpc_init or any grpc_* C API function
-            if nm --extern-only "$lib" 2>/dev/null | grep -q " T grpc_init$"; then
+            if "${NM_BIN}" --extern-only "$lib" 2>/dev/null | grep -q " T grpc_init$"; then
                 GRPC_C_SYMBOL="grpc_init"
             else
-                GRPC_C_SYMBOL=$(nm --extern-only "$lib" 2>/dev/null | \
+                GRPC_C_SYMBOL=$("${NM_BIN}" --extern-only "$lib" 2>/dev/null | \
                     grep " T grpc_" | head -1 | awk '{print $3}')
             fi
             [ -n "$GRPC_C_SYMBOL" ] && break
@@ -130,7 +132,7 @@ if [ "$HAS_GRPCXX" = true ] && [ "$HAS_GRPC" = true ]; then
         basename=$(basename "$lib")
         if [[ "$basename" == libgrpc++* ]]; then
             # Simple check: any T (text/function) symbol containing "grpc"
-            GRPC_CXX_SYMBOL=$(nm --extern-only "$lib" 2>/dev/null | \
+            GRPC_CXX_SYMBOL=$("${NM_BIN}" --extern-only "$lib" 2>/dev/null | \
                 grep " T " | grep -i "grpc" | head -1 | awk '{print $3}')
             [ -n "$GRPC_CXX_SYMBOL" ] && break
         fi
@@ -144,7 +146,7 @@ if [ "$HAS_GRPCXX" = true ] && [ "$HAS_GRPC" = true ]; then
         echo "  Skipping linkage test" >&2
     else
         # Decode the C++ symbol for display
-        CXX_SYMBOL_DECODED=$(echo "$GRPC_CXX_SYMBOL" | c++filt 2>/dev/null || echo "$GRPC_CXX_SYMBOL")
+        CXX_SYMBOL_DECODED=$(echo "$GRPC_CXX_SYMBOL" | "${CXXFILT_BIN}" 2>/dev/null || echo "$GRPC_CXX_SYMBOL")
 
         # Create a test program
         cat > /tmp/test_grpc_link_$$.cc <<EOF
@@ -160,7 +162,7 @@ int main() {
 EOF
 
         # Compile the test program
-        if ! g++ -c /tmp/test_grpc_link_$$.cc -o /tmp/test_grpc_link_$$.o -std=c++17 2>/dev/null; then
+        if ! "${CXX_BIN}" -c /tmp/test_grpc_link_$$.cc -o /tmp/test_grpc_link_$$.o -std=c++17 2>/dev/null; then
             echo " : FAILED"
             echo "  Error: Could not compile test program" >&2
             rm -f /tmp/test_grpc_link_$$.cc /tmp/test_grpc_link_$$.o
@@ -178,7 +180,7 @@ EOF
         done
 
         # Try to link
-        link_output=$(g++ /tmp/test_grpc_link_$$.o -L"$LIB_DIR" $LINK_LIBS -o /tmp/test_grpc_link_$$ 2>&1 || true)
+        link_output=$("${CXX_BIN}" /tmp/test_grpc_link_$$.o -L"$LIB_DIR" $LINK_LIBS -o /tmp/test_grpc_link_$$ 2>&1 || true)
 
         # Check if our symbols were found
         if echo "$link_output" | grep -q "undefined reference to .*${GRPC_C_SYMBOL}\|undefined reference to.*${GRPC_CXX_SYMBOL}"; then

@@ -184,7 +184,7 @@ option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_E
 option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
-option(THEROCK_ENABLE_SYS_TOOLS "Enable building of system tools" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
@@ -265,10 +265,15 @@ endif()
 if(NOT WIN32)
   # RDC is Linux-only and requires rocprofiler-sdk v3
   therock_add_feature(RDC
-    GROUP SYS_TOOLS
+    GROUP DC_TOOLS
     DESCRIPTION "Enables ROCm Data Center Tool (RDC)"
     REQUIRES CORE_RUNTIME ROCPROFV3
   )
+endif()
+if(NOT THEROCK_ENABLE_DC_TOOLS AND THEROCK_ENABLE_RDC)
+  message(STATUS "Disabling RDC because THEROCK_ENABLE_DC_TOOLS is OFF")
+  set(THEROCK_ENABLE_RDC OFF CACHE BOOL
+      "Enables ROCm Data Center Tool (RDC)" FORCE)
 endif()
 
 # Comm-libs Features.
@@ -429,7 +434,6 @@ endif()
 
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
-set(THEROCK_BUNDLED_GRPC)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
@@ -451,7 +455,6 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_GRPC therock-grpc)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
@@ -467,6 +470,21 @@ if(THEROCK_BUNDLE_SYSDEPS)
   else()
     message(FATAL_ERROR "Bundled system deps not supported on this platform (THEROCK_BUNDLE_SYSDEPS=ON)")
   endif()
+endif()
+
+################################################################################
+# Project-specific third-party dependencies
+# Unlike sysdeps (shared libraries for runtime deps), these are statically
+# linked into specific projects and conditionally built when needed.
+# Pattern: THEROCK_BUNDLED_{name} variables for conditional RUNTIME_DEPS use.
+################################################################################
+
+# gRPC: Exclusive to RDC standalone mode
+# Statically linked into rdcd/rdci/librdc_client.so (Linux, BUNDLE_SYSDEPS=ON)
+# Ref: docs/rfcs/RFC0007-rdc-therock-integration.md
+set(THEROCK_BUNDLED_GRPC)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND THEROCK_BUNDLE_SYSDEPS)
+  set(THEROCK_BUNDLED_GRPC therock-grpc)
 endif()
 
 ################################################################################
@@ -494,6 +512,12 @@ add_subdirectory(core)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
+# Data center tools (RDC, etc.)
+if(THEROCK_ENABLE_DC_TOOLS AND THEROCK_ENABLE_RDC AND NOT WIN32)
+  add_subdirectory(dctools)
+elseif(THEROCK_ENABLE_RDC)
+  message(WARNING "THEROCK_ENABLE_RDC is ON but RDC requires Linux and THEROCK_ENABLE_DC_TOOLS=ON. Skipping.")
+endif()
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)

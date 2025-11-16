@@ -48,60 +48,67 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(LIBCAP_BUILD)
 
+include(ExternalProject)
 include(ProcessorCount)
 ProcessorCount(PAR_JOBS)
+if(NOT PAR_JOBS OR PAR_JOBS EQUAL 0)
+  set(PAR_JOBS 1)
+endif()
+
+find_program(_libcap_make NAMES make gmake REQUIRED)
 
 if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-# Set variable for reused path to improve code maintainability
-set(_libcap_source_dir "${CMAKE_CURRENT_BINARY_DIR}/s")
-
-# Safety check: Prevent accidental deletion of system directories with 'rm -rf'
-# Two-layer protection:
-#   1. Blacklist: Reject critical system paths (/, /usr, /usr/local)
-#   2. Whitelist: Require path contains "build" (typical build directory pattern)
-# This allows flexibility for developers (e.g., /home/user/project/build) while
-# preventing accidental deletion of system directories or non-build paths.
-if(CMAKE_INSTALL_PREFIX STREQUAL "/" OR
-   CMAKE_INSTALL_PREFIX STREQUAL "/usr" OR
-   CMAKE_INSTALL_PREFIX STREQUAL "/usr/local" OR
-   NOT CMAKE_INSTALL_PREFIX MATCHES "/build")
+# Safety check: Prevent accidental deletion of directories outside the build tree.
+get_filename_component(_libcap_install_abs "${CMAKE_INSTALL_PREFIX}" ABSOLUTE)
+if(DEFINED THEROCK_STAGE_INSTALL_ROOT AND THEROCK_STAGE_INSTALL_ROOT)
+  get_filename_component(_libcap_stage_abs "${THEROCK_STAGE_INSTALL_ROOT}" ABSOLUTE)
+else()
+  get_filename_component(_libcap_stage_abs "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
+endif()
+string(LENGTH "${_libcap_stage_abs}" _libcap_stage_len)
+string(SUBSTRING "${_libcap_install_abs}" 0 ${_libcap_stage_len} _libcap_install_prefix)
+if(NOT _libcap_install_prefix STREQUAL "${_libcap_stage_abs}")
   message(FATAL_ERROR
-    "libcap: CMAKE_INSTALL_PREFIX appears to be outside a build directory.\n"
-    "  CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}\n"
-    "This is dangerous with 'rm -rf'. Please ensure it's within a build directory.")
+    "libcap: CMAKE_INSTALL_PREFIX (${CMAKE_INSTALL_PREFIX}) must reside under ${_libcap_stage_abs} to safely run rm -rf.")
 endif()
 
-add_custom_target(
-  build ALL
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${_libcap_source_dir}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${_libcap_source_dir}"
-  COMMAND
-    make -C "${_libcap_source_dir}/libcap"
-      -j "${PAR_JOBS}"
-      prefix="${CMAKE_INSTALL_PREFIX}"
-      lib=lib
-      GOLANG=no
-      PAM_CAP=no
-      RAISE_SETFCAP=no
-  COMMAND
-    make -C "${_libcap_source_dir}/libcap"
-      install
-      prefix="${CMAKE_INSTALL_PREFIX}"
-      lib=lib
-      GOLANG=no
-      PAM_CAP=no
-      RAISE_SETFCAP=no
-  COMMAND
-    "${CMAKE_COMMAND}" -E env
-      "PATCHELF=${PATCHELF}"
-      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
-      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
-  VERBATIM
+set(_libcap_make_args
+  prefix=<INSTALL_DIR>
+  lib=lib
+  GOLANG=no
+  PAM_CAP=no
+  RAISE_SETFCAP=no
 )
+
+ExternalProject_Add(libcap-build
+  DOWNLOAD_COMMAND ""
+  SOURCE_DIR "${SOURCE_DIR}/libcap"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND
+    "${_libcap_make}" -C "<SOURCE_DIR>" -j "${PAR_JOBS}" ${_libcap_make_args}
+  INSTALL_COMMAND
+    "${_libcap_make}" -C "<SOURCE_DIR>" install ${_libcap_make_args}
+    COMMAND
+      "${CMAKE_COMMAND}" -E env
+        "PATCHELF=${PATCHELF}"
+        "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
+        "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+      bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" "<INSTALL_DIR>"
+  INSTALL_DIR "${CMAKE_INSTALL_PREFIX}"
+  BUILD_ALWAYS ON
+  LOG_BUILD ON
+  LOG_INSTALL ON
+)
+
+add_custom_target(libcap ALL DEPENDS libcap-build)
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/libcap-config.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/libcap-config.cmake
+  @ONLY
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libcap-config.cmake" DESTINATION lib/cmake/Libcap)

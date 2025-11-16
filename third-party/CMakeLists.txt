@@ -38,7 +38,18 @@ if(THEROCK_BUNDLE_SYSDEPS)
   endif()
 endif()
 
-# gRPC (static library) depends on zlib from sysdeps
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+# gRPC: RDC-exclusive dependency (static library)
+# - Built for RDC standalone mode only (Linux)
+# - Depends on bundled zlib from sysdeps
+# - See: docs/rfcs/RFC0007-rdc-therock-integration.md
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND THEROCK_BUNDLE_SYSDEPS)
+  get_target_property(_therock_zlib_stage ${THEROCK_BUNDLED_ZLIB} THEROCK_STAGE_DIR)
+  if(NOT _therock_zlib_stage)
+    message(FATAL_ERROR "Failed to locate stage directory for ${THEROCK_BUNDLED_ZLIB}")
+  endif()
+  set(THEROCK_GRPC_ZLIB_STAGE_LIB_DIR "${_therock_zlib_stage}/lib/rocm_sysdeps/lib" CACHE INTERNAL
+    "Staged zlib lib directory for gRPC post-install patch" FORCE)
   add_subdirectory(grpc)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(STATUS "Skipping bundled gRPC build (requires THEROCK_BUNDLE_SYSDEPS=ON for zlib dependency)")
 endif()

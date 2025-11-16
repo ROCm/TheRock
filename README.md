@@ -153,6 +153,7 @@ enable/disable selected subsets:
 | `-DTHEROCK_ENABLE_MATH_LIBS=OFF` | Disables all math libraries          |
 | `-DTHEROCK_ENABLE_ML_LIBS=OFF`   | Disables all ML libraries            |
 | `-DTHEROCK_ENABLE_PROFILER=OFF`  | Disables profilers                   |
+| `-DTHEROCK_ENABLE_DC_TOOLS=OFF`  | Disables data center tools           |
 
 Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
@@ -176,6 +177,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON` | Enables MIOpen_plugin                         |
 | `-DTHEROCK_ENABLE_HIPDNN=ON`        | Enables hipDNN                                |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`       | Enables rocWMMA                               |
+| `-DTHEROCK_ENABLE_RDC=ON`           | Enables ROCm Data Center Tool (Linux only)    |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some

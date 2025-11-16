@@ -26,6 +26,7 @@ project wide:
   bundling is not enabled or supported for the target OS):
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
+  - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
   - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_NUMACTL`
@@ -67,6 +68,14 @@ Supported sub-libraries: `libelf`, `libdw`.
 - Canonical method: `find_package(libdw)`
 - Import library: `libdw::libdw`
 - Alternatives: `pkg_check_modules(DW libdw)`
+
+## libcap
+
+Provides Linux capabilities for privileged operations (used by RDC).
+
+- Canonical method: `find_package(Libcap)`
+- Import library: `Libcap::Libcap`
+- Alternatives: `pkg_check_modules(LIBCAP libcap)` or direct linking (used by RDC)
 
 ## libdrm
 
