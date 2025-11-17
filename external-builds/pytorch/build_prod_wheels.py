@@ -646,7 +646,7 @@ def do_build_pytorch(
                 print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
                 print(
                     f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
-for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/205
+for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2056
                       """
                 )
 
