@@ -28,13 +28,13 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature              | Linux support                                                                    | Windows support  |
-| ------------------------------ | -------------------------------------------------------------------------------- | ---------------- |
-| torch                          | ✅ Supported                                                                     | ✅ Supported     |
-| torchaudio                     | ✅ Supported                                                                     | ✅ Supported     |
-| torchvision                    | ✅ Supported                                                                     | ✅ Supported     |
-| Flash attention via [ao]triton | ✅ Supported                                                                     | ✅ Supported     |
-| FBGEMM GenAI                   | ❌ Not supported (see [Issue#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
+| Project / feature              | Linux support                                                                     | Windows support  |
+| ------------------------------ | --------------------------------------------------------------------------------- | ---------------- |
+| torch                          | ✅ Supported                                                                      | ✅ Supported     |
+| torchaudio                     | ✅ Supported                                                                      | ✅ Supported     |
+| torchvision                    | ✅ Supported                                                                      | ✅ Supported     |
+| Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     |
+| FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
 
 ### Supported PyTorch versions
 
