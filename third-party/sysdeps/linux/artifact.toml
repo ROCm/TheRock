@@ -17,6 +17,11 @@ include = [
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 
+# libbacktrace
+# Required by amd-dbgapi library.
+[components.dev."third-party/sysdeps/linux/libbacktrace/build/stage"]
+[components.lib."third-party/sysdeps/linux/libbacktrace/build/stage"]
+
 # libcap
 [components.dev."third-party/sysdeps/linux/libcap/build/stage"]
 [components.lib."third-party/sysdeps/linux/libcap/build/stage"]
