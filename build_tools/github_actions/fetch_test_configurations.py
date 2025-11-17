@@ -51,13 +51,13 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1702
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 4,
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -124,6 +124,14 @@ test_matrix = {
         "exclude_family": {
             "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
         },
+    },
+    "hipsparselt": {
+        "job_name": "hipsparselt",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
+        "platform": ["linux"],
+        "total_shards": 4,
     },
     # RAND tests
     "rocrand": {
@@ -195,6 +203,15 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
         "platform": ["linux"],
         "total_shards": 1,
+    },
+    # rocWMMA tests
+    "rocwmma": {
+        "job_name": "rocwmma",
+        "fetch_artifact_args": "--rocwmma --tests --blas",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocwmma.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 4,
     },
 }
 

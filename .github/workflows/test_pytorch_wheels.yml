@@ -128,7 +128,7 @@ jobs:
 
       - name: Run PyTorch smoketests
         run: |
-          pytest -v external-builds/pytorch/smoke-tests
+          pytest --log-cli-level=INFO -v external-builds/pytorch/smoke-tests
 
       - name: Run PyTorch tests
         if: "contains(inputs.test_runs_on, 'linux')"

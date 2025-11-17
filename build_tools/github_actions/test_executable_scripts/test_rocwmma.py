@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -18,27 +20,39 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
-tests_to_exclude = [
-    "*known_bug*",
-    "_/getrs*",
-    "_/getri_batched.solver*",
-    "_/gels_batched.solver*",
-]
-
-exclusion_list = ":".join(tests_to_exclude)
-
-cmd = [
-    f"{THEROCK_BIN_DIR}/hipblas-test",
-    f"--gtest_filter=-{exclusion_list}",
-]
-
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-# TODO(#2101) Re-enable smoke tests once issue solved
-# if test_type == "smoke":
-#    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml"]
 
+# If there are devices for which the full set is too slow, we can
+# programatically set test_type to "regression" here.
 
+test_subdir = ""
+timeout = "3600"
+if test_type == "smoke":
+    # The emulator regression tests are very fast.
+    # If we need something even faster we can use "/smoke" here.
+    test_subdir = "/regression"
+    timeout = "300"
+elif test_type == "regression":
+    test_subdir = "/regression"
+    timeout = "300"
+
+cmd = [
+    "ctest",
+    "--test-dir",
+    f"{THEROCK_BIN_DIR}/rocwmma{test_subdir}",
+    "--output-on-failure",
+    "--parallel",
+    "8",
+    "--timeout",
+    timeout,
+]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+
+subprocess.run(
+    cmd,
+    cwd=THEROCK_DIR,
+    check=True,
+    env=environ_vars,
+)

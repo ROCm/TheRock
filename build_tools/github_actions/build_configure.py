@@ -62,7 +62,6 @@ def build_configure(manylinux=False):
             f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
             "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
             "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
-            "-DTHEROCK_VERBOSE=ON",
             "-DBUILD_TESTING=ON",
         ]
     )

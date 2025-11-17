@@ -61,9 +61,11 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (BLAS)    | [rocBLAS](https://github.com/ROCm/rocBLAS)                                                                               | ✅        |                                               |
 | math-libs (BLAS)    | [rocSPARSE](https://github.com/ROCm/rocSPARSE)                                                                           | ✅        |                                               |
 | math-libs (BLAS)    | [hipSPARSE](https://github.com/ROCm/hipSPARSE)                                                                           | ✅        |                                               |
+| math-libs (BLAS)    | [hipSPARSELt](https://github.com/ROCm/hipSPARSELt)                                                                       | ❌        | Unsupported                                   |
 | math-libs (BLAS)    | [rocSOLVER](https://github.com/ROCm/rocSOLVER)                                                                           | ✅        |                                               |
 | math-libs (BLAS)    | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                                                                           | ✅        |                                               |
 | math-libs (BLAS)    | [hipBLAS](https://github.com/ROCm/hipBLAS)                                                                               | ✅        |                                               |
+| math-libs           | [rocWMMA](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma)                                          | ✅        |                                               |
 |                     |                                                                                                                          |           |                                               |
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/composable_kernel)                                                           | ❌        | Unsupported                                   |
 | ml-libs             | [MIOpen](https://github.com/ROCm/MIOpen)                                                                                 | ✅        |                                               |

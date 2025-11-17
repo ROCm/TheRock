@@ -209,16 +209,46 @@ class SystemInfo:
         if self.is_windows:
             gpu_status_list = []
 
-            gpu_result = subprocess.run(
-                ["wmic", "path", "win32_VideoController", "get", "Name"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-            )
-            gpu_result_lines = [
-                line.strip() for line in gpu_result.stdout.splitlines() if line.strip()
-            ]
-            gpu_count = len(gpu_result_lines[1:]) if len(gpu_result_lines) > 1 else []
+            try:
+                gpu_result = subprocess.run(
+                    ["wmic", "path", "win32_VideoController", "get", "Name"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                )
+                gpu_result_lines = [
+                    line.strip()
+                    for line in gpu_result.stdout.splitlines()
+                    if line.strip()
+                ]
+            except FileNotFoundError:
+                # wmic not found, try PowerShell fallback
+                try:
+                    ps_cmd = [
+                        "powershell",
+                        "-Command",
+                        "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name",
+                    ]
+                    gpu_result = subprocess.run(
+                        ps_cmd,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
+                    gpu_result_lines = [
+                        line.strip()
+                        for line in gpu_result.stdout.splitlines()
+                        if line.strip()
+                    ]
+                except Exception:
+                    return []
+            # Handle optional header from `wmic` output; PowerShell output has no header
+            if gpu_result_lines and gpu_result_lines[0].strip().lower() == "name":
+                gpu_names = gpu_result_lines[1:]
+            else:
+                gpu_names = gpu_result_lines
+
+            gpu_count = len(gpu_names) if gpu_names else 0
 
             for i in range(0, gpu_count):
                 _GPU_REG_KEY = str(
@@ -404,15 +434,18 @@ class SystemInfo:
             )
 
             ccache.append([proc.stdout.splitlines()])
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, FileNotFoundError):
             ccache.append(["Ccache not detected!"])
             ccache.append([""])
             return ccache
 
-        proc = subprocess.run(
-            ["ccache", "--show-config"], capture_output=True, text=True, check=True
-        )
-        ccache.append([proc.stdout.splitlines()])
+        try:
+            proc = subprocess.run(
+                ["ccache", "--show-config"], capture_output=True, text=True, check=True
+            )
+            ccache.append([proc.stdout.splitlines()])
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            ccache.append([""])
 
         return ccache
 
