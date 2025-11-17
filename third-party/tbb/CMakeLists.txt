@@ -16,7 +16,7 @@ therock_cmake_subproject_declare(therock-tbb
     -DTBB_TEST=OFF
 )
 
-therock_cmake_subproject_provide_package(therock-tbb tbb lib/cmake)
+therock_cmake_subproject_provide_package(therock-tbb TBB lib/cmake)
 therock_cmake_subproject_activate(therock-tbb)
 
 add_dependencies(therock-third-party therock-tbb)
