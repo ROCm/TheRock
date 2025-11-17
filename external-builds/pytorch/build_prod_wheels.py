@@ -631,23 +631,24 @@ def do_build_pytorch(
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.8 and higher Pytorch version
-    ## https://github.com/ROCm/TheRock/issues/1619
+    ## Disable FBGEMM_GENAI on Linux for PyTorch, as not available for 2.7 on rocm/pytorch
+    ## and causes build failures for PyTorch >= 2.8.
+    ## Warn user when enabling it manually.
+    ## https://github.com/ROCm/TheRock/issues/2056
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
         if args.enable_pytorch_fbgemm_genai_linux is None:
-            # Default behavior — based on PyTorch version
-            if pytorch_build_version_parsed.release < (2, 8):
-                use_fbgemm_genai = "ON"
-            else:
-                use_fbgemm_genai = "OFF"
-            print(
-                f"FBGEMM_GENAI default behavior based on PyTorch version: {use_fbgemm_genai}"
-            )
+            use_fbgemm_genai = "OFF"
         else:
             # Explicit override: user has set the flag to true/false
             use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
-            print(f"FBGEMM_GENAI override set by flag: {use_fbgemm_genai}")
+            if use_fbgemm_genai == "ON":
+                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
+                print(
+                    f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
+for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2056
+                      """
+                )
 
         env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
