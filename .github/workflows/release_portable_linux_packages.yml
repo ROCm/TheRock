@@ -186,6 +186,7 @@ jobs:
           # Prefetch docker container in background.
           docker pull ${{ env.BUILD_IMAGE }} &
           ./build_tools/fetch_sources.py --jobs 10
+          pip install -r requirements-external.txt
           wait
 
       - name: Build Projects
