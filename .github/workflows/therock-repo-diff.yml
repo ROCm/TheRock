@@ -22,10 +22,10 @@ on:
 
 jobs:
   therock-diff-report:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Set commit parameters
         id: commits
@@ -48,7 +48,7 @@ jobs:
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
-          cd .github/scripts
+          cd build_tools/github_actions
           echo "Starting TheRock repository diff analysis..."
           echo "Start: ${{ steps.commits.outputs.start_commit }}"
           echo "End: ${{ steps.commits.outputs.end_commit }}"
@@ -65,41 +65,11 @@ jobs:
               --end "${{ steps.commits.outputs.end_commit }}"
           fi
 
-      - name: Generate job summary
-        if: always()
-        run: |
-          cd .github/scripts
-
-          echo "## TheRock Repository Diff Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Analysis Period:**" >> $GITHUB_STEP_SUMMARY
-          echo "- **Start Commit:** \`${{ steps.commits.outputs.start_commit }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **End Commit:** \`${{ steps.commits.outputs.end_commit }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Workflow Mode:** ${{ steps.commits.outputs.workflow_mode }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -f "TheRockReport.html" ]; then
-            echo "**Report Generated Successfully**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The detailed HTML report has been uploaded as an artifact and can be downloaded from the workflow run." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Report Generation Failed**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "No HTML report was generated. Check the logs for errors." >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: List generated files
-        run: |
-          cd .github/scripts
-          echo "Files generated:"
-          ls -la *.html || echo "No HTML files found"
-
       - name: Upload TheRock HTML Report
         uses: actions/upload-artifact@v4
         with:
           name: therock-diff-report
-          path: .github/scripts/TheRockReport.html
+          path: build_tools/github_actions/TheRockReport.html
           retention-days: 30
         if: always()
 
