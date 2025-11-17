@@ -1,130 +1,19 @@
 # This script generates a report for TheRock highlighting the difference in commits for each component between 2 builds.
 
 # Imports
-import requests
 import re
 import os
 from urllib.parse import urlparse
 import argparse
 import base64
 import subprocess
-
+import urllib.parse
 from collections import defaultdict
 
-# Global variables for GitHub API access
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
-GITHUB_HEADERS = {
-    'Authorization': f'token {GITHUB_TOKEN}',
-    'Accept': 'application/vnd.github.v3+json'
-}
+# Import GitHub Actions utilities
+from github_actions_utils import gha_append_step_summary, gha_query_workflow_run_information, gha_send_request
 
-def get_rocm_components(repo):
-    """Get components from ROCm repositories (shared and projects directories)"""
-    components = []
-
-    # If the repo is rocm-libraries fetch from shared and projects subfolders
-    if repo == "rocm-libraries":
-        url = f"https://api.github.com/repos/ROCm/{repo}/contents/shared"
-        print(f"Requesting: {url}")
-        resp = requests.get(url, headers=GITHUB_HEADERS)
-        print(f"GitHub API status (shared): {resp.status_code}")
-        if resp.status_code == 200:
-            data = resp.json()
-            for item in data:
-                print(f"Item: {item.get('name')} type: {item.get('type')}")
-                if item['type'] == 'dir':
-                    components.append("shared/" + item['name'])
-        else:
-            print(f"Failed to fetch shared folder from GitHub: {resp.status_code} {resp.text}")
-
-    # Fetch the components in the projects directory
-    url = f"https://api.github.com/repos/ROCm/{repo}/contents/projects"
-    print(f"Requesting: {url}")
-    resp = requests.get(url, headers=GITHUB_HEADERS)
-    print(f"GitHub API status (projects): {resp.status_code}")
-    if resp.status_code == 200:
-        data = resp.json()
-        for item in data:
-            print(f"Item: {item.get('name')} type: {item.get('type')}")
-            if item['type'] == 'dir':
-                components.append("projects/" + item['name'])
-    else:
-        print(f"Failed to fetch projects folder from GitHub: {resp.status_code} {resp.text}")
-
-    return components
-
-def fetch_commits_range(repo, start_rev, end_rev):
-    """Fetch commits between start_rev and end_rev from ROCm repository"""
-    url = f"https://api.github.com/repos/ROCm/{repo}/commits"
-
-    params = {
-        "sha": end_rev,
-        "per_page": 100
-    }
-    commits = []
-    found_start = False
-    while True:
-        resp = requests.get(url, headers=GITHUB_HEADERS, params=params)
-        if resp.status_code != 200:
-            break
-        data = resp.json()
-        for commit in data:
-            sha = commit['sha']
-            print(f"Processing commit: {sha}")
-            # Enrich commit with files
-            commit_url = f"https://api.github.com/repos/ROCm/{repo}/commits/{sha}"
-            commit_resp = requests.get(commit_url, headers=GITHUB_HEADERS)
-            if commit_resp.status_code == 200:
-                commit_full = commit_resp.json()
-                commits.append(commit_full)
-            else:
-                commits.append(commit)  # fallback to original if API fails
-            if sha == start_rev:
-                found_start = True
-                break
-        if found_start:
-            break
-        # Pagination
-        if 'next' in resp.links:
-            url = resp.links['next']['url']
-            params = None
-        else:
-            break
-    return commits
-
-def allocate_commits_to_projects(commits, projects):
-    """Allocate commits to projects based on file paths touched."""
-    allocation = defaultdict(list)
-
-    for commit in commits:
-        sha = commit.get('sha', '-')
-        print(f"Handling commit: {sha}")
-        files = commit.get('files', [])
-        assigned_projects = set()
-
-        # Check which projects this commit touches
-        for f in files:
-            filename = f.get('filename', '')
-            print(f"  Analyzing file: {filename}")
-
-            # Check each project to see if this file belongs to it
-            for project in projects:
-                if filename.startswith(f"{project}/"):
-                    assigned_projects.add(project)
-                    print(f"    Matches project: {project}")
-                    break  # Found a match, no need to check other projects for this file
-
-        # Assign commit to all matching projects
-        if assigned_projects:
-            for project in assigned_projects:
-                allocation[project].append(commit)
-                print(f"    Assigned to project: {project}")
-        else:
-            allocation['Unassigned'].append(commit)
-            print(f"  Assigned to: Unassigned")
-
-    return dict(allocation)
-
+# HTML Helper Functions
 def create_commit_badge_html(sha, repo_name):
     """Create a styled HTML badge for a commit SHA with link"""
     short_sha = sha[:7] if sha != '-' and sha != 'N/A' else sha
@@ -159,8 +48,9 @@ def create_table_wrapper(headers, rows):
         "</table>"
     )
 
-def generate_commit_diff_html_table(allocation, original_commits=None, repo_name="rocm-libraries"):
-    """Create a styled HTML table for commit differences"""
+# HTML Table Functions
+def generate_monorepo_html_table(allocation, original_commits=None, repo_name="rocm-libraries"):
+    """Create a styled HTML table for monorepo commit differences with project allocation"""
     rows = []
     commit_seen = set()
     commit_to_projects = {}
@@ -225,117 +115,6 @@ def generate_commit_diff_html_table(allocation, original_commits=None, repo_name
     )
 
     return table + commit_projects_html
-
-def find_repo_head(workflowId):
-    """Get commit SHA for a TheRock workflow run using GitHub API"""
-    print(f"Looking for commit SHA for workflow {workflowId}")
-
-    url = f"https://api.github.com/repos/ROCm/TheRock/actions/runs/{workflowId}"
-
-    try:
-        response = requests.get(url, headers=GITHUB_HEADERS)
-        response.raise_for_status()
-        data = response.json()
-
-        # The head_sha field contains the commit SHA that triggered the workflow
-        head_commit = data.get('head_sha')
-        print(f"Found commit SHA via API: {head_commit}")
-        return head_commit
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching workflow info via API: {e}")
-        return None
-
-def get_submodule_paths_from_gitmodules(commit_sha):
-    """Get submodule paths from the .gitmodules file for a specific commit"""
-    gitmodules_url = f"https://api.github.com/repos/ROCm/TheRock/contents/.gitmodules?ref={commit_sha}"
-
-    try:
-        response = requests.get(gitmodules_url, headers=GITHUB_HEADERS)
-        response.raise_for_status()
-
-        gitmodules_data = response.json()
-        if gitmodules_data.get('encoding') == 'base64':
-            # Decode the base64 content
-            content = base64.b64decode(gitmodules_data['content']).decode('utf-8')
-
-            # Parse the .gitmodules content to extract paths
-            submodule_paths = set()
-            for line in content.split('\n'):
-                line = line.strip()
-                if line.startswith('path ='):
-                    path = line.split('path =')[1].strip()
-                    submodule_paths.add(path)
-                    print(f"Found submodule path in .gitmodules: {path}")
-
-            return submodule_paths
-        else:
-            print("Error: .gitmodules file encoding not supported")
-            return set()
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching .gitmodules file: {e}")
-        return set()
-
-def get_submodule_commit_at_path(commit_sha, submodule_path):
-    """Get commit SHA for a submodule at a specific path using GitHub API"""
-    try:
-        # Use Contents API to get the submodule at the specific path
-        contents_url = f"https://api.github.com/repos/ROCm/TheRock/contents/{submodule_path}?ref={commit_sha}"
-        response = requests.get(contents_url, headers=GITHUB_HEADERS)
-        response.raise_for_status()
-
-        content_data = response.json()
-        # For submodules, the 'sha' field contains the pinned commit SHA
-        if content_data.get('type') == 'submodule':
-            return content_data.get('sha')
-        else:
-            print(f"Warning: {submodule_path} is not a submodule")
-            return None
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error getting submodule commit for {submodule_path}: {e}")
-        return None
-
-def find_submodules(commit_sha):
-    """Find submodules and their commit SHAs for a TheRock commit"""
-
-    # Get submodule paths from .gitmodules file
-    submodule_paths = get_submodule_paths_from_gitmodules(commit_sha)
-    if not submodule_paths:
-        print("No submodules found in .gitmodules")
-        return {}
-
-    # Get the actual commit SHAs from the git tree
-    submodules = {}
-    for path in submodule_paths:
-        submodule_sha = get_submodule_commit_at_path(commit_sha, path)
-        if submodule_sha:
-            # Extract just the submodule name from the path (last part after /)
-            submodule_name = path.split('/')[-1]
-
-            # Hard-coded fixes for special submodule names
-            if path == "profiler/rocprof-trace-decoder/binaries":
-                submodule_name = "rocprof-trace-decoder"
-            elif submodule_name == "amd-llvm":
-                submodule_name = "llvm-project"
-
-            submodules[submodule_name] = submodule_sha
-            print(f"Found submodule: {submodule_name} (path: {path}) -> {submodule_sha}")
-        else:
-            print(f"Warning: Could not find commit SHA for submodule at {path}")
-
-    return submodules
-
-def get_commits_in_range(start, end, repo_name):
-    """Fetch commits between start and end commit SHAs from ROCm repository"""
-
-    # Fetch the commits between the start and end range
-    commits_url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?sha={end}&since={start}&until={end}"
-    response = requests.get(commits_url, headers=GITHUB_HEADERS)
-    response.raise_for_status()
-
-    return response.json()
 
 def generate_non_monorepo_html_table(submodule_commits):
     """Generate an HTML table for non-monorepo components"""
@@ -410,6 +189,220 @@ def generate_therock_html_report(html_reports):
 
     print("Generated TheRockReport.html successfully!")
 
+# TheRock Helper Functions
+def get_rocm_components(repo):
+    """Get components from ROCm monorepo repositories (shared and projects directories)"""
+    components = []
+
+    # If the repo is rocm-libraries fetch from shared and projects subfolders
+    if repo == "rocm-libraries":
+        url = f"https://api.github.com/repos/ROCm/{repo}/contents/shared"
+        print(f"Requesting: {url}")
+        try:
+            data = gha_send_request(url)
+            for item in data:
+                print(f"Item: {item.get('name')} type: {item.get('type')}")
+                if item['type'] == 'dir':
+                    components.append("shared/" + item['name'])
+        except Exception as e:
+            print(f"Failed to fetch shared folder from GitHub: {e}")
+
+    # Fetch the components in the projects directory
+    url = f"https://api.github.com/repos/ROCm/{repo}/contents/projects"
+    print(f"Requesting: {url}")
+    try:
+        data = gha_send_request(url)
+        for item in data:
+            print(f"Item: {item.get('name')} type: {item.get('type')}")
+            if item['type'] == 'dir':
+                components.append("projects/" + item['name'])
+    except Exception as e:
+        print(f"Failed to fetch projects folder from GitHub: {e}")
+
+    return components
+
+def get_commits_between_shas(repo_name, start_sha, end_sha, enrich_with_files=False):
+    """
+    Get commits between two SHAs for any repository.
+
+    Args:
+        repo_name: Repository name (e.g., 'rocm-libraries', 'hip')
+        start_sha: Starting commit SHA to stop at
+        end_sha: Ending commit SHA to start from
+        enrich_with_files: If True, fetch detailed file info for each commit (needed for monorepos)
+
+    Returns:
+        List of commit objects in chronological order (newest first)
+    """
+    commits = []
+    found_start = False
+    page = 1
+    max_pages = 20
+
+    repo_type = "monorepo" if enrich_with_files else "submodule"
+    print(f"  Getting commits for {repo_type} {repo_name} from {start_sha} to {end_sha}")
+
+    while not found_start and page <= max_pages:
+        params = {"sha": end_sha, "per_page": 100, "page": page}
+        url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
+
+        try:
+            print(f"  Fetching page {page} for {repo_name}")
+            data = gha_send_request(url)
+
+            if not data:
+                print(f"  No more commits found on page {page}")
+                break
+
+            print(f"  Page {page}: Received {len(data)} commits from API")
+
+            for commit in data:
+                sha = commit['sha']
+
+                # Enrich with file details if requested (for monorepos)
+                if enrich_with_files:
+                    print(f"  Processing commit: {sha}")
+                    try:
+                        commit_url = f"https://api.github.com/repos/ROCm/{repo_name}/commits/{sha}"
+                        commit = gha_send_request(commit_url)
+                    except Exception:
+                        pass  # Use original commit if enrichment fails
+
+                commits.append(commit)
+
+                if sha == start_sha:
+                    found_start = True
+                    print(f"  Found start commit {start_sha} for {repo_name}")
+                    break
+
+            # Stop if we got fewer commits than requested (end of history)
+            if len(data) < params['per_page']:
+                print(f"  Reached end of commits (got {len(data)} < {params['per_page']})")
+                break
+
+            page += 1
+
+        except Exception as e:
+            print(f"  Error fetching commits for {repo_name}: {e}")
+            break
+
+    # Report results
+    if not found_start and page > max_pages:
+        print(f"  Warning: Reached page limit ({max_pages}) without finding start commit {start_sha}")
+    elif not found_start:
+        print(f"  Warning: Did not find start commit {start_sha} for {repo_name}")
+
+    print(f"  Found {len(commits)} commits for {repo_name}")
+    return commits
+
+def allocate_commits_to_projects(commits, projects):
+    """Allocate commits to projects based on file paths touched."""
+    allocation = defaultdict(list)
+
+    for commit in commits:
+        sha = commit.get('sha', '-')
+        print(f"Handling commit: {sha}")
+        files = commit.get('files', [])
+        assigned_projects = set()
+
+        # Check which projects this commit touches
+        for f in files:
+            filename = f.get('filename', '')
+            print(f"  Analyzing file: {filename}")
+
+            # Check each project to see if this file belongs to it
+            for project in projects:
+                if filename.startswith(f"{project}/"):
+                    assigned_projects.add(project)
+                    print(f"    Matches project: {project}")
+                    break  # Found a match, no need to check other projects for this file
+
+        # Assign commit to all matching projects
+        if assigned_projects:
+            for project in assigned_projects:
+                allocation[project].append(commit)
+                print(f"    Assigned to project: {project}")
+        else:
+            allocation['Unassigned'].append(commit)
+            print(f"  Assigned to: Unassigned")
+
+    return dict(allocation)
+
+def find_submodules(commit_sha):
+    """Find submodules and their commit SHAs for a TheRock commit"""
+
+    # Get .gitmodules file content
+    gitmodules_url = f"https://api.github.com/repos/ROCm/TheRock/contents/.gitmodules?ref={commit_sha}"
+    try:
+        gitmodules_data = gha_send_request(gitmodules_url)
+        if gitmodules_data.get('encoding') != 'base64':
+            print("Error: .gitmodules file encoding not supported")
+            return {}
+
+        # Parse submodule paths from .gitmodules content
+        content = base64.b64decode(gitmodules_data['content']).decode('utf-8')
+        submodule_paths = {
+            line.split('path =')[1].strip()
+            for line in content.split('\n')
+            if line.strip().startswith('path =')
+        }
+
+        if not submodule_paths:
+            print("No submodules found in .gitmodules")
+            return {}
+
+        print(f"Found {len(submodule_paths)} submodule paths in .gitmodules")
+
+    except Exception as e:
+        print(f"Error fetching .gitmodules file: {e}")
+        return {}
+
+    # Special name mappings for submodules
+    name_mappings = {
+        "profiler/rocprof-trace-decoder/binaries": "rocprof-trace-decoder",
+        "compiler/amd-llvm": "llvm-project"
+    }
+
+    # Get commit SHAs for all submodules
+    submodules = {}
+    for path in submodule_paths:
+        try:
+            # Get submodule commit SHA
+            contents_url = f"https://api.github.com/repos/ROCm/TheRock/contents/{path}?ref={commit_sha}"
+            content_data = gha_send_request(contents_url)
+            if content_data.get('type') == 'submodule' and content_data.get('sha'):
+                # Determine submodule name (with special mappings)
+                submodule_name = name_mappings.get(path, path.split('/')[-1])
+                submodules[submodule_name] = content_data['sha']
+                print(f"Found submodule: {submodule_name} (path: {path}) -> {content_data['sha']}")
+                if path == "compiler/amd-llvm":
+                    print(f"  DEBUG: compiler/amd-llvm path mapped to {submodule_name}")
+            else:
+                print(f"Warning: {path} is not a valid submodule")
+        except Exception as e:
+            print(f"Warning: Could not get commit SHA for submodule at {path}: {e}")
+
+    return submodules
+
+# Workflow Summary Function
+def generate_step_summary(start_commit, end_commit, html_reports, submodule_commits):
+    """Generate simple GitHub Actions step summary"""
+    monorepo_count = len([k for k in html_reports.keys() if k != 'non-monorepo'])
+    non_monorepo_count = len(submodule_commits)
+    total_submodules = monorepo_count + non_monorepo_count
+
+    summary = f"""## TheRock Repository Diff Report
+
+**TheRock Commit Range:** `{start_commit[:7]}` → `{end_commit[:7]}`
+
+**Analysis:** Compared submodule changes between these two TheRock commits
+
+**Status:** {' Report generated successfully' if os.path.exists('TheRockReport.html') else ' Report generation failed'}
+
+**Submodules with Updates:** {total_submodules} submodules ({monorepo_count} monorepos + {non_monorepo_count} regular submodules)"""
+
+    gha_append_step_summary(summary)
+
 # Main Function
 def main():
     # Arguments parsed
@@ -434,8 +427,20 @@ def main():
 
     if mode == "workflow":
         # Extract commits from workflow logs
-        start = find_repo_head(args.start)
-        end = find_repo_head(args.end)
+        print(f"Looking for commit SHA for workflow {args.start}")
+        try:
+            start = gha_query_workflow_run_information("ROCm/TheRock", args.start).get('head_sha')
+            print(f"Found start commit SHA via API: {start}")
+        except Exception as e:
+            print(f"Error fetching start workflow info via API: {e}")
+            start = None
+        print(f"Looking for commit SHA for workflow {args.end}")
+        try:
+            end = gha_query_workflow_run_information("ROCm/TheRock", args.end).get('head_sha')
+            print(f"Found end commit SHA via API: {end}")
+        except Exception as e:
+            print(f"Error fetching end workflow info via API: {e}")
+            end = None
     else:
         # Direct commit comparison
         start = args.start
@@ -473,13 +478,13 @@ def main():
                 components = get_rocm_components(submodule)
 
                 # Fetch commits between the old and new SHA
-                commits = fetch_commits_range(submodule, old_submodules[submodule], new_submodules[submodule])
+                commits = get_commits_between_shas(submodule, old_submodules[submodule], new_submodules[submodule], enrich_with_files=True)
 
                 # Allocate commits to components
                 allocation = allocate_commits_to_projects(commits, components)
 
                 # Generate HTML table
-                html_table = generate_commit_diff_html_table(allocation, commits, submodule)
+                html_table = generate_monorepo_html_table(allocation, commits, submodule)
 
                 # Store the HTML report
                 html_reports[submodule] = {
@@ -492,7 +497,7 @@ def main():
 
             else:
                 # For other submodules, we can just print the commit SHAs we want to store them in a dictonary
-                submodule_commits[submodule] = get_commits_in_range(old_submodules[submodule], new_submodules[submodule], submodule)
+                submodule_commits[submodule] = get_commits_between_shas(submodule, old_submodules[submodule], new_submodules[submodule], enrich_with_files=False)
         else:
             # Append a list of submodules not in new submodules
             notseen_submodules.append(submodule)
@@ -512,7 +517,7 @@ def main():
         else:
             print(f"  No commits found for {submodule}")
 
-    print(f"\nTotal submodules with commits: {len(submodule_commits)}")
+    print(f"\nTotal non-monorepo submodules with commits: {len(submodule_commits)}")
 
     # Generate HTML report for non-monorepo submodules
     print(f"\n=== Generating Non-Monorepo HTML Report ===")
@@ -528,6 +533,8 @@ def main():
     # Generate the comprehensive HTML report
     generate_therock_html_report(html_reports)
 
+    # Generate GitHub Actions step summary
+    generate_step_summary(start, end, html_reports, submodule_commits)
 
 if __name__ == "__main__":
     main()
