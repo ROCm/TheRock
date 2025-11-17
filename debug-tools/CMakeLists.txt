@@ -171,3 +171,90 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
     )
   endif()
 endif()
+
+if(THEROCK_ENABLE_ROCGDB)
+  ##############################################################################
+  # rocgdb
+  #
+  # The AMD source-level debugger for Linux, based on the GNU Debugger (GDB).
+  ##############################################################################
+
+  # Define the Python versions we want to build against.
+  set(rocgdb_python_versions "3.9" "3.10" "3.11" "3.12" "3.13" "3.14")
+
+  therock_cmake_subproject_declare(rocgdb
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "rocgdb"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocgdb"
+    CMAKE_ARGS
+      "-DPATCHELF=${PATCHELF}"
+      "-DPYTHON_VERSIONS='${rocgdb_python_versions}'"
+      "-DBUILD_TESTING=${BUILD_TESTING}"
+      "-DROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
+    COMPILER_TOOLCHAIN
+      amd-llvm
+    RUNTIME_DEPS
+      amd-comgr
+      amd-dbgapi
+      therock-bzip2
+      therock-gmp
+      therock-mpfr
+      therock-expat
+      therock-ncurses
+      therock-liblzma
+      therock-zlib
+      therock-zstd
+    INTERFACE_PROGRAM_DIRS
+      "bin"
+    INTERFACE_LINK_DIRS
+      "lib"
+  )
+
+  # We may want to adjust this to optimize rebuilds.
+  therock_cmake_subproject_glob_c_sources(rocgdb SUBDIRS
+    bfd
+    binutils
+    gdb
+    gdbsupport
+    includes
+  )
+  therock_cmake_subproject_provide_package(rocgdb rocgdb lib/cmake/rocgdb)
+  therock_cmake_subproject_activate(rocgdb)
+
+  # The artifacts provided by rocgdb.
+  therock_provide_artifact(rocgdb
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-rocgdb.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      amd-comgr
+      amd-dbgapi
+      therock-bzip2
+      therock-expat
+      therock-gmp
+      therock-mpfr
+      therock-ncurses
+      therock-liblzma
+      therock-zlib
+      therock-zstd
+      rocgdb
+  )
+
+  # We don't want to keep the cmake wrapper in the ROCgdb repo itself, so we
+  # resort to keeping the wrapper in TheRock and copying it to rocgdb's source
+  # directory just before a build. That way rocgdb is kept with a clean
+  # autotools-based build system.
+  message(STATUS "Copying ROCgdb's cmake wrapper to the source directory")
+  execute_process(
+      COMMAND ${CMAKE_COMMAND} -E copy ${DEBUG_TOOLS_DIR}/rocgdb.cmake ${DEBUG_TOOLS_DIR}/rocgdb/CMakeLists.txt
+      OUTPUT_VARIABLE _output
+      ERROR_VARIABLE _error
+      RESULT_VARIABLE _result
+  )
+endif()

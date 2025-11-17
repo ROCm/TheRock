@@ -45,6 +45,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |           |                                               |
 | debug-tools         | [amd-dbgapi](https://github.com/ROCm/ROCdbgapi.git)                                                                      | ❌        | Unsupported                                   |
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocr_debug_agent.git)                                                         | ❌        | Unsupported                                   |
+| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb.git)                                                                             | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-compute](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute)                    | ❌        | Unsupported                                   |

@@ -88,7 +88,7 @@ submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
 
 [source_sets.debug-tools]
 description = "ROCm debug tools submodules"
-submodules = ["amd-dbgapi", "rocr-debug-agent", "rocr-debug-agent-tests"]
+submodules = ["amd-dbgapi", "rocgdb", "rocr-debug-agent", "rocr-debug-agent-tests"]
 
 [source_sets.rocm-systems]
 description = "ROCm systems monorepo (runtime, profiler, etc.)"
@@ -587,5 +587,12 @@ disable_platforms = ["windows"]
 artifact_group = "debug-tools"
 type = "target-specific"
 artifact_deps = ["rocr-debug-agent", "core-hip"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+[artifacts.rocgdb]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
