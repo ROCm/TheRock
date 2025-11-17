@@ -141,7 +141,7 @@ amdgpu_family_info_matrix_nightly = {
         },
         # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
-            "test-runs-on": "",
+            "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
