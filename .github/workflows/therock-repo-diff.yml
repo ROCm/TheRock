@@ -70,6 +70,6 @@ jobs:
         with:
           name: therock-diff-report
           path: build_tools/github_actions/TheRockReport.html
-          retention-days: 30
+          retention-days: 15
         if: always()
 

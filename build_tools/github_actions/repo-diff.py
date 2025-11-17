@@ -140,13 +140,51 @@ def generate_non_monorepo_html_table(submodule_commits):
 
     return create_table_wrapper(["Submodule", "Commits"], rows)
 
-def generate_therock_html_report(html_reports):
+def generate_therock_html_report(html_reports, removed_submodules=None, newly_added_submodules=None, unchanged_submodules=None):
     """Generate a comprehensive HTML report for TheRock repository diff"""
     print(f"\n=== Generating Comprehensive HTML Report ===")
 
     # Read template
     with open("report_template.html", "r") as f:
         template = f.read()
+
+    # Generate and populate submodule changes summary
+    summary_html = ""
+    if removed_submodules or newly_added_submodules or unchanged_submodules:
+        summary_html += '<div style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">'
+        summary_html += '<div style="text-align:center; color:#2196F3; font-size:2.2em; font-weight:bold; margin-bottom:16px;">Submodule Changes Summary</div>'
+
+        if newly_added_submodules:
+            summary_html += '<div style="margin-bottom:16px;">'
+            summary_html += '<h3 style="color:#28a745; margin-bottom:8px;">Newly Added Submodules:</h3>'
+            summary_html += '<ul style="margin:0; padding-left:20px;">'
+            for sub in sorted(newly_added_submodules):
+                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
+            summary_html += '</ul></div>'
+
+        if removed_submodules:
+            summary_html += '<div style="margin-bottom:16px;">'
+            summary_html += '<h3 style="color:#dc3545; margin-bottom:8px;">Removed Submodules:</h3>'
+            summary_html += '<ul style="margin:0; padding-left:20px;">'
+            for sub in sorted(removed_submodules):
+                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
+            summary_html += '</ul></div>'
+
+        if unchanged_submodules:
+            summary_html += '<div>'
+            summary_html += '<h3 style="color:#6c757d; margin-bottom:8px;">Unchanged Submodules:</h3>'
+            summary_html += '<ul style="margin:0; padding-left:20px;">'
+            for sub in sorted(unchanged_submodules):
+                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
+            summary_html += '</ul></div>'
+
+        summary_html += '</div>'
+
+    # Insert summary at the top
+    template = template.replace(
+        '<div id="submodule-summary"></div>',
+        f'<div id="submodule-summary">{summary_html}</div>'
+    )
 
     # Check what sections have content and populate accordingly
     rocm_lib_data = html_reports.get('rocm-libraries')
@@ -466,11 +504,78 @@ def main():
 
     # Compare submodules and get commit history for changed ones
     submodule_commits = {}
-    notseen_submodules = []
+    removed_submodules = []
+    newly_added_submodules = []
+    unchanged_submodules = []
     html_reports = {}
 
-    for submodule in old_submodules.keys():
-        if submodule in new_submodules:
+    # Get all unique submodules from both commits
+    all_submodules = set(old_submodules.keys()) | set(new_submodules.keys())
+
+    # Categorize submodules
+    for submodule in all_submodules:
+        old_sha = old_submodules.get(submodule)
+        new_sha = new_submodules.get(submodule)
+
+        if old_sha and not new_sha:
+            # Submodule was removed
+            removed_submodules.append(submodule)
+            print(f"REMOVED: {submodule} (was at {old_sha[:7]})")
+
+        elif new_sha and not old_sha:
+            # Submodule was newly added
+            newly_added_submodules.append(submodule)
+            print(f"NEWLY ADDED: {submodule} -> {new_sha[:7]}")
+
+            # Process newly added monorepo (show as single commit entry)
+            if submodule == "rocm-systems" or submodule == "rocm-libraries":
+                # Create clickable commit badge for the current SHA
+                commit_badge = create_commit_badge_html(new_sha, submodule)
+
+                # Get commit message for the current SHA
+                commit_message = "N/A"
+                try:
+                    commit_url = f"https://api.github.com/repos/ROCm/{submodule}/commits/{new_sha}"
+                    commit_data = gha_send_request(commit_url)
+                    commit_message = commit_data.get('commit', {}).get('message', 'N/A').split('\n')[0]
+                    print(f"  Retrieved commit message for newly added {submodule}")
+                except Exception as e:
+                    print(f"  Warning: Could not get commit message for newly added {submodule}: {e}")
+
+                # Create informative content for newly added monorepo
+                content_html = f"""
+                <div style="padding: 20px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-bottom: 16px;">
+                    <h3 style="margin-top: 0; color: #28a745; font-size: 1.4em;">Newly Added Monorepo</h3>
+                    <p style="margin-bottom: 12px; font-size: 1.1em;">
+                        This <strong>{submodule}</strong> monorepo has been newly added to TheRock repository.
+                    </p>
+                    <div style="background-color: #ffffff; padding: 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+                        <strong>Current Commit:</strong> {commit_badge} {commit_message}
+                    </div>
+                    <p style="margin-top: 12px; margin-bottom: 0; color: #6c757d; font-style: italic;">
+                        No previous version exists for comparison. Future reports will show detailed component-level changes.
+                    </p>
+                </div>
+                """
+
+                html_reports[submodule] = {
+                    'start_commit': 'N/A (newly added)',
+                    'end_commit': new_sha,
+                    'content_html': content_html
+                }
+            else:
+                submodule_commits[submodule] = [{
+                    'sha': new_sha,
+                    'commit': {
+                        'message': f'Newly added submodule: {submodule}',
+                        'author': {'name': 'System', 'date': 'N/A'}
+                    }
+                }]
+
+        elif old_sha and new_sha:
+            # Submodule exists in both - process changed submodules
+            print(f"🔄 CHANGED: {submodule} {old_sha[:7]} -> {new_sha[:7]}")
+
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
                 print(f"\n=== Processing {submodule.upper()} monorepo ===")
 
@@ -478,7 +583,7 @@ def main():
                 components = get_rocm_components(submodule)
 
                 # Fetch commits between the old and new SHA
-                commits = get_commits_between_shas(submodule, old_submodules[submodule], new_submodules[submodule], enrich_with_files=True)
+                commits = get_commits_between_shas(submodule, old_sha, new_sha, enrich_with_files=True)
 
                 # Allocate commits to components
                 allocation = allocate_commits_to_projects(commits, components)
@@ -488,19 +593,48 @@ def main():
 
                 # Store the HTML report
                 html_reports[submodule] = {
-                    'start_commit': old_submodules[submodule],
-                    'end_commit': new_submodules[submodule],
+                    'start_commit': old_sha,
+                    'end_commit': new_sha,
                     'content_html': html_table
                 }
 
                 print(f"Generated HTML report for {submodule}")
 
             else:
-                # For other submodules, we can just print the commit SHAs we want to store them in a dictonary
-                submodule_commits[submodule] = get_commits_between_shas(submodule, old_submodules[submodule], new_submodules[submodule], enrich_with_files=False)
-        else:
-            # Append a list of submodules not in new submodules
-            notseen_submodules.append(submodule)
+                # For other submodules, get commit history
+                submodule_commits[submodule] = get_commits_between_shas(submodule, old_sha, new_sha, enrich_with_files=False)
+
+        # Handle unchanged submodules separately
+        if old_sha and new_sha and old_sha == new_sha:
+            print(f" UNCHANGED: {submodule} -> {new_sha[:7]}")
+            unchanged_submodules.append(submodule)
+
+    # Print summary
+    print(f"\n=== SUBMODULE CHANGES SUMMARY ===")
+    print(f" Total submodules: {len(all_submodules)}")
+    print(f" Newly added: {len(newly_added_submodules)}")
+    print(f"  Removed: {len(removed_submodules)}")
+    print(f" Unchanged: {len(unchanged_submodules)}")
+    # Show detailed lists
+    if newly_added_submodules:
+        print(f"\n NEWLY ADDED SUBMODULES:")
+        for sub in sorted(newly_added_submodules):
+            print(f"  + {sub} -> {new_submodules[sub][:7]}")
+
+    if removed_submodules:
+        print(f"\n  REMOVED SUBMODULES:")
+        for sub in sorted(removed_submodules):
+            print(f"  - {sub} (was at {old_submodules[sub][:7]})")
+
+    if unchanged_submodules:
+        print(f"\n UNCHANGED SUBMODULES:")
+        for sub in sorted(unchanged_submodules):
+            print(f"  = {sub} -> {new_submodules[sub][:7]}")
+
+    changed_count = len([s for s in all_submodules if s in old_submodules and s in new_submodules and old_submodules[s] != new_submodules[s]])
+    unchanged_count = len([s for s in all_submodules if s in old_submodules and s in new_submodules and old_submodules[s] == new_submodules[s]])
+    print(f" Changed: {changed_count}")
+    print(f" Unchanged: {unchanged_count}")
 
     # Print all the submodules and their commits
     print(f"\n=== SUBMODULE COMMIT DETAILS ===")
@@ -531,7 +665,7 @@ def main():
     }
 
     # Generate the comprehensive HTML report
-    generate_therock_html_report(html_reports)
+    generate_therock_html_report(html_reports, removed_submodules, newly_added_submodules, unchanged_submodules)
 
     # Generate GitHub Actions step summary
     generate_step_summary(start, end, html_reports, submodule_commits)
