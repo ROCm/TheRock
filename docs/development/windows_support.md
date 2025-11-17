@@ -44,6 +44,7 @@ mainline, in open source, using MSVC, etc.).
 | core                | [clr](https://github.com/ROCm/clr)                                                                                       | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |           |                                               |
 | debug-tools         | [amd-dbgapi](https://github.com/ROCm/ROCdbgapi.git)                                                                      | ❌        | Unsupported                                   |
+| debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocr_debug_agent.git)                                                         | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-compute](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute)                    | ❌        | Unsupported                                   |

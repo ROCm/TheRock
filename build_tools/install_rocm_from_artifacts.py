@@ -210,6 +210,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("blas")
         if args.debug_tools:
             extra_artifacts.append("amd-dbgapi")
+            extra_artifacts.append("rocr-debug-agent")
+            extra_artifacts.append("rocr-debug-agent-tests")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -372,7 +374,7 @@ def main(argv):
     artifacts_group.add_argument(
         "--debug-tools",
         default=False,
-        help="Include ROCm debugging tools (amd-dbgapi) artifacts",
+        help="Include ROCm debugging tools (amd-dbgapi and rocr_debug_agent) artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
