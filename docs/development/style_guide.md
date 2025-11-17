@@ -1,5 +1,11 @@
 # TheRock Style Guide
 
+> [!IMPORTANT]
+> This is a living document meant to steer developers towards agreed upon best
+> practices.
+>
+> 📝 Feel free to propose new sections and amend (or remove) existing sections.
+
 Table of contents:
 
 - [Introduction](#introduction)
