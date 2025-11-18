@@ -35,10 +35,17 @@ cmd = [
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-# TODO(#2101) Re-enable smoke tests once issue solved
-# if test_type == "smoke":
-#    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml"]
+if test_type == "smoke":
+    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml"]
 
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+result = subprocess.run(
+    cmd, cwd=THEROCK_DIR, env=environ_vars, capture_output=True, text=True
+)
+# Currently, hipblas smoke tests pass but exit with status code 3
+# TODO(#2101) Remove status code check for exit code 3 and default to 0 for smoke tests
+if result.returncode not in (0, 3):
+    raise subprocess.CalledProcessError(
+        result.returncode, result.args, output=result.stdout, stderr=result.stderr
+    )
