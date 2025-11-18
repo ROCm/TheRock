@@ -126,7 +126,7 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
         else str(new_version).split("+rocm")[-1]
     )
 
-    print("  Changing wheel-specific files that contain the version", end="")
+    print("  Changing wheel-specific files that contain the version")
 
     if not "torch" in new_dir_path.name:  # rocm packages
         files_to_change = [
@@ -140,13 +140,15 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
         ]
 
         # special handling
-        # we only want to change required-distr matching "rocm"
+        # we only want to change required-dist matching "rocm"
+        metadata_path = (
+            new_dir_path
+            / f"{package_name_no_version}-{old_version}.dist-info"
+            / "METADATA"
+        )
+        print(f"    {metadata_path}")
         with fileinput.input(
-            files=(
-                new_dir_path
-                / f"{package_name_no_version}-{old_version}.dist-info"
-                / "METADATA"
-            ),
+            files=(metadata_path),
             encoding="utf-8",
             inplace=True,
         ) as f:
@@ -166,11 +168,13 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
         # no additional (rocm-specific) files needed to be changed that contain the version
         return
 
+    for f in files_to_change:
+        print(f"    {f}")
     with fileinput.input(files=(files_to_change), encoding="utf-8", inplace=True) as f:
         for line in f:
             print(line.replace(old_rocm_version, new_rocm_version), end="")
 
-    print(" ...done")
+    print("  ...done")
 
 
 def promote_wheel(filename: pathlib.Path, prerelease_type: str) -> bool:
