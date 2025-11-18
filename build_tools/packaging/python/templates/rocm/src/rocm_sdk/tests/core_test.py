@@ -45,7 +45,7 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
     ("rocm_agent_enumerator", [], "", True),
     ("rocminfo", [], "", True),
     ("rocm-smi", [], "Management", True),
-    ("hipify-perl", ["--help", "HIP Version", True]),
+    ("hipify-perl", ["--help"], "HIP Version", True),
 ]
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [
