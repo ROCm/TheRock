@@ -180,7 +180,7 @@ libraries with LTO style optimizations.
 As the Fusilli integration evolves, so will TheRock's IREE integration. It will likely follow the steps below:
 
 1. (current state) Fusilli uses a "side loaded" `iree-compile` binary. If users build TheRock with `THEROCK_ENABLE_BUILD_IREE_LIBS=ON` (off by default) they will also need to pip install [`iree-compiler`](https://pypi.org/project/iree-compiler/) on their system.
-1. (nearish future) Fusilli will move to using IREE compiler's C-API + `libIREECompiler.so` built in TheRock. IREE uses a *very* recent LLVM (daily integration). In this phase, `build_tools/fetch_sources.py` will be updated to fetch IREE's captive LLVM, adding yet another LLVM build to TheRock. The main build will not be affected, but builds with `THEROCK_ENABLE_BUILD_IREE_LIBS=ON` will be slower at this point in the integration.
+1. (mid term) Fusilli will move to using IREE compiler's C-API + `libIREECompiler.so` built in TheRock. IREE uses a *very* recent LLVM (daily integration). In this phase, `build_tools/fetch_sources.py` will be updated to fetch IREE's captive LLVM, adding yet another LLVM build to TheRock. The main build will not be affected, but builds with `THEROCK_ENABLE_BUILD_IREE_LIBS=ON` will be slower at this point in the integration.
 1. (long term) Unify some set of LLVMs to eliminate IREE's captive LLVM - this will be a _large_ effort. After unification, building Fusilli integration should be cheap.
 
 ## Revision History
