@@ -13,11 +13,11 @@ There are a few modes this can be used in:
     python setup_venv.py .venv
     ```
 
-* To install the latest nightly rocm packages for gfx110X-dgpu into the venv:
+* To install the latest nightly rocm packages for gfx110X-all into the venv:
 
     ```
     python setup_venv.py .venv --packages rocm[libraries,devel] \
-        --index-name nightly --index-subdir gfx110X-dgpu
+        --index-name nightly --index-subdir gfx110X-all
     ```
 
     This is roughly equivalent to:
@@ -26,7 +26,7 @@ There are a few modes this can be used in:
     python -m venv .venv
     source .venv/bin/activate
     python -m pip install --upgrade pip
-    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-dgpu
+    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
     deactivate
     ```
 """
@@ -281,7 +281,7 @@ def main(argv: list[str]):
     if not all_subdir_sets_congruent and subdirs:
         index_subdir_help += ". Available options per index: " + str(subdirs)
     elif not subdirs:
-        index_subdir_help += ", such as 'gfx110X-dgpu'"
+        index_subdir_help += ", such as 'gfx110X-all'"
     else:
         index_subdir_help += "."
 

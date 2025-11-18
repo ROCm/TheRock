@@ -41,7 +41,7 @@ Examples:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0rc20250416 \
-        --amdgpu-family gfx110X-dgpu \
+        --amdgpu-family gfx110X-all \
         --output-dir build
     ```
 - Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
