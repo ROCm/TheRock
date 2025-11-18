@@ -80,6 +80,7 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       TORCH_VERSION: ${{ inputs.torch_version }}
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
 
     steps:
       - name: Checkout
@@ -128,9 +129,10 @@ jobs:
 
       - name: Run PyTorch smoketests
         run: |
-          pytest -v external-builds/pytorch/smoke-tests
+          pytest --log-cli-level=INFO -v external-builds/pytorch/smoke-tests
 
       - name: Run PyTorch tests
         if: "contains(inputs.test_runs_on, 'linux')"
+        # pytorch version is auto-detected
         run: |
-          bash external-builds/pytorch/run_linux_pytorch_tests.sh
+          python ./external-builds/pytorch/run_linux_pytorch_tests.py --amdgpu-family ${AMDGPU_FAMILY}

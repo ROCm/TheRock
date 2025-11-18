@@ -80,11 +80,11 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+        default: "https://rocm.devreleases.amd.com/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
@@ -229,6 +229,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          special-characters-workaround: true
 
       - name: Upload wheels to S3 staging
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -308,6 +309,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          special-characters-workaround: true
 
       - name: Determine upload flag
         env:

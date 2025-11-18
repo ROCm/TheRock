@@ -49,7 +49,7 @@ If having trouble building on a system, we will typically want to eliminate envi
 
 ## Alternative Configurations
 
-### Manylinux x84-64
+### Manylinux x86-64
 
 Our open-source binaries are typically built within a [manylinux container](https://github.com/pypa/manylinux) (see [the docker file](../dockerfiles/build_manylinux_x86_64.Dockerfile)). These images are versioned by the glibc version they target, and if dependencies are controlled carefully, binaries built on them should work on systems with the same or higher glibc version.
 

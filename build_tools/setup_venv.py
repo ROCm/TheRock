@@ -54,7 +54,7 @@ is_windows = platform.system() == "Windows"
 
 INDEX_URLS_MAP = {
     "nightly": "https://rocm.nightlies.amd.com/v2",
-    "dev": "https://d25kgig7rdsyks.cloudfront.net/v2",
+    "dev": "https://rocm.devreleases.amd.com/v2",
 }
 
 

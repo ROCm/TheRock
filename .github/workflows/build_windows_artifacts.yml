@@ -134,6 +134,10 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
 
+      - name: Install external python deps
+        run: |
+          pip install -r requirements-external.txt
+
       - name: Configure Projects
         env:
           cmake_preset: ${{ inputs.build_variant_cmake_preset }}
@@ -186,6 +190,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          special-characters-workaround: true
 
       - name: Post Build Upload
         if: always()

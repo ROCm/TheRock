@@ -28,12 +28,13 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature              | Linux support                                                                                                                         | Windows support              |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| torch                          | ✅ Supported                                                                                                                          | ✅ Supported                 |
-| torchaudio                     | ✅ Supported                                                                                                                          | ✅ Supported                 |
-| torchvision                    | ✅ Supported                                                                                                                          | ✅ Supported                 |
-| Flash attention via [ao]triton | ✅ Supported for torch 2.7<br>❌ Not yet supported for newer versions (see [Issue#1408](https://github.com/ROCm/TheRock/issues/1408)) | ✅ Supported since torch 2.9 |
+| Project / feature              | Linux support                                                                     | Windows support  |
+| ------------------------------ | --------------------------------------------------------------------------------- | ---------------- |
+| torch                          | ✅ Supported                                                                      | ✅ Supported     |
+| torchaudio                     | ✅ Supported                                                                      | ✅ Supported     |
+| torchvision                    | ✅ Supported                                                                      | ✅ Supported     |
+| Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     |
+| FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
 
 ### Supported PyTorch versions
 
@@ -235,7 +236,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   # OR from therock-dev-python
   python -m pip install \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/ \
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-dgpu/ \
     rocm[libraries,devel]
   ```
 
@@ -482,7 +483,7 @@ python pytorch_torch_repo.py checkout --repo-hashtag nightly
 python pytorch_audio_repo.py checkout --repo-hashtag nightly
 python pytorch_vision_repo.py checkout --repo-hashtag nightly
 # Note that triton will be checked out at the PyTorch pin.
-python pytorch_triton_repo.py checkout
+python pytorch_triton_repo.py checkout --patch --patch-set nightly
 ```
 
 #### ROCm PyTorch release branches

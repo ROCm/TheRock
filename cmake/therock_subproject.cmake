@@ -15,7 +15,6 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   CMAKE_PROGRAM_PATH
   CMAKE_PLATFORM_NO_VERSIONED_SONAME
   Python3_EXECUTABLE
-  Python3_FIND_VIRTUALENV
   THEROCK_SOURCE_DIR
   THEROCK_BINARY_DIR
   THEROCK_ROCM_LIBRARIES_SOURCE_DIR
@@ -40,13 +39,6 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
 # resolver).
 set_property(GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
 
-# Some sub-projects do not react well to not having any GPU targets to build.
-# In this case, we build them with a default target. This should only happen
-# with target filtering for non-production, single target builds, and we will
-# warn about it.
-set(THEROCK_SUBPROJECTS_REQUIRING_DEFAULT_GPU_TARGETS hipBLASLt)
-set(THEROCK_DEFAULT_GPU_TARGETS "gfx1100")
-
 set_property(GLOBAL PROPERTY THEROCK_SUBPROJECT_COMPILE_COMMANDS_FILES)
 
 if(CMAKE_C_VISIBILITY_PRESET)
@@ -54,6 +46,9 @@ if(CMAKE_C_VISIBILITY_PRESET)
 endif()
 if(CMAKE_CXX_VISIBILITY_PRESET)
   list(APPEND THEROCK_DEFAULT_CMAKE_VARS ${CMAKE_CXX_VISIBILITY_PRESET})
+endif()
+if(Python3_FIND_VIRTUALENV)
+  list(APPEND THEROCK_DEFAULT_CMAKE_VARS Python3_FIND_VIRTUALENV)
 endif()
 
 # CXX flags that we hard-code in the toolchain file when building projects
@@ -209,6 +204,12 @@ endfunction()
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
 #   in the project. This is largely used for broken projects that cannot
 #   build with an explicit target list.
+# DEFAULT_GPU_TARGETS: List of GPU targets to use as a fallback when all targets
+#   are excluded via EXCLUDE_TARGET_PROJECTS in therock_amdgpu_targets.cmake.
+#   Most projects should NOT set this and will default to an empty list. Only
+#   set this for projects that cannot build with an empty target list. This
+#   should only be needed during bringup of new targets and is not intended
+#   for production use.
 # NO_MERGE_COMPILE_COMMANDS: Option to disable merging of this project's
 #   compile_commands.json into the overall project. This is useful for
 #   third-party projects that are excluded from all as it eliminates a
@@ -301,7 +302,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -442,6 +443,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_SUBPROJECT cmake
     THEROCK_BUILD_POOL "${_build_pool}"
     THEROCK_AMDGPU_TARGETS "${_gpu_targets}"
+    THEROCK_DEFAULT_GPU_TARGETS "${ARG_DEFAULT_GPU_TARGETS}"
     THEROCK_DISABLE_AMDGPU_TARGETS "${ARG_DISABLE_AMDGPU_TARGETS}"
     THEROCK_EXCLUDE_FROM_ALL "${ARG_EXCLUDE_FROM_ALL}"
     THEROCK_NO_MERGE_COMPILE_COMMANDS "${ARG_NO_MERGE_COMPILE_COMMANDS}"
@@ -1204,11 +1206,12 @@ function(_therock_filter_project_gpu_targets out_var target_name)
   endif()
 
   if(NOT _filtered)
-    if("${target_name}" IN_LIST THEROCK_SUBPROJECTS_REQUIRING_DEFAULT_GPU_TARGETS)
-      set(_filtered ${THEROCK_DEFAULT_GPU_TARGETS})
+    get_target_property(_default_gpu_targets "${target_name}" THEROCK_DEFAULT_GPU_TARGETS)
+    if(_default_gpu_targets)
+      set(_filtered ${_default_gpu_targets})
       message(WARNING
         "Project ${target_name} cannot build with no gpu targets but was "
-        "instructed to do so. Overriding to the default ${_filtered}. "
+        "instructed to do so. Overriding to the project-specific default ${_filtered}. "
         "This message should never appear for production/supported gfx targets."
       )
     endif()

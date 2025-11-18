@@ -51,7 +51,7 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1702
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 4,
     },
     "hipblaslt": {
@@ -208,7 +208,7 @@ test_matrix = {
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
-        "timeout_minutes": 15,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,

@@ -147,6 +147,19 @@ amdgpu_family_info_matrix_nightly = {
             "expect_pytorch_failure": True,
         },
     },
+    "gfx110x": {
+        "linux": {
+            "test-runs-on": "linux-gfx1101-gpu-rocm",
+            "family": "gfx110X-dgpu",
+            "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
+        },
+        "windows": {
+            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            "family": "gfx110X-dgpu",
+            "build_variants": ["release"],
+        },
+    },
     "gfx1150": {
         "linux": {
             "test-runs-on": "",
@@ -161,8 +174,24 @@ amdgpu_family_info_matrix_nightly = {
     },
 }
 
-amdgpu_family_info_matrix_all = (
-    amdgpu_family_info_matrix_presubmit
-    | amdgpu_family_info_matrix_postsubmit
-    | amdgpu_family_info_matrix_nightly
-)
+
+def get_all_families_for_trigger_types(trigger_types):
+    """
+    Returns a combined family matrix for the specified trigger types.
+    trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
+    """
+    result = {}
+    matrix_map = {
+        "presubmit": amdgpu_family_info_matrix_presubmit,
+        "postsubmit": amdgpu_family_info_matrix_postsubmit,
+        "nightly": amdgpu_family_info_matrix_nightly,
+    }
+
+    for trigger_type in trigger_types:
+        if trigger_type in matrix_map:
+            for family_name, family_config in matrix_map[trigger_type].items():
+                # Only add if not already present (first occurrence wins)
+                if family_name not in result:
+                    result[family_name] = family_config
+
+    return result

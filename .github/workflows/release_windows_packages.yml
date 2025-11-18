@@ -114,8 +114,8 @@ jobs:
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
-          echo "tmp_cloudfront_url=https://d25kgig7rdsyks.cloudfront.net/v2" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://d25kgig7rdsyks.cloudfront.net/v2-staging" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.devreleases.amd.com/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.devreleases.amd.com/v2-staging" >> $GITHUB_ENV
           echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
 
       - name: Generate release information
@@ -221,6 +221,10 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
 
+      - name: Install external python deps
+        run: |
+          pip install -r requirements-external.txt
+
       - name: Configure Projects
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
@@ -274,6 +278,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
+          special-characters-workaround: true
 
       # TODO: upload logs even if the build fails (separate from artifact upload?)
       - name: Post Build Upload
