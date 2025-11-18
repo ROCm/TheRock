@@ -221,10 +221,6 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
 
-      - name: Install external python deps
-        run: |
-          pip install -r requirements-external.txt
-
       - name: Configure Projects
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
