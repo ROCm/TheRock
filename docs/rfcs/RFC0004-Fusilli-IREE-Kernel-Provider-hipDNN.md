@@ -151,7 +151,7 @@ Fusilli-Plugin is currently in
 [`amd-shark-ai`](https://github.com/nod-ai/shark-ai/tree/b33f16e77ef00b4c9378fcd5edd3123d72fdcb68/fusilli-plugin),
 and move into a `plugins/` subdirectory of
 [`fusilli`](https://github.com/iree-org/fusilli). It will remain a standalone
-project emulating the end state (as if it was "in TheRock") - built _with_ 
+project emulating the end state (as if it was "in TheRock") - built _with_
 the Fusilli API, rather than being a part of the Fusilli API itself - but just
 in the Fusilli repo to stage the roll-out to be less disruptive. This allows
 for it to be easily movable alongside other hipdnn plugins at a later point.
