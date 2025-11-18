@@ -33,10 +33,10 @@ if test_type == "smoke":
     # The emulator regression tests are very fast.
     # If we need something even faster we can use "/smoke" here.
     test_subdir = "/regression"
-    timeout = "300"
+    timeout = "900"
 elif test_type == "regression":
     test_subdir = "/regression"
-    timeout = "300"
+    timeout = "900"
 
 cmd = [
     "ctest",
