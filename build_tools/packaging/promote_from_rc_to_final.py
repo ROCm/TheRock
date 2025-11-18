@@ -25,6 +25,9 @@ TYPICAL USAGE:
   # Promote only specific files matching a pattern:
   python ./build_tools/packaging/promote_from_rc_to_final.py --input-dir=./release_candidates/ --match-files='*rc2*'
 
+  # Promote some nightly for testing
+  python ./build_tools/packaging/promote_from_rc_to_final.py --input-dir=./release_candidates/ --release-type="a"
+
 TESTING:
   python ./build_tools/packaging/tests/promote_from_rc_to_final_test.py
 """
@@ -69,7 +72,7 @@ Promotion works for for wheels and .tar.gz.
 Wheels version is determined by python library to interact with the wheel.
 For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
 """,
-        usage="python ./build_tools/packaging/promote_from_rc_to_final.py --input-dir=./release_candidates/rc1/ --delete-old-on-success --platform=win",
+        usage="python ./build_tools/packaging/promote_from_rc_to_final.py --input-dir=./release_candidates/rc1/ --delete-old-on-success",
     )
     parser.add_argument(
         "--input-dir",
@@ -86,6 +89,13 @@ For tar.gz., the version is extract from <.tar.gz>/PKG-INFO file.
         "--delete-old-on-success",
         help="Deletes old file after successful promotion",
         action="store_true",
+    )
+    parser.add_argument(
+        "--prerelease-type",
+        help="Prerelease type to use instead of 'rc' (e.g. 'dev' or 'a')",
+        nargs="+",
+        default=["rc"],
+        choices=["rc", "dev", "a"],
     )
 
     return parser.parse_args(argv)
@@ -163,7 +173,7 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
     print(" ...done")
 
 
-def promote_wheel(filename: pathlib.Path):
+def promote_wheel(filename: pathlib.Path, prerelease_type: str) -> bool:
     print(f"Promoting whl from rc to final: {filename}")
 
     original_wheel = Wheel(filename)
@@ -173,14 +183,18 @@ def promote_wheel(filename: pathlib.Path):
     print(f"  Detected version: {original_version}")
 
     if original_version.local:  # torch packages
-        if not "rc" in original_version.local:
-            print("  Only release candidates (rc) can be promoted! Aborting!")
+        if not prerelease_type in original_version.local:
+            print(
+                f"  [ERROR] Only prerelease versions of type '{prerelease_type}' can be promoted! Skipping!"
+            )
             return False
-        new_local_version = str(original_version.local).split("rc", 1)[0]
+        new_local_version = str(original_version.local).split(prerelease_type, 1)[0]
         new_base_version = str(original_version.public)
     else:  # rocm packages
-        if not "rc" in str(original_version):
-            print("  Only release candidates (rc) can be promoted! Aborting!")
+        if not prerelease_type in str(original_version):
+            print(
+                f"  [ERROR] Only prerelease versions of type '{prerelease_type}' can be promoted! Skipping!"
+            )
             return False
         new_local_version = None
 
@@ -202,8 +216,7 @@ def promote_wheel(filename: pathlib.Path):
     return True
 
 
-# TODO TODO use Version and offer option to switch from "rc" to other release suffixes like "dev" or "a"
-def promote_targz_sdist(filename: pathlib.Path):
+def promote_targz_sdist(filename: pathlib.Path, prerelease_type: str) -> bool:
     print(f"Found tar.gz: {filename}")
 
     base_dir = filename.parent
@@ -221,24 +234,20 @@ def promote_targz_sdist(filename: pathlib.Path):
 
         with open(tmp_path / f"{package_name}" / "PKG-INFO", "r") as info:
             for line in info.readlines():
-                if "Version" in line:
-                    version = line.removeprefix("Version:").strip()
+                if line.startswith("Version"):
+                    version = Version(line.removeprefix("Version:").strip())
 
         assert version, f"No version found in {filename}/PKG-INFO."
 
-        base_version = version.split("rc", 1)[0]
+        print(f"  Detected version: {version}")
 
-        if any(c.isalpha() for c in base_version):
+        if not prerelease_type in str(version):
             print(
-                f"  Base version extraction not successful and letters still in the version {base_version}."
-            )
-            print("  Only release candidates (rc) can be promoted! Aborting!")
-            return False
-        if base_version == version:
-            print(
-                f"  {version} and {base_version} are the same. Already the base version? Skipping..."
+                f"  [ERROR] Only prerelease versions of type '{prerelease_type}' can be promoted! Skipping!"
             )
             return False
+
+        base_version = version.base_version
 
         print(
             f"  Editing files to change version from {version} to {base_version}",
@@ -256,14 +265,14 @@ def promote_targz_sdist(filename: pathlib.Path):
             files=(files_to_change), encoding="utf-8", inplace=True
         ) as f:
             for line in f:
-                print(line.replace(version, base_version), end="")
+                print(line.replace(str(version), str(base_version)), end="")
 
         print(" ...done")
 
         print("  Creating new archive for it", end="")
         # Rename temporary directory to package name with promoted version
-        package_name_no_version = package_name.removesuffix(version)
-        new_archive_name = package_name_no_version + base_version
+        package_name_no_version = package_name.removesuffix(str(version))
+        new_archive_name = package_name_no_version + str(base_version)
         os.rename(tmp_path / f"{package_name}", tmp_path / f"{new_archive_name}")
 
         print(f" {new_archive_name}", end="")
@@ -278,14 +287,24 @@ def promote_targz_sdist(filename: pathlib.Path):
         return True
 
 
-def promote_targz_tarball(filename: pathlib.Path, delete: bool):
+def promote_targz_tarball(
+    filename: pathlib.Path, delete: bool, prerelease_type: str
+) -> bool:
     old_name = filename.name.removesuffix(".tar.gz")
     old_version = Version(old_name.split("-")[-1])
-    new_version = Version(old_version.base_version)
-    new_name = old_name.replace(str(old_version), str(new_version)) + ".tar.gz"
 
     print(f"Promoting tarball from rc to final: {filename.name}")
     print(f"  Detected version: {old_version}")
+
+    if not prerelease_type in str(old_version):
+        print(
+            f"  [ERROR] Only prerelease versions of type '{prerelease_type}' can be promoted! Skipping!"
+        )
+        return False
+
+    new_version = Version(old_version.base_version)
+    new_name = old_name.replace(str(old_version), str(new_version)) + ".tar.gz"
+
     print(f"  New version: {new_version}")
 
     if delete:
@@ -300,7 +319,12 @@ def promote_targz_tarball(filename: pathlib.Path, delete: bool):
     return True
 
 
-def main(input_dir: pathlib.Path, match_files: str = "*", delete: bool = False) -> None:
+def main(
+    input_dir: pathlib.Path,
+    match_files: str = "*",
+    delete: bool = False,
+    prerelease_type: str = "rc",
+) -> None:
     print(f"Looking for .whl and .tar.gz in {input_dir}/{match_files}")
 
     files = input_dir.glob(match_files)
@@ -311,14 +335,14 @@ def main(input_dir: pathlib.Path, match_files: str = "*", delete: bool = False) 
             print(f"Skipping directory: {file}")
             continue
         if file.suffix == ".whl":
-            if promote_wheel(file) and delete:
+            if promote_wheel(file, prerelease_type) and delete:
                 print(f"Removing old wheel: {file}")
                 os.remove(file)
         elif file.suffixes[-1] == ".gz" and file.suffixes[-2] == ".tar":
             if file.name.startswith("therock-dist"):
-                promote_targz_tarball(file, delete)
+                promote_targz_tarball(file, delete, prerelease_type)
             else:
-                if promote_targz_sdist(file) and delete:
+                if promote_targz_sdist(file, prerelease_type) and delete:
                     print(f"Removing old sdist .tar.gz: {file}")
                     os.remove(file)
         else:
@@ -330,4 +354,4 @@ if __name__ == "__main__":
     p = parse_arguments(sys.argv[1:])
     print(" ...done")
 
-    main(p.input_dir, p.match_files, p.delete_old_on_success)
+    main(p.input_dir, p.match_files, p.delete_old_on_success, p.prerelease_type[0])
