@@ -88,6 +88,41 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
   ##############################################################################
+  # rocprofiler-systems
+  ##############################################################################
+  therock_cmake_subproject_declare(rocprofiler-systems
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DCMAKE_C_COMPILER=gcc
+      -DCMAKE_CXX_COMPILER=g++
+      -DROCPROFSYS_USE_ROCM=ON
+      -DROCPROFSYS_BUILD_ELFUTILS=ON
+      -DROCPROFSYS_BUILD_TBB=ON
+      -DROCPROFSYS_BUILD_LIBIBERTY=ON
+      -DROCPROFSYS_BUILD_BOOST=ON
+      -DROCPROFSYS_BUILD_DYNINST=ON
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    RUNTIME_DEPS
+      amdsmi
+      aqlprofile
+      hip-clr
+      rocprofiler-register
+      rocprofiler-sdk
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_SQLITE3}
+  )
+  therock_cmake_subproject_glob_c_sources(rocprofiler-systems
+    SUBDIRS .
+  )
+
+  therock_cmake_subproject_activate(rocprofiler-systems)
+
+  ##############################################################################
   # rocprofiler-compute
   ##############################################################################
   therock_cmake_subproject_declare(rocprofiler-compute
@@ -152,6 +187,11 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
   therock_cmake_subproject_activate(roctracer)
 
+
+  ##############################################################################
+  # Artifacts
+  ##############################################################################
+
   therock_provide_artifact(rocprofiler-sdk
     TARGET_NEUTRAL
     DESCRIPTOR artifact-rocprofiler-sdk.toml
@@ -166,6 +206,23 @@ if(THEROCK_ENABLE_ROCPROFV3)
       rocprofiler-sdk
       roctracer
       ${_rocprofiler_sdk_optional_deps}
+  )
+
+  therock_provide_artifact(rocprofiler-systems
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-rocprofiler-systems.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      amdsmi
+      rocprofiler-sdk
+      aqlprofile
+      roctracer
   )
 
   therock_provide_artifact(rocprofiler-compute

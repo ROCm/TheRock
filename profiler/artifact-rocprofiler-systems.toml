@@ -1,0 +1,17 @@
+# rocprofiler-systems
+[components.dbg."profiler/rocprofiler-systems/stage"]
+[components.dev."profiler/rocprofiler-systems/stage"]
+[components.doc."profiler/rocprofiler-systems/stage"]
+include = [
+  "share/doc/rocprofiler-systems/**"
+]
+[components.lib."profiler/rocprofiler-systems/stage"]
+include = [
+  "libexec/rocprofiler-systems/**"
+]
+[components.run."profiler/rocprofiler-systems/stage"]
+include = [
+  "bin/**",
+  "share/rocprofiler-systems/**"
+]
+[components.test."profiler/rocprofiler-systems/stage"]
