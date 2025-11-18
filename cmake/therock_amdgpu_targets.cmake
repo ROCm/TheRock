@@ -145,6 +145,11 @@ therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
 )
+therock_add_amdgpu_target(gfx1152 "" FAMILY igpu-all gfx115X-all gfx115X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl  # https://github.com/ROCm/TheRock/issues/150
+)
 
 # gfx120X family
 therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
