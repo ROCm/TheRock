@@ -8,7 +8,7 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 all_build_variants = {
     "linux": {
         "release": {
-            "build_variant_label": "Release",
+            "build_variant_label": "release",
             "build_variant_suffix": "",
             # TODO: Enable linux-release-package once capacity and rccl link
             # issues are resolved. https://github.com/ROCm/TheRock/issues/1781
@@ -16,16 +16,15 @@ all_build_variants = {
             "build_variant_cmake_preset": "",
         },
         "asan": {
-            "build_variant_label": "ASAN",
+            "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
             "expect_failure": True,
-            "skip_presubmit_build": True,
         },
     },
     "windows": {
         "release": {
-            "build_variant_label": "Release",
+            "build_variant_label": "release",
             "build_variant_suffix": "",
             "build_variant_cmake_preset": "windows-release",
         },

@@ -11,8 +11,8 @@ on:
         default: gfx94X-dcgpu
       build_variant_label:
         type: string
-        description: "A label for the build variant (ex: 'Release', 'ASAN')"
-        default: "Release"
+        description: "A label for the build variant (ex: 'release', 'asan')"
+        default: "release"
       build_variant_suffix:
         type: string
         description: "The build variant suffix (ex: 'asan' suffix -> 'gfx94X-dcgpu-asan')"
@@ -58,7 +58,9 @@ permissions:
 jobs:
   build_portable_linux_artifacts:
     name: Build (xfail ${{ inputs.expect_failure }})
-    runs-on: azure-linux-scale-rocm
+    # azure-linux-scale-rocm are used for regular CI builds
+    # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
+    runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-scale-rocm-heavy' || 'azure-linux-scale-rocm' }}
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
     permissions:
@@ -125,7 +127,8 @@ jobs:
           python3 build_tools/github_actions/build_configure.py --manylinux
 
       - name: Build therock-archives and therock-dist
-        run: cmake --build build --target therock-archives therock-dist -- -k 0
+        run: |
+          cmake --build build --target therock-archives therock-dist -- -k 0
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
