@@ -473,21 +473,6 @@ if(THEROCK_BUNDLE_SYSDEPS)
 endif()
 
 ################################################################################
-# Project-specific third-party dependencies
-# Unlike sysdeps (shared libraries for runtime deps), these are statically
-# linked into specific projects and conditionally built when needed.
-# Pattern: THEROCK_BUNDLED_{name} variables for conditional RUNTIME_DEPS use.
-################################################################################
-
-# gRPC: Exclusive to RDC standalone mode
-# Statically linked into rdcd/rdci/librdc_client.so (Linux, BUNDLE_SYSDEPS=ON)
-# Ref: docs/rfcs/RFC0007-rdc-therock-integration.md
-set(THEROCK_BUNDLED_GRPC)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND THEROCK_BUNDLE_SYSDEPS)
-  set(THEROCK_BUNDLED_GRPC therock-grpc)
-endif()
-
-################################################################################
 # Priority build targets.
 # By declaring these first as part of ALL, we influence build order a little
 # bit, helping to ensure that the critical path projects start as soon as
@@ -513,10 +498,8 @@ add_subdirectory(core)
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
 # Data center tools (RDC, etc.)
-if(THEROCK_ENABLE_DC_TOOLS AND THEROCK_ENABLE_RDC AND NOT WIN32)
+if(THEROCK_ENABLE_DC_TOOLS)
   add_subdirectory(dctools)
-elseif(THEROCK_ENABLE_RDC)
-  message(WARNING "THEROCK_ENABLE_RDC is ON but RDC requires Linux and THEROCK_ENABLE_DC_TOOLS=ON. Skipping.")
 endif()
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)

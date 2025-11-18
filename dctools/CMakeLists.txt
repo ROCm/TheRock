@@ -1,36 +1,24 @@
 # Data Center Tools
 
+# RDC-specific checks
 if(THEROCK_ENABLE_RDC)
-  # RDC builds with statically linked gRPC; tools (protoc, grpc_cpp_plugin) come from the bundled
-  # therock-grpc stage dir to keep symbol visibility and dependencies consistent with RFC0007.
-  if(NOT TARGET ${THEROCK_BUNDLED_GRPC})
-    message(FATAL_ERROR "RDC requires bundled gRPC (${THEROCK_BUNDLED_GRPC}); enable THEROCK_BUNDLE_SYSDEPS=ON to build gRPC and its dependencies.")
+  if(WIN32)
+    message(FATAL_ERROR
+      "THEROCK_ENABLE_RDC is ON but RDC requires Linux. Windows is not supported.")
   endif()
-  get_target_property(_therock_grpc_stage ${THEROCK_BUNDLED_GRPC} THEROCK_STAGE_DIR)
-  if(NOT _therock_grpc_stage)
-    message(FATAL_ERROR "Bundled gRPC target ${THEROCK_BUNDLED_GRPC} is missing THEROCK_STAGE_DIR")
+
+  if(NOT THEROCK_ENABLE_DC_TOOLS)
+    message(FATAL_ERROR
+      "THEROCK_ENABLE_RDC is ON but RDC requires THEROCK_ENABLE_DC_TOOLS=ON")
   endif()
-  set(_therock_grpc_root "${_therock_grpc_stage}/lib/rocm_sysdeps")
-  set(_rdc_grpc_cmake_dir "${_therock_grpc_root}/lib/cmake/grpc")
-  set(_rdc_protobuf_cmake_dir "${_therock_grpc_root}/lib/cmake/protobuf")
+endif()
 
-  set(_rdc_runtime_deps
-    ROCR-Runtime
-    amdsmi
-    rocprofiler-sdk
-    ${THEROCK_BUNDLED_LIBCAP}
-    ${THEROCK_BUNDLED_ZLIB}
-    ${THEROCK_BUNDLED_GRPC}
-  )
+if(THEROCK_ENABLE_RDC)
+  # RDC builds with statically linked gRPC
+  # gRPC is specified as a BUILD_DEPS, which automatically handles package configuration
 
-  set(_rdc_artifact_deps
-    amdsmi
-    rocprofiler-sdk
-    rdc
-    ${THEROCK_BUNDLED_LIBCAP}
-    ${THEROCK_BUNDLED_ZLIB}
-    ${THEROCK_BUNDLED_GRPC}
-  )
+  # Get gRPC stage directory for RDC's GRPC_ROOT requirement
+  get_target_property(_grpc_stage therock-grpc THEROCK_STAGE_DIR)
 
   therock_cmake_subproject_declare(rdc
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rdc"
@@ -45,16 +33,17 @@ if(THEROCK_ENABLE_RDC)
       -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
       -DHIP_PLATFORM=amd
       -DCMAKE_CXX_STANDARD=17
-      -DGRPC_ROOT=${_therock_grpc_root}
-      -DCMAKE_PREFIX_PATH=${_therock_grpc_root}
-      -DgRPC_DIR=${_rdc_grpc_cmake_dir}
-      -Dprotobuf_DIR=${_rdc_protobuf_cmake_dir}
+      -DGRPC_ROOT=${_grpc_stage}
 
     BUILD_DEPS
-      amd-llvm
+      therock-grpc
 
     RUNTIME_DEPS
-      ${_rdc_runtime_deps}
+      ROCR-Runtime
+      amdsmi
+      rocprofiler-sdk
+      ${THEROCK_BUNDLED_LIBCAP}
+      ${THEROCK_BUNDLED_ZLIB}
 
     INSTALL_DESTINATION
       portable-rdc
@@ -65,13 +54,10 @@ if(THEROCK_ENABLE_RDC)
     INTERFACE_INSTALL_RPATH_DIRS
       lib
   )
-
   therock_cmake_subproject_glob_c_sources(rdc
     SUBDIRS .
   )
-
   therock_cmake_subproject_provide_package(rdc rdc lib/cmake/rdc)
-
   therock_cmake_subproject_activate(rdc)
 
   # RDC validation tests (runtime tests excluded - require GPU hardware)
@@ -122,7 +108,11 @@ if(THEROCK_ENABLE_RDC)
       run
       test
     SUBPROJECT_DEPS
-      ${_rdc_artifact_deps}
+      amdsmi
+      rocprofiler-sdk
+      rdc
+      ${THEROCK_BUNDLED_LIBCAP}
+      ${THEROCK_BUNDLED_ZLIB}
   )
 
 endif(THEROCK_ENABLE_RDC)
