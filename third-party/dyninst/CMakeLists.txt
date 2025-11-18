@@ -16,15 +16,9 @@ therock_cmake_subproject_declare(therock-dyninst
     therock-boost
     therock-tbb
     ${THEROCK_BUNDLED_ELFUTILS}
-    ${THEROCK_BUNDLED_ZLIB}
-    ${THEROCK_BUNDLED_BZIP2}
-    ${THEROCK_BUNDLED_LIBLZMA}
-    ${THEROCK_BUNDLED_ZSTD}
   INSTALL_RPATH_DIRS
     lib/rocm_sysdeps/lib
   CMAKE_ARGS
-    -DTBB_ROOT_DIR="${CMAKE_CURRENT_BINARY_DIR}/../tbb/stage"
-    -DElfUtils_ROOT_DIR="${CMAKE_CURRENT_BINARY_DIR}/../sysdeps/linux/elfutils/build/stage/lib/rocm_sysdeps"
     -DLibIberty_ROOT_DIR="/opt/rh/gcc-toolset-13/root/usr"
 )
 therock_cmake_subproject_provide_package(therock-dyninst dyninst lib/cmake)
