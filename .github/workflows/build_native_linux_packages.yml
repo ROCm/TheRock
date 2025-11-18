@@ -21,7 +21,7 @@ on:
         required: true
         type: string
       package_suffix:
-        description: The suffix to be added to package name (ex: asan, static).
+        description: The suffix to be added to package name (Like asan, static).
         required: false
         type: string
   workflow_dispatch:
@@ -45,7 +45,7 @@ on:
           - deb
         default: "rpm"
       package_suffix:
-        description: The suffix to be added to package name (ex: asan, static).
+        description: The suffix to be added to package name (Like asan, static).
         type: string
         required: false
 
