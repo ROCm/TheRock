@@ -379,8 +379,7 @@ def matrix_generator(
         ):
             selected_target_names.append(target)
 
-    # FOR TESTING!!!!
-    if is_schedule or is_workflow_dispatch:
+    if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
         # For nightly runs, we run all builds and full tests
@@ -507,7 +506,7 @@ def main(base_args, linux_families, windows_families):
     test_type = "smoke"
 
     # In the case of a scheduled run, we always want to build and we want to run full tests
-    if is_schedule or is_workflow_dispatch:
+    if is_schedule:
         enable_build_jobs = True
         test_type = "full"
     else:
