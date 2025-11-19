@@ -49,31 +49,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     PATH ROCR-Runtime/dist/lib
     LIB_NAMES libhsa-runtime64.so
   )
-  
-  therock_cmake_subproject_declare(rocrtst
-    USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH="
-      "-DLLVM_DIR="
-      "-DROCM_DIR="
-    COMPILER_TOOLCHAIN
-      "${_system_toolchain}"
-    BUILD_DEPS
-      amd-llvm
-      amdsmi
-    RUNTIME_DEPS
-      ROCR-Runtime
-      rocprofiler-register
-      ${THEROCK_BUNDLED_ELFUTILS}
-      ${THEROCK_BUNDLED_LIBDRM}
-      ${THEROCK_BUNDLED_NUMACTL}
-      ocl-clr
-  )
-  therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
-  therock_cmake_subproject_activate(rocrtst)
 
   ##############################################################################
   # rocminfo
@@ -101,11 +76,9 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       doc
       lib
       run
-      test
     SUBPROJECT_DEPS
       ROCR-Runtime
       rocminfo
-      rocrtst
   )
 
 endif(THEROCK_ENABLE_CORE_RUNTIME)
@@ -338,3 +311,50 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   endif()
 
 endif(THEROCK_ENABLE_OCL_RUNTIME)
+
+##############################################################################
+# rocrtst for ROCR-Runtime
+##############################################################################
+
+if(THEROCK_ENABLE_CORE_RUNTIME)
+
+  therock_cmake_subproject_declare(rocrtst
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DCMAKE_PREFIX_PATH="
+      "-DLLVM_DIR="
+      "-DROCM_DIR="
+    COMPILER_TOOLCHAIN
+      "${_system_toolchain}"
+    BUILD_DEPS
+      amd-llvm
+      amdsmi
+    RUNTIME_DEPS
+      ROCR-Runtime
+      rocprofiler-register
+      ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_NUMACTL}
+      ocl-clr
+  )
+  therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
+  therock_cmake_subproject_activate(rocrtst)
+
+  therock_provide_artifact(rocrtst
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-runtime.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      rocrtst
+  )
+  
+endif(THEROCK_ENABLE_CORE_RUNTIME)
