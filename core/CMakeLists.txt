@@ -101,9 +101,11 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       ROCR-Runtime
       rocminfo
+      rocrtst
   )
 
 endif(THEROCK_ENABLE_CORE_RUNTIME)
