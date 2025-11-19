@@ -60,7 +60,7 @@ test_matrix = {
         "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards": 6,
     },
     # SOLVER tests
     "hipsolver": {
