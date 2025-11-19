@@ -501,7 +501,8 @@ def main(base_args, linux_families, windows_families):
     test_type = "smoke"
 
     # In the case of a scheduled run, we always want to build and we want to run full tests
-    if is_schedule:
+    # FOR TESTING !!!!!!
+    if is_schedule or is_workflow_dispatch:
         enable_build_jobs = True
         test_type = "full"
     else:
