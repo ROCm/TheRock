@@ -1,10 +1,4 @@
 if(THEROCK_ENABLE_ROCPROFV3)
-
-  set(_system_toolchain "amd-llvm")
-  if(WIN32)
-    set(_system_toolchain "")
-  endif()
-  
   set(_rocprofiler_sdk_optional_deps)
 
   ##############################################################################
