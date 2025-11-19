@@ -27,7 +27,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       amd-llvm
       therock-simde
     RUNTIME_DEPS
-      ocl-clr
       rocprofiler-register
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
@@ -71,6 +70,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_NUMACTL}
+      ocl-clr
   )
   therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
   therock_cmake_subproject_activate(rocrtst)
