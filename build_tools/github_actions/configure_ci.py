@@ -379,16 +379,18 @@ def matrix_generator(
         ):
             selected_target_names.append(target)
 
-    # FOR TESTING ! PLS REMOVE !
-    if is_schedule or is_workflow_dispatch:
-    # if is_schedule:
+    if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
         # For nightly runs, we run all builds and full tests
-        amdgpu_family_info_matrix_all = (amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit | amdgpu_family_info_matrix_nightly)
+        amdgpu_family_info_matrix_all = (
+            amdgpu_family_info_matrix_presubmit
+            | amdgpu_family_info_matrix_postsubmit
+            | amdgpu_family_info_matrix_nightly
+        )
         for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
-        
+
         # For nightly runs, we want to run full tests regardless of limited machines, so we delete the sanity_check_only_for_family option
         for key in lookup_matrix:
             if "sanity_check_only_for_family" in lookup_matrix[key]:
@@ -501,8 +503,7 @@ def main(base_args, linux_families, windows_families):
     test_type = "smoke"
 
     # In the case of a scheduled run, we always want to build and we want to run full tests
-    # FOR TESTING !!!!!!
-    if is_schedule or is_workflow_dispatch:
+    if is_schedule:
         enable_build_jobs = True
         test_type = "full"
     else:
