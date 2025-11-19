@@ -259,6 +259,15 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # aqlprofile tests
+    "aqlprofile": {
+        "job_name": "apqlprofile",
+        "fetch_artifact_args": "--rocprofiler-compute --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
