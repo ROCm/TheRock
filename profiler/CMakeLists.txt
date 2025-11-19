@@ -222,8 +222,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       amdsmi
       rocprofiler-sdk
       rocprofiler-systems
-      aqlprofile
-      roctracer
   )
 
   therock_provide_artifact(rocprofiler-compute
