@@ -221,6 +221,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBPROJECT_DEPS
       amdsmi
       rocprofiler-sdk
+      rocprofiler-systems
       aqlprofile
       roctracer
   )
