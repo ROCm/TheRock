@@ -408,7 +408,7 @@ def main(argv):
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
-        actions=argparse.BooleanOptionalAction,
+        action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
