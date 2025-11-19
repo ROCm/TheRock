@@ -19,9 +19,11 @@ The Rock Test Framework is developed on top of [pytest](https://docs.pytest.org/
 ## Cloning Repo and Basic Configuration
 
 ```
-$ git clone https://github.com/TheRock
+$ git clone https://github.com/ROCm/TheRock.git
 $ cd tests/harness
-$ pip3 install --quiet -r requirements.txt
+$ python -m venv venv
+$ source venv/bin/activate
+$ pip install --quiet -r requirements.txt
 ```
 
 ## Tests Integration using PyTest Framework
@@ -39,9 +41,9 @@ Run the tests using the following options
 
 ```
 $ cd tests/harness
+$ source venv/bin/activate
 $ pytest -v -s --tb=short \
-    --rock=/TheRock/therock-build  <path to the installed path of the rock> \
-    --env VAR:VALUE VAR2:VALUE2  <extra envs that your test needs> \
+    --therock-path=/TheRock/therock-build  <path to the installed path of the rock> \
     tests_*.py -k '<testName|pattern> or <test2Name>'
 
 # Ex: To run rocrand and rocthrust tests
@@ -56,7 +58,6 @@ Note: You can get more help on options with `pytest -h`
 #### Available Pytest Fixtures in conftest.py
 
 - **therock-path:** The path of TheRock
-- **extraEnv:**: The env dictionary provided via `--env` option
 - **orch:** The orchestrator to run ctest/gtest/binary type of tests
 - **dmesgs:** Fetches node's dmesgs and dumps in dmesg\_<testName>.log
 - **report:** Overall Reporting object
@@ -131,7 +132,7 @@ Orchestrator includes helper functions for running tests with ctest/gtest framew
 # Running Ctests
 >>> verdict = orch.runCtest(cwd=f'{rock}/bin/hipcub')
 # Running Gtests
->>> verdict = orch.runGtest('./hipblas-test', env=ompEnv, cwd=f'{rock}/bin')
+>>> verdict = orch.runGtest('./hipblas-test', env=myExtraEnv, cwd=f'{rock}/bin')
 ```
 
 #### Reporting

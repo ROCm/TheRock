@@ -6,5 +6,5 @@ class TestHipCub:
 
     def test_hipcub(self, orch, therock_path, result):
         """A Test case to verify hipcub"""
-        result.testVerdict = orch.runCtest(cwd=f"{therock_path}/bin/hipcub")
-        assert result.testVerdict
+        result.verdict = orch.runCtest(cwd=f"{therock_path}/bin/hipcub")
+        assert result.verdict

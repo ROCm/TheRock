@@ -49,10 +49,20 @@ def table(report):
 @pytest.fixture(scope="function")
 def result(pytestconfig, request, report, table):
     """Fixture to access the Result Object"""
-    report.testVerdict = False
+    report.verdict = False
     startTime = time.time()
     yield report
     testName = request.node.name
-    verdictStr = ("FAIL", "PASS")[report.testVerdict]
+    verdictStr = ("FAIL", "PASS")[report.verdict]
     execTime = time.strftime("%H:%M:%S", time.gmtime(time.time() - startTime))
     table.addRow(testName, verdictStr, execTime)
+
+
+@pytest.fixture(scope="session")
+def ldpathEnv(therock_path):
+    return {"LD_LIBRARY_PATH": f"{therock_path}/lib:$LD_LIBRARY_PATH"}
+
+
+@pytest.fixture(scope="session")
+def ompEnv(orch):
+    return {"OMP_NUM_THREADS": int(orch.node.getCpuCount() / 2) or 1}

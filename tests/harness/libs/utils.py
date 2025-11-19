@@ -9,9 +9,6 @@ import threading
 import subprocess
 
 
-TIMEOUT = 1200  # default console timeout
-
-
 # Configure the basic logging settings
 logging.basicConfig(
     level=logging.DEBUG,  # Set the minimum level to log
@@ -42,7 +39,9 @@ def runCmd(
     cwd=None,
     env=None,
     stdin=None,
-    timeout=TIMEOUT,
+    timeout=1200,  # default console timeout in seconds
+    reqOut=False,
+    reqOutErr=False,
     **kwargs,
 ):
     """Executes Cmd on the current node:
@@ -51,6 +50,8 @@ def runCmd(
     env[dict]: extra environment variable to be passed to the cmd
     stdin[str]: input to the cmd via its stdin
     timeout[int]: min time to wait before killing the process when no activity observed
+    reqOut[bool]: request to return stdout and stderr combined
+    reqOutErr[bool]: request to return stdout and stderr saperately
     """
 
     # console prints to log all the running cmds for easy repro of test steps
@@ -90,7 +91,7 @@ def runCmd(
     # live collection of process stdout / stderr streams
     def _readStream(fd):
         chunk = fd.read()
-        log.debug(chunk)
+        log.debug(chunk.decode())
         return chunk
 
     ret, stdout, stderr = None, b"", b""
@@ -116,7 +117,11 @@ def runCmd(
     status = "success" if ret == 0 else "failed"
     log.info(f"[{shlex.join(cmd)}] {status} return code: {ret}")
 
-    return ret, stdout.decode(), stderr.decode()
+    if reqOutErr:  # return retval, stdout and stderr saperately on request
+        return ret, stdout.decode(), stderr.decode()
+    elif reqOut:  # return retval, stdout and stderr combined on request
+        return ret, (stdout + stderr).decode()
+    return ret  # return only retval if no request received for stdout or stderr
 
 
 def runParallel(*funcs):

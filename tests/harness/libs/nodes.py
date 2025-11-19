@@ -37,6 +37,12 @@ class Node(object):
         return utils.runCmd(*args, **kwargs)
 
     @utils._callOnce
+    def getCpuCount(self):
+        """Gets the CPU count of the node"""
+        ret, out = self.runCmd("nproc", reqOut=True)
+        return int(out)
+
+    @utils._callOnce
     def getGpuCount(self):
         """Gets the GPU count of the node"""
         return len(glob.glob("/dev/dri/render*"))
@@ -51,8 +57,6 @@ class Node(object):
                     i,
                     env={
                         "ROCR_VISIBLE_DEVICES": i,
-                        "HIP_VISIBLE_DEVICES": i,
-                        "HSA_TEST_GPUS_NUM": i,
                     },
                 )
                 for i in range(ngpus)
