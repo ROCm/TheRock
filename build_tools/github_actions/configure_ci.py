@@ -395,7 +395,7 @@ def matrix_generator(
         # For nightly runs, we want to run full tests regardless of limited machines, so we delete the sanity_check_only_for_family option
         for key in lookup_matrix:
             if "sanity_check_only_for_family" in lookup_matrix[key][platform]:
-                del lookup_matrix[platform]["sanity_check_only_for_family"]
+                del lookup_matrix[key][platform]["sanity_check_only_for_family"]
 
     # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
