@@ -208,6 +208,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rccl")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
+        if args.rocprofiler_systems:
+            extra_artifacts.append("rocprofiler-systems")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
 
@@ -396,6 +398,13 @@ def main(argv):
         default=False,
         help="Include 'rocprofiler-compute' artifacts",
         action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocprofiler-systems",
+        default=False,
+        help="Include 'rocprofiler-systems' artifacts ",
+        actions=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
