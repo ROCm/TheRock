@@ -154,7 +154,8 @@ and move into a `plugins/` subdirectory of
 project emulating the end state (as if it was "in TheRock") - built _with_
 the Fusilli API, rather than being a part of the Fusilli API itself - but just
 in the Fusilli repo to stage the roll-out to be less disruptive. This allows
-for it to be easily movable alongside other hipdnn plugins at a later point.
+for it to be easily movable alongside other hipdnn plugins at a later point if
+desired.
 
 Fusilli-Plugin will build as a `therock_cmake_subproject_declare`, reaching into
 the `plugins/` directory of the `fusilli` submodule.
