@@ -65,7 +65,6 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pytest
-import torch
 
 
 def setup_env(pytorch_dir: str) -> None:
@@ -165,11 +164,56 @@ By default TheRock root dir is determined based on this script's location.""",
     return args
 
 
-def detect_amdgpu_family(amdgpu_family: str = "") -> list[str]:
-    """Detect and configure AMDGPU family using PyTorch.
+def get_available_gpus() -> list[str]:
+    """Query available AMD GPUs using PyTorch in a subprocess.
 
-    This function always queries PyTorch to get available GPUs and sets
-    HIP_VISIBLE_DEVICES to select the appropriate GPU(s) for testing.
+    This avoids initializing CUDA in the main process before HIP_VISIBLE_DEVICES is set.
+
+    Returns:
+        List of available GPU architecture strings (e.g., ["gfx942", "gfx1100"]).
+        Exits on failure.
+    """
+    query_script = """
+import sys
+try:
+    import torch
+    if not torch.cuda.is_available():
+        print("ERROR:ROCm is not available", file=sys.stderr)
+        sys.exit(1)
+    gpus = torch.cuda.get_arch_list()
+    if len(gpus) == 0:
+        print("ERROR:No AMD GPUs detected", file=sys.stderr)
+        sys.exit(1)
+    # Print one GPU per line for easy parsing
+    for gpu in gpus:
+        print(gpu)
+except Exception as e:
+    print(f"ERROR:{e}", file=sys.stderr)
+    sys.exit(1)
+"""
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", query_script],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        available_gpus = result.stdout.strip().split("\n")
+        return available_gpus
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] Failed to query GPUs: {e.stderr}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"[ERROR] Unexpected error querying GPUs: {e}")
+        sys.exit(1)
+
+
+def detect_amdgpu_family(amdgpu_family: str = "") -> list[str]:
+    """Detect and configure AMDGPU family for testing.
+
+    This function queries available GPUs and sets HIP_VISIBLE_DEVICES BEFORE
+    PyTorch/CUDA is initialized in the main process via pytest.
 
     Args:
         amdgpu_family: AMDGPU family string. Can be:
@@ -182,84 +226,67 @@ def detect_amdgpu_family(amdgpu_family: str = "") -> list[str]:
 
     Side effects:
         Sets HIP_VISIBLE_DEVICES environment variable to comma-separated GPU indices.
+        This MUST be called before importing torch in the main process via pytest.
     """
-    try:
-        # Query available GPUs
-        if not torch.cuda.is_available():
-            print("[ERROR] ROCm is not available or not detected by PyTorch")
+    # Query available GPUs using subprocess (doesn't initialize CUDA in main process)
+    available_gpus = get_available_gpus()
+
+    print(f"Available AMD GPUs: {available_gpus}")
+
+    selected_gpu_indices = []
+    selected_gpu_archs = []
+
+    if not amdgpu_family:
+        # Mode 1: Auto-detect - use first available GPU
+        selected_gpu_indices = [0]
+        selected_gpu_archs = [available_gpus[0]]
+        print(f"AMDGPU Arch auto-detected (using GPU at index 0): {selected_gpu_archs}")
+    elif amdgpu_family.split("-")[0].upper().endswith("X"):
+        # Mode 2: Wildcard match (e.g., "gfx94X" matches "gfx942", "gfx940", etc.)
+        family_part = amdgpu_family.split("-")[0]
+        partial_match = family_part[:-1]  # Remove the 'X'
+
+        for idx, gpu in enumerate(available_gpus):
+            if partial_match in gpu:
+                selected_gpu_indices += [idx]
+                selected_gpu_archs += [gpu]
+        print(
+            f"AMDGPU Arch detected via wildcard match '{partial_match}': "
+            f"{selected_gpu_archs} (GPU indices {selected_gpu_indices})"
+        )
+
+        if len(selected_gpu_archs) == 0:
+            print(
+                f"[ERROR] No GPU found matching wildcard pattern '{amdgpu_family}'. "
+                f"Available GPUs: {available_gpus}"
+            )
+            sys.exit(1)
+    else:
+        # Mode 3: Specific GPU arch - validate it exists in available GPUs
+        for idx, gpu in enumerate(available_gpus):
+            if gpu == amdgpu_family or amdgpu_family in gpu:
+                selected_gpu_indices += [idx]
+                selected_gpu_archs += [gpu]
+                print(
+                    f"AMDGPU Arch validated: {selected_gpu_archs} "
+                    f"(GPU indices {selected_gpu_indices})"
+                )
+                break
+
+        if len(selected_gpu_archs) == 0:
+            print(
+                f"[ERROR] Requested GPU '{amdgpu_family}' not found in available GPUs. "
+                f"Available GPUs: {available_gpus}"
+            )
             sys.exit(1)
 
-        available_gpus = torch.cuda.get_arch_list()
+    # Set HIP_VISIBLE_DEVICES to select the specific GPU(s)
+    # This MUST be done before torch is imported in the main process via pytest.
+    str_indices = ",".join(str(idx) for idx in selected_gpu_indices)
+    os.environ["HIP_VISIBLE_DEVICES"] = str_indices
+    print(f"Set HIP_VISIBLE_DEVICES={str_indices}")
 
-        if len(available_gpus) == 0:
-            print("[ERROR] No AMD GPUs detected by PyTorch")
-            sys.exit(1)
-
-        print(f"Available AMD GPUs: {available_gpus}")
-
-        # Determine which GPU to use based on input
-        selected_gpu_indices = []
-        selected_gpu_archs = []
-
-        if not amdgpu_family:
-            # Mode 1: Auto-detect - use first available GPU
-            selected_gpu_indices = [0]
-            selected_gpu_archs = [available_gpus[0]]
-            print(
-                f"AMDGPU Arch auto-detected (using GPU at index 0): {selected_gpu_archs}"
-            )
-        elif amdgpu_family.split("-")[0].upper().endswith("X"):
-            # Mode 2: Wildcard match (e.g., "gfx94X" matches "gfx942", "gfx940", etc.)
-            family_part = amdgpu_family.split("-")[0]
-            partial_match = family_part[:-1]  # Remove the 'X'
-
-            for idx, gpu in enumerate(available_gpus):
-                if partial_match in gpu:
-                    selected_gpu_indices += [idx]
-                    selected_gpu_archs += [gpu]
-            print(
-                f"AMDGPU Arch detected via wildcard match '{partial_match}': "
-                f"{selected_gpu_archs} (GPU indices {selected_gpu_indices})"
-            )
-
-            if len(selected_gpu_archs) == 0:
-                print(
-                    f"[ERROR] No GPU found matching wildcard pattern '{amdgpu_family}'. "
-                    f"Available GPUs: {available_gpus}"
-                )
-                sys.exit(1)
-        else:
-            # Mode 3: Specific GPU arch - validate it exists in available GPUs
-            for idx, gpu in enumerate(available_gpus):
-                if gpu == amdgpu_family or amdgpu_family in gpu:
-                    selected_gpu_indices += [idx]
-                    selected_gpu_archs += [gpu]
-                    print(
-                        f"AMDGPU Arch validated: {selected_gpu_archs} "
-                        f"(GPU indices {selected_gpu_indices})"
-                    )
-                    break
-
-            if selected_gpu_archs is None:
-                print(
-                    f"[ERROR] Requested GPU '{amdgpu_family}' not found in available GPUs. "
-                    f"Available GPUs: {available_gpus}"
-                )
-                sys.exit(1)
-
-        # Set HIP_VISIBLE_DEVICES to select the specific GPU
-        str_indices = ",".join(str(idx) for idx in selected_gpu_indices)
-        os.environ["HIP_VISIBLE_DEVICES"] = str_indices
-        print(f"Set HIP_VISIBLE_DEVICES={str_indices}")
-
-        return selected_gpu_archs
-
-    except FileNotFoundError as e:
-        print(f"[ERROR] Command not found: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"[ERROR] Unexpected error during AMDGPU detection: {e}")
-        sys.exit(1)
+    return selected_gpu_archs
 
 
 def detect_pytorch_version() -> str:
@@ -301,7 +328,9 @@ def main() -> int:
     # Determine root directory
     root_dir = determine_root_dir(args.the_rock_root_dir)
 
-    # Determine AMDGPU family
+    # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
+    # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
+    # changing HIP_VISIBLE_DEVICES has no effect.
     amdgpu_family = detect_amdgpu_family(args.amdgpu_family)
     print(f"Using AMDGPU family: {amdgpu_family}")
 
