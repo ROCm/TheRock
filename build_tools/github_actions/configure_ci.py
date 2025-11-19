@@ -379,7 +379,8 @@ def matrix_generator(
         ):
             selected_target_names.append(target)
 
-    if is_schedule:
+    # FOR TESTING!!!!
+    if is_schedule or is_workflow_dispatch:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
         # For nightly runs, we run all builds and full tests
@@ -392,9 +393,9 @@ def matrix_generator(
             selected_target_names.append(key)
 
         # For nightly runs, we want to run full tests regardless of limited machines, so we delete the sanity_check_only_for_family option
-        for key in lookup_matrix:
-            if "sanity_check_only_for_family" in lookup_matrix[key]:
-                del lookup_matrix[key]["sanity_check_only_for_family"]
+        for key in matrix_row:
+            if "sanity_check_only_for_family" in matrix_row[key][platform]:
+                del matrix_row[platform]["sanity_check_only_for_family"]
 
     # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
@@ -503,7 +504,7 @@ def main(base_args, linux_families, windows_families):
     test_type = "smoke"
 
     # In the case of a scheduled run, we always want to build and we want to run full tests
-    if is_schedule:
+    if is_schedule or is_workflow_dispatch:
         enable_build_jobs = True
         test_type = "full"
     else:
