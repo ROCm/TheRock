@@ -379,7 +379,9 @@ def matrix_generator(
         ):
             selected_target_names.append(target)
 
-    if is_schedule:
+    # FOR TESTING ! PLS REMOVE !
+    if is_schedule or is_workflow_dispatch:
+    # if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
         # For nightly runs, we run all builds and full tests
