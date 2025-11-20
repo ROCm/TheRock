@@ -326,7 +326,7 @@ jobs:
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
-              "native_package_type": "rpm",
+              "native_package_type": "rpm"
             }
 
       - name: Trigger build native debian package
@@ -339,7 +339,7 @@ jobs:
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
-              "native_package_type": "deb",
+              "native_package_type": "deb"
             }
 
       - name: Save cache
