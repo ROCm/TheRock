@@ -74,9 +74,7 @@ class ConfigureCITest(unittest.TestCase):
     def test_filter_known_target_names(self):
         requested_target_names = ["gfx110X", "abcdef"]
         # Use all trigger types to get a comprehensive matrix for testing
-        test_matrix = configure_ci.get_all_families_for_trigger_types(
-            TriggerType.ALL
-        )
+        test_matrix = configure_ci.get_all_families_for_trigger_types(TriggerType.ALL)
         target_names = configure_ci.filter_known_names(
             requested_target_names, "target", test_matrix
         )

@@ -10,10 +10,12 @@ from enum import Enum
 
 class TriggerType(Enum):
     """Enum for different trigger types used in GitHub workflows."""
+
     PRESUBMIT = "presubmit"
     POSTSUBMIT = "postsubmit"
     NIGHTLY = "nightly"
     ALL = "all"
+
 
 all_build_variants = {
     "linux": {
@@ -203,10 +205,10 @@ amdgpu_family_info_matrix_nightly = {
 def get_all_families_for_trigger_types(trigger_type):
     """
     Returns a family matrix for the specified trigger type.
-    
+
     Args:
         trigger_type: TriggerType enum value (PRESUBMIT, POSTSUBMIT, NIGHTLY, or ALL)
-    
+
     Returns:
         A dictionary containing the family matrix configuration for the specified trigger type.
         For TriggerType.ALL, returns a combined matrix of all trigger types.
