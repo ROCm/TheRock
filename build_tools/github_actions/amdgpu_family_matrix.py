@@ -5,6 +5,16 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 * Each group determines which entries run by default on workflow triggers
 """
 
+from enum import Enum
+
+
+class TriggerType(Enum):
+    """Enum for different trigger types used in GitHub workflows."""
+    PRESUBMIT = "presubmit"
+    POSTSUBMIT = "postsubmit"
+    NIGHTLY = "nightly"
+    ALL = "all"
+
 all_build_variants = {
     "linux": {
         "release": {
@@ -190,23 +200,37 @@ amdgpu_family_info_matrix_nightly = {
 }
 
 
-def get_all_families_for_trigger_types(trigger_types):
+def get_all_families_for_trigger_types(trigger_type):
     """
-    Returns a combined family matrix for the specified trigger types.
-    trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
+    Returns a family matrix for the specified trigger type.
+    
+    Args:
+        trigger_type: TriggerType enum value (PRESUBMIT, POSTSUBMIT, NIGHTLY, or ALL)
+    
+    Returns:
+        A dictionary containing the family matrix configuration for the specified trigger type.
+        For TriggerType.ALL, returns a combined matrix of all trigger types.
     """
-    result = {}
-    matrix_map = {
-        "presubmit": amdgpu_family_info_matrix_presubmit,
-        "postsubmit": amdgpu_family_info_matrix_postsubmit,
-        "nightly": amdgpu_family_info_matrix_nightly,
-    }
+    # Build matrix_map based on the trigger type
+    if trigger_type == TriggerType.PRESUBMIT:
+        matrix_map = amdgpu_family_info_matrix_presubmit
+    elif trigger_type == TriggerType.POSTSUBMIT:
+        matrix_map = amdgpu_family_info_matrix_postsubmit
+    elif trigger_type == TriggerType.NIGHTLY:
+        matrix_map = amdgpu_family_info_matrix_nightly
+    elif trigger_type == TriggerType.ALL:
+        # Combine all matrices: presubmit, postsubmit, then nightly
+        # First occurrence wins (priority: presubmit > postsubmit > nightly)
+        matrix_map = {}
+        for matrix in [
+            amdgpu_family_info_matrix_presubmit,
+            amdgpu_family_info_matrix_postsubmit,
+            amdgpu_family_info_matrix_nightly,
+        ]:
+            for family_name, family_config in matrix.items():
+                if family_name not in matrix_map:
+                    matrix_map[family_name] = family_config
+    else:
+        raise ValueError(f"Unsupported trigger type: {trigger_type}")
 
-    for trigger_type in trigger_types:
-        if trigger_type in matrix_map:
-            for family_name, family_config in matrix_map[trigger_type].items():
-                # Only add if not already present (first occurrence wins)
-                if family_name not in result:
-                    result[family_name] = family_config
-
-    return result
+    return matrix_map

@@ -5,6 +5,7 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
+from amdgpu_family_matrix import TriggerType
 
 
 class ConfigureCITest(unittest.TestCase):
@@ -74,7 +75,7 @@ class ConfigureCITest(unittest.TestCase):
         requested_target_names = ["gfx110X", "abcdef"]
         # Use all trigger types to get a comprehensive matrix for testing
         test_matrix = configure_ci.get_all_families_for_trigger_types(
-            ["presubmit", "postsubmit", "nightly"]
+            TriggerType.ALL
         )
         target_names = configure_ci.filter_known_names(
             requested_target_names, "target", test_matrix

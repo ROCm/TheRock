@@ -58,6 +58,7 @@ from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_postsubmit,
     amdgpu_family_info_matrix_nightly,
     get_all_families_for_trigger_types,
+    TriggerType,
 )
 from fetch_test_configurations import test_matrix
 
@@ -294,11 +295,10 @@ def matrix_generator(
     # For workflow_dispatch and PR labels, we need to check all matrices
     if is_workflow_dispatch or is_pull_request:
         # For workflow_dispatch, check all possible matrices
-        lookup_trigger_types = ["presubmit", "postsubmit", "nightly"]
-        lookup_matrix = get_all_families_for_trigger_types(lookup_trigger_types)
-        print(f"Using family matrix for trigger types: {lookup_trigger_types}")
+        lookup_matrix = get_all_families_for_trigger_types(TriggerType.ALL)
+        print(f"Using family matrix for trigger type: ALL")
     elif active_trigger_types:
-        lookup_matrix = get_all_families_for_trigger_types(active_trigger_types)
+        lookup_matrix = get_all_families_for_trigger_types(TriggerType.ALL)
         print(f"Using family matrix for trigger types: {active_trigger_types}")
     else:
         # This code path should never be reached in production workflows
