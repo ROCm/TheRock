@@ -937,6 +937,26 @@ def do_build_pytorch_vision(
     copy_to_output(args, built_wheel)
 
 
+def do_build_pytorch_apex(
+    args: argparse.Namespace, pytorch_apex_dir: Path, env: dict[str, str]
+):
+    # Compute version.
+    build_version = (pytorch_apex_dir / "version.txt").read_text().strip()
+    build_version += args.version_suffix
+    print(f"  Default pytorch apex BUILD_VERSION: {build_version}")
+    env["BUILD_VERSION"] = build_version
+    env["BUILD_NUMBER"] = args.pytorch_build_number
+
+    remove_dir_if_exists(pytorch_apex_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(pytorch_apex_dir / "build")
+
+    exec([sys.executable, "-m", "build", "--wheel", "--no-isolation", "-C", "--build-option=--cpp_ext", "-C", "--build-option=--cuda_ext"], cwd=pytorch_apex_dir, env=env)
+    built_wheel = find_built_wheel(pytorch_apex_dir / "dist", "apex")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
 
