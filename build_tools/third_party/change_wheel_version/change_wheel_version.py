@@ -124,7 +124,9 @@ def change_wheel_version(
         tmpdir = Path(_tmpdir)
         dest_dir = tmpdir / "wheel"
 
+        print("  Unpacking wheel...", end="")
         wheel_unpack(wheel, dest_dir, f"{distribution}-{old_version}")
+        print(" done")
 
         old_slug = f"{distribution}-{old_version}"
         new_slug = f"{distribution}-{new_version}"
@@ -132,9 +134,12 @@ def change_wheel_version(
         assert (dest_dir / old_slug / f"{old_slug}.dist-info").exists()
 
         # copy everything over
+        print(f"  Move directory from {old_slug} to {new_slug}...", end="")
         shutil.move(dest_dir / old_slug, dest_dir / new_slug)
+        print(" done")
 
         # AMD-added
+        print("  Changing wheel-specific files that contain the version")
         if callback_func != None:
             callback_func(dest_dir / new_slug, old_version, new_version)
 
@@ -143,12 +148,14 @@ def change_wheel_version(
             dest_dir / new_slug / f"{old_slug}.dist-info",
             dest_dir / new_slug / f"{new_slug}.dist-info",
         )
+        print(f"    Rename directory from {old_slug}.dist-info to {new_slug}.dist-info")
         # rename data
         if (dest_dir / new_slug / f"{old_slug}.data").exists():
             shutil.move(
                 dest_dir / new_slug / f"{old_slug}.data",
                 dest_dir / new_slug / f"{new_slug}.data",
             )
+            print(f"    Rename directory from {old_slug}.data to {new_slug}.data")
 
         metadata_path = dest_dir / new_slug / f"{new_slug}.dist-info" / "METADATA"
         wheel_path = dest_dir / new_slug / f"{new_slug}.dist-info" / "WHEEL"
@@ -169,17 +176,28 @@ def change_wheel_version(
         msg.replace_header("Version", version_str)
         with open(metadata_path, "wb") as f:
             f.write(msg.as_bytes())
+        
+        print(f"    {metadata_path}")
+
+        print("  ... done")
+        
 
         if platform_tag:
+            print("  Changing platform tag...", end="")
             # We don't need to sort, because we assume len(parse_tag(platform_tag)) == 1
             new_tag = change_platform_tag(wheel_path, platform_tag, parser)
+            print(" done")
         else:
+            print("  Generating platform tag...", end="")
             # Generate the tags that will be associated with the wheel after it is repacked.
             # `wheel pack` sorts the tags, so we need to do the same if we're not changing it.
             new_tag = "-".join(
                 ".".join(sorted(t.split("."))) for t in old_parts.tag.split("-")
             )
+            print(" done")
 
+        # print is sometimes buffered, so we need to flush it, as repacking can take a while
+        print("  Repacking wheel and rewriting RECORD file...", end="", flush=True)
         # wheel pack rewrites the RECORD file
         subprocess.check_output(
             [
@@ -192,6 +210,7 @@ def change_wheel_version(
                 str(dest_dir / new_slug),
             ]
         )
+        print(" done")
 
     new_parts = old_parts._replace(version=str(new_version), tag=new_tag)
     new_wheel_name = "-".join(p for p in new_parts if p) + ".whl"
