@@ -187,6 +187,7 @@ option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THERO
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
+option(THEROCK_ENABLE_FUSILLI_PLUGIN "Build fusilli plugin" OFF)
 
 # Host Math Features.
 therock_add_feature(HOST_BLAS
@@ -365,6 +366,12 @@ if(NOT WIN32)
     DESCRIPTION "Enables the MIOpen plugin project"
     REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
   )
+
+  therock_add_feature(FUSILLI_PLUGIN
+    GROUP FUSILLI_PLUGIN
+    DESCRIPTION "Enables the Fusilli plugin project"
+    REQUIRES COMPILER HIPDNN HIP_RUNTIME
+  )
 endif()
 
 # Finalize all feature flags.
@@ -490,6 +497,7 @@ add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
+
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -498,6 +506,11 @@ add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
+
+# IREE and Fusilli are required by the Fusilli plugin
+if(THEROCK_ENABLE_FUSILLI_PLUGIN)
+  add_subdirectory(iree-libs)
+endif()
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

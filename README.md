@@ -184,6 +184,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_HIPDNN=ON`        | Enables hipDNN                                |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`       | Enables rocWMMA                               |
 | `-DTHEROCK_ENABLE_RDC=ON`           | Enables ROCm Data Center Tool (Linux only)    |
+| `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON` | Enables Fusilli Plugin                        |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
