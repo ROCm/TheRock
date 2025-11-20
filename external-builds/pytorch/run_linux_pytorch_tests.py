@@ -424,24 +424,6 @@ def detect_pytorch_version() -> str:
     return version("torch").rsplit("+", 1)[0].rsplit(".", 1)[0]
 
 
-def determine_root_dir(provided_root: str) -> Path:
-    """Determine the TheRock root directory.
-
-    Args:
-        provided_root: User-provided root directory path, or empty string.
-
-    Returns:
-        Path object representing the TheRock root directory.
-    """
-    if provided_root:
-        return Path(provided_root)
-
-    # Autodetect root dir via path of the script
-    # We are in <TheRock Root Dir>/external-builds/pytorch
-    script_dir = Path(__file__).resolve().parent
-    return script_dir.parent.parent
-
-
 def main() -> int:
     """Main entry point for the PyTorch test runner.
 
