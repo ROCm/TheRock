@@ -208,7 +208,7 @@ endfunction()
 #   further configure the sub-project.
 # USE_DIST_AMDGPU_TARGETS: Use the dist GPU targets vs the shard specific GPU
 #   targets. Typically this is set on runtime components that are intended to
-#    work for all supported targets, whereas it is ommitted for components which
+#    work for all supported targets, whereas it is omitted for components which
 #    are meant to be built only for the given targets (typically for kernel
 #    libraries).
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
@@ -255,9 +255,9 @@ endfunction()
 #   super-project specified C/C++ compiler. This will add an implicit dep on
 #   the named compiler sub-project and reconfigure CMAKE_C(XX)_COMPILER options.
 #   Only a fixed set of supported toolchains are supported (currently
-#   "amd-llvm").
+#   "amd-llvm" and "amd-hip").
 # BACKGROUND_BUILD: Option to indicate that the subproject does low concurrency,
-#   high latency build steps. It will be run in the backgroun in a job pool that
+#   high latency build steps. It will be run in the background in a job pool that
 #   allows some overlapping of work (controlled by
 #   THEROCK_BACKGROUND_BUILD_JOBS).
 # CMAKE_LISTS_RELPATH: Relative path within the source directory to the
@@ -304,6 +304,10 @@ endfunction()
 #   that all shared libraries are installed to. Defaults to
 #   INSTALL_DESTINATION/lib. Can be overriden on a per target basis by setting
 #   THEROCK_INSTALL_RPATH_LIBRARY_DIR.
+# INSTALL_OPTIONAL_COMPONENTS: List of CMake component names to pass to cmake
+#   --install via --component flags alongside default (all) target. Use this
+#   when a project marks certain components as EXCLUDE_FROM_ALL and you need to
+#   explicitly request them.
 #
 # Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
 # transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
@@ -329,7 +333,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS;INSTALL_OPTIONAL_COMPONENTS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -521,6 +525,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES "${_transitive_configure_depend_files}"
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
     THEROCK_OUTPUT_ON_FAILURE "${ARG_OUTPUT_ON_FAILURE}"
+    THEROCK_OPTIONAL_INSTALL_COMPONENTS "${ARG_INSTALL_OPTIONAL_COMPONENTS}"
 
     # RPATH
     THEROCK_NO_INSTALL_RPATH "${ARG_NO_INSTALL_RPATH}"
@@ -614,6 +619,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_prefix_dir "${target_name}" THEROCK_PREFIX_DIR)
   get_target_property(_output_on_failure "${target_name}" THEROCK_OUTPUT_ON_FAILURE)
   get_target_property(_logical_target_name "${target_name}" THEROCK_LOGICAL_TARGET_NAME)
+  get_target_property(_optional_install_components "${target_name}" THEROCK_OPTIONAL_INSTALL_COMPONENTS)
 
   # RPATH properties: just mirror these to same named variables because we just
   # mirror them syntactically into the subprojet..
@@ -1028,6 +1034,33 @@ function(therock_cmake_subproject_activate target_name)
     if(THEROCK_SPLIT_DEBUG_INFO)
       set(_install_strip_option "--strip")
     endif()
+    # Set up install command(s) for optional components. If INSTALL_COMPONENTS is specified, run cmake
+    # --install once for each component, for some reason CMake doesn't support
+    # multiple --component flags in one call.
+    #   example commands with 2 INSTALL_COMPONENTS:
+    #     COMMAND;python;teatime.py;--log-timestamps;--label;
+    #     ${target_name} ${_comp1} install;--interactive;path/logs/${target_name}_${comp1}_install.log;--;
+    #     cmake;--install;build;--component;${_comp1};--strip;
+    #     COMMAND;python;teatime.py;--log-timestamps;--label;
+    #     ${target_name} ${comp2} install;--interactive;path/logs/${target_name}_${comp2}_install.log;--;
+    #     cmake;--install;build;--component;${comp2};--strip
+    set(_optional_component_install_commands)
+    if(_optional_install_components)
+      foreach(_comp IN LISTS _optional_install_components)
+        therock_subproject_log_command(_install_log_prefix
+          LOG_FILE "${target_name}_${_comp}_install.log"
+          LABEL "${target_name} ${_comp} install"
+          # While useful for debugging, stage install logs are almost pure noise
+          # for interactive use.
+          OUTPUT_ON_FAILURE "${THEROCK_QUIET_INSTALL}"
+        )
+        # install component to stage directory.
+        list(APPEND _optional_component_install_commands
+          COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" --component "${_comp}" ${_install_strip_option}
+        )
+      endforeach()
+    endif()
+    # Setup prefix for default component.
     therock_subproject_log_command(_install_log_prefix
       LOG_FILE "${target_name}_install.log"
       LABEL "${target_name} install"
@@ -1037,8 +1070,10 @@ function(therock_cmake_subproject_activate target_name)
     )
     add_custom_command(
       OUTPUT "${_stage_stamp_file}"
-      # Install to stage directory.
+      # Install default (all target) to stage directory.
       COMMAND ${_install_log_prefix} "${CMAKE_COMMAND}" --install "${_binary_dir}" ${_install_strip_option}
+      # Expand optional components _install command(s).
+      ${_optional_component_install_commands}
       # Populate local dist directory with this+all transitive stage installs.
       COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" copy ${_fileset_verbose_arg} "${_dist_dir}" ${_dist_source_dirs}
       COMMAND "${CMAKE_COMMAND}" -E touch "${_stage_stamp_file}"
