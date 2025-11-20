@@ -14,6 +14,7 @@ mkdir -p "$CCACHE_DIR"
 mkdir -p "$PIP_CACHE_DIR"
 
 pip install -r /therock/src/requirements.txt
+pip install -r /therock/src/requirements-external.txt
 
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache

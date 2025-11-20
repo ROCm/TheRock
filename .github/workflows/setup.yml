@@ -2,6 +2,10 @@ name: Setup
 
 on:
   workflow_call:
+    inputs:
+      build_variant:
+        type: string
+        default: "release"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -45,7 +49,7 @@ jobs:
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           # We need the parent commit to do a diff
           fetch-depth: 2
@@ -67,6 +71,7 @@ jobs:
           INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
           WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
         run: ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version

@@ -8,7 +8,7 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 all_build_variants = {
     "linux": {
         "release": {
-            "build_variant_label": "Release",
+            "build_variant_label": "release",
             "build_variant_suffix": "",
             # TODO: Enable linux-release-package once capacity and rccl link
             # issues are resolved. https://github.com/ROCm/TheRock/issues/1781
@@ -16,16 +16,15 @@ all_build_variants = {
             "build_variant_cmake_preset": "",
         },
         "asan": {
-            "build_variant_label": "ASAN",
+            "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
             "expect_failure": True,
-            "skip_presubmit_build": True,
         },
     },
     "windows": {
         "release": {
-            "build_variant_label": "Release",
+            "build_variant_label": "release",
             "build_variant_suffix": "",
             "build_variant_cmake_preset": "windows-release",
         },
@@ -76,7 +75,9 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            # Networking issue: https://github.com/ROCm/TheRock/issues/1660
+            # Label is "linux-mi355-1gpu-ossci-rocm"
+            "test-runs-on": "",
             "family": "gfx950-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -141,7 +142,7 @@ amdgpu_family_info_matrix_nightly = {
         },
         # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
-            "test-runs-on": "",
+            "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
@@ -169,6 +170,20 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
+            "build_variants": ["release"],
+        },
+    },
+    "gfx1152": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx1152",
+            "expect_failure": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx1152",
+            "expect_failure": True,
             "build_variants": ["release"],
         },
     },

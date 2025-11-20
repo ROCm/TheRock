@@ -60,7 +60,7 @@ test_matrix = {
         "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards": 6,
     },
     # SOLVER tests
     "hipsolver": {
@@ -208,10 +208,10 @@ test_matrix = {
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
-        "timeout_minutes": 60,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards": 1,
     },
 }
 

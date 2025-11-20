@@ -41,7 +41,11 @@
         "aqlprofile_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "rocprofiler-sdk_SANITIZER": "OFF",
-        "roctracer_SANITIZER": "OFF"
+        "roctracer_SANITIZER": "OFF",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_CXX_FLAGS": "-g1",
+        "CMAKE_C_FLAGS": "-g1"
       }
     },
     {
