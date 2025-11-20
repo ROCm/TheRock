@@ -871,6 +871,7 @@ def main(argv: list[str]):
     p.add_argument(
         "--version-suffix",
         type=str,
+        nargs='?',
         help="Version suffix to append to package names",
     )
 

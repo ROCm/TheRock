@@ -324,7 +324,7 @@ jobs:
           key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
 
   build_native_rpm_package:
-    name : Build Native RPM Packages
+    name : ${{ matrix.target_bundle.amdgpu_family }}::Build Native RPM
     permissions:
       id-token: write
       contents: read
@@ -342,7 +342,7 @@ jobs:
     needs: [setup_metadata, portable_linux_packages]
 
   build_native_deb_package:
-    name : Build Native Debian Packages
+    name : ${{ matrix.target_bundle.amdgpu_family }}::Build Native Deb
     permissions:
       id-token: write
       contents: read
