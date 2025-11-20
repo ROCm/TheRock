@@ -3,6 +3,14 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
+
+For presubmit, postsubmit and nightly family selection:
+
+- presubmit runs the targets from presubmit dictionary on pull requests
+- postsubmit runs the targets from presubmit and postsubmit dictionaries on pushes to main branch
+- nightly runs targets from presubmit, postsubmit and nightly dictionaries
+
+TODO(#2200): clarify AMD GPU family selection
 """
 
 all_build_variants = {
