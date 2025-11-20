@@ -40,8 +40,9 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(SQLITE3_BUILD)
+project(SQLITE3_BUILD VERSION 3.49.1)
 include(CMakeDependentOption)
+include(CMakePackageConfigHelpers)
 
 set(BUILD_SHARED_LIBS ON)
 set(INSTALL_SHLIB_DIR "lib")
@@ -87,4 +88,11 @@ configure_file(
   @ONLY
 )
 
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/sqlite3-config-version.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sqlite3-config.cmake" DESTINATION lib/cmake/SQLite3)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sqlite3-config-version.cmake" DESTINATION lib/cmake/SQLite3)
