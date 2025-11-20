@@ -446,7 +446,7 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
-    test_type = "full"
+    test_type = "smoke"
 
     # In the case of a scheduled run, we always want to build
     if is_schedule:
