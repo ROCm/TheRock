@@ -42,28 +42,6 @@ if not test_bin:
         f"rocroller-tests not found in: {', '.join(map(str, bin_candidates))}"
     )
 
-# Runtime libs
-if platform == "linux":
-    THEROCK_DIST_DIR = BUILD_DIR / "core" / "clr" / "dist"
-    llvm_libdir = THEROCK_DIST_DIR / "lib" / "llvm" / "lib"  # libomp.so
-    ld_parts = [
-        str(THEROCK_DIST_DIR / "lib"),
-        str(THEROCK_DIST_DIR / "lib64"),
-        str(llvm_libdir),
-        # superbuild libs if running from the build tree:
-        str(test_bin.parent.parent),  # .../rocRoller/build
-        str(BUILD_DIR / "math-libs" / "BLAS" / "rocRoller" / "stage" / "lib"),
-        str(BUILD_DIR / "math-libs" / "BLAS" / "rocRoller" / "dist" / "lib"),
-    ]
-    # De-dupe while preserving order
-    seen, ld_clean = set(), []
-    for p in ld_parts:
-        if p and p not in seen:
-            seen.add(p)
-            ld_clean.append(p)
-    env["ROCM_PATH"] = str(THEROCK_DIST_DIR)
-    env["HIP_PATH"] = str(THEROCK_DIST_DIR)
-
 # TEST_TYPE → gtest filter
 TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
 test_filter_arg = None
