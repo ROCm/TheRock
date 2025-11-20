@@ -38,18 +38,6 @@ if(THEROCK_BUNDLE_SYSDEPS)
   endif()
 endif()
 
-# gRPC: Static library dependency for RDC
-# - Only built when RDC is enabled (Linux only)
-# - Depends on bundled zlib from sysdeps (via RUNTIME_DEPS)
-# - See: docs/rfcs/RFC0007-rdc-therock-integration.md
-if(THEROCK_ENABLE_RDC)
-  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    message(FATAL_ERROR "gRPC/RDC is only supported on Linux")
-  endif()
-
-  if(NOT THEROCK_BUNDLE_SYSDEPS)
-    message(FATAL_ERROR "RDC/gRPC requires THEROCK_BUNDLE_SYSDEPS=ON for zlib dependency")
-  endif()
-
-  add_subdirectory(grpc)
-endif()
+# gRPC: Static library for RDC (built on-demand when depended upon)
+# See: docs/rfcs/RFC0007-rdc-therock-integration.md
+add_subdirectory(grpc)

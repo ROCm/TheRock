@@ -270,11 +270,6 @@ if(NOT WIN32)
     REQUIRES CORE_RUNTIME ROCPROFV3
   )
 endif()
-if(NOT THEROCK_ENABLE_DC_TOOLS AND THEROCK_ENABLE_RDC)
-  message(STATUS "Disabling RDC because THEROCK_ENABLE_DC_TOOLS is OFF")
-  set(THEROCK_ENABLE_RDC OFF CACHE BOOL
-      "Enables ROCm Data Center Tool (RDC)" FORCE)
-endif()
 
 # Comm-libs Features.
 if(NOT WIN32)
@@ -498,9 +493,7 @@ add_subdirectory(core)
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
 # Data center tools (RDC, etc.)
-if(THEROCK_ENABLE_DC_TOOLS)
-  add_subdirectory(dctools)
-endif()
+add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)

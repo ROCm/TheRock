@@ -1,21 +1,9 @@
 # Data Center Tools
 
-# RDC-specific checks
 if(THEROCK_ENABLE_RDC)
   if(WIN32)
-    message(FATAL_ERROR
-      "THEROCK_ENABLE_RDC is ON but RDC requires Linux. Windows is not supported.")
+    message(FATAL_ERROR "RDC requires Linux (Windows not supported)")
   endif()
-
-  if(NOT THEROCK_ENABLE_DC_TOOLS)
-    message(FATAL_ERROR
-      "THEROCK_ENABLE_RDC is ON but RDC requires THEROCK_ENABLE_DC_TOOLS=ON")
-  endif()
-endif()
-
-if(THEROCK_ENABLE_RDC)
-  # RDC builds with statically linked gRPC
-  # gRPC is specified as a BUILD_DEPS, which automatically handles package configuration
 
   # Get gRPC stage directory for RDC's GRPC_ROOT requirement
   get_target_property(_grpc_stage therock-grpc THEROCK_STAGE_DIR)
