@@ -135,10 +135,40 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure
 
+
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
         run: |
+          mkdir -p build/logs
+
+          # --- Collect machine and status info ---
+          HOSTNAME=$(hostname)
+          JOB_RESULT="${{ job.status }}"
+
+          # Default outcomes
+          BUILD_OUTCOME="unknown"
+          BUILD_TEST_OUTCOME="unknown"
+
+          # Detect build success/failure based on previous steps
+          if [ "$JOB_RESULT" == "success" ]; then
+            BUILD_OUTCOME="success"
+          else
+            BUILD_OUTCOME="failed"
+          fi
+
+          # Check if any test result file exists or use ctest return
+          if [ -f "build/Testing/Temporary/LastTest.log" ]; then
+            if grep -q "100% tests passed" build/Testing/Temporary/LastTest.log; then
+              BUILD_TEST_OUTCOME="success"
+            else
+              BUILD_TEST_OUTCOME="failed"
+            fi
+          else
+            # Default to same as build result if tests not run
+            BUILD_TEST_OUTCOME="$BUILD_OUTCOME"
+          fi
+
           if [ -d "./build" ]; then
             echo "Full SDK du:"
             echo "------------"
@@ -153,11 +183,63 @@ jobs:
             echo "-------------"
             ccache -s -v
             tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+
+            echo "Collecting build metrics and writing to JSON..."
+            SDK_DU=$(du -h -d 1 build/dist/rocm 2>/dev/null | awk '{print $1, $2}' | jq -R -s -c 'split("\n")[:-1]')
+            ARTIFACT_ARCHIVES=$(ls -lh build/artifacts/*.tar.xz 2>/dev/null | awk '{print $5, $9}' | jq -R -s -c 'split("\n")[:-1]')
+            ARTIFACT_DU=$(du -h -d 1 build/artifacts 2>/dev/null | awk '{print $1, $2}' | jq -R -s -c 'split("\n")[:-1]')
+            CCACHE_STATS=$(ccache -s -v 2>/dev/null | jq -R -s -c '.')
+
+            jq -n \
+              --arg workflow "${{ github.workflow }}" \
+              --arg job_name "${{ github.job }}" \
+              --arg job_result "$JOB_RESULT" \
+              --arg run_id "${{ github.run_id }}" \
+              --arg run_number "${{ github.run_number }}" \
+              --arg repo "${{ github.repository }}" \
+              --arg hostname "$HOSTNAME" \
+              --arg timestamp "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+              --arg build_outcome "$BUILD_OUTCOME" \
+              --arg build_test_outcome "$BUILD_TEST_OUTCOME" \
+              --argjson sdk_du "$SDK_DU" \
+              --argjson artifact_archives "$ARTIFACT_ARCHIVES" \
+              --argjson artifact_du "$ARTIFACT_DU" \
+              --arg ccache_stats "$CCACHE_STATS" \
+              '{
+                workflow: $workflow,
+                job_name: $job_name,
+                job_result: $job_result,
+                run_id: $run_id,
+                run_number: $run_number,
+                commit: $commit,
+                repo: $repo,
+                hostname: $hostname,
+                timestamp: $timestamp,
+                build_outcome: $build_outcome,
+                build_test_outcome: $build_test_outcome,
+                build: {
+                  sdk_disk_usage: $sdk_du,
+                  artifact_archives: $artifact_archives,
+                  artifact_disk_usage: $artifact_du,
+                  ccache_stats: $ccache_stats
+                }
+              }' > build/logs/build_report_${HOSTNAME}.json
+
+            echo " JSON report written to build/logs/build_report_${HOSTNAME}.json"
           else
-            echo "[ERROR] Build directory ./build does not exist. Skipping report!"
+            echo "[ERROR] Build directory ./build does not exist. Skipping report!" | tee build/logs/error.log
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
+
+      - name: Upload build logs and JSONs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "linux-build-logs-${{ runner.name || env.HOSTNAME }}"
+          path: |
+            build/logs/
+          if-no-files-found: warn
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}

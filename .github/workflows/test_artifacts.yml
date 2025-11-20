@@ -114,3 +114,72 @@ jobs:
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
+
+  upload_test_status:
+    name: "Upload test job status summary (JSON)"
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [test_sanity_check, test_components]
+
+    steps:
+      - name: Generate job status summary (JSON)
+        shell: bash
+        run: |
+          mkdir -p logs
+          HOSTNAME=$(hostname)
+
+          # Map job results to pass/fail booleans
+          sanity_status="${{ needs.test_sanity_check.result }}"
+          component_status="${{ needs.test_components.result }}"
+
+          if [ "$sanity_status" = "success" ]; then
+            sanity_passed=true
+          else
+            sanity_passed=false
+          fi
+
+          if [ "$component_status" = "success" ]; then
+            component_passed=true
+          else
+            component_passed=false
+          fi
+
+          # Generate JSON summary
+          jq -n \
+            --arg workflow "${{ github.workflow }}" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_number "${{ github.run_number }}" \
+            --arg commit "${{ github.sha }}" \
+            --arg repo "${{ github.repository }}" \
+            --arg timestamp "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+            --arg hostname "$HOSTNAME" \
+            --arg test_sanity_check "$sanity_status" \
+            --arg test_components "$component_status" \
+            --argjson sanity_passed "$sanity_passed" \
+            --argjson component_passed "$component_passed" \
+            '{
+              workflow: $workflow,
+              run_id: $run_id,
+              run_number: $run_number,
+              commit: $commit,
+              repo: $repo,
+              timestamp: $timestamp,
+              hostname: $hostname,
+              job_results: {
+                test_sanity_check: $test_sanity_check,
+                test_components: $test_components
+              },
+              summary: {
+                sanity_passed: $sanity_passed,
+                component_passed: $component_passed
+              }
+            }' > logs/job_status_summary_${HOSTNAME}.json
+
+          echo " JSON job summary written to logs/job_status_summary_${HOSTNAME}.json"
+
+      - name: Upload job status summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: "test-job-logs-${{ runner.name || env.HOSTNAME }}"
+          path: "logs/job_status_summary_*.json"
+          if-no-files-found: warn
