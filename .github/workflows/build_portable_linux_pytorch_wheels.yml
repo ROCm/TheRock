@@ -280,7 +280,7 @@ jobs:
           BUILD_RESULT: ${{ needs.build_pytorch_wheels.result }}
           TEST_RESULT: ${{ needs.test_pytorch_wheels.result }}
           TEST_RUNS_ON: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-          BYPASS_TESTS_FOR_RELEASES: "True"
+          BYPASS_TESTS_FOR_RELEASES: ${{ needs.generate_target_to_run.outputs.bypass_tests_for_releases }}
         run: python ./build_tools/github_actions/promote_wheels_based_on_policy.py
 
       - name: Copy PyTorch wheels from staging to release S3
