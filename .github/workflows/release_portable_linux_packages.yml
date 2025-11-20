@@ -316,45 +316,35 @@ jobs:
               "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}"
             }
 
+      - name: Trigger build native rpm package
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
+        with:
+          workflow: build_native_linux_packages.yml
+          inputs: |
+            { "artifact_group": "${{ matrix.target_bundle.amdgpu_family }}",
+              "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
+              "release_type": "${{ env.RELEASE_TYPE }}",
+              "artifact_run_id": "${{ github.run_id  }}",
+              "native_package_type": "rpm",
+            }
+
+      - name: Trigger build native debian package
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
+        with:
+          workflow: build_native_linux_packages.yml
+          inputs: |
+            { "artifact_group": "${{ matrix.target_bundle.amdgpu_family }}",
+              "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
+              "release_type": "${{ env.RELEASE_TYPE }}",
+              "artifact_run_id": "${{ github.run_id  }}",
+              "native_package_type": "deb",
+            }
+
       - name: Save cache
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
           key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
-
-  build_native_rpm_package:
-    name : ${{ matrix.target_bundle.amdgpu_family }}::Build Native RPM
-    permissions:
-      id-token: write
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
-    uses: ./.github/workflows/build_native_linux_packages.yml
-    with:
-      artifact_group: ${{ matrix.target_bundle.amdgpu_family }}
-      rocm_version: ${{ needs.setup_metadata.outputs.version }}
-      artifact_run_id: ${{ github.run_id }}
-      native_package_type: 'rpm'
-      release_type: ${{ needs.setup_metadata.outputs.release_type }}
-    needs: [setup_metadata, portable_linux_packages]
-
-  build_native_deb_package:
-    name : ${{ matrix.target_bundle.amdgpu_family }}::Build Native Deb
-    permissions:
-      id-token: write
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        target_bundle: ${{ fromJSON(needs.setup_metadata.outputs.package_targets) }}
-    uses: ./.github/workflows/build_native_linux_packages.yml
-    with:
-      artifact_group: ${{ matrix.target_bundle.amdgpu_family }}
-      rocm_version: ${{ needs.setup_metadata.outputs.version }}
-      artifact_run_id: ${{ github.run_id }}
-      native_package_type: 'deb'
-      release_type: ${{ needs.setup_metadata.outputs.release_type }}
-    needs: [setup_metadata, portable_linux_packages]
