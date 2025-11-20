@@ -66,6 +66,8 @@ from pathlib import Path
 
 import pytest
 
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+
 
 def setup_env(pytorch_dir: str) -> None:
     """Set up environment variables required for PyTorch testing with ROCm.
@@ -128,13 +130,12 @@ Select (potentially) additional tests to be skipped based on the Pytorch version
 If no PyTorch version is given, it is auto-determined by the PyTorch used to run pytest.""",
     )
 
-    env_root_dir = os.getenv("THEROCK_ROOT_DIR")
+    default_pytorch_dir = THIS_SCRIPT_DIR / "pytorch"
     parser.add_argument(
-        "--the-rock-root-dir",
-        default=env_root_dir if env_root_dir is not None else "",
-        required=False,
-        help="""Overwrites the root directory of TheRock.
-By default TheRock root dir is determined based on this script's location.""",
+        "--pytorch-dir",
+        type=Path,
+        default=default_pytorch_dir,
+        help="Path for the pytorch repository, where tests will be sourced from",
     )
 
     parser.add_argument(
@@ -161,6 +162,12 @@ By default TheRock root dir is determined based on this script's location.""",
     )
 
     args = parser.parse_args(argv)
+
+    if not args.pytorch_dir.exists():
+        parser.error(
+            f"Directory at '{args.pytorch_dir}' does not exist, checkout pytorch and then set the path via --pytorch-dir"
+        )
+
     return args
 
 
@@ -303,8 +310,7 @@ def main() -> int:
     """
     args = cmd_arguments(sys.argv[1:])
 
-    # Determine root directory
-    root_dir = determine_root_dir(args.the_rock_root_dir)
+    pytorch_dir = args.pytorch_dir
 
     # Determine AMDGPU family
     amdgpu_family = detect_amdgpu_family(args.amdgpu_family)
@@ -323,7 +329,6 @@ def main() -> int:
     if args.k:
         tests_to_skip = args.k
 
-    pytorch_dir = f"{root_dir}/external-builds/pytorch/pytorch"
     setup_env(pytorch_dir)
 
     pytorch_args = [
