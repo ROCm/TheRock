@@ -6,9 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def run(cmd, cwd=None):
     print(f"+ {cmd}")
     subprocess.check_call(cmd, shell=True, cwd=cwd)
+
 
 def main():
     therock_tar_url = os.environ.get("THEROCK_TAR_URL", "").strip()
@@ -34,7 +36,7 @@ def main():
     print(f"Found tarball: {tarball}")
 
     # Extract version from filename
-    m = re.search(r'(\d+\.\d+\.\w+\d+)', tarball)
+    m = re.search(r"(\d+\.\d+\.\w+\d+)", tarball)
     if not m:
         print("Could not extract ROCm version from tarball name")
         sys.exit(1)
@@ -49,9 +51,10 @@ def main():
     run(f'sudo mkdir -p "{dest}"')
     run(f'sudo mv "{install_dir}"/* "{dest}"')
     run(f'sudo ln -sfn "{dest}" /opt/rocm')
-    run(f'sudo ln -sfn /opt/rocm /etc/alternatives/rocm')
+    run(f"sudo ln -sfn /opt/rocm /etc/alternatives/rocm")
 
     print("ROCm installation configured at /opt/rocm with alternatives link")
+
 
 if __name__ == "__main__":
     sys.exit(main())
