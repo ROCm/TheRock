@@ -1,14 +1,14 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
-    set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
+    set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork")
     set(_download_stamp "${_source_dir}/download.stamp")
 
-    therock_subproject_fetch(therock-amd-mesa-sources
-      SOURCE_DIR "${_source_dir}"
-      URL "https://github.com/ROCm/mesa-fork/archive/refs/heads/amd-decode-only.zip"
+    #therock_subproject_fetch(therock-amd-mesa-sources
+      #SOURCE_DIR "${_source_dir}"
+      #URL "https://github.com/ROCm/mesa-fork/archive/refs/heads/amd-decode-only.zip"
       #URL_HASH ""
-      TOUCH "${_download_stamp}"
-    )
+      #TOUCH "${_download_stamp}"
+    #)
 
     therock_cmake_subproject_declare(therock-amd-mesa
       EXTERNAL_SOURCE_DIR .
