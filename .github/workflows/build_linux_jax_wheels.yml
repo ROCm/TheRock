@@ -156,26 +156,17 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
-      
-      - name: Generating target to run
-        id: configure
-        env:
-          TARGET: ${{ inputs.amdgpu_family }}
-          PLATFORM: "linux"
-        run: python ./build_tools/github_actions/configure_target_run.py
 
   test_jax_wheels:
-    name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    name: Test JAX wheels | ${{ inputs.amdgpu_family }} | linux-mi325-1gpu-ossci-rocm
     needs: [build_jax_wheels]
-    if:  ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     permissions:
       id-token: write
       contents: read
-      packages: write
+      packages: read
     uses: ./.github/workflows/test_linux_jax_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
-      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
       release_type: ${{ inputs.release_type }}
       s3_subdir: ${{ inputs.s3_subdir }}
       package_index_url: ${{ inputs.cloudfront_staging_url }}
