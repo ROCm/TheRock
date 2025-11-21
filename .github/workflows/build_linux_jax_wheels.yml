@@ -156,11 +156,18 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+      
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "linux"
+        run: python ./build_tools/github_actions/configure_target_run.py
 
   test_jax_wheels:
-    name: Test JAX wheels | ${{ inputs.amdgpu_family }}
+    name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     needs: [build_jax_wheels]
-    if: ${{ github.repository_owner == 'ROCm' }}
+    if:  ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     permissions:
       id-token: write
       contents: read
@@ -168,10 +175,12 @@ jobs:
     uses: ./.github/workflows/test_linux_jax_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
       release_type: ${{ inputs.release_type }}
       s3_subdir: ${{ inputs.s3_subdir }}
       package_index_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
       python_versions: ${{ inputs.python_versions }}
-      jax_ref: master
+      ref: ${{ inputs.ref || '' }}
+      jax_ref: ${{ inputs.jax_ref }}
