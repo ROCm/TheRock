@@ -1,0 +1,58 @@
+name: Bump rocm-libraries submodule
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 11 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-submodules:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Run bump submodules script
+        run: |
+          git config --global user.name "therockbot"
+          git config --global user.email "therockbot@amd.com"
+
+          DATE=$(LC_ALL=C date +%Y%m%d)
+          python3 ./build_tools/bump_submodules.py \
+            --components rocm-libraries \
+            --push-branch \
+            --branch-name github-actions/bump-rocm-libs-$DATE
+
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: actions/create-github-app-token@b36a0b4db3c4ce0a0d11a8d6c20d7b19d4c89d2f # v2.1.0
+        with:
+          app-id: ${{ secrets.PULL_REQUEST_APP_ID }}
+          private-key: ${{ secrets.PULL_REQUEST_APP_KEY }}
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          DATE=$(LC_ALL=C date +%Y%m%d)
+          BRANCH_NAME=github-actions/bump-rocm-libs-$DATE
+          TITLE="rocm-libraries Submodule Bump ${DATE}"
+          BODY="- Updating rocm-libraries"
+
+          echo "Creating PR:"
+          echo "  Branch: $BRANCH_NAME"
+          echo "  Title:  $TITLE"
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH_NAME" \
+            --title "$TITLE" \
+            --body "$BODY"
