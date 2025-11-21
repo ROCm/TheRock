@@ -71,6 +71,8 @@ from pathlib import Path
 
 import pytest
 
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+
 
 def setup_env(pytorch_dir: str) -> None:
     """Set up environment variables required for PyTorch testing with ROCm.
@@ -133,13 +135,12 @@ Select (potentially) additional tests to be skipped based on the Pytorch version
 If no PyTorch version is given, it is auto-determined by the PyTorch used to run pytest.""",
     )
 
-    env_root_dir = os.getenv("THEROCK_ROOT_DIR")
+    default_pytorch_dir = THIS_SCRIPT_DIR / "pytorch"
     parser.add_argument(
-        "--the-rock-root-dir",
-        default=env_root_dir if env_root_dir is not None else "",
-        required=False,
-        help="""Overwrites the root directory of TheRock.
-By default TheRock root dir is determined based on this script's location.""",
+        "--pytorch-dir",
+        type=Path,
+        default=default_pytorch_dir,
+        help="Path for the pytorch repository, where tests will be sourced from",
     )
 
     parser.add_argument(
@@ -166,6 +167,12 @@ By default TheRock root dir is determined based on this script's location.""",
     )
 
     args = parser.parse_args(argv)
+
+    if not args.pytorch_dir.exists():
+        parser.error(
+            f"Directory at '{args.pytorch_dir}' does not exist, checkout pytorch and then set the path via --pytorch-dir"
+        )
+
     return args
 
 
@@ -417,24 +424,6 @@ def detect_pytorch_version() -> str:
     return version("torch").rsplit("+", 1)[0].rsplit(".", 1)[0]
 
 
-def determine_root_dir(provided_root: str) -> Path:
-    """Determine the TheRock root directory.
-
-    Args:
-        provided_root: User-provided root directory path, or empty string.
-
-    Returns:
-        Path object representing the TheRock root directory.
-    """
-    if provided_root:
-        return Path(provided_root)
-
-    # Autodetect root dir via path of the script
-    # We are in <TheRock Root Dir>/external-builds/pytorch
-    script_dir = Path(__file__).resolve().parent
-    return script_dir.parent.parent
-
-
 def main() -> int:
     """Main entry point for the PyTorch test runner.
 
@@ -443,8 +432,7 @@ def main() -> int:
     """
     args = cmd_arguments(sys.argv[1:])
 
-    # Determine root directory
-    root_dir = determine_root_dir(args.the_rock_root_dir)
+    pytorch_dir = args.pytorch_dir
 
     # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
     # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
@@ -465,7 +453,6 @@ def main() -> int:
     if args.k:
         tests_to_skip = args.k
 
-    pytorch_dir = f"{root_dir}/external-builds/pytorch/pytorch"
     setup_env(pytorch_dir)
 
     pytorch_args = [
