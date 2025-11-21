@@ -1,0 +1,4 @@
+installer==0.7.0
+packaging==25.0
+pkginfo==1.12.1.2
+wheel==0.45.1
