@@ -58,6 +58,7 @@ from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_postsubmit,
     amdgpu_family_info_matrix_nightly,
     get_all_families_for_trigger_types,
+    TriggerType,
 )
 from fetch_test_configurations import test_matrix
 
@@ -282,34 +283,30 @@ def matrix_generator(
     selected_test_names = []
 
     # Determine which trigger types are active for proper matrix lookup
-    active_trigger_types = []
+    # For pull requests, use PRESUBMIT matrix for lookups
+    # For pushes to main, use ALL matrix since we add both presubmit and postsubmit families
+    # For scheduled runs, use NIGHTLY matrix for lookups
+    # For workflow dispatch, use ALL matrix to support any valid family
     if is_pull_request:
-        active_trigger_types.append("presubmit")
-    if is_push and base_args.get("branch_name") == "main":
-        active_trigger_types.extend(["presubmit", "postsubmit"])
-    if is_schedule:
-        active_trigger_types.append("nightly")
-
-    # Get the appropriate family matrix based on active triggers
-    # For workflow_dispatch and PR labels, we need to check all matrices
-    if is_workflow_dispatch or is_pull_request:
-        # For workflow_dispatch, check all possible matrices
-        lookup_trigger_types = ["presubmit", "postsubmit", "nightly"]
-        lookup_matrix = get_all_families_for_trigger_types(lookup_trigger_types)
-        print(f"Using family matrix for trigger types: {lookup_trigger_types}")
-    elif active_trigger_types:
-        lookup_matrix = get_all_families_for_trigger_types(active_trigger_types)
-        print(f"Using family matrix for trigger types: {active_trigger_types}")
+        active_trigger_type = TriggerType.PRESUBMIT
+    elif is_push and base_args.get("branch_name") == "main":
+        active_trigger_type = TriggerType.ALL
+    elif is_schedule:
+        active_trigger_type = TriggerType.NIGHTLY
+    elif is_workflow_dispatch:
+        active_trigger_type = TriggerType.ALL
     else:
-        # This code path should never be reached in production workflows
-        # as they only trigger on main branch pushes, PRs, workflow_dispatch, or schedule.
-        # If this error is raised, it indicates an unexpected trigger combination.
+        # Default for any other case
+        active_trigger_type = TriggerType.ALL
+
+    # Validate that pushes only happen to main branch
+    if is_push and base_args.get("branch_name") != "main":
         raise AssertionError(
-            f"Unreachable code: no trigger types determined. "
-            f"is_pull_request={is_pull_request}, is_workflow_dispatch={is_workflow_dispatch}, "
-            f"is_push={is_push}, is_schedule={is_schedule}, "
-            f"branch_name={base_args.get('branch_name')}"
+            f"Unreachable code: push events should only trigger on main branch. "
+            f"Got branch_name={base_args.get('branch_name')}"
         )
+
+    lookup_matrix = get_all_families_for_trigger_types(active_trigger_type)
 
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
