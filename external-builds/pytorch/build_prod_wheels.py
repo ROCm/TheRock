@@ -56,12 +56,12 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-dgpu/
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -99,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
