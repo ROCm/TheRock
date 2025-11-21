@@ -117,6 +117,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "torch",
     "torcharrow",
     "torchaudio",
+    "apex",
     "torchcodec",
     "torchcsprng",
     "torchdata",
