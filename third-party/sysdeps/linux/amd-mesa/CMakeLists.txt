@@ -1,14 +1,6 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    # When included in TheRock, we download sources and set up the sub-project.
+    # setup submodule project
     set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork")
-    #set(_download_stamp "${_source_dir}/download.stamp")
-
-    #therock_subproject_fetch(therock-amd-mesa-sources
-      #SOURCE_DIR "${_source_dir}"
-      #URL "https://github.com/ROCm/mesa-fork/archive/refs/heads/amd-decode-only.zip"
-      #URL_HASH ""
-      #TOUCH "${_download_stamp}"
-    #)
 
     therock_cmake_subproject_declare(therock-amd-mesa
       EXTERNAL_SOURCE_DIR .
@@ -31,9 +23,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         lib/rocm_sysdeps/lib
       INTERFACE_PKG_CONFIG_DIRS
         lib/rocm_sysdeps/lib/pkgconfig
-      EXTRA_DEPENDS
-        "${_download_stamp}"
     )
+
     therock_cmake_subproject_activate(therock-amd-mesa)
 
     therock_test_validate_shared_lib(
@@ -51,37 +42,26 @@ if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
-# Meson refuses to build if the source dir is a subdir of the build dir, so
-# make it a sibling.
-set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
-
 add_custom_target(
   meson_build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${PATCH_SOURCE_DIR}"
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
-    # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E chdir "${PATCH_SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
-      # Escaping hack: experimentally determined to persist through the layers.
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       --
-      "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
+      "${MESON_BUILD}" setup
         --reconfigure
-        # We generate relocatable, arch neutral directory layouts and use
-        # DESTDIR to install it to the lib/rocm_sysdeps tree.
         --prefix "/"
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
         -Dva-libs-path="/lib"
-        #-Dallow-fallback-for=libva
+        # -Dallow-fallback-for=libva # NOTE: Use local build of VA library
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
-        # Only enable the decode for rocm
-        -Damd-decode-only=true
-
+        -Damd-decode-only=true # NOTE: enable decode only for TheRock
+        "${CMAKE_CURRENT_BINARY_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork"
   COMMAND
     "${MESON_BUILD}" compile --verbose
   COMMAND
