@@ -94,7 +94,7 @@ permissions:
 jobs:
   test_jax_wheels:
     name: Test JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_versions }}
-    runs-on: linux-mi325-1gpu-ossci-rocm
+    runs-on: linux-mi325-1gpu-ossci-rocm-test
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
       options: >-
