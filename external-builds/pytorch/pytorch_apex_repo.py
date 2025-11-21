@@ -41,7 +41,7 @@ import sys
 
 import repo_management
 
-THIS_MAIN_REPO_NAME = "pytorch_apex"
+THIS_MAIN_REPO_NAME = "apex"
 THIS_DIR = Path(__file__).resolve().parent
 
 DEFAULT_ORIGIN = "https://github.com/ROCm/apex.git"
