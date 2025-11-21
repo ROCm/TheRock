@@ -97,22 +97,21 @@ positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
 positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
+positive_filter.append("*/GPU_KernelTuningNetTest*")
+positive_filter.append("*/GPU_MIOpenDriver*")
+
 positive_filter.append("*/GPU_Bwd_Mha_*")
 positive_filter.append("*/GPU_Fwd_Mha_*")
 positive_filter.append("*/GPU_Softmax*")
 positive_filter.append("*/GPU_Dropout*")
 positive_filter.append("*/GPU_MhaBackward_*")
 positive_filter.append("*/GPU_MhaForward_*")
-negative_filter.append("*GPU_TestMhaFind20*")
+positive_filter.append("*GPU_TestMhaFind20*")
 
 #############################################
 
 negative_filter.append("*DeepBench*")
 negative_filter.append("*MIOpenTestConv*")
-
-# Failing tests
-negative_filter.append("*/GPU_KernelTuningNetTest*")
-negative_filter.append("*/GPU_MIOpenDriver*")
 
 # For sake of time saving on pre-commit step
 ####################################################

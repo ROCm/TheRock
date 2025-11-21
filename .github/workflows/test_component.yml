@@ -24,7 +24,7 @@ jobs:
   test_component:
     name: 'Test ${{ fromJSON(inputs.component).job_name }} (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})'
     runs-on: ${{ inputs.test_runs_on }}
-    timeout-minutes: 60
+    timeout-minutes: 210
     container:
       image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
       options: --ipc host
@@ -51,7 +51,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
       - name: "Fetch 'build_tools' from repository"
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           sparse-checkout: build_tools
           path: "prejob"
@@ -62,7 +62,7 @@ jobs:
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Checkout Repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: "ROCm/TheRock"
 
@@ -75,6 +75,16 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: ${{ fromJSON(inputs.component).fetch_artifact_args }}
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+
+      # safe.directory must be set before Runner Health Status
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: |
+          python ./build_tools/health_status.py
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}

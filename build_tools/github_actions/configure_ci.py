@@ -17,6 +17,7 @@
   * WINDOWS_TEST_LABELS (optional): Comma-separated list of test labels to test
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
+  * BUILD_VARIANT (optional): The build variant to run (ex: release, asan)
 
   Environment variables (for pull requests):
   * PR_LABELS (optional) : JSON list of PR label names.
@@ -56,7 +57,7 @@ from amdgpu_family_matrix import (
     amdgpu_family_info_matrix_presubmit,
     amdgpu_family_info_matrix_postsubmit,
     amdgpu_family_info_matrix_nightly,
-    amdgpu_family_info_matrix_all,
+    get_all_families_for_trigger_types,
 )
 from fetch_test_configurations import test_matrix
 
@@ -224,12 +225,24 @@ def get_pr_labels(args) -> List[str]:
     return labels
 
 
-def filter_known_names(requested_names: List[str], name_type: str) -> List[str]:
-    """Filters a requested names list down to known names."""
-    known_references = {
-        "target": amdgpu_family_info_matrix_all,
-        "test": test_matrix,
-    }
+def filter_known_names(
+    requested_names: List[str], name_type: str, target_matrix=None
+) -> List[str]:
+    """Filters a requested names list down to known names.
+
+    Args:
+        requested_names: List of names to filter
+        name_type: Type of name ('target' or 'test')
+        target_matrix: For 'target' type, the specific family matrix to use. Required for 'target' type.
+    """
+    if name_type == "target":
+        assert (
+            target_matrix is not None
+        ), "target_matrix must be provided for 'target' name_type"
+        known_references = {"target": target_matrix}
+    else:
+        known_references = {"test": test_matrix}
+
     filtered_names = []
     if name_type not in known_references:
         print(f"WARNING: unknown name_type '{name_type}'")
@@ -268,6 +281,36 @@ def matrix_generator(
     # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
     selected_test_names = []
 
+    # Determine which trigger types are active for proper matrix lookup
+    active_trigger_types = []
+    if is_pull_request:
+        active_trigger_types.append("presubmit")
+    if is_push and base_args.get("branch_name") == "main":
+        active_trigger_types.extend(["presubmit", "postsubmit"])
+    if is_schedule:
+        active_trigger_types.extend(["presubmit", "postsubmit", "nightly"])
+
+    # Get the appropriate family matrix based on active triggers
+    # For workflow_dispatch and PR labels, we need to check all matrices
+    if is_workflow_dispatch or is_pull_request:
+        # For workflow_dispatch, check all possible matrices
+        lookup_trigger_types = ["presubmit", "postsubmit", "nightly"]
+        lookup_matrix = get_all_families_for_trigger_types(lookup_trigger_types)
+        print(f"Using family matrix for trigger types: {lookup_trigger_types}")
+    elif active_trigger_types:
+        lookup_matrix = get_all_families_for_trigger_types(active_trigger_types)
+        print(f"Using family matrix for trigger types: {active_trigger_types}")
+    else:
+        # This code path should never be reached in production workflows
+        # as they only trigger on main branch pushes, PRs, workflow_dispatch, or schedule.
+        # If this error is raised, it indicates an unexpected trigger combination.
+        raise AssertionError(
+            f"Unreachable code: no trigger types determined. "
+            f"is_pull_request={is_pull_request}, is_workflow_dispatch={is_workflow_dispatch}, "
+            f"is_push={is_push}, is_schedule={is_schedule}, "
+            f"branch_name={base_args.get('branch_name')}"
+        )
+
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
 
@@ -280,7 +323,7 @@ def matrix_generator(
         requested_target_names = input_gpu_targets.translate(translator).split()
 
         selected_target_names.extend(
-            filter_known_names(requested_target_names, "target")
+            filter_known_names(requested_target_names, "target", lookup_matrix)
         )
 
         # If any workflow dispatch test labels are specified, we run full tests for those specific tests
@@ -323,7 +366,7 @@ def matrix_generator(
                 _, test_name = label.split(":")
                 requested_test_names.append(test_name)
         selected_target_names.extend(
-            filter_known_names(requested_target_names, "target")
+            filter_known_names(requested_target_names, "target", lookup_matrix)
         )
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
@@ -339,9 +382,22 @@ def matrix_generator(
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
-        # Add _only_ nightly targets.
-        for key in amdgpu_family_info_matrix_nightly:
+        # For nightly runs, we run all builds and full tests
+        amdgpu_family_info_matrix_all = (
+            amdgpu_family_info_matrix_presubmit
+            | amdgpu_family_info_matrix_postsubmit
+            | amdgpu_family_info_matrix_nightly
+        )
+        for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
+
+        for key in lookup_matrix:
+            if (
+                platform in lookup_matrix[key]
+                and "sanity_check_only_for_family" in lookup_matrix[key][platform]
+            ):
+                # For nightly runs, we want to run full tests regardless of limited machines, so we delete the sanity_check_only_for_family option
+                del lookup_matrix[key][platform]["sanity_check_only_for_family"]
 
     # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
@@ -355,7 +411,8 @@ def matrix_generator(
     ), f"Expected build variant {platform} in {all_build_variants}"
     for target_name in unique_target_names:
         # Filter targets to only those matching the requested platform.
-        platform_set = amdgpu_family_info_matrix_all.get(target_name)
+        # Use the trigger-appropriate lookup matrix
+        platform_set = lookup_matrix.get(target_name)
         if platform in platform_set:
             platform_info = platform_set.get(platform)
             assert isinstance(platform_info, dict)
@@ -366,6 +423,13 @@ def matrix_generator(
                 build_variant_names, list
             ), f"Expected 'build_variant' in platform: {platform_info}"
             for build_variant_name in build_variant_names:
+                # We have custom build variants for specific CI flows.
+                # For CI, we use the release build variant (for PRs, pushes to main, nightlies)
+                # For CI ASAN, we use the ASAN build variant (for pushes to main)
+                # In the case that the build variant is not requested, we skip it
+                if build_variant_name != base_args.get("build_variant"):
+                    continue
+
                 # Merge platform_info and build_variant_info into a matrix_row.
                 matrix_row = dict(platform_info)
 
@@ -373,13 +437,6 @@ def matrix_generator(
                 assert isinstance(
                     build_variant_info, dict
                 ), f"Expected {build_variant_name} in {platform_build_variants} for {platform_info}"
-
-                # If "skip_presubmit_build" is enabled in `amdgpu_family_matrix.py`, then we skip for presubmit.
-                # This build variant is typically skipped for variants with long build times
-                if is_pull_request and build_variant_info.get(
-                    "skip_presubmit_build", False
-                ):
-                    continue
 
                 # If the build variant level notes expect_failure, set it on the overall row.
                 # But if not, honor what is already there.
@@ -448,9 +505,10 @@ def main(base_args, linux_families, windows_families):
 
     test_type = "smoke"
 
-    # In the case of a scheduled run, we always want to build
+    # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
         enable_build_jobs = True
+        test_type = "full"
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
@@ -528,5 +586,6 @@ if __name__ == "__main__":
     base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
         "WINDOWS_TEST_LABELS", ""
     )
+    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
 
     main(base_args, linux_families, windows_families)

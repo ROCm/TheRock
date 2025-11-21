@@ -53,7 +53,7 @@ on:
         options:
           - gfx101X-dgpu
           - gfx103X-dgpu
-          - gfx110X-dgpu
+          - gfx110X-all
           - gfx1150
           - gfx1151
           - gfx120X-all
@@ -80,11 +80,11 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+        default: "https://rocm.devreleases.amd.com/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
@@ -108,7 +108,7 @@ jobs:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -122,7 +122,7 @@ jobs:
       triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -221,7 +221,7 @@ jobs:
       bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -263,7 +263,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}

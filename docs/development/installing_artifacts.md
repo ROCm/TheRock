@@ -19,6 +19,7 @@ The script supports the following command-line options:
 | `--prim`          | Flag   | Include primitives artifacts                                           |
 | `--rand`          | Flag   | Include random number generator artifacts                              |
 | `--rccl`          | Flag   | Include RCCL artifacts                                                 |
+| `--rocwmma`       | Flag   | Include rocWMMA artifacts                                              |
 | `--release`       | String | Release version from nightly or dev tarballs                           |
 | `--run-id`        | String | GitHub CI workflow run ID to install from                              |
 | `--tests`         | Flag   | Include test artifacts for enabled components                          |
@@ -193,6 +194,8 @@ In the `retrieve_artifacts_by_run_id` function, add your component to the condit
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
+        if args.rocprofiler_compute:
+            extra_artifacts.append("rocprofiler-compute")
         if args.newcomponent:
             extra_artifacts.append("newcomponent")
 

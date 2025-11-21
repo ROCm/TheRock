@@ -27,7 +27,7 @@ override_dh_strip:
 	# Unprefixed names
 	ln -sf "$(shell command -v llvm-strip)"   debian/.llvm-tools/strip
 	ln -sf "$(shell command -v llvm-objcopy)" debian/.llvm-tools/objcopy
-	PATH="$(CURDIR)/debian/.llvm-tools:$(PATH)" dh_strip
+	PATH="$(CURDIR)/debian/.llvm-tools:$(PATH)" dh_strip --exclude=libompdevice.a
 {% endif %}
 
 
