@@ -111,6 +111,7 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
     COMPONENTS
       dbg
       lib
+      test
     SUBPROJECT_DEPS
       fusilli_plugin
   )
