@@ -424,7 +424,7 @@ add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 
 # IREE and Fusilli are required by the Fusilli plugin
-if(THEROCK_ENABLE_FUSILLI_PLUGIN)
+if(NOT WIN32 AND THEROCK_ENABLE_FUSILLI_PLUGIN)
   add_subdirectory(iree-libs)
 endif()
 
