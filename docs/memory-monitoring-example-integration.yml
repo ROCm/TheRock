@@ -1,0 +1,229 @@
+# Example integration of memory monitoring into build_portable_linux_artifacts.yml
+# This shows the key changes needed to enable memory monitoring
+
+name: Build Portable Linux Artifacts (with Memory Monitoring)
+
+# ... (keep all existing on:, permissions:, etc.)
+
+jobs:
+  build_portable_linux_artifacts:
+    name: Build (xfail ${{ inputs.expect_failure }})
+    runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-scale-rocm-heavy' || 'azure-linux-scale-rocm' }}
+    continue-on-error: ${{ inputs.expect_failure }}
+    timeout-minutes: 720
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      TEATIME_FORCE_INTERACTIVE: 0
+      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+      # Memory monitoring configuration
+      MEMORY_MONITOR_INTERVAL: "10"  # Sample every 10 seconds
+      MEMORY_MONITOR_LOG_DIR: ${{ github.workspace }}/build/memory-logs
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Test build_tools
+        run: |
+          python -m pytest build_tools/tests build_tools/github_actions/tests
+
+      # CHANGE: Wrap fetch_sources with memory monitoring
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: |
+          python build_tools/github_actions/memory_wrapped_build.py \
+            --phase "Fetch Sources" \
+            --interval 15 \
+            -- ./build_tools/fetch_sources.py --jobs 12
+
+      - name: Install external python deps
+        run: |
+          pip install -r requirements-external.txt
+
+      # CHANGE: Wrap configure step with memory monitoring
+      - name: Configure Projects
+        env:
+          cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+          amdgpu_families: ${{ inputs.amdgpu_families }}
+          package_version: ${{ inputs.package_version }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          BUILD_DIR: build
+        run: |
+          python build_tools/github_actions/memory_wrapped_build.py \
+            --phase "Configure Projects" \
+            -- python3 build_tools/github_actions/build_configure.py --manylinux
+
+      # CHANGE: Split build into separate monitored phases
+      - name: Build therock-archives
+        run: |
+          python build_tools/github_actions/memory_wrapped_build.py \
+            --phase "Build therock-archives" \
+            --interval 5 \
+            -- cmake --build build --target therock-archives -- -k 0
+
+      - name: Build therock-dist
+        run: |
+          python build_tools/github_actions/memory_wrapped_build.py \
+            --phase "Build therock-dist" \
+            --interval 5 \
+            -- cmake --build build --target therock-dist -- -k 0
+
+      # CHANGE: Wrap testing with memory monitoring
+      - name: Test Packaging
+        if: ${{ github.event.repository.name == 'TheRock' }}
+        run: |
+          python build_tools/github_actions/memory_wrapped_build.py \
+            --phase "Test Packaging" \
+            -- ctest --test-dir build --output-on-failure
+
+      # NEW: Analyze memory usage after build
+      - name: Analyze Memory Usage
+        if: always()  # Run even if previous steps failed
+        shell: bash
+        run: |
+          if [ -d "build/memory-logs" ]; then
+            echo "Analyzing memory logs..."
+            python build_tools/analyze_memory_logs.py --detailed --github-summary
+            
+            # Also save the analysis report
+            python build_tools/analyze_memory_logs.py --detailed --output build/memory-analysis-report.txt
+          else
+            echo "No memory logs found"
+          fi
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          if [ -d "./build" ]; then
+            echo "Full SDK du:"
+            echo "------------"
+            du -h -d 1 build/dist/rocm
+            echo "Artifact Archives:"
+            echo "------------------"
+            ls -lh build/artifacts/*.tar.xz
+            echo "Artifacts:"
+            echo "----------"
+            ls -lh build/artifacts/*
+            echo "ccache:"
+            echo "-------"
+            ccache -s
+            
+            # NEW: Show memory analysis summary if available
+            if [ -f "build/memory-analysis-report.txt" ]; then
+              echo ""
+              echo "Memory Usage Summary:"
+              echo "--------------------"
+              head -n 50 build/memory-analysis-report.txt
+            fi
+          fi
+
+      # Existing upload artifacts steps...
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4
+        with:
+          name: ${{ inputs.artifact_group }}_portable_dist
+          path: build/artifacts/*.tar.xz
+          retention-days: 7
+          if-no-files-found: error
+
+      # NEW: Upload memory logs for later analysis
+      - name: Upload Memory Logs
+        if: always()  # Upload even on failure to help diagnose OOM issues
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4
+        with:
+          name: memory-logs-${{ inputs.artifact_group }}
+          path: |
+            build/memory-logs/
+            build/memory-analysis-report.txt
+          retention-days: 7
+          if-no-files-found: ignore  # Don't fail if monitoring wasn't enabled
+
+      # NEW: Set output indicating if memory issues were detected
+      - name: Check for Memory Issues
+        if: always()
+        id: memory_check
+        shell: bash
+        run: |
+          if [ -f "build/memory-analysis-report.txt" ]; then
+            if grep -q "CRITICAL" build/memory-analysis-report.txt; then
+              echo "memory_critical=true" >> $GITHUB_OUTPUT
+              echo "⚠️ CRITICAL memory usage detected! Check the memory analysis report."
+            elif grep -q "HIGH" build/memory-analysis-report.txt; then
+              echo "memory_high=true" >> $GITHUB_OUTPUT
+              echo "⚠️ HIGH memory usage detected. Review the memory analysis report."
+            else
+              echo "memory_ok=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+# Additional optional job to aggregate memory stats across matrix builds
+jobs:
+  aggregate_memory_stats:
+    name: Aggregate Memory Statistics
+    needs: [build_portable_linux_artifacts]
+    if: always()  # Run even if builds failed
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      
+      - name: Install python deps
+        run: |
+          pip install -r requirements.txt
+      
+      - name: Download all memory logs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: memory-logs-*
+          path: all-memory-logs/
+      
+      - name: Aggregate Analysis
+        run: |
+          echo "# 📊 Aggregate Memory Analysis Across All Builds" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          for log_dir in all-memory-logs/*/; do
+            if [ -d "$log_dir" ]; then
+              build_name=$(basename "$log_dir")
+              echo "## Build: $build_name" >> $GITHUB_STEP_SUMMARY
+              
+              if [ -f "$log_dir/memory-analysis-report.txt" ]; then
+                # Extract summary lines
+                head -n 30 "$log_dir/memory-analysis-report.txt" | tail -n 20 >> $GITHUB_STEP_SUMMARY
+              fi
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "Full memory logs are available as artifacts."
+
