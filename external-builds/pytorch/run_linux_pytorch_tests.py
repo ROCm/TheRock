@@ -461,13 +461,14 @@ def main() -> int:
 
     setup_env(pytorch_dir)
 
+    # DO NOT SUBMIT - limit to just test_torch.py for initial testing
     pytorch_args = [
-        f"{pytorch_dir}/test/test_nn.py",
+        # f"{pytorch_dir}/test/test_nn.py",
         f"{pytorch_dir}/test/test_torch.py",
-        f"{pytorch_dir}/test/test_cuda.py",
-        f"{pytorch_dir}/test/test_unary_ufuncs.py",
-        f"{pytorch_dir}/test/test_binary_ufuncs.py",
-        f"{pytorch_dir}/test/test_autograd.py",
+        # f"{pytorch_dir}/test/test_cuda.py",
+        # f"{pytorch_dir}/test/test_unary_ufuncs.py",
+        # f"{pytorch_dir}/test/test_binary_ufuncs.py",
+        # f"{pytorch_dir}/test/test_autograd.py",
         "--continue-on-collection-errors",
         "--import-mode=importlib",
         f"-k={tests_to_skip}",
@@ -491,6 +492,31 @@ def main() -> int:
     return retcode
 
 
+def force_exit_with_code(retcode):
+    """Forces termination to work around https://github.com/ROCm/TheRock/issues/999."""
+    import signal
+
+    retcode_file = Path("retcode.txt")
+    print(f"Writing retcode {retcode} to '{retcode_file}'")
+    print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
+
+    with open(retcode_file, "w") as f:
+        f.write(str(retcode))
+
+    # Flush output before we force exit.
+    sys.stdout.flush()
+
+    # In order from "asking nicely" to "tear down immediately":
+    #   1. `sys.exit(retcode)`
+    #   2. `os._exit(retcode)`
+    #   3. `os.kill(os.getpid(), signal.SIGTERM)`
+    #   4. `subprocess.Popen(f'taskkill /F /PID {os.getpid()}', shell=True)`
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
 if __name__ == "__main__":
-    # Lets make this script return pytest exit code (success or failure)
-    sys.exit(main())
+    retcode = main()
+    if platform.system() == "Windows":
+        force_exit_with_code(retcode)
+    else:
+        sys.exit(retcode)
