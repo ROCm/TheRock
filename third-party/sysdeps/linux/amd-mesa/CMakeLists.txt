@@ -77,7 +77,7 @@ add_custom_target(
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
         -Dva-libs-path="/lib"
-        -Dallow-fallback-for=libva
+        #-Dallow-fallback-for=libva
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
         # Only enable the decode for rocm
         -Damd-decode-only=true
