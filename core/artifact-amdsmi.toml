@@ -1,0 +1,21 @@
+# amdsmi core artifact
+
+[components.dbg."core/amdsmi/stage"]
+optional = "windows"
+
+[components.dev."core/amdsmi/stage"]
+optional = "windows"
+
+[components.doc."core/amdsmi/stage"]
+optional = "windows"
+
+[components.lib."core/amdsmi/stage"]
+optional = "windows"
+
+[components.run."core/amdsmi/stage"]
+optional = "windows"
+include = [
+  "bin/**",
+  "libexec/**",
+  "share/amd_smi/**",
+]
