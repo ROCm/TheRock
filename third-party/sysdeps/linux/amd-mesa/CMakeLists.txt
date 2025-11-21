@@ -1,7 +1,7 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork")
-    set(_download_stamp "${_source_dir}/download.stamp")
+    #set(_download_stamp "${_source_dir}/download.stamp")
 
     #therock_subproject_fetch(therock-amd-mesa-sources
       #SOURCE_DIR "${_source_dir}"
