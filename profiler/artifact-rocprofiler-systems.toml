@@ -14,4 +14,3 @@ include = [
   "bin/**",
   "share/rocprofiler-systems/**"
 ]
-[components.test."profiler/rocprofiler-systems/stage"]
