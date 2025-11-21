@@ -1,11 +1,9 @@
 # gRPC static library for RDC
 therock_subproject_fetch(therock-grpc-sources
   CMAKE_PROJECT
-  # TODO: Mirror this repository to S3 for better availability and faster downloads
-  GIT_REPOSITORY "https://github.com/grpc/grpc.git"
-  GIT_TAG "v1.67.1"
-  GIT_SHALLOW ON
-  GIT_SUBMODULES_RECURSE ON
+  # Originally mirrored from: https://github.com/grpc/grpc.git (git tag v1.67.1)
+  URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/grpc-v1.67.1.tar.gz"
+  URL_HASH "SHA256=ed0051771a1ed0ec6583be4ddb0fe9ee4473bc2f8a59d214ff49290ed5edb4ef"
 )
 
 set(_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/build")
