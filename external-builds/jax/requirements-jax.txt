@@ -3,7 +3,7 @@ build
 wheel
 six
 auditwheel
-scipy
+scipy>=1.13
 pytest
 pytest-html
 pytest_html_merger
