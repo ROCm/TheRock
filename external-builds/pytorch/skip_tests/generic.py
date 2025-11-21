@@ -144,4 +144,11 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
         ],
     },
+    "windows": {
+        "torch": [
+            # This test hangs on Windows.
+            # The callstack points to _fill_mem_eff_dropout_mask, so it may be related to aotriton.
+            "test_cublas_config_nondeterministic_alert_cuda",
+        ],
+    },
 }

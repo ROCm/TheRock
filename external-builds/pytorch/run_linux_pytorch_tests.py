@@ -61,6 +61,7 @@ Side-effects
 
 import argparse
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -447,7 +448,12 @@ def main() -> int:
     print(f"Using PyTorch version: {pytorch_version}")
 
     # Get tests to skip
-    tests_to_skip = get_tests(amdgpu_family, pytorch_version, not args.debug)
+    tests_to_skip = get_tests(
+        amdgpu_family=amdgpu_family,
+        pytorch_version=pytorch_version,
+        platform=platform.system(),
+        create_skip_list=not args.debug,
+    )
 
     # Allow manual override of test selection
     if args.k:
