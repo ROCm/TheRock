@@ -87,8 +87,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
-
-
   ##############################################################################
   # rocprofiler-compute
   ##############################################################################
