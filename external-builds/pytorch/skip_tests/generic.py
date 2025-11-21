@@ -144,4 +144,18 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
         ],
     },
+    "windows": {
+        # Skip tests that hang. Perhaps related to processes not terminating
+        # on their own: https://github.com/ROCm/TheRock/issues/999.
+        # Even if _test cases_ themselves terminate, the parent process still
+        # hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
+        # force termination.
+        "torch": [
+            # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
+            "test_cublas_config_nondeterministic_alert_cuda",
+        ],
+        "cuda": [
+            "test_graph_error",
+        ],
+    },
 }
