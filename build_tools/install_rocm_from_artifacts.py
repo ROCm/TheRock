@@ -23,6 +23,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rand | --no-rand]
     [--rccl | --no-rccl]
     [--rocwmma | --no-rocwmma]
+    [--hiptensor | --no-hiptensor]
     [--tests | --no-tests]
     [--base-only]
 
@@ -174,6 +175,7 @@ def retrieve_artifacts_by_run_id(args):
             args.blas,
             args.fft,
             args.hipdnn,
+            args.hiptensor,
             args.miopen,
             args.miopen_plugin,
             args.prim,
@@ -192,6 +194,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fftw3")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.miopen:
             extra_artifacts.append("miopen")
             # We need bin/MIOpenDriver executable for tests.
@@ -353,6 +357,13 @@ def main(argv):
         "--hipdnn",
         default=False,
         help="Include 'hipdnn' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
