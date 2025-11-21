@@ -69,9 +69,9 @@ on:
         description: Base CloudFront URL for the Python package index
         required: true
         type: string
-        default: https://d25kgig7rdsyks.cloudfront.net/v2-staging
+        default: https://rocm.nightlies.amd.com/v2-staging/
       rocm_version:
-        description: ROCm version (optional, informational)
+        description: ROCm version
         required: false
         type: string
       tar_url:
