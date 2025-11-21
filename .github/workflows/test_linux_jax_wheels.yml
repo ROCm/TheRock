@@ -97,12 +97,11 @@ jobs:
     runs-on: linux-mi325-1gpu-ossci-rocm-test
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
-      options: >-
-          --user root
-          --device /dev/kfd
+      options: --device /dev/kfd
           --device /dev/dri
           --group-add render
           --group-add video
+          --user root # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
 
     env:
       VIRTUAL_ENV: /home/tester/.venv
@@ -158,7 +157,7 @@ jobs:
 
       - name: Extract JAX version and set to GITHUB_ENV
         run: |
-          JAX_VERSION=$(tr -d ' ' < rocm-jax/build/requirements.txt \
+          JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
             | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
           echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
 
