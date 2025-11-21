@@ -377,6 +377,13 @@ Future versions will explore more advanced compression techniques which may trad
 
 1. **Cross-architecture sharing**: Common IR or bytecode
 
+## References
+
+- **rocm-kpack repository** (pre-move): https://github.com/stellaraccident/rocm-kpack
+- **Original build integration design**: https://github.com/stellaraccident/rocm-kpack/blob/main/docs/kpack-build-integration.md
+- **POC runtime API documentation**: https://github.com/stellaraccident/rocm-kpack/blob/main/docs/runtime_api.md
+- **Original multi-arch packaging design**: https://github.com/stellaraccident/rocm-kpack/blob/main/docs/multi_arch_packaging_with_kpack.md
+
 ## Summary
 
 Integrating rocm-kpack into TheRock enables a fundamental shift in how ROCm handles multi-architecture support. By separating device code from host code and enabling parallel architecture builds, we can:
