@@ -81,7 +81,7 @@ jobs:
       VENV_DIR: ${{ github.workspace }}/.venv
       TORCH_VERSION: ${{ inputs.torch_version }}
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
-      CHECKOUT_ROOT: ${{ github.workspace }}/pytorch
+      CHECKOUT_ROOT: "${{ contains(inputs.test_runs_on, 'linux') && ${{ github.workspace }}/pytorch || B:/src }}"
 
     steps:
       - name: Checkout
