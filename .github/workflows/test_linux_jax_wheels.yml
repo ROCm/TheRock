@@ -32,18 +32,14 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: master
-      jax_test_branch:
-        description: rocm/jax tests ref/branch to run
-        required: false
-        type: string
-        default: main
+        default: rocm-jaxlib-v0.8.0
       test_runs_on:
         required: true
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -142,7 +138,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: rocm/jax
-          ref: ${{ inputs.jax_test_branch }}
+          ref: ${{ inputs.jax_ref }}
           path: jax/jax_tests
 
       - name: Set up Python

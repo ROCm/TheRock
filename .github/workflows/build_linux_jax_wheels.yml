@@ -23,6 +23,20 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -57,6 +71,18 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront base URL pointing to Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+      jax_ref:
+        description: rocm-jax repository ref/branch to check out
+        type: string
+        default: rocm-jaxlib-v0.8.0
 
 permissions:
   id-token: write
@@ -81,7 +107,7 @@ jobs:
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ matrix.jax_ref }}
+          ref: ${{ inputs.jax_ref || matrix.jax_ref }}
 
       - name: Configure Git Identity
         run: |
