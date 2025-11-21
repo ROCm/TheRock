@@ -1,0 +1,50 @@
+name: Run Rock Release Branching
+
+on:
+  workflow_call:
+    inputs:
+      release_branch:
+        type: string
+        default: release/therock-7.x
+        
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "Name of branch to create (e.g., release/v1.2.3)"
+        required: true
+jobs:
+  run-script:
+    runs-on: azure-linux-scale-rocm
+
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v4
+      - name: Set up Git identity
+        run: |
+            git config --global user.name "rocm-ci"
+            git config --global user.email "rocm-ci@amd.com"
+      - name: Checkout Python repo from other org
+        uses: actions/checkout@v4
+        with:
+          repository: ROCm/TheRock   
+          ref: srayasam/branching_code 
+          
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r build_tools/release_automations/requirements.txt
+
+      - name: Run release script
+        run: |
+          BRANCH=${{ inputs.release_branch }}
+          API_TOKEN="${{ secrets.PROD_API_TOKEN }}"
+
+          # Run the external Python script
+          python build_tools/release_automations/create_release_branch.py \
+            -A "$API_TOKEN" \
+            -B "$BRANCH" \
+            --dry_run
