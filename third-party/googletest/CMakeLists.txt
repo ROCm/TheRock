@@ -16,5 +16,3 @@ therock_cmake_subproject_declare(therock-googletest
 )
 therock_cmake_subproject_provide_package(therock-googletest GTest lib/cmake/GTest)
 therock_cmake_subproject_activate(therock-googletest)
-
-add_dependencies(therock-third-party therock-googletest)

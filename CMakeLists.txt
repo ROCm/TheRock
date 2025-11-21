@@ -473,9 +473,11 @@ endif()
 
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
-add_subdirectory(third-party)
+add_subdirectory(third-party/sysdeps)
+add_subdirectory(third-party/googletest)  # TODO: decide on if this should be a sysdep or not (both?)
 add_subdirectory(base)
 add_subdirectory(compiler)
+add_subdirectory(third-party)
 add_subdirectory(core)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
