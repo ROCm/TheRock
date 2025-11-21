@@ -89,8 +89,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  packages: write
+  packages: read
 
 jobs:
   test_jax_wheels:

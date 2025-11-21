@@ -161,7 +161,6 @@ jobs:
     name: Test JAX wheels | ${{ inputs.amdgpu_family }} | linux-mi325-1gpu-ossci-rocm
     needs: [build_jax_wheels]
     permissions:
-      id-token: write
       contents: read
       packages: read
     uses: ./.github/workflows/test_linux_jax_wheels.yml
