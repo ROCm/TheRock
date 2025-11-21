@@ -47,6 +47,7 @@ endif()
 if(UNIX AND NOT APPLE AND NOT THEROCK_DISABLE_GNU_CHECK)
   # Linux-specific check.
   if(THEROCK_ENABLE_ROCPROFSYS AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR NOT CMAKE_C_COMPILER_ID STREQUAL "GNU"))
+   # Currently, the Dyninst dependency in rocprofiler-systems requires GNU compilers (gcc/g++).
     message(FATAL_ERROR
         "Currently, rocprofiler-systems requires GNU compilers (gcc/g++).\n"
         "  Detected CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}\n"
