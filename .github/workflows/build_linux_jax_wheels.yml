@@ -130,3 +130,22 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+
+  test_jax_wheels:
+    name: Test JAX wheels | ${{ inputs.amdgpu_family }}
+    needs: [build_jax_wheels]
+    if: ${{ github.repository_owner == 'ROCm' }}
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
+    uses: ./.github/workflows/test_linux_jax_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      release_type: ${{ inputs.release_type }}
+      s3_subdir: ${{ inputs.s3_subdir }}
+      package_index_url: ${{ inputs.cloudfront_staging_url }}
+      rocm_version: ${{ inputs.rocm_version }}
+      tar_url: ${{ inputs.tar_url }}
+      python_versions: ${{ inputs.python_versions }}
+      jax_ref: master

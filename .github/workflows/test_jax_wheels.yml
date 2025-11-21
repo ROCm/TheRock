@@ -1,0 +1,194 @@
+name: Test Linux JAX Wheels
+
+on:
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      release_type:
+        required: true
+        type: string
+      s3_subdir:
+        required: true
+        type: string
+      package_index_url:
+        description: Base CloudFront URL for the Python package index
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version (optional, informational)
+        required: false
+        type: string
+      tar_url:
+        description: URL to TheRock tarball to configure ROCm
+        required: true
+        type: string
+      python_versions:
+        description: Python version(s) to test (e.g., "3.12")
+        required: true
+        type: string
+      jax_ref:
+        description: rocm-jax repository ref/branch to check out
+        required: false
+        type: string
+        default: master
+      jax_test_branch:
+        description: rocm/jax tests ref/branch to run
+        required: false
+        type: string
+        default: main
+      test_runs_on:
+        required: true
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        type: choice
+        options:
+          - gfx110X-dgpu
+          - gfx1151
+          - gfx120X-all
+          - gfx94X-dcgpu
+          - gfx950-dcgpu
+        default: gfx94X-dcgpu
+      release_type:
+        description: The type of release ("nightly" or "dev")
+        required: true
+        type: string
+        default: dev
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
+        required: true
+        type: string
+        default: v2
+      package_index_url:
+        description: Base CloudFront URL for the Python package index
+        required: true
+        type: string
+        default: https://d25kgig7rdsyks.cloudfront.net/v2-staging
+      rocm_version:
+        description: ROCm version (optional, informational)
+        required: false
+        type: string
+      tar_url:
+        description: URL to TheRock tarball to configure ROCm
+        required: true
+        type: string
+      python_versions:
+        description: Python version(s) to test (e.g., "3.12")
+        required: true
+        type: string
+        default: "3.12"
+      jax_ref:
+        description: rocm-jax repository ref/branch to check out
+        required: false
+        type: string
+        default: master
+      jax_test_branch:
+        description: google/jax tests ref/branch to run
+        required: false
+        type: string
+        default: main
+      test_runs_on:
+        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
+        required: true
+        type: string
+        default: "linux-mi325-1gpu-ossci-rocm"
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  test_jax_wheels:
+    name: Test JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_versions }}
+    runs-on: ${{ inputs.test_runs_on }}
+    container:
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      options: >-
+          --device /dev/kfd
+          --device /dev/dri 
+          --group-add render 
+          --group-add video
+
+    env:
+      VIRTUAL_ENV: /home/tester/.venv
+      PIP_PROGRESS_BAR: off
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      THEROCK_TAR_URL: ${{ inputs.tar_url }}
+      PYTHON_VERSION: ${{ inputs.python_versions }}
+      WHEEL_INDEX_URL: ${{ inputs.package_index_url }}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Checkout rocm-jax (plugin + build scripts)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          path: jax
+          repository: rocm/rocm-jax
+          ref: ${{ inputs.jax_ref }}
+
+      - name: Checkout JAX tests repo (for extended tests)
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: rocm/jax
+          ref: ${{ inputs.jax_test_branch }}
+          path: jax/jax_tests
+          
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: ${{ inputs.python_versions }}
+
+      - name: Ensure PATH includes venv bin
+        run: |
+          echo "PATH=${{ env.VIRTUAL_ENV }}/bin:${PATH}" >> "$GITHUB_ENV"
+          echo "PIP_PROGRESS_BAR=off" >> "$GITHUB_ENV"
+          echo "PIP_DISABLE_PIP_VERSION_CHECK=1" >> "$GITHUB_ENV"
+
+      - name: System deps, venv, and base jax requirements install
+        run: |
+          python3 setup_venv.py /home/tester/.venv --activate-in-future-github-actions-steps
+          pip install -r external-builds/jax/requirements-jax.txt
+
+      - name: Configure ROCm from TheRock tarball
+        env:
+          THEROCK_TAR_URL: ${{ env.THEROCK_TAR_URL }}
+        run: |
+          python3 build_tools/install_rocm_tar.py
+
+      - name: Extract JAX version and set to GITHUB_ENV
+        run: |
+          JAX_VERSION=$(tr -d ' ' < rocm-jax/build/requirements.txt \
+            | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
+          echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install JAX wheels from package index
+        run: |
+          # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
+          pip install --index-url "${WHEEL_INDEX_URL}" \
+            "jaxlib==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
+            "jax-rocm7-plugin==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
+            "jax-rocm7-pjrt==${JAX_VERSION}+rocm${{ inputs.rocm_version }}"
+          pip install --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
+
+          python -c "import jax; print('JAX version:', jax.__version__)"
+          python -c "import jaxlib; print('jaxlib version:', jaxlib.__version__)"
+
+      - name: Run JAX tests
+        working-directory: jax-test
+        run: |
+          pytest jax/jax_tests/tests/multi_device_test.py -q
+          pytest jax/jax_tests/tests/core_test.py -q
+          pytest jax/jax_tests/tests/util_test.py -q
+          pytest jax/jax_tests/tests/scipy_stats_test.py -q
