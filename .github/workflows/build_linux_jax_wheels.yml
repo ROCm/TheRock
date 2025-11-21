@@ -66,7 +66,7 @@ jobs:
   build_jax_wheels:
     strategy:
       matrix:
-        jax_ref: [rocm-jaxlib-v0.7.1]
+        jax_ref: [rocm-jaxlib-v0.8.0]
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
@@ -102,7 +102,7 @@ jobs:
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_versions }}" \
-            --rocm-version="${ROCM_VERSION:0:5}" \
+            --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
 
