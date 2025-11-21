@@ -496,7 +496,7 @@ def force_exit_with_code(retcode):
     """Forces termination to work around https://github.com/ROCm/TheRock/issues/999."""
     import signal
 
-    retcode_file = Path("retcode.txt")
+    retcode_file = Path("exit_code.txt")
     print(f"Writing retcode {retcode} to '{retcode_file}'")
     print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
 
