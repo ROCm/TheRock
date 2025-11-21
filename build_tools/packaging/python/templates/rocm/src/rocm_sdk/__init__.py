@@ -6,6 +6,7 @@ import platform
 import re
 
 from ._dist_info import __version__
+from ._dist_info import ALL_LIBRARIES
 
 __all__ = [
     "__version__",
@@ -81,6 +82,31 @@ def find_libraries(*shortnames: str) -> list[Path]:
 
 _ALL_CDLLS = {}
 
+def resolve_deps(shortnames: list[str], processed=None) -> list[str]:
+    """Recursively resolve ROCm library dependencies in correct load order.
+    Ensures each dependency is processed only once.
+    """
+    if processed is None:
+        processed = set()
+
+    result = []
+
+    for name in shortnames:
+        if name in processed:
+            continue
+        processed.add(name)
+
+        entry = ALL_LIBRARIES[name]
+        if entry.deps:
+            result.extend(resolve_deps(entry.deps, processed))
+
+        result.append(name)
+
+    seen = set()
+    ordered = [lib for lib in result if not (lib in seen or seen.add(lib))]
+
+    return ordered
+
 
 def preload_libraries(*shortnames: str, rtld_global: bool = True):
     """Preloads a list of library names, caching their handles globally.
@@ -93,6 +119,8 @@ def preload_libraries(*shortnames: str, rtld_global: bool = True):
     Library paths are resolved via `find_libraries`.
     """
     import ctypes
+
+    shortnames = resolve_deps(list(shortnames))
 
     paths = find_libraries(*shortnames)
     mode = ctypes.RTLD_GLOBAL if rtld_global is True else ctypes.RTLD_LOCAL
