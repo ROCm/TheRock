@@ -50,8 +50,8 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "linux-gfx1101-gpu-rocm",
-            "family": "gfx110X-dgpu",
+            "test-runs-on": "linux-gfx110X-gpu-rocm",
+            "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -166,6 +166,20 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
+            "build_variants": ["release"],
+        },
+    },
+    "gfx1152": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx1152",
+            "expect_failure": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx1152",
+            "expect_failure": True,
             "build_variants": ["release"],
         },
     },
