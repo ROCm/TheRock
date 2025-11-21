@@ -43,7 +43,7 @@ all_build_variants = {
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            "test-runs-on": "linux-mi325-1gpu-ossci-rocm-test",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
         }
