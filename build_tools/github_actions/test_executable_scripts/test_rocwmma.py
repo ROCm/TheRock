@@ -26,7 +26,9 @@ test_type = os.getenv("TEST_TYPE", "full")
 
 # FIXME: Temporarily force smoke tests for rocWMMA.  See https://github.com/ROCm/TheRock/issues/2259
 if test_type == "full":
-    logging.info("++ NOTE: The 'full' test set was requested for rocWMMA, but 'smoke' tests will be run instead.")
+    logging.info(
+        "++ NOTE: The 'full' test set was requested for rocWMMA, but 'smoke' tests will be run instead."
+    )
 test_type = "smoke"
 
 # If there are devices for which the full set is too slow, we can
