@@ -107,15 +107,18 @@ jobs:
       #   ```
       - name: (Linux) Set checkout root
         if: ${{ contains(inputs.test_runs_on, 'linux') }}
-        run: echo "CHECKOUT_ROOT=${{ github.workspace }}/pytorch" >> $GITHUB_ENV
+        run: |
+          echo "CHECKOUT_ROOT=${{ github.workspace }}/pytorch" >> $GITHUB_ENV
       - name: (Windows) Set checkout root
         if: ${{ !contains(inputs.test_runs_on, 'linux') }}
-        run: echo "CHECKOUT_ROOT=C:/runner/_work/TheRock" >> $GITHUB_ENV
+        run: |
+          git config --global core.longpaths true
+          # echo "CHECKOUT_ROOT=C:/runner/_work/TheRock" >> $GITHUB_ENV
+          echo "CHECKOUT_ROOT=${{ github.workspace }}/pytorch" >> $GITHUB_ENV
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
-      # TODO(scotttodd): Windows may need to checkout to a shorter path?
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
