@@ -4,3 +4,10 @@
 exclude = [
   "lib/*.a",
 ]
+[components.test."iree-libs/fusilli_plugin/stage"]
+include = [
+  "bin/test_fusilli_plugin_api",
+  "bin/test_graph_import",
+  "bin/fusilli_plugin_integration_tests",
+  "bin/fusilli_plugin/CTestTestfile.cmake",
+]

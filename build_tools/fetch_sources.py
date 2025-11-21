@@ -443,7 +443,7 @@ def main(argv):
     )
     parser.add_argument(
         "--include-iree-libs",
-        default=False,
+        default=True,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
     )
