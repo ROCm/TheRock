@@ -222,6 +222,7 @@ if(NOT WIN32)
   therock_add_feature(CORE_RUNTIME
     GROUP CORE
     DESCRIPTION "Enables the core device runtime and tools"
+    REQUIRES COMPILER
   )
   set(_hip_runtime_platform_requirements "CORE_RUNTIME")
 else()
