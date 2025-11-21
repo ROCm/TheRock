@@ -109,11 +109,17 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Suggests": [
+    "DEBSuggests": [
       "sudo",
       "libdrm-dev",
       "libdrm-amdgpu-dev"
     ],
+    "RPMSuggests": [
+      "sudo",
+      "libdrm-devel",
+      "libdrm-amdgpu-devel"
+    ],
+
     "Components": [
       "lib",
       "dev",
@@ -281,7 +287,13 @@
       "python3-wheel",
       "rocm-core"
     ],
-    "Recommends": [
+    "RPMRecommends": [
+      "python3-argcomplete",
+      "libdrm-devel",
+      "libdrm-amdgpu-devel"
+    ],
+
+    "DEBRecommends": [
       "python3-argcomplete",
       "libdrm-dev",
       "libdrm-amdgpu-dev"
@@ -447,8 +459,12 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Provides": "hip-rocclr",
-    "Replaces": "hip-rocclr",
+    "Provides": [
+      "hip-rocclr"
+    ],
+    "Replaces": [
+      "hip-rocclr"
+    ],
     "Components": [
       "lib",
       "run",
@@ -490,8 +506,12 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Provides": "hip-base",
-    "Replaces": "hip-base",
+    "Provides": [
+      "hip-base"
+    ],
+    "Replaces": [
+      "hip-base"
+    ],
     "Components": [
       "dev"
     ],
@@ -647,13 +667,17 @@
       "hsakmt-roct-devel",
       "hsa-ext-rocr-devel"
     ],
-    "Recommends": [
+    "RPMRecommends": [
+      "libdrm-amdgpu-devel"
+    ],
+
+    "DEBRecommends": [
       "libdrm-amdgpu-dev"
     ],
     "Replaces": [
       "hsakmt-roct",
-      "hsakmt-roct-dev",
-      "hsa-ext-rocr-dev"
+      "hsakmt-roct-devel",
+      "hsa-ext-rocr-devel"
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
     "Description_Short": "AMD Heterogeneous System Architecture HSA development package",
@@ -1677,7 +1701,9 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Conflicts": "miopen-opencl",
+    "Conflicts": [
+      "miopen-opencl"
+    ],
     "Components": [
       "lib",
       "doc"
@@ -1709,7 +1735,9 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Conflicts": "miopen-opencl",
+    "Conflicts": [
+      "miopen-opencl"
+    ],
     "Components": [
       "dev",
       "run"

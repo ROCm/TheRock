@@ -3,6 +3,8 @@
 
 
 import json
+import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -192,6 +194,19 @@ def get_package_list():
 
     pkg_list = [pkg["Package"] for pkg in data if not is_packaging_disabled(pkg)]
     return pkg_list
+
+
+def remove_dir(dir_name):
+    """Remove the directory if it exists
+
+    Parameters:
+    dir_name : Directory to be removed
+
+    Returns: None
+    """
+    if os.path.exists(dir_name) and os.path.isdir(dir_name):
+        shutil.rmtree(dir_name)
+        print(f"Removed directory: {dir_name}")
 
 
 def version_to_str(version_str):
