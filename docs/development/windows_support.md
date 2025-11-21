@@ -43,6 +43,9 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo from hip-tests](https://github.com/ROCm/hip-tests)                                                              | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/clr)                                                                                       | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |           |                                               |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/ROCdbgapi.git)                                                                      | ❌        | Unsupported for now                           |
+| debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocr_debug_agent.git)                                                         | ❌        | Unsupported for now                           |
+|                     |                                                                                                                          |           |                                               |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-compute](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute)                    | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |

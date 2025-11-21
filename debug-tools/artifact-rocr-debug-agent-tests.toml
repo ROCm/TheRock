@@ -1,0 +1,6 @@
+# rocr-debug-agent-tests
+[components.doc."debug-tools/rocr-debug-agent-tests/stage"]
+[components.test."debug-tools/rocr-debug-agent-tests/stage"]
+include = [
+  "src/**",
+]

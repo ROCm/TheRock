@@ -151,6 +151,16 @@ cmake_dependent_option(
   "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
   ON "LINUX" OFF)
 
+# Flag: -DTHEROCK_FLAG_INCLUDE_DEBUG_TOOLS=OFF
+# Controls the inclusion of the debug tools (amd-dbgapi, rocr-debug-agent
+# and rocgdb) in the configuration and build.
+#
+# Default is OFF for Windows and ON for anything else.
+cmake_dependent_option(
+  THEROCK_FLAG_INCLUDE_DEBUG_TOOLS
+  "Allows the debug tools to be manually disabled by setting to OFF"
+  ON "NOT WIN32" OFF)
+
 # Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
 # Note that the profiler is an integral part of the system and disabling it is not
 # fully supported. However, in early bringup, it can be useful to disable building
@@ -181,6 +191,7 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 option(THEROCK_ENABLE_ALL "Enables building of all feature groups" ON)
 option(THEROCK_ENABLE_CORE "Enable building of core libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_DEBUG_TOOLS "Enable building the ROCm debug tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
@@ -242,6 +253,21 @@ therock_add_feature(OCL_RUNTIME
   DESCRIPTION "Enables the OCL runtime"
   REQUIRES COMPILER ${_hip_runtime_platform_requirements}
 )
+
+# Debug Tools Features.
+if(THEROCK_FLAG_INCLUDE_DEBUG_TOOLS)
+  therock_add_feature(DEBUG_TOOLS_ROCDBGAPI
+    GROUP DEBUG_TOOLS
+    DESCRIPTION "Enables the ROCm debug API library"
+    REQUIRES COMPILER ${_hip_runtime_platform_requirements}
+  )
+
+  therock_add_feature(DEBUG_TOOLS_ROCR_DEBUG_AGENT
+    GROUP DEBUG_TOOLS
+    DESCRIPTION "Enables the ROCR debug agent library"
+    REQUIRES COMPILER DEBUG_TOOLS_ROCDBGAPI HIP_RUNTIME
+  )
+endif()
 
 # Profiler Features.
 if(THEROCK_FLAG_INCLUDE_PROFILER)
@@ -477,6 +503,7 @@ add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
+add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
