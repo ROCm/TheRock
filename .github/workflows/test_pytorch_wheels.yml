@@ -94,12 +94,17 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      # Windows needs shorter paths to checkout pytorch successfully. See logs:
+      #   ```
+      #   Initialized empty Git repository in C:/runner/_work/TheRock/TheRock/runner_workTheRockTheRock/pytorch/torch/.git/
+      #   error: unable to create file test/compiled_autograd_skips/TestNestedTensorSubclassCPU.test_op_dim_reduce_batch_only_different_output_shape_mean_keepdim_True_requires_grad_False_components_require_grad_False_cpu_float32: Filename too long
+      #   ```
       - name: (Linux) Set checkout root
         if: ${{ contains(inputs.test_runs_on, 'linux') }}
         run: echo "CHECKOUT_ROOT=${{ github.workspace }}/pytorch" >> $GITHUB_ENV
       - name: (Windows) Set checkout root
         if: ${{ !contains(inputs.test_runs_on, 'linux') }}
-        run: echo "CHECKOUT_ROOT=B:/src" >> $GITHUB_ENV
+        run: echo "CHECKOUT_ROOT=C:/runner/_work/TheRock" >> $GITHUB_ENV
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
