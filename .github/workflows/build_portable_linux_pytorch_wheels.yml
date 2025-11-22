@@ -161,7 +161,7 @@ jobs:
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
-          ./external-builds/pytorch/pytorch_apex_repo.py checkout --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_apex_repo.py checkout --repo-hashtag Refactor_build
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
