@@ -18,7 +18,7 @@ function(therock_add_feature feature_name)
   cmake_parse_arguments(PARSE_ARGV 1 ARG
     ""
     "DEFAULT;GROUP;DESCRIPTION"
-    "REQUIRES"
+    "REQUIRES;DISABLE_PLATFORMS"
   )
 
   set(_default_enabled ON)
@@ -27,6 +27,16 @@ function(therock_add_feature feature_name)
       set(_default_enabled OFF)
     endif()
   endif()
+
+  # Check if current platform is in DISABLE_PLATFORMS list
+  if(ARG_DISABLE_PLATFORMS)
+    string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_lower)
+    if(_system_lower IN_LIST ARG_DISABLE_PLATFORMS)
+      set(_default_enabled OFF)
+      # If user tries to force enable, we'll check later and error
+    endif()
+  endif()
+
   if(THEROCK_RESET_FEATURES)
     set(_force "FORCE")
   endif()
@@ -45,6 +55,15 @@ function(therock_add_feature feature_name)
   # scope.
   set(THEROCK_ENABLE_${feature_name} ${_default_enabled} CACHE BOOL "${ARG_DESCRIPTION}" ${_force})
   set(_actual $CACHE{THEROCK_ENABLE_${feature_name}})
+
+  # Error if user tries to enable a feature that's disabled on current platform
+  if(_actual AND ARG_DISABLE_PLATFORMS)
+    string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_lower)
+    if(_system_lower IN_LIST ARG_DISABLE_PLATFORMS)
+      message(FATAL_ERROR "${feature_name} is not supported on ${CMAKE_SYSTEM_NAME}")
+    endif()
+  endif()
+
   set(THEROCK_ENABLE_${feature_name} "${_actual}" PARENT_SCOPE)
   set(THEROCK_REQUIRES_${feature_name} ${ARG_REQUIRES} PARENT_SCOPE)
   set(_all_features ${THEROCK_ALL_FEATURES})
