@@ -142,6 +142,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    "rocrand_bench": {
+        "job_name": "rocrand_bench",
+        "fetch_artifact_args": "--rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocrand_benchmark.py')}",
+        # TODO(lajagapp): Add windows test
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
@@ -157,6 +166,15 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    "rocfft_bench": {
+        "job_name": "rocfft_bench",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocfft_benchmark.py')}",
+        # TODO(lajagapp): Add windows test
         "platform": ["linux"],
         "total_shards": 1,
     },
