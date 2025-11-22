@@ -1,0 +1,37 @@
+[Unit]
+Description=Ollama Service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+User=ollama
+Group=ollama
+Restart=always
+RestartSec=3
+
+# ROCm Environment for AMD RX 6700 XT (gfx1030/gfx1031)
+Environment="ROCM_PATH=/opt/rocm"
+Environment="HIP_PATH=/opt/rocm"
+Environment="PATH=/opt/rocm/bin:/opt/rocm/lib/llvm/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+Environment="LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/lib/llvm/lib"
+
+# HIP Configuration
+Environment="HIP_PLATFORM=amd"
+Environment="HIP_COMPILER=clang"
+Environment="HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode"
+Environment="HIP_VISIBLE_DEVICES=0"
+
+# HSA Configuration for RDNA 2 (gfx1030/1031)
+Environment="HSA_OVERRIDE_GFX_VERSION=10.3.0"
+Environment="HSA_XNACK=0"
+Environment="HSA_ENABLE_SDMA=0"
+
+# AMD/ROCm Performance Settings
+Environment="AMD_DIRECT_DISPATCH=0"
+Environment="GPU_DEVICE_ORDINAL=0"
+
+# Ollama Configuration
+Environment="OLLAMA_DEBUG=false"
+
+[Install]
+WantedBy=default.target
