@@ -30,6 +30,36 @@ include(therock_job_pools)
 include(therock_testing)
 
 ################################################################################
+# Python is used throughout the build. Ensure it is initialized early.
+################################################################################
+
+find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+
+################################################################################
+# Generate build topology targets
+################################################################################
+# Track BUILD_TOPOLOGY.toml and related files for changes to trigger reconfigure
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/build_topology.py"
+)
+
+block(SCOPE_FOR VARIABLES)
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE}
+      "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
+      "--topology" "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+      "--output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake"
+    OUTPUT_VARIABLE _topology_output
+    ERROR_VARIABLE _topology_error
+    COMMAND_ERROR_IS_FATAL ANY  # Fail on any error
+  )
+  message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
+endblock()
+
+################################################################################
 # Notices
 # If there are ongoing issues for specific configurations log them here.
 ################################################################################
@@ -188,136 +218,60 @@ option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
-# Host Math Features.
-therock_add_feature(HOST_BLAS
-  GROUP HOST_MATH
-  DESCRIPTION "Bundled host BLAS library"
-)
-if(NOT WIN32)
-  # Currently unsupported on Windows.
-  therock_add_feature(HOST_SUITE_SPARSE
-    GROUP HOST_MATH
-    DESCRIPTION "Bundled SuiteSparse library"
-    REQUIRES HOST_BLAS
-  )
-endif()
+################################################################################
+# Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
+# To modify artifact features, edit BUILD_TOPOLOGY.toml
+################################################################################
 
-# Base Features.
-therock_add_feature(COMPILER
-  GROUP ALL
-  DESCRIPTION "Enables the AMDGPU+host compiler toolchain"
-)
-therock_add_feature(HIPIFY
-  GROUP ALL
-  DESCRIPTION "Enables the hipify tool"
-  REQUIRES COMPILER
-)
+# Include generated topology (contains feature definitions)
+include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
+
+################################################################################
+# Manual features that don't map to artifacts
+################################################################################
 
 # Core Features.
 # The HIP runtime for ROCm uses different implementations per platform today:
 #   * HIP on Linux uses the HSA runtime in ROCR-Runtime, used by CLR.
 #   * HIP on Windows uses the PAL runtime included directly as part of CLR.
 # https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
+# Platform-specific dependencies are handled automatically by therock_add_feature()
+# which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
+
+# Optional sub-features that control behavior within artifacts
 if(NOT WIN32)
-  # Other platforms (Linux) _do_ have the "core runtime".
-  therock_add_feature(CORE_RUNTIME
-    GROUP CORE
-    DESCRIPTION "Enables the core device runtime and tools"
-    REQUIRES COMPILER
-  )
-  set(_hip_runtime_platform_requirements "CORE_RUNTIME")
-else()
-  # No "core runtime" (ROCR-Runtime + rocminfo) on Windows.
-  # TODO(#36): Could provide an alternate or no-op "core runtime" instead?
-  set(_hip_runtime_platform_requirements "")
+  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
+    "Enables composable kernel in MIOpen" ON
+    "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 endif()
 
-therock_add_feature(HIP_RUNTIME
-  GROUP CORE
-  DESCRIPTION "Enables the HIP runtime"
-  REQUIRES COMPILER ${_hip_runtime_platform_requirements}
-)
+cmake_dependent_option(THEROCK_ROCWMMA_USE_ROCBLAS
+  "Enables rocBLAS validation in rocWMMA" ON
+  "THEROCK_ENABLE_ROCWMMA;THEROCK_ENABLE_BLAS" OFF)
 
-therock_add_feature(OCL_RUNTIME
-  GROUP CORE
-  DESCRIPTION "Enables the OCL runtime"
-  REQUIRES COMPILER ${_hip_runtime_platform_requirements}
-)
+cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
+  "Enables building rocWMMA benchmarks" OFF
+  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
 
-# Profiler Features.
+# Additional manual features that don't map to artifacts
+
+# Profiler Trace Decoder Binary (not an artifact, just a config option)
 if(THEROCK_FLAG_INCLUDE_PROFILER)
   therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
     GROUP PROFILER
     DESCRIPTION "Enables the closed-source rocprof trace decoder binary"
   )
-  # Other platforms (Linux) _do_ have the profiler SDK.
-  therock_add_feature(ROCPROFV3
-    GROUP PROFILER
-    DESCRIPTION "Enables the rocprofilerv3 project (and ancillary deps)"
-    REQUIRES HIP_RUNTIME
-  )
-  set(_optional_profiler_requirements "ROCPROFV3")
-
-  # Enables the rocprofiler-systems project, which has a dependency on rocprofv3.
-  therock_add_feature(ROCPROFSYS
-    GROUP PROFILER
-    DESCRIPTION "Enables the rocprofiler-systems project"
-    REQUIRES COMPILER ROCPROFV3
-  )
-else()
-  # No profiler SDK on Windows.
-  set(_optional_profiler_requirements "")
 endif()
 
-# Systems Tools Features
-if(NOT WIN32)
-  # RDC is Linux-only and requires rocprofiler-sdk v3
-  therock_add_feature(RDC
-    GROUP DC_TOOLS
-    DESCRIPTION "Enables ROCm Data Center Tool (RDC)"
-    REQUIRES CORE_RUNTIME ROCPROFV3
-  )
-endif()
+# Optional sub-features that control behavior within artifacts
 
-# Comm-libs Features.
-if(NOT WIN32)
-  # RCCL is Linux-only.
-  therock_add_feature(RCCL
-    GROUP COMM_LIBS
-    DESCRIPTION "Enables rccl"
-    REQUIRES COMPILER HIP_RUNTIME HIPIFY
-  )
-endif()
-
-# Math-libs Features.
-therock_add_feature(PRIM
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables prim libraries (rocprim, hipCUB, rocThrust)"
-  REQUIRES COMPILER HIP_RUNTIME
-)
-therock_add_feature(BLAS
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables blas libraries (hipblaslt, rocblas, hipblas)"
-  # NOTE: HOST_BLAS is only needed for some tests and PROFILER_SDK is
-  # currently only required for rocblas. We may want to re-evaluate the deps
-  # if they continue to be sparse like this as it increases minimum dep length.
-  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS ${_optional_profiler_requirements}
-)
-therock_add_feature(RAND
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables rand libraries (hiprand, rocrand)"
-  REQUIRES COMPILER HIP_RUNTIME
-)
-therock_add_feature(FFT
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables fft libraries"
-  REQUIRES COMPILER HIP_RUNTIME RAND
-)
+# Math library sub-components (control what gets built within BLAS artifact)
 therock_add_feature(SPARSE
   GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM ${_optional_profiler_requirements}
+  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse) within BLAS"
+  REQUIRES BLAS PRIM
 )
+
 if(NOT WIN32)
   set(_solver_platform_requirements "HOST_SUITE_SPARSE")
 else()
@@ -325,50 +279,10 @@ else()
 endif()
 therock_add_feature(SOLVER
   GROUP MATH_LIBS
-  DESCRIPTION "Enables solver libraries (hipsolver, rocsolver)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE ${_solver_platform_requirements}
+  DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
+  REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
-if(NOT WIN32)
-  therock_add_feature(COMPOSABLE_KERNEL
-    GROUP MATH_LIBS
-    DESCRIPTION "Enables build of composable kernel, including minimal kernel library"
-    REQUIRES COMPILER HIP_RUNTIME RAND
-  )
-  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL "Enables composable kernel in MIOpen" ON ${THEROCK_ENABLE_COMPOSABLE_KERNEL} OFF)
-endif()
-
-cmake_dependent_option(THEROCK_ROCWMMA_USE_ROCBLAS "Enables rocBLAS validation in rocWMMA" ON "THEROCK_ENABLE_ROCWMMA" OFF)
-cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS "Enables building rocWMMA benchmarks" OFF "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
-if(THEROCK_ROCWMMA_USE_ROCBLAS)
-  set(_rocwmma_blas_requirements "BLAS")
-else()
-  set(_rocwmma_blas_requirements "")
-endif()
-therock_add_feature(ROCWMMA
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables rocWMMA"
-  REQUIRES COMPILER HIP_RUNTIME ${_rocwmma_blas_requirements}
-)
-
-# ML-Libs Features.
-therock_add_feature(MIOPEN
-  GROUP ML_LIBS
-  DESCRIPTION "Enables the MIOpen project (with minimal deps defaults to ON)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS RAND ${_optional_profiler_requirements}
-)
-
-therock_add_feature(HIPDNN
-  GROUP ML_LIBS
-  DESCRIPTION "Enables the hipDNN project"
-  REQUIRES COMPILER HIP_RUNTIME
-)
-
-therock_add_feature(MIOPEN_PLUGIN
-  GROUP ML_LIBS
-  DESCRIPTION "Enables the MIOpen plugin project"
-  REQUIRES COMPILER MIOPEN HIPDNN HIP_RUNTIME
-)
 
 # Finalize all feature flags.
 therock_finalize_features()
@@ -403,9 +317,6 @@ therock_validate_amdgpu_targets()
 ################################################################################
 # Global setup
 ################################################################################
-
-# Some sub-projects need Python. Make sure it is found consistently.
-find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
 
 set(STAGING_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/staging_install")
 

@@ -30,7 +30,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
     RUNTIME_DEPS
       hip-clr
       rocm-half
-      rocRAND
+      ${optional_rand_deps}
       ${THEROCK_BUNDLED_BZIP2}
       ${optional_profiler_deps}
   )
@@ -69,6 +69,12 @@ if(THEROCK_ENABLE_MIOPEN)
         set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
       endif()
     endforeach()
+  endif()
+
+  # Add optional runtime dependencies for composable-kernel
+  set(optional_rand_deps)
+  if(THEROCK_ENABLE_RAND)
+    list(APPEND optional_rand_deps rocRAND)
   endif()
 
   # If composable kernel is enabled, add it as an MIOpen dep.
