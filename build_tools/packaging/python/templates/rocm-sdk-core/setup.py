@@ -61,6 +61,7 @@ setup(
             "amdlld=rocm_sdk_core._cli:amdlld",
             "hipcc=rocm_sdk_core._cli:hipcc",
             "hipconfig=rocm_sdk_core._cli:hipconfig",
+            "hipify-clang=rocm_sdk_core._cli:hipify_clang",
             "offload-arch=rocm_sdk_core._cli:offload_arch",
             "roc-obj=rocm_sdk_core._cli:roc_obj",
             "roc-obj-extract=rocm_sdk_core._cli:roc_obj_extract",
@@ -70,6 +71,7 @@ setup(
             [
                 # These tools are only available on Linux.
                 "amd-smi=rocm_sdk_core._cli:amd_smi",
+                "hipify-perl=rocm_sdk_core._cli:hipify_perl",
                 "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
                 "rocminfo=rocm_sdk_core._cli:rocm_info",
                 "rocm-smi=rocm_sdk_core._cli:rocm_smi",
