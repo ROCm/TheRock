@@ -116,6 +116,18 @@ jobs:
       optional_build_prod_arguments: ""
     outputs:
       cp_version: ${{ env.cp_version }}
+      # The following are python package versions produced by the build. The
+      # exact versions will depend on workflow inputs and the underlying code.
+      # For example:
+      #   Inputs
+      #     rocm_version       : 7.10.0a20251120
+      #     pytorch_git_ref    : release/2.9
+      #   Outputs
+      #     torch_version      : 2.9.1+rocm7.10.0a20251120
+      #     torchaudio_version : 2.9.0+rocm7.10.0a20251120
+      #     torchvision_version: 0.24.0+rocm7.10.0a20251120
+      # Future jobs can use these version outputs to identify newly built
+      # packages, for example via `pip install torch==${TORCH_VERSION}`.
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
       torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
