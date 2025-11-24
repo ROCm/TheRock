@@ -140,7 +140,9 @@ If no PyTorch version is given, it is auto-determined by the PyTorch used to run
         "--pytorch-dir",
         type=Path,
         default=default_pytorch_dir,
-        help="Path for the pytorch repository, where tests will be sourced from",
+        help="""Path for the pytorch repository, where tests will be sourced from
+By default the pytorch directory is determined based on this script's location
+""",
     )
 
     parser.add_argument(
@@ -170,7 +172,7 @@ If no PyTorch version is given, it is auto-determined by the PyTorch used to run
 
     if not args.pytorch_dir.exists():
         parser.error(
-            f"Directory at '{args.pytorch_dir}' does not exist, checkout pytorch and then set the path via --pytorch-dir"
+            f"Directory at '{args.pytorch_dir}' does not exist, checkout pytorch and then set the path via --pytorch-dir or check it out in TheRock/external-build/pytorch/<your pytorch directory>"
         )
 
     return args
