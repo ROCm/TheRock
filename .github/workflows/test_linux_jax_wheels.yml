@@ -128,10 +128,10 @@ jobs:
           ref: ${{ inputs.jax_ref }}
           path: jax/jax_tests
 
-      - name: System deps, venv, and base jax requirements install
+      - name: System deps, venv configure
         shell: bash
         run: |
-           apt-get update && apt-get install -y --no-install-recommends python3.12-venv python3-pip ca-certificates git
+           apt-get update && apt-get install -y --no-install-recommends python${{ inputs.python_versions }}-venv python3-pip ca-certificates git
            python3 -m venv "${VIRTUAL_ENV}"
            echo "PATH=${VIRTUAL_ENV}/bin:${PATH}" >> "$GITHUB_ENV"
            "${VIRTUAL_ENV}/bin/python" -m pip install --upgrade pip setuptools wheel
@@ -145,12 +145,13 @@ jobs:
 
       - name: Configure ROCm from TheRock tarball
         run: |
-          python build_tools/install_rocm_tar.py "${{ inputs.tar_url }}"
+          python build_tools/install_rocm_tar.py "${{ inputs.tar_url }}" "${{ inputs.rocm_version }}"
 
       - name: Extract JAX version and set to GITHUB_ENV
         run: |
+          # Extract JAX version from requirements.txt (e.g., "jax==0.8.0")
           JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
-            | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
+          | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
           echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
 
       - name: Install JAX wheels from package index
