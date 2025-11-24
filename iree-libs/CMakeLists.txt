@@ -61,10 +61,14 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
     BUILD_DEPS
       therock-iree-runtime
       therock-catch2
+    RUNTIME_DEPS
+      rocminfo  # Provides rocm_agent_enumerator
     CMAKE_ARGS
       -DFUSILLI_BUILD_TESTS=OFF
       -DFUSILLI_BUILD_BENCHMARKS=OFF
-      -DFUSILLI_SYSTEMS_AMDGPU=ON
+      # TODO: the library code for AMDGPU systems is there regardless of this
+      # flag; I think it's poorly named.
+      -DFUSILLI_SYSTEMS_AMDGPU=OFF
       -DFUSILLI_CODE_COVERAGE=OFF
       -DFUSILLI_ENABLE_LOGGING=OFF
       -DFUSILLI_ENABLE_CLANG_TIDY=OFF
@@ -99,6 +103,7 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
       therock-fusilli
     RUNTIME_DEPS
       hip-clr
+      rocminfo  # Provides rocm_agent_enumerator
   )
   therock_cmake_subproject_glob_c_sources(fusilli_plugin
   SUBDIRS
