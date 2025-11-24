@@ -1,0 +1,10 @@
+# aqlprofile
+[components.dbg."profiler/aqlprofile/stage"]
+[components.dev."profiler/aqlprofile/stage"]
+[components.doc."profiler/aqlprofile/stage"]
+[components.lib."profiler/aqlprofile/stage"]
+[components.run."profiler/aqlprofile/stage"]
+[components.test."profiler/aqlprofile/stage"]
+include = [
+  "share/hsa-amd-aqlprofile/**",
+]
