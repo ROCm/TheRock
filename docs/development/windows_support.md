@@ -45,6 +45,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |           |                                               |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-compute](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute)                    | ❌        | Unsupported                                   |
+| profiler            | [rocprofiler-systems](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems)                    | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |
 | comm-libs           | [rccl](https://github.com/ROCm/rccl)                                                                                     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |

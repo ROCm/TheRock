@@ -214,6 +214,7 @@ These artifacts are built if any project features requiring them are enabled:
 ### Profiler Artifacts
 
 - `rocprofiler-sdk`: The rocprofv3 tools and libraries (excluding `rocprofiler-register`, which is in `base`).
+- `rocprofiler-systems`: The ROCm Systems Profiler tools and libraries.
 
 ### Kernel Libraries
 

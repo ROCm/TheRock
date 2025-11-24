@@ -22,6 +22,8 @@ python build_tools/install_rocm_from_artifacts.py
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
+    [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocwmma | --no-rocwmma]
     [--tests | --no-tests]
     [--base-only]
@@ -41,7 +43,7 @@ Examples:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0rc20250416 \
-        --amdgpu-family gfx110X-dgpu \
+        --amdgpu-family gfx110X-all \
         --output-dir build
     ```
 - Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
@@ -179,6 +181,8 @@ def retrieve_artifacts_by_run_id(args):
             args.prim,
             args.rand,
             args.rccl,
+            args.rocprofiler_compute,
+            args.rocprofiler_systems,
             args.rocwmma,
         ]
     ):
@@ -208,6 +212,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rccl")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
+        if args.rocprofiler_systems:
+            extra_artifacts.append("rocprofiler-systems")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
 
@@ -395,6 +401,13 @@ def main(argv):
         "--rocprofiler-compute",
         default=False,
         help="Include 'rocprofiler-compute' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocprofiler-systems",
+        default=False,
+        help="Include 'rocprofiler-systems' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
