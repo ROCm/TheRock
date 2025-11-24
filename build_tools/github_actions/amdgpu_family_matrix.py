@@ -43,7 +43,7 @@ all_build_variants = {
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -84,9 +84,7 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            # Networking issue: https://github.com/ROCm/TheRock/issues/1660
-            # Label is "linux-mi355-1gpu-ossci-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
             "build_variants": ["release", "asan"],
         }
