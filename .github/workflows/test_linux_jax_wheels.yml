@@ -144,8 +144,21 @@ jobs:
           pip install -r external-builds/jax/requirements-jax.txt
 
       - name: Configure ROCm from TheRock tarball
+        shell: bash
+        env:
+          ROCM_VERSION: ${{ inputs.rocm_version }}
+          AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
         run: |
-          python build_tools/install_rocm_tar.py "${{ inputs.tar_url }}" "${{ inputs.rocm_version }}"
+          python -m pip install -q --upgrade pip boto3
+          DEST="/opt/rocm-${{ inputs.rocm_version }}"
+          # Install directly from TheRock release buckets (nightly/dev) using the provided version
+          python build_tools/install_rocm_from_artifacts.py \
+            --release "${{ inputs.rocm_version }}" \
+            --artifact-group "${{ inputs.amdgpu_family }}" \
+            --output-dir "${DEST}"
+          # Create standard symlinks
+          ln -sfn "${DEST}" /opt/rocm
+          ln -sfn /opt/rocm /etc/alternatives/rocm
 
       - name: Extract JAX version and set to GITHUB_ENV
         run: |
