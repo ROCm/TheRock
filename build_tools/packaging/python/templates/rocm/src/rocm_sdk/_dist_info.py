@@ -239,7 +239,13 @@ PackageEntry(
 # TODO(#703,#1057): Use patterns for version suffixes and platform differences too?
 
 # Public libraries.
-LibraryEntry("amdhip64", "core", "libamdhip64.so*", "amdhip64*.dll")
+LibraryEntry(
+    "amdhip64",
+    "core",
+    "libamdhip64.so*",
+    "amdhip64*.dll",
+    deps=["amd_comgr", "rocprofiler-sdk-roctx"],
+)
 # The DLL glob here uses '0' from the version to avoid matching 'hiprtc-builtins'.
 # If DLLs with no version suffix are later added we will need a different pattern.
 LibraryEntry(
@@ -263,19 +269,60 @@ LibraryEntry(
     "rocm-openblas*.dll",
     "lib/host-math/lib",
 )
-LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
+LibraryEntry(
+    "amd_comgr",
+    "core",
+    "libamd_comgr.so*",
+    "amd_comgr*.dll",
+    deps=["rocm_sysdeps_liblzma"],
+)
 LibraryEntry("rocm_smi64", "core", "librocm_smi64.so*", "")
 LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
 LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
-LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
-LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
-LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
-LibraryEntry("hiprand", "libraries", "libhiprand.so*", "hiprand*.dll")
-LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
-LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "")
-LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
-LibraryEntry("rccl", "libraries", "librccl.so*", "")
-LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
+LibraryEntry(
+    "hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll", deps=["amdhip64"]
+)  # missing rocsolver, rocblas
+LibraryEntry(
+    "hipblaslt",
+    "libraries",
+    "libhipblaslt.so*",
+    "*hipblaslt*.dll",
+    deps=["roctx64", "amdhip64"],
+)  # missing rocroller
+LibraryEntry(
+    "hipfft", "libraries", "libhipfft.so*", "hipfft*.dll", deps=["amdhip64"]
+)  # missing rocfft
+LibraryEntry(
+    "hiprand", "libraries", "libhiprand.so*", "hiprand*.dll", deps=["amdhip64"]
+)  # missing rocrand
+LibraryEntry(
+    "hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll", deps=["amdhip64"]
+)  # missing rocsparse
+LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "", deps=["roctx64"])
+LibraryEntry(
+    "hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll", deps=["amdhip64"]
+)  # missing rocsolver, rocsparse, rocblas)
+LibraryEntry(
+    "rccl",
+    "libraries",
+    "librccl.so*",
+    "",
+    deps=["roctx64", "rocprofiler-sdk-roctx", "amdhip64"],
+)  # missing rocm_smi
+LibraryEntry(
+    "miopen",
+    "libraries",
+    "libMIOpen.so*",
+    "MIOpen*.dll",
+    deps=[
+        "rocm_systems_liblzma",
+        "hiprtc",
+        "roctx64",
+        "hipblaslt",
+        "amd_comgr",
+        "amdhip64",
+    ],
+)  # missing rocblas
 LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
 
 # Others we may want:
