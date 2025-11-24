@@ -82,6 +82,7 @@ def find_libraries(*shortnames: str) -> list[Path]:
 
 _ALL_CDLLS = {}
 
+
 def resolve_deps(shortnames: list[str], processed=None) -> list[str]:
     """Recursively resolve ROCm library dependencies in correct load order.
     Ensures each dependency is processed only once.
