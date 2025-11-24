@@ -17,6 +17,16 @@ include = [
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 
+# Expat
+# Required by ROCgdb
+[components.dev."third-party/sysdeps/linux/expat/build/stage"]
+[components.doc."third-party/sysdeps/linux/expat/build/stage"]
+[components.lib."third-party/sysdeps/linux/expat/build/stage"]
+# Include the executable contents.
+include = [
+  "**/bin/*"
+]
+
 # GMP
 # Required by ROCgdb.
 [components.dev."third-party/sysdeps/linux/gmp/build/stage"]
