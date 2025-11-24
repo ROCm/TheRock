@@ -104,6 +104,11 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Import library: `LibLZMA::LibLZMA`
 - Alternatives: `pkg_check_modules(LZMA liblzma)`
 
+## MPFR
+
+- Canonical method: `find_package(mpfr)`
+- Import library: `mpfr::mpfr`
+
 ### numactl
 
 Provides the `libnuma` library. Tools are not included in bundled sysdeps.
