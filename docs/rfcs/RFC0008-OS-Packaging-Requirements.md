@@ -175,6 +175,7 @@ Package granularity will be increased with ROCm 8.0. Developmentt packages are t
 
 | Name | Dev package components only | Runtime packages | Source package inclusion only |
 | :------------- | :------------- | :------------- | :------------- |
+| amd-smi | | amd-smi | |
 | rocm-llvm |  | amdclang++ (flang and openmp here if not separable) |  |
 | rocm-flang |  | flang |  |
 | rocm-runtimes |  | HIP, ROCR, CLR, runtime compilation, SPIR-V |  |
