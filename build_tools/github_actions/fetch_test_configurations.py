@@ -216,7 +216,7 @@ test_matrix = {
     # aqlprofile tests
     "aqlprofile": {
         "job_name": "apqlprofile",
-        "fetch_artifact_args": "--base-only --tests",
+        "fetch_artifact_args": "--tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
         "platform": ["linux"],
