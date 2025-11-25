@@ -13,7 +13,6 @@ Usage:
     python build_tools/memory_monitor.py --background --interval 5 --phase "Build Phase"
     
 Environment Variables:
-    ACTIONS_RUNNER_DEBUG: When set to 'true', enables more verbose memory logging
     MEMORY_MONITOR_INTERVAL: Override default monitoring interval (seconds)
     MEMORY_MONITOR_LOG_FILE: Path to write detailed memory logs
 """
@@ -50,7 +49,7 @@ class MemoryMonitor:
         self.interval = interval
         self.phase_name = phase_name
         self.log_file = log_file
-        self.verbose = verbose or os.getenv("ACTIONS_RUNNER_DEBUG", "").lower() == "true"
+        self.verbose = verbose
         self.running = False
         self.peak_memory = 0
         self.peak_swap = 0
@@ -313,7 +312,7 @@ def main():
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Enable verbose logging (also enabled by ACTIONS_RUNNER_DEBUG=true)"
+        help="Enable verbose logging"
     )
     
     parser.add_argument(

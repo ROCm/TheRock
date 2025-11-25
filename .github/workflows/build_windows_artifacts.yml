@@ -150,7 +150,12 @@ jobs:
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-archives and therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+        run: |
+          if [ "$ACTIONS_RUNNER_DEBUG" = "true" ]; then
+            python build_tools/github_actions/memory_wrapped_build.py cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+          else
+            cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+          fi
 
       - name: Report
         if: ${{ !cancelled() }}
