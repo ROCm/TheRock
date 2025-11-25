@@ -30,6 +30,18 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       TOUCH "${_download_stamp}"
     )
 
+    # Download sources again to a different directory for ILP64 variant
+    set(_source_dir_64 "${CMAKE_CURRENT_BINARY_DIR}/source64")
+    set(_download_stamp_64 "${_source_dir_64}/download.stamp")
+
+    therock_subproject_fetch(therock-OpenBLAS64-sources
+      CMAKE_PROJECT
+      SOURCE_DIR "${_source_dir_64}"
+      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-0.3.30.tar.gz
+      URL_HASH SHA256=27342cff518646afb4c2b976d809102e368957974c250a25ccc965e53063c95d
+      TOUCH "${_download_stamp_64}"
+    )
+
     # MSVC does not support VLA and AT&T assembly which are required by DYNAMIC_ARCH
     # See: https://github.com/OpenMathLib/OpenBLAS/issues/2826#issuecomment-814170090
     # Multi-arch support on Windows seems to be a problem not limited to MSVC
@@ -99,7 +111,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
       EXTERNAL_SOURCE_DIR .
-      DIR_PREFIX ilp64-
       INTERFACE_LINK_DIRS "lib/host-math/lib"
       # RPATH logic needs to know that executables/libs for this project are in
       # a non-default location.
@@ -107,7 +118,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INSTALL_RPATH_LIBRARY_DIR "lib/host-math/lib"
       INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
       CMAKE_ARGS
-        "-DSOURCE_DIR=${_source_dir}"
+        "-DSOURCE_DIR=${_source_dir_64}"
         -DBUILD_SHARED_LIBS=ON
         -DC_LAPACK=ON
         # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
@@ -117,7 +128,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DBUILD_TESTING=OFF
         -DINTERFACE64=ON
       EXTRA_DEPENDS
-        "${_download_stamp}"
+        "${_download_stamp_64}"
     )
     therock_cmake_subproject_provide_package(therock-host-blas64 OpenBLAS64 lib/host-math/lib/cmake/OpenBLAS64)
     therock_cmake_subproject_provide_package(therock-host-blas64 cblas64 lib/host-math/lib/cmake/OpenBLAS64)
