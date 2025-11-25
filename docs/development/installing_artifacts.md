@@ -50,7 +50,7 @@ Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.PAT
 1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
    - Example: `therock-dist-linux-gfx110X-dgpu-6.4.0rc20250514.tar.gz`
-1. Extract the version from thefilename (the part after the last hyphen, before `.tar.gz`)
+1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
    - In the example above, the version is: `6.4.0rc20250514`
 1. Use this version string with `--release`:
    ```bash
@@ -74,7 +74,7 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
    - Example: `therock-dist-linux-gfx94X-dcgpu-6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9.tar.gz`
-1. Extract the version from thefilename (the part after the last hyphen, before `.tar.gz`)
+1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
    - In the example above, the version is: `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
 1. Use this version string with `--release`:
    ```bash
