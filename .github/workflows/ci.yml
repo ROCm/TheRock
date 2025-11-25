@@ -17,7 +17,7 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - release/therock-7.10
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
