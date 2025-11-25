@@ -7,7 +7,7 @@ include = [
 ]
 [components.lib."math-libs/libhipcxx/stage"]
 optional = true
-[components.test."math-libs/libhipcxx/stage"]
+[components.test."math-libs/libhipcxx/build"]
 include = [
-  "test/*",
+  "libhipcxx/**/*",
 ]
