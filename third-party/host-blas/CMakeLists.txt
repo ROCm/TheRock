@@ -140,7 +140,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_provide_artifact(host-blas64
-      DESCRIPTOR artifact-host-OpenBLAS64.toml
+      DESCRIPTOR artifact-host-OpenBLAS.toml
       TARGET_NEUTRAL
       COMPONENTS
         dbg
