@@ -6,25 +6,25 @@ This document provides instructions for installing ROCm artifacts from TheRock b
 
 The script supports the following command-line options:
 
-| Option                    | Type   | Description                                                            |
-| ------------------------- | ------ | ---------------------------------------------------------------------- |
-| `--amdgpu-family`         | String | AMD GPU family target (required)                                       |
-| `--base-only`             | Flag   | Include only base artifacts (minimal installation)                     |
-| `--blas`                  | Flag   | Include BLAS artifacts                                                 |
-| `--fft`                   | Flag   | Include FFT artifacts                                                  |
-| `--hipdnn`                | Flag   | Include hipDNN artifacts                                               |
-| `--input-dir`             | String | Existing TheRock directory to copy from                                |
-| `--miopen`                | Flag   | Include MIOpen artifacts                                               |
-| `--output-dir`            | Path   | Output directory for TheRock installation (default: `./therock-build`) |
-| `--prim`                  | Flag   | Include primitives artifacts                                           |
-| `--rand`                  | Flag   | Include random number generator artifacts                              |
-| `--rccl`                  | Flag   | Include RCCL artifacts                                                 |
-| `--rocprofiler-compute`   | Flag   | Include rocprofiler-compute artifacts                                  |
-| `--rocprofiler-systems`   | Flag   | Include rocprofiler-systems artifacts                                  |
-| `--rocwmma`               | Flag   | Include rocWMMA artifacts                                              |
-| `--release`               | String | Release version from nightly or dev tarballs                           |
-| `--run-id`                | String | GitHub CI workflow run ID to install from                              |
-| `--tests`                 | Flag   | Include test artifacts for enabled components                          |
+| Option                  | Type   | Description                                                            |
+| ----------------------- | ------ | ---------------------------------------------------------------------- |
+| `--amdgpu-family`       | String | AMD GPU family target (required)                                       |
+| `--base-only`           | Flag   | Include only base artifacts (minimal installation)                     |
+| `--blas`                | Flag   | Include BLAS artifacts                                                 |
+| `--fft`                 | Flag   | Include FFT artifacts                                                  |
+| `--hipdnn`              | Flag   | Include hipDNN artifacts                                               |
+| `--input-dir`           | String | Existing TheRock directory to copy from                                |
+| `--miopen`              | Flag   | Include MIOpen artifacts                                               |
+| `--output-dir`          | Path   | Output directory for TheRock installation (default: `./therock-build`) |
+| `--prim`                | Flag   | Include primitives artifacts                                           |
+| `--rand`                | Flag   | Include random number generator artifacts                              |
+| `--rccl`                | Flag   | Include RCCL artifacts                                                 |
+| `--rocprofiler-compute` | Flag   | Include rocprofiler-compute artifacts                                  |
+| `--rocprofiler-systems` | Flag   | Include rocprofiler-systems artifacts                                  |
+| `--rocwmma`             | Flag   | Include rocWMMA artifacts                                              |
+| `--release`             | String | Release version from nightly or dev tarballs                           |
+| `--run-id`              | String | GitHub CI workflow run ID to install from                              |
+| `--tests`               | Flag   | Include test artifacts for enabled components                          |
 
 ### Finding GitHub Run IDs
 
