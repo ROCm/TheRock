@@ -82,7 +82,7 @@ def parse_output_path(output_path):
             return None, None, None
 
         # Categorize artifacts
-        if 'sysdeps' in name or 'fftw3' in name:
+        if 'sysdeps' in name or 'fftw3' in name or name.startswith('host-'):
             category = "Dependency"
 
     elif parts[0] == 'third-party':
@@ -94,19 +94,32 @@ def parse_output_path(output_path):
         elif len(parts) > 1:
             # third-party/boost -> boost
             name = parts[1]
-            
+
         if name == 'sysdeps':
              return None, None, None
-    
+
     elif parts[0] in ['rocm-libraries', 'rocm-systems']:
         category = "ROCm Component"
         if len(parts) > 2 and parts[1] == 'projects':
             name = parts[2]
 
-    elif parts[0] in ['base', 'compiler', 'core', 'comm-libs', 'dctools', 'profiler']:
+    elif parts[0] in ['base', 'compiler', 'core', 'comm-libs', 'dctools', 'profiler', 'ml-libs']:
         category = "ROCm Component"
         if len(parts) > 1:
             name = parts[1]
+
+    elif parts[0] == 'math-libs':
+        category = "ROCm Component"
+        if len(parts) > 1:
+            if parts[1] == 'BLAS':
+                 if len(parts) > 2:
+                    name = parts[2]
+                 else:
+                     return None, None, None # Skip the parent BLAS directory itself
+            elif parts[1] == 'support' and len(parts) > 2:
+                name = parts[2]
+            else:
+                name = parts[1]
 
     else:
         return None, None, None
@@ -115,7 +128,18 @@ def parse_output_path(output_path):
     NAME_MAPPING = {
         'clr': 'core-hip',
         'ocl-clr': 'core-ocl',
-        'ROCR-Runtime': 'core-runtime'
+        'ROCR-Runtime': 'core-runtime',
+        'blas': 'rocBLAS',
+        'prim': 'rocPRIM',
+        'fft': 'rocFFT',
+        'rand': 'rocRAND',
+        'miopen': 'MIOpen',
+        'hipdnn': 'hipDNN',
+        'composable-kernel': 'composable_kernel',
+        'support': 'mxDataGenerator',
+        'host-suite-sparse': 'SuiteSparse',
+        'rocwmma': 'rocWMMA',
+        'miopen-plugin': 'miopen_plugin'
     }
 
     if name in NAME_MAPPING:
@@ -126,15 +150,25 @@ def parse_output_path(output_path):
 def analyze_tasks(tasks, build_dir):
     # Structure: projects[category][name][phase] = duration
     projects = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    seen_tasks = set()
 
     build_dir_abs = str(build_dir.resolve())
 
     for task in tasks:
         output_path = task['output']
+        start = task['start']
+        end = task['end']
 
         # Normalize absolute paths by stripping build_dir
         if output_path.startswith(build_dir_abs):
             output_path = output_path[len(build_dir_abs):].lstrip('/')
+
+        # Deduplicate based on normalized path and timestamps
+        # Some entries in .ninja_log might be duplicated with absolute/relative paths
+        task_key = (output_path, start, end)
+        if task_key in seen_tasks:
+            continue
+        seen_tasks.add(task_key)
 
         name, category, phase = parse_output_path(output_path)
         if not name:
