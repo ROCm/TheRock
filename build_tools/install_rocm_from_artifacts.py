@@ -151,6 +151,8 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+    if args.run_github_repo:
+        argv.extend(["--run-github-repo", args.run_github_repo])
 
     # These artifacts are the "base" requirements for running tests.
     base_artifact_patterns = [
@@ -433,6 +435,12 @@ def main(argv):
         "--input-dir",
         type=str,
         help="Pass in an existing directory of TheRock to provision and test",
+    )
+
+    parser.add_argument(
+        "--run-github-repo",
+        type=str,
+        help="GitHub repository for --run-id. If omitted, this is inferred from the GITHUB_REPOSITORY env var or defaults to ROCm/TheRock",
     )
 
     args = parser.parse_args(argv)
