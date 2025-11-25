@@ -6,24 +6,24 @@ This document provides instructions for installing ROCm artifacts from TheRock b
 
 The script supports the following command-line options:
 
-| Option              | Type   | Description                                                            |
-| ------------------- | ------ | ---------------------------------------------------------------------- |
-| `--amdgpu-family`   | String | AMD GPU family target (required)                                       |
-| `--base-only`       | Flag   | Include only base artifacts (minimal installation)                     |
-| `--blas`            | Flag   | Include BLAS artifacts                                                 |
-| `--fft`             | Flag   | Include FFT artifacts                                                  |
-| `--hipdnn`          | Flag   | Include hipDNN artifacts                                               |
-| `--input-dir`       | String | Existing TheRock directory to copy from                                |
-| `--miopen`          | Flag   | Include MIOpen artifacts                                               |
-| `--output-dir`      | Path   | Output directory for TheRock installation (default: `./therock-build`) |
-| `--prim`            | Flag   | Include primitives artifacts                                           |
-| `--rand`            | Flag   | Include random number generator artifacts                              |
-| `--rccl`            | Flag   | Include RCCL artifacts                                                 |
-| `--rocwmma`         | Flag   | Include rocWMMA artifacts                                              |
-| `--release`         | String | Release version from nightly or dev tarballs                           |
-| `--run-github-repo` | String | GitHub repository for CI run ID (default: `ROCm/TheRock`)              |
-| `--run-id`          | String | GitHub CI workflow run ID to install from                              |
-| `--tests`           | Flag   | Include test artifacts for enabled components                          |
+| Option              | Type   | Description                                                                              |
+| ------------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `--amdgpu-family`   | String | AMD GPU family target (required)                                                         |
+| `--base-only`       | Flag   | Include only base artifacts (minimal installation)                                       |
+| `--blas`            | Flag   | Include BLAS artifacts                                                                   |
+| `--fft`             | Flag   | Include FFT artifacts                                                                    |
+| `--hipdnn`          | Flag   | Include hipDNN artifacts                                                                 |
+| `--input-dir`       | String | Existing TheRock directory to copy from                                                  |
+| `--miopen`          | Flag   | Include MIOpen artifacts                                                                 |
+| `--output-dir`      | Path   | Output directory for TheRock installation (default: `./therock-build`)                   |
+| `--prim`            | Flag   | Include primitives artifacts                                                             |
+| `--rand`            | Flag   | Include random number generator artifacts                                                |
+| `--rccl`            | Flag   | Include RCCL artifacts                                                                   |
+| `--rocwmma`         | Flag   | Include rocWMMA artifacts                                                                |
+| `--release`         | String | Release version from nightly or dev tarballs                                             |
+| `--run-github-repo` | String | GitHub repository for CI run ID (default: `GITHUB_REPOSITORY` env var or `ROCm/TheRock`) |
+| `--run-id`          | String | GitHub CI workflow run ID to install from                                                |
+| `--tests`           | Flag   | Include test artifacts for enabled components                                            |
 
 ### Finding GitHub Run IDs
 
@@ -50,7 +50,7 @@ Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.PAT
 1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
    - Example: `therock-dist-linux-gfx110X-dgpu-6.4.0rc20250514.tar.gz`
-1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
+1. Extract the version from thefilename (the part after the last hyphen, before `.tar.gz`)
    - In the example above, the version is: `6.4.0rc20250514`
 1. Use this version string with `--release`:
    ```bash
@@ -74,7 +74,7 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
    - Example: `therock-dist-linux-gfx94X-dcgpu-6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9.tar.gz`
-1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
+1. Extract the version from thefilename (the part after the last hyphen, before `.tar.gz`)
    - In the example above, the version is: `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
 1. Use this version string with `--release`:
    ```bash
@@ -95,9 +95,9 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 
 ### Fetching Artifacts from Other Repositories
 
-By default, the script fetches artifacts from the `ROCm/TheRock` repository. However, you can specify a different repository using the `--run-github-repo` argument.
+By default, the script fetches artifacts from the repository defined in the `GITHUB_REPOSITORY` environment variable. If that variable is unset, it defaults to `ROCm/TheRock`.
 
-For example, to fetch artifacts from the `ROCm/rocm-libraries` repository:
+You can specify a different repository using the `--run-github-repo` argument. For example, to fetch artifacts from the `ROCm/rocm-libraries` repository:
 
 ```bash
 python build_tools/install_rocm_from_artifacts.py \
