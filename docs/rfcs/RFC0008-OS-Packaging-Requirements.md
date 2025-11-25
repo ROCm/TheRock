@@ -197,7 +197,7 @@ Package granularity will be increased with ROCm 8.0. Developmentt packages are t
 | rocm-decode |  | rocDecode |  |
 | rocm-jpeg |  | rocJPEG |  |
 | rocm-file |  | hipFile, rocFile (future addition) |  |
-| rocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa) |  |
+| rocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa, subset of libVA) |  |
 
 ## Python Packaging Requirements
 
