@@ -84,6 +84,61 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         run
       SUBPROJECT_DEPS therock-host-blas
     )
+
+    # --------------------------------------------------------------------------
+    # ILP64 (INTERFACE64) variant of OpenBLAS
+    # Builds a second copy with 64-bit integer interfaces. This is kept fully
+    # separate via a dedicated sub-project and artifact publication. We rely on
+    # upstream OpenBLAS CMake variables: INTERFACE64 triggers ILP64, producing
+    # an "OpenBLAS64" package directory (cmake/OpenBLAS64) and a libopenblas_64.so
+    # which we rename to librocm-openblas64.so for ROCm.
+    # --------------------------------------------------------------------------
+    therock_cmake_subproject_declare(therock-host-blas64
+      BACKGROUND_BUILD
+      EXCLUDE_FROM_ALL
+      NO_MERGE_COMPILE_COMMANDS
+      OUTPUT_ON_FAILURE
+      EXTERNAL_SOURCE_DIR .
+      INTERFACE_LINK_DIRS "lib/host-math/lib"
+      # RPATH logic needs to know that executables/libs for this project are in
+      # a non-default location.
+      INSTALL_RPATH_EXECUTABLE_DIR "lib/host-math/bin"
+      INSTALL_RPATH_LIBRARY_DIR "lib/host-math/lib"
+      INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
+      CMAKE_ARGS
+        "-DSOURCE_DIR=${_source_dir}"
+        -DBUILD_SHARED_LIBS=ON
+        -DC_LAPACK=ON
+        # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
+        # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
+        -DTARGET=HASWELL
+        -DDYNAMIC_ARCH=${_enable_dynamicArch}
+        -DBUILD_TESTING=OFF
+        -DINTERFACE64=ON
+      EXTRA_DEPENDS
+        "${_download_stamp}"
+    )
+    therock_cmake_subproject_provide_package(therock-host-blas64 OpenBLAS64 lib/host-math/lib/cmake/OpenBLAS64)
+    therock_cmake_subproject_provide_package(therock-host-blas64 cblas64 lib/host-math/lib/cmake/OpenBLAS64)
+    therock_cmake_subproject_activate(therock-host-blas64)
+
+    therock_test_validate_shared_lib(
+      PATH dist/lib/host-math/lib
+      LIB_NAMES librocm-openblas64.so
+    )
+
+    therock_provide_artifact(host-blas64
+      DESCRIPTOR artifact-host-OpenBLAS64.toml
+      TARGET_NEUTRAL
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS therock-host-blas64
+    )
+
     return()
 endif()
 
@@ -110,9 +165,7 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas)
 # name.
 # TODO: Also set Linux symbol versioning flags.
 set_target_properties(openblas_shared PROPERTIES
-  # Private SONAME/DLL name.
   OUTPUT_NAME rocm-openblas
-  # Install location in the library is hard-coded to include in the install root.
   INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas>
 )
 
@@ -127,3 +180,30 @@ configure_file(
   @ONLY
 )
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS)
+
+# --------------------------------------------------------------------------
+# Build ILP64 (64-bit integer interface) variant
+# --------------------------------------------------------------------------
+add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas64)
+
+# Alterations.
+# We would like this to be a library scoped to ROCm, so give it a custom
+# name.
+# TODO: Also set Linux symbol versioning flags.
+set_target_properties(openblas64_shared PROPERTIES
+  OUTPUT_NAME rocm-openblas64
+  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas64>
+)
+
+# Some of the test targets do not build with an altered library name on
+# Windows. Just uniformly exclude them from the build.
+set_target_properties(openblas_utest PROPERTIES EXCLUDE_FROM_ALL TRUE)
+set_target_properties(openblas_utest_ext PROPERTIES EXCLUDE_FROM_ALL TRUE)
+
+# Install cblas64-config.cmake to OpenBLAS64 cmake directory
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cblas64-config.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/cblas64-config.cmake
+  @ONLY
+)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas64-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS64)

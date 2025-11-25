@@ -1,0 +1,5 @@
+# OpenBLAS ILP64 artifact descriptor (INTERFACE64 build)
+[components.dbg."third-party/host-blas/stage"]
+[components.dev."third-party/host-blas/stage"]
+[components.doc."third-party/host-blas/stage"]
+[components.lib."third-party/host-blas/stage"]
