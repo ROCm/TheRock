@@ -450,6 +450,8 @@ therock_cmake_subproject_declare(hipBLAS
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_SAMPLES=${THEROCK_BUILD_TESTING}
+    # Enable -fPIC for Fortran samples (required by ld.lld linker)
+    "-DCMAKE_Fortran_FLAGS=-fPIC"
     -DLINK_BLIS=OFF
   COMPILER_TOOLCHAIN
     amd-hip
