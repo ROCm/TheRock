@@ -3,6 +3,8 @@
 Script to generate an index.html listing .tar.gz files in an S3 bucket, performing the following:
  * Lists .tar.gz files in the specified S3 bucket.
  * Generates HTML page with sorting and filtering options
+ * Displays a page generation timestamp
+ * Displays per-artifact size and timestamp (S3 LastModified)
  * Saves the HTML locally as index.html
  * Uploads index.html back to the same S3 bucket
 
@@ -27,13 +29,13 @@ from botocore.exceptions import NoCredentialsError, ClientError
 import re
 import json
 import logging
+from datetime import datetime, timezone
 from github_actions.github_actions_utils import gha_append_step_summary
 
 log = logging.getLogger(__name__)
 
 
 def extract_gpu_details(files):
-
     # Regex: r"gfx(?:\d+[A-Za-z]*|\w+)"
     # Matches "gfx" + digits with optional letters (e.g., gfx90a/gfx103) or a word token (e.g., gfx_ip).
     # Tweaks: require letter -> [A-Za-z]+; uppercase-only -> [A-Z]* or [A-Z]+; digit-led only -> remove |\w+.
@@ -41,7 +43,7 @@ def extract_gpu_details(files):
     # Examples: gfx90a, gfx1150, gfx_ip, gfxX.
     gpu_family_pattern = re.compile(r"gfx(?:\d+[A-Za-z]*|\w+)", re.IGNORECASE)
     gpu_families = set()
-    for file_name, _ in files:
+    for file_name, _mtime, _size in files:
         match = gpu_family_pattern.search(file_name)
         if match:
             gpu_families.add(match.group(0))
@@ -51,6 +53,7 @@ def extract_gpu_details(files):
 def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
     prefix = prefix.lstrip("/").rstrip("/")
+
     # List all objects and select .tar.gz keys
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
@@ -78,7 +81,11 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
             if key.endswith(".tar.gz") and os.path.dirname(key) == prefix:
                 # Only append the filename without the full path.
                 files.append(
-                    (key.removeprefix(f"{prefix}/"), obj["LastModified"].timestamp())
+                    (
+                        key.removeprefix(f"{prefix}/") if prefix else key,
+                        int(obj["LastModified"].timestamp()),
+                        int(obj.get("Size", 0)),
+                    )
                 )
 
     if not files:
@@ -92,6 +99,8 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         page_title = "ROCm SDK nightly tarballs"
     elif "prerelease" in bucket_lower:
         page_title = "ROCm SDK prerelease tarballs"
+    elif "release" in bucket_lower:
+        page_title = "ROCm SDK release tarballs"
     else:
         page_title = "ROCm SDK tarballs"
 
@@ -109,6 +118,8 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     gha_append_step_summary(
         f"Found {len(files)} .tar.gz files in bucket '{bucket_name}'."
     )
+    # Generation timestamp (UTC) with 'UTC' suffix
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # HTML content for displaying files
     html_content = f"""
@@ -119,32 +130,179 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         <meta http-equiv="x-ua-compatible" content="ie=edge"/>
         <meta name="viewport" content="width=device-width, initial-scale=1"/>
         <style>
-            body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }}
-            h1 {{ color: #0056b3; }}
-            select {{ margin-bottom: 10px; padding: 5px; font-size: 16px; }}
-            ul {{ list-style-type: none; padding: 0; }}
-            li {{ margin-bottom: 5px; padding: 10px; background-color: white; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }}
-            a {{ text-decoration: none; color: #0056b3; word-break: break-all; }}
-            a:hover {{ color: #003d82; }}
-            .controls {{ display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }}
+            :root {{
+                --gap: 12px;
+                /* Column widths: 1fr for artifact, size ~10ch, time ~22ch */
+                --col-artifact: 1fr;
+                --col-size: 10ch;
+                --col-time: 22ch;
+            }}
+            * {{ box-sizing: border-box; }}
+            body {{
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #f4f4f9;
+                color: #333;
+            }}
+            .header {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 16px;
+            }}
+            h1 {{ color: #0056b3; margin: 0; }}
+            .timestamp {{
+                font-size: 14px;
+                color: #666;
+                white-space: nowrap;
+            }}
+            .controls {{
+                display: flex;
+                gap: var(--gap);
+                align-items: center;
+                flex-wrap: wrap;
+                margin-bottom: 8px;
+            }}
             label {{ font-weight: bold; }}
+            select {{ margin-bottom: 10px; padding: 5px; font-size: 16px; }}
+
+            /* Shared grid for header and rows */
+            .grid-row {{
+                display: grid;
+                grid-template-columns: var(--col-artifact) var(--col-size) var(--col-time);
+                gap: var(--gap);
+                align-items: center;
+            }}
+            /* Header row styling */
+            .list-header {{
+                margin: 8px 0 12px 0;
+                padding: 10px;
+                color: #555;
+                font-weight: bold;
+                /* Use same font as rows for better alignment */
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+                font-variant-numeric: tabular-nums;
+            }}
+            ul {{ list-style-type: none; padding: 0; margin: 0; }}
+            li {{
+                margin-bottom: 5px;
+                padding: 10px;
+                background-color: white;
+                border-radius: 5px;
+                box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            }}
+            /* Apply grid to list items too */
+            li.grid-row {{
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+                font-variant-numeric: tabular-nums; /* Align digits */
+            }}
+
+            .file-link {{
+                text-decoration: none;
+                color: #0056b3;
+                word-break: break-all;
+                min-width: 0;
+            }}
+            .file-link:hover {{ color: #003d82; }}
+
+            .col-size, .col-time {{
+                white-space: nowrap;
+                text-align: right;
+                color: #666;
+                font-size: 13px;
+            }}
+
+            /* Responsive: stack on narrow screens */
+            @media (max-width: 720px) {{
+                .grid-row {{
+                    grid-template-columns: 1fr;
+                }}
+                .col-size, .col-time {{
+                    text-align: left;
+                }}
+            }}
         </style>
         <script>
             const files = {files_js_array};
+
+            function toUTCStringFromEpochSec(sec) {{
+                // Format as YYYY-MM-DD HH:MM:SS UTC
+                const dateObj = new Date(sec * 1000);
+                const yyyy = dateObj.getUTCFullYear();
+                const mm = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(dateObj.getUTCDate()).padStart(2, '0');
+                const HH = String(dateObj.getUTCHours()).padStart(2, '0');
+                const MM = String(dateObj.getUTCMinutes()).padStart(2, '0');
+                const SS = String(dateObj.getUTCSeconds()).padStart(2, '0');
+                return `${{yyyy}}-${{mm}}-${{dd}} ${{HH}}:${{MM}}:${{SS}} UTC`;
+            }}
+
+            function formatBytes(bytes) {{
+                // Human-readable size, base-1024
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+                const unitIndex = Math.floor(Math.log(bytes) / Math.log(k));
+                const value = bytes / Math.pow(k, unitIndex);
+                return (unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)) + ' ' + units[unitIndex];
+            }}
+
             function applyFilter(fileList, filter) {{
                 if (filter === 'all') return fileList;
                 return fileList.filter(file => file.name.includes(filter));
             }}
-            function renderFiles(fileList) {{
-                const ul = document.getElementById('fileList');
-                ul.innerHTML = '';
-                fileList.forEach(file => {{
-                    const li = document.createElement('li');
-                    const href = encodeURIComponent(file.name).replace(/%2F/g, '/');
-                    li.innerHTML = `<a href="${{href}}" target="_blank" rel="noopener noreferrer">${{file.name}}</a>`;
-                    ul.appendChild(li);
-                }});
+
+            function createFileRow(file) {{
+                const listItem = document.createElement('li');
+                listItem.className = 'grid-row';
+                listItem.setAttribute('role', 'listitem');
+
+                // Artifact link
+                const artifactLink = document.createElement('a');
+                const encodedHref = encodeURIComponent(file.name).replace(/%2F/g, '/');
+                artifactLink.href = encodedHref;
+                artifactLink.target = '_blank';
+                artifactLink.rel = 'noopener noreferrer';
+                artifactLink.className = 'file-link';
+                artifactLink.textContent = file.name;
+
+                // Size column
+                const sizeColumn = document.createElement('span');
+                sizeColumn.className = 'col-size';
+                const sizeText = formatBytes(file.size);
+                sizeColumn.textContent = sizeText;
+                sizeColumn.setAttribute('aria-label', 'Size ' + sizeText);
+
+                // Time column
+                const timeColumn = document.createElement('span');
+                timeColumn.className = 'col-time';
+                const timeText = toUTCStringFromEpochSec(file.mtime);
+                timeColumn.textContent = timeText;
+                timeColumn.title = 'S3 LastModified (UTC): ' + timeText + '\\nRaw size: ' + file.size + ' bytes';
+                timeColumn.setAttribute('aria-label', 'Time generated ' + timeText);
+
+                // Assemble row
+                listItem.appendChild(artifactLink);
+                listItem.appendChild(sizeColumn);
+                listItem.appendChild(timeColumn);
+
+                return {{ element: listItem }};
             }}
+
+            function renderFiles(fileList) {{
+                const listElement = document.getElementById('fileList');
+                listElement.innerHTML = '';
+
+                const fragment = document.createDocumentFragment();
+
+                fileList.forEach(file => {{
+                    const {{ element }} = createFileRow(file);
+                    fragment.appendChild(element);
+                }});
+
+                listElement.appendChild(fragment);
+            }}
+
             function updateDisplay() {{
                 const order = document.getElementById('sortOrder').value;
                 const filter = document.getElementById('filter').value;
@@ -154,6 +312,7 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                 sortedFiles = applyFilter(sortedFiles, filter);
                 renderFiles(sortedFiles);
             }}
+
             document.addEventListener('DOMContentLoaded', function() {{
                 updateDisplay();
                 document.getElementById('sortOrder').addEventListener('change', updateDisplay);
@@ -162,7 +321,10 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         </script>
     </head>
     <body>
-        <h1>{page_title}</h1>
+        <div class="header">
+            <h1>{page_title}</h1>
+            <div class="timestamp">Generated: {generated_at}</div>
+        </div>
         <div class="controls">
             <label for="sortOrder">Sort by:</label>
             <select id="sortOrder">
@@ -175,7 +337,15 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                 {gpu_families_options}
             </select>
         </div>
-        <ul id="fileList"></ul>
+
+        <!-- Aligned column headers -->
+        <div class="list-header grid-row" role="row">
+            <span>Artifact</span>
+            <span class="col-size">Size</span>
+            <span class="col-time">Time generated</span>
+        </div>
+
+        <ul id="fileList" role="list" aria-label="Tarball artifacts"></ul>
     </body>
     </html>
     """
