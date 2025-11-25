@@ -194,7 +194,6 @@ Package granularity will be increased with ROCm 8.0. Developmentt packages are t
 | rocm-math-comon or rocm-math-dev |  |  | CK, rocWMMA, rocRoller, Tensile, Origami |
 | rocm-hipify |  | HIPIFY |  |
 | rocm-opencl |  | OpenCL |  |
-| rocm-openmp |  | OpenMP |  |
 | rocm-decode |  | rocDecode |  |
 | rocm-jpeg |  | rocJPEG |  |
 | rocm-file |  | hipFile, rocFile (future addition) |  |
