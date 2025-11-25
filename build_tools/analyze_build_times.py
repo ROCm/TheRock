@@ -25,13 +25,13 @@ NAME_MAPPING = {
     'support': 'mxDataGenerator',
     'host-suite-sparse': 'SuiteSparse',
     'rocwmma': 'rocWMMA',
-    'miopen-plugin': 'miopen_plugin'
+    'miopen-plugin': 'miopen_plugin',
+    'rccl-tests': 'rccl'
 }
 
 # Directories that are considered ROCm Components (whitelist)
 ROCM_COMPONENT_DIRS = {
-    'base', 'compiler', 'core', 'comm-libs', 'dctools', 'profiler', 'ml-libs', 
-    'rocm-libraries', 'rocm-systems'
+    'base', 'compiler', 'core', 'comm-libs', 'dctools', 'profiler', 'ml-libs'
 }
 
 # Regex to capture name and variant from artifact filenames
@@ -109,7 +109,10 @@ def parse_output_path(output_path: str) -> Tuple[Optional[str], Optional[str], O
             name = parts[1]
         if name == 'sysdeps':
              return None, None, None
-    
+
+    # ROCM_COMPONENT_DIRS contains 'rocm-libraries' and 'rocm-systems', but the logic above handles them specially
+    # to extract the project name (3rd level) instead of the 2nd level directory.
+    # 'rocm-libraries' and 'rocm-systems' are handled explicitly to support deeper directory structures
     elif parts[0] in ['rocm-libraries', 'rocm-systems']:
         category = "ROCm Component"
         if len(parts) > 2 and parts[1] == 'projects':
