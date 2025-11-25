@@ -352,6 +352,8 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       rocm-cmake
     RUNTIME_DEPS
       hip-clr
+      hipcc
+      rocm-cmake
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
     SUBDIRS
