@@ -5,105 +5,117 @@ import os
 import sys
 from pathlib import Path
 from collections import defaultdict
-import json
 import re
+from typing import List, Dict, Tuple, Optional, Set
 
-def parse_ninja_log(log_path):
-    """
-    Parses .ninja_log file.
-    Format: start_time \t end_time \t mtime \t output_path \t command_hash
-    Times are in milliseconds.
-    """
+# --- Configuration & Constants ---
+
+# Mapping for components with different build/package names
+NAME_MAPPING = {
+    'clr': 'core-hip',
+    'ocl-clr': 'core-ocl',
+    'ROCR-Runtime': 'core-runtime',
+    'blas': 'rocBLAS',
+    'prim': 'rocPRIM',
+    'fft': 'rocFFT',
+    'rand': 'rocRAND',
+    'miopen': 'MIOpen',
+    'hipdnn': 'hipDNN',
+    'composable-kernel': 'composable_kernel',
+    'support': 'mxDataGenerator',
+    'host-suite-sparse': 'SuiteSparse',
+    'rocwmma': 'rocWMMA',
+    'miopen-plugin': 'miopen_plugin'
+}
+
+# Directories that are considered ROCm Components (whitelist)
+ROCM_COMPONENT_DIRS = {
+    'base', 'compiler', 'core', 'comm-libs', 'dctools', 'profiler', 'ml-libs', 
+    'rocm-libraries', 'rocm-systems'
+}
+
+# Regex to capture name and variant from artifact filenames
+ARTIFACT_REGEX = re.compile(r'(.+)_(dbg|dev|doc|lib|run|test)(_.+)?')
+
+# --- Core Logic ---
+
+def parse_ninja_log(log_path: Path) -> List[Dict]:
+    """Parses .ninja_log file."""
     tasks = []
-    with open(log_path, 'r') as f:
-        header = f.readline() # Skip header
-        for line in f:
-            parts = line.strip().split('\t')
-            if len(parts) < 4:
-                continue
-            start, end, _, output, _ = parts[:5]
-            tasks.append({
-                'start': int(start),
-                'end': int(end),
-                'output': output
-            })
+    try:
+        with open(log_path, 'r') as f:
+            header = f.readline() # Skip header
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) < 4:
+                    continue
+                start, end, _, output, _ = parts[:5]
+                tasks.append({
+                    'start': int(start),
+                    'end': int(end),
+                    'output': output
+                })
+    except FileNotFoundError:
+        print(f"Error: Log file {log_path} not found.")
+        sys.exit(1)
     return tasks
 
-def parse_output_path(output_path):
-    """
-    Parses the output path to identify:
-    - Clean Name
-    - Category (ROCm Component vs Dependency)
-    - Phase (Configure, Build, Install, Package)
-    """
-    parts = output_path.split('/')
-
-    # Phase Detection
-    phase = None
+def get_phase(output_path: str) -> Optional[str]:
+    """Detects the build phase based on the output path suffix or patterns."""
     if output_path.endswith('/stamp/configure.stamp'):
-        phase = 'Configure'
+        return 'Configure'
     elif output_path.endswith('/stamp/build.stamp'):
-        phase = 'Build'
+        return 'Build'
     elif output_path.endswith('/stamp/stage.stamp'):
-        phase = 'Install'
+        return 'Install'
     elif output_path.startswith('artifacts/') and output_path.endswith('.tar.xz'):
-        phase = 'Package'
+        return 'Package'
     elif 'download' in output_path and ('stamp' in output_path or output_path.endswith('.stamp')):
-        phase = 'Download'
+        return 'Download'
     elif 'update' in output_path and 'stamp' in output_path:
-        phase = 'Update'
+        return 'Update'
+    return None
 
+def parse_output_path(output_path: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Parses the output path to identify: Name, Category, Phase."""
+    phase = get_phase(output_path)
     if not phase:
         return None, None, None
 
-    # Name and Category Detection
+    parts = output_path.split('/')
     name = "Unknown"
     category = "ROCm Component" # Default
 
     if output_path.startswith('artifacts/'):
-        # Artifacts: artifacts/name_variant.tar.xz
         filename = parts[1]
-        # Remove extension
         base = filename.replace('.tar.xz', '')
-        # Heuristic: split by underscore, take first part as name usually
-        # But some names have hyphens: core-runtime, amd-llvm
-        # Some have underscores: sysdeps_doc_generic
-        # Let's try to match against known patterns or just take the prefix before the first underscore that looks like a variant
-        # Common variants: dbg, dev, doc, lib, run, test
-        # Regex to capture name and variant, ignoring the specific architecture/platform suffix (e.g., _generic, _gfx1151)
-        m = re.match(r'(.+)_(dbg|dev|doc|lib|run|test)(_.+)?', base)
+        m = ARTIFACT_REGEX.match(base)
         if m:
             name = m.group(1)
         else:
             name = base
 
-        # Exclude 'base' artifact as it is a directory/meta-package, not a specific component
-        if name == 'base' or name == 'sysdeps':
+        if name in ('base', 'sysdeps'):
             return None, None, None
 
-        # Categorize artifacts
         if 'sysdeps' in name or 'fftw3' in name or name.startswith('host-'):
             category = "Dependency"
-
+    
     elif parts[0] == 'third-party':
         category = "Dependency"
         if len(parts) > 3 and parts[1] == 'sysdeps' and parts[2] in ['linux', 'common']:
-            # third-party/sysdeps/linux/zstd -> zstd
-            # third-party/sysdeps/common/something -> something
             name = parts[3]
         elif len(parts) > 1:
-            # third-party/boost -> boost
             name = parts[1]
-
         if name == 'sysdeps':
              return None, None, None
-
+    
     elif parts[0] in ['rocm-libraries', 'rocm-systems']:
         category = "ROCm Component"
         if len(parts) > 2 and parts[1] == 'projects':
             name = parts[2]
 
-    elif parts[0] in ['base', 'compiler', 'core', 'comm-libs', 'dctools', 'profiler', 'ml-libs']:
+    elif parts[0] in ROCM_COMPONENT_DIRS:
         category = "ROCm Component"
         if len(parts) > 1:
             name = parts[1]
@@ -115,7 +127,7 @@ def parse_output_path(output_path):
                  if len(parts) > 2:
                     name = parts[2]
                  else:
-                     return None, None, None # Skip the parent BLAS directory itself
+                     return None, None, None
             elif parts[1] == 'support' and len(parts) > 2:
                 name = parts[2]
             else:
@@ -124,47 +136,26 @@ def parse_output_path(output_path):
     else:
         return None, None, None
 
-    # Mapping for components with different build/package names
-    NAME_MAPPING = {
-        'clr': 'core-hip',
-        'ocl-clr': 'core-ocl',
-        'ROCR-Runtime': 'core-runtime',
-        'blas': 'rocBLAS',
-        'prim': 'rocPRIM',
-        'fft': 'rocFFT',
-        'rand': 'rocRAND',
-        'miopen': 'MIOpen',
-        'hipdnn': 'hipDNN',
-        'composable-kernel': 'composable_kernel',
-        'support': 'mxDataGenerator',
-        'host-suite-sparse': 'SuiteSparse',
-        'rocwmma': 'rocWMMA',
-        'miopen-plugin': 'miopen_plugin'
-    }
-
     if name in NAME_MAPPING:
         name = NAME_MAPPING[name]
 
     return name, category, phase
 
-def analyze_tasks(tasks, build_dir):
-    # Structure: projects[category][name][phase] = duration
+def analyze_tasks(tasks: List[Dict], build_dir: Path) -> Dict:
     projects = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     seen_tasks = set()
 
     build_dir_abs = str(build_dir.resolve())
+    build_dir_len = len(build_dir_abs)
 
     for task in tasks:
         output_path = task['output']
         start = task['start']
         end = task['end']
 
-        # Normalize absolute paths by stripping build_dir
         if output_path.startswith(build_dir_abs):
-            output_path = output_path[len(build_dir_abs):].lstrip('/')
+            output_path = output_path[build_dir_len:].lstrip('/')
 
-        # Deduplicate based on normalized path and timestamps
-        # Some entries in .ninja_log might be duplicated with absolute/relative paths
         task_key = (output_path, start, end)
         if task_key in seen_tasks:
             continue
@@ -175,133 +166,104 @@ def analyze_tasks(tasks, build_dir):
             continue
 
         duration = task['end'] - task['start']
-        # We assume one task per phase per component usually, or we sum them if multiple (e.g. multiple artifacts for one component)
         projects[category][name][phase] += duration
 
     return projects
 
-def format_duration(ms):
+def format_duration(ms: int) -> str:
     if ms == 0:
         return "-"
     seconds = ms / 1000.0
     return f"{seconds:.2f}"
 
-def generate_html(projects, output_file):
-    html_template = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ROCm Build Time Analysis</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
-        h1 { text-align: center; color: #2c3e50; }
-        h2 { color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 30px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); background-color: white; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #3498db; color: white; }
-        tr:hover { background-color: #f1f1f1; }
-        .total-col { font-weight: bold; color: #27ae60; }
-        .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; }
-    </style>
-</head>
-<body>
-    <h1>ROCm Build Time Analysis</h1>
+def generate_html_table(title: str, headers: List[str], rows: List[Tuple]) -> str:
+    """Generates an HTML table string."""
+    if not rows:
+        return ""
 
-    {tables}
+    html = f"<h2>{title}</h2>\n"
+    html += "<table>\n<thead>\n<tr>\n"
+    for h in headers:
+        html += f"<th>{h}</th>\n"
+    html += "</tr>\n</thead>\n<tbody>\n"
 
-    <div class="footer">Generated by analyze_build_times.py</div>
-</body>
-</html>
-    """
+    for row in rows:
+        html += "<tr>\n"
+        html += f"<td>{row[0]}</td>\n" # Name
+        for val in row[1]: # Columns
+            html += f"<td>{val}</td>\n"
+        html += f"<td class=\"total-col\">{row[2]}</td>\n" # Total
+        html += "</tr>\n"
 
-    tables_html = ""
+    html += "</tbody>\n</table>\n"
+    return html
 
-    # Order: ROCm Components, then Dependencies
-    categories = ["ROCm Component", "Dependency"]
-
-    for cat in categories:
-        if cat not in projects:
-            continue
-
-        tables_html += f"<h2>{cat}s</h2>" if cat != "Dependency" else f"<h2>Dependencies</h2>"
-
-        if cat == "ROCm Component":
-            tables_html += """
-            <table>
-                <thead>
-                    <tr>
-                        <th>Sub-Project</th>
-                        <th>Configure (s)</th>
-                        <th>Build (s)</th>
-                        <th>Install (s)</th>
-                        <th>Package (s)</th>
-                        <th>Total Time (s)</th>
-                    </tr>
-                </thead>
-                <tbody>
-            """
-        else: # Dependency
-            tables_html += """
-            <table>
-                <thead>
-                    <tr>
-                        <th>Sub-Project</th>
-                        <th>Download (s)</th>
-                        <th>Configure (s)</th>
-                        <th>Build (s)</th>
-                        <th>Install (s)</th>
-                        <th>Total Time (s)</th>
-                    </tr>
-                </thead>
-                <tbody>
-            """
-
-        # Sort by Total Time descending
-        comps = []
-        for name, phases in projects[cat].items():
+def generate_report(projects: Dict, output_file: Path):
+    # Prepare Data for ROCm Components
+    rocm_rows = []
+    if "ROCm Component" in projects:
+        for name, phases in projects["ROCm Component"].items():
             total = sum(phases.values())
-            comps.append((name, phases, total))
+            cols = [
+                format_duration(phases['Configure']),
+                format_duration(phases['Build']),
+                format_duration(phases['Install']),
+                format_duration(phases['Package'])
+            ]
+            rocm_rows.append((name, cols, format_duration(total), total))
+        
+        rocm_rows.sort(key=lambda x: x[3], reverse=True)
+        rocm_rows = [(r[0], r[1], r[2]) for r in rocm_rows]
 
-        comps.sort(key=lambda x: x[2], reverse=True)
+    rocm_table_html = generate_html_table(
+        "ROCm Components", 
+        ["Sub-Project", "Configure (s)", "Build (s)", "Install (s)", "Package (s)", "Total Time (s)"],
+        rocm_rows
+    )
 
-        for name, phases, total in comps:
-            if cat == "ROCm Component":
-                tables_html += f"""
-                    <tr>
-                        <td>{name}</td>
-                        <td>{format_duration(phases['Configure'])}</td>
-                        <td>{format_duration(phases['Build'])}</td>
-                        <td>{format_duration(phases['Install'])}</td>
-                        <td>{format_duration(phases['Package'])}</td>
-                        <td class="total-col">{format_duration(total)}</td>
-                    </tr>
-                """
-            else: # Dependency
-                download_time = phases['Download'] + phases['Update']
-                tables_html += f"""
-                    <tr>
-                        <td>{name}</td>
-                        <td>{format_duration(download_time)}</td>
-                        <td>{format_duration(phases['Configure'])}</td>
-                        <td>{format_duration(phases['Build'])}</td>
-                        <td>{format_duration(phases['Install'])}</td>
-                        <td class="total-col">{format_duration(total)}</td>
-                    </tr>
-                """
+    # Prepare Data for Dependencies
+    dep_rows = []
+    if "Dependency" in projects:
+        for name, phases in projects["Dependency"].items():
+            total = sum(phases.values())
+            download_time = phases['Download'] + phases['Update']
+            cols = [
+                format_duration(download_time),
+                format_duration(phases['Configure']),
+                format_duration(phases['Build']),
+                format_duration(phases['Install'])
+            ]
+            dep_rows.append((name, cols, format_duration(total), total))
+        
+        dep_rows.sort(key=lambda x: x[3], reverse=True)
+        dep_rows = [(r[0], r[1], r[2]) for r in dep_rows]
 
-        tables_html += """
-            </tbody>
-        </table>
-        """
+    dep_table_html = generate_html_table(
+        "Dependencies",
+        ["Sub-Project", "Download (s)", "Configure (s)", "Build (s)", "Install (s)", "Total Time (s)"],
+        dep_rows
+    )
 
+    # Load Template
+    script_dir = Path(__file__).resolve().parent
+    template_path = script_dir / "report_build_time_template.html"
+    
     try:
+        with open(template_path, 'r') as f:
+            template = f.read()
+        
+        # Replace placeholders
+        full_html = template.replace("{{ROCM_TABLE}}", rocm_table_html)
+        full_html = full_html.replace("{{DEP_TABLE}}", dep_table_html)
+
         with open(output_file, 'w') as f:
-            f.write(html_template.replace("{tables}", tables_html))
+            f.write(full_html)
         print(f"HTML report generated at: {output_file}")
+        
+    except FileNotFoundError:
+        print(f"Error: Template file not found at {template_path}")
     except Exception as e:
-        print(f"Error writing file: {e}")
+        print(f"Error generating report: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze Ninja build times")
@@ -321,10 +283,9 @@ def main():
         output_html = args.output
     else:
         output_html = args.build_dir / "logs" / "build_time_analysis.html"
-        # Ensure logs dir exists
         output_html.parent.mkdir(parents=True, exist_ok=True)
 
-    generate_html(projects, output_html)
+    generate_report(projects, output_html)
 
 if __name__ == "__main__":
     main()
