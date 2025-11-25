@@ -103,6 +103,7 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
       therock-fusilli
     RUNTIME_DEPS
       hip-clr
+      hipDNN
       rocminfo  # Provides rocm_agent_enumerator
   )
   therock_cmake_subproject_glob_c_sources(fusilli_plugin
