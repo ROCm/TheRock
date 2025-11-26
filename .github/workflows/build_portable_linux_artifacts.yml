@@ -130,14 +130,6 @@ jobs:
         run: |
           cmake --build build --target therock-archives therock-dist -- -k 0
 
-      - name: Print Driver and GPU info
-        run: |
-          ./build_tools/print_driver_gpu_info.py
-
-      - name: Print Driver and GPU info (from built ROCm)
-        run: |
-          ./build/dist/rocm/bin/amd-smi
-
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
         run: |

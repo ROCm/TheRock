@@ -86,6 +86,11 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
+      - name: Print GPU info from SDK amd-smi (in test_component.yml)
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          ./build/dist/rocm/bin/amd-smi || echo "SDK amd-smi failed"
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
