@@ -10,6 +10,36 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     set(_system_toolchain "")
   endif()
 
+
+  ################################################################################
+  # amdsmi
+  ################################################################################
+
+  if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+
+    therock_cmake_subproject_declare(amdsmi
+      EXTERNAL_SOURCE_DIR "amdsmi"
+      USE_DIST_AMDGPU_TARGETS
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      CMAKE_ARGS
+        # TODO: Enable tests
+        # -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+        "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+      BUILD_DEPS
+        therock-googletest
+      RUNTIME_DEPS
+        rocm-core
+        ${THEROCK_BUNDLED_LIBDRM}
+    )
+    therock_cmake_subproject_provide_package(amdsmi
+      amd_smi lib/cmake)
+    therock_cmake_subproject_activate(amdsmi)
+
+  endif()
+
+
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -79,6 +109,19 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     SUBPROJECT_DEPS
       ROCR-Runtime
       rocminfo
+  )
+
+  therock_provide_artifact(amdsmi
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amdsmi.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS
+      amdsmi
   )
 
 endif(THEROCK_ENABLE_CORE_RUNTIME)
