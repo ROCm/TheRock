@@ -3,7 +3,6 @@
 ## Table of Contents
 
 - [Support status](#support-status)
-- [Supported JAX versions](#supported-jax-versions)
 - [Build instructions](#build-instructions)
 - [Build jax_rocmX_plugin and jax_rocmX_pjrt wheels instructions](#build-jax_rocmx_plugin-and-jax_rocmx_pjrt-wheels-instructions)
 - [Developer Setup](#developer-setup)
@@ -29,31 +28,42 @@ and thus leave less room for interpretation than in upstream repositories.
 We support building various Jax versions compatible with the latest ROCm
 sources and release packages.
 
-Support for the latest upstream JAX code is provided via the `master` branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax), as well as the stable `rocm-jaxlib-v0.7.1` release branch. Developers can build using either the `master` or `rocm-jaxlib-v0.7.1` branches to suit their requirements.
+Support for JAX is provided via the stable `rocm-jaxlib-v0.8.0` release branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax). Developers can build using the `rocm-jaxlib-v0.8.0` branch to suit their requirements.
 
-See the following table for how each version is supported:
+See the following table for supported version:
 
 | JAX version | Linux                                                                                                                                   | Windows          |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 0.7.1       | ✅ Supported<br><ul><li>[ROCm/rocm-jax `rocm-jaxlib-v0.7.1` branch](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.7.1)</li></ul> | ❌ Not supported |
+| 0.8.0       | ✅ Supported<br><ul><li>[ROCm/rocm-jax `rocm-jaxlib-v0.8.0` branch](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.0)</li></ul> | ❌ Not supported |
 
 ## Build instructions
 
-Using build instructions like
+This repository builds the ROCm-enabled JAX artifacts:
+- jaxlib (ROCm)
+- jax_rocmX_pjrt (PJRT runtime for ROCm)
+- jax_rocmX_plugin (JAX runtime plugin for ROCm)
 
-For the most up-to-date and detailed build steps, please refer to the [Quick Build instructions in the ROCm JAX repository](https://github.com/ROCm/rocm-jax/tree/master?tab=readme-ov-file#quickbuild). Follow those steps to ensure a successful build process.
+We support simple flow. The path uses TheRock tarballs for ROCm install.
+### Steps
 
-## Build jax_rocmX_plugin and jax_rocmX_pjrt wheels instructions
+- Checkout rocm-jax 
+  - `git clone https://github.com/ROCm/rocm-jax.git`
+  - `cd rocm-jax`
 
-To build `jax_rocmX_plugin` and `jax_rocmX_pjrt` wheels, please follow the official instructions provided in the ROCm JAX repository. The most accurate and up-to-date build steps are documented at [BUILDING.md#building](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md#building). Refer to this guide for environment setup, build commands, and troubleshooting tips.
+- Choose versions and TheRock Source
+  - Pick Python version
+  - Pick a TheRock tarball URL, a local tarball file path or a directory containing ROCm installation
+  - the TAR url paths for nightly `https://rocm.nightlies.amd.com/tarball/`
 
-## Developer Setup
-
-For JAX development setup and the latest instructions, please refer to the [ROCm JAX DEVSETUP guide](https://github.com/ROCm/rocm-jax/blob/master/DEVSETUP.md). If you want to run JAX locally, follow the steps outlined in that document for environment preparation and build commands.
-
-## Running/testing JAX
-
-After building the wheels, you should verify their functionality by running the recommended tests. Please follow the instructions provided in the [ROCm JAX BUILDING.md - Running Tests section](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md#3-running-tests) to ensure your build passes all required checks. This guide covers environment setup, test commands, and troubleshooting tips for validating your wheel builds.
+- Build all wheels using a tarball URL:
+  ```bash
+  python3 build/ci_build \
+  --compiler=clang \
+  --python-versions="3.12" \
+  --rocm-version="7.10.0a20251120" \
+  --therock-path="https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0a20251120.tar.gz" \
+  dist_wheels
+  ```
 
 ## Nightly releases
 

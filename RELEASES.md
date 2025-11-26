@@ -386,8 +386,8 @@ also install `jaxlib`, `jax-rocm7-plugin`, and `jax-rocm7-pjrt`.
 > install older versions take note of the compatibility matrix:
 >
 > | jaxlib version | jax-rocm7-plugin version | jax-rocm7-pjrt version |
-> | ------------- | ------------------ | ------------------- |
-> | 0.7.1         | 0.7.1               | 0.7.1              |
+> | -------------- | ------------------------ | ---------------------- |
+> | 0.7.1          | 0.7.1                    | 0.7.1                  |
 >
 > For example, `jax` 0.7.1 and compatible wheels can be installed by specifying
 >
@@ -405,7 +405,6 @@ also install `jaxlib`, `jax-rocm7-plugin`, and `jax-rocm7-pjrt`.
 > be installed First.
 > [!NOTE]
 > We will update the installation of ROCm automalically soon just by installing jax wheels.
-
 
 #### jax for gfx94X-dcgpu
 
@@ -479,7 +478,6 @@ python -m pip install \
   --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
   --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
 ```
-
 
 ## Installing from tarballs
 
