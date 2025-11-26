@@ -17,6 +17,10 @@ include = [
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 
+# libcap
+[components.dev."third-party/sysdeps/linux/libcap/build/stage"]
+[components.lib."third-party/sysdeps/linux/libcap/build/stage"]
+
 # libdrm
 [components.dev."third-party/sysdeps/linux/libdrm/build/stage"]
 [components.lib."third-party/sysdeps/linux/libdrm/build/stage"]

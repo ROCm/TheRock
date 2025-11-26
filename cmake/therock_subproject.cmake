@@ -355,11 +355,20 @@ function(therock_cmake_subproject_declare target_name)
   set(_prefix_dir "${ARG_BINARY_DIR}/${ARG_DIR_PREFIX}prefix")
   make_directory("${_prefix_dir}")
 
-  # Collect LINK_DIRS and PROGRAM_DIRS from explicit args and RUNTIME_DEPS.
-  _therock_cmake_subproject_collect_runtime_deps(
-      _private_include_dirs _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
-      _transitive_runtime_deps
+  # Collect transitive requirements from runtime and build deps.
+  # Include, link, program, pkgconfig and configure depends are derived transitively
+  # from build and runtime deps. RPATH and transitive runtime deps are only
+  # collected from runtime deps.
+  _therock_cmake_subproject_collect_build_deps(
+      _private_include_dirs
+      _private_link_dirs
+      _private_program_dirs
+      _private_pkg_config_dirs
       _transitive_configure_depend_files
+      ${ARG_RUNTIME_DEPS} ${ARG_BUILD_DEPS})
+  _therock_cmake_subproject_collect_runtime_deps(
+      _interface_install_rpath_dirs
+      _transitive_runtime_deps
       ${ARG_RUNTIME_DEPS})
 
   # Include dirs
@@ -1117,19 +1126,18 @@ function(_therock_cmake_subproject_deps_to_stamp out_stamp_files stamp_name)
   set(${out_stamp_files} "${_stamp_files}" PARENT_SCOPE)
 endfunction()
 
-# For a list of targets, gets absolute paths for all interface link directories
-# and transitive runtime deps. Both lists may contain duplicates if the DAG
-# includes the same dep multiple times.
-function(_therock_cmake_subproject_collect_runtime_deps
-    out_include_dirs out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
-    out_transitive_deps
+# For a list of targets, resolves several transitive properties relavent to build
+# and runtime deps.
+function(_therock_cmake_subproject_collect_build_deps
+    out_include_dirs
+    out_link_dirs
+    out_program_dirs
+    out_pkg_config_dirs
     out_transitive_configure_depend_files)
   set(_include_dirs)
-  set(_install_rpath_dirs)
   set(_link_dirs)
   set(_program_dirs)
   set(_pkg_config_dirs)
-  set(_transitive_deps)
   set(_transitive_configure_depend_files)
   foreach(target_name ${ARGN})
     _therock_assert_is_cmake_subproject("${target_name}")
@@ -1145,10 +1153,6 @@ function(_therock_cmake_subproject_collect_runtime_deps
     get_target_property(_link_dir "${target_name}" THEROCK_INTERFACE_LINK_DIRS)
     list(APPEND _link_dirs ${_link_dir})
 
-    # Transitive runtime target deps.
-    get_target_property(_deps "${target_name}" THEROCK_RUNTIME_DEPS)
-    list(APPEND _transitive_deps ${_deps} ${target_name})
-
     # Depend on stage installation.
     get_target_property(_program_dir "${target_name}" THEROCK_INTERFACE_PROGRAM_DIRS)
     if(_program_dir)
@@ -1161,6 +1165,27 @@ function(_therock_cmake_subproject_collect_runtime_deps
     if(_pkg_config_dir)
       list(APPEND _pkg_config_dirs ${_pkg_config_dir})
     endif()
+  endforeach()
+  set("${out_include_dirs}" "${_include_dirs}" PARENT_SCOPE)
+  set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
+  set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)
+  set("${out_pkg_config_dirs}" "${_pkg_config_dirs}" PARENT_SCOPE)
+  set("${out_transitive_configure_depend_files}" "${_transitive_configure_depend_files}" PARENT_SCOPE)
+endfunction()
+
+# For a list of targets, resolves transitive properties relavent only to runtime
+# deps.
+function(_therock_cmake_subproject_collect_runtime_deps
+    out_install_rpath_dirs
+    out_transitive_deps)
+  set(_install_rpath_dirs)
+  set(_transitive_deps)
+  foreach(target_name ${ARGN})
+    _therock_assert_is_cmake_subproject("${target_name}")
+
+    # Transitive runtime target deps.
+    get_target_property(_deps "${target_name}" THEROCK_RUNTIME_DEPS)
+    list(APPEND _transitive_deps ${_deps} ${target_name})
 
     # RPATH dirs.
     get_target_property(_install_rpath_dir "${target_name}" THEROCK_INTERFACE_INSTALL_RPATH_DIRS)
@@ -1168,13 +1193,8 @@ function(_therock_cmake_subproject_collect_runtime_deps
       list(APPEND _install_rpath_dirs ${_install_rpath_dir})
     endif()
   endforeach()
-  set("${out_include_dirs}" "${_include_dirs}" PARENT_SCOPE)
   set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
-  set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
-  set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)
-  set("${out_pkg_config_dirs}" "${_pkg_config_dirs}" PARENT_SCOPE)
   set("${out_transitive_deps}" "${_transitive_deps}" PARENT_SCOPE)
-  set("${out_transitive_configure_depend_files}" "${_transitive_configure_depend_files}" PARENT_SCOPE)
 endfunction()
 
 # Transforms a list to be absolute paths if not already.

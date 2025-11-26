@@ -36,11 +36,31 @@ function(therock_provide_artifact slice_name)
     )
   endif()
 
+  # Fail-fast: Check if artifact is defined in topology
+  if(DEFINED THEROCK_TOPOLOGY_ARTIFACTS)
+    if(NOT "${slice_name}" IN_LIST THEROCK_TOPOLOGY_ARTIFACTS)
+      message(FATAL_ERROR
+        "Artifact '${slice_name}' is not defined in BUILD_TOPOLOGY.toml. "
+        "All artifacts must be declared in the topology. "
+        "Valid artifacts are: ${THEROCK_TOPOLOGY_ARTIFACTS}"
+      )
+    endif()
+  endif()
+
   # Normalize arguments.
   set(_target_name "artifact-${slice_name}")
   set(_archive_target_name "archive-${slice_name}")
+
+  # Check if targets exist from topology (expected) vs duplicate definition (error)
+  set(_target_exists FALSE)
   if(TARGET "${_target_name}")
-    message(FATAL_ERROR "Artifact slice '${slice_name}' provided more than once")
+    # Target exists - check if it's from topology or a duplicate
+    # If THEROCK_TOPOLOGY_ARTIFACTS is defined, we expect the target to exist
+    if(DEFINED THEROCK_TOPOLOGY_ARTIFACTS)
+      set(_target_exists TRUE)
+    else()
+      message(FATAL_ERROR "Artifact slice '${slice_name}' provided more than once")
+    endif()
   endif()
   if(TARGET "${_archive_target_name}")
     message(FATAL_ERROR "Archive slice '${slice_name}' provided more than once")
@@ -140,10 +160,21 @@ function(therock_provide_artifact slice_name)
       "${ARG_DESCRIPTOR}"
       "${_fileset_tool}"
   )
-  add_custom_target(
-    "${_target_name}"
-    DEPENDS ${_manifest_files}
-  )
+  # If target exists from topology, create a helper target for file dependencies
+  if(_target_exists)
+    # Target already exists from topology - create a helper target for file dependencies
+    add_custom_target(
+      "${_target_name}_files"
+      DEPENDS ${_manifest_files}
+    )
+    add_dependencies("${_target_name}" "${_target_name}_files")
+  else()
+    # Create new target (fallback for when topology is not loaded)
+    add_custom_target(
+      "${_target_name}"
+      DEPENDS ${_manifest_files}
+    )
+  endif()
   add_dependencies(therock-artifacts "${_target_name}")
   if(ARG_DISTRIBUTION)
     add_dependencies("dist-${ARG_DISTRIBUTION}" "${_target_name}")

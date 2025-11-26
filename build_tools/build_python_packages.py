@@ -38,7 +38,9 @@ def run(args: argparse.Namespace):
     PopulatedDistPackage(params, logical_name="meta")
 
     # Populate each target neutral library package.
-    core = PopulatedDistPackage(params, logical_name="core").populate_runtime_files(
+    core = PopulatedDistPackage(params, logical_name="core")
+    core.rpath_dep(core, "lib/llvm/lib")
+    core.populate_runtime_files(
         params.filter_artifacts(
             core_artifact_filter,
             # TODO: The base package is shoving CMake redirects into lib.
@@ -87,6 +89,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-ocl",
         "core-hipinfo",
         "core-runtime",
+        "hipify",
         "host-blas",
         "host-suite-sparse",
         "rocprofiler-sdk",

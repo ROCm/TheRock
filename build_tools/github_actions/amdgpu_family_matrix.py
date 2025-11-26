@@ -3,6 +3,14 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
+
+For presubmit, postsubmit and nightly family selection:
+
+- presubmit runs the targets from presubmit dictionary on pull requests
+- postsubmit runs the targets from presubmit and postsubmit dictionaries on pushes to main branch
+- nightly runs targets from presubmit, postsubmit and nightly dictionaries
+
+TODO(#2200): clarify AMD GPU family selection
 """
 
 all_build_variants = {
@@ -35,7 +43,7 @@ all_build_variants = {
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -43,16 +51,17 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-dgpu",
+            "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "",
-            "family": "gfx110X-dgpu",
+            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
         },
     },
     "gfx1151": {
@@ -75,9 +84,7 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            # Networking issue: https://github.com/ROCm/TheRock/issues/1660
-            # Label is "linux-mi355-1gpu-ossci-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -148,19 +155,6 @@ amdgpu_family_info_matrix_nightly = {
             "expect_pytorch_failure": True,
         },
     },
-    "gfx110x": {
-        "linux": {
-            "test-runs-on": "linux-gfx1101-gpu-rocm",
-            "family": "gfx110X-dgpu",
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "windows-gfx110X-gpu-rocm",
-            "family": "gfx110X-dgpu",
-            "build_variants": ["release"],
-        },
-    },
     "gfx1150": {
         "linux": {
             "test-runs-on": "",
@@ -205,8 +199,6 @@ def get_all_families_for_trigger_types(trigger_types):
     for trigger_type in trigger_types:
         if trigger_type in matrix_map:
             for family_name, family_config in matrix_map[trigger_type].items():
-                # Only add if not already present (first occurrence wins)
-                if family_name not in result:
-                    result[family_name] = family_config
+                result[family_name] = family_config
 
     return result

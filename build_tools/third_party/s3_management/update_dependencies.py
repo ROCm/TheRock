@@ -187,7 +187,7 @@ def main() -> None:
     SUBFOLDERS =  [
         "gfx101X-dgpu",
         "gfx103X-dgpu",
-        "gfx110X-dgpu",
+        "gfx110X-all",
         "gfx1150",
         "gfx1151",
         "gfx120X-all",

@@ -37,3 +37,7 @@ if(THEROCK_BUNDLE_SYSDEPS)
     add_subdirectory(sysdeps/windows)
   endif()
 endif()
+
+# gRPC: Static library for RDC (built on-demand when depended upon)
+# See: docs/rfcs/RFC0007-rdc-therock-integration.md
+add_subdirectory(grpc)
