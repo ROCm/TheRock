@@ -14,6 +14,7 @@ python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
+    [--run-github-repo RUN_GITHUB_REPO]
     [--blas | --no-blas]
     [--fft | --no-fft]
     [--hipdnn | --no-hipdnn]
@@ -52,6 +53,16 @@ Examples:
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 \
         --amdgpu-family gfx120X-all
+    ```
+- Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 19644138192
+  (from https://github.com/ROCm/rocm-libraries/actions/runs/19644138192) in the `ROCm/rocm-libraries` repository to the
+  default output directory `therock-build`:
+    ```
+    python build_tools/install_rocm_from_artifacts.py \
+        --run-id 19644138192 \
+        --amdgpu-family gfx94X-dcgpu \
+        --tests \
+        --run-github-repo ROCm/rocm-libraries
     ```
 
 You can select your AMD GPU family from therock_amdgpu_targets.cmake.
@@ -440,7 +451,7 @@ def main(argv):
     parser.add_argument(
         "--run-github-repo",
         type=str,
-        help="GitHub repository for --run-id. If omitted, this is inferred from the GITHUB_REPOSITORY env var or defaults to ROCm/TheRock",
+        help="GitHub repository for --run-id in 'owner/repo' format (e.g. 'ROCm/TheRock'). Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
 
     args = parser.parse_args(argv)

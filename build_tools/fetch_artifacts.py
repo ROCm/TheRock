@@ -386,7 +386,7 @@ def main(argv):
     parser.add_argument(
         "--run-github-repo",
         type=str,
-        help="GitHub repository for --run-id. If omitted, this is inferred from the GITHUB_REPOSITORY env var or defaults to ROCm/TheRock",
+        help="GitHub repository for --run-id in 'owner/repo' format (e.g. 'ROCm/TheRock'). Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
     parser.add_argument(
         "--run-id",
