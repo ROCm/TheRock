@@ -18,6 +18,7 @@ RUN sudo apt-get update -y \
     && sudo add-apt-repository -y ppa:git-core/ppa \
     && sudo apt-get update -y \
     && sudo apt-get install -y --no-install-recommends \
+    build-essential \
     curl \
     ca-certificates \
     git \
