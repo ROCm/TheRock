@@ -26,7 +26,7 @@ if test_type == "smoke":
 else:
     # Due to BLAS bugs with tests, we only run presubmit tests as "full tests" to have better coverage
     # TODO(#1605): Enable full set of tests https://github.com/ROCm/TheRock/issues/1605
-    test_filter = ["--gtest_filter=*quick*:*pre_checkin*-*known_bug*"]
+    test_filter = ["--gtest_filter=*pre_checkin*-*known_bug*"]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
