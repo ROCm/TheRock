@@ -1,9 +1,52 @@
-# Build Topology Metadata for TheRock
-# This file describes the artifact-centric build topology
-# Three-level hierarchy:
-#   1. Build Stages - Pipeline jobs that build sets of artifact groups
-#   2. Artifact Groups - Logical groupings of related artifacts
-#   3. Artifacts - Individual build outputs that cross stage boundaries
+# ==============================================================================
+# BUILD_TOPOLOGY.toml - Build Topology Metadata for TheRock
+# ==============================================================================
+#
+# This file is the single source of truth for TheRock's build artifact structure.
+# It serves two primary purposes:
+#
+#   1. CMake Feature Generation: At configure time, topology_to_cmake.py reads
+#      this file and generates therock_add_feature() calls for each artifact,
+#      creating the THEROCK_ENABLE_* cache variables that control the build.
+#
+#   2. CI/CD Pipeline Sharding: The build_topology.py module parses this file
+#      to compute artifact dependencies for sharded builds, determining which
+#      artifacts need to be fetched from artifact storage before each stage.
+#
+# THREE-LEVEL HIERARCHY:
+#   1. Build Stages   - CI/CD pipeline jobs that build sets of artifact groups
+#   2. Artifact Groups - Logical groupings of related artifacts with shared deps
+#   3. Artifacts      - Individual build outputs (the fundamental packaging unit)
+#
+# NAMING CONVENTIONS:
+#   - Entity names (stages, groups, artifacts): lowercase with hyphens (e.g., "core-runtime")
+#   - feature_name: UPPERCASE with underscores (e.g., "CORE_RUNTIME") - maps to THEROCK_ENABLE_*
+#   - feature_group: UPPERCASE with underscores (e.g., "CORE") - maps to group options
+#   - type values: lowercase (e.g., "generic", "per-arch", "target-neutral", "target-specific")
+#   - platform values: lowercase (e.g., "windows", "linux")
+#
+# SCHEMA REFERENCE:
+#
+#   [build_stages.<name>]
+#   description = "Human-readable description"
+#   artifact_groups = ["group1", "group2"]  # Groups built in this stage
+#   type = "generic" | "per-arch"           # Optional, default "generic"
+#
+#   [artifact_groups.<name>]
+#   description = "Human-readable description"
+#   type = "generic" | "per-arch"           # "per-arch" = built per GPU architecture
+#   artifact_group_deps = ["dep1", "dep2"]  # Optional, other groups this depends on
+#
+#   [artifacts.<name>]
+#   artifact_group = "group-name"           # Required: which group this belongs to
+#   type = "target-neutral" | "target-specific"  # target-specific = per GPU arch
+#   artifact_deps = ["dep1", "dep2"]        # Optional: other artifacts this depends on
+#   feature_name = "FEATURE_NAME"           # Optional: override auto-generated name
+#   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
+#   platform = "windows"                    # Optional: platform-specific artifact
+#   disable_platforms = ["windows"]         # Optional: platforms where disabled
+#
+# ==============================================================================
 
 [metadata]
 version = "1.0"
@@ -296,12 +339,14 @@ type = "target-neutral"
 artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
+disable_platforms = ["windows"]
 
 [artifacts.rocprofiler-compute]
 artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["rocprofiler-sdk"]
 feature_group = "PROFILER"
+disable_platforms = ["windows"]
 
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
@@ -309,6 +354,7 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "rocprofiler-sdk"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
+disable_platforms = ["windows"]
 
 # --- Data Center Tools ---
 

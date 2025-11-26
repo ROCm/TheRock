@@ -235,14 +235,108 @@ class BuildTopology:
 
         return produced_artifacts
 
+    def _validate_naming_conventions(self) -> List[str]:
+        """
+        Validate naming conventions for all topology entities.
+
+        Conventions:
+        - Entity names (stages, groups, artifacts): lowercase with hyphens
+        - feature_name: UPPERCASE with underscores
+        - feature_group: UPPERCASE with underscores
+        - type values: lowercase
+        - platform values: lowercase
+
+        Returns:
+            List of validation error messages
+        """
+        import re
+
+        errors = []
+
+        # Pattern for entity names: lowercase letters, numbers, and hyphens
+        entity_pattern = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+        # Pattern for feature names/groups: uppercase letters, numbers, and underscores
+        feature_pattern = re.compile(r"^[A-Z0-9]+(_[A-Z0-9]+)*$")
+
+        # Valid type values
+        valid_stage_types = {"generic", "per-arch"}
+        valid_artifact_types = {"target-neutral", "target-specific"}
+        valid_platforms = {"windows", "linux"}
+
+        # Validate build stage names and types
+        for stage_name, stage in self.build_stages.items():
+            if not entity_pattern.match(stage_name):
+                errors.append(
+                    f"Build stage '{stage_name}' should be lowercase-with-hyphens"
+                )
+            if stage.type not in valid_stage_types:
+                errors.append(
+                    f"Build stage '{stage_name}' has invalid type '{stage.type}' "
+                    f"(expected: {valid_stage_types})"
+                )
+
+        # Validate artifact group names and types
+        for group_name, group in self.artifact_groups.items():
+            if not entity_pattern.match(group_name):
+                errors.append(
+                    f"Artifact group '{group_name}' should be lowercase-with-hyphens"
+                )
+            if group.type not in valid_stage_types:
+                errors.append(
+                    f"Artifact group '{group_name}' has invalid type '{group.type}' "
+                    f"(expected: {valid_stage_types})"
+                )
+
+        # Validate artifact names, types, and feature overrides
+        for artifact_name, artifact in self.artifacts.items():
+            if not entity_pattern.match(artifact_name):
+                errors.append(
+                    f"Artifact '{artifact_name}' should be lowercase-with-hyphens"
+                )
+            if artifact.type not in valid_artifact_types:
+                errors.append(
+                    f"Artifact '{artifact_name}' has invalid type '{artifact.type}' "
+                    f"(expected: {valid_artifact_types})"
+                )
+            if artifact.feature_name and not feature_pattern.match(
+                artifact.feature_name
+            ):
+                errors.append(
+                    f"Artifact '{artifact_name}' feature_name '{artifact.feature_name}' "
+                    f"should be UPPERCASE_WITH_UNDERSCORES"
+                )
+            if artifact.feature_group and not feature_pattern.match(
+                artifact.feature_group
+            ):
+                errors.append(
+                    f"Artifact '{artifact_name}' feature_group '{artifact.feature_group}' "
+                    f"should be UPPERCASE_WITH_UNDERSCORES"
+                )
+            if artifact.platform and artifact.platform not in valid_platforms:
+                errors.append(
+                    f"Artifact '{artifact_name}' has invalid platform '{artifact.platform}' "
+                    f"(expected: {valid_platforms})"
+                )
+            for platform in artifact.disable_platforms:
+                if platform not in valid_platforms:
+                    errors.append(
+                        f"Artifact '{artifact_name}' has invalid disable_platform '{platform}' "
+                        f"(expected: {valid_platforms})"
+                    )
+
+        return errors
+
     def validate_topology(self) -> List[str]:
         """
-        Validate topology for cycles, missing references, etc.
+        Validate topology for cycles, missing references, naming conventions, etc.
 
         Returns:
             List of validation error messages (empty if valid)
         """
         errors = []
+
+        # Validate naming conventions
+        errors.extend(self._validate_naming_conventions())
 
         # Check for missing artifact group references in stages
         for stage in self.build_stages.values():
