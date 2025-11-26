@@ -300,14 +300,6 @@ therock_add_feature(SOLVER
   REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
-if(NOT WIN32)
-  therock_add_feature(LIBHIPCXX
-    GROUP MATH_LIBS
-    DESCRIPTION "Enables libhipcxx"
-    REQUIRES COMPILER HIP_RUNTIME
-  )
-endif()
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()
