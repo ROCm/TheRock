@@ -13,3 +13,25 @@ msgpack>=1.1.0
 
 # AWS Redshift connector
 redshift_connector==2.1.8
+
+# rocprofiler-compute dependencies
+astunparse==1.6.2
+colorlover
+dash-bootstrap-components
+dash-svg
+dash>=3.0.0
+kaleido==0.2.1
+matplotlib
+numpy>=1.17.5
+pandas>=1.4.3
+plotext
+plotille
+pymongo
+pyyaml
+setuptools
+sqlalchemy>=2.0.42
+tabulate
+textual
+textual_plotext
+textual-fspicker>=0.4.3
+tqdm
