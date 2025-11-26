@@ -42,3 +42,8 @@ repos:
   hooks:
   - id: forbid-tabs
     exclude: ".gitmodules|docs/development/git_chores.md|build_tools/packaging/linux/template/debian_rules.j2"
+
+- repo: https://github.com/rhysd/actionlint
+  rev: v1.7.9
+  hooks:
+    - id: actionlint
