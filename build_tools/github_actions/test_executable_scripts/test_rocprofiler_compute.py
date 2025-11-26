@@ -5,15 +5,20 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+environ_vars = os.environ.copy()
+environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
 
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/rocprofiler-compute",
+    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/tests",
     "--output-on-failure",
     "--parallel",
     "8",
@@ -26,4 +31,5 @@ subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
     check=True,
+    env=environ_vars
 )
