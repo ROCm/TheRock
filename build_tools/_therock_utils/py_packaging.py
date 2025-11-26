@@ -349,27 +349,18 @@ class PopulatedDistPackage:
             ]
             subprocess.check_call(patchelf_cl)
 
-    def _normalize_rpath(self, file_path: Path):
-        try:
-            existing_rpath = (
-                subprocess.check_output(
-                    [
-                        "patchelf",
-                        "--print-rpath",
-                        str(file_path),
-                    ],
-                    stderr=subprocess.DEVNULL,
-                )
-                .decode()
-                .strip()
+      def _normalize_rpath(self, file_path: Path):
+        existing_rpath = (
+            subprocess.check_output(
+                [
+                    "patchelf",
+                    "--print-rpath",
+                    str(file_path),
+                ]
             )
-        except subprocess.CalledProcessError:
-            # patchelf failed (for wmma it was a binary with too many sections), skip normalization
-            log(
-                f"  SKIP_RPATH: {file_path.name}: patchelf failed, skipping RPATH normalization"
-            )
-            return
-
+            .decode()
+            .strip()
+        )
         if not existing_rpath:
             return
 
@@ -377,22 +368,18 @@ class PopulatedDistPackage:
         norm_rpath = existing_rpath
 
         log(f"  NORMALIZE_RPATH: {file_path}: {norm_rpath}")
-        try:
-            subprocess.check_call(
-                [
-                    "patchelf",
-                    "--set-rpath",
-                    norm_rpath,
-                    # Forces the use of RPATH vs RUNPATH, which is more appropriate
-                    # for hermetic libraries like these since it does not allow
-                    # LD_LIBRARY_PATH to interfere.
-                    "--force-rpath",
-                    str(file_path),
-                ],
-                stderr=subprocess.DEVNULL,
-            )
-        except subprocess.CalledProcessError:
-            log(f"  SKIP_RPATH_SET: {file_path.name}: patchelf could not modify RPATH")
+        subprocess.check_call(
+            [
+                "patchelf",
+                "--set-rpath",
+                norm_rpath,
+                # Forces the use of RPATH vs RUNPATH, which is more appropriate
+                # for hermetic libraries like these since it does not allow
+                # LD_LIBRARY_PATH to interfere.
+                "--force-rpath",
+                str(file_path),
+            ]
+        )
 
     def populate_devel_files(
         self,
