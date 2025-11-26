@@ -3,7 +3,7 @@
 # ==============================================================================
 #
 # This file is the single source of truth for TheRock's build artifact structure.
-# It serves two primary purposes:
+# It serves three primary purposes:
 #
 #   1. CMake Feature Generation: At configure time, topology_to_cmake.py reads
 #      this file and generates therock_add_feature() calls for each artifact,
@@ -13,10 +13,15 @@
 #      to compute artifact dependencies for sharded builds, determining which
 #      artifacts need to be fetched from artifact storage before each stage.
 #
-# THREE-LEVEL HIERARCHY:
-#   1. Build Stages   - CI/CD pipeline jobs that build sets of artifact groups
-#   2. Artifact Groups - Logical groupings of related artifacts with shared deps
-#   3. Artifacts      - Individual build outputs (the fundamental packaging unit)
+#   3. Partial Source Checkouts: Source sets define which git submodules are
+#      needed for each artifact group, enabling CI jobs to clone only the
+#      submodules required for their build stage (via fetch_sources.py --stage).
+#
+# HIERARCHY:
+#   - Source Sets    - Groupings of git submodules for partial checkouts
+#   - Build Stages   - CI/CD pipeline jobs that build sets of artifact groups
+#   - Artifact Groups - Logical groupings of related artifacts with shared deps
+#   - Artifacts      - Individual build outputs (the fundamental packaging unit)
 #
 # NAMING CONVENTIONS:
 #   - Entity names (stages, groups, artifacts): lowercase with hyphens (e.g., "core-runtime")
@@ -27,6 +32,10 @@
 #
 # SCHEMA REFERENCE:
 #
+#   [source_sets.<name>]
+#   description = "Human-readable description"
+#   submodules = ["submodule1", "submodule2"]  # Git submodule directory names
+#
 #   [build_stages.<name>]
 #   description = "Human-readable description"
 #   artifact_groups = ["group1", "group2"]  # Groups built in this stage
@@ -36,6 +45,7 @@
 #   description = "Human-readable description"
 #   type = "generic" | "per-arch"           # "per-arch" = built per GPU architecture
 #   artifact_group_deps = ["dep1", "dep2"]  # Optional, other groups this depends on
+#   source_sets = ["set1", "set2"]          # Optional, source sets needed for this group
 #
 #   [artifacts.<name>]
 #   artifact_group = "group-name"           # Required: which group this belongs to
@@ -51,6 +61,41 @@
 [metadata]
 version = "1.0"
 description = "TheRock artifact-based build topology"
+
+# ==============================================================================
+# SOURCE SETS - Submodule groupings for partial checkouts
+# ==============================================================================
+# Each source_set defines submodules needed for a category of builds.
+# Currently just lists submodules; can be extended later with sparse_checkout specs.
+# Names are chosen to align with fetch_sources.py flags where possible.
+
+[source_sets.base]
+description = "Base infrastructure submodules"
+submodules = ["half", "rocm-cmake", "amdsmi"]
+
+[source_sets.compilers]
+description = "Compiler toolchain submodules"
+submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
+
+[source_sets.rocm-systems]
+description = "ROCm systems monorepo (runtime, profiler, etc.)"
+submodules = ["rocm-systems"]
+
+[source_sets.rocm-libraries]
+description = "ROCm libraries monorepo (math libs)"
+submodules = ["rocm-libraries"]
+
+[source_sets.ml-frameworks]
+description = "ML framework submodules"
+submodules = ["composable_kernel"]
+
+[source_sets.comm-libs]
+description = "Communication library submodules"
+submodules = ["rccl", "rccl-tests"]
+
+[source_sets.profiler-extras]
+description = "Additional profiler submodules"
+submodules = ["rocprof-trace-decoder"]
 
 # ==============================================================================
 # BUILD STAGES - Pipeline jobs that build sets of artifact groups
@@ -109,60 +154,72 @@ artifact_groups = ["profiler-apps"]
 [artifact_groups.third-party-sysdeps]
 description = "Critical system dependencies (always needed)"
 type = "generic"
+source_sets = []  # No submodules - uses vendored/in-tree deps
 
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
 type = "generic"
+source_sets = []  # No submodules - uses vendored/in-tree deps
 
 [artifact_groups.base]
 description = "Base ROCm infrastructure and CMake tools"
 type = "generic"
 artifact_group_deps = []
+source_sets = ["base"]
 
 [artifact_groups.core-runtime]
 description = "Core runtime (ROCR-Runtime, rocminfo)"
 type = "generic"
 artifact_group_deps = ["base", "third-party-sysdeps"]
+source_sets = ["rocm-systems"]
 
 [artifact_groups.compiler]
 description = "AMD LLVM toolchain and compiler infrastructure"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps"]
+source_sets = ["compilers"]
 
 [artifact_groups.hip-runtime]
 description = "HIP runtime"
 type = "generic"
 artifact_group_deps = ["core-runtime", "compiler"]
+source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
 [artifact_groups.opencl-runtime]
 description = "OpenCL runtime"
 type = "generic"
 artifact_group_deps = ["core-runtime", "compiler"]
+source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
-artifact_group_deps = ["hip-runtime", "profiler-core"]  # Many libs use rocprofiler-sdk for annotations
+artifact_group_deps = ["hip-runtime", "profiler-core"]
+source_sets = ["rocm-libraries"]
 
 [artifact_groups.ml-libs]
 description = "Machine learning libraries"
 type = "per-arch"
 artifact_group_deps = ["math-libs", "profiler-core"]
+source_sets = ["rocm-libraries", "ml-frameworks"]
 
 [artifact_groups.comm-libs]
 description = "Communication libraries"
 type = "per-arch"
 artifact_group_deps = ["hip-runtime"]
+source_sets = ["comm-libs"]
 
 [artifact_groups.profiler-core]
 description = "Core profiling libraries and annotation support"
 type = "generic"
 artifact_group_deps = ["core-runtime"]
+source_sets = ["rocm-systems"]  # rocprofiler-sdk is in rocm-systems
 
 [artifact_groups.dctools-core]
 description = "Data center management tools with minimal dependencies"
 type = "generic"
 artifact_group_deps = ["core-runtime", "profiler-core"]
+source_sets = ["base"]  # RDC uses amdsmi from base
 
 # Future artifact groups
 # [artifact_groups.dctools-rocm]
@@ -174,6 +231,7 @@ artifact_group_deps = ["core-runtime", "profiler-core"]
 description = "Profiler applications and analysis tools"
 type = "generic"
 artifact_group_deps = ["profiler-core", "compiler"]
+source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
 
 # [artifact_groups.iree-libs]
 # description = "IREE and Fusilli integration"
