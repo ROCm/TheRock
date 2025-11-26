@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 cmd = [
     "ctest",
     "--test-dir",
-    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/tests",
+    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute",
     "--output-on-failure",
     "--parallel",
     "8",
