@@ -9,5 +9,20 @@ Homepage: {{ homepage }}
 Package: {{ pkg_name }}
 Architecture: {{ arch }}
 Depends: {{ depends }}
+{%- if provides %}
+Provides: {{ provides }}
+{%- endif %}
+{%- if replaces %}
+Replaces: {{ replaces }}
+{%- endif %}
+{%- if conflicts %}
+Conflicts: {{ conflicts }}
+{%- endif %}
+{%- if debrecommends %}
+Recommends: {{ debrecommends }}
+{%- endif %}
+{%- if debsuggests %}
+Suggests: {{ debsuggests }}
+{%- endif %}
 Description: {{ description_short }}
  {{ description_long }}
