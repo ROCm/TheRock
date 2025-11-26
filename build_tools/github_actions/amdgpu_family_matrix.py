@@ -3,18 +3,6 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
-
-Architecture coverage for release CI runs
-
-For both pre-submit (PR) and post-submit (merge) runs,
-the same set of GPU architectures are built and tested.
-
-Platform-specific coverage:
-  * Windows builds:
-      gfx110x, gfx1151, gfx1150, gfx120x
-  * Linux builds:
-      gfx110x, gfx1151, gfx1150, gfx120x, gfx94x, gfx90x, gfx950
-
 """
 
 all_build_variants = {
@@ -56,6 +44,7 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-dgpu",
+            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
@@ -70,56 +59,13 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-strix-halo-gpu-rocm",
             "family": "gfx1151",
+            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
             "family": "gfx1151",
-            "build_variants": ["release"],
-        },
-    },
-    "gfx950": {
-        "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
-            "family": "gfx950-dcgpu",
-            "build_variants": ["release", "asan"],
-        }
-    },
-    "gfx1150": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx1150",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx1150",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-    },
-    "gfx90x": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx90X-dcgpu",
-            "bypass_tests_for_releases": True,
-            "sanity_check_only_for_family": True,
-            "build_variants": ["release"],
-        },
-    },
-    "gfx120x": {
-        "linux": {
-            "test-runs-on": "linux-rx9070-gpu-rocm",
-            "family": "gfx120X-all",
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
     },
@@ -138,6 +84,7 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "linux-rx9070-gpu-rocm",
             "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
@@ -145,63 +92,6 @@ amdgpu_family_info_matrix_postsubmit = {
             "test-runs-on": "",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-    },
-    "gfx94x": {
-        "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
-            "family": "gfx94X-dcgpu",
-            "build_variants": ["release", "asan"],
-        }
-    },
-    "gfx110x": {
-        "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-dgpu",
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "windows-gfx110X-gpu-rocm",
-            "family": "gfx110X-dgpu",
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-    },
-    "gfx1150": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx1150",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx1150",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-    },
-    "gfx90x": {
-        "linux": {
-            "test-runs-on": "",
-            "family": "gfx90X-dcgpu",
-            "bypass_tests_for_releases": True,
-            "sanity_check_only_for_family": True,
-            "build_variants": ["release"],
-        },
-    },
-    "gfx1151": {
-        "linux": {
-            "test-runs-on": "linux-strix-halo-gpu-rocm",
-            "family": "gfx1151",
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "windows-strix-halo-gpu-rocm",
-            "family": "gfx1151",
             "build_variants": ["release"],
         },
     },
