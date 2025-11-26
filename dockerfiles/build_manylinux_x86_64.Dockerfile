@@ -78,6 +78,13 @@ RUN yum install -y \
     && yum clean all && \
     rm -rf /var/cache/yum
 
+######## Yum Packages for amd-mesa, rocdecode, and rocjpeg #######
+# Additional packages required for media libraries to build
+RUN yum install -y \
+      libva-devel \
+    && yum clean all && \
+    rm -rf /var/cache/yum
+
 ######## DVC via pip ######
 # dvc's rpm package includes .so dependencies built against glib 2.29
 # settling for pip install for now, but it installs modules not needed for dvc pull
