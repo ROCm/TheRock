@@ -57,7 +57,7 @@ test_matrix = {
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 180,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 6,
@@ -117,10 +117,10 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 8,
+        "total_shards": 5,
         "exclude_family": {
             "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
         },
@@ -128,10 +128,10 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
         "platform": ["linux"],
-        "total_shards": 6,
+        "total_shards": 5,
     },
     # RAND tests
     "rocrand": {
