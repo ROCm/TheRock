@@ -452,7 +452,9 @@ def main(argv):
             submodule_names = [s.name for s in submodules]
             print(f"  {stage.name} ({stage.type}):")
             print(f"    {stage.description}")
-            print(f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}")
+            print(
+                f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
+            )
             print()
         sys.exit(0)
 
