@@ -86,16 +86,6 @@ jobs:
           TEST_LABELS: ${{ inputs.test_labels }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
-      - name: Print GPU info from SDK amd-smi (in test_artifacts.yml)
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          ./build/dist/rocm/bin/amd-smi || echo "SDK amd-smi failed"
-
-      - name: Print driver / GPU info
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          ./build_tools/print_driver_gpu_info.py
-
   test_sanity_check:
     name: 'Test Sanity Check'
     needs: configure_test_matrix

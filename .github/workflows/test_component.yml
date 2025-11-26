@@ -89,7 +89,9 @@ jobs:
       - name: Print GPU info from SDK amd-smi (in test_component.yml)
         if: ${{ runner.os == 'Linux' }}
         run: |
-          ./build/dist/rocm/bin/amd-smi || echo "SDK amd-smi failed"
+          which amd-smi
+          amd-smi  || echo "SDK amd-smi failed"
+          ./build/dist/rocm/bin/amd-smi || echo "SDK./build/dist/rocm/bin/amd-sm failed"
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
