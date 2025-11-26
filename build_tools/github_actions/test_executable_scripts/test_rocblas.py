@@ -24,8 +24,9 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:
-    # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
-    test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
+    # Due to BLAS bugs with tests, we only run presubmit tests as "full tests" to have better coverage
+    # TODO(#1605): Enable full set of tests https://github.com/ROCm/TheRock/issues/1605
+    test_filter = ["--gtest_filter=*quick*:*pre_checkin*-*known_bug*"]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
