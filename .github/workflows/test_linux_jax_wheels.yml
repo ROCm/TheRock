@@ -165,9 +165,6 @@ jobs:
             --release "${{ inputs.rocm_version }}" \
             --artifact-group "${{ inputs.amdgpu_family }}" \
             --output-dir "${DEST}"
-          # Create standard symlinks
-          ln -sfn "${DEST}" /opt/rocm
-          ln -sfn /opt/rocm /etc/alternatives/rocm
 
       - name: Extract JAX version and set to GITHUB_ENV
         run: |
