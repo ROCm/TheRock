@@ -25,6 +25,10 @@ Note this module will respect:
     AWS_SESSION_TOKEN
 if and only if all are specified in the environment to connect with S3.
 If unspecified, we will create an anonymous boto file that can only acccess public artifacts.
+
+TODO: Evaluate switching to artifact_manager.py which provides a unified backend
+abstraction (local directory or S3) and integrates with BUILD_TOPOLOGY.toml for
+stage-aware artifact filtering.
 """
 
 import argparse
