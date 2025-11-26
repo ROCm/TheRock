@@ -270,10 +270,9 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 # --- hip-tests (per-arch) ---
 
-[artifacts.core-hipinfo]
-artifact_group = "hip-tests"
+[artifacts.core-hiptests]
+artifact_group = "hip-runtime"
 type = "target-specific"
-platform = "windows", "linux"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
