@@ -57,7 +57,7 @@ jobs:
     needs: [setup_metadata]
     runs-on: ${{ matrix.target_bundle.test_machine }}
     container:
-      image: 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98'
+      image: 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:d84961d3cb0b1d608f7a3dded3eda3d60f8d92f9f3e415b7df253835736c7821'
       options: --ipc host
         --group-add video
         --device /dev/kfd
