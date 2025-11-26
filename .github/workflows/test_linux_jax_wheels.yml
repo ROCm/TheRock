@@ -32,7 +32,6 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: rocm-jaxlib-v0.8.0
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
