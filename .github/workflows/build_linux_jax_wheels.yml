@@ -7,6 +7,7 @@ on:
         required: true
         type: string
       python_versions:
+        description: eg "3.12"
         required: true
         type: string
       release_type:
@@ -74,11 +75,11 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+        default: "https://rocm.devreleases.amd.com/v2-staging"
       jax_ref:
         description: rocm-jax repository ref/branch to check out
         type: string
