@@ -351,7 +351,9 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     BUILD_DEPS
       rocm-cmake
     RUNTIME_DEPS
+      amd-llvm
       hip-clr
+      ROCR-Runtime
       hipcc
       rocm-cmake
   )
