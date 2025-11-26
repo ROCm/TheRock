@@ -344,7 +344,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      #-DMIOPEN_REQ_LIBS_ONLY=ON
+      -DMIOPEN_REQ_LIBS_ONLY=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -358,8 +358,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       ${THEROCK_BUNDLED_BZIP2}
       ${optional_profiler_deps}
   )
-  #therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
-  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake)
+  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
 
   therock_cmake_subproject_activate(composable_kernel)
 
@@ -380,7 +379,6 @@ if(THEROCK_ENABLE_HIPTENSOR)
   ##############################################################################
   # hipTensor
   ##############################################################################
-  set(ENV{CK_DIR} "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel")
 
   therock_cmake_subproject_declare(hipTensor
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
