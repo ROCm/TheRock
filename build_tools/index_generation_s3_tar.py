@@ -34,7 +34,6 @@ from github_actions.github_actions_utils import gha_append_step_summary
 
 log = logging.getLogger(__name__)
 
-
 def extract_gpu_details(files):
     # Regex: r"gfx(?:\d+[A-Za-z]*|\w+)"
     # Matches "gfx" + digits with optional letters (e.g., gfx90a/gfx103) or a word token (e.g., gfx_ip).
@@ -49,11 +48,9 @@ def extract_gpu_details(files):
             gpu_families.add(match.group(0))
     return sorted(list(gpu_families))
 
-
 def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
     prefix = prefix.lstrip("/").rstrip("/")
-
     # List all objects and select .tar.gz keys
     try:
         paginator = s3_client.get_paginator("list_objects_v2")
@@ -196,7 +193,6 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                 font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
                 font-variant-numeric: tabular-nums; /* Align digits */
             }}
-
             .file-link {{
                 text-decoration: none;
                 color: #0056b3;
@@ -204,14 +200,12 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                 min-width: 0;
             }}
             .file-link:hover {{ color: #003d82; }}
-
             .col-size, .col-time {{
                 white-space: nowrap;
                 text-align: right;
                 color: #666;
                 font-size: 13px;
             }}
-
             /* Responsive: stack on narrow screens */
             @media (max-width: 720px) {{
                 .grid-row {{
@@ -224,7 +218,6 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         </style>
         <script>
             const files = {files_js_array};
-
             function toUTCStringFromEpochSec(sec) {{
                 // Format as YYYY-MM-DD HH:MM:SS UTC
                 const dateObj = new Date(sec * 1000);
@@ -292,14 +285,11 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
             function renderFiles(fileList) {{
                 const listElement = document.getElementById('fileList');
                 listElement.innerHTML = '';
-
                 const fragment = document.createDocumentFragment();
-
                 fileList.forEach(file => {{
                     const {{ element }} = createFileRow(file);
                     fragment.appendChild(element);
                 }});
-
                 listElement.appendChild(fragment);
             }}
 
