@@ -891,9 +891,7 @@ def do_build_pytorch_vision(
     copy_to_output(args, built_wheel)
 
 
-def do_build_apex(
-    args: argparse.Namespace, apex_dir: Path, env: dict[str, str]
-):
+def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str]):
     # Compute version.
     build_version = (apex_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
@@ -905,7 +903,19 @@ def do_build_apex(
     if args.clean:
         remove_dir_if_exists(apex_dir / "build")
 
-    exec([sys.executable, "-m", "build", "--wheel", "--no-isolation", "-C--build-option=--cpp_ext", "-C--build-option=--cuda_ext"], cwd=apex_dir, env=env)
+    exec(
+        [
+            sys.executable,
+            "-m",
+            "build",
+            "--wheel",
+            "--no-isolation",
+            "-C--build-option=--cpp_ext",
+            "-C--build-option=--cuda_ext",
+        ],
+        cwd=apex_dir,
+        env=env,
+    )
     built_wheel = find_built_wheel(apex_dir / "dist", "apex")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
