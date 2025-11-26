@@ -27,9 +27,4 @@ cmd = [
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-    env=environ_vars
-)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
