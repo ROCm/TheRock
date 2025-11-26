@@ -159,7 +159,6 @@ jobs:
           ROCM_VERSION: ${{ inputs.rocm_version }}
           AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
         run: |
-          python -m pip install -q --upgrade pip
           DEST="/opt/rocm-${{ inputs.rocm_version }}"
           # Install directly from TheRock release buckets (nightly/dev) using the provided version
           python build_tools/install_rocm_from_artifacts.py \
