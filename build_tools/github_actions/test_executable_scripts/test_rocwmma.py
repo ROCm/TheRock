@@ -18,18 +18,14 @@ environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
+# Enable GTest "brief" output: only show failures and the final results
+environ_vars["GTEST_BRIEF"] = str(1)
+
 logging.basicConfig(level=logging.INFO)
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-
-# FIXME: Temporarily force smoke tests for rocWMMA.  See https://github.com/ROCm/TheRock/issues/2259
-if test_type == "full":
-    logging.info(
-        "++ NOTE: The 'full' test set was requested for rocWMMA, but 'smoke' tests will be run instead."
-    )
-test_type = "smoke"
 
 # If there are devices for which the full set is too slow, we can
 # programatically set test_type to "regression" here.
