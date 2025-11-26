@@ -329,3 +329,51 @@ if(THEROCK_ENABLE_ROCWMMA)
       rocWMMA
   )
 endif(THEROCK_ENABLE_ROCWMMA)
+
+if(THEROCK_ENABLE_LIBHIPCXX)
+  ##############################################################################
+  # libhipcxx
+  ##############################################################################
+
+  therock_cmake_subproject_declare(libhipcxx
+    # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
+    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/libhipcxx"
+    EXTERNAL_SOURCE_DIR "${THEROCK_LIBHIPCXX_SOURCE_DIR}"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+      hipcc
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      amd-llvm
+      hip-clr
+      ROCR-Runtime
+      hipcc
+      rocm-cmake
+  )
+  therock_cmake_subproject_glob_c_sources(libhipcxx
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_activate(libhipcxx)
+
+  therock_provide_artifact(libhipcxx
+    DESCRIPTOR artifact-libhipcxx.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      libhipcxx
+  )
+endif(THEROCK_ENABLE_LIBHIPCXX)
