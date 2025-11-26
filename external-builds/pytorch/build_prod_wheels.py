@@ -499,12 +499,8 @@ def do_build(args: argparse.Namespace):
     print("--- Builds all completed")
 
     # Build apex.
-    if args.build_apex or (
-        args.build_apex is None and apex_dir
-    ):
-        assert (
-            apex_dir
-        ), "Must specify --apex-dir if --build-apex"
+    if args.build_apex or (args.build_apex is None and apex_dir):
+        assert apex_dir, "Must specify --apex-dir if --build-apex"
         do_build_apex(args, apex_dir, dict(env))
     else:
         print("--- Not build apex (no --apex-dir)")
