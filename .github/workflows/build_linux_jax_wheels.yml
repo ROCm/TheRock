@@ -156,9 +156,29 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+  
+  generate_target_to_run:
+    name: Generate target_to_run
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "linux"
+        run: python ./build_tools/github_actions/configure_target_run.py
 
   test_jax_wheels:
-    name: Test JAX wheels | ${{ inputs.amdgpu_family }} | linux-mi325-1gpu-ossci-rocm
+    name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     needs: [build_jax_wheels]
     permissions:
       contents: read
@@ -174,3 +194,4 @@ jobs:
       python_version: ${{ inputs.python_version }}
       ref: ${{ inputs.ref || '' }}
       jax_ref: ${{ inputs.jax_ref }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
