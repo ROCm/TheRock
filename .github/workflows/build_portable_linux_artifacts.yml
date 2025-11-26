@@ -130,19 +130,9 @@ jobs:
         if: ${{ inputs.build_variant_label == 'ASAN' }}
         shell: bash
         run: |
-          echo "Starting telemetry loop..."
-
-          nohup bash -c '
-            while true; do
-              echo "--- $(date) ---"
-              free -h
-              top -b -n1 | head -20
-              sleep 30
-            done
-          ' > telemetry.log 2>&1 &
-
-          echo "TELEMETRY_PID=$!" >> $GITHUB_ENV
-          echo "Telemetry started with PID $!"
+          sudo apt-get update && sudo apt-get install -y tmux
+          tmux new-session -d -s telemetry \
+            "while true; do echo \"--- \$(date) ---\"; free -h; top -b -n1 | head -20; sleep 30; done"
           
       - name: Build therock-archives and therock-dist
         run: cmake --build build --target therock-archives therock-dist -- -k 0
@@ -151,8 +141,7 @@ jobs:
         if: ${{ inputs.build_variant_label == 'ASAN' }}
         shell: bash
         run: |
-          echo "Stopping telemetry with PID $TELEMETRY_PID"
-          kill "$TELEMETRY_PID" || echo "Telemetry process already stopped"
+          tmux kill-session -t telemetry
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
