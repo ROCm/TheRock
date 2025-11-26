@@ -1,3 +1,12 @@
+From b34cd50bb9d302c1647e3bdf7cd121f7ba1992df Mon Sep 17 00:00:00 2001
+From: Estevan Vedovelli <Estevan.Vedovelli@amd.com>
+Date: Wed, 26 Nov 2025 13:42:17 -0500
+Subject: [PATCH] [hipTensor] Remove PATHS for composable_kernel find_package
+
+---
+ projects/hiptensor/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
 diff --git a/projects/hiptensor/CMakeLists.txt b/projects/hiptensor/CMakeLists.txt
 index ff3290022f..00b1358a0e 100644
 --- a/projects/hiptensor/CMakeLists.txt
@@ -11,3 +20,6 @@ index ff3290022f..00b1358a0e 100644
  rocm_package_add_dependencies("composable_kernel >= 1.0.0" COMPONENT tests)
  
  # Configure library build
+-- 
+2.43.0
+
