@@ -4,6 +4,9 @@ This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 * Each entry determines which families and test runners are available to use
 * Each group determines which entries run by default on workflow triggers
 
+Arch coverage for pre-submit PR runs: gfx110x,gfx1151,gfx1150,gfx120x,gfx94x,gfx90x,gfx950
+Arch coverage for post-submit PR runs: gfx110x,gfx1151,gfx1150,gfx120x,gfx94x,gfx90x,gfx950
+
 For presubmit, postsubmit and nightly family selection:
 
 - presubmit runs the targets from presubmit dictionary on pull requests
