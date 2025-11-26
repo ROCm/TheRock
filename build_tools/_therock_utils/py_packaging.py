@@ -349,7 +349,7 @@ class PopulatedDistPackage:
             ]
             subprocess.check_call(patchelf_cl)
 
-      def _normalize_rpath(self, file_path: Path):
+    def _normalize_rpath(self, file_path: Path):
         existing_rpath = (
             subprocess.check_output(
                 [
