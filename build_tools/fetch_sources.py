@@ -33,6 +33,15 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
+def parse_nested_submodules(s):
+    """Parse nested submodules string like 'iree:flatcc,something' into (project, [nested])."""
+    if ":" in s:
+        project, nested = s.split(":", 1)
+        nested_list = [n.strip() for n in nested.split(",")] if nested else []
+        return (project, nested_list)
+    return (s, [])
+
+
 def get_enabled_projects(args) -> list[str]:
     projects = []
     if args.include_system_projects:
@@ -45,7 +54,44 @@ def get_enabled_projects(args) -> list[str]:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
+    if args.include_iree_libs:
+        projects.extend(args.iree_libs_projects)
     return projects
+
+
+def fetch_nested_submodules(args, projects):
+    """Fetch nested submodules for projects specified in --nested-submodules."""
+    update_args = []
+    if args.depth:
+        update_args += ["--depth", str(args.depth)]
+    if args.progress:
+        update_args += ["--progress"]
+    if args.jobs:
+        update_args += ["--jobs", str(args.jobs)]
+    if args.remote:
+        update_args += ["--remote"]
+
+    for name, nested_submodules in dict(args.nested_submodules).items():
+        if len(nested_submodules) == 0:
+            continue
+
+        # Skip if parent project wasn't fetched
+        if name not in projects:
+            continue
+
+        # Fetch the nested submodules
+        project_dir = THEROCK_DIR / get_submodule_path(name)
+        nested_submodule_paths = [
+            get_submodule_path(nested_submodule, cwd=project_dir)
+            for nested_submodule in nested_submodules
+        ]
+        exec(
+            ["git", "submodule", "update", "--init"]
+            + update_args
+            + ["--"]
+            + nested_submodule_paths,
+            cwd=project_dir,
+        )
 
 
 def run(args):
@@ -71,6 +117,10 @@ def run(args):
         )
     if args.dvc_projects:
         pull_large_files(args.dvc_projects, projects)
+
+    # Fetch nested submodules
+    if args.update_submodules:
+        fetch_nested_submodules(args, projects)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
@@ -193,7 +243,7 @@ def apply_patches(args, projects):
 
 # Gets the the relative path to a submodule given its name.
 # Raises an exception on failure.
-def get_submodule_path(name: str) -> str:
+def get_submodule_path(name: str, cwd=THEROCK_DIR) -> str:
     relpath = (
         subprocess.check_output(
             [
@@ -204,7 +254,7 @@ def get_submodule_path(name: str) -> str:
                 "--get",
                 f"submodule.{name}.path",
             ],
-            cwd=str(THEROCK_DIR),
+            cwd=cwd,
         )
         .decode()
         .strip()
@@ -288,6 +338,13 @@ def main(argv):
         default=None,
     )
     parser.add_argument(
+        "--nested-submodules",
+        nargs="+",
+        type=parse_nested_submodules,
+        default=[("iree", ["third_party/flatcc"])],
+        help="Specify which nested submodules to fetch (e.g., iree:flatcc,something fusilli:nested1)",
+    )
+    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -316,6 +373,12 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include machine learning frameworks that are part of ROCM",
+    )
+    parser.add_argument(
+        "--include-iree-libs",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include IREE and related libraries",
     )
     parser.add_argument(
         "--system-projects",
@@ -352,6 +415,15 @@ def main(argv):
                 "composable_kernel",
             ]
         ),
+    )
+    parser.add_argument(
+        "--iree-libs-projects",
+        nargs="+",
+        type=str,
+        default=[
+            "iree",
+            "fusilli",
+        ],
     )
     parser.add_argument(
         # projects that use DVC to manage large files
