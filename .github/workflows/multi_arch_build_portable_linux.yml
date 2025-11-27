@@ -141,10 +141,9 @@ jobs:
       - name: Push stage artifacts
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: compiler-runtime (generic)
@@ -152,11 +151,6 @@ jobs:
   compiler-runtime:
     name: Stage - Compiler Runtime
     needs: foundation
-    if: >-
-      ${{
-        always() &&
-        (needs.foundation.result == 'success' || needs.foundation.result == 'skipped')
-      }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 480  # 8 hours (compiler is big)
     permissions:
@@ -200,10 +194,9 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} fetch \
             --stage ${STAGE_NAME} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
@@ -249,10 +242,9 @@ jobs:
       - name: Push stage artifacts
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: math-libs (per-arch)
@@ -260,11 +252,6 @@ jobs:
   math-libs:
     name: Stage - Math Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
-      }}
     strategy:
       fail-fast: false
       matrix:
@@ -313,11 +300,10 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} fetch \
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
@@ -365,11 +351,10 @@ jobs:
       - name: Push stage artifacts
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: comm-libs (per-arch, parallel to math-libs)
@@ -377,11 +362,6 @@ jobs:
   comm-libs:
     name: Stage - Comm Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
-      }}
     strategy:
       fail-fast: false
       matrix:
@@ -430,11 +410,10 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} fetch \
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
@@ -482,11 +461,10 @@ jobs:
       - name: Push stage artifacts
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: dctools-core (generic, parallel to math-libs)
@@ -494,11 +472,6 @@ jobs:
   dctools-core:
     name: Stage - DC Tools Core
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
-      }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 120  # 2 hours
     permissions:
@@ -542,10 +515,9 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} fetch \
             --stage ${STAGE_NAME} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
@@ -591,10 +563,9 @@ jobs:
       - name: Push stage artifacts
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: profiler-apps (generic, parallel to math-libs)
@@ -602,11 +573,6 @@ jobs:
   profiler-apps:
     name: Stage - Profiler Apps
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
-      }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 180  # 3 hours
     permissions:
@@ -650,10 +616,9 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} fetch \
             --stage ${STAGE_NAME} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
@@ -699,7 +664,6 @@ jobs:
       - name: Push stage artifacts
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
