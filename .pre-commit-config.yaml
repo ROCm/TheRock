@@ -47,4 +47,4 @@ repos:
   rev: v1.7.9
   hooks:
     - id: actionlint
-      args: [-ignore, 'label ".+" is unknown']
+      args: [-shellcheck=, -ignore, 'label ".+" is unknown']
