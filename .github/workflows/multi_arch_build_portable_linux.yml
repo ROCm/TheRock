@@ -89,15 +89,16 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
@@ -203,15 +204,16 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
@@ -316,9 +318,6 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
@@ -326,6 +325,10 @@ jobs:
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family }} \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
@@ -432,9 +435,6 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
@@ -442,6 +442,10 @@ jobs:
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family }} \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
@@ -542,15 +546,16 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
@@ -649,15 +654,16 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |

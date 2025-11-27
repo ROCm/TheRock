@@ -55,6 +55,7 @@
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
+#   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #
 # ==============================================================================
 
@@ -405,6 +406,7 @@ type = "target-neutral"
 artifact_deps = ["rocprofiler-sdk"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
+python_requires = ["-r rocm-systems/projects/rocprofiler-compute/requirements.txt"]
 
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"

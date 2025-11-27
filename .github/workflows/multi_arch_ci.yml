@@ -85,7 +85,7 @@ jobs:
   # Linux Build - Sharded Pipeline
   # --------------------------------------------------------------------------
   linux_build:
-    name: Linux Build (${{ inputs.build_variant }})
+    name: Linux Build${{ inputs.build_variant && format(' ({0})', inputs.build_variant) || '' }}
     needs: setup
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit

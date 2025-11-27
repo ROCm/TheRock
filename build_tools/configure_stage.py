@@ -214,7 +214,10 @@ def main(argv: List[str] = None):
         output = "\n".join(cmake_args)
 
     if args.gha_output:
-        gha_set_output({"cmake_args": output})
+        # Get python requirements for this stage
+        python_requires = topology.get_python_requires_for_stage(args.stage)
+        pip_install_cmd = " ".join(python_requires) if python_requires else ""
+        gha_set_output({"cmake_args": output, "pip_install_cmd": pip_install_cmd})
     elif args.output_cmake_args:
         args.output_cmake_args.write_text(output + "\n")
         log(f"Wrote CMake arguments to {args.output_cmake_args}")
