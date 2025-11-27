@@ -11,6 +11,37 @@ from typing import Dict, List, Optional, Set
 
 
 @dataclass
+class Submodule:
+    """Represents a git submodule with checkout configuration.
+
+    This class is designed to be extended with additional fields:
+    - sparse_checkout: List[str] - paths to include in sparse checkout
+    - recursive: bool - whether to recursively init submodules
+    - depth: int - shallow clone depth
+    """
+
+    name: str
+    # Future fields for sparse checkout, recursive settings, etc.
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        if isinstance(other, Submodule):
+            return self.name == other.name
+        return False
+
+
+@dataclass
+class SourceSet:
+    """Represents a grouping of submodules for partial checkouts."""
+
+    name: str
+    description: str
+    submodules: List[Submodule] = field(default_factory=list)
+
+
+@dataclass
 class BuildStage:
     """Represents a build stage (CI/CD pipeline job)."""
 
@@ -28,6 +59,7 @@ class ArtifactGroup:
     description: str
     type: str  # "generic" or "per-arch"
     artifact_group_deps: List[str] = field(default_factory=list)
+    source_sets: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -62,6 +94,7 @@ class BuildTopology:
             toml_path: Path to BUILD_TOPOLOGY.toml file
         """
         self.toml_path = Path(toml_path)
+        self.source_sets: Dict[str, SourceSet] = {}
         self.build_stages: Dict[str, BuildStage] = {}
         self.artifact_groups: Dict[str, ArtifactGroup] = {}
         self.artifacts: Dict[str, Artifact] = {}
@@ -80,6 +113,17 @@ class BuildTopology:
         with open(self.toml_path, "rb") as f:
             data = tomllib.load(f)
 
+        # Parse source sets
+        for set_name, set_data in data.get("source_sets", {}).items():
+            # Convert submodule names to Submodule objects
+            submodule_names = set_data.get("submodules", [])
+            submodules = [Submodule(name=name) for name in submodule_names]
+            self.source_sets[set_name] = SourceSet(
+                name=set_name,
+                description=set_data.get("description", ""),
+                submodules=submodules,
+            )
+
         # Parse build stages
         for stage_name, stage_data in data.get("build_stages", {}).items():
             self.build_stages[stage_name] = BuildStage(
@@ -96,6 +140,7 @@ class BuildTopology:
                 description=group_data.get("description", ""),
                 type=group_data.get("type", "generic"),
                 artifact_group_deps=group_data.get("artifact_group_deps", []),
+                source_sets=group_data.get("source_sets", []),
             )
 
         # Parse artifacts
@@ -500,3 +545,69 @@ class BuildTopology:
             visit(stage_name)
 
         return order
+
+    def get_source_sets(self) -> List[SourceSet]:
+        """Get all source sets."""
+        return list(self.source_sets.values())
+
+    def get_submodules_for_source_set(self, source_set_name: str) -> List[Submodule]:
+        """
+        Get the submodules for a specific source set.
+
+        Args:
+            source_set_name: Name of the source set
+
+        Returns:
+            List of Submodule objects
+        """
+        if source_set_name not in self.source_sets:
+            raise ValueError(f"Source set '{source_set_name}' not found")
+        return self.source_sets[source_set_name].submodules
+
+    def get_submodules_for_stage(self, build_stage: str) -> List[Submodule]:
+        """
+        Get all submodules needed to build a specific stage.
+
+        This collects source_sets from all artifact_groups in the stage,
+        deduplicating by submodule name. When sparse checkout is added,
+        this will need to merge specs for the same submodule.
+
+        Args:
+            build_stage: Name of the build stage
+
+        Returns:
+            List of Submodule objects needed for this stage
+        """
+        if build_stage not in self.build_stages:
+            raise ValueError(f"Build stage '{build_stage}' not found")
+
+        stage = self.build_stages[build_stage]
+        # Use dict to dedupe by name while preserving order
+        submodules_by_name: Dict[str, Submodule] = {}
+
+        for group_name in stage.artifact_groups:
+            if group_name not in self.artifact_groups:
+                continue
+            group = self.artifact_groups[group_name]
+            for source_set_name in group.source_sets:
+                if source_set_name in self.source_sets:
+                    for submodule in self.source_sets[source_set_name].submodules:
+                        # TODO: When adding sparse_checkout, merge specs here
+                        if submodule.name not in submodules_by_name:
+                            submodules_by_name[submodule.name] = submodule
+
+        return list(submodules_by_name.values())
+
+    def get_all_submodules(self) -> List[Submodule]:
+        """
+        Get all submodules defined across all source sets.
+
+        Returns:
+            List of all Submodule objects (deduplicated by name)
+        """
+        submodules_by_name: Dict[str, Submodule] = {}
+        for source_set in self.source_sets.values():
+            for submodule in source_set.submodules:
+                if submodule.name not in submodules_by_name:
+                    submodules_by_name[submodule.name] = submodule
+        return list(submodules_by_name.values())
