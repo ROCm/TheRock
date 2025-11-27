@@ -162,6 +162,7 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 GITHUB_WORKFLOWS_CI_PATTERNS = [
     "setup.yml",
     "ci*.yml",
+    "multi_arch*.yml",
     "build*artifact*.yml",
     "test*artifacts.yml",
     "test_sanity_check.yml",
@@ -266,6 +267,98 @@ def filter_known_names(
     return filtered_names
 
 
+def generate_multi_arch_matrix(
+    target_names: List[str],
+    lookup_matrix: dict,
+    platform: str,
+    platform_build_variants: dict,
+    base_args: dict,
+) -> List[dict]:
+    """Generate matrix grouped by build_variant with structured per-family data.
+
+    In multi-arch mode, instead of creating one entry per (family × build_variant),
+    we create one entry per build_variant containing all families that support it.
+    This allows multi_arch_build_portable_linux.yml to run generic stages once
+    and matrix over families only for per-arch stages.
+
+    Args:
+        target_names: List of target family names (e.g., ["gfx94X", "gfx1201"])
+        lookup_matrix: Family info matrix from amdgpu_family_matrix.py
+        platform: Platform name ("linux" or "windows")
+        platform_build_variants: Dict of build variant configs for this platform
+        base_args: Base arguments including 'build_variant' to filter by
+
+    Returns:
+        List of matrix entries, each containing:
+        - matrix_per_family_json: JSON array of {amdgpu_family, test-runs-on} objects
+          for per-architecture job matrix expansion
+        - dist_amdgpu_families: Semicolon-separated family names for THEROCK_DIST_AMDGPU_TARGETS
+        - build_variant_label: Human-readable label (e.g., "Release", "ASAN")
+        - build_variant_suffix: Suffix for artifact naming (e.g., "", "asan"). Empty string
+          for release builds, short identifier for other variants.
+        - build_variant_cmake_preset: CMake preset name (e.g., "release", "asan")
+        - expect_failure: If True, job failure is non-blocking (continue-on-error)
+        - artifact_group: Unique identifier for artifact grouping, formatted as
+          "multi-arch-{suffix}" where suffix defaults to "release" if empty
+    """
+    # Collect per-family info for each build_variant
+    variant_to_family_info: dict[str, List[dict]] = {}
+    variant_info: dict[str, dict] = {}
+
+    for target_name in target_names:
+        platform_set = lookup_matrix.get(target_name)
+        if not platform_set or platform not in platform_set:
+            continue
+        platform_info = platform_set.get(platform)
+        family_name = platform_info["family"]
+        test_runs_on = platform_info.get("test-runs-on", "")
+
+        for build_variant_name in platform_info.get("build_variants", []):
+            if build_variant_name != base_args.get("build_variant"):
+                continue
+
+            if build_variant_name not in variant_to_family_info:
+                variant_to_family_info[build_variant_name] = []
+                variant_info[build_variant_name] = platform_build_variants.get(
+                    build_variant_name
+                )
+
+            # Check for duplicates by family name
+            existing_families = [
+                f["amdgpu_family"] for f in variant_to_family_info[build_variant_name]
+            ]
+            if family_name not in existing_families:
+                variant_to_family_info[build_variant_name].append(
+                    {
+                        "amdgpu_family": family_name,
+                        "test-runs-on": test_runs_on,
+                    }
+                )
+
+    # Create one matrix entry per build_variant
+    matrix_output = []
+    for variant_name, family_info_list in variant_to_family_info.items():
+        info = variant_info[variant_name]
+        if not info:
+            continue
+
+        # Extract family names for dist_amdgpu_families
+        family_names = [f["amdgpu_family"] for f in family_info_list]
+
+        matrix_row = {
+            "matrix_per_family_json": json.dumps(family_info_list),
+            "dist_amdgpu_families": ";".join(family_names),
+            "artifact_group": f"multi-arch-{info.get('build_variant_suffix') or 'release'}",
+            "build_variant_label": info["build_variant_label"],
+            "build_variant_suffix": info["build_variant_suffix"],
+            "build_variant_cmake_preset": info["build_variant_cmake_preset"],
+            "expect_failure": info.get("expect_failure", False),
+        }
+        matrix_output.append(matrix_row)
+
+    return matrix_output
+
+
 def matrix_generator(
     is_pull_request=False,
     is_workflow_dispatch=False,
@@ -274,6 +367,7 @@ def matrix_generator(
     base_args={},
     families={},
     platform="linux",
+    multi_arch=False,
 ):
     """
     Generates a matrix of "family" and "test-runs-on" parameters based on the workflow inputs.
@@ -289,8 +383,12 @@ def matrix_generator(
     active_trigger_types = []
     if is_pull_request:
         active_trigger_types.append("presubmit")
-    if is_push and base_args.get("branch_name") == "main":
-        active_trigger_types.extend(["presubmit", "postsubmit"])
+    if is_push:
+        if base_args.get("branch_name") == "main":
+            active_trigger_types.extend(["presubmit", "postsubmit"])
+        else:
+            # Non-main branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
+            active_trigger_types.append("presubmit")
     if is_schedule:
         active_trigger_types.extend(["presubmit", "postsubmit", "nightly"])
 
@@ -374,14 +472,25 @@ def matrix_generator(
         )
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
-    if is_push and base_args.get("branch_name") == "main":
-        print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
+    if is_push:
+        branch_name = base_args.get("branch_name")
+        if branch_name == "main":
+            print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
-        # Add presubmit and postsubmit targets.
-        for target in (
-            amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
-        ):
-            selected_target_names.append(target)
+            # Add presubmit and postsubmit targets.
+            for target in (
+                amdgpu_family_info_matrix_presubmit
+                | amdgpu_family_info_matrix_postsubmit
+            ):
+                selected_target_names.append(target)
+        else:
+            print(
+                f"[PUSH - {branch_name}] Generating build matrix with {str(base_args)}"
+            )
+
+            # Non-main branch pushes use presubmit targets
+            for target in amdgpu_family_info_matrix_presubmit:
+                selected_target_names.append(target)
 
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
@@ -407,12 +516,26 @@ def matrix_generator(
     unique_target_names = list(set(selected_target_names))
     unique_test_names = list(set(selected_test_names))
 
-    # Expand selected target names back to a matrix.
-    matrix_output = []
     platform_build_variants = all_build_variants.get(platform)
     assert isinstance(
         platform_build_variants, dict
     ), f"Expected build variant {platform} in {all_build_variants}"
+
+    # In multi-arch mode, group all families into one entry per build_variant
+    if multi_arch:
+        matrix_output = generate_multi_arch_matrix(
+            unique_target_names,
+            lookup_matrix,
+            platform,
+            platform_build_variants,
+            base_args,
+        )
+        print(f"Generated multi-arch build matrix: {str(matrix_output)}")
+        print(f"Generated test list: {str(unique_test_names)}")
+        return matrix_output, unique_test_names
+
+    # Expand selected target names back to a matrix (cross-product of families × variants).
+    matrix_output = []
     for target_name in unique_target_names:
         # Filter targets to only those matching the requested platform.
         # Use the trigger-appropriate lookup matrix
@@ -483,7 +606,10 @@ def main(base_args, linux_families, windows_families):
     print(f"  is_pull_request: {is_pull_request}")
     print("")
 
-    print(f"Generating build matrix for Linux: {str(linux_families)}")
+    multi_arch = base_args.get("multi_arch", False)
+    print(
+        f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
+    )
     linux_variants_output, linux_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
@@ -492,10 +618,13 @@ def main(base_args, linux_families, windows_families):
         base_args,
         linux_families,
         platform="linux",
+        multi_arch=multi_arch,
     )
     print("")
 
-    print(f"Generating build matrix for Windows: {str(windows_families)}")
+    print(
+        f"Generating build matrix for Windows (multi_arch={multi_arch}): {str(windows_families)}"
+    )
     windows_variants_output, windows_test_output = matrix_generator(
         is_pull_request,
         is_workflow_dispatch,
@@ -504,6 +633,7 @@ def main(base_args, linux_families, windows_families):
         base_args,
         windows_families,
         platform="windows",
+        multi_arch=multi_arch,
     )
     print("")
 
@@ -535,13 +665,25 @@ def main(base_args, linux_families, windows_families):
         if linux_test_output or windows_test_output:
             test_type = "full"
 
+    # Format variants for summary - handle both regular and multi-arch modes
+    def format_variants(variants):
+        result = []
+        for item in variants:
+            if "family" in item:
+                result.append(item["family"])
+            elif "matrix_per_family_json" in item:
+                # Multi-arch mode: show the families from the JSON
+                families = json.loads(item["matrix_per_family_json"])
+                result.append([f["amdgpu_family"] for f in families])
+        return result
+
     gha_append_step_summary(
         f"""## Workflow configure results
 
-* `linux_variants`: {str([item.get("family") for item in linux_variants_output])}
+* `linux_variants`: {str(format_variants(linux_variants_output))}
 * `linux_test_labels`: {str([test for test in linux_test_output])}
 * `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
-* `windows_variants`: {str([item.get("family") for item in windows_variants_output])}
+* `windows_variants`: {str(format_variants(windows_variants_output))}
 * `windows_test_labels`: {str([test for test in windows_test_output])}
 * `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
@@ -591,5 +733,6 @@ if __name__ == "__main__":
         "WINDOWS_TEST_LABELS", ""
     )
     base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
+    base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
 
     main(base_args, linux_families, windows_families)
