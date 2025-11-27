@@ -158,6 +158,7 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 GITHUB_WORKFLOWS_CI_PATTERNS = [
     "setup.yml",
     "ci*.yml",
+    "multi_arch*.yml",
     "build*artifact*.yml",
     "test*artifacts.yml",
     "test_sanity_check.yml",
