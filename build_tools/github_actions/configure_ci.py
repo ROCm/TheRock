@@ -373,7 +373,10 @@ def matrix_generator(
         )
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
-    if is_push and base_args.get("branch_name") == "main":
+    if is_push and (
+        base_args.get("branch_name") == "main"
+        or base_args.get("branch_name").startswith("releases/therock")
+    ):
         print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
         # Add presubmit and postsubmit targets.
