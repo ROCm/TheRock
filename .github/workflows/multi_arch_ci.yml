@@ -18,6 +18,10 @@
 name: Multi-Arch CI
 
 on:
+  push:
+    branches:
+      # While we are iterating on testing.
+      - 'multi_arch/**'
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
