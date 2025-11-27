@@ -285,7 +285,10 @@ def matrix_generator(
     active_trigger_types = []
     if is_pull_request:
         active_trigger_types.append("presubmit")
-    if is_push and base_args.get("branch_name") == "main":
+    if is_push and (
+        base_args.get("branch_name") == "main"
+        or base_args.get("branch_name").startswith("releases/therock")
+    ):
         active_trigger_types.extend(["presubmit", "postsubmit"])
     if is_schedule:
         active_trigger_types.append("nightly")
