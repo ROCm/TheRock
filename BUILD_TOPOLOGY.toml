@@ -166,7 +166,8 @@ source_sets = []  # No submodules - uses vendored/in-tree deps
 description = "Base ROCm infrastructure and CMake tools"
 type = "generic"
 artifact_group_deps = []
-source_sets = ["base"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["base", "rocm-systems"]
 
 [artifact_groups.core-runtime]
 description = "Core runtime (ROCR-Runtime, rocminfo)"
@@ -196,7 +197,8 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
 artifact_group_deps = ["hip-runtime", "profiler-core"]
-source_sets = ["rocm-libraries"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["rocm-libraries", "rocm-systems"]
 
 [artifact_groups.ml-libs]
 description = "Machine learning libraries"
@@ -208,7 +210,8 @@ source_sets = ["rocm-libraries", "ml-frameworks"]
 description = "Communication libraries"
 type = "per-arch"
 artifact_group_deps = ["hip-runtime"]
-source_sets = ["comm-libs"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["comm-libs", "rocm-systems"]
 
 [artifact_groups.profiler-core]
 description = "Core profiling libraries and annotation support"
@@ -220,7 +223,8 @@ source_sets = ["rocm-systems"]  # rocprofiler-sdk is in rocm-systems
 description = "Data center management tools with minimal dependencies"
 type = "generic"
 artifact_group_deps = ["core-runtime", "profiler-core"]
-source_sets = ["base"]  # RDC uses amdsmi from base
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from base
 
 # Future artifact groups
 # [artifact_groups.dctools-rocm]
