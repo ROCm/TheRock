@@ -287,7 +287,7 @@ def matrix_generator(
         active_trigger_types.append("presubmit")
     if is_push and (
         base_args.get("branch_name") == "main"
-        or base_args.get("branch_name").startswith("releases/therock")
+        or base_args.get("branch_name").startswith("release/therock")
     ):
         active_trigger_types.extend(["presubmit", "postsubmit"])
     if is_schedule:
@@ -561,9 +561,12 @@ if __name__ == "__main__":
         "INPUT_WINDOWS_AMDGPU_FAMILIES", ""
     )
 
+    print(f"original branch name from GITHUB_REF: {os.environ.get('GITHUB_REF')}")
     # For now, add default run for gfx94X-linux
     base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
-    base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
+    #  We only want to cut of the first "/" to get the branch name
+    # e.g. origin/main -> main or origin/release/therock-7.10 -> release/therock-7.10
+    base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/", 1)[-1]
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
