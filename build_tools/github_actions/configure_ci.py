@@ -564,9 +564,15 @@ if __name__ == "__main__":
     print(f"original branch name from GITHUB_REF: {os.environ.get('GITHUB_REF')}")
     # For now, add default run for gfx94X-linux
     base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
-    #  We only want to cut of the first "/" to get the branch name
-    # e.g. origin/main -> main or origin/release/therock-7.10 -> release/therock-7.10
-    base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/", 1)[-1]
+
+    #  We only want the branch name portion of GITHUB_REF
+    # e.g. origin/main -> main or refs/heads/release/therock-7.10 -> release/therock-7.10
+    branch = os.environ.get("GITHUB_REF")
+    if branch.startswith("refs/heads/"):
+        base_args["branch_name"] = branch.removeprefix("refs/heads/")
+    else:
+        base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
+
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
