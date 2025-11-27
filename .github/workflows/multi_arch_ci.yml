@@ -61,6 +61,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       amdgpu_families_json: ${{ steps.configure.outputs.amdgpu_families_json }}
+      dist_amdgpu_families: ${{ steps.configure.outputs.dist_amdgpu_families }}
       enabled_stages: ${{ steps.configure.outputs.enabled_stages }}
       artifact_group: ${{ steps.configure.outputs.artifact_group }}
       rocm_package_version: ${{ steps.version.outputs.rocm_package_version }}
@@ -91,6 +92,7 @@ jobs:
     secrets: inherit
     with:
       amdgpu_families_json: ${{ needs.setup.outputs.amdgpu_families_json }}
+      dist_amdgpu_families: ${{ needs.setup.outputs.dist_amdgpu_families }}
       artifact_group: ${{ needs.setup.outputs.artifact_group }}
       build_variant: ${{ inputs.build_variant }}
       package_version: ${{ needs.setup.outputs.rocm_package_version }}

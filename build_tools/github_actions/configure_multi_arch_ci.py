@@ -6,6 +6,7 @@ multi-arch CI pipeline jobs.
 
 Outputs (via GITHUB_OUTPUT):
     amdgpu_families_json: JSON array of GPU families for matrix builds
+    dist_amdgpu_families: Semicolon-separated list of all families (CMake list format)
     enabled_stages: Comma-separated list of enabled stages
     artifact_group: Artifact group identifier
 """
@@ -56,6 +57,9 @@ def main(argv: list[str] = None):
     families = [f.strip() for f in args.amdgpu_families.split(",") if f.strip()]
     families_json = json.dumps(families)
 
+    # Create semicolon-joined list for CMake (THEROCK_DIST_AMDGPU_FAMILIES)
+    dist_amdgpu_families = ";".join(families)
+
     # Determine enabled stages
     if args.stages:
         enabled_stages = args.stages
@@ -69,6 +73,7 @@ def main(argv: list[str] = None):
     gha_set_output(
         {
             "amdgpu_families_json": families_json,
+            "dist_amdgpu_families": dist_amdgpu_families,
             "enabled_stages": enabled_stages,
             "artifact_group": artifact_group,
         }

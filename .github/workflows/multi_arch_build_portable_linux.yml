@@ -19,6 +19,10 @@ on:
         type: string
         required: true
         description: "JSON array of GPU families for per-arch stages"
+      dist_amdgpu_families:
+        type: string
+        required: true
+        description: "Semicolon-separated list of all GPU families for dist targets"
       artifact_group:
         type: string
         required: true
@@ -94,6 +98,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
       - name: Install stage python deps
@@ -209,6 +214,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
       - name: Install stage python deps
@@ -324,6 +330,7 @@ jobs:
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family }} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
       - name: Install stage python deps
@@ -441,6 +448,7 @@ jobs:
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
             --amdgpu-families ${{ matrix.family }} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
       - name: Install stage python deps
@@ -551,6 +559,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
       - name: Install stage python deps
@@ -659,6 +668,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
       - name: Install stage python deps
