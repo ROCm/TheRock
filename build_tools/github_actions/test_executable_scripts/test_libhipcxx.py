@@ -62,6 +62,7 @@ cmd = [
     f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
     #f"-DCMAKE_CXX_FLAGS=--rocm-path={OUTPUT_ARTIFACTS_PATH}",
     f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+    "-GNinja",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
@@ -78,7 +79,7 @@ if test_type == "smoke":
     pass
 
 cmd = [
-    "make",
+    "ninja",
     "check-hipcxx"
 ]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
