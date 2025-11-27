@@ -391,7 +391,7 @@ artifact_deps = ["miopen", "hipdnn"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
@@ -415,7 +415,7 @@ python_requires = ["-r rocm-systems/projects/rocprofiler-compute/requirements.tx
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "rocprofiler-sdk"]
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
@@ -425,7 +425,7 @@ disable_platforms = ["windows"]
 [artifacts.rdc]
 artifact_group = "dctools-core"
 type = "target-neutral"
-artifact_deps = ["rocprofiler-sdk", "sysdeps"]
+artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps"]
 feature_group = "DC_TOOLS"  # Part of DC tools, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 
