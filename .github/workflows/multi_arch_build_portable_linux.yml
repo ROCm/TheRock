@@ -139,7 +139,7 @@ jobs:
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
@@ -240,7 +240,7 @@ jobs:
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
@@ -349,7 +349,7 @@ jobs:
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
@@ -459,7 +459,7 @@ jobs:
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
@@ -561,7 +561,7 @@ jobs:
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
@@ -662,7 +662,7 @@ jobs:
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py --run-id ${{ github.run_id }} push \
             --stage ${STAGE_NAME} \
