@@ -17,8 +17,10 @@ THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 
 # Set up ROCm/HIP environment
 environ_vars["ROCM_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
+environ_vars["HIP_DEVICE_LIB_PATH"] = str(OUTPUT_ARTIFACTS_PATH / "lib/llvm/amdgcn/bitcode/")
 environ_vars["HIP_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["CMAKE_PREFIX_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
+environ_vars["HIP_PLATFORM"] = "amd"
 
 # Add ROCm binaries to PATH
 rocm_bin = str(THEROCK_BIN_PATH)
@@ -56,8 +58,10 @@ cmd = [
     "cmake",
     "..",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DCMAKE_HIP_COMPILER={THEROCK_BIN_PATH}/hipcc",
+    #f"-DCMAKE_HIP_COMPILER={THEROCK_BIN_PATH}/hipcc",
     f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
+    #f"-DCMAKE_CXX_FLAGS=--rocm-path={OUTPUT_ARTIFACTS_PATH}",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
