@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import List, Set
 
 from _therock_utils.build_topology import BuildTopology
+from github_actions.github_actions_utils import gha_set_output
 
 
 def log(msg: str):
@@ -172,6 +173,11 @@ def main(argv: List[str] = None):
         action="store_true",
         help="List available build stages and exit",
     )
+    parser.add_argument(
+        "--gha-output",
+        action="store_true",
+        help="Write cmake_args to GITHUB_OUTPUT (for GitHub Actions)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -202,12 +208,14 @@ def main(argv: List[str] = None):
         cmake_args = [a for a in cmake_args if not a.startswith("#") and a]
 
     # Output
-    if args.oneline:
+    if args.oneline or args.gha_output:
         output = " ".join(cmake_args)
     else:
         output = "\n".join(cmake_args)
 
-    if args.output_cmake_args:
+    if args.gha_output:
+        gha_set_output({"cmake_args": output})
+    elif args.output_cmake_args:
         args.output_cmake_args.write_text(output + "\n")
         log(f"Wrote CMake arguments to {args.output_cmake_args}")
     elif args.print_args:
