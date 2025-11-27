@@ -18,4 +18,7 @@ include = [
   "bin/simple_*",
   # Tests
   "bin/*_test*",
+  "CTestTestfile.cmake",
+  "bin/hiptensor/CTestTestfile.cmake",
+  "bin/hiptensor/*/CTestTestfile.cmake",
 ]

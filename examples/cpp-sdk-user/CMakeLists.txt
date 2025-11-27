@@ -153,6 +153,6 @@ if(THEROCK_ENABLE_ROCWMMA)
 endif()
 
 if(THEROCK_ENABLE_HIPTENSOR)
-    find_package(hipTensor CONFIG REQUIRED)
+    find_package(hiptensor CONFIG REQUIRED)
     message(STATUS "hipTensor version: ${hiptensor_VERSION}")
 endif()
