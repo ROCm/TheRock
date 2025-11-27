@@ -52,21 +52,21 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         self.assertEqual(artifacts, [])
 
     def test_list_artifacts_with_files(self):
-        """Test listing artifacts with tar.xz files present."""
-        # Create some test artifact files
-        (self.backend.base_path / "blas_lib_gfx94X.tar.xz").touch()
+        """Test listing artifacts with tar.zst and tar.xz files present."""
+        # Create some test artifact files (both zstd and xz)
+        (self.backend.base_path / "blas_lib_gfx94X.tar.zst").touch()
         (self.backend.base_path / "blas_dev_gfx94X.tar.xz").touch()
-        (self.backend.base_path / "fft_lib_generic.tar.xz").touch()
+        (self.backend.base_path / "fft_lib_generic.tar.zst").touch()
         # Create a sha256sum file (should be excluded)
-        (self.backend.base_path / "blas_lib_gfx94X.tar.xz.sha256sum").touch()
+        (self.backend.base_path / "blas_lib_gfx94X.tar.zst.sha256sum").touch()
         # Create a non-artifact file (should be excluded)
         (self.backend.base_path / "README.txt").touch()
 
         artifacts = self.backend.list_artifacts()
         self.assertEqual(len(artifacts), 3)
-        self.assertIn("blas_lib_gfx94X.tar.xz", artifacts)
+        self.assertIn("blas_lib_gfx94X.tar.zst", artifacts)
         self.assertIn("blas_dev_gfx94X.tar.xz", artifacts)
-        self.assertIn("fft_lib_generic.tar.xz", artifacts)
+        self.assertIn("fft_lib_generic.tar.zst", artifacts)
 
     def test_list_artifacts_with_name_filter(self):
         """Test filtering artifacts by name prefix."""
@@ -215,20 +215,20 @@ class TestS3Backend(unittest.TestCase):
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
     def test_list_artifacts(self, mock_client_prop):
-        """Test listing S3 artifacts."""
+        """Test listing S3 artifacts (both zstd and xz)."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
 
-        # Mock paginator
+        # Mock paginator with both zstd and xz artifacts
         mock_paginator = mock.MagicMock()
         mock_client.get_paginator.return_value = mock_paginator
         mock_paginator.paginate.return_value = [
             {
                 "Contents": [
-                    {"Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.xz"},
+                    {"Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.zst"},
                     {"Key": "external/test-run-456-linux/blas_dev_gfx94X.tar.xz"},
                     {
-                        "Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.xz.sha256sum"
+                        "Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.zst.sha256sum"
                     },
                 ]
             }
@@ -236,7 +236,7 @@ class TestS3Backend(unittest.TestCase):
 
         artifacts = self.backend.list_artifacts()
         self.assertEqual(len(artifacts), 2)
-        self.assertIn("blas_lib_gfx94X.tar.xz", artifacts)
+        self.assertIn("blas_lib_gfx94X.tar.zst", artifacts)
         self.assertIn("blas_dev_gfx94X.tar.xz", artifacts)
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
