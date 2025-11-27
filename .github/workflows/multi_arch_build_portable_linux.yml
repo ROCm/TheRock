@@ -15,30 +15,32 @@ name: Multi-Arch Build (Linux)
 on:
   workflow_call:
     inputs:
-      amdgpu_families_json:
-        type: string
-        required: true
-        description: "JSON array of GPU families for per-arch stages"
-      dist_amdgpu_families:
-        type: string
-        required: true
-        description: "Semicolon-separated list of all GPU families for dist targets"
       artifact_group:
         type: string
-        required: true
-        description: "Artifact group identifier"
-      build_variant:
+      matrix_per_family_json:
         type: string
-        required: true
-        description: "Build variant (release, asan)"
-      package_version:
+        description: "JSON array of {amdgpu_family, test-runs-on} objects for per-arch stages"
+      dist_amdgpu_families:
         type: string
-        required: true
-        description: "Package version string"
-      enabled_stages:
+        description: "Semicolon-separated list of all GPU families for dist targets"
+      build_variant_label:
         type: string
-        required: true
-        description: "Comma-separated list of enabled stages"
+      build_variant_cmake_preset:
+        type: string
+      build_variant_suffix:
+        type: string
+      test_labels:
+        type: string
+      artifact_run_id:
+        type: string
+      expect_failure:
+        type: boolean
+      use_prebuilt_artifacts:
+        type: string
+      rocm_package_version:
+        type: string
+      test_type:
+        type: string
 
 permissions:
   contents: read
@@ -55,7 +57,7 @@ jobs:
   # ==========================================================================
   foundation:
     name: Stage - Foundation
-    if: contains(inputs.enabled_stages, 'foundation')
+    # Always run all stages
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 180  # 3 hours
     permissions:
@@ -108,7 +110,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
@@ -153,8 +155,7 @@ jobs:
     if: >-
       ${{
         always() &&
-        (needs.foundation.result == 'success' || needs.foundation.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'compiler-runtime')
+        (needs.foundation.result == 'success' || needs.foundation.result == 'skipped')
       }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 480  # 8 hours (compiler is big)
@@ -224,7 +225,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
@@ -257,18 +258,17 @@ jobs:
   # STAGE: math-libs (per-arch)
   # ==========================================================================
   math-libs:
-    name: Stage - Math Libs (${{ matrix.family }})
+    name: Stage - Math Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
     if: >-
       ${{
         always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'math-libs')
+        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
       }}
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(inputs.amdgpu_families_json) }}
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 480  # 8 hours
     permissions:
@@ -279,7 +279,7 @@ jobs:
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: math-libs
-      AMDGPU_FAMILIES: ${{ matrix.family }}
+      AMDGPU_FAMILIES: ${{ matrix.family_info.amdgpu_family }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -315,7 +315,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py fetch \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --output-dir build \
             --run-id ${{ github.run_id }} \
             --bootstrap
@@ -329,7 +329,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
@@ -340,8 +340,8 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
-            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family_info.amdgpu_family }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
@@ -367,7 +367,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --build-dir build \
             --run-id ${{ github.run_id }}
 
@@ -375,18 +375,17 @@ jobs:
   # STAGE: comm-libs (per-arch, parallel to math-libs)
   # ==========================================================================
   comm-libs:
-    name: Stage - Comm Libs (${{ matrix.family }})
+    name: Stage - Comm Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
     if: >-
       ${{
         always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'comm-libs')
+        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
       }}
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(inputs.amdgpu_families_json) }}
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 240  # 4 hours
     permissions:
@@ -397,7 +396,7 @@ jobs:
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: comm-libs
-      AMDGPU_FAMILIES: ${{ matrix.family }}
+      AMDGPU_FAMILIES: ${{ matrix.family_info.amdgpu_family }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -433,7 +432,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py fetch \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --output-dir build \
             --run-id ${{ github.run_id }} \
             --bootstrap
@@ -447,7 +446,7 @@ jobs:
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
@@ -458,8 +457,8 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
-            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family_info.amdgpu_family }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
@@ -485,7 +484,7 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --build-dir build \
             --run-id ${{ github.run_id }}
 
@@ -498,8 +497,7 @@ jobs:
     if: >-
       ${{
         always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'dctools-core')
+        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
       }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 120  # 2 hours
@@ -569,7 +567,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
@@ -607,8 +605,7 @@ jobs:
     if: >-
       ${{
         always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'profiler-apps')
+        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped')
       }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 180  # 3 hours
@@ -678,7 +675,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
