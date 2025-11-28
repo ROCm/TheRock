@@ -32,7 +32,7 @@ on:
         required: true
         type: string
       repository:
-        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        description: "Repository to checkout. Defaults to `ROCm/TheRock`."
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
@@ -156,7 +156,7 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
-  
+
   generate_target_to_run:
     name: Generate target_to_run
     runs-on: ubuntu-24.04
