@@ -73,6 +73,7 @@ jobs:
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
       cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
+      cloudfront_base_url: ${{ steps.release_information.outputs.cloudfront_base_url }}
       s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
@@ -120,6 +121,8 @@ jobs:
           echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
           echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
           echo "s3_subdir_tar=${tmp_s3_subdir_tar}" >> $GITHUB_OUTPUT
+          # TODO: Refactor to use a single CloudFront URL bucket paths (v2 vs. whl) are harmonized
+          echo "cloudfront_base_url=${tmp_cloudfront_url%/*}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -299,7 +302,7 @@ jobs:
         # TODO: Enable JAX wheels for prereleases
         if: ${{ env.RELEASE_TYPE != 'prerelease' }}
         id: url-encode-tar
-        run: python -c "from urllib.parse import quote; print('tar_url=https://therock-${{ env.RELEASE_TYPE }}-tarball.s3.amazonaws.com/' + quote('therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz'))" >> ${GITHUB_OUTPUT}
+        run: python -c "from urllib.parse import quote; print('tar_url=${{ needs.setup_metadata.outputs.cloudfront_base_url }}/' + quote('${{ env.FILE_NAME }}'))" >> ${GITHUB_OUTPUT}
 
       - name: Trigger build JAX wheels
         # TODO: Enable JAX wheels for prereleases
