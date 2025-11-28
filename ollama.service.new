@@ -22,7 +22,8 @@ Environment="HIP_DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode"
 Environment="HIP_VISIBLE_DEVICES=0"
 
 # HSA Configuration for RDNA 2 (gfx1030/1031)
-Environment="HSA_OVERRIDE_GFX_VERSION=10.3.0"
+# NOTE: ROCm 7.11 has native gfx103X support, override may cause issues
+# Environment="HSA_OVERRIDE_GFX_VERSION=10.3.0"
 Environment="HSA_XNACK=0"
 Environment="HSA_ENABLE_SDMA=0"
 

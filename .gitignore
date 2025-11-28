@@ -23,3 +23,16 @@ __pycache__
 /install/
 /output-*/
 /out/
+
+# Personal build logs and artifacts
+build*.log
+install*.log
+*.pcap
+*.pp
+*.te
+Konsole/
+blah/
+FORK_SUMMARY.md
+
+# SELinux and service configs (keep in docs)
+# ollama.service.new - keep modified
