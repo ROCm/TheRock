@@ -375,9 +375,11 @@ def matrix_generator(
 
     if is_push and (
         base_args.get("branch_name") == "main"
-        or base_args.get("branch_name").startswith("releases/therock")
+        or base_args.get("branch_name").startswith("release/therock")
     ):
-        print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
+        print(
+            f"[PUSH - MAIN OR RELEASE/THEROCK-x.y] Generating build matrix with {str(base_args)}"
+        )
 
         # Add presubmit and postsubmit targets.
         for target in (
