@@ -181,6 +181,20 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
+    "gfx1153": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx1153",
+            "expect_failure": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx1153",
+            "expect_failure": True,
+            "build_variants": ["release"],
+        },
+    },
 }
 
 
