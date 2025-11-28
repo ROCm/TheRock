@@ -126,7 +126,7 @@ jobs:
       - name: Find last successful CI run
         id: last_success
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           echo "Finding last successful ci_nightly workflow run on main branch..."
 
