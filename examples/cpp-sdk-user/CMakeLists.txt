@@ -152,7 +152,8 @@ if(THEROCK_ENABLE_ROCWMMA)
     message(STATUS "rocWMMA version: ${rocWMMA_VERSION}")
 endif()
 
-if(THEROCK_ENABLE_HIPTENSOR)
-    find_package(hiptensor CONFIG REQUIRED)
-    message(STATUS "hipTensor version: ${hiptensor_VERSION}")
-endif()
+# TODO: uncomment these lines before merging
+#if(THEROCK_ENABLE_HIPTENSOR)
+#    find_package(hiptensor CONFIG REQUIRED)
+#    message(STATUS "hipTensor version: ${hiptensor_VERSION}")
+#endif()
