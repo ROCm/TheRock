@@ -90,6 +90,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
+    if args.include_rocm_media:
+        projects.extend(args.rocm_media_projects)
     return projects
 
 
@@ -384,6 +386,12 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
+        "--include-rocm-media",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include media projects that are part of ROCM",
+    )
+    parser.add_argument(
         "--system-projects",
         nargs="+",
         type=str,
@@ -416,6 +424,19 @@ def main(argv):
             else [
                 # Linux only projects.
                 "composable_kernel",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--rocm-media-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "amd-mesa",
             ]
         ),
     )
