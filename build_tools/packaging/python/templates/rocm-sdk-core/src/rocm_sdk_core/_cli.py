@@ -59,6 +59,14 @@ def hipconfig():
     _exec("bin/hipconfig")
 
 
+def hipify_clang():
+    _exec("bin/hipify-clang")
+
+
+def hipify_perl():
+    _exec("bin/hipify-perl")
+
+
 def hipInfo():
     _exec("bin/hipInfo")
 

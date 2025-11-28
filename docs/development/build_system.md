@@ -192,6 +192,58 @@ part of it). Or you can invoke the expunge sub-target:
 ninja amd-llvm+expunge
 ```
 
+## Build Topology
+
+TheRock uses a declarative topology file (`BUILD_TOPOLOGY.toml` in the repository
+root) to define the relationships between build artifacts. This file serves as
+the single source of truth for:
+
+1. **CMake Feature Generation**: During CMake configure, the topology is parsed
+   to automatically generate `THEROCK_ENABLE_*` feature flags for each artifact.
+   This replaces manual `therock_add_feature()` calls for artifact-mapped features.
+
+1. **CI/CD Pipeline Sharding**: The topology defines which artifacts belong to
+   which build stages, enabling the CI system to fetch only the required
+   dependencies from artifact storage before each build stage.
+
+### Topology Structure
+
+The topology has a three-level hierarchy:
+
+- **Build Stages**: CI/CD pipeline jobs (e.g., `compiler-runtime`, `math-libs`)
+- **Artifact Groups**: Logical groupings with shared dependencies (e.g., `hip-runtime`)
+- **Artifacts**: Individual build outputs (e.g., `core-hip`, `blas`, `miopen`)
+
+### Key Files
+
+- `BUILD_TOPOLOGY.toml` - The topology definition (see inline documentation)
+- `build_tools/_therock_utils/build_topology.py` - Python parser and utilities
+- `build_tools/topology_to_cmake.py` - Generates CMake includes from topology
+
+### Naming Conventions
+
+| Field             | Convention                 | Example           |
+| ----------------- | -------------------------- | ----------------- |
+| Entity names      | lowercase-with-hyphens     | `core-runtime`    |
+| `feature_name`    | UPPERCASE_WITH_UNDERSCORES | `CORE_RUNTIME`    |
+| `feature_group`   | UPPERCASE_WITH_UNDERSCORES | `CORE`            |
+| `type` values     | lowercase                  | `target-specific` |
+| `platform` values | lowercase                  | `windows`         |
+
+### Validation
+
+Run validation without generating output:
+
+```bash
+python build_tools/topology_to_cmake.py --validate-only
+```
+
+Print the dependency graph as JSON:
+
+```bash
+python build_tools/topology_to_cmake.py --print-graph
+```
+
 ## Adding Sub-Projects
 
 The entire sub-project facility is defined in
