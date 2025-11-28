@@ -20,7 +20,7 @@ def create_commit_badge_html(sha, repo_name):
     commit_url = f"https://github.com/ROCm/{repo_name}/commit/{sha}"
     return (
         f"<a href='{commit_url}' target='_blank' style='text-decoration:none;'>"
-        f"<span style='display:inline-block; background-color:#2196F3; color:#fff; padding:2px 8px; font-family:Verdana,sans-serif; font-size:12px; border-radius:2px;'>{short_sha}</span>"
+        f"<span style='display:inline-block; background-color:#1976D2; color:#fff; padding:2px 8px; font-family:Verdana,sans-serif; font-size:12px; border-radius:2px;'>{short_sha}</span>"
         f"</a>"
     )
 
@@ -49,8 +49,8 @@ def create_table_wrapper(headers, rows):
     )
 
 # HTML Table Functions
-def generate_monorepo_html_table(allocation, original_commits=None, repo_name="rocm-libraries"):
-    """Create a styled HTML table for monorepo commit differences with project allocation"""
+def generate_superrepo_html_table(allocation, original_commits=None, repo_name="rocm-libraries"):
+    """Create a styled HTML table for superrepo commit differences with project allocation"""
     rows = []
     commit_seen = set()
     commit_to_projects = {}
@@ -116,8 +116,8 @@ def generate_monorepo_html_table(allocation, original_commits=None, repo_name="r
 
     return table + commit_projects_html
 
-def generate_non_monorepo_html_table(submodule_commits):
-    """Generate an HTML table for non-monorepo components"""
+def generate_non_superrepo_html_table(submodule_commits):
+    """Generate an HTML table for non-superrepo components"""
     rows = []
 
     for submodule, commits in submodule_commits.items():
@@ -140,7 +140,7 @@ def generate_non_monorepo_html_table(submodule_commits):
 
     return create_table_wrapper(["Submodule", "Commits"], rows)
 
-def generate_therock_html_report(html_reports, removed_submodules=None, newly_added_submodules=None, unchanged_submodules=None):
+def generate_therock_html_report(html_reports, removed_submodules=None, newly_added_submodules=None, unchanged_submodules=None, changed_submodules=None):
     """Generate a comprehensive HTML report for TheRock repository diff"""
     print(f"\n=== Generating Comprehensive HTML Report ===")
 
@@ -150,13 +150,16 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
 
     # Generate and populate submodule changes summary
     summary_html = ""
-    if removed_submodules or newly_added_submodules or unchanged_submodules:
+    if removed_submodules or newly_added_submodules or unchanged_submodules or changed_submodules:
+        # Calculate total number of submodules
+        total_submodules = len(newly_added_submodules or []) + len(removed_submodules or []) + len(unchanged_submodules or []) + len(changed_submodules or [])
         summary_html += '<div style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">'
-        summary_html += '<div style="text-align:center; color:#2196F3; font-size:2.2em; font-weight:bold; margin-bottom:16px;">Submodule Changes Summary</div>'
+        summary_html += '<div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold; margin-bottom:16px;">Submodule Changes Summary</div>'
+        summary_html += '<div style="text-align:center; color:#666; font-size:0.9em; margin-bottom:20px; padding:8px; background-color:#f8f9fa; border-radius:4px; border-left:4px solid #17a2b8;"><strong>Note:</strong> The total count represents all unique submodules found across both commits (start and end), including newly added, removed, changed, and unchanged submodules.</div>'
 
         if newly_added_submodules:
             summary_html += '<div style="margin-bottom:16px;">'
-            summary_html += '<h3 style="color:#28a745; margin-bottom:8px;">Newly Added Submodules:</h3>'
+            summary_html += f'<h3 style="color:#28a745; margin-bottom:8px;">Newly Added Submodules ({len(newly_added_submodules)}/{total_submodules}):</h3>'
             summary_html += '<ul style="margin:0; padding-left:20px;">'
             for sub in sorted(newly_added_submodules):
                 summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
@@ -164,15 +167,23 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
 
         if removed_submodules:
             summary_html += '<div style="margin-bottom:16px;">'
-            summary_html += '<h3 style="color:#dc3545; margin-bottom:8px;">Removed Submodules:</h3>'
+            summary_html += f'<h3 style="color:#dc3545; margin-bottom:8px;">Removed Submodules ({len(removed_submodules)}/{total_submodules}):</h3>'
             summary_html += '<ul style="margin:0; padding-left:20px;">'
             for sub in sorted(removed_submodules):
                 summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
             summary_html += '</ul></div>'
 
+        if changed_submodules:
+            summary_html += '<div style="margin-bottom:16px;">'
+            summary_html += f'<h3 style="color:#ffc107; margin-bottom:8px;">Changed Submodules ({len(changed_submodules)}/{total_submodules}):</h3>'
+            summary_html += '<ul style="margin:0; padding-left:20px;">'
+            for sub in sorted(changed_submodules):
+                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
+            summary_html += '</ul></div>'
+
         if unchanged_submodules:
             summary_html += '<div>'
-            summary_html += '<h3 style="color:#6c757d; margin-bottom:8px;">Unchanged Submodules:</h3>'
+            summary_html += f'<h3 style="color:#6c757d; margin-bottom:8px;">Unchanged Submodules ({len(unchanged_submodules)}/{total_submodules}):</h3>'
             summary_html += '<ul style="margin:0; padding-left:20px;">'
             for sub in sorted(unchanged_submodules):
                 summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
@@ -189,37 +200,37 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
     # Check what sections have content and populate accordingly
     rocm_lib_data = html_reports.get('rocm-libraries')
     rocm_sys_data = html_reports.get('rocm-systems')
-    non_monorepo_data = html_reports.get('non-monorepo')
+    non_superrepo_data = html_reports.get('non-superrepo')
 
-    # Populate ROCm-Libraries Monorepo container
+    # Populate ROCm-Libraries Superrepo container
     if rocm_lib_data:
-        template = template.replace('<span id="commit-diff-start-rocm-libraries-monorepo"></span>', rocm_lib_data['start_commit'])
-        template = template.replace('<span id="commit-diff-end-rocm-libraries-monorepo"></span>', rocm_lib_data['end_commit'])
+        template = template.replace('<span id="commit-diff-start-rocm-libraries-superrepo"></span>', rocm_lib_data['start_commit'])
+        template = template.replace('<span id="commit-diff-end-rocm-libraries-superrepo"></span>', rocm_lib_data['end_commit'])
         template = template.replace(
-            '<div id="commit-diff-job-content-rocm-libraries-monorepo" style="margin-top:8px;">\n      </div>',
-            f'<div id="commit-diff-job-content-rocm-libraries-monorepo" style="margin-top:8px;">{rocm_lib_data["content_html"]}</div>'
+            '<div id="commit-diff-job-content-rocm-libraries-superrepo" style="margin-top:8px;">\n      </div>',
+            f'<div id="commit-diff-job-content-rocm-libraries-superrepo" style="margin-top:8px;">{rocm_lib_data["content_html"]}</div>'
         )
-        print("Populated ROCm-Libraries monorepo section")
+        print("Populated ROCm-Libraries superrepo section")
 
-    # Populate ROCm-Systems Monorepo container
+    # Populate ROCm-Systems Superrepo container
     if rocm_sys_data:
-        template = template.replace('<span id="commit-diff-start-rocm-systems-monorepo"></span>', rocm_sys_data['start_commit'])
-        template = template.replace('<span id="commit-diff-end-rocm-systems-monorepo"></span>', rocm_sys_data['end_commit'])
+        template = template.replace('<span id="commit-diff-start-rocm-systems-superrepo"></span>', rocm_sys_data['start_commit'])
+        template = template.replace('<span id="commit-diff-end-rocm-systems-superrepo"></span>', rocm_sys_data['end_commit'])
         template = template.replace(
-            '<div id="commit-diff-job-content-rocm-systems-monorepo" style="margin-top:8px;">\n      </div>',
-            f'<div id="commit-diff-job-content-rocm-systems-monorepo" style="margin-top:8px;">{rocm_sys_data["content_html"]}</div>'
+            '<div id="commit-diff-job-content-rocm-systems-superrepo" style="margin-top:8px;">\n      </div>',
+            f'<div id="commit-diff-job-content-rocm-systems-superrepo" style="margin-top:8px;">{rocm_sys_data["content_html"]}</div>'
         )
-        print("Populated ROCm-Systems monorepo section")
+        print("Populated ROCm-Systems superrepo section")
 
-    # Populate Non-Monorepo container
-    if non_monorepo_data and non_monorepo_data.get('content_html') and non_monorepo_data['content_html'].strip():
-        template = template.replace('<span id="commit-diff-start-non-monorepo"></span>', non_monorepo_data['start_commit'])
-        template = template.replace('<span id="commit-diff-end-non-monorepo"></span>', non_monorepo_data['end_commit'])
+    # Populate Non-Superrepo container
+    if non_superrepo_data and non_superrepo_data.get('content_html') and non_superrepo_data['content_html'].strip():
+        template = template.replace('<span id="commit-diff-start-non-superrepo"></span>', non_superrepo_data['start_commit'])
+        template = template.replace('<span id="commit-diff-end-non-superrepo"></span>', non_superrepo_data['end_commit'])
         template = template.replace(
-            '<div id="commit-diff-job-content-non-monorepo" style="margin-top:8px;">\n      </div>',
-            f'<div id="commit-diff-job-content-non-monorepo" style="margin-top:8px;">{non_monorepo_data["content_html"]}</div>'
+            '<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">\n      </div>',
+            f'<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">{non_superrepo_data["content_html"]}</div>'
         )
-        print("Populated Non-Monorepo section")
+        print("Populated Non-Superrepo section")
 
     # Write the final TheRock HTML report
     with open("TheRockReport.html", "w") as f:
@@ -229,7 +240,7 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
 
 # TheRock Helper Functions
 def get_rocm_components(repo):
-    """Get components from ROCm monorepo repositories (shared and projects directories)"""
+    """Get components from ROCm superrepo repositories (shared and projects directories)"""
     components = []
 
     # If the repo is rocm-libraries fetch from shared and projects subfolders
@@ -267,7 +278,7 @@ def get_commits_between_shas(repo_name, start_sha, end_sha, enrich_with_files=Fa
         repo_name: Repository name (e.g., 'rocm-libraries', 'hip')
         start_sha: Starting commit SHA to stop at
         end_sha: Ending commit SHA to start from
-        enrich_with_files: If True, fetch detailed file info for each commit (needed for monorepos)
+        enrich_with_files: If True, fetch detailed file info for each commit (needed for superrepos)
 
     Returns:
         List of commit objects in chronological order (newest first)
@@ -277,7 +288,7 @@ def get_commits_between_shas(repo_name, start_sha, end_sha, enrich_with_files=Fa
     page = 1
     max_pages = 20
 
-    repo_type = "monorepo" if enrich_with_files else "submodule"
+    repo_type = "superrepo" if enrich_with_files else "submodule"
     print(f"  Getting commits for {repo_type} {repo_name} from {start_sha} to {end_sha}")
 
     while not found_start and page <= max_pages:
@@ -297,7 +308,7 @@ def get_commits_between_shas(repo_name, start_sha, end_sha, enrich_with_files=Fa
             for commit in data:
                 sha = commit['sha']
 
-                # Enrich with file details if requested (for monorepos)
+                # Enrich with file details if requested (for superrepos)
                 if enrich_with_files:
                     print(f"  Processing commit: {sha}")
                     try:
@@ -425,9 +436,9 @@ def find_submodules(commit_sha):
 # Workflow Summary Function
 def generate_step_summary(start_commit, end_commit, html_reports, submodule_commits):
     """Generate simple GitHub Actions step summary"""
-    monorepo_count = len([k for k in html_reports.keys() if k != 'non-monorepo'])
-    non_monorepo_count = len(submodule_commits)
-    total_submodules = monorepo_count + non_monorepo_count
+    superrepo_count = len([k for k in html_reports.keys() if k != 'non-superrepo'])
+    non_superrepo_count = len(submodule_commits)
+    total_submodules = superrepo_count + non_superrepo_count
 
     summary = f"""## TheRock Repository Diff Report
 
@@ -437,7 +448,7 @@ def generate_step_summary(start_commit, end_commit, html_reports, submodule_comm
 
 **Status:** {' Report generated successfully' if os.path.exists('TheRockReport.html') else ' Report generation failed'}
 
-**Submodules with Updates:** {total_submodules} submodules ({monorepo_count} monorepos + {non_monorepo_count} regular submodules)"""
+**Submodules with Updates:** {total_submodules} submodules ({superrepo_count} superrepos + {non_superrepo_count} regular submodules)"""
 
     gha_append_step_summary(summary)
 
@@ -447,12 +458,11 @@ def main():
     parser = argparse.ArgumentParser(description="Generate HTML report for repo diffs")
     parser.add_argument("--start", required=True, help="Start workflow ID or commit SHA")
     parser.add_argument("--end", required=True, help="End workflow ID or commit SHA")
-    parser.add_argument("--workflow-mode", action="store_true", help="Use workflow mode (extract commits from workflow logs). If not set, uses commit mode (direct commit comparison)")
 
     args = parser.parse_args()
 
-    # Determine mode
-    if args.workflow_mode:
+    # Determine mode from environment variable
+    if os.getenv('WORKFLOW_MODE') == 'true':
         print("Running in WORKFLOW mode - extracting commits from workflow logs")
         mode = "workflow"
     else:
@@ -507,6 +517,7 @@ def main():
     removed_submodules = []
     newly_added_submodules = []
     unchanged_submodules = []
+    changed_submodules = []
     html_reports = {}
 
     # Get all unique submodules from both commits
@@ -527,30 +538,30 @@ def main():
             newly_added_submodules.append(submodule)
             print(f"NEWLY ADDED: {submodule} -> {new_sha[:7]}")
 
-            # Process newly added monorepo (show as single commit entry)
+            # Get commit message for the tip SHA
+            commit_message = "N/A"
+            try:
+                commit_url = f"https://api.github.com/repos/ROCm/{submodule}/commits/{new_sha}"
+                commit_data = gha_send_request(commit_url)
+                commit_message = commit_data.get('commit', {}).get('message', 'N/A').split('\n')[0]
+                print(f"  Retrieved commit message for newly added {submodule}")
+            except Exception as e:
+                print(f"  Warning: Could not get commit message for newly added {submodule}: {e}")
+
+            # Process newly added superrepo (show as single commit entry)
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
                 # Create clickable commit badge for the current SHA
                 commit_badge = create_commit_badge_html(new_sha, submodule)
 
-                # Get commit message for the current SHA
-                commit_message = "N/A"
-                try:
-                    commit_url = f"https://api.github.com/repos/ROCm/{submodule}/commits/{new_sha}"
-                    commit_data = gha_send_request(commit_url)
-                    commit_message = commit_data.get('commit', {}).get('message', 'N/A').split('\n')[0]
-                    print(f"  Retrieved commit message for newly added {submodule}")
-                except Exception as e:
-                    print(f"  Warning: Could not get commit message for newly added {submodule}: {e}")
-
-                # Create informative content for newly added monorepo
+                # Create informative content for newly added superrepo
                 content_html = f"""
                 <div style="padding: 20px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-bottom: 16px;">
-                    <h3 style="margin-top: 0; color: #28a745; font-size: 1.4em;">Newly Added Monorepo</h3>
+                    <h3 style="margin-top: 0; color: #28a745; font-size: 1.4em;">Newly Added Superrepo</h3>
                     <p style="margin-bottom: 12px; font-size: 1.1em;">
-                        This <strong>{submodule}</strong> monorepo has been newly added to TheRock repository.
+                        This <strong>{submodule}</strong> superrepo has been newly added to TheRock repository.
                     </p>
                     <div style="background-color: #ffffff; padding: 12px; border-radius: 4px; border: 1px solid #dee2e6;">
-                        <strong>Current Commit:</strong> {commit_badge} {commit_message}
+                        <strong>Current(Tip) Commit:</strong> {commit_badge} {commit_message}
                     </div>
                     <p style="margin-top: 12px; margin-bottom: 0; color: #6c757d; font-style: italic;">
                         No previous version exists for comparison. Future reports will show detailed component-level changes.
@@ -567,19 +578,25 @@ def main():
                 submodule_commits[submodule] = [{
                     'sha': new_sha,
                     'commit': {
-                        'message': f'Newly added submodule: {submodule}',
+                        'message': f'Newly added submodule: {submodule} Tip -> {commit_message}',
                         'author': {'name': 'System', 'date': 'N/A'}
                     }
                 }]
 
         elif old_sha and new_sha:
-            # Submodule exists in both - process changed submodules
-            print(f"🔄 CHANGED: {submodule} {old_sha[:7]} -> {new_sha[:7]}")
+            # Submodule exists in both
+            # Log and track changed and unchanged submodules
+            if old_sha and new_sha and old_sha == new_sha:
+                print(f" UNCHANGED: {submodule} -> {new_sha[:7]}")
+                unchanged_submodules.append(submodule)
+            else:
+                print(f"CHANGED: {submodule} {old_sha[:7]} -> {new_sha[:7]}")
+                changed_submodules.append(submodule)
 
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
-                print(f"\n=== Processing {submodule.upper()} monorepo ===")
+                print(f"\n=== Processing {submodule.upper()} superrepo ===")
 
-                # Get the components for this monorepo
+                # Get the components for this superrepo
                 components = get_rocm_components(submodule)
 
                 # Fetch commits between the old and new SHA
@@ -589,7 +606,7 @@ def main():
                 allocation = allocate_commits_to_projects(commits, components)
 
                 # Generate HTML table
-                html_table = generate_monorepo_html_table(allocation, commits, submodule)
+                html_table = generate_superrepo_html_table(allocation, commits, submodule)
 
                 # Store the HTML report
                 html_reports[submodule] = {
@@ -604,17 +621,13 @@ def main():
                 # For other submodules, get commit history
                 submodule_commits[submodule] = get_commits_between_shas(submodule, old_sha, new_sha, enrich_with_files=False)
 
-        # Handle unchanged submodules separately
-        if old_sha and new_sha and old_sha == new_sha:
-            print(f" UNCHANGED: {submodule} -> {new_sha[:7]}")
-            unchanged_submodules.append(submodule)
-
     # Print summary
     print(f"\n=== SUBMODULE CHANGES SUMMARY ===")
     print(f" Total submodules: {len(all_submodules)}")
     print(f" Newly added: {len(newly_added_submodules)}")
-    print(f"  Removed: {len(removed_submodules)}")
+    print(f" Removed: {len(removed_submodules)}")
     print(f" Unchanged: {len(unchanged_submodules)}")
+    print(f" Changed: {len(changed_submodules)}")
     # Show detailed lists
     if newly_added_submodules:
         print(f"\n NEWLY ADDED SUBMODULES:")
@@ -631,10 +644,13 @@ def main():
         for sub in sorted(unchanged_submodules):
             print(f"  = {sub} -> {new_submodules[sub][:7]}")
 
-    changed_count = len([s for s in all_submodules if s in old_submodules and s in new_submodules and old_submodules[s] != new_submodules[s]])
-    unchanged_count = len([s for s in all_submodules if s in old_submodules and s in new_submodules and old_submodules[s] == new_submodules[s]])
-    print(f" Changed: {changed_count}")
-    print(f" Unchanged: {unchanged_count}")
+    if changed_submodules:
+        print(f"\n CHANGED SUBMODULES:")
+        for sub in sorted(changed_submodules):
+            print(f"  * {sub} {old_submodules[sub][:7]} -> {new_submodules[sub][:7]}")
+
+    print(f" Changed: {len(changed_submodules)}")
+    print(f" Unchanged: {len(unchanged_submodules)}")
 
     # Print all the submodules and their commits
     print(f"\n=== SUBMODULE COMMIT DETAILS ===")
@@ -651,21 +667,21 @@ def main():
         else:
             print(f"  No commits found for {submodule}")
 
-    print(f"\nTotal non-monorepo submodules with commits: {len(submodule_commits)}")
+    print(f"\nTotal non-superrepo submodules with commits: {len(submodule_commits)}")
 
-    # Generate HTML report for non-monorepo submodules
-    print(f"\n=== Generating Non-Monorepo HTML Report ===")
-    non_monorepo_html = generate_non_monorepo_html_table(submodule_commits)
+    # Generate HTML report for non-superrepo submodules
+    print(f"\n=== Generating Non-Superrepo HTML Report ===")
+    non_superrepo_html = generate_non_superrepo_html_table(submodule_commits)
 
-    # Store non-monorepo HTML report with TheRock start/end commits
-    html_reports['non-monorepo'] = {
+    # Store non-superrepo HTML report with TheRock start/end commits
+    html_reports['non-superrepo'] = {
         'start_commit': start,  # TheRock start commit
         'end_commit': end,      # TheRock end commit
-        'content_html': non_monorepo_html
+        'content_html': non_superrepo_html
     }
 
     # Generate the comprehensive HTML report
-    generate_therock_html_report(html_reports, removed_submodules, newly_added_submodules, unchanged_submodules)
+    generate_therock_html_report(html_reports, removed_submodules, newly_added_submodules, unchanged_submodules, changed_submodules)
 
     # Generate GitHub Actions step summary
     generate_step_summary(start, end, html_reports, submodule_commits)
