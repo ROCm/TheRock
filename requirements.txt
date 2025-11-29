@@ -10,6 +10,3 @@ pytest-cmake==0.13.0
 # hipBLASLt deps
 joblib>=1.4.2
 msgpack>=1.1.0
-
-# AWS Redshift connector
-redshift_connector==2.1.8
