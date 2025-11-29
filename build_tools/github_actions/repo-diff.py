@@ -14,6 +14,17 @@ from collections import defaultdict
 from github_actions_utils import gha_append_step_summary, gha_query_workflow_run_information, gha_send_request
 
 # HTML Helper Functions
+def format_commit_date(date_string):
+    """Format ISO date string to readable format"""
+    if date_string == 'Unknown' or not date_string:
+        return 'Unknown'
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        return dt.strftime('%b %d, %Y')
+    except:
+        return date_string
+
 def create_commit_badge_html(sha, repo_name):
     """Create a styled HTML badge for a commit SHA with link"""
     short_sha = sha[:7] if sha != '-' and sha != 'N/A' else sha
@@ -24,18 +35,34 @@ def create_commit_badge_html(sha, repo_name):
         f"</a>"
     )
 
+def extract_commit_data(commit):
+    """Extract common commit data to avoid redundancy"""
+    return {
+        'sha': commit.get('sha', '-'),
+        'message': commit.get('commit', {}).get('message', '-').split('\n')[0],
+        'author': commit.get('commit', {}).get('author', {}).get('name', 'Unknown'),
+        'date': commit.get('commit', {}).get('author', {}).get('date', 'Unknown'),
+        'formatted_date': format_commit_date(commit.get('commit', {}).get('author', {}).get('date', 'Unknown'))
+    }
+
 def create_commit_item_html(commit, repo_name):
-    """Create HTML for a single commit item with badge and message"""
-    sha = commit.get('sha', '-')
-    msg = commit.get('commit', {}).get('message', '-').split('\n')[0]
-    badge_html = create_commit_badge_html(sha, repo_name)
-    return f"<div style='margin-bottom:4px;'>{badge_html} {msg}</div>"
+    """Create HTML for a single commit item with badge, message, author and date"""
+    commit_data = extract_commit_data(commit)
+    badge_html = create_commit_badge_html(commit_data['sha'], repo_name)
+
+    return (
+        f"<div style='margin-bottom:8px; border-left:3px solid #1976D2; padding-left:8px;'>"
+        f"<div>{badge_html} {commit_data['message']}</div>"
+        f"<div style='color:#666; font-size:11px; margin-top:2px;'>{commit_data['formatted_date']} • {commit_data['author']}</div>"
+        f"</div>"
+    )
 
 def create_commit_list_container(commit_items):
     """Create a scrollable container for commit items"""
+    content = ''.join(commit_items) if commit_items else '<div style="color:#888; font-style:italic; text-align:center; padding:8px;">Component not changed</div>'
     return (
-        f"<div class='commit-list' style='max-height:120px; overflow-y:auto; padding:4px; border:1px solid #ccc; font-family:Verdana,sans-serif; font-size:13px; line-height:1.4; background-color:#f9f9f9;'>"
-        f"{''.join(commit_items)}</div>"
+        f"<div class='commit-list' style='max-height:160px; overflow-y:auto; padding:4px; border:1px solid #ccc; font-family:Verdana,sans-serif; font-size:13px; line-height:1.4; background-color:#f9f9f9;'>"
+        f"{content}</div>"
     )
 
 def create_table_wrapper(headers, rows):
@@ -49,75 +76,73 @@ def create_table_wrapper(headers, rows):
     )
 
 # HTML Table Functions
-def generate_superrepo_html_table(allocation, original_commits=None, repo_name="rocm-libraries"):
+def generate_superrepo_html_table(allocation, all_commits, repo_name):
     """Create a styled HTML table for superrepo commit differences with project allocation"""
     rows = []
-    commit_seen = set()
     commit_to_projects = {}
-    unassigned_proj = None
-    unassigned_list = None
 
+    # Build commit-to-projects mapping efficiently from allocation
     for component, commits in allocation.items():
-        commit_items = []
         for commit in commits:
-            sha = commit.get('sha', '-')
+            commit_data = extract_commit_data(commit)
+            sha = commit_data['sha']
             if sha not in commit_to_projects:
                 commit_to_projects[sha] = set()
-            # Only add 'Unassigned' if this is the only association
-            if component != 'Unassigned':
-                commit_to_projects[sha].add(component)
-            elif not commit_to_projects[sha]:
-                commit_to_projects[sha].add('Unassigned')
+            commit_to_projects[sha].add(component)
 
-            commit_items.append(create_commit_item_html(commit, repo_name))
-            commit_seen.add(sha)
-
-        # Create scrollable list for commits
+    # Generate component rows directly from allocation
+    for component, commits in allocation.items():
+        # Convert commits to HTML items
+        commit_items = [create_commit_item_html(commit, repo_name) for commit in commits]
         commit_list_html = create_commit_list_container(commit_items)
 
-        if component == "Unassigned":
-            unassigned_proj = component
-            unassigned_list = commit_list_html
-        else:
-            rows.append(
-                f"<tr>"
-                f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{component}</td>"
-                f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{commit_list_html}</td>"
-                f"</tr>"
-            )
-
-    if unassigned_list:
         rows.append(
             f"<tr>"
-            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{unassigned_proj}</td>"
-            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{unassigned_list}</td>"
+            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{component}</td>"
+            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{commit_list_html}</td>"
             f"</tr>"
         )
 
     table = create_table_wrapper(["Component", "Commits"], rows)
-    # List commit-project associations below the table
-    commit_project_list = []
-    if original_commits is not None:
-        for commit in original_commits:
-            sha = commit.get('sha', '-')
-            msg = commit.get('commit', {}).get('message', '-').split('\n')[0]
-            projects = ', '.join(sorted(commit_to_projects.get(sha, []))) if sha in commit_to_projects else 'Unassigned'
-            badge_html = create_commit_badge_html(sha, repo_name)
 
-            commit_project_list.append(
-                f"<div style='margin-bottom:4px;'>"
-                f"<b>{projects}</b> {badge_html} {msg}</div>"
+    # Create commit-project associations table using all_commits
+    commit_projects_html = ""
+    if all_commits:
+        project_table_rows = []
+        for commit in all_commits:
+            commit_data = extract_commit_data(commit)
+            projects = ', '.join(sorted(commit_to_projects.get(commit_data['sha'], []))) if commit_data['sha'] in commit_to_projects else 'Unassigned'
+            badge_html = create_commit_badge_html(commit_data['sha'], repo_name)
+
+            project_table_rows.append(
+                f"<tr>"
+                f"<td style='padding:8px; border:1px solid #ccc; font-size:12px; color:#666;'>{commit_data['formatted_date']}</td>"
+                f"<td style='padding:8px; border:1px solid #ccc;'>{badge_html}</td>"
+                f"<td style='padding:8px; border:1px solid #ccc; font-size:12px; color:#555;'>{commit_data['author']}</td>"
+                f"<td style='padding:8px; border:1px solid #ccc; font-weight:bold;'>{projects}</td>"
+                f"<td style='padding:8px; border:1px solid #ccc; font-size:13px;'>{commit_data['message']}</td>"
+                f"</tr>"
             )
 
-    commit_projects_html = (
-        "<div style='margin-top:16px; font-weight:bold;'>Commit Project Associations (in commit history order):</div>"
-        + "".join(commit_project_list)
-    )
+        if project_table_rows:
+            commit_projects_html = (
+                "<div style='margin-top:16px; font-weight:bold;'>Commit Project Associations (in newest commit to oldest commit order):</div>"
+                "<table style='width:100%; border-collapse:collapse; border:1px solid #ccc; margin-top:8px;'>"
+                "<tr style='background-color:#f8f9fa;'>"
+                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:80px;'>Date</th>"
+                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:60px;'>SHA</th>"
+                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:120px;'>Author</th>"
+                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:150px;'>Project(s)</th>"
+                "<th style='padding:8px; border:1px solid #ccc; text-align:left;'>Message</th>"
+                "</tr>"
+                + "".join(project_table_rows) +
+                "</table>"
+            )
 
     return table + commit_projects_html
 
 def generate_non_superrepo_html_table(submodule_commits):
-    """Generate an HTML table for non-superrepo components"""
+    """Generate an HTML table for other components"""
     rows = []
 
     for submodule, commits in submodule_commits.items():
@@ -155,7 +180,7 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
         total_submodules = len(newly_added_submodules or []) + len(removed_submodules or []) + len(unchanged_submodules or []) + len(changed_submodules or [])
         summary_html += '<div style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">'
         summary_html += '<div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold; margin-bottom:16px;">Submodule Changes Summary</div>'
-        summary_html += '<div style="text-align:center; color:#666; font-size:0.9em; margin-bottom:20px; padding:8px; background-color:#f8f9fa; border-radius:4px; border-left:4px solid #17a2b8;"><strong>Note:</strong> The total count represents all unique submodules found across both commits (start and end), including newly added, removed, changed, and unchanged submodules.</div>'
+        summary_html += '<div style="text-align:center; color:#666; font-size:0.9em; margin-bottom:20px; padding:8px; background-color:#f8f9fa; border-radius:4px; border-left:4px solid #17a2b8;"><strong>Note:</strong> This summary shows only the direct submodules found in TheRock repository (start and end commits). Components within the superrepos (ROCm-Libraries and ROCm-Systems) are detailed separately in their respective sections below and are not counted in these submodule totals.</div>'
 
         if newly_added_submodules:
             summary_html += '<div style="margin-bottom:16px;">'
@@ -222,7 +247,7 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
         )
         print("Populated ROCm-Systems superrepo section")
 
-    # Populate Non-Superrepo container
+    # Populate Other Components container
     if non_superrepo_data and non_superrepo_data.get('content_html') and non_superrepo_data['content_html'].strip():
         template = template.replace('<span id="commit-diff-start-non-superrepo"></span>', non_superrepo_data['start_commit'])
         template = template.replace('<span id="commit-diff-end-non-superrepo"></span>', non_superrepo_data['end_commit'])
@@ -230,7 +255,7 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
             '<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">\n      </div>',
             f'<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">{non_superrepo_data["content_html"]}</div>'
         )
-        print("Populated Non-Superrepo section")
+        print("Populated Other Components section")
 
     # Write the final TheRock HTML report
     with open("TheRockReport.html", "w") as f:
@@ -269,6 +294,136 @@ def get_rocm_components(repo):
         print(f"Failed to fetch projects folder from GitHub: {e}")
 
     return components
+
+def get_commits_by_directories(repo_name, start_sha, end_sha, project_directories):
+    """
+    Get commits by project directories using GitHub API path parameter.
+
+    Args:
+        repo_name: Repository name (e.g., 'rocm-libraries')
+        start_sha: Starting commit SHA (exclusive - commits after this)
+        end_sha: Ending commit SHA (inclusive - commits up to this)
+        project_directories: List of directory paths with trailing slashes (e.g., ['projects/hip/', 'shared/rocm-cmake/'])
+
+    Returns:
+        Tuple of (allocation, all_commits):
+        - allocation: Dictionary with project names as keys, commit lists as values (includes 'Unassigned' if needed)
+        - all_commits: List of all commits in chronological order (newest to oldest)
+    """
+    print(f"  Getting commits by directories for {repo_name} from {start_sha} to {end_sha}")
+
+    # Step 1: Get all commits in range (GitHub API returns newest first by default)
+    all_commits = []
+    found_start = False
+    page = 1
+    max_pages = 20
+
+    print(f"  Getting all commits in range...")
+    while not found_start and page <= max_pages:
+        params = {"sha": end_sha, "per_page": 100, "page": page}
+        url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
+
+        try:
+            data = gha_send_request(url)
+            if not data:
+                break
+
+            for commit in data:
+                all_commits.append(commit)
+                if commit['sha'] == start_sha:
+                    found_start = True
+                    break
+
+            if len(data) < params['per_page']:
+                break
+            page += 1
+
+        except Exception as e:
+            print(f"  Error fetching commits: {e}")
+            break
+
+    # Keep commits in newest-to-oldest order (as received from GitHub API)
+    print(f"  Found {len(all_commits)} commits in range")
+
+    # Create SHA set for fast range checking when filtering directory commits
+    commit_shas_in_range = {commit['sha'] for commit in all_commits}
+
+    # Step 2: Query each directory and build allocation
+    allocation = {}
+    all_seen_commits = set()
+
+    for directory in project_directories:
+        project_name = directory.rstrip('/')
+        print(f"  Querying directory: {directory}")
+        allocation[project_name] = []
+
+        # Query commits that touched this specific directory path
+        page = 1
+        directory_commits = []
+
+        while page <= max_pages:
+            params = {
+                "sha": end_sha,
+                "path": directory,
+                "per_page": 100,
+                "page": page
+            }
+            url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
+
+            try:
+                data = gha_send_request(url)
+                if not data:
+                    break
+
+                commits_found_this_page = 0
+                for commit in data:
+                    sha = commit['sha']
+
+                    # Only include commits that are in our target range
+                    if sha in commit_shas_in_range:
+                        directory_commits.append(commit)
+                        all_seen_commits.add(sha)
+                        commits_found_this_page += 1
+
+                        # Stop if we've reached the start commit
+                        if sha == start_sha:
+                            break
+
+                print(f"    Page {page}: Found {commits_found_this_page} commits in range")
+
+                # If no commits found in range on this page, we've probably gone beyond our range
+                if commits_found_this_page == 0 and page > 1:
+                    break
+
+                if len(data) < params['per_page']:
+                    break
+
+                page += 1
+
+            except Exception as e:
+                print(f"    Error querying directory {directory}: {e}")
+                break
+
+        # Sort directory commits to match all_commits chronological order (newest to oldest)
+        # This is needed because directory API queries return commits in different order than the full commit list
+        sha_to_position = {commit['sha']: i for i, commit in enumerate(all_commits)}
+        directory_commits.sort(key=lambda c: sha_to_position.get(c['sha'], float('inf')))
+
+        allocation[project_name] = directory_commits
+        print(f"  Directory {project_name}: Found {len(directory_commits)} commits")
+
+        # Show empty directories
+        if not directory_commits:
+            print(f"  Directory {project_name} has no commits - showing as empty")
+
+    # Step 3: Find unassigned commits
+    unassigned_commits = [commit for commit in all_commits if commit['sha'] not in all_seen_commits]
+
+    if unassigned_commits:
+        allocation['Unassigned'] = unassigned_commits
+        print(f"  Found {len(unassigned_commits)} unassigned commits")
+
+    return allocation, all_commits
 
 def get_commits_between_shas(repo_name, start_sha, end_sha, enrich_with_files=False):
     """
@@ -343,39 +498,6 @@ def get_commits_between_shas(repo_name, start_sha, end_sha, enrich_with_files=Fa
 
     print(f"  Found {len(commits)} commits for {repo_name}")
     return commits
-
-def allocate_commits_to_projects(commits, projects):
-    """Allocate commits to projects based on file paths touched."""
-    allocation = defaultdict(list)
-
-    for commit in commits:
-        sha = commit.get('sha', '-')
-        print(f"Handling commit: {sha}")
-        files = commit.get('files', [])
-        assigned_projects = set()
-
-        # Check which projects this commit touches
-        for f in files:
-            filename = f.get('filename', '')
-            print(f"  Analyzing file: {filename}")
-
-            # Check each project to see if this file belongs to it
-            for project in projects:
-                if filename.startswith(f"{project}/"):
-                    assigned_projects.add(project)
-                    print(f"    Matches project: {project}")
-                    break  # Found a match, no need to check other projects for this file
-
-        # Assign commit to all matching projects
-        if assigned_projects:
-            for project in assigned_projects:
-                allocation[project].append(commit)
-                print(f"    Assigned to project: {project}")
-        else:
-            allocation['Unassigned'].append(commit)
-            print(f"  Assigned to: Unassigned")
-
-    return dict(allocation)
 
 def find_submodules(commit_sha):
     """Find submodules and their commit SHAs for a TheRock commit"""
@@ -542,8 +664,9 @@ def main():
             commit_message = "N/A"
             try:
                 commit_url = f"https://api.github.com/repos/ROCm/{submodule}/commits/{new_sha}"
-                commit_data = gha_send_request(commit_url)
-                commit_message = commit_data.get('commit', {}).get('message', 'N/A').split('\n')[0]
+                commit_api_response = gha_send_request(commit_url)
+                commit_data = extract_commit_data(commit_api_response)
+                commit_message = commit_data['message']
                 print(f"  Retrieved commit message for newly added {submodule}")
             except Exception as e:
                 print(f"  Warning: Could not get commit message for newly added {submodule}: {e}")
@@ -599,14 +722,14 @@ def main():
                 # Get the components for this superrepo
                 components = get_rocm_components(submodule)
 
-                # Fetch commits between the old and new SHA
-                commits = get_commits_between_shas(submodule, old_sha, new_sha, enrich_with_files=True)
+                # Add trailing slashes to ensure full path matching (projects/hip/ not projects/hipsparse)
+                project_directories = [comp + "/" if not comp.endswith("/") else comp for comp in components]
 
-                # Allocate commits to components
-                allocation = allocate_commits_to_projects(commits, components)
+                # Use new directory-based approach
+                allocation, all_commits_for_display = get_commits_by_directories(submodule, old_sha, new_sha, project_directories)
 
-                # Generate HTML table
-                html_table = generate_superrepo_html_table(allocation, commits, submodule)
+                # Generate HTML table - allocation is ready to use directly
+                html_table = generate_superrepo_html_table(allocation, all_commits_for_display, submodule)
 
                 # Store the HTML report
                 html_reports[submodule] = {
@@ -658,19 +781,16 @@ def main():
         print(f"\n--- {submodule.upper()} ---")
         if commits:
             for commit in commits:
-                sha = commit.get('sha', 'N/A')
-                short_sha = sha[:7] if sha != 'N/A' else 'N/A'
-                message = commit.get('commit', {}).get('message', 'No message').split('\n')[0]
-                author = commit.get('commit', {}).get('author', {}).get('name', 'Unknown')
-                date = commit.get('commit', {}).get('author', {}).get('date', 'Unknown')
-                print(f"  {short_sha} - {author} ({date}): {message}")
+                commit_data = extract_commit_data(commit)
+                short_sha = commit_data['sha'][:7] if commit_data['sha'] != '-' else commit_data['sha']
+                print(f"  {short_sha} - {commit_data['author']} ({commit_data['date']}): {commit_data['message']}")
         else:
             print(f"  No commits found for {submodule}")
 
-    print(f"\nTotal non-superrepo submodules with commits: {len(submodule_commits)}")
+    print(f"\nTotal other component submodules with commits: {len(submodule_commits)}")
 
-    # Generate HTML report for non-superrepo submodules
-    print(f"\n=== Generating Non-Superrepo HTML Report ===")
+    # Generate HTML report for other component submodules
+    print(f"\n=== Generating Other Components HTML Report ===")
     non_superrepo_html = generate_non_superrepo_html_table(submodule_commits)
 
     # Store non-superrepo HTML report with TheRock start/end commits
