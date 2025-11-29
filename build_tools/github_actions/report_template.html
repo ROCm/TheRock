@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ROCm CI Infra Report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0; padding:0; background-color:#f1f1f1; font-family:'Segoe UI', sans-serif;">
+
+  <!-- Header -->
+  <div style="padding:32px 16px; margin-bottom:16px; text-align:center; background-color:#1976D2; color:#ffffff; font-size:2em; font-weight:600; letter-spacing:1px;">
+    ROCm CI Infra Report
+  </div>
+
+  <!-- Container -->
+  <div style="margin: 2em auto; max-width: 1200px;">
+
+    <!-- Report Information -->
+    <div style="background-color:#e8f5e8; padding:12px; margin-bottom:2em; box-shadow:0 2px 5px rgba(0,0,0,0.16); border-radius:4px; border-left:4px solid #28a745;">
+      <div style="color:#155724; font-weight:bold; margin-bottom:8px;">📋 Report Information</div>
+      <div style="color:#155724; font-size:0.9em; margin-bottom:6px;">All commits in this report are ordered from <strong>newest to oldest</strong>.</div>
+      <div style="color:#155724; font-size:0.9em;"><strong>Note on Unassigned Commits:</strong> Some commits may appear as "unassigned" - these are typically root-level changes that don't belong to a specific project component. These may also be commits from CK that are being handled through the merge commits.</div>
+    </div>
+
+    <!-- Submodule Changes Summary -->
+    <div id="submodule-summary"></div>
+
+    <!-- Commit Diff Job Container for ROCm-Libraries Monorepo -->
+    <div id="rocm-libraries-superrepo-container" style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">
+      <div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold;">ROCm-Libraries Monorepo Component Commit Diff</div>
+      <div style="text-align:center; color:#3a3a3a;">Start Commit: <span id="commit-diff-start-rocm-libraries-superrepo"></span> &nbsp; End Commit: <span id="commit-diff-end-rocm-libraries-superrepo"></span></div>
+      <div id="commit-diff-job-content-rocm-libraries-superrepo" style="margin-top:8px;">
+      </div>
+    </div>
+
+    <!-- Commit Diff Job Container for ROCm-Systems Monorepo -->
+    <div id="rocm-systems-superrepo-container" style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">
+      <div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold;">ROCm-Systems Monorepo Component Commit Diff</div>
+      <div style="text-align:center; color:#3a3a3a;">Start Commit: <span id="commit-diff-start-rocm-systems-superrepo"></span> &nbsp; End Commit: <span id="commit-diff-end-rocm-systems-superrepo"></span></div>
+      <div id="commit-diff-job-content-rocm-systems-superrepo" style="margin-top:8px;">
+      </div>
+    </div>
+
+    <!-- Commit Diff Job Container for Other Components -->
+    <div id="non-superrepo-container" style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">
+      <div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold;">Other Component Commit Diff</div>
+      <div style="text-align:center; color:#3a3a3a;">Start Commit: <span id="commit-diff-start-non-superrepo"></span> &nbsp; End Commit: <span id="commit-diff-end-non-superrepo"></span></div>
+      <div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
