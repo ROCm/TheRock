@@ -102,7 +102,7 @@ def main(cl_args: list[str]):
     p = argparse.ArgumentParser("pytorch_apex_repo.py")
     sub_p = p.add_subparsers(required=True)
     checkout_p = sub_p.add_parser(
-        "checkout", help="Clone PyTorch Audio locally and checkout"
+        "checkout", help="Clone Apex locally and checkout"
     )
     add_common(checkout_p)
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
