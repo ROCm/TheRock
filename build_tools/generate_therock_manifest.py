@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import platform
 import re
 import shlex
 import subprocess
@@ -117,8 +120,26 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
-def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
+def read_rocm_version(repo_root: Path) -> str | None:
+    """
+    Read ROCm version from <repo>/version.json with key 'rocm-version'.
+    Returns None if file/key is missing or unreadable.
+    """
+    path = repo_root / "version.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        # get 'rocm-version'
+        v = data.get("rocm-version")
+        if isinstance(v, str):
+            v = v.strip()
+        return v or None
+    except Exception:
+        return None
 
+
+def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
     # Enumerate submodules via .gitmodules
     entries = list_submodules_via_gitconfig(repo_root)
 
@@ -136,8 +157,32 @@ def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
             }
         )
 
+    # Values pulled from env or system; only include if non-empty.
+    artifact_group = os.getenv("ARTIFACT_GROUP")
+    run_id = os.getenv("GITHUB_RUN_ID")
+    job_id = os.getenv("GITHUB_JOB")
+    # Prefer version.json; fall back to env ROCM_VERSION if provided.
+    rocm_version = read_rocm_version(repo_root) or os.getenv("ROCM_VERSION")
+    plat = (os.getenv("RUNNER_OS") or platform.system() or "").lower()
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    build_ctx = {}
+    if run_id:
+        build_ctx["run_id"] = run_id
+    if plat:
+        build_ctx["platform"] = plat
+    if artifact_group:
+        build_ctx["artifact_group"] = artifact_group
+    if rocm_version:
+        build_ctx["rocm_version"] = rocm_version
+    if timestamp:
+        build_ctx["timestamp"] = timestamp
+    if job_id:
+        build_ctx["job_id"] = job_id
+
     return {
         "the_rock_commit": the_rock_commit,
+        "build_context": build_ctx,
         "submodules": rows,
     }
 
