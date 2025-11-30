@@ -5,7 +5,6 @@ on:
     inputs:
       artifact_group:
         description: gfx arch group for the s3 server
-        required: true
         type: string
         default: gfx94X-dcgpu
       artifact_run_id:
