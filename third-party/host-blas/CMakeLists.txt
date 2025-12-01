@@ -61,6 +61,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DTARGET=HASWELL
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
+        # Use multithreaded for all GEMM sizes
+        -DGEMM_MULTITHREAD_THRESHOLD=0
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
