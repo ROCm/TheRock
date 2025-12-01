@@ -27,8 +27,8 @@ if os.name == 'nt':
             print(f"Error copying {file_path}: {e}")
 
     cmd = [
-        f"ctest",
-        f"--test-dir",
+        "ctest",
+        "--test-dir",
         catch_tests_path,
         "--output-on-failure",
         "--timeout",
@@ -47,7 +47,7 @@ else:
     cmd = [
         "sudo",
         "-E",
-        f"ctest",
+        "ctest",
         "--test-dir",
         f"{THEROCK_BIN_DIR}/../share/hip/catch_tests",
         "--output-on-failure",
