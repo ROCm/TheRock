@@ -125,23 +125,9 @@ jobs:
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
-
-      - name: Start ASAN telemetry
-        if: ${{ inputs.build_variant_label == 'ASAN' }}
-        shell: bash
-        run: |
-          yum install -y tmux
-          tmux new-session -d -s telemetry \
-            "while true; do echo \"--- \$(date) ---\"; free -h; top -b -n1 | head -20; sleep 30; done"
           
       - name: Build therock-archives and therock-dist
-        run: cmake --build build --target therock-archives therock-dist -- -k 0
-
-      - name: Stop ASAN telemetry
-        if: ${{ inputs.build_variant_label == 'ASAN' }}
-        shell: bash
-        run: |
-          tmux kill-session -t telemetry
+        run: python3 build_tools/github_actions/cmake_build_script.py --build-variant "${{ inputs.build_variant_label }}"
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
