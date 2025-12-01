@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""cmake_build_script.py
+
+This script runs TheRock's cmake build in the CI system. In addition to the cmake command, we supply telemetry options.
+
+Usage:
+python build_tools/github_actions/cmake_build_script.py [-h] [--build-variant BUILD_VARIANT] [--telemetry | --no-telemetry]
+"""
 import argparse
 import shlex
 import subprocess
@@ -14,6 +21,7 @@ def telemetry_loop():
     while True:
         try:
             _log(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
+            # TODO(geomin12): Add Windows alternative for these commands
             subprocess.run(["free", "-h"], check=False)
 
             # top -b -n1 | head -20
@@ -35,7 +43,7 @@ def run(args):
     telemetry_thread = None
     stop_event = threading.Event()
 
-    # Start telemetry if flag is enabled
+    # Start telemetry if the build variant is asan or telemetry flag is enabled
     if build_variant == "asan" or telemetry:
         _log("[telemetry] starting background monitoring...")
 
