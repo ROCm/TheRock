@@ -87,6 +87,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "zipp",
     # ----
     "Pillow",
+    "apex",
     "certifi",
     "charset_normalizer",
     "cmake",
@@ -117,7 +118,6 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "torch",
     "torcharrow",
     "torchaudio",
-    "apex",
     "torchcodec",
     "torchcsprng",
     "torchdata",
