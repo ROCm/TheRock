@@ -71,9 +71,9 @@ class MemoryMonitor:
             for child in children:
                 try:
                     children_memory += child.memory_info().rss
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
-        except Exception:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
         
         total_process_memory = process_memory + children_memory
