@@ -276,31 +276,39 @@ class MemoryMonitor:
                     status = "WARNING"
                 else:
                     status = "OK"
-                
+
                 f.write(f"\n## [{status}] Memory Stats: {self.phase_name}\n\n")
-                
+
                 # Main statistics table
                 f.write("| Metric | Value |\n")
                 f.write("|:-------|------:|\n")
                 f.write(f"| **Duration** | {duration:.1f}s |\n")
                 f.write(f"| **Samples Collected** | {len(self.samples)} |\n")
                 f.write(f"| **Average Memory** | {avg_memory_percent:.1f}% |\n")
-                f.write(f"| **Peak Memory** | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n")
+                f.write(
+                    f"| **Peak Memory** | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n"
+                )
                 f.write(f"| **Average Swap** | {avg_swap_percent:.1f}% |\n")
-                f.write(f"| **Peak Swap** | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n")
-                
+                f.write(
+                    f"| **Peak Swap** | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n"
+                )
+
                 # Add warnings as alerts if needed
                 if max_memory_percent > 90:
                     f.write("\n> [!CAUTION]\n")
-                    f.write("> Memory usage exceeded 90% during this phase! This phase is likely causing out-of-memory issues.\n")
+                    f.write(
+                        "> Memory usage exceeded 90% during this phase! This phase is likely causing out-of-memory issues.\n"
+                    )
                 elif max_memory_percent > 75:
                     f.write("\n> [!WARNING]\n")
                     f.write("> Memory usage exceeded 75% during this phase.\n")
-                
+
                 if max_swap_percent > 50:
                     f.write("\n> [!WARNING]\n")
-                    f.write(f"> Significant swap usage detected ({max_swap_percent:.1f}%). Consider increasing available memory or reducing parallel jobs.\n")
-                
+                    f.write(
+                        f"> Significant swap usage detected ({max_swap_percent:.1f}%). Consider increasing available memory or reducing parallel jobs.\n"
+                    )
+
                 f.write("\n")
         except Exception as e:
             print(f"Warning: Failed to write GitHub summary: {e}", file=sys.stderr)
