@@ -6,7 +6,7 @@ Subject: [PATCH] Revert "hsakmt: bump vgpr count for gfx1151 (#1807)"
 This reverts commit 770f30bc4c72d763742e39932e2c0583813d531f.
 ---
  projects/rocr-runtime/libhsakmt/src/libhsakmt.h | 1 -
- projects/rocr-runtime/libhsakmt/src/queues.c    | 1 -
+ projects/rocr-runtime/libhsakmt/src/queues.c | 1 -
  2 files changed, 2 deletions(-)
 
 diff --git a/projects/rocr-runtime/libhsakmt/src/libhsakmt.h b/projects/rocr-runtime/libhsakmt/src/libhsakmt.h
