@@ -3,6 +3,7 @@
 See also https://pypi.org/project/github-action-utils/.
 """
 
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -222,13 +223,23 @@ def retrieve_bucket_info(
         else f"{owner}-{repo_name}/"
     )
 
+    # From TheRock #2046 onward, a new S3 bucket was used.
+    # This datetime comparison will determine whether to download from older bucket or newer bucket.
+    curr_commit_dt = datetime.strptime(workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ")
+    curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
+    commit_to_compare_dt = datetime.fromisoformat("2025-11-11 08:18:48 -0800")
+
     release_type = os.getenv("RELEASE_TYPE")
     if release_type:
         _log(f"  (implicit) RELEASE_TYPE: {release_type}")
         bucket = f"therock-{release_type}-artifacts"
     else:
         if external_repo == "":
-            bucket = "therock-ci-artifacts"
+            bucket = (
+                "therock-ci-artifacts"
+                if curr_commit_dt > commit_to_compare_dt
+                else "therock-artifacts"
+            )
         elif (
             repo_name == "therock-releases-internal"
             and owner == "ROCm"
@@ -236,7 +247,11 @@ def retrieve_bucket_info(
         ):
             bucket = "therock-artifacts-internal"
         else:
-            bucket = "therock-ci-artifacts-external"
+            bucket = (
+                "therock-ci-artifacts-external"
+                if curr_commit_dt > commit_to_compare_dt
+                else "therock-artifacts-external"
+            )
 
     _log("Retrieved bucket info:")
     _log(f"  external_repo: {external_repo}")
