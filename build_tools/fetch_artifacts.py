@@ -25,6 +25,10 @@ Note this module will respect:
     AWS_SESSION_TOKEN
 if and only if all are specified in the environment to connect with S3.
 If unspecified, we will create an anonymous boto file that can only acccess public artifacts.
+
+TODO: Evaluate switching to artifact_manager.py which provides a unified backend
+abstraction (local directory or S3) and integrates with BUILD_TOPOLOGY.toml for
+stage-aware artifact filtering.
 """
 
 import argparse
@@ -386,7 +390,7 @@ def main(argv):
     parser.add_argument(
         "--run-github-repo",
         type=str,
-        help="GitHub repository for --run-id. If omitted, this is inferred from the GITHUB_REPOSITORY env var or defaults to ROCm/TheRock",
+        help="GitHub repository for --run-id in 'owner/repo' format (e.g. 'ROCm/TheRock'). Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
     parser.add_argument(
         "--run-id",

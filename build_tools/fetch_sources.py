@@ -2,6 +2,14 @@
 # Fetches sources from a specified branch/set of projects.
 # This script is available for users, but it is primarily the mechanism
 # the CI uses to get to a clean state.
+#
+# Stage-aware fetching:
+#   Use --stage <stage_name> to fetch only submodules needed for a build stage.
+#   This uses BUILD_TOPOLOGY.toml to determine which submodules are required.
+#
+# Legacy flag-based fetching:
+#   Use --include-* flags to control which project groups to fetch.
+#   This is the original behavior and is still supported.
 
 import argparse
 import hashlib
@@ -11,10 +19,12 @@ import shlex
 import shutil
 import subprocess
 import sys
+from typing import List, Optional
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
+TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
 
 
 def is_windows() -> bool:
@@ -33,7 +43,42 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def get_enabled_projects(args) -> list[str]:
+def get_projects_from_topology(stage: str) -> List[str]:
+    """Get submodule names for a build stage from BUILD_TOPOLOGY.toml."""
+    from _therock_utils.build_topology import BuildTopology
+
+    if not TOPOLOGY_PATH.exists():
+        raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+
+    topology = BuildTopology(str(TOPOLOGY_PATH))
+    submodules = topology.get_submodules_for_stage(stage)
+    return [s.name for s in submodules]
+
+
+def get_available_stages() -> List[str]:
+    """Get list of available build stages from BUILD_TOPOLOGY.toml."""
+    from _therock_utils.build_topology import BuildTopology
+
+    if not TOPOLOGY_PATH.exists():
+        return []
+
+    topology = BuildTopology(str(TOPOLOGY_PATH))
+    return [s.name for s in topology.get_build_stages()]
+
+
+def get_enabled_projects(args) -> List[str]:
+    """Get list of submodule names to fetch.
+
+    If --stage is provided, uses BUILD_TOPOLOGY.toml to determine submodules.
+    Otherwise, uses the legacy --include-* flags.
+    """
+    # Stage-aware mode: use topology
+    if args.stage:
+        projects = get_projects_from_topology(args.stage)
+        log(f"Stage '{args.stage}' requires submodules: {projects}")
+        return projects
+
+    # Legacy flag-based mode
     projects = []
     if args.include_system_projects:
         projects.extend(args.system_projects)
@@ -247,7 +292,28 @@ def get_submodule_revision(submodule_path: str) -> str:
 
 
 def main(argv):
-    parser = argparse.ArgumentParser(prog="fetch_sources")
+    parser = argparse.ArgumentParser(
+        prog="fetch_sources",
+        description="Fetch sources for TheRock build. Use --stage for stage-aware "
+        "fetching or --include-* flags for legacy mode.",
+    )
+
+    # Stage-aware fetching (preferred for CI)
+    available_stages = get_available_stages()
+    parser.add_argument(
+        "--stage",
+        type=str,
+        choices=available_stages if available_stages else None,
+        help=f"Build stage to fetch sources for. Uses BUILD_TOPOLOGY.toml. "
+        f"Available: {', '.join(available_stages) if available_stages else 'none'}",
+    )
+    parser.add_argument(
+        "--list-stages",
+        action="store_true",
+        help="List available build stages and their submodules, then exit",
+    )
+
+    # Legacy options
     parser.add_argument(
         "--patch-tag",
         type=str,
@@ -370,6 +436,28 @@ def main(argv):
         ),
     )
     args = parser.parse_args(argv)
+
+    # Handle --list-stages
+    if args.list_stages:
+        from _therock_utils.build_topology import BuildTopology
+
+        if not TOPOLOGY_PATH.exists():
+            print(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+            sys.exit(1)
+
+        topology = BuildTopology(str(TOPOLOGY_PATH))
+        print("Available build stages and their submodules:\n")
+        for stage in topology.get_build_stages():
+            submodules = topology.get_submodules_for_stage(stage.name)
+            submodule_names = [s.name for s in submodules]
+            print(f"  {stage.name} ({stage.type}):")
+            print(f"    {stage.description}")
+            print(
+                f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
+            )
+            print()
+        sys.exit(0)
+
     run(args)
 
 

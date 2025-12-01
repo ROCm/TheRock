@@ -43,6 +43,24 @@ A report will be printed and if any changes to project state were made,
 "Reconfiguring..." will be printed and a CMake reconfigure of TheRock will be
 done to pick up the changes.
 
+Bootstrap Usage
+---------------
+The `bootstrap` subcommand populates a build directory with artifacts from a
+prior build, creating .prebuilt markers so CMake skips building those components:
+
+    python ./build_tools/buildctl.py bootstrap \
+        --build-dir build \
+        --artifact-dir /path/to/artifacts
+
+When --stage is provided, artifacts are filtered to only those needed as inbound
+dependencies for that stage (using BUILD_TOPOLOGY.toml):
+
+    python ./build_tools/buildctl.py bootstrap \
+        --build-dir build \
+        --artifact-dir /path/to/artifacts \
+        --stage math-libs \
+        --target-families gfx94X-dcgpu
+
 What is going on under the covers
 ---------------------------------
 Under the covers, the build system operates off of `stage/` subdirectories in
@@ -54,16 +72,18 @@ date check (so if you touch this file, it will invalidate all dependents,
 forcing them to rebuild). You can manage these files yourself with `find`,
 `touch`, and `rm` but it is tedious. This tool aims to handle common workflows
 without filesystem hacking.
-
-TODO: Merge the functionality in bootstrap_build.py into this script.
 """
 
 import argparse
 from pathlib import Path
 import os
 import re
+import shutil
 import subprocess
 import sys
+from typing import Optional, Set
+
+from _therock_utils.artifacts import ArtifactPopulator, ArtifactName
 
 
 def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
@@ -205,6 +225,122 @@ def reconfigure(build_dir: Path):
         raise CLIError(f"Project reconfigure failed")
 
 
+################################################################################
+# Bootstrap command
+################################################################################
+
+
+def get_inbound_artifact_names(stage: str) -> Set[str]:
+    """Get the set of artifact names needed by a build stage."""
+    from _therock_utils.build_topology import BuildTopology
+
+    script_dir = Path(__file__).parent
+    repo_root = script_dir.parent
+    topology_path = repo_root / "BUILD_TOPOLOGY.toml"
+    if not topology_path.exists():
+        raise CLIError(f"BUILD_TOPOLOGY.toml not found at {topology_path}")
+
+    topology = BuildTopology(str(topology_path))
+    return topology.get_inbound_artifacts(stage)
+
+
+class BootstrappingPopulator(ArtifactPopulator):
+    """ArtifactPopulator that creates .prebuilt markers for bootstrapping."""
+
+    def __init__(self, output_path: Path, verbose: bool = False):
+        super().__init__(output_path=output_path, verbose=verbose, flatten=False)
+        self.created_markers: list[Path] = []
+
+    def on_first_relpath(self, relpath: str):
+        if not relpath:
+            return  # Skip empty relpaths
+
+        full_path = self.output_path / relpath
+        if full_path.exists():
+            print(f"CLEANING: {full_path}")
+            shutil.rmtree(full_path)
+        # Write the ".prebuilt" marker file
+        prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
+        prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
+        prebuilt_path.touch()
+        self.created_markers.append(prebuilt_path)
+
+    def on_artifact_dir(self, artifact_dir: Path):
+        print(f"FLATTENING {artifact_dir.name}")
+
+    def on_artifact_archive(self, artifact_archive: Path):
+        print(f"EXPANDING {artifact_archive.name}")
+
+
+def do_bootstrap(args: argparse.Namespace):
+    """Bootstrap a build directory with artifacts from a prior build."""
+    build_dir: Path = args.build_dir
+    artifact_dir: Path = args.artifact_dir
+
+    if not artifact_dir.exists():
+        raise CLIError(f"Artifact directory not found: {artifact_dir}")
+
+    # Determine which artifacts to include based on stage
+    inbound_names: Optional[Set[str]] = None
+    if args.stage:
+        inbound_names = get_inbound_artifact_names(args.stage)
+        print(f"Stage '{args.stage}' requires {len(inbound_names)} inbound artifacts:")
+        for name in sorted(inbound_names):
+            print(f"  - {name}")
+        print()
+
+    # Determine allowed target families
+    allowed_families = {"generic"}
+    if args.target_families:
+        # Support comma-separated list
+        for family in args.target_families.split(","):
+            allowed_families.add(family.strip())
+        print(f"Allowed target families: {', '.join(sorted(allowed_families))}")
+        print()
+
+    build_dir.mkdir(parents=True, exist_ok=True)
+    populator = BootstrappingPopulator(output_path=build_dir, verbose=args.verbose)
+    artifact_names: set[ArtifactName] = set()
+    processed_count = 0
+    skipped_count = 0
+
+    for entry in artifact_dir.iterdir():
+        an = ArtifactName.from_path(entry)
+        if not an:
+            continue
+
+        # Check target family
+        if an.target_family not in allowed_families:
+            if args.verbose:
+                print(
+                    f"SKIP {entry.name}: Target family '{an.target_family}' not in allowed list"
+                )
+            skipped_count += 1
+            continue
+
+        # Check if artifact is in the inbound set (when stage filtering)
+        if inbound_names is not None and an.name not in inbound_names:
+            if args.verbose:
+                print(
+                    f"SKIP {entry.name}: Not in inbound artifacts for stage '{args.stage}'"
+                )
+            skipped_count += 1
+            continue
+
+        # Skip duplicates
+        if an in artifact_names:
+            if args.verbose:
+                print(f"SKIP {entry.name}: Duplicate")
+            skipped_count += 1
+            continue
+
+        artifact_names.add(an)
+        populator(entry)
+        processed_count += 1
+
+    print(f"\nProcessed {processed_count} artifacts, skipped {skipped_count}")
+
+
 class CLIError(Exception):
     ...
 
@@ -241,7 +377,7 @@ def main(cl_args: list[str]):
     add_common_options(enable_p, lambda args: do_enable_disable(args, enable_mode=True))
     add_selection_options(enable_p)
 
-    # 'unpin' command
+    # 'disable' command
     disable_p = sub_p.add_parser(
         "disable", help="Disable subset of projects as prebuilt"
     )
@@ -249,6 +385,39 @@ def main(cl_args: list[str]):
         disable_p, lambda args: do_enable_disable(args, enable_mode=False)
     )
     add_selection_options(disable_p)
+
+    # 'bootstrap' command
+    bootstrap_p = sub_p.add_parser(
+        "bootstrap",
+        help="Bootstrap build directory with artifacts from a prior build",
+    )
+    bootstrap_p.set_defaults(func=do_bootstrap)
+    bootstrap_p.add_argument(
+        "--build-dir",
+        type=Path,
+        required=True,
+        help="Path to the CMake build directory to populate",
+    )
+    bootstrap_p.add_argument(
+        "--artifact-dir",
+        type=Path,
+        required=True,
+        help="Directory from which to source artifacts",
+    )
+    bootstrap_p.add_argument(
+        "--stage",
+        type=str,
+        help="Build stage to bootstrap for (uses BUILD_TOPOLOGY.toml to filter artifacts)",
+    )
+    bootstrap_p.add_argument(
+        "--target-families",
+        type=str,
+        help="Target families to include (comma-separated, e.g., 'gfx94X-dcgpu,gfx110X-all'). "
+        "Generic artifacts are always included.",
+    )
+    bootstrap_p.add_argument(
+        "--verbose", action="store_true", help="Print verbose status"
+    )
 
     args = p.parse_args(cl_args)
     try:
