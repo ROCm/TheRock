@@ -374,12 +374,12 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand"
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen"]
+artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.miopen-plugin]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["miopen", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
 # --- Communication Libraries (per-arch) ---
 
