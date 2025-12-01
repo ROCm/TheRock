@@ -86,7 +86,8 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     create_versioned_deb_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
-    clean_debian_build_dir()
+    # Clean debian build directory
+    remove_dir(DEBIAN_CONTENTS_DIR)
 
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
@@ -194,13 +195,9 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
     name = name_part.strip()
     email = email_part.replace(">", "").strip()
     # version is used along with package name
-    version = (
-        config.rocm_version
-        + "."
-        + version_to_str(config.rocm_version)
-        + "-"
-        + config.version_suffix
-    )
+    version = str(config.rocm_version)
+    if config.version_suffix:
+        version += f"-{str(config.version_suffix)}"
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_changelog.j2")
@@ -291,11 +288,36 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     control_file = Path(deb_dir) / "control"
 
     pkg_name = pkg_info.get("Package")
+    provides = ""
+    replaces = ""
+    conflicts = ""
+    debrecommends = ""
+    debsuggests = ""
 
     if config.versioned_pkg:
+        recommends_list = pkg_info.get("DEBRecommends", [])
+        debrecommends = convert_to_versiondependency(recommends_list, config)
+        suggests_list = pkg_info.get("DEBSuggests", [])
+        debsuggests = convert_to_versiondependency(suggests_list, config)
+
         depends_list = pkg_info.get("DEBDepends", [])
     else:
         depends_list = [pkg_name]
+        provides_list = [
+            debian_replace_devel_name(pkg)
+            for pkg in (pkg_info.get("Provides", []) or [])
+        ]
+        provides = ", ".join(provides_list)
+        replaces_list = [
+            debian_replace_devel_name(pkg)
+            for pkg in (pkg_info.get("Replaces", []) or [])
+        ]
+        replaces = ", ".join(replaces_list)
+        conflicts_list = [
+            debian_replace_devel_name(pkg)
+            for pkg in (pkg_info.get("Conflicts", []) or [])
+        ]
+        conflicts = ", ".join(conflicts_list)
 
     depends = convert_to_versiondependency(depends_list, config)
 
@@ -315,6 +337,11 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         "priority": pkg_info.get("Priority"),
         "section": pkg_info.get("Section"),
         "version": config.rocm_version,
+        "provides": provides,
+        "replaces": replaces,
+        "conflicts": conflicts,
+        "debrecommends": debrecommends,
+        "debsuggests": debsuggests,
     }
 
     with control_file.open("w", encoding="utf-8") as f:
@@ -439,7 +466,8 @@ def create_rpm_package(pkg_name, config: PackageConfig):
 
     create_versioned_rpm_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
-    clean_rpm_build_dir()
+    # Clean rpm build directory
+    remove_dir(RPM_CONTENTS_DIR)
 
 
 def generate_spec_file(pkg_name, specfile, config: PackageConfig):
@@ -455,21 +483,27 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     print_function_name()
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
 
-    pkginfo = get_package_info(pkg_name)
+    pkg_info = get_package_info(pkg_name)
     # populate packge version details
-    version = f"{config.rocm_version}.{version_to_str(config.rocm_version)}"
+    version = f"{config.rocm_version}"
     # TBD: Whether to use component version details?
-    #    version = pkginfo.get("Version")
-
+    #    version = pkg_info.get("Version")
+    provides = ""
+    obsoletes = ""
+    conflicts = ""
+    rpmrecommends = ""
+    rpmsuggests = ""
     sourcedir_list = []
     if config.versioned_pkg:
-        recommends_list = pkginfo.get("RPMRecommends", [])
+        recommends_list = pkg_info.get("RPMRecommends", [])
         rpmrecommends = convert_to_versiondependency(recommends_list, config)
+        suggests_list = pkg_info.get("RPMSuggests", [])
+        rpmsuggests = convert_to_versiondependency(suggests_list, config)
 
-        requires_list = pkginfo.get("RPMRequires", [])
+        requires_list = pkg_info.get("RPMRequires", [])
 
         # Get the packages included by the composite package
-        pkg_list = pkginfo.get("Includes")
+        pkg_list = pkg_info.get("Includes")
 
         if pkg_list is None:
             pkg_list = [pkg_name]
@@ -487,7 +521,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             for path in sourcedir_list:
                 convert_runpath_to_rpath(path)
     else:
-        rpmrecommends = ""
+        # Provides, Obsoletes and Conflicts field is only valid
+        # for non-versioned packages
+        provides = ", ".join(pkg_info.get("Provides", []) or [])
+        obsoletes = ", ".join(pkg_info.get("Obsoletes", []) or [])
+        conflicts = ", ".join(pkg_info.get("Conflicts", []) or [])
         requires_list = [pkg_name]
 
     requires = convert_to_versiondependency(requires_list, config)
@@ -502,17 +540,21 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "pkg_name": pkg_name,
         "version": version,
         "release": config.version_suffix,
-        "build_arch": pkginfo.get("BuildArch"),
-        "description_short": pkginfo.get("Description_Short"),
-        "description_long": pkginfo.get("Description_Long"),
-        "group": pkginfo.get("Group"),
-        "pkg_license": pkginfo.get("License"),
-        "vendor": pkginfo.get("Vendor"),
+        "build_arch": pkg_info.get("BuildArch"),
+        "description_short": pkg_info.get("Description_Short"),
+        "description_long": pkg_info.get("Description_Long"),
+        "group": pkg_info.get("Group"),
+        "pkg_license": pkg_info.get("License"),
+        "vendor": pkg_info.get("Vendor"),
         "install_prefix": config.install_prefix,
         "requires": requires,
+        "provides": provides,
+        "obsoletes": obsoletes,
+        "conflicts": conflicts,
         "rpmrecommends": rpmrecommends,
-        "disable_rpm_strip": is_rpm_stripping_disabled(pkginfo),
-        "disable_debug_package": is_debug_package_disabled(pkginfo),
+        "rpmsuggests": rpmsuggests,
+        "disable_rpm_strip": is_rpm_stripping_disabled(pkg_info),
+        "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
     }
 
@@ -748,28 +790,6 @@ def parse_input_package_list(pkg_name):
     return pkg_list
 
 
-def clean_rpm_build_dir():
-    """Clean the rpm build directory
-
-    Parameters: None
-    Returns: None
-    """
-    if os.path.exists(RPM_CONTENTS_DIR) and os.path.isdir(RPM_CONTENTS_DIR):
-        shutil.rmtree(RPM_CONTENTS_DIR)
-        print(f"Removed directory: {RPM_CONTENTS_DIR}")
-
-
-def clean_debian_build_dir():
-    """Clean the debian build directory
-
-    Parameters: None
-    Returns: None
-    """
-    if os.path.exists(DEBIAN_CONTENTS_DIR) and os.path.isdir(DEBIAN_CONTENTS_DIR):
-        shutil.rmtree(DEBIAN_CONTENTS_DIR)
-        print(f"Removed directory: {DEBIAN_CONTENTS_DIR}")
-
-
 def clean_package_build_dir(artifacts_dir):
     """Clean the package build directories
 
@@ -781,18 +801,12 @@ def clean_package_build_dir(artifacts_dir):
     Returns: None
     """
     print_function_name()
-
-    clean_rpm_build_dir()
-    clean_debian_build_dir()
-
     PYCACHE_DIR = Path(SCRIPT_DIR) / "__pycache__"
-    if os.path.exists(PYCACHE_DIR) and os.path.isdir(PYCACHE_DIR):
-        shutil.rmtree(PYCACHE_DIR)
-        print(f"Removed directory: {PYCACHE_DIR}")
 
-    if os.path.exists(artifacts_dir) and os.path.isdir(artifacts_dir):
-        shutil.rmtree(artifacts_dir)
-        print(f"Removed directory: {artifacts_dir}")
+    remove_dir(RPM_CONTENTS_DIR)
+    remove_dir(DEBIAN_CONTENTS_DIR)
+    remove_dir(PYCACHE_DIR)
+    remove_dir(artifacts_dir)
 
 
 def run(args: argparse.Namespace):
@@ -875,7 +889,7 @@ def main(argv: list[str]):
     p.add_argument(
         "--version-suffix",
         type=str,
-        required=True,
+        nargs="?",
         help="Version suffix to append to package names",
     )
 
