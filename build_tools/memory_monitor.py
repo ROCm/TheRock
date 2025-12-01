@@ -140,6 +140,7 @@ class MemoryMonitor:
     
     def monitor_loop(self):
         """Main monitoring loop."""
+        next_tick = time.monotonic()
         while self.running:
             try:
                 stats = self.get_memory_stats()
@@ -148,7 +149,11 @@ class MemoryMonitor:
             except Exception as e:
                 print(f"Error collecting memory stats: {e}", file=sys.stderr)
             
-            time.sleep(self.interval)
+            next_tick += self.interval
+            sleep_for = max(0, next_tick - time.monotonic())
+            if sleep_for == 0:
+                print(f"[WARNING] Stats collection took longer than interval ({self.interval}s)", file=sys.stderr)
+            time.sleep(sleep_for)
     
     def start(self):
         """Start monitoring in a background thread."""
