@@ -26,7 +26,7 @@ jobs:
       # Memory monitoring configuration
       MEMORY_MONITOR_INTERVAL: "10"  # Sample every 10 seconds
       MEMORY_MONITOR_LOG_DIR: ${{ github.workspace }}/build/memory-logs
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -112,7 +112,7 @@ jobs:
           if [ -d "build/memory-logs" ]; then
             echo "Analyzing memory logs..."
             python build_tools/analyze_memory_logs.py --detailed --github-summary
-            
+
             # Also save the analysis report
             python build_tools/analyze_memory_logs.py --detailed --output build/memory-analysis-report.txt
           else
@@ -136,7 +136,7 @@ jobs:
             echo "ccache:"
             echo "-------"
             ccache -s
-            
+
             # NEW: Show memory analysis summary if available
             if [ -f "build/memory-analysis-report.txt" ]; then
               echo ""
@@ -196,27 +196,27 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-      
+
       - name: Install python deps
         run: |
           pip install -r requirements.txt
-      
+
       - name: Download all memory logs
         uses: actions/download-artifact@v4
         with:
           pattern: memory-logs-*
           path: all-memory-logs/
-      
+
       - name: Aggregate Analysis
         run: |
           echo "# Aggregate Memory Analysis Across All Builds" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           for log_dir in all-memory-logs/*/; do
             if [ -d "$log_dir" ]; then
               build_name=$(basename "$log_dir")
               echo "## Build: $build_name" >> $GITHUB_STEP_SUMMARY
-              
+
               if [ -f "$log_dir/memory-analysis-report.txt" ]; then
                 # Extract summary lines
                 head -n 30 "$log_dir/memory-analysis-report.txt" | tail -n 20 >> $GITHUB_STEP_SUMMARY
@@ -224,6 +224,5 @@ jobs:
               echo "" >> $GITHUB_STEP_SUMMARY
             fi
           done
-          
-          echo "Full memory logs are available as artifacts."
 
+          echo "Full memory logs are available as artifacts."

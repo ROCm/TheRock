@@ -8,10 +8,10 @@ which build phase is causing out-of-memory errors.
 Usage:
     # Monitor a single command:
     python build_tools/memory_monitor.py --phase "Configure Projects" -- cmake ...
-    
+
     # Run as background monitoring:
     python build_tools/memory_monitor.py --background --interval 5 --phase "Build Phase"
-    
+
 Environment Variables:
     MEMORY_MONITOR_INTERVAL: Override default monitoring interval (seconds)
     MEMORY_MONITOR_LOG_FILE: Path to write detailed memory logs
@@ -38,7 +38,7 @@ except ImportError:
 
 class MemoryMonitor:
     """Monitors system and process memory usage."""
-    
+
     def __init__(
         self,
         interval: float = 5.0,
@@ -59,11 +59,11 @@ class MemoryMonitor:
         """Collect current memory statistics."""
         vm = psutil.virtual_memory()
         swap = psutil.swap_memory()
-        
+
         # Get current process and its children
         current_process = psutil.Process()
         process_memory = current_process.memory_info().rss
-        
+
         # Try to get memory of all child processes
         children_memory = 0
         try:
@@ -71,13 +71,17 @@ class MemoryMonitor:
             for child in children:
                 try:
                     children_memory += child.memory_info().rss
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                except (
+                    psutil.NoSuchProcess,
+                    psutil.AccessDenied,
+                    psutil.ZombieProcess,
+                ):
                     pass
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
-        
+
         total_process_memory = process_memory + children_memory
-        
+
         # Track peak usage
         self.peak_memory = max(self.peak_memory, vm.used)
         self.peak_swap = max(self.peak_swap, swap.used)
@@ -103,9 +107,9 @@ class MemoryMonitor:
             "children_memory_gb": children_memory / (1024**3),
             "total_process_memory_gb": total_process_memory / (1024**3),
         }
-        
+
         return stats
-    
+
     def format_memory_stats(self, stats: Dict[str, Any]) -> str:
         """Format memory stats for human-readable output."""
         lines = [
@@ -116,31 +120,37 @@ class MemoryMonitor:
             f"  Process Memory: {stats['total_process_memory_gb']:.2f} GB (Self: {stats['process_memory_gb']:.2f} GB, Children: {stats['children_memory_gb']:.2f} GB)",
         ]
         return "\n".join(lines)
-    
+
     def log_stats(self, stats: Dict[str, Any]):
         """Log memory statistics to console and file."""
         formatted = self.format_memory_stats(stats)
-        
+
         # Always print to stdout for GitHub Actions logs
         print(formatted, flush=True)
-        
+
         # Log detailed JSON to file if specified
         if self.log_file:
             try:
-                with open(self.log_file, 'a') as f:
+                with open(self.log_file, "a") as f:
                     f.write(json.dumps(stats) + "\n")
             except Exception as e:
                 print(f"Warning: Failed to write to log file: {e}", file=sys.stderr)
-        
+
         # Check for concerning memory levels
-        if stats['memory_percent'] > 90:
-            print(f"[WARNING] Memory usage is critically high ({stats['memory_percent']:.1f}%)", file=sys.stderr)
-        elif stats['memory_percent'] > 75:
+        if stats["memory_percent"] > 90:
+            print(
+                f"[WARNING] Memory usage is critically high ({stats['memory_percent']:.1f}%)",
+                file=sys.stderr,
+            )
+        elif stats["memory_percent"] > 75:
             print(f"[WARNING] Memory usage is high ({stats['memory_percent']:.1f}%)")
-        
-        if stats['swap_percent'] > 50:
-            print(f"[WARNING] Swap usage is high ({stats['swap_percent']:.1f}%), this may slow down builds", file=sys.stderr)
-    
+
+        if stats["swap_percent"] > 50:
+            print(
+                f"[WARNING] Swap usage is high ({stats['swap_percent']:.1f}%), this may slow down builds",
+                file=sys.stderr,
+            )
+
     def monitor_loop(self):
         """Main monitoring loop."""
         next_tick = time.monotonic()
@@ -151,52 +161,63 @@ class MemoryMonitor:
                 self.log_stats(stats)
             except Exception as e:
                 print(f"Error collecting memory stats: {e}", file=sys.stderr)
-            
+
             next_tick += self.interval
             sleep_for = max(0, next_tick - time.monotonic())
             if sleep_for == 0:
-                print(f"[WARNING] Stats collection took longer than interval ({self.interval}s)", file=sys.stderr)
+                print(
+                    f"[WARNING] Stats collection took longer than interval ({self.interval}s)",
+                    file=sys.stderr,
+                )
             time.sleep(sleep_for)
-    
+
     def start(self):
         """Start monitoring in a background thread."""
         self.running = True
         self.start_time = time.time()
         self.thread = threading.Thread(target=self.monitor_loop, daemon=True)
         self.thread.start()
-        print(f"[MONITOR] Memory monitoring started for phase: {self.phase_name} (interval: {self.interval}s)")
-    
+        print(
+            f"[MONITOR] Memory monitoring started for phase: {self.phase_name} (interval: {self.interval}s)"
+        )
+
     def stop(self):
         """Stop monitoring and print summary."""
         self.running = False
         self.end_time = time.time()
-        
-        if hasattr(self, 'thread'):
+
+        if hasattr(self, "thread"):
             self.thread.join(timeout=self.interval + 1)
-        
+
         # Print summary
         self.print_summary()
-    
+
     def print_summary(self):
         """Print summary statistics."""
         if not self.samples:
             print("No memory samples collected")
             return
-        
-        duration = self.end_time - self.start_time if self.end_time and self.start_time else 0
-        
-        avg_memory_percent = sum(s['memory_percent'] for s in self.samples) / len(self.samples)
-        max_memory_percent = max(s['memory_percent'] for s in self.samples)
+
+        duration = (
+            self.end_time - self.start_time if self.end_time and self.start_time else 0
+        )
+
+        avg_memory_percent = sum(s["memory_percent"] for s in self.samples) / len(
+            self.samples
+        )
+        max_memory_percent = max(s["memory_percent"] for s in self.samples)
         # Use the tracked peak memory from the last sample (cumulative peak)
-        peak_memory_gb = self.samples[-1]['peak_memory_gb'] if self.samples else 0
-        peak_swap_gb = self.samples[-1]['peak_swap_gb'] if self.samples else 0
-        
-        avg_swap_percent = sum(s['swap_percent'] for s in self.samples) / len(self.samples)
-        max_swap_percent = max(s['swap_percent'] for s in self.samples)
-        
-        print("\n" + "="*80)
+        peak_memory_gb = self.samples[-1]["peak_memory_gb"] if self.samples else 0
+        peak_swap_gb = self.samples[-1]["peak_swap_gb"] if self.samples else 0
+
+        avg_swap_percent = sum(s["swap_percent"] for s in self.samples) / len(
+            self.samples
+        )
+        max_swap_percent = max(s["swap_percent"] for s in self.samples)
+
+        print("\n" + "=" * 80)
         print(f"[SUMMARY] Memory Monitoring Summary - Phase: {self.phase_name}")
-        print("="*80)
+        print("=" * 80)
         print(f"Duration: {duration:.1f} seconds")
         print(f"Samples collected: {len(self.samples)}")
         print(f"")
@@ -207,49 +228,70 @@ class MemoryMonitor:
         print(f"Swap Usage:")
         print(f"  Average: {avg_swap_percent:.1f}%")
         print(f"  Peak: {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB)")
-        
+
         # Warnings
         if max_memory_percent > 90:
             print(f"\n[CRITICAL] Memory usage exceeded 90% during this phase!")
             print(f"   This phase is likely causing out-of-memory issues.")
         elif max_memory_percent > 75:
             print(f"\n[WARNING] Memory usage exceeded 75% during this phase.")
-        
+
         if max_swap_percent > 50:
-            print(f"\n[WARNING] Significant swap usage detected ({max_swap_percent:.1f}%)")
+            print(
+                f"\n[WARNING] Significant swap usage detected ({max_swap_percent:.1f}%)"
+            )
             print(f"   Consider increasing available memory or reducing parallel jobs.")
-        
-        print("="*80 + "\n")
-        
+
+        print("=" * 80 + "\n")
+
         # GitHub Actions Step Summary
         if "GITHUB_STEP_SUMMARY" in os.environ:
             self.write_github_summary(
-                duration, avg_memory_percent, max_memory_percent, 
-                peak_memory_gb, peak_swap_gb, avg_swap_percent, max_swap_percent
+                duration,
+                avg_memory_percent,
+                max_memory_percent,
+                peak_memory_gb,
+                peak_swap_gb,
+                avg_swap_percent,
+                max_swap_percent,
             )
-    
+
     def write_github_summary(
-        self, duration, avg_memory_percent, max_memory_percent,
-        peak_memory_gb, peak_swap_gb, avg_swap_percent, max_swap_percent
+        self,
+        duration,
+        avg_memory_percent,
+        max_memory_percent,
+        peak_memory_gb,
+        peak_swap_gb,
+        avg_swap_percent,
+        max_swap_percent,
     ):
         """Write summary to GitHub Actions step summary."""
         try:
-            with open(os.environ["GITHUB_STEP_SUMMARY"], 'a') as f:
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
                 f.write(f"\n### Memory Stats: {self.phase_name}\n\n")
                 f.write(f"| Metric | Value |\n")
                 f.write(f"|--------|-------|\n")
                 f.write(f"| Duration | {duration:.1f}s |\n")
                 f.write(f"| Samples | {len(self.samples)} |\n")
                 f.write(f"| Avg Memory Usage | {avg_memory_percent:.1f}% |\n")
-                f.write(f"| Peak Memory Usage | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n")
+                f.write(
+                    f"| Peak Memory Usage | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n"
+                )
                 f.write(f"| Avg Swap Usage | {avg_swap_percent:.1f}% |\n")
-                f.write(f"| Peak Swap Usage | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n")
-                
+                f.write(
+                    f"| Peak Swap Usage | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n"
+                )
+
                 if max_memory_percent > 90:
-                    f.write(f"**CRITICAL**: Memory usage exceeded 90% during this phase!\n")
+                    f.write(
+                        f"**CRITICAL**: Memory usage exceeded 90% during this phase!\n"
+                    )
                 elif max_memory_percent > 75:
-                    f.write(f"️**WARNING**: Memory usage exceeded 75% during this phase.\n")
-                
+                    f.write(
+                        f"️**WARNING**: Memory usage exceeded 75% during this phase.\n"
+                    )
+
                 f.write(f"\n")
         except Exception as e:
             print(f"Warning: Failed to write GitHub summary: {e}", file=sys.stderr)
@@ -267,9 +309,9 @@ def run_command_with_monitoring(
         phase_name=phase_name,
         log_file=log_file,
     )
-    
+
     monitor.start()
-    
+
     try:
         # Run the command
         print(f"[EXEC] Executing command: {' '.join(command)}")
@@ -283,7 +325,7 @@ def run_command_with_monitoring(
         return_code = 1
     finally:
         monitor.stop()
-    
+
     return return_code
 
 
@@ -291,48 +333,48 @@ def main():
     parser = argparse.ArgumentParser(
         description="Monitor memory usage during CI builds",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
-    
+
     parser.add_argument(
         "--phase",
         type=str,
         default="Build Phase",
-        help="Name of the build phase being monitored"
+        help="Name of the build phase being monitored",
     )
-    
+
     parser.add_argument(
         "--interval",
         type=float,
         default=float(os.getenv("MEMORY_MONITOR_INTERVAL", "5")),
-        help="Monitoring interval in seconds (default: 5)"
+        help="Monitoring interval in seconds (default: 5)",
     )
-    
+
     parser.add_argument(
         "--log-file",
         type=Path,
         default=os.getenv("MEMORY_MONITOR_LOG_FILE"),
-        help="Path to write detailed JSON logs"
+        help="Path to write detailed JSON logs",
     )
-    
+
     parser.add_argument(
         "--background",
         action="store_true",
-        help="Run monitoring in background without executing a command"
+        help="Run monitoring in background without executing a command",
     )
-    
+
     parser.add_argument(
         "command",
         nargs="*",
-        help="Command to execute while monitoring (use -- to separate from options)"
+        help="Command to execute while monitoring (use -- to separate from options)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Handle the -- separator if present
     if args.command and args.command[0] == "--":
         args.command = args.command[1:]
-    
+
     if args.background:
         # Background monitoring mode
         print("[INFO] Background monitoring mode - press Ctrl+C to stop")
@@ -342,7 +384,7 @@ def main():
             log_file=args.log_file,
         )
         monitor.start()
-        
+
         try:
             # Keep running until interrupted
             while True:
@@ -350,9 +392,9 @@ def main():
         except KeyboardInterrupt:
             print("\n[STOP] Stopping background monitoring...")
             monitor.stop()
-        
+
         return 0
-    
+
     elif args.command:
         # Command execution mode
         return_code = run_command_with_monitoring(
@@ -362,7 +404,7 @@ def main():
             log_file=args.log_file,
         )
         return return_code
-    
+
     else:
         # One-shot monitoring
         monitor = MemoryMonitor(
@@ -377,4 +419,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
