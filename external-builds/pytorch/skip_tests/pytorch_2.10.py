@@ -104,7 +104,7 @@ skip_tests = {
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
             "test_cpp_warnings_have_python_context_cuda",
             # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
-            # ypeError: 'CustomDecompTable' object is not a mapping
+            # TypeError: 'CustomDecompTable' object is not a mapping
             "test_fx_memory_profiler_augmentation",
             # failure in python 3.13
             "test_index_add_correctness",
