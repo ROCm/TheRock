@@ -18,6 +18,7 @@ Usage:
 import argparse
 import json
 import sys
+import os
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
@@ -318,8 +319,6 @@ def main():
 
     # Write GitHub summary if requested
     if args.github_summary:
-        import os
-
         phase_analyses = []
         for phase, samples in analyzer.phase_data.items():
             analysis = analyzer.analyze_phase(phase, samples)
@@ -332,6 +331,5 @@ def main():
 
 
 if __name__ == "__main__":
-    import os
 
     sys.exit(main())
