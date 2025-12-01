@@ -193,7 +193,7 @@ def main():
     if os.environ.get("ACTIONS_RUNNER_DEBUG", "").lower() != "true":
         print("Skipping memory monitor tests (ACTIONS_RUNNER_DEBUG not set to true)")
         return 0
-    
+
     print("Running memory monitor tests...\n")
 
     tests = [
