@@ -177,10 +177,10 @@ jobs:
           if [ -f "build/memory-analysis-report.txt" ]; then
             if grep -q "CRITICAL" build/memory-analysis-report.txt; then
               echo "memory_critical=true" >> $GITHUB_OUTPUT
-              echo "⚠️ CRITICAL memory usage detected! Check the memory analysis report."
+              echo "CRITICAL memory usage detected! Check the memory analysis report."
             elif grep -q "HIGH" build/memory-analysis-report.txt; then
               echo "memory_high=true" >> $GITHUB_OUTPUT
-              echo "⚠️ HIGH memory usage detected. Review the memory analysis report."
+              echo "HIGH memory usage detected. Review the memory analysis report."
             else
               echo "memory_ok=true" >> $GITHUB_OUTPUT
             fi
@@ -209,7 +209,7 @@ jobs:
       
       - name: Aggregate Analysis
         run: |
-          echo "# 📊 Aggregate Memory Analysis Across All Builds" >> $GITHUB_STEP_SUMMARY
+          echo "# Aggregate Memory Analysis Across All Builds" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           for log_dir in all-memory-logs/*/; do

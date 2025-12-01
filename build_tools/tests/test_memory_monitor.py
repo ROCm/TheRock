@@ -130,7 +130,7 @@ def test_analysis_script():
         # Write some test data
         test_data = [
             {
-                'timestamp': '2024-11-21T10:00:00',
+                'timestamp': '2025-11-21T10:00:00',
                 'phase': 'Test Phase',
                 'total_memory_gb': 32.0,
                 'available_memory_gb': 8.0,

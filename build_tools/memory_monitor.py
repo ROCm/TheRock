@@ -238,9 +238,9 @@ class MemoryMonitor:
                 f.write(f"| Peak Swap Usage | {max_swap_percent:.1f}% |\n")
                 
                 if max_memory_percent > 90:
-                    f.write(f"\n⚠️ **CRITICAL**: Memory usage exceeded 90% during this phase!\n")
+                    f.write(f"**CRITICAL**: Memory usage exceeded 90% during this phase!\n")
                 elif max_memory_percent > 75:
-                    f.write(f"\n⚠️ **WARNING**: Memory usage exceeded 75% during this phase.\n")
+                    f.write(f"️**WARNING**: Memory usage exceeded 75% during this phase.\n")
                 
                 f.write(f"\n")
         except Exception as e:
