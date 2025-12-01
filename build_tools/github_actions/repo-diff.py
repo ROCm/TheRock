@@ -57,9 +57,17 @@ def create_commit_item_html(commit, repo_name):
         f"</div>"
     )
 
-def create_commit_list_container(commit_items):
-    """Create a scrollable container for commit items"""
-    content = ''.join(commit_items) if commit_items else '<div class="no-commits">Component not changed</div>'
+def create_commit_list_container(commit_items, component_status=None):
+    """Create a scrollable container for commit items with support for component status"""
+    if component_status == 'newly_added':
+        content = '<div class="newly-added">Newly added component (no previous version to compare)</div>'
+    elif component_status == 'removed':
+        content = '<div class="removed">Component removed in this version</div>'
+    elif not commit_items:
+        content = '<div class="no-commits">Component has no commits in this range (Superrepo Component Unchanged)</div>'
+    else:
+        content = ''.join(commit_items)
+
     return (
         f"<div class='commit-list'>"
         f"{content}</div>"
@@ -76,7 +84,7 @@ def create_table_wrapper(headers, rows):
     )
 
 # HTML Table Functions
-def generate_superrepo_html_table(allocation, all_commits, repo_name):
+def generate_superrepo_html_table(allocation, all_commits, repo_name, component_status=None):
     """Create a styled HTML table for superrepo commit differences with project allocation"""
     rows = []
     commit_to_projects = {}
@@ -94,7 +102,10 @@ def generate_superrepo_html_table(allocation, all_commits, repo_name):
     for component, commits in allocation.items():
         # Convert commits to HTML items
         commit_items = [create_commit_item_html(commit, repo_name) for commit in commits]
-        commit_list_html = create_commit_list_container(commit_items)
+
+        # Determine component status from parameter
+        status = component_status.get(component) if component_status else None
+        commit_list_html = create_commit_list_container(commit_items, status)
 
         rows.append(
             f"<tr>"
@@ -165,7 +176,62 @@ def generate_non_superrepo_html_table(submodule_commits):
 
     return create_table_wrapper(["Submodule", "Commits"], rows)
 
-def generate_therock_html_report(html_reports, removed_submodules=None, newly_added_submodules=None, unchanged_submodules=None, changed_submodules=None):
+def generate_summary_content(items_data, summary_type="submodules"):
+    """
+    Generate HTML content for summary categories (without container wrapper)
+
+    Args:
+        items_data: Dict with categories like {'added': [...], 'removed': [...], 'changed': [...], 'unchanged': [...]}
+        summary_type: "submodules" or "components" to adjust terminology
+    """
+    if not any(items_data.values()):
+        return ""
+
+    total_items = sum(len(items) if items else 0 for items in items_data.values())
+    if total_items == 0:
+        return ""
+
+    html = ""
+
+    # Added items
+    if items_data.get('added'):
+        html += '<div class="summary-category added">'
+        html += f'<h3>Newly Added {summary_type.title()} ({len(items_data["added"])}/{total_items}):</h3>'
+        html += '<ul class="summary-list">'
+        for item in sorted(items_data['added']):
+            html += f'<li><code>{item}</code></li>'
+        html += '</ul></div>'
+
+    # Removed items
+    if items_data.get('removed'):
+        html += '<div class="summary-category removed">'
+        html += f'<h3>Removed {summary_type.title()} ({len(items_data["removed"])}/{total_items}):</h3>'
+        html += '<ul class="summary-list">'
+        for item in sorted(items_data['removed']):
+            html += f'<li><code>{item}</code></li>'
+        html += '</ul></div>'
+
+    # Changed items
+    if items_data.get('changed'):
+        html += '<div class="summary-category changed">'
+        html += f'<h3>Changed {summary_type.title()} ({len(items_data["changed"])}/{total_items}):</h3>'
+        html += '<ul class="summary-list">'
+        for item in sorted(items_data['changed']):
+            html += f'<li><code>{item}</code></li>'
+        html += '</ul></div>'
+
+    # Unchanged items
+    if items_data.get('unchanged'):
+        html += '<div class="summary-category unchanged">'
+        html += f'<h3>Unchanged {summary_type.title()} ({len(items_data["unchanged"])}/{total_items}):</h3>'
+        html += '<ul class="summary-list">'
+        for item in sorted(items_data['unchanged']):
+            html += f'<li><code>{item}</code></li>'
+        html += '</ul></div>'
+
+    return html
+
+def generate_therock_html_report(html_reports, removed_submodules=None, newly_added_submodules=None, unchanged_submodules=None, changed_submodules=None, superrepo_component_changes=None):
     """Generate a comprehensive HTML report for TheRock repository diff"""
     print(f"\n=== Generating Comprehensive HTML Report ===")
 
@@ -173,56 +239,33 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
     with open("report_template.html", "r") as f:
         template = f.read()
 
-    # Generate and populate submodule changes summary
-    summary_html = ""
-    if removed_submodules or newly_added_submodules or unchanged_submodules or changed_submodules:
-        # Calculate total number of submodules
-        total_submodules = len(newly_added_submodules or []) + len(removed_submodules or []) + len(unchanged_submodules or []) + len(changed_submodules or [])
-        summary_html += '<div style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">'
-        summary_html += '<div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold; margin-bottom:16px;">Submodule Changes Summary</div>'
-        summary_html += '<div style="text-align:center; color:#666; font-size:0.9em; margin-bottom:20px; padding:8px; background-color:#f8f9fa; border-radius:4px; border-left:4px solid #17a2b8;"><strong>Note:</strong> This summary shows only the direct submodules found in TheRock repository (start and end commits). Components within the superrepos (ROCm-Libraries and ROCm-Systems) are detailed separately in their respective sections below and are not counted in these submodule totals.</div>'
+    # Generate submodule changes content
+    submodule_data = {
+        'added': newly_added_submodules or [],
+        'removed': removed_submodules or [],
+        'changed': changed_submodules or [],
+        'unchanged': unchanged_submodules or []
+    }
 
-        if newly_added_submodules:
-            summary_html += '<div style="margin-bottom:16px;">'
-            summary_html += f'<h3 style="color:#28a745; margin-bottom:8px;">Newly Added Submodules ({len(newly_added_submodules)}/{total_submodules}):</h3>'
-            summary_html += '<ul style="margin:0; padding-left:20px;">'
-            for sub in sorted(newly_added_submodules):
-                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
-            summary_html += '</ul></div>'
+    submodule_content = generate_summary_content(submodule_data, "submodules")
 
-        if removed_submodules:
-            summary_html += '<div style="margin-bottom:16px;">'
-            summary_html += f'<h3 style="color:#dc3545; margin-bottom:8px;">Removed Submodules ({len(removed_submodules)}/{total_submodules}):</h3>'
-            summary_html += '<ul style="margin:0; padding-left:20px;">'
-            for sub in sorted(removed_submodules):
-                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
-            summary_html += '</ul></div>'
+    # Generate superrepo components content
+    superrepo_content = ""
+    if superrepo_component_changes:
+        for repo_name, component_data in superrepo_component_changes.items():
+            if any(component_data.values()):  # Only show if there are changes
+                repo_title = f"{repo_name.replace('-', '-').title()} Components"
+                repo_content = generate_summary_content(component_data, "components")
 
-        if changed_submodules:
-            summary_html += '<div style="margin-bottom:16px;">'
-            summary_html += f'<h3 style="color:#ffc107; margin-bottom:8px;">Changed Submodules ({len(changed_submodules)}/{total_submodules}):</h3>'
-            summary_html += '<ul style="margin:0; padding-left:20px;">'
-            for sub in sorted(changed_submodules):
-                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
-            summary_html += '</ul></div>'
+                if repo_content:
+                    superrepo_content += '<div class="summary-section">'
+                    superrepo_content += f'<h2>{repo_title}</h2>'
+                    superrepo_content += repo_content
+                    superrepo_content += '</div>'
 
-        if unchanged_submodules:
-            summary_html += '<div>'
-            summary_html += f'<h3 style="color:#6c757d; margin-bottom:8px;">Unchanged Submodules ({len(unchanged_submodules)}/{total_submodules}):</h3>'
-            summary_html += '<ul style="margin:0; padding-left:20px;">'
-            for sub in sorted(unchanged_submodules):
-                summary_html += f'<li style="color:#6c757d; margin-bottom:4px;"><code>{sub}</code></li>'
-            summary_html += '</ul></div>'
-
-        summary_html += '</div>'
-
-    # Insert summary at the top
-    template = template.replace(
-        '<div id="submodule-summary"></div>',
-        f'<div id="submodule-summary">{summary_html}</div>'
-    )
-
-    # Check what sections have content and populate accordingly
+    # Insert content into template containers
+    template = template.replace('<div id="submodule-content"></div>', f'<div id="submodule-content">{submodule_content}</div>')
+    template = template.replace('<div id="superrepo-content"></div>', f'<div id="superrepo-content">{superrepo_content}</div>')    # Check what sections have content and populate accordingly
     rocm_lib_data = html_reports.get('rocm-libraries')
     rocm_sys_data = html_reports.get('rocm-systems')
     non_superrepo_data = html_reports.get('non-superrepo')
@@ -264,13 +307,14 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
     print("Generated TheRockReport.html successfully!")
 
 # TheRock Helper Functions
-def get_rocm_components(repo):
-    """Get components from ROCm superrepo repositories (shared and projects directories)"""
+def get_rocm_components(repo, commit_sha=None):
+    """Get components from ROCm superrepo repositories (shared and projects directories) at specific commit"""
     components = []
+    ref_param = f"?ref={commit_sha}" if commit_sha else ""
 
     # If the repo is rocm-libraries fetch from shared and projects subfolders
     if repo == "rocm-libraries":
-        url = f"https://api.github.com/repos/ROCm/{repo}/contents/shared"
+        url = f"https://api.github.com/repos/ROCm/{repo}/contents/shared{ref_param}"
         print(f"Requesting: {url}")
         try:
             data = gha_send_request(url)
@@ -282,7 +326,7 @@ def get_rocm_components(repo):
             print(f"Failed to fetch shared folder from GitHub: {e}")
 
     # Fetch the components in the projects directory
-    url = f"https://api.github.com/repos/ROCm/{repo}/contents/projects"
+    url = f"https://api.github.com/repos/ROCm/{repo}/contents/projects{ref_param}"
     print(f"Requesting: {url}")
     try:
         data = gha_send_request(url)
@@ -294,6 +338,25 @@ def get_rocm_components(repo):
         print(f"Failed to fetch projects folder from GitHub: {e}")
 
     return components
+
+def detect_component_changes(start_components, end_components, repo_name=None):
+    """Compare two component lists to find added/removed components"""
+    start_set = set(start_components)
+    end_set = set(end_components)
+
+    added = end_set - start_set
+    removed = start_set - end_set
+
+    if repo_name:
+        if added:
+            print(f"  Found {len(added)} newly added components in {repo_name}: {sorted(added)}")
+        if removed:
+            print(f"  Found {len(removed)} removed components in {repo_name}: {sorted(removed)}")
+
+    return {
+        'added': added,
+        'removed': removed
+    }
 
 def get_commits_by_directories(repo_name, start_sha, end_sha, project_directories):
     """
@@ -641,6 +704,7 @@ def main():
     unchanged_submodules = []
     changed_submodules = []
     html_reports = {}
+    superrepo_component_changes = {}
 
     # Get all unique submodules from both commits
     all_submodules = set(old_submodules.keys()) | set(new_submodules.keys())
@@ -660,16 +724,17 @@ def main():
             newly_added_submodules.append(submodule)
             print(f"NEWLY ADDED: {submodule} -> {new_sha[:7]}")
 
-            # Get commit message for the tip SHA
+            # Get commit info for the tip SHA
             commit_message = "N/A"
+            commit_data = {'author': 'System', 'date': 'N/A'}
             try:
                 commit_url = f"https://api.github.com/repos/ROCm/{submodule}/commits/{new_sha}"
                 commit_api_response = gha_send_request(commit_url)
                 commit_data = extract_commit_data(commit_api_response)
                 commit_message = commit_data['message']
-                print(f"  Retrieved commit message for newly added {submodule}")
+                print(f"  Retrieved commit info for newly added {submodule}")
             except Exception as e:
-                print(f"  Warning: Could not get commit message for newly added {submodule}: {e}")
+                print(f"  Warning: Could not get commit info for newly added {submodule}: {e}")
 
             # Process newly added superrepo (show as single commit entry)
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
@@ -698,11 +763,15 @@ def main():
                     'content_html': content_html
                 }
             else:
+                # Use the commit_data that was already extracted above
                 submodule_commits[submodule] = [{
                     'sha': new_sha,
                     'commit': {
                         'message': f'Newly added submodule: {submodule} Tip -> {commit_message}',
-                        'author': {'name': 'System', 'date': 'N/A'}
+                        'author': {
+                            'name': commit_data['author'],
+                            'date': commit_data['date']
+                        }
                     }
                 }]
 
@@ -719,23 +788,62 @@ def main():
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
                 print(f"\n=== Processing {submodule.upper()} superrepo ===")
 
-                # Get the components for this superrepo
-                components = get_rocm_components(submodule)
+                # Get components from both start and end commits
+                start_components = get_rocm_components(submodule, old_sha)
+                end_components = get_rocm_components(submodule, new_sha)
+
+                # Detect component changes for this superrepo
+                component_changes = detect_component_changes(start_components, end_components, submodule)
+
+                # Get all components (union of start and end)
+                all_components = set(start_components) | set(end_components)
 
                 # Add trailing slashes to ensure full path matching (projects/hip/ not projects/hipsparse)
-                project_directories = [comp + "/" if not comp.endswith("/") else comp for comp in components]
+                project_directories = [comp + "/" if not comp.endswith("/") else comp for comp in all_components]
 
                 # Use new directory-based approach
                 allocation, all_commits_for_display = get_commits_by_directories(submodule, old_sha, new_sha, project_directories)
 
-                # Generate HTML table - allocation is ready to use directly
-                html_table = generate_superrepo_html_table(allocation, all_commits_for_display, submodule)
+                # Categorize all components for summary (now that we have allocation)
+                changed_components = set()
+                unchanged_components = set()
 
-                # Store the HTML report
+                # For components that exist in both, check if they have commits (indicating changes)
+                for comp in start_components:
+                    if comp in end_components:
+                        # Check if this component has any commits in the allocation
+                        comp_key = comp.rstrip('/')
+                        if comp_key in allocation and allocation[comp_key]:
+                            changed_components.add(comp)
+                        else:
+                            unchanged_components.add(comp)
+
+                # Store component categorization for summary
+                superrepo_component_changes[submodule] = {
+                    'added': component_changes['added'],
+                    'removed': component_changes['removed'],
+                    'changed': changed_components,
+                    'unchanged': unchanged_components
+                }
+
+                # Create component status mapping
+                component_status = {}
+                for comp in component_changes['added']:
+                    component_status[comp] = 'newly_added'
+                for comp in component_changes['removed']:
+                    # Add removed components to allocation with empty commits
+                    allocation[comp] = []
+                    component_status[comp] = 'removed'
+
+                # Generate HTML table with component status
+                html_table = generate_superrepo_html_table(allocation, all_commits_for_display, submodule, component_status)
+
+                # Store the HTML report with component changes
                 html_reports[submodule] = {
                     'start_commit': old_sha,
                     'end_commit': new_sha,
-                    'content_html': html_table
+                    'content_html': html_table,
+                    'component_changes': component_changes
                 }
 
                 print(f"Generated HTML report for {submodule}")
@@ -801,7 +909,7 @@ def main():
     }
 
     # Generate the comprehensive HTML report
-    generate_therock_html_report(html_reports, removed_submodules, newly_added_submodules, unchanged_submodules, changed_submodules)
+    generate_therock_html_report(html_reports, removed_submodules, newly_added_submodules, unchanged_submodules, changed_submodules, superrepo_component_changes)
 
     # Generate GitHub Actions step summary
     generate_step_summary(start, end, html_reports, submodule_commits)
