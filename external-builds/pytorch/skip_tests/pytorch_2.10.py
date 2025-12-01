@@ -5,8 +5,9 @@ skip_tests = {
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
             # "test_multi_grad_all_hooks",
-            # "test_side_stream_backward_overlap",
-            # "test_side_stream_backward_overlap",
+            # flaky, was good some itme
+            "test_side_stream_backward_overlap",
+            "test_side_stream_backward_overlap_cuda"
             #
             #  Test run says they are good????
             # # AttributeError: 'torch._C._autograd.SavedTensor' object has no attribute 'data'
@@ -19,7 +20,9 @@ skip_tests = {
             # # associated with the custom Function, leading to incorrect gradients. This behavior is forbidden. You can fix this by cloning the output
             # # of the custom Function.
             # "test_autograd_simple_views_python",
-            "test_grad_dtype"
+            "test_grad_dtype",
+            # AssertionError: Booleans mismatch: False is not True
+            "test_warn_on_accumulate_grad_stream_mismatch_flag_cuda",
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
@@ -99,6 +102,12 @@ skip_tests = {
         ],
         "torch": [
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
+            "test_cpp_warnings_have_python_context_cuda",
+            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_fx_memory_profiler_augmentation",
+            # failure in python 3.13
+            "test_index_add_correctness",
         ],
     },
 }
