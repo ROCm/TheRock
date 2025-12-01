@@ -130,7 +130,7 @@ jobs:
         if: ${{ inputs.build_variant_label == 'ASAN' }}
         shell: bash
         run: |
-          apt-get update && apt-get install -y tmux
+          apt update && apt install -y tmux
           tmux new-session -d -s telemetry \
             "while true; do echo \"--- \$(date) ---\"; free -h; top -b -n1 | head -20; sleep 30; done"
           
