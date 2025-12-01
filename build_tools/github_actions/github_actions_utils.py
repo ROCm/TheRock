@@ -10,11 +10,9 @@ import sys
 from typing import Mapping
 from urllib.request import urlopen, Request
 
-
 def _log(*args, **kwargs):
-    print(*args, **kwargs)
-    sys.stdout.flush()
-
+    print(*args, **kwargs, file=sys.stderr)
+    sys.stderr.flush()
 
 def gha_warn_if_not_running_on_ci():
     # https://docs.github.com/en/actions/reference/variables-reference
