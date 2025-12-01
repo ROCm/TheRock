@@ -178,13 +178,18 @@ jobs:
 
       - name: Upload job metrics to Redshift database
         if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
+        shell: bash
         env:
           RUN_ID: ${{ github.run_id }}
           ATTEMPT: ${{ github.run_attempt }}
         run: |
-          # Fetch job summary and store it
-          JOB_SUMMARY=$(python3 build_tools/github_actions/fetch_job_status.py)
-          # Populate Redshift Database tables
+          echo "Fetching job summary..."
+          python3 build_tools/github_actions/fetch_job_status.py > job_summary.json
+          echo "Job summary written to job_summary.json"
+          echo "Contents:"
+          cat job_summary.json
+          JOB_SUMMARY=$(cat job_summary.json)
+          echo "Invoking Redshift Database population script..."
           python3 build_tools/github_actions/populate_redshift_db.py \
             --api-output "$JOB_SUMMARY" \
             --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
