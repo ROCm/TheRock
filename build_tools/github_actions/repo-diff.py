@@ -358,6 +358,52 @@ def detect_component_changes(start_components, end_components, repo_name=None):
         'removed': removed
     }
 
+def fetch_commits_in_range(repo_name, start_sha, end_sha):
+    """
+    Core function to fetch commits between two SHAs.
+
+    Args:
+        repo_name: Repository name (e.g., 'rocm-libraries', 'hip')
+        start_sha: Starting commit SHA (exclusive - commits after this)
+        end_sha: Ending commit SHA (inclusive - commits up to this)
+
+    Returns:
+        List of commit objects in chronological order (newest to oldest)
+    """
+    commits = []
+    found_start = False
+    page = 1
+    max_pages = 20
+
+    print(f"  Getting commits for {repo_name} from {start_sha[:7]} to {end_sha[:7]}")
+
+    while not found_start and page <= max_pages:
+        params = {"sha": end_sha, "per_page": 100, "page": page}
+        url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
+
+        try:
+            data = gha_send_request(url)
+            if not data:
+                break
+
+            for commit in data:
+                commits.append(commit)
+
+                if commit['sha'] == start_sha:
+                    found_start = True
+                    break
+
+            if len(data) < params['per_page']:
+                break
+            page += 1
+
+        except Exception as e:
+            print(f"  Error fetching commits: {e}")
+            break
+
+    print(f"  Found {len(commits)} commits in range")
+    return commits
+
 def get_commits_by_directories(repo_name, start_sha, end_sha, project_directories):
     """
     Get commits by project directories using GitHub API path parameter.
@@ -375,38 +421,8 @@ def get_commits_by_directories(repo_name, start_sha, end_sha, project_directorie
     """
     print(f"  Getting commits by directories for {repo_name} from {start_sha} to {end_sha}")
 
-    # Step 1: Get all commits in range (GitHub API returns newest first by default)
-    all_commits = []
-    found_start = False
-    page = 1
-    max_pages = 20
-
-    print(f"  Getting all commits in range...")
-    while not found_start and page <= max_pages:
-        params = {"sha": end_sha, "per_page": 100, "page": page}
-        url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
-
-        try:
-            data = gha_send_request(url)
-            if not data:
-                break
-
-            for commit in data:
-                all_commits.append(commit)
-                if commit['sha'] == start_sha:
-                    found_start = True
-                    break
-
-            if len(data) < params['per_page']:
-                break
-            page += 1
-
-        except Exception as e:
-            print(f"  Error fetching commits: {e}")
-            break
-
-    # Keep commits in newest-to-oldest order (as received from GitHub API)
-    print(f"  Found {len(all_commits)} commits in range")
+    # Step 1: Get all commits in range using consolidated function
+    all_commits = fetch_commits_in_range(repo_name, start_sha, end_sha)
 
     # Create SHA set for fast range checking when filtering directory commits
     commit_shas_in_range = {commit['sha'] for commit in all_commits}
@@ -422,6 +438,7 @@ def get_commits_by_directories(repo_name, start_sha, end_sha, project_directorie
 
         # Query commits that touched this specific directory path
         page = 1
+        max_pages = 20
         directory_commits = []
 
         while page <= max_pages:
@@ -488,79 +505,7 @@ def get_commits_by_directories(repo_name, start_sha, end_sha, project_directorie
 
     return allocation, all_commits
 
-def get_commits_between_shas(repo_name, start_sha, end_sha, enrich_with_files=False):
-    """
-    Get commits between two SHAs for any repository.
 
-    Args:
-        repo_name: Repository name (e.g., 'rocm-libraries', 'hip')
-        start_sha: Starting commit SHA to stop at
-        end_sha: Ending commit SHA to start from
-        enrich_with_files: If True, fetch detailed file info for each commit (needed for superrepos)
-
-    Returns:
-        List of commit objects in chronological order (newest first)
-    """
-    commits = []
-    found_start = False
-    page = 1
-    max_pages = 20
-
-    repo_type = "superrepo" if enrich_with_files else "submodule"
-    print(f"  Getting commits for {repo_type} {repo_name} from {start_sha} to {end_sha}")
-
-    while not found_start and page <= max_pages:
-        params = {"sha": end_sha, "per_page": 100, "page": page}
-        url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
-
-        try:
-            print(f"  Fetching page {page} for {repo_name}")
-            data = gha_send_request(url)
-
-            if not data:
-                print(f"  No more commits found on page {page}")
-                break
-
-            print(f"  Page {page}: Received {len(data)} commits from API")
-
-            for commit in data:
-                sha = commit['sha']
-
-                # Enrich with file details if requested (for superrepos)
-                if enrich_with_files:
-                    print(f"  Processing commit: {sha}")
-                    try:
-                        commit_url = f"https://api.github.com/repos/ROCm/{repo_name}/commits/{sha}"
-                        commit = gha_send_request(commit_url)
-                    except Exception:
-                        pass  # Use original commit if enrichment fails
-
-                commits.append(commit)
-
-                if sha == start_sha:
-                    found_start = True
-                    print(f"  Found start commit {start_sha} for {repo_name}")
-                    break
-
-            # Stop if we got fewer commits than requested (end of history)
-            if len(data) < params['per_page']:
-                print(f"  Reached end of commits (got {len(data)} < {params['per_page']})")
-                break
-
-            page += 1
-
-        except Exception as e:
-            print(f"  Error fetching commits for {repo_name}: {e}")
-            break
-
-    # Report results
-    if not found_start and page > max_pages:
-        print(f"  Warning: Reached page limit ({max_pages}) without finding start commit {start_sha}")
-    elif not found_start:
-        print(f"  Warning: Did not find start commit {start_sha} for {repo_name}")
-
-    print(f"  Found {len(commits)} commits for {repo_name}")
-    return commits
 
 def find_submodules(commit_sha):
     """Find submodules and their commit SHAs for a TheRock commit"""
@@ -850,7 +795,7 @@ def main():
 
             else:
                 # For other submodules, get commit history
-                submodule_commits[submodule] = get_commits_between_shas(submodule, old_sha, new_sha, enrich_with_files=False)
+                submodule_commits[submodule] = fetch_commits_in_range(submodule, old_sha, new_sha)
 
     # Print summary
     print(f"\n=== SUBMODULE CHANGES SUMMARY ===")
