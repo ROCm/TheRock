@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shlex
@@ -8,6 +9,21 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1))
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+# Load ROCm version from version.json
+def load_rocm_version() -> str:
+    """Loads the rocm-version from the repository's version.json file."""
+    version_file = THEROCK_DIR / "version.json"
+    logging.info(f"Loading ROCm version from: {version_file}")
+    with open(version_file, "rt") as f:
+        loaded_file = json.load(f)
+        return loaded_file["rocm-version"]
+
+ROCM_VERSION = load_rocm_version()
+logging.info(f"ROCm version: {ROCM_VERSION}")
 
 environ_vars = os.environ.copy()
 
@@ -21,6 +37,7 @@ environ_vars["HIP_DEVICE_LIB_PATH"] = str(OUTPUT_ARTIFACTS_PATH / "lib/llvm/amdg
 environ_vars["HIP_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["CMAKE_PREFIX_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["HIP_PLATFORM"] = "amd"
+environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
 
 # Add ROCm binaries to PATH
 rocm_bin = str(THEROCK_BIN_PATH)
@@ -53,8 +70,9 @@ except FileNotFoundError as e:
     raise
 
 
-# Configure with CMake
-cmd = [
+if SHARD_INDEX == 1: # hipcc
+  # Configure with CMake
+  cmd = [
     "cmake",
     "..",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
@@ -63,11 +81,30 @@ cmd = [
     #f"-DCMAKE_CXX_FLAGS=--rocm-path={OUTPUT_ARTIFACTS_PATH}",
     f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
     "-GNinja",
-]
+  ]
+elif SHARD_INDEX == 2: # hiprtc
+  cmd = [
+    "cmake",
+    "..",
+    f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
+    #f"-DCMAKE_HIP_COMPILER={THEROCK_BIN_PATH}/hipcc",
+    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
+    #f"-DCMAKE_CXX_FLAGS=--rocm-path={OUTPUT_ARTIFACTS_PATH}",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+    "-DLIBHIPCXX_TEST_WITH_HIPRTC=ON",
+    "-GNinja",
+  ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
+if SHARD_INDEX == 2: # build hiprtcc
+  cmd = [
+    "ninja",
+  ]
+
+  logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
+  subprocess.run(cmd, check=True, env=environ_vars)
 
 # Run the tests using lit
 # If smoke tests are enabled, we run smoke tests only.
