@@ -44,12 +44,10 @@ class MemoryMonitor:
         interval: float = 5.0,
         phase_name: str = "Unknown",
         log_file: Optional[Path] = None,
-        verbose: bool = False,
     ):
         self.interval = interval
         self.phase_name = phase_name
         self.log_file = log_file
-        self.verbose = verbose
         self.running = False
         self.peak_memory = 0
         self.peak_swap = 0
@@ -252,14 +250,12 @@ def run_command_with_monitoring(
     phase_name: str,
     interval: float,
     log_file: Optional[Path],
-    verbose: bool,
 ) -> int:
     """Run a command while monitoring memory usage."""
     monitor = MemoryMonitor(
         interval=interval,
         phase_name=phase_name,
         log_file=log_file,
-        verbose=verbose,
     )
     
     monitor.start()
@@ -310,12 +306,6 @@ def main():
     )
     
     parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
-    )
-    
-    parser.add_argument(
         "--background",
         action="store_true",
         help="Run monitoring in background without executing a command"
@@ -340,7 +330,6 @@ def main():
             interval=args.interval,
             phase_name=args.phase,
             log_file=args.log_file,
-            verbose=args.verbose,
         )
         monitor.start()
         
@@ -361,7 +350,6 @@ def main():
             phase_name=args.phase,
             interval=args.interval,
             log_file=args.log_file,
-            verbose=args.verbose,
         )
         return return_code
     
@@ -371,7 +359,6 @@ def main():
             interval=args.interval,
             phase_name=args.phase,
             log_file=args.log_file,
-            verbose=args.verbose,
         )
         stats = monitor.get_memory_stats()
         monitor.log_stats(stats)
