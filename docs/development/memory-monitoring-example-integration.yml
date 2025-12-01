@@ -186,8 +186,7 @@ jobs:
             fi
           fi
 
-# Additional optional job to aggregate memory stats across matrix builds
-jobs:
+  # Additional optional job to aggregate memory stats across matrix builds
   aggregate_memory_stats:
     name: Aggregate Memory Statistics
     needs: [build_portable_linux_artifacts]
