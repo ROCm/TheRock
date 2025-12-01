@@ -125,7 +125,7 @@ jobs:
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
-          
+
       - name: Build therock-archives and therock-dist
         run: python3 build_tools/github_actions/cmake_build_script.py --build-variant "${{ inputs.build_variant_label }}"
 
