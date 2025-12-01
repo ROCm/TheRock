@@ -41,8 +41,7 @@ def extract_commit_data(commit):
         'sha': commit.get('sha', '-'),
         'message': commit.get('commit', {}).get('message', '-').split('\n')[0],
         'author': commit.get('commit', {}).get('author', {}).get('name', 'Unknown'),
-        'date': commit.get('commit', {}).get('author', {}).get('date', 'Unknown'),
-        'formatted_date': format_commit_date(commit.get('commit', {}).get('author', {}).get('date', 'Unknown'))
+        'date': format_commit_date(commit.get('commit', {}).get('author', {}).get('date', 'Unknown'))
     }
 
 def create_commit_item_html(commit, repo_name):
@@ -53,7 +52,7 @@ def create_commit_item_html(commit, repo_name):
     return (
         f"<div class='commit-item'>"
         f"<div>{badge_html} {commit_data['message']}</div>"
-        f"<div class='commit-meta'>{commit_data['formatted_date']} • {commit_data['author']}</div>"
+        f"<div class='commit-meta'>{commit_data['date']} • {commit_data['author']}</div>"
         f"</div>"
     )
 
@@ -127,7 +126,7 @@ def generate_superrepo_html_table(allocation, all_commits, repo_name, component_
 
             project_table_rows.append(
                 f"<tr>"
-                f"<td class='date-col'>{commit_data['formatted_date']}</td>"
+                f"<td class='date-col'>{commit_data['date']}</td>"
                 f"<td>{badge_html}</td>"
                 f"<td class='author-col'>{commit_data['author']}</td>"
                 f"<td class='project-col'>{projects}</td>"
@@ -177,13 +176,7 @@ def generate_non_superrepo_html_table(submodule_commits):
     return create_table_wrapper(["Submodule", "Commits"], rows)
 
 def generate_summary_content(items_data, summary_type="submodules"):
-    """
-    Generate HTML content for summary categories (without container wrapper)
-
-    Args:
-        items_data: Dict with categories like {'added': [...], 'removed': [...], 'changed': [...], 'unchanged': [...]}
-        summary_type: "submodules" or "components" to adjust terminology
-    """
+    """ Generate HTML content for summary categories (without container wrapper)"""
     if not any(items_data.values()):
         return ""
 
@@ -254,14 +247,10 @@ def generate_therock_html_report(html_reports, removed_submodules=None, newly_ad
     if superrepo_component_changes:
         for repo_name, component_data in superrepo_component_changes.items():
             if any(component_data.values()):  # Only show if there are changes
-                repo_title = f"{repo_name.replace('-', '-').title()} Components"
                 repo_content = generate_summary_content(component_data, "components")
-
                 if repo_content:
-                    superrepo_content += '<div class="summary-section">'
-                    superrepo_content += f'<h2>{repo_title}</h2>'
-                    superrepo_content += repo_content
-                    superrepo_content += '</div>'
+                    repo_title = f"{repo_name.title()} Components"
+                    superrepo_content += f'<div class="summary-section"><h2>{repo_title}</h2>{repo_content}</div>'
 
     # Insert content into template containers
     template = template.replace('<div id="submodule-content"></div>', f'<div id="submodule-content">{submodule_content}</div>')
@@ -339,37 +328,64 @@ def get_rocm_components(repo, commit_sha=None):
 
     return components
 
-def detect_component_changes(start_components, end_components, repo_name=None):
-    """Compare two component lists to find added/removed components"""
-    start_set = set(start_components)
-    end_set = set(end_components)
+def find_submodules(commit_sha):
+    """Find submodules and their commit SHAs for a TheRock commit"""
 
-    added = end_set - start_set
-    removed = start_set - end_set
+    # Get .gitmodules file content
+    gitmodules_url = f"https://api.github.com/repos/ROCm/TheRock/contents/.gitmodules?ref={commit_sha}"
+    try:
+        gitmodules_data = gha_send_request(gitmodules_url)
+        if gitmodules_data.get('encoding') != 'base64':
+            print("Error: .gitmodules file encoding not supported")
+            return {}
 
-    if repo_name:
-        if added:
-            print(f"  Found {len(added)} newly added components in {repo_name}: {sorted(added)}")
-        if removed:
-            print(f"  Found {len(removed)} removed components in {repo_name}: {sorted(removed)}")
+        # Parse submodule paths from .gitmodules content
+        content = base64.b64decode(gitmodules_data['content']).decode('utf-8')
+        submodule_paths = {
+            line.split('path =')[1].strip()
+            for line in content.split('\n')
+            if line.strip().startswith('path =')
+        }
 
-    return {
-        'added': added,
-        'removed': removed
+        if not submodule_paths:
+            print("No submodules found in .gitmodules")
+            return {}
+
+        print(f"Found {len(submodule_paths)} submodule paths in .gitmodules")
+
+    except Exception as e:
+        print(f"Error fetching .gitmodules file: {e}")
+        return {}
+
+    # Special name mappings for submodules
+    name_mappings = {
+        "profiler/rocprof-trace-decoder/binaries": "rocprof-trace-decoder",
+        "compiler/amd-llvm": "llvm-project"
     }
 
+    # Get commit SHAs for all submodules
+    submodules = {}
+    for path in submodule_paths:
+        try:
+            # Get submodule commit SHA
+            contents_url = f"https://api.github.com/repos/ROCm/TheRock/contents/{path}?ref={commit_sha}"
+            content_data = gha_send_request(contents_url)
+            if content_data.get('type') == 'submodule' and content_data.get('sha'):
+                # Determine submodule name (with special mappings)
+                submodule_name = name_mappings.get(path, path.split('/')[-1])
+                submodules[submodule_name] = content_data['sha']
+                print(f"Found submodule: {submodule_name} (path: {path}) -> {content_data['sha']}")
+                if path == "compiler/amd-llvm":
+                    print(f"  DEBUG: compiler/amd-llvm path mapped to {submodule_name}")
+            else:
+                print(f"Warning: {path} is not a valid submodule")
+        except Exception as e:
+            print(f"Warning: Could not get commit SHA for submodule at {path}: {e}")
+
+    return submodules
+
 def fetch_commits_in_range(repo_name, start_sha, end_sha):
-    """
-    Core function to fetch commits between two SHAs.
-
-    Args:
-        repo_name: Repository name (e.g., 'rocm-libraries', 'hip')
-        start_sha: Starting commit SHA (exclusive - commits after this)
-        end_sha: Ending commit SHA (inclusive - commits up to this)
-
-    Returns:
-        List of commit objects in chronological order (newest to oldest)
-    """
+    """Core function to fetch commits between two SHAs."""
     commits = []
     found_start = False
     page = 1
@@ -404,24 +420,30 @@ def fetch_commits_in_range(repo_name, start_sha, end_sha):
     print(f"  Found {len(commits)} commits in range")
     return commits
 
+def detect_component_changes(start_components, end_components, repo_name=None):
+    """Compare two component lists to find added/removed components"""
+    start_set = set(start_components)
+    end_set = set(end_components)
+
+    added = end_set - start_set
+    removed = start_set - end_set
+
+    if repo_name:
+        if added:
+            print(f"  Found {len(added)} newly added components in {repo_name}: {sorted(added)}")
+        if removed:
+            print(f"  Found {len(removed)} removed components in {repo_name}: {sorted(removed)}")
+
+    return {
+        'added': added,
+        'removed': removed
+    }
+
 def get_commits_by_directories(repo_name, start_sha, end_sha, project_directories):
-    """
-    Get commits by project directories using GitHub API path parameter.
-
-    Args:
-        repo_name: Repository name (e.g., 'rocm-libraries')
-        start_sha: Starting commit SHA (exclusive - commits after this)
-        end_sha: Ending commit SHA (inclusive - commits up to this)
-        project_directories: List of directory paths with trailing slashes (e.g., ['projects/hip/', 'shared/rocm-cmake/'])
-
-    Returns:
-        Tuple of (allocation, all_commits):
-        - allocation: Dictionary with project names as keys, commit lists as values (includes 'Unassigned' if needed)
-        - all_commits: List of all commits in chronological order (newest to oldest)
-    """
+    """Get commits by project directories using GitHub API path parameter."""
     print(f"  Getting commits by directories for {repo_name} from {start_sha} to {end_sha}")
 
-    # Step 1: Get all commits in range using consolidated function
+    # Step 1: Get all commits in range
     all_commits = fetch_commits_in_range(repo_name, start_sha, end_sha)
 
     # Create SHA set for fast range checking when filtering directory commits
@@ -505,65 +527,81 @@ def get_commits_by_directories(repo_name, start_sha, end_sha, project_directorie
 
     return allocation, all_commits
 
+# Workflow Summary Function
+def process_superrepo_changes(submodule, old_sha, new_sha):
+    """Process component changes for superrepos and generate HTML content"""
+    print(f"\n=== Processing {submodule.upper()} superrepo ===")
 
+    # Get components from both commits
+    start_components = get_rocm_components(submodule, old_sha)
+    end_components = get_rocm_components(submodule, new_sha)
 
-def find_submodules(commit_sha):
-    """Find submodules and their commit SHAs for a TheRock commit"""
+    # Detect component changes
+    component_changes = detect_component_changes(start_components, end_components, submodule)
 
-    # Get .gitmodules file content
-    gitmodules_url = f"https://api.github.com/repos/ROCm/TheRock/contents/.gitmodules?ref={commit_sha}"
-    try:
-        gitmodules_data = gha_send_request(gitmodules_url)
-        if gitmodules_data.get('encoding') != 'base64':
-            print("Error: .gitmodules file encoding not supported")
-            return {}
+    # Get all components and create directory list
+    all_components = set(start_components) | set(end_components)
+    project_directories = [comp + "/" if not comp.endswith("/") else comp for comp in all_components]
 
-        # Parse submodule paths from .gitmodules content
-        content = base64.b64decode(gitmodules_data['content']).decode('utf-8')
-        submodule_paths = {
-            line.split('path =')[1].strip()
-            for line in content.split('\n')
-            if line.strip().startswith('path =')
-        }
+    # Get commits by directory
+    allocation, all_commits_for_display = get_commits_by_directories(submodule, old_sha, new_sha, project_directories)
 
-        if not submodule_paths:
-            print("No submodules found in .gitmodules")
-            return {}
+    # Categorize components based on commit activity
+    changed_components = set()
+    unchanged_components = set()
 
-        print(f"Found {len(submodule_paths)} submodule paths in .gitmodules")
+    for comp in start_components:
+        if comp in end_components:
+            comp_key = comp.rstrip('/')
+            if comp_key in allocation and allocation[comp_key]:
+                changed_components.add(comp)
+            else:
+                unchanged_components.add(comp)
 
-    except Exception as e:
-        print(f"Error fetching .gitmodules file: {e}")
-        return {}
-
-    # Special name mappings for submodules
-    name_mappings = {
-        "profiler/rocprof-trace-decoder/binaries": "rocprof-trace-decoder",
-        "compiler/amd-llvm": "llvm-project"
+    # Create component categorization for summary
+    component_summary = {
+        'added': component_changes['added'],
+        'removed': component_changes['removed'],
+        'changed': changed_components,
+        'unchanged': unchanged_components
     }
 
-    # Get commit SHAs for all submodules
-    submodules = {}
-    for path in submodule_paths:
-        try:
-            # Get submodule commit SHA
-            contents_url = f"https://api.github.com/repos/ROCm/TheRock/contents/{path}?ref={commit_sha}"
-            content_data = gha_send_request(contents_url)
-            if content_data.get('type') == 'submodule' and content_data.get('sha'):
-                # Determine submodule name (with special mappings)
-                submodule_name = name_mappings.get(path, path.split('/')[-1])
-                submodules[submodule_name] = content_data['sha']
-                print(f"Found submodule: {submodule_name} (path: {path}) -> {content_data['sha']}")
-                if path == "compiler/amd-llvm":
-                    print(f"  DEBUG: compiler/amd-llvm path mapped to {submodule_name}")
-            else:
-                print(f"Warning: {path} is not a valid submodule")
-        except Exception as e:
-            print(f"Warning: Could not get commit SHA for submodule at {path}: {e}")
+    # Create component status mapping
+    component_status = {}
+    for comp in component_changes['added']:
+        component_status[comp] = 'newly_added'
+    for comp in component_changes['removed']:
+        allocation[comp] = []  # Add removed components with empty commits
+        component_status[comp] = 'removed'
 
-    return submodules
+    # Generate HTML content
+    content_html = generate_superrepo_html_table(allocation, all_commits_for_display, submodule, component_status)
 
-# Workflow Summary Function
+    return {
+        'html_content': content_html,
+        'component_summary': component_summary,
+        'start_commit': old_sha,
+        'end_commit': new_sha
+    }
+
+def create_newly_added_superrepo_html(submodule, new_sha, commit_message):
+    """Create HTML for newly added superrepos"""
+    commit_badge = create_commit_badge_html(new_sha, submodule)
+    return f"""
+    <div style="padding: 20px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-bottom: 16px;">
+        <h3 style="margin-top: 0; color: #28a745; font-size: 1.4em;">Newly Added Superrepo</h3>
+        <p style="margin-bottom: 12px; font-size: 1.1em;">
+            This <strong>{submodule}</strong> superrepo has been newly added to TheRock repository.
+        </p>
+        <div style="background-color: #ffffff; padding: 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+            <strong>Current(Tip) Commit:</strong> {commit_badge} {commit_message}
+        </div>
+        <p style="margin-top: 12px; margin-bottom: 0; color: #6c757d; font-style: italic;">
+            No previous version exists for comparison. Future reports will show detailed component-level changes.
+        </p>
+    </div>
+    """
+
 def generate_step_summary(start_commit, end_commit, html_reports, submodule_commits):
     """Generate simple GitHub Actions step summary"""
     superrepo_count = len([k for k in html_reports.keys() if k != 'non-superrepo'])
@@ -672,51 +710,26 @@ def main():
             # Get commit info for the tip SHA
             commit_message = "N/A"
             commit_data = {'author': 'System', 'date': 'N/A'}
-            try:
-                commit_url = f"https://api.github.com/repos/ROCm/{submodule}/commits/{new_sha}"
-                commit_api_response = gha_send_request(commit_url)
-                commit_data = extract_commit_data(commit_api_response)
+            commit_url = f"https://api.github.com/repos/ROCm/{submodule}/commits/{new_sha}"
+            commit_response = gha_send_request(commit_url)
+            if commit_response:
+                commit_data = extract_commit_data(commit_response)
                 commit_message = commit_data['message']
                 print(f"  Retrieved commit info for newly added {submodule}")
-            except Exception as e:
-                print(f"  Warning: Could not get commit info for newly added {submodule}: {e}")
 
-            # Process newly added superrepo (show as single commit entry)
+            # Process newly added submodule
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
-                # Create clickable commit badge for the current SHA
-                commit_badge = create_commit_badge_html(new_sha, submodule)
-
-                # Create informative content for newly added superrepo
-                content_html = f"""
-                <div style="padding: 20px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-bottom: 16px;">
-                    <h3 style="margin-top: 0; color: #28a745; font-size: 1.4em;">Newly Added Superrepo</h3>
-                    <p style="margin-bottom: 12px; font-size: 1.1em;">
-                        This <strong>{submodule}</strong> superrepo has been newly added to TheRock repository.
-                    </p>
-                    <div style="background-color: #ffffff; padding: 12px; border-radius: 4px; border: 1px solid #dee2e6;">
-                        <strong>Current(Tip) Commit:</strong> {commit_badge} {commit_message}
-                    </div>
-                    <p style="margin-top: 12px; margin-bottom: 0; color: #6c757d; font-style: italic;">
-                        No previous version exists for comparison. Future reports will show detailed component-level changes.
-                    </p>
-                </div>
-                """
-
                 html_reports[submodule] = {
                     'start_commit': 'N/A (newly added)',
                     'end_commit': new_sha,
-                    'content_html': content_html
+                    'content_html': create_newly_added_superrepo_html(submodule, new_sha, commit_message)
                 }
             else:
-                # Use the commit_data that was already extracted above
                 submodule_commits[submodule] = [{
                     'sha': new_sha,
                     'commit': {
                         'message': f'Newly added submodule: {submodule} Tip -> {commit_message}',
-                        'author': {
-                            'name': commit_data['author'],
-                            'date': commit_data['date']
-                        }
+                        'author': {'name': commit_data['author'], 'date': commit_data['date']}
                     }
                 }]
 
@@ -731,68 +744,19 @@ def main():
                 changed_submodules.append(submodule)
 
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
-                print(f"\n=== Processing {submodule.upper()} superrepo ===")
-
-                # Get components from both start and end commits
-                start_components = get_rocm_components(submodule, old_sha)
-                end_components = get_rocm_components(submodule, new_sha)
-
-                # Detect component changes for this superrepo
-                component_changes = detect_component_changes(start_components, end_components, submodule)
-
-                # Get all components (union of start and end)
-                all_components = set(start_components) | set(end_components)
-
-                # Add trailing slashes to ensure full path matching (projects/hip/ not projects/hipsparse)
-                project_directories = [comp + "/" if not comp.endswith("/") else comp for comp in all_components]
-
-                # Use new directory-based approach
-                allocation, all_commits_for_display = get_commits_by_directories(submodule, old_sha, new_sha, project_directories)
-
-                # Categorize all components for summary (now that we have allocation)
-                changed_components = set()
-                unchanged_components = set()
-
-                # For components that exist in both, check if they have commits (indicating changes)
-                for comp in start_components:
-                    if comp in end_components:
-                        # Check if this component has any commits in the allocation
-                        comp_key = comp.rstrip('/')
-                        if comp_key in allocation and allocation[comp_key]:
-                            changed_components.add(comp)
-                        else:
-                            unchanged_components.add(comp)
-
-                # Store component categorization for summary
-                superrepo_component_changes[submodule] = {
-                    'added': component_changes['added'],
-                    'removed': component_changes['removed'],
-                    'changed': changed_components,
-                    'unchanged': unchanged_components
-                }
-
-                # Create component status mapping
-                component_status = {}
-                for comp in component_changes['added']:
-                    component_status[comp] = 'newly_added'
-                for comp in component_changes['removed']:
-                    # Add removed components to allocation with empty commits
-                    allocation[comp] = []
-                    component_status[comp] = 'removed'
-
-                # Generate HTML table with component status
-                html_table = generate_superrepo_html_table(allocation, all_commits_for_display, submodule, component_status)
-
-                # Store the HTML report with component changes
+                # Process superrepo using consolidated function
+                result = process_superrepo_changes(submodule, old_sha, new_sha)
                 html_reports[submodule] = {
-                    'start_commit': old_sha,
-                    'end_commit': new_sha,
-                    'content_html': html_table,
-                    'component_changes': component_changes
+                    'start_commit': result['start_commit'],
+                    'end_commit': result['end_commit'],
+                    'content_html': result['html_content'],
+                    'component_changes': {
+                        'added': result['component_summary']['added'],
+                        'removed': result['component_summary']['removed']
+                    }
                 }
-
+                superrepo_component_changes[submodule] = result['component_summary']
                 print(f"Generated HTML report for {submodule}")
-
             else:
                 # For other submodules, get commit history
                 submodule_commits[submodule] = fetch_commits_in_range(submodule, old_sha, new_sha)
