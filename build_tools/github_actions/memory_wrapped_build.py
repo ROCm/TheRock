@@ -152,7 +152,6 @@ def main():
         phase_name=phase_name,
         interval=args.interval,
         log_file=log_file,
-        verbose=False,
     )
     
     return return_code

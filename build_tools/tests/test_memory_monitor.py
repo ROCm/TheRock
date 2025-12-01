@@ -30,6 +30,7 @@ def test_memory_stats_collection():
     expected_keys = [
         'timestamp', 'phase', 'total_memory_gb', 'available_memory_gb',
         'used_memory_gb', 'memory_percent', 'free_memory_gb',
+        'peak_memory_gb', 'peak_swap_gb',
         'total_swap_gb', 'used_swap_gb', 'swap_percent',
         'process_memory_gb', 'children_memory_gb', 'total_process_memory_gb'
     ]

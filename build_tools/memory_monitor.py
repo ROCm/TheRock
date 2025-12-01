@@ -54,7 +54,7 @@ class MemoryMonitor:
         self.samples = []
         self.start_time = None
         self.end_time = None
-        
+
     def get_memory_stats(self) -> Dict[str, Any]:
         """Collect current memory statistics."""
         vm = psutil.virtual_memory()
@@ -78,6 +78,10 @@ class MemoryMonitor:
         
         total_process_memory = process_memory + children_memory
         
+        # Track peak usage
+        self.peak_memory = max(self.peak_memory, vm.used)
+        self.peak_swap = max(self.peak_swap, swap.used)
+
         stats = {
             "timestamp": datetime.now().isoformat(),
             "phase": self.phase_name,
@@ -87,6 +91,9 @@ class MemoryMonitor:
             "used_memory_gb": vm.used / (1024**3),
             "memory_percent": vm.percent,
             "free_memory_gb": vm.free / (1024**3),
+            # Peak memory
+            "peak_memory_gb": self.peak_memory / (1024**3),
+            "peak_swap_gb": self.peak_swap / (1024**3),
             # Swap
             "total_swap_gb": swap.total / (1024**3),
             "used_swap_gb": swap.used / (1024**3),
@@ -96,10 +103,6 @@ class MemoryMonitor:
             "children_memory_gb": children_memory / (1024**3),
             "total_process_memory_gb": total_process_memory / (1024**3),
         }
-        
-        # Track peak usage
-        self.peak_memory = max(self.peak_memory, vm.used)
-        self.peak_swap = max(self.peak_swap, swap.used)
         
         return stats
     
@@ -184,7 +187,9 @@ class MemoryMonitor:
         
         avg_memory_percent = sum(s['memory_percent'] for s in self.samples) / len(self.samples)
         max_memory_percent = max(s['memory_percent'] for s in self.samples)
-        max_memory_gb = max(s['used_memory_gb'] for s in self.samples)
+        # Use the tracked peak memory from the last sample (cumulative peak)
+        peak_memory_gb = self.samples[-1]['peak_memory_gb'] if self.samples else 0
+        peak_swap_gb = self.samples[-1]['peak_swap_gb'] if self.samples else 0
         
         avg_swap_percent = sum(s['swap_percent'] for s in self.samples) / len(self.samples)
         max_swap_percent = max(s['swap_percent'] for s in self.samples)
@@ -197,11 +202,11 @@ class MemoryMonitor:
         print(f"")
         print(f"Memory Usage:")
         print(f"  Average: {avg_memory_percent:.1f}%")
-        print(f"  Peak: {max_memory_percent:.1f}% ({max_memory_gb:.2f} GB)")
+        print(f"  Peak: {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB)")
         print(f"")
         print(f"Swap Usage:")
         print(f"  Average: {avg_swap_percent:.1f}%")
-        print(f"  Peak: {max_swap_percent:.1f}%")
+        print(f"  Peak: {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB)")
         
         # Warnings
         if max_memory_percent > 90:
@@ -220,12 +225,12 @@ class MemoryMonitor:
         if "GITHUB_STEP_SUMMARY" in os.environ:
             self.write_github_summary(
                 duration, avg_memory_percent, max_memory_percent, 
-                max_memory_gb, avg_swap_percent, max_swap_percent
+                peak_memory_gb, peak_swap_gb, avg_swap_percent, max_swap_percent
             )
     
     def write_github_summary(
         self, duration, avg_memory_percent, max_memory_percent,
-        max_memory_gb, avg_swap_percent, max_swap_percent
+        peak_memory_gb, peak_swap_gb, avg_swap_percent, max_swap_percent
     ):
         """Write summary to GitHub Actions step summary."""
         try:
@@ -236,9 +241,9 @@ class MemoryMonitor:
                 f.write(f"| Duration | {duration:.1f}s |\n")
                 f.write(f"| Samples | {len(self.samples)} |\n")
                 f.write(f"| Avg Memory Usage | {avg_memory_percent:.1f}% |\n")
-                f.write(f"| Peak Memory Usage | {max_memory_percent:.1f}% ({max_memory_gb:.2f} GB) |\n")
+                f.write(f"| Peak Memory Usage | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n")
                 f.write(f"| Avg Swap Usage | {avg_swap_percent:.1f}% |\n")
-                f.write(f"| Peak Swap Usage | {max_swap_percent:.1f}% |\n")
+                f.write(f"| Peak Swap Usage | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n")
                 
                 if max_memory_percent > 90:
                     f.write(f"**CRITICAL**: Memory usage exceeded 90% during this phase!\n")
