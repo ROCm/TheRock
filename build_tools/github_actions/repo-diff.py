@@ -30,8 +30,8 @@ def create_commit_badge_html(sha, repo_name):
     short_sha = sha[:7] if sha != '-' and sha != 'N/A' else sha
     commit_url = f"https://github.com/ROCm/{repo_name}/commit/{sha}"
     return (
-        f"<a href='{commit_url}' target='_blank' style='text-decoration:none;'>"
-        f"<span style='display:inline-block; background-color:#1976D2; color:#fff; padding:2px 8px; font-family:Verdana,sans-serif; font-size:12px; border-radius:2px;'>{short_sha}</span>"
+        f"<a href='{commit_url}' target='_blank' class='commit-badge-link'>"
+        f"<span class='commit-badge'>{short_sha}</span>"
         f"</a>"
     )
 
@@ -51,26 +51,26 @@ def create_commit_item_html(commit, repo_name):
     badge_html = create_commit_badge_html(commit_data['sha'], repo_name)
 
     return (
-        f"<div style='margin-bottom:8px; border-left:3px solid #1976D2; padding-left:8px;'>"
+        f"<div class='commit-item'>"
         f"<div>{badge_html} {commit_data['message']}</div>"
-        f"<div style='color:#666; font-size:11px; margin-top:2px;'>{commit_data['formatted_date']} • {commit_data['author']}</div>"
+        f"<div class='commit-meta'>{commit_data['formatted_date']} • {commit_data['author']}</div>"
         f"</div>"
     )
 
 def create_commit_list_container(commit_items):
     """Create a scrollable container for commit items"""
-    content = ''.join(commit_items) if commit_items else '<div style="color:#888; font-style:italic; text-align:center; padding:8px;">Component not changed</div>'
+    content = ''.join(commit_items) if commit_items else '<div class="no-commits">Component not changed</div>'
     return (
-        f"<div class='commit-list' style='max-height:160px; overflow-y:auto; padding:4px; border:1px solid #ccc; font-family:Verdana,sans-serif; font-size:13px; line-height:1.4; background-color:#f9f9f9;'>"
+        f"<div class='commit-list'>"
         f"{content}</div>"
     )
 
 def create_table_wrapper(headers, rows):
     """Create a styled HTML table with headers and rows"""
-    header_html = "".join([f"<th style='padding:8px; border:1px solid #ccc; text-align:left;'>{header}</th>" for header in headers])
+    header_html = "".join([f"<th>{header}</th>" for header in headers])
     return (
-        "<table style='width:100%; border-collapse:collapse; border:1px solid #ccc; font-family:Verdana,sans-serif; font-size:14px;'>"
-        f"<tr style='background-color:#f1f1f1;'>{header_html}</tr>"
+        "<table class='report-table'>"
+        f"<tr>{header_html}</tr>"
         + "".join(rows) +
         "</table>"
     )
@@ -98,8 +98,8 @@ def generate_superrepo_html_table(allocation, all_commits, repo_name):
 
         rows.append(
             f"<tr>"
-            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{component}</td>"
-            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{commit_list_html}</td>"
+            f"<td>{component}</td>"
+            f"<td>{commit_list_html}</td>"
             f"</tr>"
         )
 
@@ -116,24 +116,24 @@ def generate_superrepo_html_table(allocation, all_commits, repo_name):
 
             project_table_rows.append(
                 f"<tr>"
-                f"<td style='padding:8px; border:1px solid #ccc; font-size:12px; color:#666;'>{commit_data['formatted_date']}</td>"
-                f"<td style='padding:8px; border:1px solid #ccc;'>{badge_html}</td>"
-                f"<td style='padding:8px; border:1px solid #ccc; font-size:12px; color:#555;'>{commit_data['author']}</td>"
-                f"<td style='padding:8px; border:1px solid #ccc; font-weight:bold;'>{projects}</td>"
-                f"<td style='padding:8px; border:1px solid #ccc; font-size:13px;'>{commit_data['message']}</td>"
+                f"<td class='date-col'>{commit_data['formatted_date']}</td>"
+                f"<td>{badge_html}</td>"
+                f"<td class='author-col'>{commit_data['author']}</td>"
+                f"<td class='project-col'>{projects}</td>"
+                f"<td class='message-col'>{commit_data['message']}</td>"
                 f"</tr>"
             )
 
         if project_table_rows:
             commit_projects_html = (
-                "<div style='margin-top:16px; font-weight:bold;'>Commit Project Associations (in newest commit to oldest commit order):</div>"
-                "<table style='width:100%; border-collapse:collapse; border:1px solid #ccc; margin-top:8px;'>"
-                "<tr style='background-color:#f8f9fa;'>"
-                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:80px;'>Date</th>"
-                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:60px;'>SHA</th>"
-                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:120px;'>Author</th>"
-                "<th style='padding:8px; border:1px solid #ccc; text-align:left; width:150px;'>Project(s)</th>"
-                "<th style='padding:8px; border:1px solid #ccc; text-align:left;'>Message</th>"
+                "<div class='section-title'>Commit History (in newest commit to oldest commit order):</div>"
+                "<table class='commit-history-table'>"
+                "<tr>"
+                "<th class='col-date'>Date</th>"
+                "<th class='col-sha'>SHA</th>"
+                "<th class='col-author'>Author</th>"
+                "<th class='col-projects'>Project(s)</th>"
+                "<th>Message</th>"
                 "</tr>"
                 + "".join(project_table_rows) +
                 "</table>"
@@ -158,8 +158,8 @@ def generate_non_superrepo_html_table(submodule_commits):
 
         rows.append(
             f"<tr>"
-            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{submodule}</td>"
-            f"<td style='padding:8px; border:1px solid #ccc; vertical-align:top;'>{commit_list_html}</td>"
+            f"<td>{submodule}</td>"
+            f"<td>{commit_list_html}</td>"
             f"</tr>"
         )
 
