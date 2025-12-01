@@ -269,30 +269,39 @@ class MemoryMonitor:
         """Write summary to GitHub Actions step summary."""
         try:
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-                f.write(f"\n### Memory Stats: {self.phase_name}\n\n")
-                f.write(f"| Metric | Value |\n")
-                f.write(f"|--------|-------|\n")
-                f.write(f"| Duration | {duration:.1f}s |\n")
-                f.write(f"| Samples | {len(self.samples)} |\n")
-                f.write(f"| Avg Memory Usage | {avg_memory_percent:.1f}% |\n")
-                f.write(
-                    f"| Peak Memory Usage | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n"
-                )
-                f.write(f"| Avg Swap Usage | {avg_swap_percent:.1f}% |\n")
-                f.write(
-                    f"| Peak Swap Usage | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n"
-                )
-
+                # Determine status indicator
                 if max_memory_percent > 90:
-                    f.write(
-                        f"**CRITICAL**: Memory usage exceeded 90% during this phase!\n"
-                    )
+                    status = "CRITICAL"
                 elif max_memory_percent > 75:
-                    f.write(
-                        f"️**WARNING**: Memory usage exceeded 75% during this phase.\n"
-                    )
-
-                f.write(f"\n")
+                    status = "WARNING"
+                else:
+                    status = "OK"
+                
+                f.write(f"\n## [{status}] Memory Stats: {self.phase_name}\n\n")
+                
+                # Main statistics table
+                f.write("| Metric | Value |\n")
+                f.write("|:-------|------:|\n")
+                f.write(f"| **Duration** | {duration:.1f}s |\n")
+                f.write(f"| **Samples Collected** | {len(self.samples)} |\n")
+                f.write(f"| **Average Memory** | {avg_memory_percent:.1f}% |\n")
+                f.write(f"| **Peak Memory** | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n")
+                f.write(f"| **Average Swap** | {avg_swap_percent:.1f}% |\n")
+                f.write(f"| **Peak Swap** | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n")
+                
+                # Add warnings as alerts if needed
+                if max_memory_percent > 90:
+                    f.write("\n> [!CAUTION]\n")
+                    f.write("> Memory usage exceeded 90% during this phase! This phase is likely causing out-of-memory issues.\n")
+                elif max_memory_percent > 75:
+                    f.write("\n> [!WARNING]\n")
+                    f.write("> Memory usage exceeded 75% during this phase.\n")
+                
+                if max_swap_percent > 50:
+                    f.write("\n> [!WARNING]\n")
+                    f.write(f"> Significant swap usage detected ({max_swap_percent:.1f}%). Consider increasing available memory or reducing parallel jobs.\n")
+                
+                f.write("\n")
         except Exception as e:
             print(f"Warning: Failed to write GitHub summary: {e}", file=sys.stderr)
 
