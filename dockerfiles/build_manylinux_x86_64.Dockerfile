@@ -75,6 +75,7 @@ RUN yum install -y epel-release && \
 # Additional packages required for rocprofiler-systems to build
 RUN yum install -y \
       texinfo \
+      flex \
     && yum clean all && \
     rm -rf /var/cache/yum
 
