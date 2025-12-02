@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 from typing import List
+import os
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -39,11 +40,13 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     sys.stdout.flush()
-    subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+
+    full_env = {**os.environ, **(env or {})}
+    subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
 
 
 def get_projects_from_topology(stage: str) -> List[str]:
