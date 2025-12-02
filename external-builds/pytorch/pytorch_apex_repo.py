@@ -102,7 +102,7 @@ def main(cl_args: list[str]):
     checkout_p.add_argument(
         "--hipify",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Run hipify",
     )
     checkout_p.add_argument(
