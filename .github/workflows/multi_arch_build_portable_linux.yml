@@ -89,9 +89,6 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
@@ -203,9 +200,6 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
@@ -315,9 +309,6 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
-
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
 
       - name: Get stage configuration
         id: stage_config
@@ -432,9 +423,6 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
@@ -542,9 +530,6 @@ jobs:
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
 
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
-
       - name: Get stage configuration
         id: stage_config
         run: |
@@ -648,9 +633,6 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
-
-      - name: Install external python deps
-        run: pip install -r requirements-external.txt
 
       - name: Get stage configuration
         id: stage_config
