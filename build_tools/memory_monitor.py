@@ -333,14 +333,22 @@ def run_command_with_monitoring(
     if log_file:
         try:
             with open(log_file, "a") as f:
-                f.write(json.dumps({
-                    "timestamp": datetime.now().isoformat(),
-                    "phase": phase_name,
-                    "event": "command_start",
-                    "command": ' '.join(command)
-                }) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "timestamp": datetime.now().isoformat(),
+                            "phase": phase_name,
+                            "event": "command_start",
+                            "command": " ".join(command),
+                        }
+                    )
+                    + "\n"
+                )
         except Exception as e:
-            print(f"Warning: Failed to write command start to log file: {e}", file=sys.stderr)
+            print(
+                f"Warning: Failed to write command start to log file: {e}",
+                file=sys.stderr,
+            )
 
     try:
         # Run the command
@@ -357,15 +365,23 @@ def run_command_with_monitoring(
         if log_file:
             try:
                 with open(log_file, "a") as f:
-                    f.write(json.dumps({
-                        "timestamp": datetime.now().isoformat(),
-                        "phase": phase_name,
-                        "event": "command_end",
-                        "return_code": return_code,
-                        "command": ' '.join(command)
-                    }) + "\n")
+                    f.write(
+                        json.dumps(
+                            {
+                                "timestamp": datetime.now().isoformat(),
+                                "phase": phase_name,
+                                "event": "command_end",
+                                "return_code": return_code,
+                                "command": " ".join(command),
+                            }
+                        )
+                        + "\n"
+                    )
             except Exception as e:
-                print(f"Warning: Failed to write command end to log file: {e}", file=sys.stderr)
+                print(
+                    f"Warning: Failed to write command end to log file: {e}",
+                    file=sys.stderr,
+                )
         monitor.stop()
 
     return return_code
