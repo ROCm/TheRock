@@ -37,6 +37,7 @@ COMMON_CONSOLE_SCRIPT_TESTS = [
     ("amdlld", ["-flavor", "ld.lld", "--help"], "USAGE:", True),
     ("hipcc", ["--help"], "clang LLVM compiler", True),
     ("hipconfig", [], "HIP version:", True),
+    ("hipify-clang", ["--help"], "USAGE:", True),
 ]
 
 LINUX_CONSOLE_SCRIPT_TESTS = [
@@ -44,6 +45,7 @@ LINUX_CONSOLE_SCRIPT_TESTS = [
     ("rocm_agent_enumerator", [], "", True),
     ("rocminfo", [], "", True),
     ("rocm-smi", [], "Management", True),
+    ("hipify-perl", ["--help"], "USAGE:", True),
 ]
 
 WINDOWS_CONSOLE_SCRIPT_TESTS = [

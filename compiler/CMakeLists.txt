@@ -11,6 +11,16 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
 
+  # Building Flang is very memory-intensive on systems with many cores. Allow
+  # users to specify the level of concurrency for these tasks so they can
+  # reduce the risk of running out of memory.
+  if(FLANG_PARALLEL_COMPILE_JOBS)
+    message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
+    list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
+  else()
+     message(STATUS "Flang concurrency is unlimited. Memory usage may be much higher.")
+  endif()
+
   # If the compiler is not pristine (i.e. has patches), then there will be a
   # ".amd-llvm.smrev" file present which must be used instead of the auto
   # computed git revision. If present, this will have a stable hash of
