@@ -211,7 +211,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
       BACKGROUND_BUILD
-      COMPILER_TOOLCHAINExpand commentComment on line R215ResolvedCode has comments. Press enter to view.
+      COMPILER_TOOLCHAIN
         amd-hip
       CMAKE_ARGS
         -DHIP_PLATFORM="amd"
