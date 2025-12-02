@@ -24,7 +24,7 @@ on:
         required: false
         type: string
       release_type:
-        description: The type of build version to produce (nightly, prerelease or dev).
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: false
         type: string
   workflow_dispatch:
@@ -52,7 +52,7 @@ on:
         type: string
         required: false
       release_type:
-        description: The type of build version to produce (nightly, prerelease or dev).
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
 
