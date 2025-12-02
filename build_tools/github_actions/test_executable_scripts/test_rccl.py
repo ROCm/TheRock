@@ -10,6 +10,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
+environ_vars = os.environ.copy()
+environ_vars["NCCL_DEBUG"] = "INFO"
 
 class TestRCCL:
     def test_rccl_unittests(self):
@@ -20,6 +22,7 @@ class TestRCCL:
             cmd,
             cwd=THEROCK_DIR,
             check=False,
+            env=environ_vars
         )
         assert result.returncode == 0
 
