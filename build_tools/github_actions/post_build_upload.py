@@ -303,9 +303,12 @@ def run(args):
     log("----------------------")
     write_time_sync_log()
 
-    log("Upload build artifacts")
-    log("----------------------")
-    upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
+    if args.job_status and args.job_status == "failure":
+        log("Skipping artifact upload due to job failure")
+    else:
+        log("Upload build artifacts")
+        log("----------------------")
+        upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
 
     log("Upload log")
     log("----------")
@@ -343,6 +346,7 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
+    parser.add_argument("--job-status", type=str, help="Job status of this workflow run")
     args = parser.parse_args()
 
     # Check preconditions for provided arguments before proceeding.
