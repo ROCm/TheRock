@@ -98,6 +98,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DENABLE_TESTS=ON
+      -DINSTALL_TESTS=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -184,11 +186,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       run
       test
     SUBPROJECT_DEPS
-      aqlprofile
       rocprofiler-sdk
       rocprofiler-compute
-      roctracer
-      ${_rocprofiler_sdk_optional_deps}
   )
 
   ##############################################################################
