@@ -124,7 +124,7 @@ if(THEROCK_ENABLE_PRIM)
     RUNTIME_DEPS
       hip-clr
   )
-  therock_cmake_subproject_glob_c_sources(rocPRIM
+  therock_cmake_subproject_glob_c_sources(hipCUB
     SUBDIRS
       .
   )
@@ -270,3 +270,62 @@ if(THEROCK_ENABLE_BLAS)
   add_subdirectory(support)
   add_subdirectory(BLAS)
 endif()
+
+if(THEROCK_ENABLE_ROCWMMA)
+  ##############################################################################
+  # rocWMMA
+  ##############################################################################
+
+  # Configure optional dependencies
+  set(_rocwmma_optional_deps)
+  if(THEROCK_ROCWMMA_USE_ROCBLAS)
+    list(APPEND _rocwmma_optional_deps rocBLAS)
+  endif()
+  if(THEROCK_ROCWMMA_ENABLE_BENCHMARKS)
+    list(APPEND _rocwmma_optional_deps rocm_smi_lib)
+  endif()
+
+  therock_cmake_subproject_declare(rocWMMA
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocwmma"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocWMMA"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DROCWMMA_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
+      "-DROCWMMA_VALIDATE_WITH_ROCBLAS=$<BOOL:${THEROCK_ROCWMMA_USE_ROCBLAS}>"
+      "-DROCWMMA_BENCHMARK_WITH_ROCBLAS=$<AND:$<BOOL:${THEROCK_ROCWMMA_USE_ROCBLAS}>,$<BOOL:${THEROCK_ROCWMMA_ENABLE_BENCHMARKS}>>"
+      "-DROCWMMA_BUILD_BENCHMARK_TESTS=$<BOOL:${THEROCK_ROCWMMA_ENABLE_BENCHMARKS}>"
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
+      -DROCWMMA_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      therock-googletest
+      ${_rocwmma_optional_deps}
+    RUNTIME_DEPS
+      hip-clr
+      ${_rocwmma_optional_deps}
+  )
+  therock_cmake_subproject_glob_c_sources(rocWMMA
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_provide_package(rocWMMA rocwmma lib/cmake/rocwmma)
+  therock_cmake_subproject_activate(rocWMMA)
+
+  therock_provide_artifact(rocwmma
+    DESCRIPTOR artifact-rocwmma.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      rocWMMA
+  )
+endif(THEROCK_ENABLE_ROCWMMA)

@@ -32,8 +32,8 @@ on:
       rocm_version:
         description: ROCm version to pip install
         type: string
-      pytorch_version:
-        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
+      pytorch_git_ref:
+        description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
       pytorch_patchset:
@@ -53,7 +53,7 @@ on:
         options:
           - gfx101X-dgpu
           - gfx103X-dgpu
-          - gfx110X-dgpu
+          - gfx110X-all
           - gfx1150
           - gfx1151
           - gfx120X-all
@@ -80,16 +80,16 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+        default: "https://rocm.devreleases.amd.com/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
-      pytorch_version:
-        description: PyTorch version to checkout. (typically "nightly", or "release/X.Y")
+      pytorch_git_ref:
+        description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
         default: "release/2.7"
@@ -105,10 +105,10 @@ permissions:
 
 jobs:
   build_pytorch_wheels:
-    name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_version }}
+    name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -116,13 +116,26 @@ jobs:
       optional_build_prod_arguments: ""
     outputs:
       cp_version: ${{ env.cp_version }}
+      # The following are python package versions produced by the build. The
+      # exact versions will depend on workflow inputs and the underlying code.
+      # For example:
+      #   Inputs
+      #     rocm_version       : 7.10.0a20251120
+      #     pytorch_git_ref    : release/2.9
+      #   Outputs
+      #     torch_version      : 2.9.1+rocm7.10.0a20251120
+      #     torchaudio_version : 2.9.0+rocm7.10.0a20251120
+      #     torchvision_version: 0.24.0+rocm7.10.0a20251120
+      #     triton_version     : 3.5.1+rocm7.10.0a20251120
+      # Future jobs can use these version outputs to identify newly built
+      # packages, for example via `pip install torch==${TORCH_VERSION}`.
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
       torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
       triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -148,7 +161,7 @@ jobs:
 
       # Checkout nightly sources from https://github.com/pytorch/pytorch
       - name: Checkout PyTorch Source Repos from nightly branch
-        if: ${{ inputs.pytorch_version == 'nightly' }}
+        if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
@@ -157,9 +170,9 @@ jobs:
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ inputs.pytorch_version != 'nightly' }}
+        if: ${{ inputs.pytorch_git_ref != 'nightly' }}
         run: |
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --patchset ${{ inputs.pytorch_patchset }}
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }} --patchset ${{ inputs.pytorch_patchset }}
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
@@ -221,7 +234,7 @@ jobs:
       bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -244,7 +257,7 @@ jobs:
       package_index_url: ${{ inputs.cloudfront_staging_url }}
       python_version: ${{ inputs.python_version }}
       torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
-      pytorch_version: ${{ inputs.pytorch_version }}
+      pytorch_git_ref: ${{ inputs.pytorch_git_ref }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
 
@@ -263,7 +276,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}

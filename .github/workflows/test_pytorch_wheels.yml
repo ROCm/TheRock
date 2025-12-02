@@ -12,7 +12,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm"
+        default: "linux-mi325-1gpu-ossci-rocm-frac"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
@@ -23,10 +23,11 @@ on:
         type: string
         default: "3.12"
       torch_version:
+        description: torch package version to install. (e.g. "2.7.1+rocm7.10.0a20251120")
         required: true
         type: string
-      pytorch_version:
-        description: PyTorch version to checkout. ("nightly", or "release/2.7")
+      pytorch_git_ref:
+        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
         type: string
         default: "release/2.7"
 
@@ -47,8 +48,7 @@ on:
       torch_version:
         required: true
         type: string
-      pytorch_version:
-        description: PyTorch version to checkout. ("nightly", or "release/2.7")
+      pytorch_git_ref:
         type: string
         default: "release/2.7"
       repository:
@@ -80,10 +80,11 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       TORCH_VERSION: ${{ inputs.torch_version }}
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -100,14 +101,14 @@ jobs:
       #                  When Windows runs full tests, fix that and re-enable.
       - name: Checkout PyTorch Source Repos from nightly branch
         # Checkout default upstream PyTorch/PyTorch branch.
-        if: ${{ (inputs.pytorch_version == 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
+        if: ${{ (inputs.pytorch_git_ref == 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly --no-hipify --no-patch
 
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ (inputs.pytorch_version != 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
+        if: ${{ (inputs.pytorch_git_ref != 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
         run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_version }} --no-hipify --no-patch
+          python external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }} --no-hipify --no-patch
 
       - name: Set up virtual environment
         run: |
@@ -128,9 +129,10 @@ jobs:
 
       - name: Run PyTorch smoketests
         run: |
-          pytest -v external-builds/pytorch/smoke-tests
+          pytest --log-cli-level=INFO -v external-builds/pytorch/smoke-tests
 
       - name: Run PyTorch tests
         if: "contains(inputs.test_runs_on, 'linux')"
+        # pytorch version is auto-detected
         run: |
-          bash external-builds/pytorch/run_linux_pytorch_tests.sh
+          python ./external-builds/pytorch/run_linux_pytorch_tests.py

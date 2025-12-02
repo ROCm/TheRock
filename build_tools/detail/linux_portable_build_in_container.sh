@@ -14,6 +14,7 @@ mkdir -p "$CCACHE_DIR"
 mkdir -p "$PIP_CACHE_DIR"
 
 pip install -r /therock/src/requirements.txt
+pip install -r /therock/src/requirements-external.txt
 
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -29,4 +30,4 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_BUNDLE_SYSDEPS=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build"
+time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist

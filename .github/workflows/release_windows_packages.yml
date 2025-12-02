@@ -80,7 +80,7 @@ jobs:
       s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -114,8 +114,8 @@ jobs:
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
-          echo "tmp_cloudfront_url=https://d25kgig7rdsyks.cloudfront.net/v2" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://d25kgig7rdsyks.cloudfront.net/v2-staging" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.devreleases.amd.com/v2" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.devreleases.amd.com/v2-staging" >> $GITHUB_ENV
           echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
 
       - name: Generate release information
@@ -165,7 +165,7 @@ jobs:
 
     steps:
       - name: "Checking out repository"
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -221,6 +221,10 @@ jobs:
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
 
+      - name: Install external python deps
+        run: |
+          pip install -r requirements-external.txt
+
       - name: Configure Projects
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
@@ -273,7 +277,18 @@ jobs:
         uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
+          special-characters-workaround: true
+
+      # TODO: upload logs even if the build fails (separate from artifact upload?)
+      - name: Post Build Upload
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          python3 build_tools/github_actions/post_build_upload.py \
+            --run-id ${{ github.run_id }} \
+            --artifact-group "${{ matrix.target_bundle.amdgpu_family }}" \
+            --build-dir ${{ env.BUILD_DIR }} \
+            --upload
 
       - name: Upload Releases to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}

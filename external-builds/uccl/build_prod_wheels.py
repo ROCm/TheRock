@@ -124,7 +124,7 @@ def main(argv: list[str]):
 
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3ac188c17f88f08ce522297b616d8308361b8e9a9b31bcc3c3bbb9429b1efa6c",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25",
         help="Base docker image for UCCL's build",
     )
     p.add_argument(

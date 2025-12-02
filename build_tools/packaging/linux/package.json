@@ -109,11 +109,17 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Suggests": [
+    "DEBSuggests": [
       "sudo",
       "libdrm-dev",
       "libdrm-amdgpu-dev"
     ],
+    "RPMSuggests": [
+      "sudo",
+      "libdrm-devel",
+      "libdrm-amdgpu-devel"
+    ],
+
     "Components": [
       "lib",
       "dev",
@@ -256,7 +262,8 @@
     ],
     "Artifact": "amd-llvm",
     "Artifact_Subdir": "amd-llvm",
-    "Gfxarch": "False"
+    "Gfxarch": "False",
+    "Disable_RPM_STRIP": "True"
   },
   {
     "Package": "amd-smi-lib",
@@ -280,7 +287,13 @@
       "python3-wheel",
       "rocm-core"
     ],
-    "Recommends": [
+    "RPMRecommends": [
+      "python3-argcomplete",
+      "libdrm-devel",
+      "libdrm-amdgpu-devel"
+    ],
+
+    "DEBRecommends": [
       "python3-argcomplete",
       "libdrm-dev",
       "libdrm-amdgpu-dev"
@@ -371,7 +384,8 @@
     "Components": [
       "lib",
       "dev",
-      "doc"
+      "doc",
+      "run"
     ],
     "Artifact": "amd-llvm",
     "Artifact_Subdir": "hipcc",
@@ -445,8 +459,12 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Provides": "hip-rocclr",
-    "Replaces": "hip-rocclr",
+    "Provides": [
+      "hip-rocclr"
+    ],
+    "Replaces": [
+      "hip-rocclr"
+    ],
     "Components": [
       "lib",
       "run",
@@ -488,8 +506,12 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Provides": "hip-base",
-    "Replaces": "hip-base",
+    "Provides": [
+      "hip-base"
+    ],
+    "Replaces": [
+      "hip-base"
+    ],
     "Components": [
       "dev"
     ],
@@ -645,13 +667,17 @@
       "hsakmt-roct-devel",
       "hsa-ext-rocr-devel"
     ],
-    "Recommends": [
+    "RPMRecommends": [
+      "libdrm-amdgpu-devel"
+    ],
+
+    "DEBRecommends": [
       "libdrm-amdgpu-dev"
     ],
     "Replaces": [
       "hsakmt-roct",
-      "hsakmt-roct-dev",
-      "hsa-ext-rocr-dev"
+      "hsakmt-roct-devel",
+      "hsa-ext-rocr-devel"
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
     "Description_Short": "AMD Heterogeneous System Architecture HSA development package",
@@ -663,7 +689,8 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Components": [
-      "dev"
+      "dev",
+      "run"
     ],
     "Artifact": "core-runtime",
     "Artifact_Subdir": "ROCR-Runtime",
@@ -794,7 +821,6 @@
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Components": [
       "lib",
-      "run",
       "doc"
     ],
     "Artifact": "rocprofiler-sdk",
@@ -826,7 +852,8 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Components": [
-      "dev"
+      "dev",
+      "run"
     ],
     "Artifact": "rocprofiler-sdk",
     "Artifact_Subdir": "roctracer",
@@ -1334,7 +1361,8 @@
     ],
     "Artifact": "composable-kernel",
     "Artifact_Subdir": "composable_kernel",
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "DisablePackaging": "True"
   },
 
   {
@@ -1456,6 +1484,67 @@
     ],
     "Artifact": "blas",
     "Artifact_Subdir": "hipSPARSE",
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "hipsparselt",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipsparse",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipsparse",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSPARSELt Maintainer <hipsparselt-maintainer@amd.com>",
+    "Description_Short": "HIP library structured sparse matrix multiplication",
+    "Description_Long": "HIP library structured sparse matrix multiplication",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "lib",
+      "run",
+      "doc"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSPARSELt",
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "hipsparselt-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "hipsparselt",
+      "rocm-core"
+    ],
+    "RPMRequires": [
+      "hipsparselt",
+      "rocm-core"
+    ],
+    "Maintainer": "hipSPARSELt Maintainer <hipsparselt-maintainer@amd.com>",
+    "Description_Short": "HIP library structured sparse matrix multiplication",
+    "Description_Long": "Provides development files for hipsparselt library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Components": [
+      "dev"
+    ],
+    "Artifact": "blas",
+    "Artifact_Subdir": "hipSPARSELt",
     "Gfxarch": "True"
   },
   {
@@ -1612,10 +1701,11 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Conflicts": "miopen-opencl",
+    "Conflicts": [
+      "miopen-opencl"
+    ],
     "Components": [
       "lib",
-      "run",
       "doc"
     ],
     "Artifact": "miopen",
@@ -1645,9 +1735,12 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Conflicts": "miopen-opencl",
+    "Conflicts": [
+      "miopen-opencl"
+    ],
     "Components": [
-      "dev"
+      "dev",
+      "run"
     ],
     "Artifact": "miopen",
     "Artifact_Subdir": "MIOpen",
@@ -1923,7 +2016,8 @@
     ],
     "Artifact": "amd-llvm",
     "Gfxarch": "False",
-    "Composite": "Yes"
+    "Composite": "Yes",
+    "Disable_RPM_STRIP": "True"
   },
   {
     "Package": "rocm-hsa-runtime",
@@ -2106,6 +2200,7 @@
     "Includes": [
       "rocsparse",
       "hipsparse",
+      "hipsparselt",
       "hipsolver",
       "rocsolver",
       "hipblas",
@@ -2147,6 +2242,7 @@
     "Includes": [
       "rocsparse-devel",
       "hipsparse-devel",
+      "hipsparselt-devel",
       "hipsolver-devel",
       "rocsolver-devel",
       "hipblas-devel",
@@ -2348,7 +2444,8 @@
     ],
     "Artifact": "composable-kernel",
     "Gfxarch": "True",
-    "Composite": "Yes"
+    "Composite": "Yes",
+    "DisablePackaging": "True"
   },
 
   {
@@ -2438,7 +2535,6 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Components": [
       "lib",
-      "run",
       "doc"
     ],
     "Artifact": "miopen",
@@ -2467,6 +2563,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Components": [
+      "run",
       "dev"
     ],
     "Artifact": "miopen",
@@ -2595,7 +2692,7 @@
     "Artifact": "sysdeps",
     "Gfxarch": "False",
     "Disable_DWZ": "True",
-    "Disable_DH_STRIP": "True",
+    "Disable_DEB_STRIP": "True",
     "Composite": "Yes"
   },
   {

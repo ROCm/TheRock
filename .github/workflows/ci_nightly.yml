@@ -53,6 +53,8 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup.yml
+    with:
+      build_variant: "release"
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}

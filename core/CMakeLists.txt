@@ -25,6 +25,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       "-DBUILD_SHARED_LIBS=ON"
     BUILD_DEPS
       amd-llvm
+      therock-simde
     RUNTIME_DEPS
       rocprofiler-register
       ${THEROCK_BUNDLED_ELFUTILS}
@@ -131,6 +132,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       ${HIP_CLR_CMAKE_ARGS}
     BUILD_DEPS
       rocm-cmake
+      therock-simde
     RUNTIME_DEPS
       amd-llvm
       amd-comgr
@@ -291,9 +293,21 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   )
 
   therock_test_validate_shared_lib(
-    PATH ocl-clr/dist/lib
+    PATH ocl-clr/dist/lib/opencl
     LIB_NAMES
       libamdocl64.so
   )
+
+  # Ensure runtime dependencies of libamdocl64.so (for example,
+  # libamd_comgr_loader.so) are discoverable by the dynamic loader when
+  # running the validation test. Some configurations (e.g. Windows) do not
+  # register this test, so guard the property update accordingly.
+  if(TEST therock-validate-shared-lib-libamdocl64.so)
+    set_tests_properties(therock-validate-shared-lib-libamdocl64.so
+      PROPERTIES
+        ENVIRONMENT
+          "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/core/ocl-clr/dist/lib:$ENV{LD_LIBRARY_PATH}"
+    )
+  endif()
 
 endif(THEROCK_ENABLE_OCL_RUNTIME)

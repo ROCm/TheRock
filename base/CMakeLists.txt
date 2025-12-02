@@ -64,6 +64,7 @@ therock_cmake_subproject_declare(amdsmi
   BACKGROUND_BUILD
   CMAKE_ARGS
     -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+    "-DCMAKE_VERBOSE_MAKEFILE=OFF"
   BUILD_DEPS
     therock-googletest
   RUNTIME_DEPS

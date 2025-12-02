@@ -6,7 +6,7 @@ on:
       amdgpu_family:
         required: true
         type: string
-      python_versions:
+      python_version:
         required: true
         type: string
       release_type:
@@ -28,7 +28,7 @@ on:
       amdgpu_family:
         required: true
         type: string
-      python_versions:
+      python_version:
         required: true
         type: string
       release_type:
@@ -63,14 +63,14 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
     steps:
       - name: Checkout TheRock
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
       - name: Checkout JAX
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ matrix.jax_ref }}
 
       - name: Configure Git Identity
         run: |

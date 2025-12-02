@@ -39,7 +39,7 @@ on:
         options:
           - gfx101X-dgpu
           - gfx103X-dgpu
-          - gfx110X-dgpu
+          - gfx110X-all
           - gfx1150
           - gfx1151
           - gfx120X-all
@@ -62,11 +62,11 @@ on:
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+        default: "https://rocm.devreleases.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+        default: "https://rocm.devreleases.amd.com/v2-staging"
       rocm_version:
         description: ROCm version to pip install
         type: string
@@ -81,18 +81,20 @@ permissions:
 
 jobs:
   release:
-    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
     strategy:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
-        pytorch_version: ["release/2.7", "release/2.9", "nightly"]
+        pytorch_git_ref: ["release/2.7", "release/2.8", "release/2.9", "nightly"]
         include:
-          - pytorch_version: release/2.7
+          - pytorch_git_ref: release/2.7
             pytorch_patchset: rocm_2.7
-          - pytorch_version: release/2.9
+          - pytorch_git_ref: release/2.8
+            pytorch_patchset: rocm_2.8
+          - pytorch_git_ref: release/2.9
             pytorch_patchset: rocm_2.9
-          - pytorch_version: nightly
+          - pytorch_git_ref: nightly
             pytorch_patchset: nightly
 
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
@@ -105,6 +107,6 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
-      pytorch_version: ${{ matrix.pytorch_version }}
+      pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       pytorch_patchset: ${{ matrix.pytorch_patchset }}
       ref: ${{ inputs.ref || '' }}

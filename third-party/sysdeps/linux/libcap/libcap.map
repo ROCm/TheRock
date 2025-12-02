@@ -1,0 +1,92 @@
+/* Symbol version script for libcap 2.69 (prevents conflicts with system libcap) */
+
+LIBCAP_2.69 {
+  global:
+    /* Core allocation and management - cap_alloc.c */
+    cap_dup;
+    cap_free;
+    cap_init;
+    cap_iab_dup;
+    cap_iab_init;
+    cap_max_bits;
+
+    /* Flag operations - cap_flag.c */
+    cap_get_flag;
+    cap_set_flag;
+    cap_clear;
+    cap_clear_flag;
+    cap_fill_flag;
+    cap_fill;
+    cap_compare;
+    cap_iab_compare;
+    cap_iab_get_vector;
+    cap_iab_set_vector;
+    cap_iab_fill;
+
+    /* File operations - cap_file.c */
+    cap_get_fd;
+    cap_get_file;
+    cap_get_nsowner;
+    cap_set_fd;
+    cap_set_file;
+    cap_set_nsowner;
+
+    /* Process operations - cap_proc.c */
+    cap_get_proc;
+    cap_get_pid;
+    cap_set_proc;
+    cap_get_bound;
+    cap_drop_bound;
+    cap_get_ambient;
+    cap_set_ambient;
+    cap_reset_ambient;
+    cap_set_syscall;
+    cap_set_mode;
+    cap_get_mode;
+    cap_mode_name;
+    cap_get_secbits;
+    cap_set_secbits;
+    cap_prctl;
+    cap_prctlw;
+    cap_setuid;
+    cap_setgroups;
+    cap_iab_get_proc;
+    cap_iab_get_pid;
+    cap_iab_set_proc;
+
+    /* Process launcher API - cap_proc.c */
+    cap_new_launcher;
+    cap_func_launcher;
+    cap_launcher_callback;
+    cap_launcher_setuid;
+    cap_launcher_setgroups;
+    cap_launcher_set_mode;
+    cap_launcher_set_iab;
+    cap_launcher_set_chroot;
+    cap_launch;
+
+    /* Text conversion - cap_text.c */
+    cap_from_text;
+    cap_to_text;
+    cap_from_name;
+    cap_to_name;
+    cap_iab_to_text;
+    cap_iab_from_text;
+    cap_proc_root;
+
+    /* External format - cap_extint.c */
+    cap_size;
+    cap_copy_ext;
+    cap_copy_int;
+    cap_copy_int_check;
+
+    /* System calls - cap_proc.c and libc wrappers */
+    capget;
+    capset;
+    capgetp;
+    capsetp;
+
+  local:
+    /* Hide all internal symbols to prevent conflicts */
+    *;
+};

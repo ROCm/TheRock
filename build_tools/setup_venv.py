@@ -13,11 +13,11 @@ There are a few modes this can be used in:
     python setup_venv.py .venv
     ```
 
-* To install the latest nightly rocm packages for gfx110X-dgpu into the venv:
+* To install the latest nightly rocm packages for gfx110X-all into the venv:
 
     ```
     python setup_venv.py .venv --packages rocm[libraries,devel] \
-        --index-name nightly --index-subdir gfx110X-dgpu
+        --index-name nightly --index-subdir gfx110X-all
     ```
 
     This is roughly equivalent to:
@@ -26,13 +26,12 @@ There are a few modes this can be used in:
     python -m venv .venv
     source .venv/bin/activate
     python -m pip install --upgrade pip
-    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-dgpu
+    python -m pip install rocm[libraries,devel] --index-url=https://.../gfx110X-all
     deactivate
     ```
 """
 
 import argparse
-import os
 from pathlib import Path
 import platform
 import shlex
@@ -54,7 +53,7 @@ is_windows = platform.system() == "Windows"
 
 INDEX_URLS_MAP = {
     "nightly": "https://rocm.nightlies.amd.com/v2",
-    "dev": "https://d25kgig7rdsyks.cloudfront.net/v2",
+    "dev": "https://rocm.devreleases.amd.com/v2",
 }
 
 
@@ -69,6 +68,10 @@ def exec(args: list[str | Path], cwd: Path = Path.cwd()):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
+def get_system_py_command(use_uv: bool) -> list[str]:
+    return ["uv"] if use_uv else [sys.executable, "-m"]
+
+
 def find_venv_python(venv_path: Path) -> Path | None:
     paths = [venv_path / "bin" / "python", venv_path / "Scripts" / "python.exe"]
     for p in paths:
@@ -77,14 +80,15 @@ def find_venv_python(venv_path: Path) -> Path | None:
     return None
 
 
-def create_venv(venv_dir: Path, py_cmd: list[str]):
-    cwd = Path.cwd()
+def create_venv(venv_dir: Path, py_cmd: list[str] | None = None):
+    if not py_cmd:
+        py_cmd = get_system_py_command(use_uv=False)
 
     log(f"Creating venv at '{venv_dir}'")
 
     # Log some other variations of the path too.
     try:
-        venv_dir_relative = venv_dir.relative_to(cwd)
+        venv_dir_relative = venv_dir.relative_to(Path.cwd())
     except ValueError:
         venv_dir_relative = venv_dir
     venv_dir_resolved = venv_dir.resolve()
@@ -93,12 +97,12 @@ def create_venv(venv_dir: Path, py_cmd: list[str]):
     log("")
 
     # Create with 'python -m venv' as needed.
-    python_exe = find_venv_python(venv_dir)
+    python_exe = find_venv_python(venv_dir_resolved)
     if python_exe:
         log(f"  Found existing python executable at '{python_exe}', skipping creation")
         log("  Run again with --clean to clear the existing directory instead")
     else:
-        exec(py_cmd + ["venv", str(venv_dir)])
+        exec(py_cmd + ["venv", str(venv_dir_resolved)])
 
 
 def upgrade_pip(python_exe: Path):
@@ -106,7 +110,10 @@ def upgrade_pip(python_exe: Path):
     exec([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
 
 
-def install_packages(args: argparse.Namespace, py_cmd: list[str]):
+def install_packages(args: argparse.Namespace, py_cmd: list[str] | None):
+    if not py_cmd:
+        py_cmd = get_system_py_command(use_uv=False)
+
     log("")
 
     if args.index_name:
@@ -192,8 +199,7 @@ def log_activate_instructions(venv_dir: Path):
 
 def run(args: argparse.Namespace):
     venv_dir = args.venv_dir
-    # selects uv if available
-    py_cmd = ["uv"] if args.use_uv else [sys.executable, "-m"]
+    py_cmd = get_system_py_command(use_uv=args.use_uv)
 
     if args.clean and venv_dir.exists():
         log(f"Clearing existing venv_dir '{venv_dir}'")
@@ -281,7 +287,7 @@ def main(argv: list[str]):
     if not all_subdir_sets_congruent and subdirs:
         index_subdir_help += ". Available options per index: " + str(subdirs)
     elif not subdirs:
-        index_subdir_help += ", such as 'gfx110X-dgpu'"
+        index_subdir_help += ", such as 'gfx110X-all'"
     else:
         index_subdir_help += "."
 
