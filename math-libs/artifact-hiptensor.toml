@@ -1,20 +1,13 @@
 # hipTensor
 [components.dbg."math-libs/hipTensor/stage"]
-optional = true
 [components.dev."math-libs/hipTensor/stage"]
-include = [
-  "include/hiptensor/*",
-]
 [components.lib."math-libs/hipTensor/stage"]
-optional = true
 [components.test."math-libs/hipTensor/stage"]
-optional = true
 include = [
   # Samples
   "bin/simple_*",
   # Tests
   "bin/*_test*",
-  "CTestTestfile.cmake",
   "bin/hiptensor/CTestTestfile.cmake",
-  "bin/hiptensor/*/CTestTestfile.cmake",
+  "bin/hiptensor/bench/**",
 ]
