@@ -94,8 +94,8 @@ def main():
     parser.add_argument(
         "--log-dir",
         type=Path,
-        default=Path(os.getenv("MEMORY_MONITOR_LOG_DIR", "build/memory-logs")),
-        help="Directory to write memory logs (default: build/memory-logs)",
+        default=Path(os.getenv("MEMORY_MONITOR_LOG_DIR", "build/logs")),
+        help="Directory to write memory logs (default: build/logs)",
     )
 
     parser.add_argument(
