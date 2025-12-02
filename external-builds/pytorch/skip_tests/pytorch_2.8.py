@@ -11,6 +11,19 @@ skip_tests = {
             # Greatest relative difference: 0.01495361328125 at index (3, 114, 184) (up to 0.01 allowed)
             "test_index_add_correctness",
             "test_graph_concurrent_replay",
+            # passes on single run, crashes if run in a group
+            "test_memory_compile_regions",
+            "test_memory_plots",
+            "test_memory_plots_free_segment_stack",
+            #  FileNotFoundError: [Errno 2] No such file or directory: '/tmp/tmprlowr8yn.pl'
+            "test_memory_snapshot",
+            "test_memory_snapshot_script",
+            "test_memory_snapshot_with_cpp",
+            "test_mempool_ctx_multithread",
+            # RuntimeError: Error building extension 'dummy_allocator'
+            "test_mempool_empty_cache_inactive",
+            # RuntimeError: Error building extension 'dummy_allocator_v1'
+            "test_mempool_limited_memory_with_allocator",
         ]
     },
 }
