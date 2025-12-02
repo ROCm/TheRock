@@ -237,7 +237,7 @@ jobs:
             --run-id ${{ github.run_id }} \
             --artifact-group "${{ matrix.target_bundle.amdgpu_family }}" \
             --build-dir ${{ env.OUTPUT_DIR }}/build \
-            --upload
+            --upload \
             --job-status ${{ job.status }}
 
       - name: Upload Releases to staging S3
