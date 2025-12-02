@@ -154,22 +154,17 @@ jobs:
         shell: bash
         continue-on-error: true
         run: |
-          # Create logs directory
-          mkdir -p memory_logs
-
           # Start memory monitor in background
           python build_tools/memory_monitor.py \
             --phase "Build Phase" \
             --interval 10 \
-            --log-file "memory_logs/build_memory_log.jsonl" \
-            --background > memory_logs/monitor_output.txt 2>&1 &
+            --log-file "build/logs/build_memory_log_${{ github.job }}.jsonl" \
+            --background > build/logs/monitor_output_${{ github.job }}.txt 2>&1 &
 
           # Capture PID
           MONITOR_PID=$!
           echo "monitor-pid=$MONITOR_PID" >> $GITHUB_OUTPUT
           echo "Memory monitoring started with PID: $MONITOR_PID"
-
-          # Give it a moment to start
           sleep 2
 
       - name: Build therock-archives and therock-dist
@@ -199,19 +194,10 @@ jobs:
           echo "Memory monitor stopped"
 
           # Display the monitor output
-          if [ -f "memory_logs/monitor_output.txt" ]; then
+          if [ -f "build/logs/monitor_output_${{ github.job }}.txt" ]; then
             echo "=== Memory Monitor Output ==="
-            cat memory_logs/monitor_output.txt
+            cat build/logs/monitor_output_${{ github.job }}.txt
           fi
-
-      - name: Upload memory monitoring logs
-        if: ${{ always() && steps.memory-monitor.outputs.monitor-pid }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: memory-logs-${{ github.run_id }}-${{ inputs.artifact_group }}
-          path: memory_logs/
-          retention-days: 7
 
       - name: Report
         if: ${{ !cancelled() }}
