@@ -11,3 +11,4 @@ include = [
   "bin/hiptensor/CTestTestfile.cmake",
   "bin/hiptensor/bench/**",
 ]
+[components.run."math-libs/hipTensor/stage"]

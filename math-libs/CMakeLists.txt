@@ -414,6 +414,7 @@ if(THEROCK_ENABLE_HIPTENSOR)
       dbg
       dev
       lib
+      run
       test
     SUBPROJECT_DEPS
       hipTensor
