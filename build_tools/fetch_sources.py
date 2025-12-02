@@ -271,6 +271,9 @@ def apply_patches(args, projects):
             ]
             + patch_files,
             cwd=project_dir,
+            env={
+                "GIT_COMMITTER_DATE": "Thu, 1 Jan 2099 00:00:00 +0000",
+            },
         )
         # Since it is in a patched state, make it invisible to changes.
         exec(
