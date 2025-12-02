@@ -1,5 +1,55 @@
 skip_tests = {
-    "common": {},
+    "common": {
+        "autograd": [
+            # AssertionError: Booleans mismatch: False is not True
+            "test_warn_on_accumulate_grad_stream_mismatch_flag_cuda",
+        ],
+        "cuda": [
+            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
+            "test_fp32_precision_with_float32_matmul_precision",
+            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
+            "test_fp32_precision_with_tf32",
+            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
+            "test_invalid_status_for_legacy_api",
+            # passes on single run, crashes if run in a group
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_memory_compile_regions",
+            # AssertionError: False is not true
+            "test_memory_plots",
+            # AssertionError: Booleans mismatch: False is not True
+            "test_memory_plots_free_segment_stack",
+            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
+            "test_memory_snapshot",
+            # AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
+            "test_memory_snapshot_script",
+            # AssertionError: False is not true
+            "test_memory_snapshot_with_cpp",
+            # AssertionError: Scalars are not equal!
+            "test_mempool_ctx_multithread",
+            # RuntimeError: Error building extension 'dummy_allocator'
+            "test_mempool_empty_cache_inactive",
+            # RuntimeError: Error building extension 'dummy_allocator_v1'
+            "test_mempool_limited_memory_with_allocator",
+            # OSError: libhiprtc.so: cannot open shared object file: No such file or directory
+            # File "/home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/cuda/_utils.py", line 57, in _get_hiprtc_library
+            # lib = ctypes.CDLL("libhiprtc.so")
+            "test_compile_kernel",
+            "test_compile_kernel_advanced",
+            "test_compile_kernel_as_custom_op",
+            "test_compile_kernel_cuda_headers",
+            "test_compile_kernel_custom_op_validation",
+            "test_compile_kernel_dlpack",
+            "test_compile_kernel_double_precision",
+            "test_compile_kernel_large_shared_memory",
+            "test_compile_kernel_template",
+            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_record_stream_on_shifted_view",
+        ],
+        "torch": [
+            "test_index_add_correctness",
+        ],
+    },
     "gfx942": {
         "autograd": [
             # fixed or just good with no caching?
@@ -21,28 +71,9 @@ skip_tests = {
             # # of the custom Function.
             # "test_autograd_simple_views_python",
             "test_grad_dtype",
-            # AssertionError: Booleans mismatch: False is not True
-            "test_warn_on_accumulate_grad_stream_mismatch_flag_cuda",
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
-            "test_mempool_ctx_multithread",
-            #
-            # passes on single run, crashes if run in a group
-            "test_memory_plots",
-            "test_memory_compile_regions",
-            "test_memory_plots_free_segment_stack",
-            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
-            "test_memory_snapshot",
-            #  AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
-            "test_memory_snapshot_script",
-            "test_memory_snapshot_with_cpp",
-            #
-            # /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/include/ATen/hip/Exceptions.h:4:10: fatal error: 'hipblas/hipblas.h' file not found
-            # 4 | #include <hipblas/hipblas.h>
-            # |          ^~~~~~~~~~~~~~~~~~~
-            #
-            "test_mempool_empty_cache_inactive",
             #
             # what():  HIP error: operation not permitted when stream is capturing
             # Search for `hipErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__HIPRT__TYPES.html for more information.
@@ -56,29 +87,8 @@ skip_tests = {
             "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
             "test_graph_concurrent_replay ",
             #
-            # Error building extension 'dummy_allocator'
-            "test_mempool_limited_memory_with_allocator",
-            # OSError: libhiprtc.so: cannot open shared object file: No such file or directory
-            # File "/home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/cuda/_utils.py", line 57, in _get_hiprtc_library
-            # lib = ctypes.CDLL("libhiprtc.so")
-            "test_compile_kernel",
-            "test_compile_kernel_advanced",
-            "test_compile_kernel_as_custom_op",
-            "test_compile_kernel_cuda_headers",
-            "test_compile_kernel_custom_op_validation",
-            "test_compile_kernel_dlpack",
-            "test_compile_kernel_double_precision",
-            "test_compile_kernel_large_shared_memory",
-            "test_compile_kernel_template",
-            "test_record_stream_on_shifted_view",
             #
             # for whatever reason these are also flaky: if run standalone they pass?
-            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
-            "test_fp32_precision_with_float32_matmul_precision",
-            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
-            "test_fp32_precision_with_tf32",
-            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
-            "test_invalid_status_for_legacy_api",
             # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
@@ -106,8 +116,32 @@ skip_tests = {
             # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
             # TypeError: 'CustomDecompTable' object is not a mapping
             "test_fx_memory_profiler_augmentation",
-            # failure in python 3.13
-            "test_index_add_correctness",
+        ],
+    },
+    "gfx950": {
+        "cuda": [
+            "test_cpp_warnings_have_python_context_cuda",
+        ],
+        "binary_ufuncs": [
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other___rpow___cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other__refs_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig___rpow___cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig__refs_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig_pow_cuda_complex64",
+        ],
+        "torch": [
+            # SEGMENTATION FAULT!!!!!
+            # Kernel Name: _ZN2at6native13reduce_kernelILi512ELi1ENS0_8ReduceOpIbNS0_14func_wrapper_tIbZZZNS0_15and_kernel_cudaERNS_14TensorIteratorEENKUlvE_clEvENKUlvE10_clEvEUlbbE_EEjbLi4ELi4EEEEEvT1_
+            # :0:rocdevice.cpp            :3603: 1544877169487 us:  Callback: Queue 0x7f599b800000 Aborting with error : HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the necessary resources. This error may also occur when the core runtime library needs to spawn threads or create internal OS-specific events. Code: 0x1008 Available Free mem : 17592186044276 MB
+            # see pytorch_2.9.py for more details
+            "test_masked_scatter_cuda_uint8 "
         ],
     },
 }
