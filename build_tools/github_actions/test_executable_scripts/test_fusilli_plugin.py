@@ -10,6 +10,8 @@ import logging
 import os
 import shlex
 import subprocess
+import tempfile
+import venv
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -37,6 +39,14 @@ environ_vars = os.environ.copy()
 # In CI with flattened artifacts, rocm_agent_enumerator is in THEROCK_BIN_DIR
 environ_vars["PATH"] = f"{THEROCK_BIN_DIR}:{environ_vars.get('PATH', '')}"
 
+# Add library path for IREE's HIP driver to find libamdhip64.so
+# IREE does its own dlopen() which doesn't use the test binary's RPATH
+lib_dir = str(Path(THEROCK_BIN_DIR).parent / "lib")
+existing_ld_path = environ_vars.get("LD_LIBRARY_PATH", "")
+environ_vars["LD_LIBRARY_PATH"] = (
+    f"{lib_dir}:{existing_ld_path}" if existing_ld_path else lib_dir
+)
+
 # Determine test filter based on TEST_TYPE environment variable
 test_type = os.getenv("TEST_TYPE", "full")
 
@@ -48,10 +58,26 @@ logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 if test_type == "smoke":
     logging.info(f"   TEST_TYPE=smoke: Excluding Full* tests via GTEST_FILTER")
 
-# Run the tests
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-    env=environ_vars,
-)
+# Create a temporary venv with iree-base-compiler installed.
+# iree-base-compiler provides the `iree-compile` binary which fusilli calls in a subprocess.
+with tempfile.TemporaryDirectory(prefix="fusilli_test_venv_") as venv_dir:
+    venv.create(venv_dir, with_pip=True)
+    venv_bin = Path(venv_dir) / "bin"
+    python_exe = venv_bin / "python"
+
+    logging.info("Installing iree-base-compiler in temporary venv...")
+    subprocess.run(
+        [str(python_exe), "-m", "pip", "install", "-v", "iree-base-compiler"],
+        check=True,
+    )
+
+    # Add venv bin to PATH so iree-compile can be found
+    environ_vars["PATH"] = f"{venv_bin}:{environ_vars['PATH']}"
+
+    # Run the tests
+    subprocess.run(
+        cmd,
+        cwd=THEROCK_DIR,
+        check=True,
+        env=environ_vars,
+    )
