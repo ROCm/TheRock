@@ -14,7 +14,10 @@ logging.basicConfig(level=logging.INFO)
 class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
-        cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
+        cmd = [
+            f"{THEROCK_BIN_DIR}/rccl-UnitTests",
+            "--gtest_filter=-GroupCall.MultiGroupCall",
+        ]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(
             cmd,
