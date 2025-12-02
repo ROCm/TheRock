@@ -61,8 +61,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DTARGET=HASWELL
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
-        # Use multithreaded for all GEMM sizes
-        -DGEMM_MULTITHREAD_THRESHOLD=0
+        # Follow guidance from OpenBLAS docs for Julia
+        # https://github.com/OpenMathLib/OpenBLAS/blob/d6b25c43c608d9230ca8da8fe0046a8075d82867/Makefile.rule#L241-L246
+        -DGEMM_MULTITHREAD_THRESHOLD=50
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
