@@ -154,12 +154,15 @@ jobs:
         shell: bash
         continue-on-error: true
         run: |
+          # Create logs directory in BUILD_DIR
+          mkdir -p "${{ env.BUILD_DIR }}/logs"
+          
           # Start memory monitor in background
           python build_tools/memory_monitor.py \
             --phase "Build Phase" \
             --interval 10 \
-            --log-file "build/logs/build_memory_log_${{ github.job }}.jsonl" \
-            --background > build/logs/monitor_output_${{ github.job }}.txt 2>&1 &
+            --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
+            --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
 
           # Capture PID
           MONITOR_PID=$!
@@ -194,9 +197,9 @@ jobs:
           echo "Memory monitor stopped"
 
           # Display the monitor output
-          if [ -f "build/logs/monitor_output_${{ github.job }}.txt" ]; then
+          if [ -f "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" ]; then
             echo "=== Memory Monitor Output ==="
-            cat build/logs/monitor_output_${{ github.job }}.txt
+            cat "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt"
           fi
 
       - name: Report
