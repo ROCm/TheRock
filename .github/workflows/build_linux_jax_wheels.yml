@@ -62,6 +62,8 @@ permissions:
   id-token: write
   contents: read
 
+run-name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
+
 jobs:
   build_jax_wheels:
     strategy:
