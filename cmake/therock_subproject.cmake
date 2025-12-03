@@ -981,6 +981,7 @@ function(therock_cmake_subproject_glob_c_sources target_name)
     set(_s "${_project_source_dir}/${_subdir}")
     list(APPEND _globs
       "${_s}/*.h"
+      "${_s}/*.hh"
       "${_s}/*.hpp"
       "${_s}/*.inc"
       "${_s}/*.cc"

@@ -110,7 +110,9 @@ amdgpu_family_info_matrix_postsubmit = {
 amdgpu_family_info_matrix_nightly = {
     "gfx90x": {
         "linux": {
-            "test-runs-on": "linux-gfx90X-gpu-rocm",
+            # label is linux-gfx90X-gpu-rocm
+            # Disabled due to inconsistent up-time
+            "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
@@ -177,6 +179,20 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
+            "expect_failure": True,
+            "build_variants": ["release"],
+        },
+    },
+    "gfx1153": {
+        "linux": {
+            "test-runs-on": "",
+            "family": "gfx1153",
+            "expect_failure": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx1153",
             "expect_failure": True,
             "build_variants": ["release"],
         },
