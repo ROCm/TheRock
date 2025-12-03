@@ -60,7 +60,7 @@ jobs:
     name: Build (xfail ${{ inputs.expect_failure }})
     # azure-linux-scale-rocm are used for regular CI builds
     # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
-    runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-scale-rocm-heavy' || 'azure-linux-scale-rocm' }}
+    runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-u2404-hx176-cpu-rocm' || 'azure-linux-scale-rocm' }}
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
     permissions:
@@ -128,7 +128,19 @@ jobs:
 
       - name: Build therock-archives and therock-dist
         run: |
-          cmake --build build --target therock-archives therock-dist -- -k 0
+          # Background telemetry loop
+            ( while true; do
+                echo "--- $(date) ---"
+                free -h
+                top -b -n1 | head -20
+                sleep 30
+              done ) &
+            TELEMETRY_PID=$!
+
+          cmake --build build --target therock-archives therock-dist -- -k 0 -j$(nproc)
+
+          # Stop telemetry loop
+          kill $TELEMETRY_PID
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
