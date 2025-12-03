@@ -10,4 +10,6 @@ Python3_EXECUTABLE="${Python3_EXECUTABLE:?Python3_EXECUTABLE not defined}"
 
 "$Python3_EXECUTABLE" "$THEROCK_SOURCE_DIR/build_tools/patch_linux_so.py" \
   --patchelf "${PATCHELF}" --add-prefix rocm_sysdeps_ \
-  $PREFIX/lib/libgallium_drv_video.so
+  $PREFIX/lib/libgallium_drv_video.so \
+  $PREFIX/lib/libva.so \
+  $PREFIX/lib/libva-drm.so

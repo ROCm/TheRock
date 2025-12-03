@@ -29,7 +29,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_test_validate_shared_lib(
       PATH build/dist/lib/rocm_sysdeps/lib
-      LIB_NAMES libgallium_drv_video.so radeonsi_drv_video.so
+      LIB_NAMES libgallium_drv_video.so radeonsi_drv_video.so libva.so libva-drm.so
     )
 
     return()
@@ -57,7 +57,7 @@ add_custom_target(
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
         -Dva-libs-path="/lib"
-        # -Dallow-fallback-for=libva # NOTE: Use local build of VA library
+        -Dallow-fallback-for=libva # NOTE: Use local build of VA library
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
         -Damd-decode-only=true # NOTE: enable decode only for TheRock
         "${CMAKE_CURRENT_BINARY_DIR}"
