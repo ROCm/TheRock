@@ -34,6 +34,7 @@ on:
       repository:
         description: "Repository to checkout. Defaults to `ROCm/TheRock`."
         type: string
+        default: "ROCm/TheRock"
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
@@ -192,6 +193,7 @@ jobs:
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
       python_version: ${{ inputs.python_version }}
+      repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
       jax_ref: ${{ inputs.jax_ref }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
