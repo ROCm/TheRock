@@ -57,7 +57,7 @@ jobs:
           echo "" >> pr_body.txt
           
       - name: Generate GitHub App token
-        uses: actions/github-app-token@a96d5af8931ace9d219a3d6ff62babbaeff72eb7 # v1.1.0
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         id: generate-token
         with:
           app-id: ${{ secrets.PULL_REQUEST_APP_ID }}
