@@ -4,39 +4,32 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 11 * * *"
-        
 permissions:
   contents: write
   pull-requests: write
-
 jobs:
   bump-submodules:
     runs-on: ubuntu-24.04
-
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: '3.12'
-      
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
-          git config --global user.email "therockbot@amd.com"
-      
+          git config --global user.email "therockbot@amd.com"     
       - name: Set branch name
         id: set-branch
         run: |
           DATE=$(date +%Y%m%d)
           BRANCH="github-action/bump-rocm-libraries-submodule-$DATE"
           echo "branch-name=$BRANCH" >> $GITHUB_OUTPUT
-
       - name: Run bump_submodules.py
         run: |
           CMD="python3 ./build_tools/bump_submodules.py --push-branch --branch-name ${{ steps.set-branch.outputs.branch-name }} --components rocm-libraries"
           echo "Running command: $CMD"
-          eval $CMD
-          
+          eval $CMD 
       - name: Prepare PR body with diff info
         run: |
           echo "Automated daily submodule bump" > pr_body.txt
@@ -55,14 +48,12 @@ jobs:
             -e 's/^\+Subproject commit/  New commit:/g' \
             >> pr_body.txt
           echo "" >> pr_body.txt
-          
       - name: Generate GitHub App token
         uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
         id: generate-token
         with:
           app-id: ${{ secrets.PULL_REQUEST_APP_ID }}
           private-key: ${{ secrets.PULL_REQUEST_APP_KEY }}
-
       - name: Create pull request
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
