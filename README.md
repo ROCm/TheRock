@@ -58,7 +58,7 @@ instructions and configurations for alternatives.
 ```bash
 # Install Ubuntu dependencies
 sudo apt update
-sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev
+sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev texinfo bison flex
 
 # Clone the repository
 git clone https://github.com/ROCm/TheRock.git
@@ -71,9 +71,6 @@ pip install -r requirements.txt
 
 # Download submodules and apply patches
 python3 ./build_tools/fetch_sources.py
-
-# Install python dependencies for submodules
-pip install -r requirements-external.txt
 ```
 
 ### Setup - Windows 11 (VS 2022)
@@ -106,9 +103,6 @@ pip install -r requirements.txt
 # Download submodules and apply patches
 # Note that dvc is used for pulling large files
 python ./build_tools/fetch_sources.py
-
-# Install python dependencies for submodules
-pip install -r requirements-external.txt
 ```
 
 ### Build configuration
