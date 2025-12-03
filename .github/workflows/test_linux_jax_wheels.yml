@@ -83,7 +83,6 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: rocm-jaxlib-v0.8.0
       test_runs_on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
@@ -106,6 +105,7 @@ jobs:
           --group-add render
           --group-add video
           --user root
+          --env-file /etc/podinfo/gha-gpu-isolation-settings
     defaults:
       run:
         shell: bash
@@ -189,7 +189,7 @@ jobs:
 
       - name: Run JAX tests
         run: |
-          pytest jax/jax_tests/tests/multi_device_test.py -q
-          pytest jax/jax_tests/tests/core_test.py -q
-          pytest jax/jax_tests/tests/util_test.py -q
-          pytest jax/jax_tests/tests/scipy_stats_test.py -q
+            pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
