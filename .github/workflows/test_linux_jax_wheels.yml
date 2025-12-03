@@ -138,7 +138,7 @@ jobs:
           repository: rocm/rocm-jax
           ref: ${{ inputs.jax_ref }}
 
-      - name: Checkout JAX extended tests repo 
+      - name: Checkout JAX extended tests repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: rocm/jax
