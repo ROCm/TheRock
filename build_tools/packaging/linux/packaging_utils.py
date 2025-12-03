@@ -33,6 +33,69 @@ if not logger.hasHandlers():
     logger.addHandler(ch)
 
 
+from prettytable import PrettyTable
+
+from prettytable import PrettyTable
+import logging
+
+logger = logging.getLogger(__name__)
+
+def print_dict_table1(failure_dict):
+    """
+    Prints a clean failure summary table using PrettyTable with
+    a blank row between each entry.
+
+    Parameters:
+        failure_dict: dict { package_name: failure_reason_string }
+    """
+
+    if not failure_dict:
+        logger.info("All packages installed successfully.")
+        return
+
+    table = PrettyTable()
+    table.field_names = ["Package", "Failure Reason"]
+    table.align["Package"] = "l"
+    table.align["Failure Reason"] = "l"
+
+    items = list(failure_dict.items())
+
+    for idx, (pkg, reason) in enumerate(items):
+        clean_reason = reason.strip()
+        table.add_row([pkg, clean_reason])
+
+        # Add a blank separator row between rows
+        if idx != len(items) - 1:
+            table.add_row(["", ""])   # blank row separator
+
+    logger.info("\n" + table.get_string())
+
+def print_dict_table(failure_dict):
+    """
+    Prints a clean failure summary table using PrettyTable.
+
+    Parameters:
+        logger: logger object
+        failure_dict: dict { package_name: failure_reason_string }
+    """
+
+    if not failure_dict:
+        logger.info("All packages installed successfully.")
+        return
+
+    table = PrettyTable()
+    table.field_names = ["Package", "Failure Reason"]
+
+    for pkg, reason in failure_dict.items():
+        # Ensure full multiline reason stays as one cell
+        clean_reason = reason.strip()
+        table.add_row([pkg, clean_reason])
+
+        # Add blank row for readability
+        table.add_row(["", ""])
+
+    logger.info("\n" + table.get_string())
+
 def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
     """
     Load a YAML configuration file and replace placeholders dynamically.

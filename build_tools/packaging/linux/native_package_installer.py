@@ -77,6 +77,7 @@ class PackageInstaller(PackageManagerBase):
         self.bucket = bucket
         self.release_type = release_type
         self.upload = upload
+        self.failed_packages = {}
         self.loader = loader
         self.s3_config = load_yaml_config(
                 "build_tools/packaging/linux/packaging_install.yaml",
@@ -94,6 +95,7 @@ class PackageInstaller(PackageManagerBase):
         logger.info(f"Destination Directory: {self.dest_dir}")
         logger.info(f"ROCm Version: {self.rocm_version}")
         logger.info(f"Composite Build: {self.composite}")
+        logger.info(f"packages: {self.packages}")
 
         if self.upload == "post":
             self.populate_repo_file(self.run_id)
@@ -103,6 +105,9 @@ class PackageInstaller(PackageManagerBase):
             self._install_package(pkg)
 
         logger.info("Installation complete.")
+
+        # Print summary of failures
+        self.print_summary()
 
     def _run_install_command(self, pkg_name, use_repo):
         """
@@ -164,7 +169,9 @@ class PackageInstaller(PackageManagerBase):
             )
 
             if result.returncode != 0:
-                logger.error(f"Failed to install {pkg_name}:\n{result.stdout}")
+                failure_reason = result.stdout.strip()
+                logger.error(f"Failed to install {pkg_name}:\n{failure_reason}")
+                self.failed_packages[pkg_name] = failure_reason
             else:
                 logger.info(f"Installed {pkg_name} successfully")
 
@@ -292,6 +299,16 @@ class PackageInstaller(PackageManagerBase):
                         self._run_install_command(derived_pkg, True)
             elif self.upload == "post":
                 self._run_install_command(pkg_name, True)
+
+    def print_summary(self):
+
+        if not self.failed_packages:
+            logger.info("All packages installed successfully.")
+            return
+
+        logger.info("\n=== SUMMARY OF FAILURES ===")
+        print_dict_table( self.failed_packages )
+
 
 
 def parse_arguments():

@@ -7,7 +7,7 @@
 Composite uninstall (removes all composite packages in reverse order):
 
 ```
-./uninstall_package.py --run-id 123456 \
+./uninstall_package.py \
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
@@ -16,7 +16,7 @@ Composite uninstall (removes all composite packages in reverse order):
 Non-composite uninstall (removes only rocm-core and its versioned package):
 
 ```
-./uninstall_package.py --run-id 123456 \
+./uninstall_package.py \
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
@@ -49,15 +49,14 @@ class PackageUninstaller(PackageManagerBase):
         package_list: List[PackageInfo],
         rocm_version: str,
         composite: bool,
-        run_id: str,
         loader,
     ):
         super().__init__(package_list)
         self.rocm_version = rocm_version
         self.composite = composite
-        self.run_id = run_id
         self.loader = loader
         self.os_family = get_os_id()
+        self.failed_packages = {}
 
     def execute(self):
         """
@@ -71,7 +70,6 @@ class PackageUninstaller(PackageManagerBase):
         Logs the progress and errors.
         """
         logger.info(f"\n=== UNINSTALLATION PHASE ===")
-        logger.info(f"Run ID: {self.run_id}")
         logger.info(f"ROCm Version: {self.rocm_version}")
         logger.info(f"Composite Build: {self.composite}")
 
@@ -92,6 +90,18 @@ class PackageUninstaller(PackageManagerBase):
                     for derived_pkg in derived_name:
                         self._run_uninstall_command(derived_pkg)
         logger.info(" Uninstallation complete.")
+        # Print summary of failures
+        self.print_summary()
+
+
+    def print_summary(self):
+
+        if not self.failed_packages:
+            logger.info("All packages installed successfully.")
+            return
+
+        logger.info("\n=== SUMMARY OF FAILURES ===")
+        print_dict_table( self.failed_packages )
 
     def _run_uninstall_command(self, pkg_name):
         """
@@ -125,9 +135,11 @@ class PackageUninstaller(PackageManagerBase):
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
             if result.returncode != 0:
-                logger.error(f"Failed to uninstall {pkg_name}:\n{result.stdout}")
+                failure_reason = result.stdout.strip()
+                logger.error(f"Failed to install {pkg_name}:\n{failure_reason}")
+                self.failed_packages[pkg_name] = failure_reason
             else:
-                logger.info(f"Uninstalled {pkg_name}")
+                logger.info(f"Uninstalled {pkg_name}, return code: {result.returncode}")
         except Exception as e:
             logger.exception(f"Exception uninstalling {pkg_name}: {e}")
 
@@ -137,9 +149,6 @@ def parse_arguments():
     Parses command-line arguments for the uninstaller.
     """
     parser = argparse.ArgumentParser(description="ROCm Package Uninstaller")
-    parser.add_argument(
-        "--run-id", required=True, help="Unique identifier for this uninstall run"
-    )
     parser.add_argument(
         "--package-json", required=True, help="Path to package JSON definition file"
     )
@@ -178,8 +187,7 @@ def main():
         package_list=packages,
         rocm_version=args.rocm_version,
         composite=(args.composite.lower() == "true"),
-        run_id=args.run_id,
-        loader=loader,
+        loader=loader
     )
 
     uninstaller.execute()
