@@ -181,6 +181,6 @@ jobs:
       package_index_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
-      python_versions: ${{ inputs.python_versions }}
+      python_version: ${{ inputs.python_version }}
       ref: ${{ inputs.ref || '' }}
       jax_ref: ${{ inputs.jax_ref }}

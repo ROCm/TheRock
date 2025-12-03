@@ -132,13 +132,13 @@ jobs:
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: rocm-jaxlib-v0.8.0
 
       - name: Checkout JAX tests repo (for extended tests)
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           repository: rocm/jax
-          ref: ${{ inputs.jax_ref }}
+          ref: rocm-jaxlib-v0.8.0
           path: jax/jax_tests
 
       - name: Set up Python
