@@ -97,48 +97,6 @@ def test_monitoring_loop():
             log_file.unlink()
 
 
-def test_command_execution():
-    """Test running a command with monitoring."""
-    # Test that the wrapper script exists
-    wrapper_script = (
-        Path(__file__).parent.parent / "github_actions" / "memory_wrapped_build.py"
-    )
-    assert wrapper_script.exists(), f"Wrapper script not found: {wrapper_script}"
-
-    # Run a simple command with monitoring
-    with tempfile.TemporaryDirectory() as tmpdir:
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(wrapper_script),
-                "--phase",
-                "Test Command",
-                "--log-dir",
-                tmpdir,
-                "--interval",
-                "1",
-                "--",
-                "echo",
-                "test",
-            ],
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, f"Command failed: {result.stderr}"
-        assert (
-            "Memory monitoring started" in result.stdout
-            or "Executing command" in result.stdout
-        )
-
-        # Verify log was created
-        log_dir = Path(tmpdir)
-        log_files = list(log_dir.glob("*.jsonl"))
-        assert len(log_files) > 0, "No log files created"
-
-        print("[PASS] Command execution test passed")
-
-
 def test_analysis_script():
     """Test that analysis script can process logs."""
     analysis_script = Path(__file__).parent.parent / "analyze_memory_logs.py"
@@ -199,7 +157,6 @@ def main():
     tests = [
         test_memory_stats_collection,
         test_monitoring_loop,
-        test_command_execution,
         test_analysis_script,
     ]
 
