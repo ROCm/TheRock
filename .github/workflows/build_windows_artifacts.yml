@@ -156,7 +156,7 @@ jobs:
         run: |
           # Create logs directory in BUILD_DIR
           mkdir -p "${{ env.BUILD_DIR }}/logs"
-          
+
           # Start memory monitor in background
           python build_tools/memory_monitor.py \
             --phase "Build Phase" \
