@@ -27,6 +27,13 @@ This incorporates advice from:
 ## Support status
 
 ### Project and feature support status
+> [!NOTE]
+> Project support status is defined by the following classifications
+> 1. Supported: Official packages are distributed by the ROCm team
+> 2. Nightly: Included in TheRock-based packages, built nightly
+> 3. Community Supported: Enabled via community contribution
+> 4. Not Supported: Does not build, requires engineering to support
+>
 
 | Project / feature              | Linux support                                                                     | Windows support  |
 | ------------------------------ | --------------------------------------------------------------------------------- | ---------------- |
@@ -34,6 +41,9 @@ This incorporates advice from:
 | torchaudio                     | ✅ Supported                                                                      | ✅ Supported     |
 | torchvision                    | ✅ Supported                                                                      | ✅ Supported     |
 | Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     |
+| torch-scatter                  | ✅ Community Supported                                                            | ❌ Not supported |
+| torch-sparse                   | ✅ Community Supported                                                            | ❌ Not supported |
+| torchcodec                     | ❌ Not supported (see Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)) | ❌ Not supported |
 | FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
 
 ### Supported PyTorch versions
