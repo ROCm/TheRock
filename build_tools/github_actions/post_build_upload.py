@@ -224,7 +224,7 @@ def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
     else:
         run_aws_cp(log_dir, s3_base_path, content_type="text/plain")
 
-    # Upload build_time_analysis.html
+    # Build Time Analysis is only generated on Linux
     analysis_path = log_dir / "build_time_analysis.html"
     if analysis_path.is_file():
         analysis_s3_dest = f"{s3_base_path}/build_time_analysis.html"
@@ -264,8 +264,10 @@ def write_gha_build_summary(artifact_group: str, bucket_url: str):
     log_index_url = f"{bucket_url}/logs/{artifact_group}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_index_url})")
 
-    analysis_url = f"{bucket_url}/logs/{artifact_group}/build_time_analysis.html"
-    gha_append_step_summary(f"[Build Time Analysis]({analysis_url})")
+    # Build Time Analysis is only generated on Linux
+    if PLATFORM == "linux":
+        analysis_url = f"{bucket_url}/logs/{artifact_group}/build_time_analysis.html"
+        gha_append_step_summary(f"[Build Time Analysis]({analysis_url})")
 
     artifact_url = f"{bucket_url}/index-{artifact_group}.html"
     gha_append_step_summary(f"[Artifacts]({artifact_url})")
