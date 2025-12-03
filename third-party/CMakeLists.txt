@@ -24,7 +24,6 @@ add_subdirectory(spdlog)
 # Host math libraries.
 if(THEROCK_ENABLE_HOST_BLAS)
   add_subdirectory(host-blas)
-  add_subdirectory(host-blas-64)
 endif()
 if(THEROCK_ENABLE_HOST_SUITE_SPARSE)
   add_subdirectory(SuiteSparse)
