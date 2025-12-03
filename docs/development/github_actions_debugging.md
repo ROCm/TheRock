@@ -33,7 +33,7 @@ bucket and the package index https://rocm.devreleases.amd.com/
 Follow these steps:
 
 1. Identify the ROCm package version that you want to build against, like
-   `7.10.0a20251124`. You can find recent versions in a nightly release index
+   `7.11.0a20251124`. You can find recent versions in a nightly release index
    like at https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/rocm/.
 
 1. Copy that version from the "nightly" release bucket to the "dev" release
@@ -44,7 +44,8 @@ Follow these steps:
 
 1. Trigger
    https://github.com/ROCm/TheRock/actions/workflows/build_portable_linux_pytorch_wheels.yml
-   using a "dev" release and the selected version:
+   from the branch you want. Keep the default of "dev" release type, enter the
+   selected rocm version, and choose a PyTorch ref as needed:
 
    ![build_portable_linux_pytorch_wheels_workflow_dispatch](assets/build_portable_linux_pytorch_wheels_workflow_dispatch.jpg)
 
