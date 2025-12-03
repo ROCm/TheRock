@@ -311,20 +311,22 @@ def do_fetch(args: argparse.Namespace):
                             extract_artifact,
                             ExtractRequest(
                                 archive_path=downloaded_path,
-                                output_dir=output_dir / "artifacts"
-                                if not args.bootstrap
-                                else output_dir,
+                                output_dir=(
+                                    output_dir / "artifacts"
+                                    if not args.bootstrap
+                                    else output_dir
+                                ),
                                 # Don't delete during parallel extraction - cleanup
                                 # happens after all extractions complete
                                 delete_archive=False,
                                 flatten=False,
                                 bootstrap=args.bootstrap,
-                                cleaned_paths=bootstrap_cleaned_paths
-                                if args.bootstrap
-                                else None,
-                                cleaned_paths_lock=bootstrap_lock
-                                if args.bootstrap
-                                else None,
+                                cleaned_paths=(
+                                    bootstrap_cleaned_paths if args.bootstrap else None
+                                ),
+                                cleaned_paths_lock=(
+                                    bootstrap_lock if args.bootstrap else None
+                                ),
                             ),
                         )
                     )
