@@ -128,6 +128,8 @@ jobs:
 
       - name: Build therock-archives and therock-dist
         run: |
+          nproc
+
           ( while true; do
               echo "--- $(date) ---"
               free -h
@@ -136,7 +138,7 @@ jobs:
             done ) &
           TELEMETRY_PID=$!
           
-          cmake --build build --target therock-archives therock-dist -- -k 0 -j32
+          cmake --build build --target therock-archives therock-dist -- -k 0 -j8
 
           # Stop telemetry loop
           kill $TELEMETRY_PID
