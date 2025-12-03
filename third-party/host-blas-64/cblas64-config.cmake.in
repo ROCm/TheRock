@@ -1,6 +1,6 @@
 if(NOT TARGET cblas64)
   find_package(OpenBLAS64 REQUIRED)
   add_library(cblas64 INTERFACE)
-  target_link_libraries(cblas64 INTERFACE OpenBLAS::OpenBLAS)
+  target_link_libraries(cblas64 INTERFACE OpenBLAS64::OpenBLAS)
   set(CBLAS_LIBRARIES cblas64)
 endif()

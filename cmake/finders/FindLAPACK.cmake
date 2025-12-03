@@ -9,12 +9,12 @@ if("OpenBLAS" IN_LIST THEROCK_PROVIDED_PACKAGES)
 
   if(DEFINED BLA_SIZEOF_INTEGER AND BLA_SIZEOF_INTEGER EQUAL 8)
     find_package(OpenBLAS64 CONFIG REQUIRED)
-    set(BLAS_LIBRARIES OpenBLAS64::OpenBLAS)
-    # add_library(BLAS::BLAS ALIAS OpenBLAS64::OpenBLAS)
+    set(LAPACK_LIBRARIES OpenBLAS64::OpenBLAS)
+    add_library(LAPACK::LAPACK ALIAS OpenBLAS64::OpenBLAS)
   else()
     find_package(OpenBLAS CONFIG REQUIRED)
-    set(BLAS_LIBRARIES OpenBLAS::OpenBLAS)
-    # add_library(BLAS::BLAS ALIAS OpenBLAS::OpenBLAS)
+    set(LAPACK_LIBRARIES OpenBLAS::OpenBLAS)
+    add_library(LAPACK::LAPACK ALIAS OpenBLAS::OpenBLAS)
   endif()
 
   # See: https://cmake.org/cmake/help/latest/module/FindBLAS.html
