@@ -40,8 +40,8 @@ Follow these steps:
    bucket by triggering
    https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml.
 
-   Trigger the workflow twice, once to copy to "v2" and again to copy to
-   "v2-staging".
+   Trigger the workflow twice, once to copy to the `v2` "destsubdir" and again
+   to copy to the `v2-staging` "destsubdir".
 
    ![copy_release_workflow_dispatch](assets/copy_release_workflow_dispatch.jpg)
 
@@ -51,6 +51,10 @@ Follow these steps:
    selected rocm version, and choose a PyTorch ref as needed:
 
    ![build_portable_linux_pytorch_wheels_workflow_dispatch](assets/build_portable_linux_pytorch_wheels_workflow_dispatch.jpg)
+
+   The "Patch directory name" is only needed if there are patches in the
+   [`external-builds/pytorch/patches/`](/external-builds/pytorch/patches/)
+   folder for that pytorch ref you want to build.
 
 The workflow should then run as expected. If it fails to download packages,
 check that you chose a valid ROCm package version and copied the necessary files
