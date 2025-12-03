@@ -1,5 +1,11 @@
 # GitHub Actions Debugging
 
+Table of contents:
+
+- [Testing release workflows](#testing-release-workflows)
+- [Connecting to Kubernetes runners for interactive debugging](#connecting-to-kubernetes-runners-for-interactive-debugging)
+- [Working effectively from forks](#working-effectively-from-forks)
+
 ## Testing release workflows
 
 > [!IMPORTANT]
