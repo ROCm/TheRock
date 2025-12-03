@@ -309,7 +309,7 @@ jobs:
           workflow: build_linux_jax_wheels.yml
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
-              "python_versions": "3.12",
+              "python_version": "3.12",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",

@@ -6,7 +6,7 @@ on:
       amdgpu_family:
         required: true
         type: string
-      python_versions:
+      python_version:
         required: true
         type: string
       release_type:
@@ -28,7 +28,7 @@ on:
       amdgpu_family:
         required: true
         type: string
-      python_versions:
+      python_version:
         required: true
         type: string
       release_type:
@@ -70,7 +70,7 @@ jobs:
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ matrix.jax_ref }}
 
       - name: Configure Git Identity
         run: |
