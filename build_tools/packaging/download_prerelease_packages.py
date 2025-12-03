@@ -573,13 +573,15 @@ Examples:
 
     parser.add_argument(
         "--include-dependencies",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Include dependency packages in download (default: only packages to promote)",
     )
 
     parser.add_argument(
         "--include-tarballs",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Download also tarball packages (default: False)",
     )
     parser.add_argument(
@@ -600,13 +602,15 @@ Examples:
 
     parser.add_argument(
         "--list-archs",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Only list available architectures, do not download",
     )
 
     parser.add_argument(
         "--list-packages-per-arch",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="List all packages per architecture, do not download",
     )
 
