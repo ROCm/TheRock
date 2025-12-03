@@ -71,9 +71,6 @@ pip install -r requirements.txt
 
 # Download submodules and apply patches
 python3 ./build_tools/fetch_sources.py
-
-# Install python dependencies for submodules
-pip install -r requirements-external.txt
 ```
 
 ### Setup - Windows 11 (VS 2022)
@@ -106,9 +103,6 @@ pip install -r requirements.txt
 # Download submodules and apply patches
 # Note that dvc is used for pulling large files
 python ./build_tools/fetch_sources.py
-
-# Install python dependencies for submodules
-pip install -r requirements-external.txt
 ```
 
 ### Build configuration
