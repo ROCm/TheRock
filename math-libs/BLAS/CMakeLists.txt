@@ -437,7 +437,7 @@ if(THEROCK_ENABLE_SOLVER)
   list(APPEND hipBLAS_optional_deps rocSOLVER)
 endif()
 if(THEROCK_BUILD_TESTING)
-  list(APPEND hipBLAS_optional_deps therock-host-blas)
+  list(APPEND hipBLAS_optional_deps therock-host-blas-64)
 endif()
 
 therock_cmake_subproject_declare(hipBLAS

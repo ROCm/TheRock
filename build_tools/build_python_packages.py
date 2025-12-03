@@ -92,6 +92,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-runtime",
         "hipify",
         "host-blas",
+        "host-blas-64",
         "host-suite-sparse",
         "rocprofiler-sdk",
         "sysdeps",

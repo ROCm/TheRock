@@ -141,7 +141,7 @@ function(therock_subproject_fetch target_name)
     PARSE_ARGV 1 ARG
     "CMAKE_PROJECT"
     "SOURCE_DIR;PREFIX;EXCLUDE_FROM_ALL"
-    "TOUCH"
+    "TOUCH;PATCH"
   )
 
   if(NOT DEFINED ARG_EXCLUDE_FROM_ALL)
@@ -168,6 +168,11 @@ function(therock_subproject_fetch target_name)
     )
   else()
     list(APPEND _extra "BUILD_COMMAND" "")
+  endif()
+  if(ARG_PATCH)
+    list(APPEND _extra
+      PATCH_COMMAND patch ${ARG_PATCH}
+    )
   endif()
 
   ExternalProject_Add(
