@@ -1,4 +1,4 @@
-# SuiteSparse
+# host-blas
 [components.dbg."third-party/host-blas/stage"]
 [components.dev."third-party/host-blas/stage"]
 [components.doc."third-party/host-blas/stage"]
