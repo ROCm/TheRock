@@ -65,6 +65,8 @@ on:
 permissions:
   contents: read
 
+run-name: Release Windows packages (${{ inputs.families }}, ${{ inputs.release_type }})
+
 jobs:
   setup_metadata:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}

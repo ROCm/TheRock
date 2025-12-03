@@ -31,6 +31,8 @@ on:
 permissions:
   contents: read
 
+run-name: Build portable Linux Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
+
 jobs:
   build:
     name: Build Python | ${{ inputs.artifact_group }}

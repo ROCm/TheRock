@@ -103,6 +103,8 @@ permissions:
   id-token: write
   contents: read
 
+run-name: Build portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
+
 jobs:
   build_pytorch_wheels:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}

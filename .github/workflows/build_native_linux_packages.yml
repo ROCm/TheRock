@@ -60,6 +60,8 @@ permissions:
   id-token: write
   contents: read
 
+run-name: Build native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.package_suffix }}, ${{ inputs.release_type }})
+
 jobs:
   build_native_packages:
     name: Build Linux native Packages
