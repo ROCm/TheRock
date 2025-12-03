@@ -18,7 +18,7 @@ jobs:
       - name: Configure Git Identity
         run: |
           git config --global user.name "therockbot"
-          git config --global user.email "therockbot@amd.com"     
+          git config --global user.email "therockbot@amd.com"
       - name: Set branch name
         id: set-branch
         run: |
@@ -29,7 +29,7 @@ jobs:
         run: |
           CMD="python3 ./build_tools/bump_submodules.py --push-branch --branch-name ${{ steps.set-branch.outputs.branch-name }} --components rocm-libraries"
           echo "Running command: $CMD"
-          eval $CMD 
+          eval $CMD
       - name: Prepare PR body with diff info
         run: |
           echo "Automated daily submodule bump" > pr_body.txt
