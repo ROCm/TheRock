@@ -38,7 +38,10 @@ Follow these steps:
 
 1. Copy that version from the "nightly" release bucket to the "dev" release
    bucket by triggering
-   https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml :
+   https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml.
+
+   Trigger the workflow twice, once to copy to "v2" and again to copy to
+   "v2-staging".
 
    ![copy_release_workflow_dispatch](assets/copy_release_workflow_dispatch.jpg)
 
