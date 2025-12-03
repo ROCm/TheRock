@@ -45,6 +45,7 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |           |                                               |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-compute](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute)                    | ❌        | Unsupported                                   |
+| profiler            | [rocprofiler-systems](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems)                    | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |
 | comm-libs           | [rccl](https://github.com/ROCm/rccl)                                                                                     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |
@@ -70,8 +71,8 @@ mainline, in open source, using MSVC, etc.).
 |                     |                                                                                                                          |           |                                               |
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/composable_kernel)                                                           | ❌        | Unsupported                                   |
 | ml-libs             | [MIOpen](https://github.com/ROCm/MIOpen)                                                                                 | ✅        |                                               |
-| ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | ❌        | Unsupported                                   |
-| ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | ❌        | Unsupported (requires hipDNN)                 |
+| ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | ✅        |                                               |
+| ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | ✅        |                                               |
 
 ## Building TheRock from source
 
@@ -235,7 +236,7 @@ the [instructions in the root README](../../README.md#configuration) for other
 options you may want to set.
 
 ```bash
-cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 
 # If iterating and wishing to cache, add these:
 #  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
