@@ -176,7 +176,9 @@ jobs:
         run: |
           $fs = Get-PSDrive -PSProvider "FileSystem"
           $fsout = $fs | Select-Object -Property Name,Used,Free,Root
-          $fsout | % {$_.Used/=1GB;$_.For rat;Expression={$_.Size/1GB}} | Write-Host
+          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
+          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
+
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
