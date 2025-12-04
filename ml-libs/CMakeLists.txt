@@ -289,11 +289,11 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
   )
   therock_cmake_subproject_activate(hipDNN_samples)
 
-  # therock_provide_artifact(hipdnn-samples
-  #   DESCRIPTOR artifact-hipdnn-samples.toml
-  #   COMPONENTS
-  #     test
-  #   SUBPROJECT_DEPS
-  #     hipDNN_samples
-  # )
+  therock_provide_artifact(hipdnn-samples
+    DESCRIPTOR artifact-hipdnn-samples.toml
+    COMPONENTS
+      test
+    SUBPROJECT_DEPS
+      hipDNN_samples
+  )
 endif(THEROCK_ENABLE_HIPDNN_SAMPLES)

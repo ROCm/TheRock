@@ -1,7 +1,2 @@
 # hipDNN Samples
 [components.test."ml-libs/hipdnn_samples/stage"]
-include = [
-  bn_*,
-  conv_*,
-  fused_*,
-]
