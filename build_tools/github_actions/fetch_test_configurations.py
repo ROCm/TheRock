@@ -213,6 +213,14 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 5,
     },
+    # Dummy tests
+    "dummy_test": {
+        "job_name": "Dummy_test_will_be_removed",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_dummy.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    }
 }
 
 
