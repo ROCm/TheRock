@@ -143,24 +143,26 @@ jobs:
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py
 
-      # HACK: The test process does not terminate on its own gracefully,
-      # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
-      # After killing the process we read the return code to signal it normally.
-      # See https://github.com/ROCm/TheRock/issues/999.
-      - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows' }}
-        continue-on-error: true
-        run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py
+      # TODO(#2258): Enable this code to run tests on Windows
 
-      - name: (Windows) Read and propagate exit code
-        if: ${{ runner.os == 'Windows' }}
-        run: |
-          if [ -f run_pytorch_tests_exit_code.txt ]; then
-            EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
-            echo "Exit code from file: $EXIT_CODE"
-            exit $EXIT_CODE
-          else
-            echo "No run_pytorch_tests_exit_code.txt found"
-            exit 1
-          fi
+      # # HACK: The test process does not terminate on its own gracefully,
+      # # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
+      # # After killing the process we read the return code to signal it normally.
+      # # See https://github.com/ROCm/TheRock/issues/999.
+      # - name: (Windows) Run PyTorch tests
+      #   if: ${{ runner.os == 'Windows' }}
+      #   continue-on-error: true
+      #   run: |
+      #     python ./external-builds/pytorch/run_pytorch_tests.py
+
+      # - name: (Windows) Read and propagate exit code
+      #   if: ${{ runner.os == 'Windows' }}
+      #   run: |
+      #     if [ -f run_pytorch_tests_exit_code.txt ]; then
+      #       EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
+      #       echo "Exit code from file: $EXIT_CODE"
+      #       exit $EXIT_CODE
+      #     else
+      #       echo "No run_pytorch_tests_exit_code.txt found"
+      #       exit 1
+      #     fi

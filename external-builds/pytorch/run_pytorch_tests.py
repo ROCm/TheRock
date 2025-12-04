@@ -513,6 +513,8 @@ def force_exit_with_code(retcode):
     # We're going to kill the current process with SIGTERM below, which will
     # return exit code 15. This preserves the original exit code in a file.
     # Note: this path is relative to CWD, *not the script directory*.
+    # TODO(#2258): output a test report file that can be inspected on both
+    #              Linux and Windows then remove this special file
     retcode_file = Path("run_pytorch_tests_exit_code.txt")
     print(f"Writing retcode {retcode} to '{retcode_file}'")
     with open(retcode_file, "w") as f:
