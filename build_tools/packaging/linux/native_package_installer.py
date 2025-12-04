@@ -71,7 +71,7 @@ class PackageInstaller(PackageManagerBase):
         self.rocm_version = rocm_version
         self.composite = composite
         self.version_flag = version_flag
-        self.os_family = get_os_id()
+        self.os_id,self.os_family = get_os_id()
         self.artifact_group = artifact_group
         self.package_suffix = package_suffix
         self.bucket = bucket
@@ -202,7 +202,7 @@ class PackageInstaller(PackageManagerBase):
             else:
                 logger.info(f"Using S3 URL: {base_url}")
                 if self.os_family == "debian":
-                    repo_file_path = "/etc/apt/sources.list.d/rocm.list"
+                    repo_file_path = self.s3_config.get("repos", {}).get(self.os_id, {}).get("rocm_repo_file")
                     repo_entry = f"deb [trusted=yes] {base_url}/deb stable main\n"
 
                     logger.info(f"Writing Debian repo entry to {repo_file_path}")

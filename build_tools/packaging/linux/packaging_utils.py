@@ -130,12 +130,12 @@ def get_os_id(os_release_path="/etc/os-release"):
     os_like = os_release.get("ID_LIKE", "").lower()
 
     if os_id in DEBIAN_OS_IDS or any(x in os_like for x in DEBIAN_OS_IDS):
-        return "debian"
+        return os_id,"debian"
 
     if os_id in RPM_OS_IDS or any(x in os_like for x in RPM_OS_IDS):
-        return "rpm"
+        return os_id,"rpm"
 
-    return "unknown"
+    return os_id,"unknown"
 
 
 def print_function_name():
