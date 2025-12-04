@@ -138,6 +138,10 @@ SKIPPABLE_PATH_PATTERNS = [
     # workflows efficient when only nodes closer to the edges of the build graph
     # are changed.
     "external-builds/*",
+    # Changes to dockerfiles do not currently affect CI workflows directly.
+    # Docker images are built and published after commits are pushed, then
+    # workflows can be updated to use the new image sha256 values.
+    "dockerfiles/*",
     # Changes to experimental code do not run standard build/test workflows.
     "experimental/*",
 ]
@@ -288,7 +292,7 @@ def matrix_generator(
     if is_push and base_args.get("branch_name") == "main":
         active_trigger_types.extend(["presubmit", "postsubmit"])
     if is_schedule:
-        active_trigger_types.append("nightly")
+        active_trigger_types.extend(["presubmit", "postsubmit", "nightly"])
 
     # Get the appropriate family matrix based on active triggers
     # For workflow_dispatch and PR labels, we need to check all matrices
@@ -382,9 +386,22 @@ def matrix_generator(
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
-        # Add _only_ nightly targets.
-        for key in amdgpu_family_info_matrix_nightly:
+        # For nightly runs, we run all builds and full tests
+        amdgpu_family_info_matrix_all = (
+            amdgpu_family_info_matrix_presubmit
+            | amdgpu_family_info_matrix_postsubmit
+            | amdgpu_family_info_matrix_nightly
+        )
+        for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
+
+        for key in lookup_matrix:
+            if (
+                platform in lookup_matrix[key]
+                and "sanity_check_only_for_family" in lookup_matrix[key][platform]
+            ):
+                # For nightly runs, we want to run full tests regardless of limited machines, so we delete the sanity_check_only_for_family option
+                del lookup_matrix[key][platform]["sanity_check_only_for_family"]
 
     # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
@@ -492,9 +509,10 @@ def main(base_args, linux_families, windows_families):
 
     test_type = "smoke"
 
-    # In the case of a scheduled run, we always want to build
+    # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
         enable_build_jobs = True
+        test_type = "full"
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])

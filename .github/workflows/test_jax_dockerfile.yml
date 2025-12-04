@@ -6,7 +6,7 @@ on:
       test_runs_on:
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm"
+        default: "linux-mi325-1gpu-ossci-rocm-frac"
       image_name:
         required: true
         description: JAX docker image to run tests with
@@ -35,17 +35,16 @@ on:
         required: false
         type: string
       jax_plugin_branch:
-        required: true
         description: JAX plugin branch to checkout to use for test scripts
         type: string
-        default: "rocm-jaxlib-v0.6.0"
+        default: "rocm-jaxlib-v0.8.0"
 
 permissions:
   contents: read
 
 jobs:
   test_wheels:
-    name: Test | ${{ inputs.amdgpu_family }}
+    name: Test
     runs-on: ${{ inputs.test_runs_on }}
     steps:
       - name: Checkout

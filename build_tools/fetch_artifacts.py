@@ -8,11 +8,11 @@ download artifacts then unpack them into a usable install directory.
 Example usage (using https://github.com/ROCm/TheRock/actions/runs/15685736080):
   pip install boto3
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --artifact-group gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080
+    --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080
 
 Include/exclude regular expressions can be given to control what is downloaded:
   python build_tools/fetch_artifacts.py \
-    --run-id 15685736080 --artifact-group gfx110X-dgpu --output-dir ~/.therock/artifacts_15685736080 \
+    --run-id 15685736080 --artifact-group gfx110X-all --output-dir ~/.therock/artifacts_15685736080 \
     amd-llvm base 'core-(hip|runtime)' sysdeps \
     --exclude _dbg_
 
@@ -25,6 +25,10 @@ Note this module will respect:
     AWS_SESSION_TOKEN
 if and only if all are specified in the environment to connect with S3.
 If unspecified, we will create an anonymous boto file that can only acccess public artifacts.
+
+TODO: Evaluate switching to artifact_manager.py which provides a unified backend
+abstraction (local directory or S3) and integrates with BUILD_TOPOLOGY.toml for
+stage-aware artifact filtering.
 """
 
 import argparse
@@ -386,7 +390,7 @@ def main(argv):
     parser.add_argument(
         "--run-github-repo",
         type=str,
-        help="GitHub repository for --run-id. If omitted, this is inferred from the GITHUB_REPOSITORY env var or defaults to ROCm/TheRock",
+        help="GitHub repository for --run-id in 'owner/repo' format (e.g. 'ROCm/TheRock'). Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
     parser.add_argument(
         "--run-id",

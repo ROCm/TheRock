@@ -47,6 +47,9 @@ _amdgpu = {
     "gfx1152": [
         " AMD Krackan Point",
     ],
+    "gfx1153": [
+        "AMD Radeon 820M",
+    ],
     # RDNA 4
     "gfx1201": [
         "AMD Radeon RX 9070 XT",
