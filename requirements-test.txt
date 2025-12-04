@@ -11,4 +11,4 @@ packaging==25.0
 
 # libhipcxx test requirement
 lit==18.1.8
-psutil
+psutil==7.1.3
