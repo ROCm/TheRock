@@ -61,6 +61,8 @@ on:
 permissions:
   contents: read
 
+run-name: Release portable Linux packages (${{ inputs.families }}, ${{ inputs.release_type }})
+
 jobs:
   setup_metadata:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}

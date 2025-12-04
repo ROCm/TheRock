@@ -29,6 +29,9 @@ on:
         default: false
       extra_cmake_options:
         type: string
+      monitor_memory:
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -49,6 +52,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_memory:
+        type: boolean
+        default: false
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -70,6 +76,7 @@ jobs:
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
@@ -118,39 +125,84 @@ jobs:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
-          BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
+      - name: Start memory monitoring
+        if: ${{ inputs.monitor_memory }}
+        id: memory-monitor
+        shell: bash
+        continue-on-error: true
+        run: |
+          # Create logs directory in BUILD_DIR
+          mkdir -p "${{ env.BUILD_DIR }}/logs"
+
+          # Start memory monitor in background
+          python build_tools/memory_monitor.py \
+            --phase "Build Phase" \
+            --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
+            --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
+
+          # Capture PID
+          MONITOR_PID=$!
+          echo "monitor-pid=$MONITOR_PID" >> $GITHUB_OUTPUT
+          echo "Memory monitoring started with PID: $MONITOR_PID"
+          sleep 2
+
       - name: Build therock-archives and therock-dist
         run: |
-          cmake --build build --target therock-archives therock-dist -- -k 0
+          cmake --build ${{ env.BUILD_DIR }} --target therock-archives therock-dist -- -k 0
+
+      - name: Stop memory monitoring
+        if: ${{ always() && inputs.monitor_memory && steps.memory-monitor.outputs.monitor-pid }}
+        shell: bash
+        continue-on-error: true
+        env:
+          MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
+        run: |
+          echo "Stopping memory monitor (PID: $MONITOR_PID)"
+
+          # Send interrupt signal to stop monitoring gracefully
+          if kill -0 $MONITOR_PID 2>/dev/null; then
+            kill -SIGINT $MONITOR_PID
+            sleep 2
+            # Force kill if still running
+            kill -9 $MONITOR_PID 2>/dev/null || true
+          fi
+
+          echo "Memory monitor stopped"
+
+          # Display the monitor output
+          if [ -f "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" ]; then
+            echo "=== Memory Monitor Output ==="
+            cat "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt"
+          fi
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
-          ctest --test-dir build --output-on-failure
+          ctest --test-dir ${{ env.BUILD_DIR }} --output-on-failure
 
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
         run: |
-          if [ -d "./build" ]; then
+          if [ -d "${{ env.BUILD_DIR }}" ]; then
             echo "Full SDK du:"
             echo "------------"
-            du -h -d 1 build/dist/rocm
+            du -h -d 1 ${{ env.BUILD_DIR }}/dist/rocm
             echo "Artifact Archives:"
             echo "------------------"
-            ls -lh build/artifacts/*.tar.xz
+            ls -lh ${{ env.BUILD_DIR }}/artifacts/*.tar.xz
             echo "Artifacts:"
             echo "----------"
-            du -h -d 1 build/artifacts
+            du -h -d 1 ${{ env.BUILD_DIR }}/artifacts
             echo "CCache Stats:"
             echo "-------------"
             ccache -s -v
-            tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+            tail -v -n +1 .ccache/compiler_check_cache/* > ${{ env.BUILD_DIR }}/logs/ccache_compiler_check_cache.log
           else
-            echo "[ERROR] Build directory ./build does not exist. Skipping report!"
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
@@ -168,7 +220,7 @@ jobs:
           python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group "${{ inputs.artifact_group }}" \
-            --build-dir build \
+            --build-dir ${{ env.BUILD_DIR }} \
             --upload
 
       # - name: Upload job metrics to Redshift database
