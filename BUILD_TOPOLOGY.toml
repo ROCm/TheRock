@@ -381,6 +381,11 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
+[artifacts.hipdnn-samples]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
+
 # --- Communication Libraries (per-arch) ---
 
 [artifacts.rccl]
