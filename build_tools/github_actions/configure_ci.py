@@ -138,6 +138,10 @@ SKIPPABLE_PATH_PATTERNS = [
     # workflows efficient when only nodes closer to the edges of the build graph
     # are changed.
     "external-builds/*",
+    # Changes to dockerfiles do not currently affect CI workflows directly.
+    # Docker images are built and published after commits are pushed, then
+    # workflows can be updated to use the new image sha256 values.
+    "dockerfiles/*",
     # Changes to experimental code do not run standard build/test workflows.
     "experimental/*",
 ]
