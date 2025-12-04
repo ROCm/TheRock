@@ -68,7 +68,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
-      -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DBUILD_TESTS=ON
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake

@@ -12,7 +12,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
 # Env setup
-os.environ['HIP_PLATFORM'] = 'amd'
+os.environ["HIP_PLATFORM"] = "amd"
 
 # Run tests
 cmd = [
