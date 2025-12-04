@@ -65,6 +65,8 @@ on:
 permissions:
   contents: read
 
+run-name: Release Windows packages (${{ inputs.families }}, ${{ inputs.release_type }})
+
 jobs:
   setup_metadata:
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
@@ -220,10 +222,6 @@ jobs:
           git config --global core.symlinks true
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
-
-      - name: Install external python deps
-        run: |
-          pip install -r requirements-external.txt
 
       - name: Configure Projects
         env:

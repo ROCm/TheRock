@@ -66,9 +66,10 @@ def run(args: argparse.Namespace):
     devel = PopulatedDistPackage(params, logical_name="devel")
     devel.populate_devel_files(
         addl_artifact_names=[
-            # Since prim is a header only library, it is not included in runtime
-            # packages, but we still want it in the devel package.
+            # Since prim and rocwmma are header only libraries, they are not
+            # included in runtime packages, but we still want them in the devel package.
             "prim",
+            "rocwmma",
         ],
         tarball_compression=args.devel_tarball_compression,
     )

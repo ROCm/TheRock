@@ -12,7 +12,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm"
+        default: "linux-mi325-1gpu-ossci-rocm-frac"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
