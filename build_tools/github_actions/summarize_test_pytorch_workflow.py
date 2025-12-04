@@ -52,10 +52,10 @@ def run(args: argparse.Namespace):
 
     # Link to detailed documentation.
     summary += "\n"
-    summary += "To reproduce, see [Running/testing PyTorch](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#runningtesting-pytorch) and setup with:"
-    summary += "\n"
+    summary += "To reproduce, see [Running/testing PyTorch](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#runningtesting-pytorch) and setup with:\n"
 
     # Simple to copy/paste instructions to get the code and packages.
+    summary += "\n"
     summary += "```bash\n"
     summary += "# Fetch pytorch source files, including tests:\n"
     summary += f"git clone --branch {args.pytorch_git_ref} {pytorch_origin_args} {pytorch_remote_url}\n"
