@@ -67,9 +67,11 @@ jobs:
       fail-fast: true
     env:
       BUILD_DIR: B:\build
-      CACHE_DIR: "${{github.workspace}}/.cache"
+      # For Windows CI, build dir must use temp disk vs. default repo workspace
+      # set cache dir for setup_ccache.py to save logs in temp disk build dir for upload
+      CACHE_DIR: B:\.cache 
       # The ccache.conf will be written by setup_ccache.py before this gets used.
-      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
+      CCACHE_CONFIGPATH: B:\.ccache\ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
@@ -174,8 +176,7 @@ jobs:
         run: |
           $fs = Get-PSDrive -PSProvider "FileSystem"
           $fsout = $fs | Select-Object -Property Name,Used,Free,Root
-          $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
-          get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
+          $fsout | % {$_.Used/=1GB;$_.For rat;Expression={$_.Size/1GB}} | Write-Host
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
