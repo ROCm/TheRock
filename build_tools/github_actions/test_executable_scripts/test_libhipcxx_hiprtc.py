@@ -11,7 +11,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1))
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
 
 # Load ROCm version from version.json
 def load_rocm_version() -> str:
@@ -21,6 +22,7 @@ def load_rocm_version() -> str:
     with open(version_file, "rt") as f:
         loaded_file = json.load(f)
         return loaded_file["rocm-version"]
+
 
 ROCM_VERSION = load_rocm_version()
 logging.info(f"ROCm version: {ROCM_VERSION}")
@@ -33,7 +35,9 @@ THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 
 # Set up ROCm/HIP environment
 environ_vars["ROCM_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
-environ_vars["HIP_DEVICE_LIB_PATH"] = str(OUTPUT_ARTIFACTS_PATH / "lib/llvm/amdgcn/bitcode/")
+environ_vars["HIP_DEVICE_LIB_PATH"] = str(
+    OUTPUT_ARTIFACTS_PATH / "lib/llvm/amdgcn/bitcode/"
+)
 environ_vars["HIP_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["CMAKE_PREFIX_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["HIP_PLATFORM"] = "amd"
@@ -71,30 +75,27 @@ except FileNotFoundError as e:
 
 
 cmd = [
-  "cmake",
-  "..",
-  f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-  f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
-  f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
-  "-DLIBHIPCXX_TEST_WITH_HIPRTC=ON",
-  "-GNinja",
+    "cmake",
+    "..",
+    f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
+    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+    "-DLIBHIPCXX_TEST_WITH_HIPRTC=ON",
+    "-GNinja",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
 cmd = [
-  "ninja",
+    "ninja",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
 # Run the tests using lit
-cmd = [
-    "ninja",
-    "check-hipcxx"
-]
+cmd = ["ninja", "check-hipcxx"]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)
