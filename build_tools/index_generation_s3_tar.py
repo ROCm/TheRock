@@ -34,6 +34,7 @@ from github_actions.github_actions_utils import gha_append_step_summary
 
 log = logging.getLogger(__name__)
 
+
 def extract_gpu_details(files):
     # Regex: r"gfx(?:\d+[A-Za-z]*|\w+)"
     # Matches "gfx" + digits with optional letters (e.g., gfx90a/gfx103) or a word token (e.g., gfx_ip).
@@ -47,6 +48,7 @@ def extract_gpu_details(files):
         if match:
             gpu_families.add(match.group(0))
     return sorted(list(gpu_families))
+
 
 def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     # Strip any leading or trailing slash from the prefix to standardize the directory path used to filter object.
@@ -111,7 +113,9 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     gpu_families_options = "".join(
         [f'<option value="{family}">{family}</option>' for family in gpu_families]
     )
-    files_js_array = json.dumps([{"name": f[0], "mtime": f[1]} for f in files])
+    files_js_array = json.dumps(
+        [{"name": f[0], "mtime": f[1], "size": f[2]} for f in files]
+    )
     gha_append_step_summary(
         f"Found {len(files)} .tar.gz files in bucket '{bucket_name}'."
     )
@@ -232,6 +236,8 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
 
             function formatBytes(bytes) {{
                 // Human-readable size, base-1024
+                if (bytes == null || !Number.isFinite(Number(bytes))) return '—';
+                bytes = Number(bytes);
                 if (bytes === 0) return '0 B';
                 const k = 1024;
                 const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
@@ -270,8 +276,9 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                 const timeColumn = document.createElement('span');
                 timeColumn.className = 'col-time';
                 const timeText = toUTCStringFromEpochSec(file.mtime);
+                const rawSize = (file.size == null || !Number.isFinite(Number(file.size))) ? 'unknown' : String(file.size);
                 timeColumn.textContent = timeText;
-                timeColumn.title = 'S3 LastModified (UTC): ' + timeText + '\\nRaw size: ' + file.size + ' bytes';
+                timeColumn.title = 'S3 LastModified (UTC): ' + timeText + '\\nRaw size: ' + rawSize + ' bytes';
                 timeColumn.setAttribute('aria-label', 'Time generated ' + timeText);
 
                 // Assemble row
