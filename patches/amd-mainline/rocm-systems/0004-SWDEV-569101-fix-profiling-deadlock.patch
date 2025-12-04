@@ -1,0 +1,34 @@
+From fab10f76e76df8d9dd63e84898b7008db31b2184 Mon Sep 17 00:00:00 2001
+From: Ioannis Assiouras <Ioannis.Assiouras@amd.com>
+Date: Sat, 29 Nov 2025 00:02:39 +0000
+Subject: [PATCH] [clr] SWDEV-569101 - Resolve deadlock caused by graph
+packet batching when profiling is enabled (#2084)
+
+This PR fixes a deadlock in ActiveSignal when profiling and graph
+packet batching is enabled, that is introduced after #1354.
+Added a timestamp check to the signal insertion logic. Previously,
+a new profiling signal was only created when the existing signal
+was still active (signal > 0). Added a second condition signal_list_[temp_id]->ts_ == ts
+to handle the case where the slot is already associated with the current timestamp.
+
+---
+ projects/clr/rocclr/device/rocm/rocvirtual.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/projects/clr/rocclr/device/rocm/rocvirtual.cpp b/projects/clr/rocclr/device/rocm/rocvirtual.cpp
+index 76a40c7667..a364e57bc0 100644
+--- a/projects/clr/rocclr/device/rocm/rocvirtual.cpp
++++ b/projects/clr/rocclr/device/rocm/rocvirtual.cpp
+@@ -440,7 +440,8 @@ hsa_signal_t VirtualGPU::HwQueueTracker::ActiveSignal(hsa_signal_value_t init_va
+   auto temp_id = (current_id_ + 2) % signal_list_.size();
+ 
+   // If GPU is still busy with processing, then add more signals to avoid more frequent stalls
+-  if (Hsa::signal_load_relaxed(signal_list_[temp_id]->signal_) > 0) {
++  if ((Hsa::signal_load_relaxed(signal_list_[temp_id]->signal_) > 0) ||
++      (signal_list_[temp_id]->ts_ == ts)) {
+     std::unique_ptr<ProfilingSignal> signal(new ProfilingSignal());
+     if ((signal != nullptr) && CreateSignal(signal.get())) {
+       // Find valid new index
+-- 
+2.34.1
+
