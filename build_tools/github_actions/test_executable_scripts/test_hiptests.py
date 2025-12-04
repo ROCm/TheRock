@@ -1,0 +1,108 @@
+import logging
+import os
+import shlex
+import subprocess
+from pathlib import Path
+import glob
+import shutil
+import json
+
+THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
+TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
+
+env = os.environ.copy()
+
+def get_test_count():
+    cmd = ["ctest", "--show-only=json-v1"]
+    result = subprocess.run(
+        cmd,
+        cwd=THEROCK_DIR,
+        check=True,
+        capture_output=True,
+    )
+    jdata = json.loads(result.stdout)
+    tests = jdata["tests"]
+    return len(tests)
+
+
+def get_test_range_per_shard(total_test_count: int, total_shards, shard_index):
+    tests_per_shard = int(total_test_count / total_shards)
+    current_index = (tests_per_shard * (shard_index - 1)) + 1
+    end_index = current_index + tests_per_shard - 1
+    if shard_index == total_shards:
+        # Adjust last few tests
+        end_index = total_test_count
+    print(
+        "Shard index: ",
+        shard_index,
+        " total shards: ",
+        total_shards,
+        " tests per shard: ",
+        tests_per_shard,
+        " current index: ",
+        current_index,
+        " to: ",
+        end_index,
+    )
+    return [current_index, end_index]
+
+
+if os.name == 'nt':
+    # hip and comgr dlls need to be copied to the same folder as exectuable
+    dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
+    dlls_to_copy = []
+    catch_tests_path = f"{THEROCK_BIN_DIR}/../catch_tests"
+    for pattern in dlls_pattern:
+        dlls_to_copy.append(glob.glob(os.path.join(f"{THEROCK_BIN_DIR}", pattern)))
+    # convert list of lists to list
+    dlls_to_copy = [item for sublist in dlls_to_copy for item in sublist]
+    for dll in dlls_to_copy:
+        try:
+            shutil.copy(dll, catch_tests_path)
+            print(f"Copied: {dll} to {catch_tests_path}")
+        except Exception as e:
+            print(f"Error copying {file_path}: {e}")
+
+    cmd = [
+        "ctest",
+        "--test-dir",
+        catch_tests_path,
+        "--output-on-failure",
+        "--timeout",
+        "600"
+    ]
+else:
+    hip_library_path = f"{THEROCK_BIN_DIR}/../lib"
+    if "LD_LIBRARY_PATH" in env:
+        env["LD_LIBRARY_PATH"] = f"{hip_library_path}:{env['LD_LIBRARY_PATH']}"
+    else:
+        env["LD_LIBRARY_PATH"] = hip_library_path
+    # Set ROCM Path, to find rocm_agent_enum etc
+    ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+    env["ROCM_PATH"] = str(ROCM_PATH)
+    total_tests = get_test_count()
+    test_range = get_test_range_per_shard(total_tests, int(TOTAL_SHARDS), int(SHARD_INDEX))
+    index_start = test_range[0]
+    index_end = test_range[1]
+
+    cmd = [
+        "sudo",
+        "-E",
+        "ctest",
+        "-I",
+        f"{index_start},{index_end}",
+        "--test-dir",
+        f"{THEROCK_BIN_DIR}/../share/hip/catch_tests",
+        "--output-on-failure",
+        "--repeat",
+        "until-pass:3",
+        "--timeout",
+        "600"
+    ]
+
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
