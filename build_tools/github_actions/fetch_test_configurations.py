@@ -226,14 +226,23 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 5,
     },
-    # libhipcxx tests
-    "libhipcxx": {
-        "job_name": "libhipcxx",
+    # libhipcxx hipcc tests
+    "libhipcxx_hipcc": {
+        "job_name": "libhipcxx_hipcc",
         "fetch_artifact_args": "--libhipcxx --tests",
         "timeout_minutes": 20,
-        "test_script": f"python {_get_script_path('test_libhipcxx.py')}",
+        "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
         "platform": ["linux"],
-        "total_shards": 2,
+        "total_shards": 1,
+    },
+    # libhipcxx hiprtc tests
+    "libhipcxx_hiprtc": {
+        "job_name": "libhipcxx_hiprtc",
+        "fetch_artifact_args": "--libhipcxx --tests",
+        "timeout_minutes": 20,
+        "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
     },
 }
 
