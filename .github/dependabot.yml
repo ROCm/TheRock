@@ -14,7 +14,7 @@ updates:
     directory: "/"
     schedule:
       # 2:00 AM PST → 10:00 UTC
-      cron: "0 10 * * *"
+      cronjob: "0 10 * * *"
     target-branch: "main"
     allow:
       - dependency-name: "rocm-systems"
