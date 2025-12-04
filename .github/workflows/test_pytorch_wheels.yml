@@ -93,11 +93,12 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
+      # TODO: also upload and reference test report together with this logging?
       - name: Summarize workflow inputs
         run: |
           python build_tools/github_actions/summarize_test_pytorch_workflow.py \
             --torch-version=${{ inputs.torch_version }} \
-            --pytorch-ref=${{ inputs.pytorch_version }} \
+            --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }}
 

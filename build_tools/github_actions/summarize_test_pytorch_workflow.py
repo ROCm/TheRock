@@ -10,7 +10,7 @@ GITHUB_STEP_SUMMARY file.
 The script can be tested locally with inputs like this:
 
     python ./build_tools/github_actions/summarize_test_pytorch_workflow.py \
-      --pytorch-ref=release/2.7 \
+      --pytorch-git-ref=release/2.7 \
       --index-url=https://rocm.nightlies.amd.com/v2-staging \
       --index-subdir=gfx110X-dgpu \
       --torch-version=2.7.1+rocm7.10.0a20251120
@@ -32,47 +32,35 @@ LINE_CONTINUATION = f" {LINE_CONTINUATION_CHAR}\n  "
 
 
 def run(args: argparse.Namespace):
-    summary = ""
-
-    summary += "## PyTorch test environment reproduction instructions\n\n"
-
-    if not is_windows():
-        summary += "(Optional) Run under Docker\n"
-        summary += "```bash\n"
-        summary += "sudo docker run -it" + LINE_CONTINUATION
-        summary += "--device=/dev/kfd --device=/dev/dri" + LINE_CONTINUATION
-        summary += (
-            "--ipc=host --group-add=video --group-add=render --group-add=110"
-            + LINE_CONTINUATION
-        )
-        summary += "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest\n"
-        summary += "```\n\n"
-        summary += "```bash\n"
-        summary += "# Install extra packages\n"
-        summary += "sudo apt install python3.12-venv -y\n"
-        summary += "```\n\n"
-
-    pytorch_remote_name = "upstream" if args.pytorch_git_ref == "nightly" else "rocm"
     pytorch_repo_org = "pytorch" if args.pytorch_git_ref == "nightly" else "ROCm"
-    summary += "Fetch pytorch source files, including tests\n\n"
-    summary += "* (A) Clone pytorch if starting fresh\n\n"
-    summary += "    ```bash\n"
-    summary += f"    git clone --branch {args.pytorch_git_ref} --origin {pytorch_remote_name} https://github.com/{pytorch_repo_org}/pytorch.git\n"
-    summary += "    ```\n\n"
-    summary += "* (B) Switch to pytorch ref using an existing repository\n\n"
-    summary += "    ```bash\n"
-    summary += "    cd pytorch\n"
-    summary += f"    git remote add {pytorch_remote_name} https://github.com/{pytorch_repo_org}/pytorch.git\n"
-    summary += f"    git fetch {pytorch_remote_name} {args.pytorch_git_ref} && "
-    summary += f"git checkout {pytorch_remote_name}/{args.pytorch_git_ref}\n"
-    summary += "    ```\n\n"
+    pytorch_origin_args = "" if args.pytorch_git_ref == "nightly" else "--origin rocm"
+    pytorch_remote_url = f"https://github.com/{pytorch_repo_org}/pytorch.git"
+    pytorch_web_url = f"https://github.com/{pytorch_repo_org}/pytorch"
+    pytorch_web_url_with_branch = f"{pytorch_web_url}/tree/{args.pytorch_git_ref}"
 
-    summary += "Install torch and test requirements into a venv\n\n"
+    # This report should be as brief as possible while still conveying what
+    # is unique to the given arguments.
+
+    summary = ""
+    summary += "## PyTorch Test Report\n\n"
+
+    # Summary information.
+    summary += f"* torch version: `{args.torch_version}`\n"
+    summary += f"* GPU family: `{args.index_subdir}`\n"
+    summary += f"* Package index: {args.index_url}/{args.index_subdir}\n"
+    summary += f"* PyTorch source code: {pytorch_web_url_with_branch}\n"
+
+    # Link to detailed documentation.
+    summary += "\n"
+    summary += "To reproduce, see [Running/testing PyTorch](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#runningtesting-pytorch) and setup with:"
+    summary += "\n"
+
+    # Simple to copy/paste instructions to get the code and packages.
     summary += "```bash\n"
-    if is_windows():
-        summary += "python -m venv .venv && .venv\Scripts\Activate.bat\n"
-    else:
-        summary += "python3 -m venv .venv && source .venv/bin/activate\n"
+    summary += "# Fetch pytorch source files, including tests:\n"
+    summary += f"git clone --branch {args.pytorch_git_ref} {pytorch_origin_args} {pytorch_remote_url}\n"
+    summary += "\n"
+    summary += "# Install torch and test requirements\n"
     summary += "pip install" + LINE_CONTINUATION
     summary += f"--index-url={args.index_url}/{args.index_subdir}" + LINE_CONTINUATION
     summary += "torch"
@@ -80,13 +68,6 @@ def run(args: argparse.Namespace):
     summary += "\n"
     summary += "pip install -r pytorch/.ci/docker/requirements-ci.txt\n"
     summary += "```\n\n"
-
-    summary += "## PyTorch testing instructions\n\n"
-    summary += "See [Running/testing PyTorch](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#runningtesting-pytorch). "
-    summary += "For example:\n\n"
-    summary += "```bash\n"
-    summary += "PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch\n"
-    summary += "```\n"
 
     gha_append_step_summary(summary)
 
