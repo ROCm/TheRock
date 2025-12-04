@@ -327,8 +327,6 @@ platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
-
-
 # --- Math Libraries (per-arch) ---
 
 [artifacts.blas]
