@@ -129,7 +129,7 @@ The following table shows the meta packages that will be available:
 | rocm-openmp |  | Components needed to build OpenMP |
 | rocm-core-sdk |  | Everything |
 
-### Package Naming
+### Package Naming for no duplication with distors
 
 The four possible naming strategies for packages were analyzed:
 
@@ -137,11 +137,10 @@ The four possible naming strategies for packages were analyzed:
 2. Prefix `amdi-`: Legally the safest option as no one can claim to AMD incorporated
 3. Suffix `-amd`
 4. Do nothing: Manage through versioning
+5. Prefix `amd`
 
-Note that `amd-smi` isn't very applicable to the first three proposed naming strategies and would possibly have to be an exception to this standardization.
-
-TheRock must adopt `amdi-<package>` for Linus distro-native package disambiguation unless Legal or Branding teams choose an alternative.
-This avoids namespace sonflicts with distro-provided packages.
+TheRock should adopt `amdrocm-<package>` for Linux distro-native package disambiguation unless Legal or Branding teams choose an alternative.
+This avoids namespace sonflicts with distro-provided packages. Distros will use `rocm-<package>`
 
 ### Device-Specific Architecture Packages
 
