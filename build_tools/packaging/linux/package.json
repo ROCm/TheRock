@@ -2741,8 +2741,8 @@
       "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm host BLAS libraries 64 bit indices",
-    "Description_Long": "ROCm host BLAS libraries 64 bit indices",
+    "Description_Short": "ROCm host BLAS libraries with 64-bit (ILP64) integers",
+    "Description_Long": "ROCm host BLAS libraries with 64-bit (ILP64) integers",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -2755,7 +2755,7 @@
       "doc",
       "run"
     ],
-    "Artifact": "host-blas-64",
+    "Artifact": "host-blas",
     "Gfxarch": "False",
     "Composite": "Yes"
   },
