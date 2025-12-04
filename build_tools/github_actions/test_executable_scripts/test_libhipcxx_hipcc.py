@@ -70,51 +70,20 @@ except FileNotFoundError as e:
     raise
 
 
-if SHARD_INDEX == 1: # hipcc
-  # Configure with CMake
-  cmd = [
-    "cmake",
-    "..",
-    f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    #f"-DCMAKE_HIP_COMPILER={THEROCK_BIN_PATH}/hipcc",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
-    #f"-DCMAKE_CXX_FLAGS=--rocm-path={OUTPUT_ARTIFACTS_PATH}",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
-    "-GNinja",
-  ]
-elif SHARD_INDEX == 2: # hiprtc
-  cmd = [
-    "cmake",
-    "..",
-    f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    #f"-DCMAKE_HIP_COMPILER={THEROCK_BIN_PATH}/hipcc",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
-    #f"-DCMAKE_CXX_FLAGS=--rocm-path={OUTPUT_ARTIFACTS_PATH}",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
-    "-DLIBHIPCXX_TEST_WITH_HIPRTC=ON",
-    "-GNinja",
-  ]
+# Configure with CMake
+cmd = [
+  "cmake",
+  "..",
+  f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
+  f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
+  f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+  "-GNinja",
+]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
-if SHARD_INDEX == 2: # build hiprtcc
-  cmd = [
-    "ninja",
-  ]
-
-  logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
-  subprocess.run(cmd, check=True, env=environ_vars)
-
 # Run the tests using lit
-# If smoke tests are enabled, we run smoke tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    # For smoke tests, we could filter specific tests if needed
-    # For now, run all tests but could be customized later
-    pass
-
 cmd = [
     "ninja",
     "check-hipcxx"
