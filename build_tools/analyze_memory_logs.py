@@ -38,7 +38,7 @@ class MemoryLogAnalyzer:
             print(f"[ERROR] Log directory not found: {self.log_dir}", file=sys.stderr)
             return False
 
-        log_files = list(self.log_dir.glob("*.json"))
+        log_files = list(self.log_dir.glob("*.json")) + list(self.log_dir.glob("*.jsonl"))
 
         if not log_files:
             print(f"[!] No log files found in {self.log_dir}", file=sys.stderr)

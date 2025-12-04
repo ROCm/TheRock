@@ -156,7 +156,7 @@ jobs:
           # Start memory monitor in background
           python build_tools/memory_monitor.py \
             --phase "Build Phase" \
-            --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.json" \
+            --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
             --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
 
           # Capture PID
