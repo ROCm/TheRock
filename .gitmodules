@@ -41,10 +41,6 @@
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
 	branch = amd-mainline
-[submodule "amdsmi"]
-	path = base/amdsmi
-	url = https://github.com/ROCm/amdsmi.git
-	branch = amd-staging
 [submodule "amd-mesa"]
 	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
 	url = https://github.com/ROCm/mesa-fork.git
