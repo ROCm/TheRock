@@ -59,9 +59,11 @@ Where:
 A softlink must exist as a path to the latest rocm and to the latest rocm minor release for a major release:
 
 ```
-/opt/rocm/core/ -> /opt/rocm/core-8.1
-/opt/rocm/core-8 -> /opt/rocm/core-8.1
+/opt/rocm/core/ -> /opt/rocm/core-8.2.0
+/opt/rocm/core-8 -> /opt/rocm/core-8.2.0
 ```
+
+The two options for the softlinks as shown above allow users to either specify the major release and pull the latest minor and patch release of that version or to just pull the latest release by not specifiying the version.
 
 The softlinks allow for an independent directory structure for ROCm expansions which must be in the following formating:
 
@@ -140,7 +142,7 @@ The four possible naming strategies for packages were analyzed:
 5. Prefix `amd`
 
 TheRock should adopt `amdrocm-<package>` for Linux distro-native package disambiguation unless Legal or Branding teams choose an alternative.
-This avoids namespace sonflicts with distro-provided packages. Distros will use `rocm-<package>`
+This avoids namespace conflicts with distro-provided packages. Distros will use `rocm-<package>`
 
 ### Device-Specific Architecture Packages
 
@@ -254,8 +256,8 @@ Prereleases:
 | :------------- | :------------- | :------------- |
 | Python | X.Y.ZrcN | 7.9.0rc0 |
 | Tarball | X.Y.ZrcN | 7.9.0rc0 |
-| Fedora (rpm) | X.Y.Z~rcN | 7.9.0~rc0 |
-| Debian (deb) | X.Y.Z~preN | 7.9.0~pre0 |
+| Fedora (rpm) | X.Y.Z-rcN | 7.9.0-rc0 |
+| Debian (deb) | X.Y.Z-preN | 7.9.0-pre0 |
 
 Nightly Releases:
 
@@ -263,8 +265,8 @@ Nightly Releases:
 | :------------- | :------------- | :------------- |
 | Python | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
 | Tarball | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
-| Fedora (rpm) | X.Y.Z~gitYYYYMMDD.${hash}-N | 7.10.0~git20251006.a961743280c591a1b8fe197ddf2928abd2f53a86-1 |
-| Debian (deb) | X.Y.Z~YYYYMMDD | 7.10.0~20251006 |
+| Fedora (rpm) | X.Y.Z-aYYYYMMDD-N | 7.10.0-0a20251006-1 |
+| Debian (deb) | X.Y.Z-aYYYYMMDD | 7.10.0-0a20251006 |
 
 TheRock must automate all formats.
 
