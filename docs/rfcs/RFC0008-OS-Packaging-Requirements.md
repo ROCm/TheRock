@@ -174,30 +174,30 @@ Package granularity will be increased with ROCm 8.0. Developmentt packages are t
 
 | Name | Dev package components only | Runtime packages | Source package inclusion only |
 | :------------- | :------------- | :------------- | :------------- |
-| amd-smi | | amd-smi | |
-| rocm-llvm |  | amdclang++ (flang and openmp here if not separable) |  |
-| rocm-flang |  | flang |  |
-| rocm-runtimes |  | HIP, ROCR, CLR, runtime compilation, SPIR-V |  |
-| rocm-fft |  | rocFFT, hipFFT, hipFFTW |  |
-| rocm-math |  | Temporary catch all if libraries cannot fix circular dependencies by ROCm 8.0 |  |
-| rocm-blas | hipBLAS-common | rocBLAS, hipBLAS, hipBLASLt, hipSPARSELt |  |
-| rocm-sparse |  | rocSPARSE, hipSPARSE |  |
-| rocm-solver |  | rocSOLVER, hipSOLVER |  |
-| rocm-dnn |  | hipDNN, MIOpen |  |
-| rocm-rand |  | rocRAND, hipRAND |  |
-| rocm-ccl | rocPRIM, rocThrust, hipCUB | libhipcxx |  |
-| rocm-profiler |  | rocm-systems, rocm-compute, rocprofiler-sdk, tracer |  |
-| rocm-profiler-base |  | rocprofiler-sdk, tracer |  |
-| rocm-base |  | AMD-SMI, rocminfo, version (rocm-core) |  |
-| rocm-CK |  |  | CK |
-| rocm-debugger |  | rocgdb |  |
-| rocm-math-comon or rocm-math-dev |  |  | CK, rocWMMA, rocRoller, Tensile, Origami |
-| rocm-hipify |  | HIPIFY |  |
-| rocm-opencl |  | OpenCL |  |
-| rocm-decode |  | rocDecode |  |
-| rocm-jpeg |  | rocJPEG |  |
-| rocm-file |  | hipFile, rocFile (future addition) |  |
-| rocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa, subset of libVA) |  |
+| amdrocm-smi | | amd-smi | |
+| amdrocm-llvm |  | amdclang++ (flang and openmp here if not separable) |  |
+| amdrocm-flang |  | flang |  |
+| amdrocm-runtimes |  | HIP, ROCR, CLR, runtime compilation, SPIR-V |  |
+| amdrocm-fft |  | rocFFT, hipFFT, hipFFTW |  |
+| amdrocm-math |  | Temporary catch all if libraries cannot fix circular dependencies by ROCm 8.0 |  |
+| amdrocm-blas | hipBLAS-common | rocBLAS, hipBLAS, hipBLASLt, hipSPARSELt |  |
+| amdrocm-sparse |  | rocSPARSE, hipSPARSE |  |
+| amdrocm-solver |  | rocSOLVER, hipSOLVER |  |
+| amdrocm-dnn |  | hipDNN, MIOpen |  |
+| amdrocm-rand |  | rocRAND, hipRAND |  |
+| amdrocm-ccl | rocPRIM, rocThrust, hipCUB | libhipcxx |  |
+| amdrocm-profiler |  | rocm-systems, rocm-compute, rocprofiler-sdk, tracer |  |
+| amdrocm-profiler-base |  | rocprofiler-sdk, tracer |  |
+| amdrocm-base |  | AMD-SMI, rocminfo, version (rocm-core) |  |
+| amdrocm-CK |  |  | CK |
+| amdrocm-debugger |  | rocgdb |  |
+| amdrocm-math-comon or rocm-math-dev |  |  | CK, rocWMMA, rocRoller, Tensile, Origami |
+| amdrocm-hipify |  | HIPIFY |  |
+| amdrocm-opencl |  | OpenCL |  |
+| amdrocm-decode |  | rocDecode |  |
+| amdrocm-jpeg |  | rocJPEG |  |
+| amdrocm-file |  | hipFile, rocFile (future addition) |  |
+| amdrocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa, subset of libVA) |  |
 
 ## Python Packaging Requirements
 
