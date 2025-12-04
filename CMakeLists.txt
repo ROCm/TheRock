@@ -217,7 +217,6 @@ option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THERO
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
-option(THEROCK_ENABLE_FUSILLI_PLUGIN "Build fusilli plugin" ON)
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
@@ -283,15 +282,6 @@ therock_add_feature(SOLVER
   DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
   REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
-
-
-if(NOT WIN32)
-  therock_add_feature(FUSILLI_PLUGIN
-    GROUP FUSILLI_PLUGIN
-    DESCRIPTION "Enables the Fusilli plugin project"
-    REQUIRES COMPILER HIPDNN HIP_RUNTIME
-  )
-endif()
 
 # Finalize all feature flags.
 therock_finalize_features()
@@ -424,7 +414,7 @@ add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 
 # IREE and Fusilli are required by the Fusilli plugin
-if(NOT WIN32 AND THEROCK_ENABLE_FUSILLI_PLUGIN)
+if(THEROCK_ENABLE_FUSILLI_PLUGIN)
   add_subdirectory(iree-libs)
 endif()
 

@@ -43,7 +43,6 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-<<<<<<< HEAD
 def get_projects_from_topology(stage: str) -> List[str]:
     """Get submodule names for a build stage from BUILD_TOPOLOGY.toml."""
     from _therock_utils.build_topology import BuildTopology
