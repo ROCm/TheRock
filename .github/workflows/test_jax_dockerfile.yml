@@ -16,6 +16,7 @@ on:
         required: false
         type: string
       jax_plugin_branch:
+        required: true
         description: JAX plugin branch to checkout
         type: string
         default: "rocm-jaxlib-v0.6.0"
@@ -36,7 +37,7 @@ on:
       jax_plugin_branch:
         description: JAX plugin branch to checkout to use for test scripts
         type: string
-        default: "rocm-jaxlib-v0.6.0"
+        default: "rocm-jaxlib-v0.8.0"
 
 permissions:
   contents: read
