@@ -28,6 +28,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_memory:
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -48,6 +51,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_memory:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -145,8 +151,58 @@ jobs:
           ccache -z
           python3 build_tools/github_actions/build_configure.py
 
+      - name: Start memory monitoring
+        if: ${{ inputs.monitor_memory }}
+        id: memory-monitor
+        shell: bash
+        continue-on-error: true
+        run: |
+          # Create logs directory in BUILD_DIR
+          mkdir -p "${{ env.BUILD_DIR }}/logs"
+
+          # Start memory monitor in background
+          python build_tools/memory_monitor.py \
+            --phase "Build Phase" \
+            --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
+            --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
+
+          # Capture PID
+          MONITOR_PID=$!
+          echo "monitor-pid=$MONITOR_PID" >> $GITHUB_OUTPUT
+          echo "Memory monitoring started with PID: $MONITOR_PID"
+          sleep 2
+
       - name: Build therock-archives and therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+        run: |
+          cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+
+      - name: Stop memory monitoring
+        if: ${{ always() && inputs.monitor_memory && steps.memory-monitor.outputs.monitor-pid }}
+        shell: bash
+        continue-on-error: true
+        env:
+          MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
+        run: |
+          echo "Stopping memory monitor (PID: $MONITOR_PID)"
+
+          # Send interrupt signal to stop monitoring gracefully
+          if kill -0 $MONITOR_PID 2>/dev/null; then
+            kill -SIGINT $MONITOR_PID
+            sleep 2
+            # Force kill if still running
+            kill -9 $MONITOR_PID 2>/dev/null || true
+          else
+            # Fallback to taskkill on Windows (if bash kill doesn't work)
+            taskkill //PID $MONITOR_PID //F 2>/dev/null || true
+          fi
+
+          echo "Memory monitor stopped"
+
+          # Display the monitor output
+          if [ -f "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" ]; then
+            echo "=== Memory Monitor Output ==="
+            cat "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt"
+          fi
 
       - name: Report
         if: ${{ !cancelled() }}
