@@ -115,7 +115,8 @@ artifact_groups = [
     "third-party-libs",
     "hip-runtime",
     "opencl-runtime",
-    "profiler-core"
+    "profiler-core",
+    "rocrtst"
 ]
 
 [build_stages.math-libs]
@@ -325,6 +326,8 @@ type = "target-neutral"
 platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
+
+
 
 # --- Math Libraries (per-arch) ---
 
