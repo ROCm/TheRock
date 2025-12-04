@@ -249,14 +249,36 @@ def get_system_info() -> Dict[str, str]:
     return info
 
 
-def generate_system_info_html() -> str:
-    """Generate HTML for system information section."""
+def calculate_wall_time(tasks: List[Task]) -> int:
+    """Calculate wall clock time from earliest start to latest end."""
+    if not tasks:
+        return 0
+    min_start = min(task.start for task in tasks)
+    max_end = max(task.end for task in tasks)
+    return max_end - min_start
+
+
+def format_time_human(ms: int) -> str:
+    """Format milliseconds to human readable time (e.g., 1h 23.5m or 45.32 min)."""
+    minutes = ms / 60000
+    hours = int(minutes // 60)
+    remaining_minutes = minutes % 60
+    if hours > 0:
+        return f"{hours}h {remaining_minutes:.1f}m"
+    return f"{minutes:.2f} min"
+
+
+def generate_system_info_html(tasks: List[Task]) -> str:
+    """Generate HTML for build information section."""
     info = get_system_info()
+    wall_time_str = format_time_human(calculate_wall_time(tasks))
+
     return f"""<div class="system-info">
-    <h3>Build Server Information</h3>
+    <h3>Build Information</h3>
     <p>CPU: <span>{info['cpu_model']}</span></p>
     <p>CPU Cores: <span>{info['cpu_cores']}</span></p>
     <p>Memory: <span>{info['memory_gb']} GB</span></p>
+    <p>Build Duration: <span>{wall_time_str}</span></p>
 </div>
 """
 
@@ -305,7 +327,7 @@ def generate_html_table(title: str, headers: List[str], rows: List[tuple]) -> st
     return "\n".join(lines) + "\n"
 
 
-def generate_report(projects: Dict, output_file: Path):
+def generate_report(projects: Dict, tasks: List[Task], output_file: Path):
     """Generate HTML report from analyzed project data."""
     # ROCm Components table
     rocm_data = projects.get(CATEGORY_ROCM, {})
@@ -348,8 +370,8 @@ def generate_report(projects: Dict, output_file: Path):
         dep_rows,
     )
 
-    # Generate system info
-    system_html = generate_system_info_html()
+    # Generate build info (system info + build times)
+    system_html = generate_system_info_html(tasks)
 
     # Load template and generate output
     template_path = Path(__file__).resolve().parent / "report_build_time_template.html"
@@ -391,7 +413,7 @@ def main():
 
     output_file = args.output or args.build_dir / "logs" / "build_time_analysis.html"
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    generate_report(projects, output_file)
+    generate_report(projects, tasks, output_file)
 
 
 if __name__ == "__main__":
