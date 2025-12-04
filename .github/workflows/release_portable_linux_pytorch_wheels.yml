@@ -79,6 +79,8 @@ permissions:
   id-token: write
   contents: read
 
+run-name: Release portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
+
 jobs:
   release:
     name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
