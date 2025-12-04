@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       s3_subdir:
@@ -27,7 +27,7 @@ on:
         required: true
         type: string
       rocm_version:
-        description: ROCm version to pip install
+        description: ROCm version to pip install (e.g. "7.10.0a20251124")
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
@@ -48,7 +48,7 @@ on:
           - gfx950-dcgpu
         default: gfx1151
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       s3_subdir:
@@ -68,7 +68,7 @@ on:
         type: string
         default: "https://rocm.devreleases.amd.com/v2-staging"
       rocm_version:
-        description: ROCm version to pip install
+        description: ROCm version to pip install (e.g. "7.10.0a20251124")
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
