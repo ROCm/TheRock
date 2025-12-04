@@ -387,12 +387,12 @@ also install `jaxlib`, `jax-rocm7-plugin`, and `jax-rocm7-pjrt`.
 >
 > | jaxlib version | jax-rocm7-plugin version | jax-rocm7-pjrt version |
 > | -------------- | ------------------------ | ---------------------- |
-> | 0.7.1          | 0.7.1                    | 0.7.1                  |
+> | 0.8.0          | 0.8.0                    | 0.8.0                  |
 >
-> For example, `jax` 0.7.1 and compatible wheels can be installed by specifying
+> For example, `jax` 0.8.0 and compatible wheels can be installed by specifying
 >
 > ```
-> jax-rocm7-plugin==0.7.1 jax-rocm7-pjrt==0.7.1 jaxlib==0.7.1
+> jax-rocm7-plugin==0.8.0 jax-rocm7-pjrt==0.8.0 jaxlib==0.8.0
 > ```
 >
 > See also
@@ -413,70 +413,16 @@ Supported devices in this family:
 | Product Name  | GFX Target |
 | ------------- | ---------- |
 | MI300A/MI300X | gfx942     |
+Set the desired JAX and ROCm versions as variables:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
-```
+JAX_VERSION=0.8.0
+ROCM_VERSION=7.10.0a20251109
 
-#### jax for gfx950-dcgpu
-
-Supported devices in this family:
-
-| Product Name  | GFX Target |
-| ------------- | ---------- |
-| MI350X/MI355X | gfx950     |
-
-```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
-```
-
-#### jax for gfx110X-dgpu
-
-Supported devices in this family:
-
-| Product Name                       | GFX Target |
-| ---------------------------------- | ---------- |
-| AMD RX 7900 XTX                    | gfx1100    |
-| AMD RX 7800 XT                     | gfx1101    |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    |
-
-```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
-```
-
-#### jax for gfx1151
-
-Supported devices in this family:
-
-| Product Name        | GFX Target |
-| ------------------- | ---------- |
-| AMD Strix Halo iGPU | gfx1151    |
-
-```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
-```
-
-#### jax for gfx120X-all
-
-Supported devices in this family:
-
-| Product Name     | GFX Target |
-| ---------------- | ---------- |
-| AMD RX 9060 / XT | gfx1200    |
-| AMD RX 9070 / XT | gfx1201    |
-
-```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  --pre jax-rocm7-pjrt jax-rocm7-plugin jaxlib
+pip install --index-url "https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/" \
+  "jaxlib==${JAX_VERSION}+rocm${ROCM_VERSION}" \
+  "jax-rocm7-plugin==${JAX_VERSION}+rocm${ROCM_VERSION}" \
+  "jax-rocm7-pjrt==${JAX_VERSION}+rocm${ROCM_VERSION}"
 ```
 
 ## Installing from tarballs

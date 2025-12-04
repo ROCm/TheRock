@@ -3,7 +3,6 @@
 ## Table of Contents
 
 - [Support status](#support-status)
-- [Supported JAX versions](#supported-jax-versions)
 - [Build instructions](#build-instructions)
 - [Build jax_rocmX_plugin and jax_rocmX_pjrt wheels instructions](#build-jax_rocmx_plugin-and-jax_rocmx_pjrt-wheels-instructions)
 - [Developer Setup](#developer-setup)
@@ -29,42 +28,56 @@ and thus leave less room for interpretation than in upstream repositories.
 We support building various Jax versions compatible with the latest ROCm
 sources and release packages.
 
-Support for the latest upstream JAX code is provided via the `master` branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax), as well as the stable `rocm-jaxlib-v0.7.1` release branch. Developers can build using either the `master` or `rocm-jaxlib-v0.7.1` branches to suit their requirements.
+Support for JAX is provided via the stable `rocm-jaxlib-v0.8.0` release branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax). Developers can build using the `rocm-jaxlib-v0.8.0` branch to suit their requirements.
 
-See the following table for how each version is supported:
+See the following table for supported version:
 
 | JAX version | Linux                                                                                                                                   | Windows          |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 0.7.1       | ✅ Supported<br><ul><li>[ROCm/rocm-jax `rocm-jaxlib-v0.7.1` branch](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.7.1)</li></ul> | ❌ Not supported |
+| 0.8.0       | ✅ Supported<br><ul><li>[ROCm/rocm-jax `rocm-jaxlib-v0.8.0` branch](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.0)</li></ul> | ❌ Not supported |
 
 ## Build instructions
 
-Using build instructions like
+This repository builds the ROCm-enabled JAX artifacts:
 
-For the most up-to-date and detailed build steps, please refer to the [Quick Build instructions in the ROCm JAX repository](https://github.com/ROCm/rocm-jax/tree/master?tab=readme-ov-file#quickbuild). Follow those steps to ensure a successful build process.
+- jaxlib (ROCm)
+- jax_rocmX_pjrt (PJRT runtime for ROCm)
+- jax_rocmX_plugin (JAX runtime plugin for ROCm)
 
-## Build jax_rocmX_plugin and jax_rocmX_pjrt wheels instructions
+We support simple flow. The path uses TheRock tarballs for ROCm install.
 
-To build `jax_rocmX_plugin` and `jax_rocmX_pjrt` wheels, please follow the official instructions provided in the ROCm JAX repository. The most accurate and up-to-date build steps are documented at [BUILDING.md#building](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md#building). Refer to this guide for environment setup, build commands, and troubleshooting tips.
+### Prerequisites
 
-## Developer Setup
+- **OS**: Linux (supported distributions with ROCm)
+- **Python**: 3.12 recommended
+- **Compiler**: clang (provided via TheRock tarball or system)
 
-For JAX development setup and the latest instructions, please refer to the [ROCm JAX DEVSETUP guide](https://github.com/ROCm/rocm-jax/blob/master/DEVSETUP.md). If you want to run JAX locally, follow the steps outlined in that document for environment preparation and build commands.
+### Steps
 
-## Running/testing JAX
+- Checkout rocm-jax
 
-After building the wheels, you should verify their functionality by running the recommended tests. Please follow the instructions provided in the [ROCm JAX BUILDING.md - Running Tests section](https://github.com/ROCm/rocm-jax/blob/master/BUILDING.md#3-running-tests) to ensure your build passes all required checks. This guide covers environment setup, test commands, and troubleshooting tips for validating your wheel builds.
+  - `git clone https://github.com/ROCm/rocm-jax.git`
+  - `cd rocm-jax`
 
-## Nightly releases
+- Choose versions and TheRock Source
 
-### Gating releases with JAX tests
+  - Pick Python version
+  - Pick a TheRock tarball URL, a local tarball file path or a directory containing ROCm installation
+  - the TAR url paths for nightly `https://rocm.nightlies.amd.com/tarball/`
 
-With passing builds, we upload `jaxlib`, `jax_pjrt`, and `jax_plugin` wheels to subfolders of the "v2-staging" directory in the nightly release S3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
+- Build all wheels using a tarball URL:
 
-Only after passing JAX tests do we promote validated wheels to the "v2" directory in the nightly release S3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
+  ```bash
+  python3 build/ci_build \
+  --compiler=clang \
+  --python-versions="3.12" \
+  --rocm-version="<rocm_version>" \
+  --therock-path="<tar.gz path>" \
+  dist_wheels
+  ```
 
-If no runner is available: Promotion is blocked by default. Set `bypass_tests_for_releases=true` for exceptional cases under [`amdgpu_family_matrix.py`](/build_tools/github_actions/amdgpu_family_matrix.py)
-
+  example for `therock-path=https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0a20251120.tar.gz`
+  `rocm_version=7.10.0a20251120`
 
 > [!NOTE]
 > We are planning to expand our test coverage and update the testing workflow. Upcoming changes will include running smoke tests, unit tests, and multi-GPU tests using the `pip install` packaging method for improved reliability and consistency.

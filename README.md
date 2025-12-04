@@ -8,7 +8,7 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build pl
 
 TheRock includes:
 
-- Nightly releases of ROCm, PyTorch and Jax
+- Nightly releases of ROCm, PyTorch and JAX
 - A CMake super-project for HIP and ROCm source builds
 - Support for building PyTorch and JAX with ROCm from source
   - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
@@ -20,15 +20,19 @@ TheRock includes:
 
 > [!IMPORTANT]
 > See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-> ROCm, PyTorch and Jax packages.
+> ROCm and PyTorch packages.
 
 ### Nightly release status
 
 Packages and Python wheels:
-| Platform |                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages |                                                                                                                                                                                                                   JAX Python Packages (Experimental) |
-| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+
+| Platform | Prebuilt tarballs and ROCm Python packages                                                                                                                                                                                                                   | PyTorch Python packages                                                                                                                                                                                                                                                        | JAX Python Packages (Experimental)                                                                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Portable Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) | [![Build Linux JAX Wheels (Experimental)](https://github.com/ROCm/TheRock/actions/workflows/build_linux_jax_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_linux_jax_wheels.yml?query=branch%3Amain) |
-| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) |                      [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |                                                                                                                                                                                                                                         |
+| Windows  | [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain)                      | [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain)                      | ❌ Not supported                                                                                                                                                                                                                                  |
+
+> [!NOTE]
+> JAX is not supported on Windows. Only Linux builds are available.
 
 ## Building from source
 
