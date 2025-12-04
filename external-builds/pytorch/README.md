@@ -27,13 +27,14 @@ This incorporates advice from:
 ## Support status
 
 ### Project and feature support status
+
 > [!NOTE]
 > Project support status is defined by the following classifications
-> 1. Supported: Official packages are distributed by the ROCm team
-> 2. Nightly: Included in TheRock-based packages, built nightly
-> 3. Community Supported: Enabled via community contribution
-> 4. Not Supported: Does not build, requires engineering to support
 >
+> 1. Supported: Official packages are distributed by the ROCm team
+> 1. Nightly: Included in TheRock-based packages, built nightly
+> 1. Community Supported: Enabled via community contribution
+> 1. Not Supported: Does not build, requires engineering to support
 
 | Project / feature              | Linux support                                                                     | Windows support  |
 | ------------------------------ | --------------------------------------------------------------------------------- | ---------------- |
