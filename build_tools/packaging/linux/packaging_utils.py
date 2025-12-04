@@ -35,18 +35,11 @@ if not logger.hasHandlers():
 
 from prettytable import PrettyTable
 
-from prettytable import PrettyTable
-import logging
 
-logger = logging.getLogger(__name__)
-
-def print_dict_table1(failure_dict):
+def print_dict_table(failure_dict):
     """
-    Prints a clean failure summary table using PrettyTable with
-    a blank row between each entry.
-
-    Parameters:
-        failure_dict: dict { package_name: failure_reason_string }
+    Prints a clean failure summary table using PrettyTable
+    with visual separation between entries.
     """
 
     if not failure_dict:
@@ -62,37 +55,12 @@ def print_dict_table1(failure_dict):
 
     for idx, (pkg, reason) in enumerate(items):
         clean_reason = reason.strip()
-        table.add_row([pkg, clean_reason])
 
-        # Add a blank separator row between rows
+        # Add a NEWLINE at the end to visually separate entries
         if idx != len(items) - 1:
-            table.add_row(["", ""])   # blank row separator
+            clean_reason += "\n"   # Adds spacing without breaking table borders
 
-    logger.info("\n" + table.get_string())
-
-def print_dict_table(failure_dict):
-    """
-    Prints a clean failure summary table using PrettyTable.
-
-    Parameters:
-        logger: logger object
-        failure_dict: dict { package_name: failure_reason_string }
-    """
-
-    if not failure_dict:
-        logger.info("All packages installed successfully.")
-        return
-
-    table = PrettyTable()
-    table.field_names = ["Package", "Failure Reason"]
-
-    for pkg, reason in failure_dict.items():
-        # Ensure full multiline reason stays as one cell
-        clean_reason = reason.strip()
         table.add_row([pkg, clean_reason])
-
-        # Add blank row for readability
-        table.add_row(["", ""])
 
     logger.info("\n" + table.get_string())
 
@@ -123,6 +91,12 @@ def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
             return obj
 
     return replace_placeholders(copy.deepcopy(raw_config))
+
+# -------------------------------
+# Global OS identification lists
+# -------------------------------
+DEBIAN_OS_IDS = {"ubuntu", "debian"}
+RPM_OS_IDS = {"rhel", "centos", "sles", "almalinux", "fedora", "rocky", "redhat"}
 
 def get_os_id(os_release_path="/etc/os-release"):
     """
@@ -155,13 +129,13 @@ def get_os_id(os_release_path="/etc/os-release"):
     os_id = os_release.get("ID", "").lower()
     os_like = os_release.get("ID_LIKE", "").lower()
 
-    if "ubuntu" in os_id or "debian" in os_like:
-        print("returning debian")
+    if os_id in DEBIAN_OS_IDS or any(x in os_like for x in DEBIAN_OS_IDS):
         return "debian"
-    elif any(x in os_id for x in ["rhel", "centos", "sles"]) or "redhat" in os_like:
+
+    if os_id in RPM_OS_IDS or any(x in os_like for x in RPM_OS_IDS):
         return "rpm"
-    else:
-        return "unknown"
+
+    return "unknown"
 
 
 def print_function_name():

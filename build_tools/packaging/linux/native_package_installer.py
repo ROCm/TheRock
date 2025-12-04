@@ -95,7 +95,6 @@ class PackageInstaller(PackageManagerBase):
         logger.info(f"Destination Directory: {self.dest_dir}")
         logger.info(f"ROCm Version: {self.rocm_version}")
         logger.info(f"Composite Build: {self.composite}")
-        logger.info(f"packages: {self.packages}")
 
         if self.upload == "post":
             self.populate_repo_file(self.run_id)
@@ -196,44 +195,47 @@ class PackageInstaller(PackageManagerBase):
 
         try:
             base_url = self.s3_config.get(self.os_family, {}).get(self.release_type, {}).get("s3")
-            if base_url:
+            logger.info(f"Using S3 URL: {base_url}")
+            if not base_url:
                 logger.info(f"Using S3 URL: {base_url}")
-
-            if self.os_family == "debian":
-                repo_file_path = "/etc/apt/sources.list.d/rocm.list"
-                repo_entry = f"deb [trusted=yes] {base_url}/deb stable main\n"
-
-                logger.info(f"Writing Debian repo entry to {repo_file_path}")
-
-                cmd = f'echo "{repo_entry.strip()}" | sudo tee {repo_file_path} > /dev/null'
-                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-                if result.returncode != 0:
-                    logger.error(
-                        f"Failed to populate repo file: {result.stderr.strip()}"
-                    )
-                    raise RuntimeError(
-                        f"Error populating repo file: {result.stderr.strip()}"
-                    )
-
-                logger.info("Running apt-get update...")
-                subprocess.run(["sudo", "apt-get", "update"], check=False)
-
-            elif os_family == "redhat":
-                logger.info("Detected RPM-based system. Placeholder for repo setup.")
-                repo_file_path = "/etc/yum.repos.d/rocm.repo"
-                repo_entry = (
-                    f"[rocm]\nname=ROCm Repo\nbaseurl={base_url}/rpm\n"
-                    "enabled=1\ngpgcheck=0\n"
-                )
-                with open(repo_file_path, "w") as f:
-                    f.write(repo_entry)
-                subprocess.run(["sudo", "yum", "clean", "all"], check=False)
-                subprocess.run(["sudo", "yum", "makecache"], check=False)
+                logger.info(f"OS_Family: {self.os_family}, release_type: {self.release_type} should not be empty")
             else:
-                logger.warning(
-                    f"Unsupported OS family for repo population: {os_family}"
-                )
+                logger.info(f"Using S3 URL: {base_url}")
+                if self.os_family == "debian":
+                    repo_file_path = "/etc/apt/sources.list.d/rocm.list"
+                    repo_entry = f"deb [trusted=yes] {base_url}/deb stable main\n"
+
+                    logger.info(f"Writing Debian repo entry to {repo_file_path}")
+
+                    cmd = f'echo "{repo_entry.strip()}" | sudo tee {repo_file_path} > /dev/null'
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+                    if result.returncode != 0:
+                        logger.error(
+                            f"Failed to populate repo file: {result.stderr.strip()}"
+                        )
+                        raise RuntimeError(
+                            f"Error populating repo file: {result.stderr.strip()}"
+                        )
+
+                    logger.info("Running apt-get update...")
+                    subprocess.run(["sudo", "apt-get", "update"], check=False)
+
+                elif os_family == "redhat":
+                    logger.info("Detected RPM-based system. Placeholder for repo setup.")
+                    repo_file_path = "/etc/yum.repos.d/rocm.repo"
+                    repo_entry = (
+                        f"[rocm]\nname=ROCm Repo\nbaseurl={base_url}/rpm\n"
+                        "enabled=1\ngpgcheck=0\n"
+                    )
+                    with open(repo_file_path, "w") as f:
+                        f.write(repo_entry)
+                    subprocess.run(["sudo", "yum", "clean", "all"], check=False)
+                    subprocess.run(["sudo", "yum", "makecache"], check=False)
+                else:
+                    logger.warning(
+                        f"Unsupported OS family for repo population: {os_family}"
+                    )
 
         except Exception as e:
             logger.error(f"Error populating repo file: {e}")
