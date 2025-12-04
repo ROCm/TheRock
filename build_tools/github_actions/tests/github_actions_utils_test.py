@@ -46,6 +46,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         "GITHUB_TOKEN not set, skipping test that requires GitHub API access",
     )
     def test_retrieve_bucket_info(self):
+        # TODO(geomin12): work on pulling these run IDs more dynamically
         # https://github.com/ROCm/TheRock/actions/runs/18022609292?pr=1597
         external_repo, bucket = retrieve_bucket_info("ROCm/TheRock", "18022609292")
         self.assertEqual(external_repo, "")
