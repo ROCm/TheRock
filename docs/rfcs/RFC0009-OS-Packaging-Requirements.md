@@ -1,7 +1,7 @@
 ---
 author: Liam Berry (LiamfBerry), Saad Rahim (saadrahim)
 created: 2025-11-14
-modified: 2025-11-24
+modified: 2025-12-04
 status: draft
 ---
 
@@ -99,7 +99,7 @@ The primary OS root folder will include the following distrobutions where the pa
 ASAN packages may be separated into:
 
 ```
-repo.amd.com/rocm/oackages/$OS/$package-type
+repo.amd.com/rocm/packages/$OS/$package-type
 
 Package-type = standard, asan, future variant
 ```
@@ -113,9 +113,9 @@ Using `yum` ROCm Core SDK runtime components and ROCm Core SDK runtime + develop
 ```
 yum install rocm # ROCm 8.0
 yum install rocm-core # ROCm 8.0
-yum install rocm-core-<ver>
+yum install rocm-core<ver>
 yum install rocm-core-devel
-yum install rocm-core-devel-<ver>
+yum install rocm-core-devel<ver>
 ```
 The following table shows the meta packages that will be available:
 
@@ -170,7 +170,7 @@ TheRock must provide a GPU detection interface for package managers.
 
 ## Package Granularity 
 
-Package granularity will be increased with ROCm 8.0. Developmentt packages are the set of files required to build software against the current ROCm Core SDK. Source packages for all of rocm-libraries provides all the files to build the libraries from source in addition to the rocm-rock source package.
+Package granularity will be increased with ROCm 8.0. Development packages contain all the code required to build the libraries including headers, cmakefiles, and static libraries. Source packages for all of rocm-libraries provides all the files to build the libraries from source in addition to the rocm-rock source package.
 
 | Name | Dev package components only | Runtime packages | Source package inclusion only |
 | :------------- | :------------- | :------------- | :------------- |
