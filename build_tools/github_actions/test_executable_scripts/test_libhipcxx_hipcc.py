@@ -88,7 +88,13 @@ logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
 # Run the tests using lit
-cmd = ["ninja", "check-hipcxx"]
+cmd = [
+    "bash",
+    "../ci/build_libhipcxx.sh",
+    "-cmake-options",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc -DCMAKE_HIP_ARCHITECTURES= ",
+]
+
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)
