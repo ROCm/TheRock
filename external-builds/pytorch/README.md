@@ -36,16 +36,24 @@ This incorporates advice from:
 > 1. Community Supported: Enabled via community contribution
 > 1. Not Supported: Does not build, requires engineering to support
 
-| Project / feature              | Linux support                                                                     | Windows support  |
-| ------------------------------ | --------------------------------------------------------------------------------- | ---------------- |
-| torch                          | ✅ Supported                                                                      | ✅ Supported     |
-| torchaudio                     | ✅ Supported                                                                      | ✅ Supported     |
-| torchvision                    | ✅ Supported                                                                      | ✅ Supported     |
-| Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     |
-| torch-scatter                  | ✅ Community Supported                                                            | ❌ Not supported |
-| torch-sparse                   | ✅ Community Supported                                                            | ❌ Not supported |
-| torchcodec                     | ❌ Not supported (see Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)) | ❌ Not supported |
-| FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
+> [!NOTE]
+>
+> | Package Index Domain            | Description                                                                                        |
+> | ------------------------------- | -------------------------------------------------------------------------------------------------- |
+> | https://download.pytorch.org/   | Official upstream releases with instructions at https://pytorch.org/get-started/locally/           |
+> | https://repo.amd.com/rocm/      | Stable releases distributed by AMD and built by TheRock (Built in https://github.com/ROCm/rockrel) |
+> | https://rocm.nightlies.amd.com/ | Nightly releases distributed by AMD and built by TheRock                                           |
+
+| Project / feature              | Linux support                                                                     | Windows support  | Package Index Domain            | Compatibility with TheRock |
+| ------------------------------ | --------------------------------------------------------------------------------- | ---------------- | ------------------------------- | -------------------------- |
+| torch                          | ✅ Supported                                                                      | ✅ Supported     | https://download.pytorch.org/   | ✅                         |
+| torchaudio                     | ✅ Supported                                                                      | ✅ Supported     | https://download.pytorch.org/   | ✅                         |
+| torchvision                    | ✅ Supported                                                                      | ✅ Supported     | https://download.pytorch.org/   | ✅                         |
+| Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     | https://rocm.nightlies.amd.com/ | ✅                         |
+| torch-scatter                  | ✅ Community Supported                                                            | ❌ Not supported | N/A                             | ✅                         |
+| torch-sparse                   | ✅ Community Supported                                                            | ❌ Not supported | N/A                             | ✅                         |
+| torchcodec                     | ❌ Not supported (see Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)) | ❌ Not supported | N/A                             | ❌                         |
+| FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported | N/A                             | ❌                         |
 
 ### Supported PyTorch versions
 
