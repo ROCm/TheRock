@@ -87,15 +87,11 @@ cmd = [
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
-cmd = [
-    "ninja",
-]
-
-logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, check=True, env=environ_vars)
-
 # Run the tests using lit
-cmd = ["ninja", "check-hipcxx"]
+cmd = [
+    "bash",
+    "../ci/hiprtc_libhipcxx.sh",
+]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)
