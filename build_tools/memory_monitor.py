@@ -404,8 +404,8 @@ def main():
     parser.add_argument(
         "--interval",
         type=float,
-        default=float(os.getenv("MEMORY_MONITOR_INTERVAL", "5")),
-        help="Monitoring interval in seconds (default: 5)",
+        default=float(os.getenv("MEMORY_MONITOR_INTERVAL", "30")),
+        help="Monitoring interval in seconds (default: 30)",
     )
 
     parser.add_argument(

@@ -9,7 +9,7 @@ Usage:
     python build_tools/analyze_memory_logs.py
 
     # Analyze specific log directory
-    python build_tools/analyze_memory_logs.py --log-dir build/memory-logs
+    python build_tools/analyze_memory_logs.py --log-dir build/logs
 
     # Generate a detailed report
     python build_tools/analyze_memory_logs.py --detailed
@@ -38,7 +38,7 @@ class MemoryLogAnalyzer:
             print(f"[ERROR] Log directory not found: {self.log_dir}", file=sys.stderr)
             return False
 
-        log_files = list(self.log_dir.glob("*.jsonl"))
+        log_files = list(self.log_dir.glob("*.json"))
 
         if not log_files:
             print(f"[!] No log files found in {self.log_dir}", file=sys.stderr)
@@ -277,8 +277,8 @@ def main():
     parser.add_argument(
         "--log-dir",
         type=Path,
-        default=Path("build/memory-logs"),
-        help="Directory containing memory log files (default: build/memory-logs)",
+        default=Path("build/logs"),
+        help="Directory containing memory log files (default: build/logs)",
     )
 
     parser.add_argument(
@@ -329,7 +329,5 @@ def main():
 
     return 0
 
-
 if __name__ == "__main__":
-
     sys.exit(main())
