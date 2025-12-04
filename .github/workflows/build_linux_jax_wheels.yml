@@ -23,6 +23,21 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout. Defaults to `ROCm/TheRock`."
+        type: string
+        default: "ROCm/TheRock"
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -57,6 +72,18 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront base URL pointing to Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+      jax_ref:
+        description: rocm-jax repository ref/branch to check out
+        type: string
+        default: rocm-jaxlib-v0.8.0
 
 permissions:
   id-token: write
@@ -132,3 +159,43 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+
+  generate_target_to_run:
+    name: Generate target_to_run
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "linux"
+        run: python ./build_tools/github_actions/configure_target_run.py
+
+  test_jax_wheels:
+    name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    needs: [build_jax_wheels, generate_target_to_run]
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/test_linux_jax_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      release_type: ${{ inputs.release_type }}
+      s3_subdir: ${{ inputs.s3_subdir }}
+      package_index_url: ${{ inputs.cloudfront_url }}
+      rocm_version: ${{ inputs.rocm_version }}
+      tar_url: ${{ inputs.tar_url }}
+      python_version: ${{ inputs.python_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
+      jax_ref: ${{ inputs.jax_ref }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
