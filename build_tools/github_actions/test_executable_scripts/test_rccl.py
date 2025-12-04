@@ -15,9 +15,7 @@ class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
         cmd = [
-            f"{THEROCK_BIN_DIR}/rccl-UnitTests",
-            # TODO(#2378): re-enable hanging test
-            "--gtest_filter=-GroupCall.MultiGroupCall",
+            f"{THEROCK_BIN_DIR}/rccl-UnitTests"
         ]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(
