@@ -32,6 +32,9 @@ function(therock_sanitizer_configure
     # TODO: Support ASAN_STATIC to use static ASAN linkage. Shared is almost always the right thing,
     # so make "ASAN" imply shared linkage.
     string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_Fortran_FLAGS \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
+    string(APPEND _stanza "set(HIPCC_COMPILE_FLAGS_APPEND  \"\${HIPCC_COMPILE_FLAGS_APPEND} -pthread\" CACHE STRING \"\" FORCE)\n")
+    string(APPEND _stanza "set(HIPCC_LINK_FLAGS_APPEND \"\${HIPCC_LINK_FLAGS_APPEND} -pthread\" CACHE STRING \"\" FORCE)\n")
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
@@ -40,8 +43,8 @@ function(therock_sanitizer_configure
     # Only enable ASAN for C/C++ for now. Include fortran once the toolchain
     # is available and can be used for portable builds.
     # https://github.com/ROCm/TheRock/issues/1782
-    string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
-    string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    string(APPEND _stanza "add_link_options($<$<OR:$<LINK_LANGUAGE:C,CXX>,$<LINK_LANGUAGE:Fortran>>:-fsanitize=address>\n")
+    string(APPEND _stanza "  $<$<OR:$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>,$<LINK_LANGUAGE:Fortran>>:-shared-libsan>)\n")
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
     string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
