@@ -114,6 +114,11 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Canonical method: `find_package(mpfr)`
 - Import library: `mpfr::mpfr`
 
+## NCurses
+
+- Canonical method: `find_package(ncurses)`
+- Import library: `ncurses::ncurses`
+
 ### numactl
 
 Provides the `libnuma` library. Tools are not included in bundled sysdeps.

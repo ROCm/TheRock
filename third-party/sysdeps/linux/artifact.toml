@@ -59,6 +59,16 @@ include = [
 [components.doc."third-party/sysdeps/linux/mpfr/build/stage"]
 [components.lib."third-party/sysdeps/linux/mpfr/build/stage"]
 
+# NCurses
+# Required by ROCgdb
+[components.dev."third-party/sysdeps/linux/ncurses/build/stage"]
+[components.doc."third-party/sysdeps/linux/ncurses/build/stage"]
+[components.lib."third-party/sysdeps/linux/ncurses/build/stage"]
+# Include the executable contents.
+include = [
+  "**/bin/*"
+]
+
 # numactl
 [components.dev."third-party/sysdeps/linux/numactl/build/stage"]
 [components.lib."third-party/sysdeps/linux/numactl/build/stage"]
