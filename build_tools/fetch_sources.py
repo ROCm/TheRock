@@ -388,6 +388,7 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
+            "amdsmi",
             "half",
             "rccl",
             "rccl-tests",
