@@ -120,7 +120,7 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 6,
+        "total_shards": 5,
         "exclude_family": {
             "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
         },
@@ -181,7 +181,7 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 30,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
         "total_shards": 1,
