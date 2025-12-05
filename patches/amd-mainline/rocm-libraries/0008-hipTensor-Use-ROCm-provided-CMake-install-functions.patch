@@ -1,14 +1,13 @@
-From 0b981da5a8bc65a34810268463a8340e4c46cc7a Mon Sep 17 00:00:00 2001
+From 677f8a4a5aeb124f2444267f3a7edeacc7c7d3fd Mon Sep 17 00:00:00 2001
 From: Estevan Vedovelli <Estevan.Vedovelli@amd.com>
 Date: Fri, 28 Nov 2025 10:28:54 -0500
-Subject: [PATCH] [hipTensor] Use ROCm provided CMake install functions
+Subject: [PATCH 1/3] [hipTensor] Use ROCm provided CMake install functions
 
 ---
- projects/hiptensor/CMakeLists.txt             | 36 ++++++++----
- projects/hiptensor/Config.cmake.in            | 13 -----
- projects/hiptensor/library/src/CMakeLists.txt |  7 ---
- .../contraction_cpu_reference_impl.hpp        | 55 +++++++++----------
- 4 files changed, 52 insertions(+), 59 deletions(-)
+ projects/hiptensor/CMakeLists.txt             | 36 +++++++++++++------
+ projects/hiptensor/Config.cmake.in            | 13 -------
+ projects/hiptensor/library/src/CMakeLists.txt |  7 ----
+ 3 files changed, 25 insertions(+), 31 deletions(-)
  delete mode 100644 projects/hiptensor/Config.cmake.in
 
 diff --git a/projects/hiptensor/CMakeLists.txt b/projects/hiptensor/CMakeLists.txt
@@ -50,12 +49,22 @@ index ff3290022f..ee248f377d 100644
 +    STATIC_DEPENDS
 +        ${PACKAGE_STATIC_DEPENDS}
 +)
--rocm_install(FILES
++
++# Add architecture functions to the ROCm-generated config
++install(CODE "
++    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
++         \"\\n# Include hiptensor supported architectures functions\\n\")
++    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
++         \"include(\\\"\\\${CMAKE_CURRENT_LIST_DIR}/hiptensorSupportedArchitectures.cmake\\\")\\n\")
++")
++
++# Install additional helper files
+ rocm_install(FILES
 -    "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfig.cmake"
 -    "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfigVersion.cmake"
--    "cmake/Functions/hiptensorSupportedArchitectures.cmake"
--    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
--)
+     "cmake/Functions/hiptensorSupportedArchitectures.cmake"
+     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
+ )
 diff --git a/projects/hiptensor/Config.cmake.in b/projects/hiptensor/Config.cmake.in
 deleted file mode 100644
 index 8e5dc0cf5f..0000000000

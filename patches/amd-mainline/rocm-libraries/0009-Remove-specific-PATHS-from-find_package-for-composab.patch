@@ -1,14 +1,15 @@
-From b34cd50bb9d302c1647e3bdf7cd121f7ba1992df Mon Sep 17 00:00:00 2001
+From 5f65643e4b34cc3cbef8d65331021bf41004ad34 Mon Sep 17 00:00:00 2001
 From: Estevan Vedovelli <Estevan.Vedovelli@amd.com>
-Date: Wed, 26 Nov 2025 13:42:17 -0500
-Subject: [PATCH] [hipTensor] Remove PATHS for composable_kernel find_package
+Date: Wed, 3 Dec 2025 13:21:25 -0500
+Subject: [PATCH 2/3] Remove specific PATHS from find_package for
+ composable_kernel
 
 ---
  projects/hiptensor/CMakeLists.txt | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/projects/hiptensor/CMakeLists.txt b/projects/hiptensor/CMakeLists.txt
-index ff3290022f..00b1358a0e 100644
+index ee248f377d..5d82e0c4f5 100644
 --- a/projects/hiptensor/CMakeLists.txt
 +++ b/projects/hiptensor/CMakeLists.txt
 @@ -182,7 +182,7 @@ endif()

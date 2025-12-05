@@ -1,0 +1,38 @@
+From d6743100c10ff7de866c66056f551022efb5553c Mon Sep 17 00:00:00 2001
+From: Estevan Vedovelli <Estevan.Vedovelli@amd.com>
+Date: Fri, 5 Dec 2025 13:43:58 -0500
+Subject: [PATCH 3/3] Remove installation of
+ hiptensorSupportedArchitectures.cmake
+
+---
+ projects/hiptensor/CMakeLists.txt | 14 --------------
+ 1 file changed, 14 deletions(-)
+
+diff --git a/projects/hiptensor/CMakeLists.txt b/projects/hiptensor/CMakeLists.txt
+index 5d82e0c4f5..ddf7e95319 100644
+--- a/projects/hiptensor/CMakeLists.txt
++++ b/projects/hiptensor/CMakeLists.txt
+@@ -233,20 +233,6 @@ rocm_export_targets(
+         ${PACKAGE_STATIC_DEPENDS}
+ )
+ 
+-# Add architecture functions to the ROCm-generated config
+-install(CODE "
+-    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
+-         \"\\n# Include hiptensor supported architectures functions\\n\")
+-    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
+-         \"include(\\\"\\\${CMAKE_CURRENT_LIST_DIR}/hiptensorSupportedArchitectures.cmake\\\")\\n\")
+-")
+-
+-# Install additional helper files
+-rocm_install(FILES
+-    "cmake/Functions/hiptensorSupportedArchitectures.cmake"
+-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
+-)
+-
+ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+ 
+ rocm_create_package(
+-- 
+2.43.0
+
