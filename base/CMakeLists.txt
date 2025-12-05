@@ -3,6 +3,7 @@
 ################################################################################
 
 therock_cmake_subproject_declare(therock-aux-overlay
+  FPRINT_SOURCE_HASH
   EXTERNAL_SOURCE_DIR "aux-overlay"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
