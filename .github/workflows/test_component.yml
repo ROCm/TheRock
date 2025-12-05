@@ -86,6 +86,11 @@ jobs:
         run: |
           python ./build_tools/health_status.py
 
+      - name: Driver / GPU sanity check
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
