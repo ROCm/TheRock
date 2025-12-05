@@ -24,10 +24,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
-    # TODO: Tests do not build properly for explicit targets: Switch to
-    # USE_DIST_AMDGPU_TARGETS once fixed.
-    # See: https://github.com/ROCm/aqlprofile/issues/2
-    DISABLE_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
