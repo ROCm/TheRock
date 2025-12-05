@@ -18,6 +18,7 @@
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
   * BUILD_VARIANT (optional): The build variant to run (ex: release, asan)
+  * ROCM_THEROCK_TEST_RUNNERS: Test runner JSON object, coming from ROCm organization
 
   Environment variables (for pull requests):
   * PR_LABELS (optional) : JSON list of PR label names.
@@ -475,7 +476,9 @@ def matrix_generator(
             print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
             # Add presubmit and postsubmit targets.
-            for target in get_all_families_for_trigger_types(["presubmit", "postsubmit"]):
+            for target in get_all_families_for_trigger_types(
+                ["presubmit", "postsubmit"]
+            ):
                 selected_target_names.append(target)
         else:
             print(
@@ -490,7 +493,9 @@ def matrix_generator(
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
         # For nightly runs, we run all builds and full tests
-        amdgpu_family_info_matrix_all = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
+        amdgpu_family_info_matrix_all = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
+        )
         for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
 

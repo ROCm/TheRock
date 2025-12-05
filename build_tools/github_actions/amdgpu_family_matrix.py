@@ -12,6 +12,7 @@ For presubmit, postsubmit and nightly family selection:
 
 TODO(#2200): clarify AMD GPU family selection
 """
+
 import json
 import os
 
@@ -180,7 +181,7 @@ amdgpu_family_info_matrix_nightly = {
 }
 
 
-def get_test_runner_from_gh_variables():
+def load_test_runner_from_gh_variables():
     """
     As test runner names are frequently updated, we are pulling this data from the ROCm organization variable called "ROCM_THEROCK_TEST_RUNNERS"
 
@@ -192,19 +193,34 @@ def get_test_runner_from_gh_variables():
     2. Parse the JSON string into Python dictionary
     3. Adds the "test-runs-on" key / value in the associated amdgpu_family_info_matrix
     """
-    test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", '{}')
+    test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", "{}")
     test_runner_dict = json.loads(test_runner_json_str)
     for key in test_runner_dict.keys():
         for platform in test_runner_dict[key].keys():
             # Checking in presubmit dictionary
-            if key in amdgpu_family_info_matrix_presubmit and platform in amdgpu_family_info_matrix_presubmit[key]:
-                amdgpu_family_info_matrix_presubmit[key][platform]["test-runs-on"] = test_runner_dict[key][platform]
+            if (
+                key in amdgpu_family_info_matrix_presubmit
+                and platform in amdgpu_family_info_matrix_presubmit[key]
+            ):
+                amdgpu_family_info_matrix_presubmit[key][platform]["test-runs-on"] = (
+                    test_runner_dict[key][platform]
+                )
             # Checking in postsubmit dictionary
-            if key in amdgpu_family_info_matrix_postsubmit and platform in amdgpu_family_info_matrix_postsubmit[key]:
-                amdgpu_family_info_matrix_postsubmit[key][platform]["test-runs-on"] = test_runner_dict[key][platform]
+            if (
+                key in amdgpu_family_info_matrix_postsubmit
+                and platform in amdgpu_family_info_matrix_postsubmit[key]
+            ):
+                amdgpu_family_info_matrix_postsubmit[key][platform]["test-runs-on"] = (
+                    test_runner_dict[key][platform]
+                )
             # Checking in nightly dictionary
-            if key in amdgpu_family_info_matrix_nightly and platform in amdgpu_family_info_matrix_nightly[key]:
-                amdgpu_family_info_matrix_nightly[key][platform]["test-runs-on"] = test_runner_dict[key][platform]
+            if (
+                key in amdgpu_family_info_matrix_nightly
+                and platform in amdgpu_family_info_matrix_nightly[key]
+            ):
+                amdgpu_family_info_matrix_nightly[key][platform]["test-runs-on"] = (
+                    test_runner_dict[key][platform]
+                )
 
 
 def get_all_families_for_trigger_types(trigger_types):
@@ -213,7 +229,7 @@ def get_all_families_for_trigger_types(trigger_types):
     trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
     """
     # Load in test runners from ROCm organization variable "ROCM_THEROCK_TEST_RUNNERS"
-    get_test_runner_from_gh_variables()
+    load_test_runner_from_gh_variables()
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,
