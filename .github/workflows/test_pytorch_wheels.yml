@@ -79,7 +79,6 @@ jobs:
         shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
-      TORCH_VERSION: ${{ inputs.torch_version }}
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
 
     steps:
@@ -93,6 +92,15 @@ jobs:
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: ${{ inputs.python_version }}
+
+      # TODO: also upload and reference test report together with this logging?
+      - name: Summarize workflow inputs
+        run: |
+          python build_tools/github_actions/summarize_test_pytorch_workflow.py \
+            --torch-version=${{ inputs.torch_version }} \
+            --pytorch-git-ref=${{ inputs.pytorch_git_ref }} \
+            --index-url=${{ inputs.package_index_url }} \
+            --index-subdir=${{ inputs.amdgpu_family }}
 
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
@@ -113,9 +121,9 @@ jobs:
       - name: Set up virtual environment
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages torch==${TORCH_VERSION} \
-            --index-url ${{ inputs.package_index_url }} \
-            --index-subdir ${{ inputs.amdgpu_family }} \
+            --packages torch==${{ inputs.torch_version }} \
+            --index-url=${{ inputs.package_index_url }} \
+            --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
 
       - name: Install test requirements
