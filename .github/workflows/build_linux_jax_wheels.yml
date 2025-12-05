@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: true
         type: string
       s3_subdir:
@@ -58,7 +58,7 @@ on:
         type: string
         default: "3.12"
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: true
         type: string
         default: "dev"
