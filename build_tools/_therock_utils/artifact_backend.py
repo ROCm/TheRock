@@ -20,8 +20,17 @@ import shutil
 class ArtifactLocation:
     """Represents an artifact's location in the backend."""
 
-    artifact_key: str  # e.g., "blas_lib_gfx94X.tar.xz"
+    artifact_key: str  # e.g., "blas_lib_gfx94X.tar.zst" or "blas_lib_gfx94X.tar.xz"
     full_path: str  # Backend-specific full path/URI
+
+
+# Supported artifact archive extensions (in order of preference)
+ARTIFACT_EXTENSIONS = (".tar.zst", ".tar.xz")
+
+
+def _is_artifact_archive(filename: str) -> bool:
+    """Check if a filename is a recognized artifact archive."""
+    return any(filename.endswith(ext) for ext in ARTIFACT_EXTENSIONS)
 
 
 class ArtifactBackend(ABC):
@@ -32,10 +41,10 @@ class ArtifactBackend(ABC):
         """List available artifact filenames.
 
         Args:
-            name_filter: Optional artifact name prefix to filter by (e.g., "blas" to match "blas_lib_*.tar.xz")
+            name_filter: Optional artifact name prefix to filter by (e.g., "blas" to match "blas_lib_*")
 
         Returns:
-            List of artifact filenames (e.g., ["blas_lib_gfx94X.tar.xz", "blas_dev_gfx94X.tar.xz"])
+            List of artifact filenames (e.g., ["blas_lib_gfx94X.tar.zst", "blas_dev_gfx94X.tar.xz"])
         """
         pass
 
@@ -76,8 +85,8 @@ class LocalDirectoryBackend(ArtifactBackend):
 
     Directory structure mirrors S3:
         {staging_dir}/run-{run_id}-{platform}/
-            {artifact_name}_{component}_{target_family}.tar.xz
-            {artifact_name}_{component}_{target_family}.tar.xz.sha256sum
+            {artifact_name}_{component}_{target_family}.tar.zst
+            {artifact_name}_{component}_{target_family}.tar.zst.sha256sum
     """
 
     def __init__(self, staging_dir: Path, run_id: str, platform: str = "linux"):
@@ -96,10 +105,10 @@ class LocalDirectoryBackend(ArtifactBackend):
         artifacts = []
         if not self.base_path.exists():
             return artifacts
-        for p in self.base_path.glob("*.tar.xz"):
+        for p in self.base_path.iterdir():
             filename = p.name
-            # Skip sha256sum files
-            if filename.endswith(".sha256sum"):
+            # Skip non-artifact files (also excludes .sha256sum files)
+            if not _is_artifact_archive(filename):
                 continue
             # Apply name filter if provided
             if name_filter is not None and not filename.startswith(f"{name_filter}_"):
@@ -141,7 +150,7 @@ class S3Backend(ArtifactBackend):
 
     S3 path structure:
         s3://{bucket}/{external_repo}{run_id}-{platform}/
-            {artifact_name}_{component}_{target_family}.tar.xz
+            {artifact_name}_{component}_{target_family}.tar.zst
     """
 
     def __init__(
@@ -208,8 +217,8 @@ class S3Backend(ArtifactBackend):
                     filename = key.split("/")[-1]
                 else:
                     filename = key
-                # Skip non-artifact files
-                if not filename.endswith(".tar.xz") or filename.endswith(".sha256sum"):
+                # Skip non-artifact files (also excludes .sha256sum files)
+                if not _is_artifact_archive(filename):
                     continue
                 # Apply name filter if provided
                 if name_filter is not None and not filename.startswith(

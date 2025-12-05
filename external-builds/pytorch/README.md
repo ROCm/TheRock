@@ -173,6 +173,20 @@ mix/match build steps.
 
 ## Running/testing PyTorch
 
+### Prerequisites
+
+On Linux we run automated tests under our
+[`no_rocm_image_ubuntu24_04.Dockerfile`](dockerfiles/no_rocm_image_ubuntu24_04.Dockerfile)
+container. Docker is optional for developers and users. If you want to use our
+test image, run it like so:
+
+```bash
+sudo docker run -it \
+  --device=/dev/kfd --device=/dev/dri \
+  --ipc=host --group-add=video --group-add=render --group-add=110 \
+  ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+```
+
 ### Running ROCm and PyTorch sanity checks
 
 The simplest tests for a working PyTorch with ROCm install are:
@@ -196,9 +210,29 @@ pytest -v smoke-tests
 
 ### Running full PyTorch tests
 
-See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation
+We have a [`run_linux_pytorch_tests.py`](run_linux_pytorch_tests.py) script
+which runs PyTorch unit tests using pytest with additional test exclusion
+capabilities tailored for AMD ROCm GPUs. See the script for detailed
+instructions. Here are a few examples:
 
-<!-- TODO(erman-gurses): update docs here -->
+```bash
+# Basic usage (auto-detect everything):
+python run_linux_pytorch_tests.py
+
+# Custom test selection with pytest -k:
+python run_linux_pytorch_tests.py -k "test_nn and not test_dropout"
+
+# Explicit pytorch repo path (for test sources) and GPU family (for filtering)
+python run_linux_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+```
+
+Tests can also be run by following the ROCm documentation at
+https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation.
+For example:
+
+```bash
+PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
+```
 
 ## Nightly releases
 
