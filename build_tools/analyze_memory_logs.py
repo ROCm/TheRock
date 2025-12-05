@@ -24,13 +24,65 @@ from typing import List, Dict, Any
 from datetime import datetime
 from collections import defaultdict
 
+from build_tools.github_actions.github_actions_utils import gha_append_step_summary
+
 
 class MemoryLogAnalyzer:
     """Analyzes memory logs from build phases."""
 
     def __init__(self, log_dir: Path):
+        """Initialize the memory log analyzer.
+        
+        Args:
+            log_dir: Path to directory containing memory log files.
+            
+        Attributes:
+            phase_data: Dictionary mapping phase names (str) to lists of sample data.
+                Schema for each sample dict:
+                - phase (str): Name of the build phase
+                - memory_percent (float): Memory usage as percentage of total
+                - used_memory_gb (float): Used memory in gigabytes
+                - swap_percent (float): Swap usage as percentage
+                - timestamp (str): ISO format timestamp of the sample
+        """
         self.log_dir = log_dir
-        self.phase_data = defaultdict(list)
+        self._phase_data = defaultdict(list)
+
+    def add_sample(self, phase: str, sample_data: Dict[str, Any]) -> None:
+        """Add a memory sample to a specific phase.
+        
+        Args:
+            phase: Name of the build phase
+            sample_data: Dictionary containing memory metrics for the sample
+        """
+        self._phase_data[phase].append(sample_data)
+
+    def get_phase_samples(self, phase: str) -> List[Dict[str, Any]]:
+        """Get all samples for a specific phase.
+        
+        Args:
+            phase: Name of the build phase
+            
+        Returns:
+            List of sample data dictionaries for the phase
+        """
+        return self._phase_data.get(phase, [])
+
+    def get_all_phases(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Get all phase data.
+        
+        Returns:
+            Dictionary mapping phase names to lists of sample data
+        """
+        return dict(self._phase_data)
+
+    def has_data(self) -> bool:
+        """Check if any phase data has been loaded.
+        
+        Returns:
+            True if phase data exists, False otherwise
+        """
+        return len(self._phase_data) > 0
 
     def load_logs(self):
         """Load all memory log files."""
@@ -55,13 +107,13 @@ class MemoryLogAnalyzer:
                         try:
                             data = json.loads(line.strip())
                             phase = data.get("phase", "Unknown")
-                            self.phase_data[phase].append(data)
+                            self.add_sample(phase, data)
                         except json.JSONDecodeError:
                             continue
             except Exception as e:
                 print(f"[!] Warning: Failed to read {log_file}: {e}", file=sys.stderr)
 
-        return len(self.phase_data) > 0
+        return self.has_data()
 
     def analyze_phase(
         self, phase: str, samples: List[Dict[str, Any]]
@@ -93,7 +145,7 @@ class MemoryLogAnalyzer:
             start = datetime.fromisoformat(analysis["start_time"])
             end = datetime.fromisoformat(analysis["end_time"])
             analysis["duration_seconds"] = (end - start).total_seconds()
-        except Exception:
+        except ValueError:
             analysis["duration_seconds"] = 0
 
         # Determine severity
@@ -111,12 +163,12 @@ class MemoryLogAnalyzer:
 
     def generate_report(self, detailed: bool = False) -> str:
         """Generate a text report of memory usage."""
-        if not self.phase_data:
+        if not self.has_data():
             return "No data to analyze"
 
         # Analyze each phase
         phase_analyses = []
-        for phase, samples in self.phase_data.items():
+        for phase, samples in self.get_all_phases().items():
             analysis = self.analyze_phase(phase, samples)
             if analysis:
                 phase_analyses.append(analysis)
@@ -228,46 +280,42 @@ class MemoryLogAnalyzer:
 
     def write_github_summary(self, phase_analyses: List[Dict[str, Any]]):
         """Write analysis to GitHub Actions step summary."""
-        if "GITHUB_STEP_SUMMARY" not in os.environ:
-            return
+        # Build the markdown summary
+        lines = []
+        lines.append("\n## Memory Usage Analysis\n\n")
+        lines.append("### Peak Memory Usage by Phase\n\n")
+        lines.append("| Phase | Peak Memory | Avg Memory | Peak Swap | Severity |\n")
+        lines.append("|-------|-------------|------------|-----------|----------|\n")
 
-        try:
-            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-                f.write("\n## Memory Usage Analysis\n\n")
-                f.write("### Peak Memory Usage by Phase\n\n")
-                f.write("| Phase | Peak Memory | Avg Memory | Peak Swap | Severity |\n")
-                f.write("|-------|-------------|------------|-----------|----------|\n")
+        for analysis in phase_analyses[:10]:  # Top 10
+            prefix = {
+                "CRITICAL": ":red_circle:",
+                "HIGH": ":orange_circle:",
+                "MEDIUM": ":yellow_circle:",
+                "LOW": ":green_circle:",
+            }.get(analysis["severity"], ":white_circle:")
 
-                for analysis in phase_analyses[:10]:  # Top 10
-                    prefix = {
-                        "CRITICAL": ":red_circle:",
-                        "HIGH": ":orange_circle:",
-                        "MEDIUM": ":yellow_circle:",
-                        "LOW": ":green_circle:",
-                    }.get(analysis["severity"], ":white_circle:")
+            lines.append(
+                f"| {analysis['phase']} | "
+                f"{analysis['max_memory_percent']:.1f}% | "
+                f"{analysis['avg_memory_percent']:.1f}% | "
+                f"{analysis['max_swap_percent']:.1f}% | "
+                f"{prefix} {analysis['severity']} |\n"
+            )
 
-                    f.write(
-                        f"| {analysis['phase']} | "
-                        f"{analysis['max_memory_percent']:.1f}% | "
-                        f"{analysis['avg_memory_percent']:.1f}% | "
-                        f"{analysis['max_swap_percent']:.1f}% | "
-                        f"{prefix} {analysis['severity']} |\n"
-                    )
+        # Add warnings for critical phases
+        critical = [
+            a for a in phase_analyses if a["severity"] in ["CRITICAL", "HIGH"]
+        ]
+        if critical:
+            lines.append("\n### :warning: Phases with High Memory Usage\n\n")
+            for analysis in critical:
+                lines.append(
+                    f"- **{analysis['phase']}**: {analysis['max_memory_percent']:.1f}% peak memory\n"
+                )
 
-                # Add warnings for critical phases
-                critical = [
-                    a for a in phase_analyses if a["severity"] in ["CRITICAL", "HIGH"]
-                ]
-                if critical:
-                    f.write("\n### :warning: Phases with High Memory Usage\n\n")
-                    for analysis in critical:
-                        f.write(
-                            f"- **{analysis['phase']}**: {analysis['max_memory_percent']:.1f}% peak memory\n"
-                        )
-
-                f.write("\n")
-        except Exception as e:
-            print(f"Warning: Failed to write GitHub summary: {e}", file=sys.stderr)
+        summary = "".join(lines)
+        gha_append_step_summary(summary)
 
 
 def main():
@@ -322,7 +370,7 @@ def main():
     # Write GitHub summary if requested
     if args.github_summary:
         phase_analyses = []
-        for phase, samples in analyzer.phase_data.items():
+        for phase, samples in analyzer.get_all_phases().items():
             analysis = analyzer.analyze_phase(phase, samples)
             if analysis:
                 phase_analyses.append(analysis)
