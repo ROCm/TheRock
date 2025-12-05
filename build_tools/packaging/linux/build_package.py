@@ -64,7 +64,6 @@ RPM_CONTENTS_DIR = None
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm"
 
-
 ################### Debian package creation #######################
 def create_deb_package(pkg_name, config: PackageConfig):
     """Create a Debian package.
@@ -372,9 +371,11 @@ def copy_package_contents(source_dir, destination_dir):
         s = os.path.join(source_dir, item)
         d = os.path.join(destination_dir, item)
         if os.path.isdir(s):
-            shutil.copytree(s, d, dirs_exist_ok=True)
+            shutil.copytree(
+                s, d, dirs_exist_ok=True, symlinks=True, ignore_dangling_symlinks=False
+            )
         else:
-            shutil.copy2(s, d)
+            shutil.copy2(s, d, symlinks=True, ignore_dangling_symlinks=False)
 
 
 def package_with_dpkg_build(pkg_dir):
@@ -503,11 +504,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         requires_list = pkg_info.get("RPMRequires", [])
 
-        # Get the packages included by the composite package
-        pkg_list = pkg_info.get("Includes")
-
-        if pkg_list is None:
-            pkg_list = [pkg_name]
+        pkg_list = [pkg_name]
 
         for pkg in pkg_list:
             dir_list = filter_components_fromartifactory(
@@ -718,33 +715,40 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
     print_function_name()
 
     pkg_info = get_package_info(pkg_name)
-    is_composite = is_composite_package(pkg_info)
     sourcedir_list = []
-    component_list = pkg_info.get("Components", [])
-    artifact_prefix = pkg_info.get("Artifact")
-    artifact_subdir = pkg_info.get("Artifact_Subdir")
+
     if is_key_defined(pkg_info, "Gfxarch"):
         artifact_suffix = gfx_arch
     else:
         artifact_suffix = "generic"
 
-    for component in component_list:
-        source_dir = (
-            Path(artifacts_dir) / f"{artifact_prefix}_{component}_{artifact_suffix}"
-        )
-        filename = source_dir / "artifact_manifest.txt"
-        with open(filename, "r", encoding="utf-8") as file:
-            for line in file:
+    artifactory = pkg_info.get("Artifactory")
 
-                match_found = (
-                    isinstance(artifact_subdir, str)
-                    and (artifact_subdir.lower() + "/") in line.lower()
-                ) or is_composite
+    for artifact in artifactory:
+        artifact_prefix = artifact["Artifact"]
 
-                if match_found and line.strip():
-                    print("Matching line:", line.strip())
-                    source_path = source_dir / line.strip()
-                    sourcedir_list.append(source_path)
+        for subdir in artifact["Artifact_Subdir"]:
+            artifact_subdir = subdir["Name"]
+            component_list = subdir["Components"]
+
+            for component in component_list:
+                source_dir = (
+                    Path(artifacts_dir)
+                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                )
+                filename = source_dir / "artifact_manifest.txt"
+                with open(filename, "r", encoding="utf-8") as file:
+                    for line in file:
+
+                        match_found = (
+                            isinstance(artifact_subdir, str)
+                            and (artifact_subdir.lower() + "/") in line.lower()
+                        )
+
+                        if match_found and line.strip():
+                            print("Matching line:", line.strip())
+                            source_path = source_dir / line.strip()
+                            sourcedir_list.append(source_path)
 
     return sourcedir_list
 
