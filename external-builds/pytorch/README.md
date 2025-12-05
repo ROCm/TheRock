@@ -210,20 +210,20 @@ pytest -v smoke-tests
 
 ### Running full PyTorch tests
 
-We have a [`run_linux_pytorch_tests.py`](run_linux_pytorch_tests.py) script
+We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
 which runs PyTorch unit tests using pytest with additional test exclusion
 capabilities tailored for AMD ROCm GPUs. See the script for detailed
 instructions. Here are a few examples:
 
 ```bash
 # Basic usage (auto-detect everything):
-python run_linux_pytorch_tests.py
+python run_pytorch_tests.py
 
 # Custom test selection with pytest -k:
-python run_linux_pytorch_tests.py -k "test_nn and not test_dropout"
+python run_pytorch_tests.py -k "test_nn and not test_dropout"
 
 # Explicit pytorch repo path (for test sources) and GPU family (for filtering)
-python run_linux_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
 ```
 
 Tests can also be run by following the ROCm documentation at
