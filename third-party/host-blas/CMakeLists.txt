@@ -76,7 +76,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_cmake_subproject_activate(therock-host-blas)
 
     therock_test_validate_shared_lib(
-      PATH dist/lib/host-math/lib
+      PATH host-blas/dist/lib/host-math/lib
       LIB_NAMES librocm-openblas.so
     )
 
@@ -117,7 +117,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_cmake_subproject_activate(therock-host-blas-64)
 
     therock_test_validate_shared_lib(
-      PATH dist/lib/host-math/lib
+      PATH host-blas-64/dist/lib/host-math/lib
       LIB_NAMES librocm-openblas64.so
     )
 
