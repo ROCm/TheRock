@@ -2,21 +2,16 @@
 """Tests for memory monitoring functionality."""
 
 import json
-import os
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+import pytest
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-try:
-    import psutil
-except ImportError:
-    print("WARNING: psutil not installed, skipping memory monitor tests")
-    sys.exit(0)
 
 from memory_monitor import MemoryMonitor
 
@@ -53,8 +48,6 @@ def test_memory_stats_collection():
     assert 0 <= stats["memory_percent"] <= 100, "Memory percent should be 0-100"
     assert 0 <= stats["swap_percent"] <= 100, "Swap percent should be 0-100"
 
-    print("[PASS] Memory stats collection test passed")
-
 
 def test_monitoring_loop():
     """Test that monitoring loop runs and collects samples."""
@@ -89,8 +82,6 @@ def test_monitoring_loop():
                 data = json.loads(line)
                 assert "phase" in data
                 assert data["phase"] == "Test Loop"
-
-        print("[PASS] Monitoring loop test passed")
 
     finally:
         if log_file.exists():
@@ -141,45 +132,3 @@ def test_analysis_script():
         assert result.returncode == 0, f"Analysis failed: {result.stderr}"
         assert "MEMORY USAGE ANALYSIS REPORT" in result.stdout
         assert "Test Phase" in result.stdout
-
-        print("[PASS] Analysis script test passed")
-
-
-def main():
-    """Run all tests."""
-    # Only run tests if ACTIONS_RUNNER_DEBUG is set to true
-    if os.environ.get("ACTIONS_RUNNER_DEBUG", "").lower() != "true":
-        print("Skipping memory monitor tests (ACTIONS_RUNNER_DEBUG not set to true)")
-        return 0
-
-    print("Running memory monitor tests...\n")
-
-    tests = [
-        test_memory_stats_collection,
-        test_monitoring_loop,
-        test_analysis_script,
-    ]
-
-    failed = []
-
-    for test in tests:
-        try:
-            test()
-        except AssertionError as e:
-            print(f"[FAIL] {test.__name__} failed: {e}")
-            failed.append(test.__name__)
-        except Exception as e:
-            print(f"[FAIL] {test.__name__} error: {e}")
-            failed.append(test.__name__)
-
-    print(f"\n{'='*60}")
-    if failed:
-        print(f"[FAIL] {len(failed)} test(s) failed: {', '.join(failed)}")
-        return 1
-    else:
-        print(f"[PASS] All {len(tests)} tests passed!")
-        return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
