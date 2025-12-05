@@ -21,10 +21,9 @@ env["GTEST_TOTAL_SHARDS"] = str(int(os.getenv("TOTAL_SHARDS", "1")))
 
 env["LD_LIBRARY_PATH"] = f"../../lib/"
 cmd = "run_tests.sh"
-TEST_DIR = f"{OUTPUT_ARTIFACTS_DIR}/../share/hsa-amd-aqlprofile"
-cmd = f"{OUTPUT_ARTIFACTS_DIR}/../share/hsa-amd-aqlprofile/run_tests.sh"
+cmd = f"{OUTPUT_ARTIFACTS_DIR}/share/hsa-amd-aqlprofile/run_tests.sh"
 
-logging.info(f"++ Exec [{TEST_DIR}]$ {cmd}")
+logging.info(f"++ Exec {cmd}")
 
 subprocess.run(
     cmd,
