@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # repo + dirs
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
+OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR", "")
 env = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
@@ -21,8 +21,8 @@ env["GTEST_TOTAL_SHARDS"] = str(int(os.getenv("TOTAL_SHARDS", "1")))
 
 env["LD_LIBRARY_PATH"] = f"../../lib/"
 cmd = "run_tests.sh"
-TEST_DIR = f"{THEROCK_BIN_DIR}/../share/hsa-amd-aqlprofile"
-cmd = f"{THEROCK_BIN_DIR}/../share/hsa-amd-aqlprofile/run_tests.sh"
+TEST_DIR = f"{OUTPUT_ARTIFACTS_DIR}/../share/hsa-amd-aqlprofile"
+cmd = f"{OUTPUT_ARTIFACTS_DIR}/../share/hsa-amd-aqlprofile/run_tests.sh"
 
 logging.info(f"++ Exec [{TEST_DIR}]$ {cmd}")
 
