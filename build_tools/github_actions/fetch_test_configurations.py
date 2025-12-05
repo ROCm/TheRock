@@ -26,10 +26,15 @@ def _get_script_path(script_name: str) -> str:
     posix_path = platform_path.as_posix()
     return str(posix_path)
 
-def _get_rocmtest_executor():
+def _get_rocmtest_func_executor(test_label):
     executor_path = SCRIPT_DIR / "ROCmTest" / "executors" / "rocm_test_executor.py"
     executor_path = executor_path.as_posix()
-    return str(executor_path)
+    return f"{executor_path} --execute {test_label} -nodb -noart"
+
+def _get_rocmtest_perf_executor(test_label):
+    executor_path = SCRIPT_DIR / "ROCmTest" / "executors" / "rocm_perf_test_executor.py"
+    executor_path = executor_path.as_posix()
+    return f"{executor_path} {test_label} --test_flag 4 --execution_label TheRock --tester TheRock --build true --drun false --no_db --noart"
 
 test_matrix = {
     # BLAS tests
@@ -219,18 +224,45 @@ test_matrix = {
     },
 
     # ROCmTest Automation Non UT tests
+    # Functional Tests
     "amdsmi_ringhangevent": {
         "job_name": "amdsmi_ringhangevent",
         "timeout_minutes": 60,
-        "test_script": f"python3 {_get_rocmtest_executor()} --execute amdsmi_ringhangevent",
+        "test_script": f"python3 {_get_rocmtest_func_executor('amdsmi_ringhangevent')}",
         "platform": ["linux"],
         "total_shards": 1,
+        "exclude_family": {
+            "linux": ["gfx1151"]
+        },
     },
     "CLInfo": {
         "job_name": "CLInfo",
         "timeout_minutes": 2,
-        "test_script": f"python3 {_get_rocmtest_executor()} --execute CLInfo",
+        "test_script": f"python3 {_get_rocmtest_func_executor('CLInfo')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+        "exclude_family": {
+            "linux": ["gfx94x"]
+        },
     },
+    # Performance test
+    "RCCL": {
+        "job_name": "RCCL",
+        "timeout_minutes": 5,
+        "test_script": f"python3 {_get_rocmtest_perf_executor('1f')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    "BabelStream-HIP": {
+        "job_name": "BabelStream-HIP",
+        "timeout_minutes": 20,
+        "test_script": f"python3 {_get_rocmtest_perf_executor('6a14')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+        "exclude_family": {
+            "linux": ["gfx94x"]
+        },
+    }
 }
 
 
