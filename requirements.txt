@@ -1,7 +1,6 @@
 CppHeaderParser>=2.7.4
 build>=1.2.2
 meson>=1.7.0
-psutil>=5.9.0
 python-magic>=0.4.27; platform_system != "Windows"
 PyYAML==6.0.2
 setuptools>=80.9.0
