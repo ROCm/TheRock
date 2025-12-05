@@ -36,6 +36,9 @@ def log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
 
+def debug(*args):
+    print("[DEBUG]", *args)
+    sys.stdout.flush()
 
 def exec(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
@@ -63,6 +66,80 @@ def pin_ck():
         cwd=THEROCK_DIR / "ml-libs" / "composable_kernel",
     )
 
+def get_component_submodules(component: str) -> list[str]:
+    """
+    Returns the list of *actual submodule paths* belonging to the component.
+    Reads .gitmodules to ensure accuracy.
+    """
+    debug(f"Loading submodules for component '{component}' from .gitmodules")
+
+    gitmodules_path = THEROCK_DIR / ".gitmodules"
+    content = gitmodules_path.read_text()
+
+    paths = []
+
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("path = "):
+            sub_path = line.split("=", 1)[1].strip()
+            # Match exactly OR start with component + '/'
+            if sub_path == component or sub_path.startswith(component + "/"):
+                paths.append(sub_path)
+
+    debug(f"Component '{component}' owns submodules: {paths}")
+    return paths
+
+
+def get_submodule_hash(path: str) -> str:
+    """
+    Returns the commit hash for a submodule path.
+    """
+    output = subprocess.check_output(
+        ["git", "submodule", "status", path],
+        cwd=str(THEROCK_DIR),
+        text=True
+    ).strip()
+
+    commit = output.split()[0].lstrip("+ -")
+    return commit
+
+
+def get_hashes_for_component(component: str) -> dict:
+    """
+    Returns {submodule_path: hash} for the component ONLY.
+    """
+    submodules = get_component_submodules(component)
+
+    hashes = {}
+    for sm in submodules:
+        try:
+            h = get_submodule_hash(sm)
+            hashes[sm] = h
+            debug(f"Hash for {sm}: {h}")
+        except Exception as e:
+            debug(f"Failed to read hash for {sm}: {e}")
+
+    return hashes
+
+
+def detect_hash_change(old: dict, new: dict):
+    """
+    Return (old_hash, new_hash, path) for the first changed submodule.
+    Only submodules of the component are considered.
+    """
+    debug("Comparing old/new hashes for component submodules")
+    for path in new:
+        old_h = old.get(path)
+        new_h = new[path]
+
+        debug(f"Comparing {path}: old={old_h}, new={new_h}")
+
+        if old_h != new_h:
+            debug(f"CHANGE DETECTED in {path}: {old_h} -> {new_h}")
+            return old_h, new_h, path
+
+    debug("No changes detected for component")
+    return None, None, None
 
 def parse_components(components: list[str]) -> list[list]:
     arguments = []
@@ -131,6 +208,9 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
             cwd=THEROCK_DIR,
         )
 
+    component = args.components[0]
+    old_hashes = get_hashes_for_component(component)
+
     if system_projects:
         projects_args = ["--system-projects"] + system_projects
     else:
@@ -170,7 +250,28 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
             ["git", "push", "-u", "origin", args.branch_name],
             cwd=THEROCK_DIR,
         )
-
+        new_hashes = get_hashes_for_component(component)
+        old_h, new_h, changed_path = detect_hash_change(old_hashes, new_hashes)
+        if not old_h or not new_h:
+            log("WARNING: No submodule hash changes detected for the component.")
+            pr_title = f"Bump {component} from unknown to unknown"
+        else:
+            pr_title = f"Bump {component} from {old_h[:7]} to {new_h[:7]}"
+        pr_body = f"Bump happened on {datetime.today().strftime('%m%d%Y')}\n\n"
+        pr_body += "### Submodule changes:\n"
+        for sm in new_hashes:
+            pr_body += f"- `{sm}`: {old_hashes.get(sm)} → {new_hashes.get(sm)}\n"
+        # Create PR
+        exec(
+            [
+                "gh", "pr", "create",
+                "--title", pr_title,
+                "--body", pr_body,
+                "--head", args.branch_name,
+                "--base", "main",
+            ],
+            cwd=THEROCK_DIR,
+        )    
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="bump_submodules")
