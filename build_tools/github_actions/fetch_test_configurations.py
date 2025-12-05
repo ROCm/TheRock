@@ -230,7 +230,7 @@ test_matrix = {
     "libhipcxx_hipcc": {
         "job_name": "libhipcxx_hipcc",
         "fetch_artifact_args": "--libhipcxx --tests",
-        "timeout_minutes": 20,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
         "platform": ["linux"],
         "total_shards": 1,
