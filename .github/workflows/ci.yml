@@ -31,10 +31,6 @@ on:
       linux_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
-      monitor_memory:
-        type: boolean
-        description: "If enabled, memory monitoring will be performed during the build"
-        default: false
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
@@ -101,7 +97,6 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
-      monitor_memory: ${{ inputs.monitor_memory == true }}
     permissions:
       contents: read
       id-token: write
@@ -133,7 +128,6 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
-      monitor_memory: ${{ inputs.monitor_memory == true }}
     permissions:
       contents: read
       id-token: write
