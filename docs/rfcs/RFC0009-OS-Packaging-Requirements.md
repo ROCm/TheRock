@@ -256,8 +256,6 @@ Prereleases:
 | :------------- | :------------- | :------------- |
 | Python | X.Y.ZrcN | 7.9.0rc0 |
 | Tarball | X.Y.ZrcN | 7.9.0rc0 |
-| Fedora (rpm) | X.Y.Z-rcN | 7.9.0-rc0 |
-| Debian (deb) | X.Y.Z-preN | 7.9.0-pre0 |
 
 Nightly Releases:
 
@@ -265,10 +263,170 @@ Nightly Releases:
 | :------------- | :------------- | :------------- |
 | Python | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
 | Tarball | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
-| Fedora (rpm) | X.Y.Z-aYYYYMMDD-N | 7.10.0-0a20251006-1 |
-| Debian (deb) | X.Y.Z-aYYYYMMDD | 7.10.0-0a20251006 |
 
 TheRock must automate all formats.
+
+### RPM Package
+RPM packages should follow the file name format as follows
+
+```
+Non-Versioned package
+<package-name>-<package-version>-<release-version>.<arch>.rpm
+
+Versioned package
+<package-name><package-version>-<package-version>-<release-version>.<arch>.rpm
+
+  - <package-name>: The name of the package/module
+  - <package-version>: The version of the package. As defined in following session.
+  - <release-version>: Build no. Github run id should be used in case of TheRock build.
+  - <arch>: The target architecture (x86_64).
+```
+
+## RPM Package Versioning Requirements
+
+# Stable Releases:
+```
+X.Y.Z
+```
+Stable Release Version Examples:
+```
+8.0.0        # Major release
+8.1.0        # Minor release
+8.0.1        # Patch release
+8.0.2        # Patch release
+8.1.1        # Patch release
+
+Potential Extensions:
+8.1.0-1      # Package rebuild (no code change)
+8.1.0.1      # Point release (customer specific releases)
+```
+
+# Prereleases:
+```
+X.Y.Z-rcN
+
+N: release candidate no
+```
+
+# Nightly Releases:
+```
+X.Y.Z~YYYYMMDD
+```
+
+# Dev builds:
+```
+X.Y.Z~YYYYMMDDg<short-git-sha>   # git sha shortened to 8 bytes
+```
+# Package Version Ordering
+Package version in increasing order
+```
+8.1.0~20251201gf689a8e   # Development
+8.1.0~20251202ga123456   # Development
+8.1.0~20251203           # Nightly
+8.1.0~rc1                # Release Candidate 1
+8.1.0~rc2                # Release Candidate 2
+8.1.0                    # Final release
+8.1.1                    # Next patch release
+```
+
+# RPM package samples
+```
+rocm-8.1.0~20251201gf689a8e-1.x86_64.rpm                              # Development build using build no
+rocm-8.1.0~20251201gf689a8e-1234567.x86_64.rpm                        # Development build using github runid
+rocm-8.1.0~20251203-1.x86_64.rpm                                      # Nightly release
+rocm-8.1.0~rc1-1.x86_64.rpm                                           # Release Candidate 1
+rocm-8.1.0~rc2-2345678.x86_64.rpm                                     # Release Candidate 2 using github runid
+rocm-8.1.0-1.x86_64.rpm                                               # Final release
+rocm-8.2.0-3456789.x86_64.rpm                                         # Next Minor release
+rocm8.1.0~20251201gf689a8e-8.1.0~20251201gf689a8e-1.x86_64.rpm        # Versioned Development build using build no
+rocm8.1.0~20251201gf689a8e-8.1.0~20251201gf689a8e-1234567.x86_64.rpm  # Versioned Development build using github runid
+rocm8.1.0~20251203-8.1.0~20251203-1.x86_64.rpm                        # Versioned Nightly release
+rocm8.1.0~rc1-8.1.0~rc1-1.x86_64.rpm                                  # Versioned Release Candidate 1
+rocm8.1.0~rc2-8.1.0~rc2-2345678.x86_64.rpm                            # Versioned Release Candidate 2 using github runid
+rocm8.1.0-8.1.0-1.x86_64.rpm                                          # Versioned Final release
+rocm8.2.0-8.2.0-3456789.x86_64.rpm                                    # Versioned Next Minor release
+```
+
+### Debian Package
+Debian packages should follow the file name format as follows
+
+```
+Non-Versioned package
+<package-name>_<package-version>-<release-version>.<arch>.deb
+
+Versioned package
+<package-name><package-version>_<package-version>-<release-version>_<arch>.deb
+
+  - <package-name>: The name of the package/module
+  - <package-version>: The version of the package. As defined in following session.
+  - <release-version>: Build no. Github run id should be used in case of TheRock build.
+  - <arch>: The target architecture (amd64).
+```
+
+## Debian Package Versioning Requirements
+
+# Stable Releases:
+```
+X.Y.Z
+```
+Stable Release Version Examples:
+```
+8.0.0        # Major release
+8.1.0        # Minor release
+8.0.1        # Patch release
+8.0.2        # Patch release
+8.1.1        # Patch release
+
+Potential Extensions:
+8.1.0-1      # Package rebuild (no code change)
+8.1.0.1      # Point release (customer specific releases)
+```
+
+# Prereleases:
+```
+X.Y.Z-preN
+
+N: release candidate no
+```
+
+# Nightly Releases:
+```
+X.Y.Z~YYYYMMDD
+```
+
+# Dev builds:
+```
+X.Y.Z~devYYYYMMDD
+```
+# Package Version Ordering
+Package version in increasing order
+```
+8.1.0~dev20251201        # Development
+8.1.0~dev20251202        # Development
+8.1.0~20251203           # Nightly
+8.1.0~pre1               # Release Candidate 1
+8.1.0~pre2               # Release Candidate 2
+8.1.0                    # Final release
+8.1.1                    # Next patch release
+```
+
+# Debian package samples
+```
+rocm_8.1.0~20251201gf689a8e-1_amd64.deb                              # Development build using build no
+rocm_8.1.0~20251201gf689a8e-1234567_amd64.deb                        # Development build using github runid
+rocm_8.1.0~20251203-1_amd64.deb                                      # Nightly release
+rocm_8.1.0~pre1-1_amd64.deb                                          # Release Candidate 1
+rocm_8.1.0~pre2-2345678_amd64.deb                                    # Release Candidate 2 using github runid
+rocm_8.1.0-1_amd64.deb                                               # Final release
+rocm_8.2.0-3456789_amd64.deb                                         # Next Minor release
+rocm8.1.0~20251201gf689a8e_8.1.0~20251201gf689a8e-1_amd64.deb        # Versioned Development build using build no
+rocm8.1.0~20251201gf689a8e_8.1.0~20251201gf689a8e-1234567_amd64.deb  # Versioned Development build using github runid
+rocm8.1.0~20251203_8.1.0~20251203-1_amd64.deb                        # Versioned Nightly release
+rocm8.1.0~pre1_8.1.0~pre1-1_amd64.deb                                # Versioned Release Candidate 1
+rocm8.1.0~pre2_8.1.0~pre2-2345678_amd64.deb                          # Versioned Release Candidate 2 using github runid
+rocm8.1.0_8.1.0-1_amd64.deb                                          # Versioned Final release
+rocm8.2.0_8.2.0-3456789_amd64.deb                                    # Versioned Next Minor release
+```
 
 ## Windows Packaging Requirements
 
