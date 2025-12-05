@@ -183,15 +183,9 @@ amdgpu_family_info_matrix_nightly = {
 
 def load_test_runner_from_gh_variables():
     """
-    As test runner names are frequently updated, we are pulling this data from the ROCm organization variable called "ROCM_THEROCK_TEST_RUNNERS"
+    As test runner names are frequently updated, we are pulling the runner label data from the ROCm organization variable called "ROCM_THEROCK_TEST_RUNNERS"
 
-    The ROCm organization variable will look something like below:
-    ROCM_THEROCK_TEST_RUNNERS = '{"gfx110x": { "linux": "linux-gfx110X-gpu-rocm", "windows": "windows-gfx110X-gpu-rocm" }}'
-
-    Flow:
-    1. We retrieve the environment variable from ROCm organization (can be used in any repository in ROCm)
-    2. Parse the JSON string into Python dictionary
-    3. Adds the "test-runs-on" key / value in the associated amdgpu_family_info_matrix
+    For more info, go to 'docs/development/test_runner_info.md'
     """
     test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", "{}")
     test_runner_dict = json.loads(test_runner_json_str)
