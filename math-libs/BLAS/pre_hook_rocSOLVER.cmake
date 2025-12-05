@@ -1,0 +1,5 @@
+if(WIN32)
+    get_filename_component(_rocblas_dir "${CMAKE_BINARY_DIR}/../../rocBLAS/dist" ABSOLUTE)
+    set(ENV{rocBLAS_DIR} "${_rocblas_dir}")
+    message(STATUS "ENV{rocBLAS_DIR} set to: ${_rocblas_dir}")
+endif()
