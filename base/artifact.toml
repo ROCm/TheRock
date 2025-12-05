@@ -3,15 +3,15 @@
 [components.doc."base/half/stage"]
 
 # amdsmi
-[components.dbg."base/amdsmi/stage"]
+[components.dbg."base/stage"]
 optional = "windows"
-[components.dev."base/amdsmi/stage"]
+[components.dev."base/stage"]
 optional = "windows"
-[components.doc."base/amdsmi/stage"]
+[components.doc."base/stage"]
 optional = "windows"
-[components.lib."base/amdsmi/stage"]
+[components.lib."base/stage"]
 optional = "windows"
-[components.run."base/amdsmi/stage"]
+[components.run."base/stage"]
 optional = "windows"
 include = [
   "bin/**",
