@@ -24,6 +24,9 @@ from typing import List, Dict, Any
 from datetime import datetime
 from collections import defaultdict
 
+# Add parent directory to path to allow importing build_tools as a module
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from build_tools.github_actions.github_actions_utils import gha_append_step_summary
 
 
