@@ -63,6 +63,47 @@ def pin_ck():
         cwd=THEROCK_DIR / "ml-libs" / "composable_kernel",
     )
 
+def get_component_submodule_hashes(component: str, cwd: Path):
+    """
+    Returns a dict {submodule_path: commit_hash} for submodules located
+    inside the given component directory.
+    """
+    output = subprocess.check_output(
+        ["git", "submodule", "status"],
+        cwd=str(cwd),
+        text=True
+    )
+
+    results = {}
+    prefix = f"{component}/"
+
+    for line in output.splitlines():
+        parts = line.strip().split()
+        if not parts:
+            continue
+
+        commit = parts[0].lstrip("+ -")
+        path = parts[1]
+
+        if path.startswith(prefix):
+            results[path] = commit
+
+    return results
+
+
+def diff_component_hashes(old: dict, new: dict):
+    """
+    Compute old → new hash changes for submodules in the component.
+    Returns (old_hash, new_hash).
+    If multiple submodules exist, returns the *first changed pair*.
+    """
+    for path in new:
+        old_h = old.get(path)
+        new_h = new[path]
+        if old_h != new_h:
+            return old_h, new_h
+    return None, None
+
 
 def parse_components(components: list[str]) -> list[list]:
     arguments = []
@@ -130,6 +171,10 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
             ["git", "checkout", "-b", args.branch_name],
             cwd=THEROCK_DIR,
         )
+    
+    old_hashes = {}
+    for comp in args.components:
+        old_hashes[comp] = get_component_submodule_hashes(comp, THEROCK_DIR)
 
     if system_projects:
         projects_args = ["--system-projects"] + system_projects
@@ -166,11 +211,54 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         sys.exit(1)
 
     if args.push_branch:
+        # Capture new hashes for each component
+        new_hashes = {}
+        for comp in args.components:
+            new_hashes[comp] = get_component_submodule_hashes(comp, THEROCK_DIR)
+
         exec(
             ["git", "push", "-u", "origin", args.branch_name],
             cwd=THEROCK_DIR,
         )
 
+        # Determine hash changes for the *single component or combined name*
+        component_name = "-".join(args.components)
+
+        old_hash = None
+        new_hash = None
+
+        # Get the first changed pair across requested components
+        for comp in args.components:
+            o, n = diff_component_hashes(old_hashes[comp], new_hashes[comp])
+            if o and n:
+                old_hash, new_hash = o[:7], n[:7]
+                break
+
+        if not old_hash or not new_hash:
+            log("WARNING: Could not detect hash changes for the requested components.")
+            old_hash = "unknown"
+            new_hash = "unknown"
+
+        # PR Title and Body
+        pr_title = f"Bump {component_name} from {old_hash} to {new_hash}"
+        pr_date = datetime.today().strftime("%m%d%Y")
+        pr_body = f"Bump happened on {pr_date}"
+
+        # Create PR with gh
+        exec(
+            [
+                "gh", "pr", "create",
+                "--title", pr_title,
+                "--body", pr_body,
+                "--head", args.branch_name,
+                "--base", "main",        
+                "--reviewer", "ScottTodd",
+                "--reviewer", "marbre",
+                "--reviewer", "geomin12",
+                "--reviewer", "jayhawk-commits",
+            ],
+            cwd=THEROCK_DIR,
+        )
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="bump_submodules")
