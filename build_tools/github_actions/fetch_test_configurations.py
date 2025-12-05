@@ -26,6 +26,10 @@ def _get_script_path(script_name: str) -> str:
     posix_path = platform_path.as_posix()
     return str(posix_path)
 
+def _get_rocmtest_executor():
+    executor_path = SCRIPT_DIR / "ROCmTest" / "executors" / "rocm_test_executor.py"
+    executor_path = executor_path.as_posix()
+    return str(executor_path)
 
 test_matrix = {
     # BLAS tests
@@ -212,6 +216,20 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 5,
+    },
+
+    # ROCmTest Automation Non UT tests
+    "amdsmi_ringhangevent": {
+        "job_name": "amdsmi_ringhangevent",
+        "timeout_minutes": 60,
+        "test_script": f"python3 {_get_rocmtest_executor()} --execute amdsmi_ringhangevent",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    "CLInfo": {
+        "job_name": "CLInfo",
+        "timeout_minutes": 2,
+        "test_script": f"python3 {_get_rocmtest_executor()} --execute CLInfo",
     },
 }
 

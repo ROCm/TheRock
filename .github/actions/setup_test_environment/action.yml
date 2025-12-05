@@ -20,6 +20,9 @@ inputs:
   IS_PR_FROM_FORK:
     description: (boolean) True if this workflow run is from a PR on a fork (often `github.event.pull_request.head.repo.fork`)
     default: false
+  ROCmTest_REPO_PATH:
+    description: (string) Directory to clone the ROCmTest Automation repository
+    default: ${{ github.workspace }}/build_tools/github_actions/test_executable_scripts
 
 runs:
   using: "composite"
@@ -80,3 +83,15 @@ runs:
           --artifact-group=${ARTIFACT_GROUP} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}
+
+    - name: Clone ROCmTest Automation Repository
+      uses: actions/checkout@v6
+      with:
+        repository: ROCm/ROCmTest
+        token: ${{ secrets.ROCmTest_ACCESS_TOKEN }}
+        path: ${{ inputs.ROCmTest_REPO_PATH }}
+
+    - name: Execute ROCmTest Automation Prerequisites
+      shell: bash
+      run: ./install_automation_prerequisites.sh
+      working-directory: ${{ inputs.ROCmTest_REPO_PATH }}
