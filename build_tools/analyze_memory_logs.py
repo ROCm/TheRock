@@ -113,7 +113,11 @@ class MemoryLogAnalyzer:
             except Exception as e:
                 print(f"[!] Warning: Failed to read {log_file}: {e}", file=sys.stderr)
 
-        return self.has_data()
+        if not self.has_data():
+            print(f"[ERROR] No valid memory data found in log files", file=sys.stderr)
+            return False
+
+        return True
 
     def analyze_phase(
         self, phase: str, samples: List[Dict[str, Any]]
