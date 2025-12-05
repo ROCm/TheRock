@@ -1,6 +1,7 @@
 """Trampoline for console scripts."""
 
 import importlib
+import importlib.util
 import os
 import platform
 import sys
@@ -14,22 +15,29 @@ CORE_PY_PACKAGE_NAME = CORE_PACKAGE.get_py_package_name()
 CORE_MODULE = importlib.import_module(CORE_PY_PACKAGE_NAME)
 CORE_MODULE_PATH = Path(CORE_MODULE.__file__).parent
 
-DEVEL_PACKAGE = ALL_PACKAGES["devel"]
-DEVEL_PY_PACKAGE_NAME = DEVEL_PACKAGE.get_py_package_name()
-DEVEL_DIST_PACKAGE_NAME = DEVEL_PACKAGE.get_dist_package_name()
+# Default to the core module.
+MODULE_PATH = CORE_MODULE_PATH
 
-try:
-    # NOTE: dependent on there being an __init__.py in the devel package.
-    # The package must be initialized (e.g. with `rocm-sdk init`) first.
-    # TODO(#1880): auto-init if DEVEL_DIST_PACKAGE_NAME (rocm_sdk_devel) exists?
+# If we have the devel module use it instead.
+DEVEL_PACKAGE = ALL_PACKAGES["devel"]
+DEVEL_PURE_PY_PACKAGE_NAME = DEVEL_PACKAGE.pure_py_package_name
+DEVEL_PY_PACKAGE_NAME = DEVEL_PACKAGE.get_py_package_name()
+if importlib.util.find_spec(DEVEL_PURE_PY_PACKAGE_NAME) is not None:
+    # We have the rocm_sdk_devel package but it might not be expanded into
+    # the _rocm_sdk_devel package yet.
+
+    if importlib.util.find_spec(DEVEL_PY_PACKAGE_NAME) is None:
+        # The _rocm_sdk_devel package has not been expanded yet, run init.
+        # We only want to fork to a subprocess if required, hence the check.
+        import subprocess
+
+        subprocess.check_call(
+            [sys.executable, "-P", "-m", "rocm_sdk", "init", "--quiet"]
+        )
+
     DEVEL_MODULE = importlib.import_module(DEVEL_PY_PACKAGE_NAME)
     DEVEL_MODULE_PATH = Path(DEVEL_MODULE.__file__).parent
-
-    # Devel module is available, use it.
     MODULE_PATH = DEVEL_MODULE_PATH
-except ModuleNotFoundError:
-    # Fallback to the core module.
-    MODULE_PATH = CORE_MODULE_PATH
 
 is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
