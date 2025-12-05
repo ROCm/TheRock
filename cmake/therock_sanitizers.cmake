@@ -42,10 +42,8 @@ function(therock_sanitizer_configure
     # Only enable ASAN for C/C++ for now. Include fortran once the toolchain
     # is available and can be used for portable builds.
     # https://github.com/ROCm/TheRock/issues/1782
-    set(_fortran_and_flang_check "$<AND:$<LINK_LANGUAGE:Fortran>,$<Fortran_COMPILER_ID:Flang>>")
-
-    string(APPEND _stanza "add_link_options($<$<OR:$<LINK_LANGUAGE:C,CXX>,${_fortran_and_flang_check}>:-fsanitize=address>\n")
-    string(APPEND _stanza "  $<$<OR:$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>,${_fortran_and_flang_check}>:-shared-libsan>)\n")
+    string(APPEND _stanza "add_link_options($<$<OR:$<LINK_LANGUAGE:C,CXX>,$<LINK_LANGUAGE:Fortran>>:-fsanitize=address>\n")
+    string(APPEND _stanza "  $<$<OR:$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>,$<LINK_LANGUAGE:Fortran>>:-shared-libsan>)\n")
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
     string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
