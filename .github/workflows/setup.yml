@@ -6,6 +6,10 @@ on:
       build_variant:
         type: string
         default: "release"
+      multi_arch:
+        type: boolean
+        default: false
+        description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -72,6 +76,7 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          MULTI_ARCH: ${{ inputs.multi_arch }}
         run: ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version

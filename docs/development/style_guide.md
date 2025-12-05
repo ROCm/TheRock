@@ -572,11 +572,11 @@ on:
     inputs:
       release_type:
         type: choice
-        description: "Type of release to create"
+        description: Type of release to create. All developer-triggered jobs should use "dev"!
         options:
           - dev
           - nightly
-          - stable
+          - prerelease
         default: dev  # Safe: development releases don't affect production
 
       amdgpu_families:

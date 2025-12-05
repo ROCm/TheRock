@@ -19,9 +19,9 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
-environ_vars[
-    "HIPSPARSE_CLIENTS_MATRICES_DIR"
-] = f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
+environ_vars["HIPSPARSE_CLIENTS_MATRICES_DIR"] = (
+    f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
+)
 
 cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
 

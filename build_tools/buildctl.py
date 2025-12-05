@@ -341,8 +341,7 @@ def do_bootstrap(args: argparse.Namespace):
     print(f"\nProcessed {processed_count} artifacts, skipped {skipped_count}")
 
 
-class CLIError(Exception):
-    ...
+class CLIError(Exception): ...
 
 
 def main(cl_args: list[str]):

@@ -46,6 +46,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     ##############################################################################
     set(_host_blas_subproject_names)
     therock_cmake_subproject_declare(therock-host-blas
+      USE_DIST_AMDGPU_TARGETS
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/host-blas"
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL
@@ -85,6 +86,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # ILP64 OpenBLAS
     ##############################################################################
     therock_cmake_subproject_declare(therock-host-blas-64
+      USE_DIST_AMDGPU_TARGETS
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/host-blas-64"
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL

@@ -64,6 +64,7 @@ RPM_CONTENTS_DIR = None
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm"
 
+
 ################### Debian package creation #######################
 def create_deb_package(pkg_name, config: PackageConfig):
     """Create a Debian package.

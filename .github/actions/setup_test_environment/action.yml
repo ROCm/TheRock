@@ -1,20 +1,24 @@
 name: "Setup test environment"
 
+description: Setup ROCm test environment from built artifacts
+
 inputs:
   VENV_DIR:
-    type: string
+    description: (string) Directory in which to create a Python virtual environment (e.g. `github.workspace/.venv`)
     required: true
   OUTPUT_ARTIFACTS_DIR:
-    type: string
+    description: (string) Directory to download/unpack test artifacts into (e.g. `github.workspace/build`)
     required: true
   ARTIFACT_GROUP:
-    type: string
+    description: (string) Artifact group (e.g. `gfx110X-all`)
+    required: true
   ARTIFACT_RUN_ID:
-    type: string
+    description: (string) Run ID to download artifacts from (`env.ARTIFACT_RUN_ID` or a value like `19716407405`)
+    required: true
   FETCH_ARTIFACT_ARGS:
-    type: string
+    description: (string) Extra arguments to install_rocm_from_artifacts.py (e.g. `--blas --tests`)
   IS_PR_FROM_FORK:
-    type: boolean
+    description: (boolean) True if this workflow run is from a PR on a fork (often `github.event.pull_request.head.repo.fork`)
     default: false
 
 runs:

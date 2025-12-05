@@ -1,19 +1,9 @@
-# Multi-Arch CI - Sharded Pipeline
+# Multi-Arch CI
 #
-# This workflow implements a multi-stage build pipeline where:
-# - Generic stages (foundation, compiler-runtime) build ONCE for all architectures
-# - Per-arch stages (math-libs, comm-libs) run in PARALLEL per GPU family
-#
-# Stage dependency graph:
-#   foundation (generic)
-#       |
-#   compiler-runtime (generic)
-#       |
-#   +---+---+---+---+
-#   |   |   |   |   |
-#  math comm prof dc  (parallel, math/comm are per-arch)
-#
-# Artifacts flow between stages via S3, keyed by run_id.
+# This is a staging workflow for the sharded multi-arch build pipeline.
+# It mirrors ci.yml but uses multi_arch_build_portable_linux.yml instead of
+# ci_linux.yml. Once validated, ci.yml will be updated to use the multi-arch
+# sub-workflows directly.
 
 name: Multi-Arch CI
 
@@ -26,105 +16,119 @@ on:
     inputs:
       linux_amdgpu_families:
         type: string
-        description: "Comma-separated list of Linux GPU families (e.g., gfx94X-dcgpu,gfx110X-all)"
-        default: "gfx94X-dcgpu,gfx110X-all"
-      build_variant:
-        type: string
-        description: "Build variant (release, asan)"
-        default: "release"
-      package_version:
-        type: string
-        description: "Package version string"
-        default: "ADHOCBUILD"
-      stages:
-        type: string
-        description: "Comma-separated list of stages to build (empty = all). Options: foundation, compiler-runtime, math-libs, comm-libs, dctools-core, profiler-apps"
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
         default: ""
-      skip_tests:
+      linux_test_labels:
+        type: string
+        description: "If enabled, reduce test set on Linux to the list of labels prefixed with 'test:'. ex: test:rocprim, test:hipcub"
+        default: ""
+      linux_use_prebuilt_artifacts:
         type: boolean
-        description: "Skip test jobs"
-        default: false
+        description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
+      windows_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      windows_test_labels:
+        type: string
+        description: "If enabled, reduce test set on Windows to the list of labels prefixed with 'test:' ex: test:rocprim, test:hipcub"
+        default: ""
+      windows_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
+      artifact_run_id:
+        type: string
+        description: "If provided, the tests will run on this artifact ID"
+        default: ""
+  # pull_request:
+  #   types:
+  #     - labeled
+  #     - opened
+  #     - synchronize
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.sha }}
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
-  # --------------------------------------------------------------------------
-  # Setup job - compute configuration
-  # --------------------------------------------------------------------------
   setup:
-    name: Setup
-    runs-on: ubuntu-24.04
-    outputs:
-      amdgpu_families_json: ${{ steps.configure.outputs.amdgpu_families_json }}
-      enabled_stages: ${{ steps.configure.outputs.enabled_stages }}
-      artifact_group: ${{ steps.configure.outputs.artifact_group }}
-      rocm_package_version: ${{ steps.version.outputs.rocm_package_version }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+    uses: ./.github/workflows/setup.yml
+    with:
+      build_variant: "release"
+      multi_arch: true
 
-      - name: Configure pipeline
-        id: configure
-        run: |
-          python ./build_tools/github_actions/configure_multi_arch_ci.py \
-            --amdgpu-families "${{ inputs.linux_amdgpu_families }}" \
-            --stages "${{ inputs.stages }}" \
-            --build-variant "${{ inputs.build_variant }}"
-
-      - name: Compute package version
-        id: version
-        run: |
-          python ./build_tools/compute_rocm_package_version.py --release-type=dev
-
-  # --------------------------------------------------------------------------
-  # Linux Build - Sharded Pipeline
-  # --------------------------------------------------------------------------
-  linux_build:
-    name: Linux Build (${{ inputs.build_variant }})
+  linux_build_and_test:
+    name: Linux::${{ matrix.variant.build_variant_label }}
     needs: setup
+    if: >-
+      ${{
+        needs.setup.outputs.linux_variants != '[]' &&
+        needs.setup.outputs.enable_build_jobs == 'true'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(needs.setup.outputs.linux_variants) }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit
     with:
-      amdgpu_families_json: ${{ needs.setup.outputs.amdgpu_families_json }}
-      artifact_group: ${{ needs.setup.outputs.artifact_group }}
-      build_variant: ${{ inputs.build_variant }}
-      package_version: ${{ needs.setup.outputs.rocm_package_version }}
-      enabled_stages: ${{ needs.setup.outputs.enabled_stages }}
+      matrix_per_family_json: ${{ matrix.variant.matrix_per_family_json }}
+      dist_amdgpu_families: ${{ matrix.variant.dist_amdgpu_families }}
+      artifact_group: ${{ matrix.variant.artifact_group }}
+      build_variant_label: ${{ matrix.variant.build_variant_label }}
+      build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
+      build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}
+      test_labels: ${{ needs.setup.outputs.linux_test_labels }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      expect_failure: ${{ matrix.variant.expect_failure == true }}
+      use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
+      test_type: ${{ needs.setup.outputs.test_type }}
     permissions:
       contents: read
       id-token: write
 
-  # --------------------------------------------------------------------------
-  # Summary
-  # --------------------------------------------------------------------------
-  multi_arch_ci_summary:
-    name: Multi-Arch CI Summary
+  # TODO: Add windows_build_and_test when ready
+  # windows_build_and_test:
+  #   name: Windows::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
+  #   needs: setup
+  #   if: >-
+  #     ${{
+  #       needs.setup.outputs.windows_variants != '[]' &&
+  #       needs.setup.outputs.enable_build_jobs == 'true'
+  #     }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       variant: ${{ fromJSON(needs.setup.outputs.windows_variants) }}
+  #   uses: ./.github/workflows/ci_windows.yml
+  #   ...
+
+  ci_summary:
+    name: CI Summary
     if: always()
     needs:
       - setup
-      - linux_build
+      - linux_build_and_test
     runs-on: ubuntu-24.04
     steps:
-      - name: Output results
+      - name: Output failed jobs
         run: |
-          echo "## Multi-Arch CI Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build Variant**: ${{ inputs.build_variant }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **GPU Families**: ${{ inputs.linux_amdgpu_families }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Stages**: ${{ needs.setup.outputs.enabled_stages }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo '${{ toJson(needs) }}'
-
+          # Build a list of failed jobs, but ignore those marked continue-on-error
           FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
             | jq --raw-output '
               to_entries
-              | map(select(.value.result != "success" and .value.result != "skipped"))
+              | map(select(
+                  (.value.result != "success" and .value.result != "skipped")
+                  and (.value.outputs.continue_on_error | not)
+                ))
               | map(.key)
               | join(",")
             ' \
@@ -134,5 +138,5 @@ jobs:
             echo "The following jobs failed: ${FAILED_JOBS}"
             exit 1
           else
-            echo "All jobs succeeded."
+            echo "All required jobs succeeded (continue-on-error jobs ignored)."
           fi
