@@ -32,6 +32,7 @@ LINE_CONTINUATION = f" {LINE_CONTINUATION_CHAR}\n  "
 
 
 def run(args: argparse.Namespace):
+    index_url = f"{args.index_url}/{args.index_subdir}/"
     pytorch_repo_org = "pytorch" if args.pytorch_git_ref == "nightly" else "ROCm"
     pytorch_origin_args = "" if args.pytorch_git_ref == "nightly" else "--origin rocm"
     pytorch_remote_url = f"https://github.com/{pytorch_repo_org}/pytorch.git"
@@ -45,9 +46,10 @@ def run(args: argparse.Namespace):
     summary += "## PyTorch Test Report\n\n"
 
     # Summary information.
-    summary += f"* torch version: `{args.torch_version}`\n"
+    summary += f"* Torch version: `{args.torch_version}`\n"
+    summary += f"* Python version: `{args.python_version}`\n"
     summary += f"* GPU family: `{args.index_subdir}`\n"
-    summary += f"* Package index: {args.index_url}/{args.index_subdir}\n"
+    summary += f"* Package index: {index_url}/\n"
     summary += f"* PyTorch source code: {pytorch_web_url_with_branch}\n"
 
     # Link to detailed documentation.
@@ -62,7 +64,7 @@ def run(args: argparse.Namespace):
     summary += "\n"
     summary += "# Install torch and test requirements\n"
     summary += "pip install" + LINE_CONTINUATION
-    summary += f"--index-url={args.index_url}/{args.index_subdir}" + LINE_CONTINUATION
+    summary += f"--index-url={index_url}" + LINE_CONTINUATION
     summary += "torch"
     summary += f"=={args.torch_version}" if args.torch_version else ""
     summary += "\n"
@@ -78,6 +80,12 @@ if __name__ == "__main__":
         "--torch-version",
         type=str,
         help="torch package version to install (e.g. '2.7.1+rocm7.10.0a20251120'), or empty for latest",
+    )
+    parser.add_argument(
+        "--python-version",
+        type=str,
+        default=f"{sys.version_info[0]}.{sys.version_info[1]}",
+        help="Python version to used for tests (defaults to sys.version as X.Y)",
     )
     parser.add_argument(
         "--pytorch-git-ref",
