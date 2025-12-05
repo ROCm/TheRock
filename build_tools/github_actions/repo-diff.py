@@ -19,6 +19,7 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 from github_actions_utils import (
     gha_append_step_summary,
     gha_query_workflow_run_information,
+    gha_query_last_successful_workflow_run,
     gha_send_request,
 )
 
@@ -776,18 +777,44 @@ def main(argv: Optional[List[str]] = None) -> int:
     """Main entry point for the script that can be called from tests or other scripts. """
     # Arguments parsed
     parser = argparse.ArgumentParser(description="Generate HTML report for repo diffs")
-    parser.add_argument("--start", required=True, help="Start workflow ID or commit SHA")
+    parser.add_argument("--start", required=False, help="Start workflow ID or commit SHA")
     parser.add_argument("--end", required=True, help="End workflow ID or commit SHA")
+    parser.add_argument("--find-last-successful", help="Workflow name to find last successful run (e.g., 'ci_nightly.yml')")
 
     args = parser.parse_args(argv)
 
-    # Determine mode from environment variable
+    # Determine mode from environment variable first
     if os.getenv("WORKFLOW_MODE") == "true":
         print("Running in WORKFLOW mode - extracting commits from workflow logs")
         mode = "workflow"
     else:
         print("Running in COMMIT mode - direct commit comparison")
         mode = "commit"
+
+    # Handle find last successful workflow run (after determining mode)
+    if args.find_last_successful:
+        print(f"Finding last successful run of workflow: {args.find_last_successful}")
+        try:
+            last_run = gha_query_last_successful_workflow_run("ROCm/TheRock", args.find_last_successful, branch="main")
+            if last_run:
+                if mode == "workflow":
+                    # In workflow mode, use the workflow run ID
+                    args.start = str(last_run['id'])
+                    print(f"Found last successful run: {last_run['id']} (workflow mode)")
+                else:
+                    # In commit mode, use the head SHA
+                    args.start = last_run['head_sha']
+                    print(f"Found last successful run: {last_run['id']} with commit {args.start} (commit mode)")
+            else:
+                print(f"No previous successful run found for {args.find_last_successful} on main branch")
+                return 1
+        except Exception as e:
+            print(f"Error finding last successful workflow run: {e}")
+            return 1
+
+    if not args.start:
+        print("Error: --start is required unless --find-last-successful is provided")
+        return 1
 
     print(f"Start: {args.start}")
     print(f"End: {args.end}")

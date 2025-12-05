@@ -19,11 +19,15 @@ on:
         required: false
         type: boolean
         default: false
+      find_last_successful:
+        description: 'Workflow name to find last successful run (e.g., "ci_nightly.yml"). If provided, start_commit will be ignored.'
+        required: false
+        type: string
   workflow_call:
     inputs:
       start_commit:
         description: 'Start Commit SHA or Workflow ID'
-        required: true
+        required: false
         type: string
       end_commit:
         description: 'End Commit SHA or Workflow ID'
@@ -34,6 +38,10 @@ on:
         required: false
         type: boolean
         default: false
+      find_last_successful:
+        description: 'Workflow name to find last successful run (e.g., "ci_nightly.yml"). If provided, start_commit will be ignored.'
+        required: false
+        type: string
 
 jobs:
   therock-diff-report:
@@ -57,6 +65,7 @@ jobs:
             echo "start_commit=${{ inputs.start_commit }}" >> $GITHUB_OUTPUT
             echo "end_commit=${{ inputs.end_commit }}" >> $GITHUB_OUTPUT
             echo "workflow_mode=${{ inputs.workflow_mode }}" >> $GITHUB_OUTPUT
+            echo "find_last_successful=${{ inputs.find_last_successful }}" >> $GITHUB_OUTPUT
             echo "Using inputs from ${{ github.event_name }} trigger"
           fi
 
@@ -68,7 +77,8 @@ jobs:
           cd build_tools/github_actions
           python3 repo-diff.py \
             --start "${{ steps.commits.outputs.start_commit }}" \
-            --end "${{ steps.commits.outputs.end_commit }}"
+            --end "${{ steps.commits.outputs.end_commit }}" \
+            --find-last-successful "${{ steps.commits.outputs.find_last_successful }}"
 
       - name: Upload TheRock HTML Report
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.0.0
@@ -77,4 +87,3 @@ jobs:
           path: build_tools/github_actions/TheRockReport.html
           retention-days: 15
         if: always()
-
