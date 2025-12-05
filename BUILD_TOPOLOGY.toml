@@ -358,6 +358,11 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.libhipcxx]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-specific"
