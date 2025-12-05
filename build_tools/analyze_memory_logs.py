@@ -318,7 +318,7 @@ class MemoryLogAnalyzer:
         gha_append_step_summary(summary)
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         description="Analyze memory logs from CI builds",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -333,7 +333,7 @@ def main():
 
     parser.add_argument(
         "--detailed",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="Generate detailed report with per-phase breakdowns",
     )
 
@@ -343,11 +343,11 @@ def main():
 
     parser.add_argument(
         "--github-summary",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="Write summary to GITHUB_STEP_SUMMARY",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Create analyzer and load logs
     analyzer = MemoryLogAnalyzer(args.log_dir)
@@ -381,4 +381,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
