@@ -34,7 +34,7 @@ This incorporates advice from:
 > 1. Supported: Official packages are distributed by the ROCm team
 > 1. Nightly: Included in TheRock-based packages, built nightly
 > 1. Community Supported: Enabled via community contribution
-> 1. Not Supported: Does not build, requires engineering to support
+> 1. Not Supported: Currently, no known working build available
 
 > [!NOTE]
 >
