@@ -382,7 +382,7 @@ if(THEROCK_ENABLE_HIPTENSOR)
 
   therock_cmake_subproject_declare(hipTensor
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hiptensor"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipTensor"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
