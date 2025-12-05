@@ -102,21 +102,28 @@ jobs:
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }}
 
+      - name: Set git options
+        run: |
+          git config --global core.longpaths true
+
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
-      # TODO(scotttodd): Windows will need to checkout to a shorter path.
-      #                  When Windows runs full tests, fix that and re-enable.
       - name: Checkout PyTorch Source Repos from nightly branch
-        # Checkout default upstream PyTorch/PyTorch branch.
-        if: ${{ (inputs.pytorch_git_ref == 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
+        if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly --no-hipify --no-patch
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin https://github.com/pytorch/pytorch.git \
+            --repo-hashtag nightly \
+            --no-hipify --no-patch
 
       - name: Checkout PyTorch Source Repos from stable branch
-        if: ${{ (inputs.pytorch_git_ref != 'nightly') && (contains(inputs.test_runs_on, 'linux')) }}
+        if: ${{ (inputs.pytorch_git_ref != 'nightly') }}
         run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }} --no-hipify --no-patch
+          python external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --repo-hashtag ${{ inputs.pytorch_git_ref }} \
+            --no-hipify --no-patch
 
       - name: Set up virtual environment
         run: |
@@ -139,8 +146,31 @@ jobs:
         run: |
           pytest --log-cli-level=INFO -v external-builds/pytorch/smoke-tests
 
-      - name: Run PyTorch tests
-        if: "contains(inputs.test_runs_on, 'linux')"
-        # pytorch version is auto-detected
+      - name: (Linux) Run PyTorch tests
+        if: ${{ contains(inputs.test_runs_on, 'linux') }}
         run: |
-          python ./external-builds/pytorch/run_linux_pytorch_tests.py
+          python ./external-builds/pytorch/run_pytorch_tests.py
+
+      # TODO(#2258): Enable this code to run tests on Windows
+
+      # # HACK: The test process does not terminate on its own gracefully,
+      # # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
+      # # After killing the process we read the return code to signal it normally.
+      # # See https://github.com/ROCm/TheRock/issues/999.
+      # - name: (Windows) Run PyTorch tests
+      #   if: ${{ runner.os == 'Windows' }}
+      #   continue-on-error: true
+      #   run: |
+      #     python ./external-builds/pytorch/run_pytorch_tests.py
+
+      # - name: (Windows) Read and propagate exit code
+      #   if: ${{ runner.os == 'Windows' }}
+      #   run: |
+      #     if [ -f run_pytorch_tests_exit_code.txt ]; then
+      #       EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
+      #       echo "Exit code from file: $EXIT_CODE"
+      #       exit $EXIT_CODE
+      #     else
+      #       echo "No run_pytorch_tests_exit_code.txt found"
+      #       exit 1
+      #     fi
