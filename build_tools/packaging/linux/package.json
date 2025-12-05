@@ -2728,6 +2728,38 @@
     "Composite": "Yes"
   },
   {
+    "Package": "rocm-host-blas-64",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm host BLAS libraries with 64-bit (ILP64) integers",
+    "Description_Long": "ROCm host BLAS libraries with 64-bit (ILP64) integers",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Components": [
+      "lib",
+      "dev",
+      "doc",
+      "run"
+    ],
+    "Artifact": "host-blas",
+    "Gfxarch": "False",
+    "Composite": "Yes"
+  },
+  {
     "Package": "rocm-host-suite-sparse",
     "Version": "",
     "Architecture": "amd64",
