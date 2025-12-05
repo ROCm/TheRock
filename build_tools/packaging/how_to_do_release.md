@@ -70,6 +70,7 @@ Need:
    <arch1>/
       package1.whl
       package2.whl
+      rocm-*.tar.gz
       ...
    <arch2>/
       package1.whl
