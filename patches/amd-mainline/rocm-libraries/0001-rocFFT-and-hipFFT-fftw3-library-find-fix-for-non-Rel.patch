@@ -1,0 +1,73 @@
+From fad85f4a6f492394c179bc9ad1ab22ceabe945c7 Mon Sep 17 00:00:00 2001
+From: Mika Laitio <mika.laitio@amd.com>
+Date: Thu, 20 Nov 2025 17:18:39 -0800
+Subject: [PATCH] rocFFT and hipFFT fftw3 library find fix for non Release
+ builds
+
+rocFFT and hipFFT failed to find the fftw3_libs
+setting the variable to NOTFOUND when the build
+type was RelWithDebInfo instead of Release.
+
+Reason is that the property names IMPORTED_LOCATION_RELEASE
+and IMPORTED_IMPLIB_RELEASE that FFTW3-cmake files provides
+worked only for the cmake release builds.
+
+Last word in the property name depends
+from the cmake build type written with uppercase alphabets.
+For RelWithDebInfo builds for example the property name is
+IMPORTED_LOCATION_RELWITHDEBINFO instead of being
+IMPORTED_LOCATION_RELEASE.
+
+Signed-off-by: Mika Laitio <mika.laitio@amd.com>
+---
+ projects/hipfft/clients/tests/CMakeLists.txt | 9 +++++----
+ projects/rocfft/clients/tests/CMakeLists.txt | 9 +++++----
+ 2 files changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/projects/hipfft/clients/tests/CMakeLists.txt b/projects/hipfft/clients/tests/CMakeLists.txt
+index 9a35bf2083..73c2bfc5c1 100644
+--- a/projects/hipfft/clients/tests/CMakeLists.txt
++++ b/projects/hipfft/clients/tests/CMakeLists.txt
+@@ -70,12 +70,13 @@ else()
+   find_package(FFTW3f CONFIG QUIET )
+   if( FFTW3_FOUND AND FFTW3f_FOUND )
+     message(STATUS "FFTW3 found by using the FFTW3Config.cmake")
++    string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
+     if ( NOT WIN32 )
+-      get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_LOCATION_RELEASE)
+-      get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_LOCATION_RELEASE)
++      get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_LOCATION_${CMAKE_BUILD_TYPE_UPPER})
++      get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_LOCATION_${CMAKE_BUILD_TYPE_UPPER})
+     else()
+-      get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_IMPLIB_RELEASE)
+-      get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_IMPLIB_RELEASE)
++      get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_IMPLIB_${CMAKE_BUILD_TYPE_UPPER})
++      get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_IMPLIB_${CMAKE_BUILD_TYPE_UPPER})
+     endif()
+ 
+     # Look for omp (preferred) or thread libraries. These are not a
+diff --git a/projects/rocfft/clients/tests/CMakeLists.txt b/projects/rocfft/clients/tests/CMakeLists.txt
+index 10bafcea62..0d2b6eff93 100644
+--- a/projects/rocfft/clients/tests/CMakeLists.txt
++++ b/projects/rocfft/clients/tests/CMakeLists.txt
+@@ -128,12 +128,13 @@ if( NOT BUILD_FFTW )
+     find_package(FFTW3f CONFIG QUIET )
+     if( FFTW3_FOUND AND FFTW3f_FOUND )
+       message(STATUS "FFTW3 found by using the FFTW3Config.cmake")
++      string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
+       if ( NOT WIN32 )
+-        get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_LOCATION_RELEASE)
+-        get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_LOCATION_RELEASE)
++        get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_LOCATION_${CMAKE_BUILD_TYPE_UPPER})
++        get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_LOCATION_${CMAKE_BUILD_TYPE_UPPER})
+       else()
+-        get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_IMPLIB_RELEASE)
+-        get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_IMPLIB_RELEASE)
++        get_target_property(fftw3_libs FFTW3::fftw3 IMPORTED_IMPLIB_${CMAKE_BUILD_TYPE_UPPER})
++        get_target_property(fftw3f_libs FFTW3::fftw3f IMPORTED_IMPLIB_${CMAKE_BUILD_TYPE_UPPER})
+       endif()
+ 
+       # Look for omp (preferred) or thread libraries. These are not a
+-- 
+2.43.0
+
