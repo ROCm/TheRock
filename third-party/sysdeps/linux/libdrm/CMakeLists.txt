@@ -64,6 +64,8 @@ add_custom_target(
     # We have to patch the sources so make a fresh copy.
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${PATCH_SOURCE_DIR}"
+  COMMAND
     # Inline the amdgpu device table.
     "${CMAKE_CURRENT_SOURCE_DIR}/inline_amdgpu_ids.sh" "${PATCH_SOURCE_DIR}"
   COMMAND
