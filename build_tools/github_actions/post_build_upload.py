@@ -303,9 +303,12 @@ def run(args):
     log("----------------------")
     write_time_sync_log()
 
-    log("Upload build artifacts")
-    log("----------------------")
-    upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
+    if args.job_status and args.job_status == "failure":
+        log("Skipping artifact upload due to job failure")
+    else:
+        log("Upload build artifacts")
+        log("----------------------")
+        upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
 
     log("Upload log")
     log("----------")
