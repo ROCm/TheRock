@@ -50,22 +50,12 @@ index ff3290022f..ee248f377d 100644
 +    STATIC_DEPENDS
 +        ${PACKAGE_STATIC_DEPENDS}
 +)
-+
-+# Add architecture functions to the ROCm-generated config
-+install(CODE "
-+    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
-+         \"\\n# Include hiptensor supported architectures functions\\n\")
-+    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
-+         \"include(\\\"\\\${CMAKE_CURRENT_LIST_DIR}/hiptensorSupportedArchitectures.cmake\\\")\\n\")
-+")
-+
-+# Install additional helper files
- rocm_install(FILES
+-rocm_install(FILES
 -    "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfig.cmake"
 -    "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfigVersion.cmake"
-     "cmake/Functions/hiptensorSupportedArchitectures.cmake"
-     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
- )
+-    "cmake/Functions/hiptensorSupportedArchitectures.cmake"
+-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
+-)
 diff --git a/projects/hiptensor/Config.cmake.in b/projects/hiptensor/Config.cmake.in
 deleted file mode 100644
 index 8e5dc0cf5f..0000000000
