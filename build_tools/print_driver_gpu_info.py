@@ -163,9 +163,7 @@ def parse_rocminfo(output: str) -> Dict[str, Any]:
 
         # Marketing name, e.g.:
         #   Marketing Name:          AMD Instinct MI300X
-        gpu_name_match = re.search(
-            r"^\s*Marketing Name:\s*(.+)$", block, re.MULTILINE
-        )
+        gpu_name_match = re.search(r"^\s*Marketing Name:\s*(.+)$", block, re.MULTILINE)
         gpu_name = gpu_name_match.group(1).strip() if gpu_name_match else None
 
         # GFX target from ISA line: amdgcn-amd-amdhsa--gfx942
@@ -174,7 +172,9 @@ def parse_rocminfo(output: str) -> Dict[str, Any]:
             gpu_target = isa_match.group(1).strip()
         else:
             # Fallback: "Name: gfx942" inside the GPU block
-            name_match = re.search(r"^\s*Name:\s*(gfx[0-9a-zA-Z]+)", block, re.MULTILINE)
+            name_match = re.search(
+                r"^\s*Name:\s*(gfx[0-9a-zA-Z]+)", block, re.MULTILINE
+            )
             gpu_target = name_match.group(1).strip() if name_match else None
 
         gpu_agents.append(
