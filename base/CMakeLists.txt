@@ -59,7 +59,7 @@ therock_cmake_subproject_activate(rocm-core)
 if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
 
 therock_cmake_subproject_declare(amdsmi
-  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
+  EXTERNAL_SOURCE_DIR "amdsmi"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS

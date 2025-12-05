@@ -46,8 +46,19 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         "GITHUB_TOKEN not set, skipping test that requires GitHub API access",
     )
     def test_retrieve_bucket_info(self):
+        # TODO(geomin12): work on pulling these run IDs more dynamically
         # https://github.com/ROCm/TheRock/actions/runs/18022609292?pr=1597
         external_repo, bucket = retrieve_bucket_info("ROCm/TheRock", "18022609292")
+        self.assertEqual(external_repo, "")
+        self.assertEqual(bucket, "therock-artifacts")
+
+    @unittest.skipUnless(
+        os.getenv("GITHUB_TOKEN"),
+        "GITHUB_TOKEN not set, skipping test that requires GitHub API access",
+    )
+    def test_retrieve_newer_bucket_info(self):
+        # https://github.com/ROCm/TheRock/actions/runs/19680190301
+        external_repo, bucket = retrieve_bucket_info("ROCm/TheRock", "19680190301")
         self.assertEqual(external_repo, "")
         self.assertEqual(bucket, "therock-ci-artifacts")
 
@@ -59,7 +70,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         # https://github.com/ROCm/TheRock/actions/runs/18023442478?pr=1596
         external_repo, bucket = retrieve_bucket_info("ROCm/TheRock", "18023442478")
         self.assertEqual(external_repo, "ROCm-TheRock/")
-        self.assertEqual(bucket, "therock-ci-artifacts-external")
+        self.assertEqual(bucket, "therock-artifacts-external")
 
     @unittest.skipUnless(
         os.getenv("GITHUB_TOKEN"),
@@ -69,6 +80,18 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         # https://github.com/ROCm/rocm-libraries/actions/runs/18020401326?pr=1828
         external_repo, bucket = retrieve_bucket_info(
             "ROCm/rocm-libraries", "18020401326"
+        )
+        self.assertEqual(external_repo, "ROCm-rocm-libraries/")
+        self.assertEqual(bucket, "therock-artifacts-external")
+
+    @unittest.skipUnless(
+        os.getenv("GITHUB_TOKEN"),
+        "GITHUB_TOKEN not set, skipping test that requires GitHub API access",
+    )
+    def test_retrieve_newer_bucket_info_from_rocm_libraries(self):
+        # https://github.com/ROCm/rocm-libraries/actions/runs/19784318631
+        external_repo, bucket = retrieve_bucket_info(
+            "ROCm/rocm-libraries", "19784318631"
         )
         self.assertEqual(external_repo, "ROCm-rocm-libraries/")
         self.assertEqual(bucket, "therock-ci-artifacts-external")

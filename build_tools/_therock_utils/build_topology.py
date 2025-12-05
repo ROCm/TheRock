@@ -76,6 +76,9 @@ class Artifact:
     disable_platforms: List[str] = field(
         default_factory=list
     )  # Platforms where disabled
+    python_requires: List[str] = field(
+        default_factory=list
+    )  # pip install args (e.g., ["-r path/to/req.txt"])
 
 
 class BuildTopology:
@@ -145,6 +148,12 @@ class BuildTopology:
 
         # Parse artifacts
         for artifact_name, artifact_data in data.get("artifacts", {}).items():
+            python_requires = artifact_data.get("python_requires", [])
+            if python_requires and not isinstance(python_requires, list):
+                raise ValueError(
+                    f"Artifact '{artifact_name}' python_requires must be a list, "
+                    f"got {type(python_requires).__name__}"
+                )
             self.artifacts[artifact_name] = Artifact(
                 name=artifact_name,
                 artifact_group=artifact_data.get("artifact_group", ""),
@@ -154,6 +163,7 @@ class BuildTopology:
                 feature_name=artifact_data.get("feature_name"),
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
+                python_requires=python_requires,
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -611,3 +621,33 @@ class BuildTopology:
                 if submodule.name not in submodules_by_name:
                     submodules_by_name[submodule.name] = submodule
         return list(submodules_by_name.values())
+
+    def get_python_requires_for_stage(self, build_stage: str) -> List[str]:
+        """
+        Get all python_requires for artifacts produced by a build stage.
+
+        Collects python_requires from all artifacts in the stage's artifact groups,
+        returning them as a deduplicated list suitable for passing to pip install.
+
+        Args:
+            build_stage: Name of the build stage
+
+        Returns:
+            List of pip install arguments (e.g., ["-r path/to/req.txt", "package"])
+        """
+        if build_stage not in self.build_stages:
+            raise ValueError(f"Build stage '{build_stage}' not found")
+
+        stage = self.build_stages[build_stage]
+        seen: Set[str] = set()
+        requires: List[str] = []
+
+        # Collect python_requires from artifacts in this stage's groups
+        for group_name in stage.artifact_groups:
+            for artifact in self.get_artifacts_in_group(group_name):
+                for req in artifact.python_requires:
+                    if req not in seen:
+                        seen.add(req)
+                        requires.append(req)
+
+        return requires
