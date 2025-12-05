@@ -44,6 +44,7 @@ function(therock_sanitizer_configure
     # https://github.com/ROCm/TheRock/issues/1782
     string(APPEND _stanza "add_link_options($<$<OR:$<LINK_LANGUAGE:C,CXX>,$<LINK_LANGUAGE:Fortran>>:-fsanitize=address>\n")
     string(APPEND _stanza "  $<$<OR:$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>,$<LINK_LANGUAGE:Fortran>>:-shared-libsan>)\n")
+    string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-pthread>)\n")
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
     string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
     string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
