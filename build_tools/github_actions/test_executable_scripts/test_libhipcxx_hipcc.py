@@ -92,7 +92,18 @@ cmd = [
     "bash",
     "../ci/build_libhipcxx.sh",
     "-cmake-options",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc -DCMAKE_HIP_ARCHITECTURES= ",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+]
+
+logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
+
+subprocess.run(cmd, check=True, env=environ_vars)
+
+cmd = [
+    "bash",
+    "../ci/test_libhipcxx.sh",
+    "-cmake-options",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
