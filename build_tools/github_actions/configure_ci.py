@@ -54,9 +54,6 @@ from typing import Iterable, List, Optional
 import string
 from amdgpu_family_matrix import (
     all_build_variants,
-    amdgpu_family_info_matrix_presubmit,
-    amdgpu_family_info_matrix_postsubmit,
-    amdgpu_family_info_matrix_nightly,
     get_all_families_for_trigger_types,
 )
 from fetch_test_configurations import test_matrix
@@ -451,7 +448,7 @@ def matrix_generator(
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
 
         # Add presubmit targets.
-        for target in amdgpu_family_info_matrix_presubmit:
+        for target in get_all_families_for_trigger_types(["presubmit"]):
             selected_target_names.append(target)
 
         # Extend with any additional targets that PR labels opt-in to running.
@@ -478,10 +475,7 @@ def matrix_generator(
             print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
             # Add presubmit and postsubmit targets.
-            for target in (
-                amdgpu_family_info_matrix_presubmit
-                | amdgpu_family_info_matrix_postsubmit
-            ):
+            for target in get_all_families_for_trigger_types(["presubmit", "postsubmit"]):
                 selected_target_names.append(target)
         else:
             print(
@@ -489,18 +483,14 @@ def matrix_generator(
             )
 
             # Non-main branch pushes use presubmit targets
-            for target in amdgpu_family_info_matrix_presubmit:
+            for target in get_all_families_for_trigger_types(["presubmit"]):
                 selected_target_names.append(target)
 
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
         # For nightly runs, we run all builds and full tests
-        amdgpu_family_info_matrix_all = (
-            amdgpu_family_info_matrix_presubmit
-            | amdgpu_family_info_matrix_postsubmit
-            | amdgpu_family_info_matrix_nightly
-        )
+        amdgpu_family_info_matrix_all = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
         for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
 
