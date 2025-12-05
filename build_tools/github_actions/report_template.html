@@ -374,6 +374,11 @@
     ROCm CI Infra Report
   </div>
 
+  <!-- TheRock Commit Range -->
+  <div style="padding:16px; margin-bottom:16px; text-align:center; background-color:#f8f9fa; color:#495057; font-size:1.4em; font-weight:500; border:1px solid #dee2e6; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    TheRock Commit Range: <code style="background-color:#e9ecef; color:#495057; padding:4px 8px; border-radius:4px; font-family:monospace; border:1px solid #ced4da;"><span id="therock-start-commit">START_COMMIT</span></code> → <code style="background-color:#e9ecef; color:#495057; padding:4px 8px; border-radius:4px; font-family:monospace; border:1px solid #ced4da;"><span id="therock-end-commit">END_COMMIT</span></code>
+  </div>
+
   <!-- Container -->
   <div style="margin: 2em auto; max-width: 1200px;">
 
@@ -602,7 +607,7 @@
       // Render selected items UI
       function renderSelectedItems() {
         selectedItemsContainer.innerHTML = '';
-        
+
         selectedComponents.forEach(component => {
           const item = document.createElement('div');
           item.className = 'selected-item';
@@ -612,10 +617,10 @@
           `;
           selectedItemsContainer.appendChild(item);
         });
-        
+
         // Show/hide clear all button
         clearAllButton.style.display = selectedComponents.size > 0 ? 'inline-block' : 'none';
-        
+
         // Add remove button listeners
         selectedItemsContainer.querySelectorAll('.remove-btn').forEach(btn => {
           btn.addEventListener('click', function() {
@@ -638,7 +643,7 @@
           });
           return;
         }
-        
+
         // Hide all rows, then show only selected components
         document.querySelectorAll('.report-table tr').forEach(row => {
           if (!row.querySelector('th')) { // Skip header rows
