@@ -69,7 +69,7 @@ jobs:
       BUILD_DIR: B:\build
       # For Windows CI, build dir must use temp disk vs. default repo workspace
       # set cache dir for setup_ccache.py to save logs in temp disk build dir for upload
-      CACHE_DIR: B:\.cache 
+      CACHE_DIR: B:\.cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: B:\.ccache\ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
