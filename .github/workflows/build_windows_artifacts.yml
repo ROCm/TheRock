@@ -115,6 +115,7 @@ jobs:
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
+            --log-dir "$BUILD_DIR/logs/"
 
       - name: Runner health status
         run: |
