@@ -282,7 +282,6 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       therock-fmt
       therock-spdlog
     RUNTIME_DEPS
-      MIOpen
       MIOpen_plugin
   )
   therock_cmake_subproject_glob_c_sources(hipDNN_samples
