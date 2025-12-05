@@ -123,34 +123,11 @@ jobs:
     name: Generate Blame List
     runs-on: ubuntu-latest
     steps:
-      - name: Find last successful CI run
-        id: last_success
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          echo "Finding last successful ci_nightly workflow run on main branch..."
-
-          # Get the last successful run of ci_nightly workflow on main branch
-          LAST_SUCCESS_RUN=$(gh api repos/${{ github.repository }}/actions/workflows/ci_nightly.yml/runs \
-            --jq '.workflow_runs[] | select(.head_branch == "main" and .conclusion == "success") | .head_sha' \
-            | head -1)
-
-          if [ -z "$LAST_SUCCESS_RUN" ]; then
-            echo "No previous successful run found on main branch, skipping blame list generation"
-            exit 0
-          fi
-
-          echo "last_success_commit=$LAST_SUCCESS_RUN" >> $GITHUB_OUTPUT
-          echo "Last successful commit on main: $LAST_SUCCESS_RUN"
-          echo "Current commit: ${{ github.sha }}"
-
-      - name: Generate repository diff report
-        if: steps.last_success.outputs.last_success_commit != ''
+      - name: Generate Diff Report
         uses: ./.github/workflows/therock-repo-diff.yml
         with:
-          start_commit: ${{ steps.last_success.outputs.last_success_commit }}
           end_commit: ${{ github.sha }}
-          workflow_mode: false
+          find_last_successful: "ci_nightly.yml"
 
   # build_python_packages:
   #   name: Build Python Packages
