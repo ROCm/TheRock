@@ -63,6 +63,30 @@ def pin_ck():
         cwd=THEROCK_DIR / "ml-libs" / "composable_kernel",
     )
 
+def get_submodule_commit_range(cwd: Path):
+    """
+    Returns (old_hash, new_hash) for the root repo's submodule updates.
+    This inspects the last commit diff for submodule pointer changes.
+    """
+    # Get the last commit diff for submodule changes
+    output = subprocess.check_output(
+        ["git", "show", "--submodule=log", "--format=", "--name-status"],
+        cwd=str(cwd),
+        text=True
+    )
+
+    old_hash = None
+    new_hash = None
+
+    for line in output.splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 3 and parts[0] == "160000":
+            if old_hash is None:
+                old_hash = parts[1]
+            else:
+                new_hash = parts[1]
+
+    return old_hash, new_hash
 
 def parse_components(components: list[str]) -> list[list]:
     arguments = []
@@ -171,6 +195,32 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
             cwd=THEROCK_DIR,
         )
 
+        # Extract old/new hashes for PR title
+        old_hash, new_hash = get_submodule_commit_range(THEROCK_DIR)
+        if old_hash is None or new_hash is None:
+            log("WARNING: Could not detect old/new commit hashes for PR.")
+            old_hash = "unknown"
+            new_hash = "unknown"
+
+        # PR title uses component name(s)
+        component_name = "-".join(args.components)
+        pr_title = f"Bump {component_name} from {old_hash} to {new_hash}"
+
+        # Description uses MMDYYY
+        pr_date = datetime.today().strftime("%m%d%Y")
+        pr_body = f"Bump happened on {pr_date}"
+
+        # Create PR with gh
+        exec(
+            [
+                "gh", "pr", "create",
+                "--title", pr_title,
+                "--body", pr_body,
+                "--head", args.branch_name,
+                "--base", "main",
+            ],
+            cwd=THEROCK_DIR,
+        )
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="bump_submodules")
