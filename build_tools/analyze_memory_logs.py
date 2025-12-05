@@ -32,10 +32,10 @@ class MemoryLogAnalyzer:
 
     def __init__(self, log_dir: Path):
         """Initialize the memory log analyzer.
-        
+
         Args:
             log_dir: Path to directory containing memory log files.
-            
+
         Attributes:
             phase_data: Dictionary mapping phase names (str) to lists of sample data.
                 Schema for each sample dict:
@@ -50,7 +50,7 @@ class MemoryLogAnalyzer:
 
     def add_sample(self, phase: str, sample_data: Dict[str, Any]) -> None:
         """Add a memory sample to a specific phase.
-        
+
         Args:
             phase: Name of the build phase
             sample_data: Dictionary containing memory metrics for the sample
@@ -59,10 +59,10 @@ class MemoryLogAnalyzer:
 
     def get_phase_samples(self, phase: str) -> List[Dict[str, Any]]:
         """Get all samples for a specific phase.
-        
+
         Args:
             phase: Name of the build phase
-            
+
         Returns:
             List of sample data dictionaries for the phase
         """
@@ -70,7 +70,7 @@ class MemoryLogAnalyzer:
 
     def get_all_phases(self) -> Dict[str, List[Dict[str, Any]]]:
         """Get all phase data.
-        
+
         Returns:
             Dictionary mapping phase names to lists of sample data
         """
@@ -78,7 +78,7 @@ class MemoryLogAnalyzer:
 
     def has_data(self) -> bool:
         """Check if any phase data has been loaded.
-        
+
         Returns:
             True if phase data exists, False otherwise
         """
@@ -308,9 +308,7 @@ class MemoryLogAnalyzer:
             )
 
         # Add warnings for critical phases
-        critical = [
-            a for a in phase_analyses if a["severity"] in ["CRITICAL", "HIGH"]
-        ]
+        critical = [a for a in phase_analyses if a["severity"] in ["CRITICAL", "HIGH"]]
         if critical:
             lines.append("\n### :warning: Phases with High Memory Usage\n\n")
             for analysis in critical:
