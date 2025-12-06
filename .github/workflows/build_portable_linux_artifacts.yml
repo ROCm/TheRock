@@ -155,6 +155,12 @@ jobs:
             exit 1
           fi
 
+      # Analyze ninja build log to generate per-component timing report
+      - name: Analyze Build Times
+        if: ${{ !cancelled() }}
+        run: |
+          python3 build_tools/analyze_build_times.py --build-dir build
+
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
