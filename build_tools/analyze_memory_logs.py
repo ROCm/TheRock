@@ -329,11 +329,16 @@ def main(argv: list[str]):
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
+    # Determine project root (two levels up from this script)
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent
+    default_log_dir = project_root / "build" / "logs"
+
     parser.add_argument(
         "--log-dir",
         type=Path,
-        default=Path("build/logs"),
-        help="Directory containing memory log files (default: build/logs)",
+        default=default_log_dir,
+        help=f"Directory containing memory log files (default: {default_log_dir})",
     )
 
     parser.add_argument(
