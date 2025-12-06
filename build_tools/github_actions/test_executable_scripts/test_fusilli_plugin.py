@@ -37,7 +37,9 @@ environ_vars = os.environ.copy()
 
 # Add THEROCK_BIN_DIR to PATH so rocm_agent_enumerator can be found
 # In CI with flattened artifacts, rocm_agent_enumerator is in THEROCK_BIN_DIR
-environ_vars["PATH"] = f"{THEROCK_BIN_DIR}:{environ_vars.get('PATH', '')}"
+# Use absolute path since subprocess shells may have different working directories
+therock_bin_abs = str(Path(THEROCK_BIN_DIR).resolve())
+environ_vars["PATH"] = f"{therock_bin_abs}:{environ_vars.get('PATH', '')}"
 
 # Determine test filter based on TEST_TYPE environment variable
 test_type = os.getenv("TEST_TYPE", "full")
