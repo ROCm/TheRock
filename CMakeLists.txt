@@ -215,6 +215,7 @@ option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_E
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 
@@ -282,7 +283,6 @@ therock_add_feature(SOLVER
   DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
   REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
-
 
 # Finalize all feature flags.
 therock_finalize_features()
@@ -404,6 +404,7 @@ add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
+
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -412,6 +413,11 @@ add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
+
+# IREE and Fusilli are required by the Fusilli plugin
+if(THEROCK_ENABLE_FUSILLI_PLUGIN)
+  add_subdirectory(iree-libs)
+endif()
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

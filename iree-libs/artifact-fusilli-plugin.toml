@@ -1,0 +1,11 @@
+# fusilli_plugin
+[components.dbg."iree-libs/fusilli_plugin/stage"]
+[components.lib."iree-libs/fusilli_plugin/stage"]
+exclude = [
+  "lib/*.a",
+]
+[components.test."iree-libs/fusilli_plugin/stage"]
+include = [
+  "bin/fusilli_plugin_*_test",
+  "bin/fusilli_plugin/CTestTestfile.cmake",
+]
