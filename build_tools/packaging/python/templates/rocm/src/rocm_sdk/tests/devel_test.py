@@ -78,6 +78,28 @@ class ROCmDevelTest(unittest.TestCase):
         bin_path = path / "bin"
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
 
+    def testCLIUsesDevelRootPath(self):
+        root_path_output = (
+            utils.exec(
+                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
+            )
+            .decode()
+            .strip()
+        )
+        root_path = Path(root_path_output)
+
+        # CLI scripts by default run from _rocm_sdk_core.
+        # When the devel package is installed they should run from _rocm_sdk_devel.
+        rocmpath_output = (
+            utils.exec(["hipconfig", "--rocmpath"], capture=True).decode().strip()
+        )
+        rocmpath = Path(rocmpath_output)
+        self.assertEqual(
+            root_path,
+            rocmpath,
+            msg=f"Expected `hipconfig --rocmpath` to return {root_path}, not {rocmpath}",
+        )
+
     @unittest.skipIf(
         platform.system() == "Windows", "root LLVM symlink only exists on Linux"
     )
