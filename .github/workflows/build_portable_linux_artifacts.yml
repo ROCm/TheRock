@@ -155,6 +155,7 @@ jobs:
             exit 1
           fi
 
+      # Analyze ninja build log to generate per-component timing report
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
         run: |

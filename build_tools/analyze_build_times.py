@@ -1,5 +1,28 @@
 #!/usr/bin/env python3
-"""Analyze Ninja build times and generate HTML report."""
+"""Analyze Ninja build times and generate HTML report.
+
+This script parses the .ninja_log file from a build directory and generates
+an HTML report showing build times for each ROCm component and dependency.
+
+Usage:
+    python analyze_build_times.py --build-dir <path> [--output <path>]
+
+Arguments:
+    --build-dir     Path to the build directory containing .ninja_log (required)
+    --output        Path to output HTML file (optional)
+                    Default: <build-dir>/logs/build_time_analysis.html
+
+Examples:
+    # Generate report with default output path
+    python analyze_build_times.py --build-dir /path/to/build
+
+    # Generate report with custom output path
+    python analyze_build_times.py --build-dir /path/to/build --output report.html
+
+CI Usage:
+    In CI, this script is called automatically after build completion.
+    The --build-dir is set to the CI build directory, and --output is optional.
+"""
 
 import argparse
 import os
@@ -43,7 +66,12 @@ ROCM_COMPONENT_DIRS = {
     "ml-libs",
 }
 
-# Pattern: <name>_<variant>[_suffix].tar.xz
+# Regex to parse artifact filenames: <project>_<variant>[_suffix].tar.xz
+# - Group 1: project name (e.g., "rocBLAS", "MIOpen")
+# - Group 2: variant type (dbg=debug, dev=development, doc=documentation,
+#            lib=library, run=runtime, test=test)
+# - Group 3: optional suffix (e.g., "_gfx90a")
+# Example: "rocBLAS_lib_gfx90a.tar.xz" -> ("rocBLAS", "lib", "_gfx90a")
 ARTIFACT_REGEX = re.compile(r"(.+)_(dbg|dev|doc|lib|run|test)(_.+)?")
 
 # Phase detection rules: (suffix/pattern, phase_name)
@@ -56,6 +84,7 @@ PHASE_RULES = [
     (lambda p: "update" in p and "stamp" in p, "Update"),
 ]
 
+# Category labels for grouping projects in the report
 CATEGORY_ROCM = "ROCm Component"
 CATEGORY_DEP = "Dependency"
 
