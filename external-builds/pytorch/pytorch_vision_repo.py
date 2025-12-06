@@ -28,12 +28,6 @@ The checkout process combines the following activities:
 * Applies "hipified" patches to the pytorch repo and any submodules (by using
   `git am` with patches from `patches/<repo-hashtag>/<repo-name>/hipified`).
 * Records some tag information for subsequent activities.
-
-For one-shot builds and CI use, the above is sufficient. But this tool can also
-be used to develop. Any commits made to PyTorch or any of its submodules can
-be saved locally in TheRock by running `./pybuild.py save-patches`. If checked
-in, CI runs for that revision will incorporate them the same as anyone
-interactively using this tool.
 """
 import argparse
 from pathlib import Path
