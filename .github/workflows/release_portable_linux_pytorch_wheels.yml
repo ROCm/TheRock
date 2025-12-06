@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
+        python_version: ["3.10", "3.11", "3.12", "3.13"]
         pytorch_git_ref: ["release/2.7", "release/2.8", "release/2.9", "nightly"]
         include:
           - pytorch_git_ref: release/2.7

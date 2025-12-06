@@ -35,7 +35,7 @@ Table of contents:
 We recommend installing ROCm and projects like PyTorch via `pip`, the
 [Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
 
-We currently support Python 3.11, 3.12, and 3.13.
+We currently support Python 3.10, 3.11, 3.12, and 3.13.
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
