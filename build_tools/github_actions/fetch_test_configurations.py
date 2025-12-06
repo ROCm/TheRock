@@ -62,6 +62,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 6,
     },
+    "hipblaslt_bench": {
+        "job_name": "hipblaslt_bench",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_hipblaslt_benchmark.py')}",
+        # TODO(lajagapp): Add windows test
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
@@ -77,6 +86,15 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    "rocsolver_bench": {
+        "job_name": "rocsolver_bench",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocsolver_benchmark.py')}",
+        # TODO(lajagapp): Add windows test
         "platform": ["linux"],
         "total_shards": 1,
     },
@@ -142,6 +160,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    "rocrand_bench": {
+        "job_name": "rocrand_bench",
+        "fetch_artifact_args": "--rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocrand_benchmark.py')}",
+        # TODO(lajagapp): Add windows test
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
@@ -157,6 +184,15 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    "rocfft_bench": {
+        "job_name": "rocfft_bench",
+        "fetch_artifact_args": "--fft --rand --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocfft_benchmark.py')}",
+        # TODO(lajagapp): Add windows test
         "platform": ["linux"],
         "total_shards": 1,
     },
