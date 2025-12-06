@@ -61,7 +61,7 @@ on:
 permissions:
   contents: read
 
-run-name: Release portable Linux packages (${{ inputs.families }}, ${{ inputs.release_type }})
+run-name: Release portable Linux packages (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})
 
 jobs:
   setup_metadata:
