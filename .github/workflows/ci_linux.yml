@@ -29,6 +29,9 @@ on:
         type: string
       sanity_check_only_for_family:
         type: boolean
+      monitor_memory:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -47,6 +50,7 @@ jobs:
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       expect_failure: ${{ inputs.expect_failure }}
+      monitor_memory: ${{ inputs.monitor_memory }}
     permissions:
       contents: read
       id-token: write
