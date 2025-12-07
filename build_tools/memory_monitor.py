@@ -41,11 +41,11 @@ class MemoryMonitor:
 
     def __init__(
         self,
-        interval: float = 5.0,
+        interval_seconds: float = 5.0,
         phase_name: str = "Unknown",
         log_file: Optional[Path] = None,
     ):
-        self.interval = interval
+        self.interval_seconds = interval_seconds
         self.phase_name = phase_name
         self.log_file = log_file
         self.running = False
@@ -162,11 +162,11 @@ class MemoryMonitor:
             except Exception as e:
                 print(f"Error collecting memory stats: {e}", file=sys.stderr)
 
-            next_tick += self.interval
+            next_tick += self.interval_seconds
             sleep_for = max(0, next_tick - time.monotonic())
             if sleep_for == 0:
                 print(
-                    f"[WARNING] Stats collection took longer than interval ({self.interval}s)",
+                    f"[WARNING] Stats collection took longer than interval ({self.interval_seconds}s)",
                     file=sys.stderr,
                 )
             time.sleep(sleep_for)
@@ -178,7 +178,7 @@ class MemoryMonitor:
         self.thread = threading.Thread(target=self.monitor_loop, daemon=True)
         self.thread.start()
         print(
-            f"[MONITOR] Memory monitoring started for phase: {self.phase_name} (interval: {self.interval}s)"
+            f"[MONITOR] Memory monitoring started for phase: {self.phase_name} (interval: {self.interval_seconds}s)"
         )
 
     def stop(self):
@@ -187,7 +187,7 @@ class MemoryMonitor:
         self.end_time = time.time()
 
         if hasattr(self, "thread"):
-            self.thread.join(timeout=self.interval + 1)
+            self.thread.join(timeout=self.interval_seconds + 1)
 
         # Print summary
         self.print_summary()
@@ -317,12 +317,12 @@ class MemoryMonitor:
 def run_command_with_monitoring(
     command: list,
     phase_name: str,
-    interval: float,
+    interval_seconds: float,
     log_file: Optional[Path],
 ) -> int:
     """Run a command while monitoring memory usage."""
     monitor = MemoryMonitor(
-        interval=interval,
+        interval_seconds=interval_seconds,
         phase_name=phase_name,
         log_file=log_file,
     )
@@ -404,6 +404,7 @@ def main():
     parser.add_argument(
         "--interval",
         type=float,
+        dest="interval_seconds",
         default=float(os.getenv("MEMORY_MONITOR_INTERVAL", "30")),
         help="Monitoring interval in seconds (default: 30)",
     )
@@ -437,7 +438,7 @@ def main():
         # Background monitoring mode
         print("[INFO] Background monitoring mode - press Ctrl+C to stop")
         monitor = MemoryMonitor(
-            interval=args.interval,
+            interval_seconds=args.interval_seconds,
             phase_name=args.phase,
             log_file=args.log_file,
         )
@@ -458,7 +459,7 @@ def main():
         return_code = run_command_with_monitoring(
             command=args.command,
             phase_name=args.phase,
-            interval=args.interval,
+            interval_seconds=args.interval_seconds,
             log_file=args.log_file,
         )
         return return_code
@@ -466,7 +467,7 @@ def main():
     else:
         # One-shot monitoring
         monitor = MemoryMonitor(
-            interval=args.interval,
+            interval_seconds=args.interval_seconds,
             phase_name=args.phase,
             log_file=args.log_file,
         )

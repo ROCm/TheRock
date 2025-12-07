@@ -56,7 +56,7 @@ def test_monitoring_loop():
 
     try:
         monitor = MemoryMonitor(
-            interval=0.5,  # Fast interval for testing
+            interval_seconds=0.5,  # Fast interval for testing
             phase_name="Test Loop",
             log_file=log_file,
         )
