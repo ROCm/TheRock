@@ -144,4 +144,26 @@ skip_tests = {
             "test_masked_scatter_cuda_uint8 "
         ],
     },
+    "windows": {
+        "torch": [
+            # Windows fatal exception: access violation
+            #   pointing to common_cuda.py `_create_scaling_models_optimizers`
+            "test_grad_scaling_autocast_foreach0_fused0_Adam_cuda_float32",
+        ],
+        "cuda": [
+            # This test uses subprocess.run, so it hangs.
+            # See https://github.com/ROCm/TheRock/issues/999.
+            "test_pinned_memory_use_background_threads",
+            # Windows fatal exception: access violation
+            #   pointing to amdhip64_7.dll ? (happened on CI machine but not local?)
+            # Concerning... the code is just this:
+            #     x = [torch.randn(4, 4).cuda(), torch.cuda.FloatTensor()]
+            #     with tempfile.NamedTemporaryFile() as f:
+            #       torch.save(x, f)
+            #       f.seek(0)
+            #       x_copy = torch.load(f)
+            "test_serialization_array_with_empty",
+            "test_serialization_array_with_storage",
+        ],
+    },
 }

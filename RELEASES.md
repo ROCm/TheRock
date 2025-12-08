@@ -3,7 +3,9 @@
 This page describes how to install and use our release artifacts for ROCm and
 external builds like PyTorch. We produce build artifacts as part of our
 Continuous Integration (CI) build/test workflows as well as release artifacts as
-part of Continuous Delivery (CD) nightly releases. See also the
+part of Continuous Delivery (CD) nightly releases. For the development-status of GPU architecture support in TheRock, please see the [SUPPORTED_GPUS.md](./SUPPORTED_GPUS.md) document, which tracks readiness and onboarding progress for each AMD GPU architecture.
+
+See also the
 [Roadmap for support](ROADMAP.md) and
 [Build artifacts overview](docs/development/artifacts.md) pages.
 
@@ -33,7 +35,7 @@ Table of contents:
 We recommend installing ROCm and projects like PyTorch via `pip`, the
 [Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
 
-We currently support Python 3.11, 3.12, and 3.13.
+We currently support Python 3.10, 3.11, 3.12, and 3.13.
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):

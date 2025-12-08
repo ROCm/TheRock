@@ -10,3 +10,17 @@ updates:
       github-actions:
         patterns:
           - "*"
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      # 2:00 AM PST → 10:00 UTC
+      interval: "cron"
+      cronjob: "0 10 * * *"
+    target-branch: "main"
+    allow:
+      - dependency-name: "rocm-systems"
+    reviewers:
+      - "ScottTodd"
+      - "marbre"
+      - "geomin12"
+    open-pull-requests-limit: 10
