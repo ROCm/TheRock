@@ -12,6 +12,133 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 currentFuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
 
+import re
+import logging
+import yaml
+import copy
+
+
+# Create a common logger
+logger = logging.getLogger("rocm_installer")
+logger.setLevel(logging.INFO)  # default level
+
+# Console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Formatter
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+ch.setFormatter(formatter)
+
+# Add handler if not already added
+if not logger.hasHandlers():
+    logger.addHandler(ch)
+
+
+from prettytable import PrettyTable
+
+
+def print_dict_table(failure_dict):
+    """
+    Prints a clean failure summary table using PrettyTable
+    with visual separation between entries.
+    """
+
+    if not failure_dict:
+        logger.info("All packages installed successfully.")
+        return
+
+    table = PrettyTable()
+    table.field_names = ["Package", "Failure Reason"]
+    table.align["Package"] = "l"
+    table.align["Failure Reason"] = "l"
+
+    items = list(failure_dict.items())
+
+    for idx, (pkg, reason) in enumerate(items):
+        clean_reason = reason.strip()
+
+        # Add a NEWLINE at the end to visually separate entries
+        if idx != len(items) - 1:
+            clean_reason += "\n"   # Adds spacing without breaking table borders
+
+        table.add_row([pkg, clean_reason])
+
+    logger.info("\n" + table.get_string())
+
+def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
+    """
+    Load a YAML configuration file and replace placeholders dynamically.
+
+    :param yaml_path: Path to the YAML file.
+    :param variables: Dictionary of dynamic variables to substitute (e.g., artifact_group, run_id)
+    :return: Dictionary with all placeholders substituted.
+    """
+    if variables is None:
+        variables = {}
+
+    with open(yaml_path, "r") as f:
+        raw_config = yaml.safe_load(f)
+
+    pattern = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+
+    def replace_placeholders(obj):
+        if isinstance(obj, dict):
+            return {k: replace_placeholders(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [replace_placeholders(v) for v in obj]
+        elif isinstance(obj, str):
+            return pattern.sub(lambda m: variables.get(m.group(1), m.group(0)), obj)
+        else:
+            return obj
+
+    return replace_placeholders(copy.deepcopy(raw_config))
+
+# -------------------------------
+# Global OS identification lists
+# -------------------------------
+DEBIAN_OS_IDS = {"ubuntu", "debian"}
+RPM_OS_IDS = {"rhel", "centos", "sles", "almalinux", "fedora", "rocky", "redhat"}
+
+def get_os_id(os_release_path="/etc/os-release"):
+    """
+    Detect the OS family of the current system.
+
+    Reads the OS release information from `/etc/os-release` to determine
+    whether the system belongs to Debian, RedHat, or SUSE family.
+    Falls back to generic Linux detection if `/etc/os-release` is not found.
+
+    Parameters:
+    os_release_path : str, optional
+        Path to the OS release file (default is "/etc/os-release").
+
+    Returns: 
+    str :
+        OS family as one of: "debian", "redhat", "suse", "linux", or "unknown"
+
+    """
+    os_release = {}
+    try:
+        with open("/etc/os-release", "r") as f:
+            for line in f:
+                if "=" in line:
+                    k, v = line.strip().split("=", 1)
+                    os_release[k] = v.strip('"')
+    except FileNotFoundError:
+        system_name = platform.system().lower()
+        return "linux" if "linux" in system_name else "unknown"
+
+    os_id = os_release.get("ID", "").lower()
+    os_like = os_release.get("ID_LIKE", "").lower()
+
+    if os_id in DEBIAN_OS_IDS or any(x in os_like for x in DEBIAN_OS_IDS):
+        return os_id,"debian"
+
+    if os_id in RPM_OS_IDS or any(x in os_like for x in RPM_OS_IDS):
+        return os_id,"rpm"
+
+    return os_id,"unknown"
+
 
 def print_function_name():
     """Print the name of the calling function.
