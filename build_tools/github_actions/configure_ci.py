@@ -504,14 +504,6 @@ def matrix_generator(
         for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
 
-        for key in lookup_matrix:
-            if (
-                platform in lookup_matrix[key]
-                and "sanity_check_only_for_family" in lookup_matrix[key][platform]
-            ):
-                # For nightly runs, we want to run full tests regardless of limited machines, so we delete the sanity_check_only_for_family option
-                del lookup_matrix[key][platform]["sanity_check_only_for_family"]
-
     # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
     unique_test_names = list(set(selected_test_names))
@@ -642,7 +634,6 @@ def main(base_args, linux_families, windows_families):
     # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
         enable_build_jobs = True
-        test_type = "full"
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
