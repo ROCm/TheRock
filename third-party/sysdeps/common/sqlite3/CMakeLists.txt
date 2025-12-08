@@ -12,6 +12,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-sqlite3
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
