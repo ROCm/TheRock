@@ -30,6 +30,31 @@ import tarfile
 from .pattern_match import PatternMatcher, MatchPredicate
 
 
+def _get_pyzstd():
+    """Lazy import pyzstd with helpful error message."""
+    try:
+        import pyzstd
+
+        return pyzstd
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
+            "pyzstd is required for zstd artifact decompression. "
+            "Install it with: pip install pyzstd"
+        )
+
+
+def _open_archive_for_read(path: Path) -> tarfile.TarFile:
+    """Open a tar archive for reading, auto-detecting compression type."""
+    if path.name.endswith(".tar.zst"):
+        pyzstd = _get_pyzstd()
+        zstd_file = pyzstd.ZstdFile(path, mode="rb")
+        return tarfile.TarFile(fileobj=zstd_file, mode="r")
+    elif path.name.endswith(".tar.xz"):
+        return tarfile.TarFile.open(path, mode="r:xz")
+    else:
+        raise ValueError(f"Unknown archive format: {path}")
+
+
 class ArtifactName:
     def __init__(self, name: str, component: str, target_family: str):
         self.name = name
@@ -51,7 +76,7 @@ class ArtifactName:
     @staticmethod
     def from_filename(filename: str) -> Optional["ArtifactName"]:
         # Matches {name}_{component}_{target_family} and an archive extension.
-        m = re.match(r"^([^_]+)_([^_]+)_([^_]+)\.tar.xz$", filename)
+        m = re.match(r"^([^_]+)_([^_]+)_([^_]+)\.tar\.(zst|xz)$", filename)
         if not m:
             return None
         return ArtifactName(m.group(1), m.group(2), m.group(3))
@@ -181,7 +206,7 @@ class ArtifactPopulator:
                     pm.copy_to(destdir=destdir, verbose=self.verbose, remove_dest=False)
             else:
                 # Process as an archive file.
-                with tarfile.TarFile.open(artifact_path, mode="r:xz") as tf:
+                with _open_archive_for_read(artifact_path) as tf:
                     self.on_artifact_archive(artifact_path)
                     # Read manifest first.
                     manifest_member = tf.next()
