@@ -53,7 +53,7 @@ def build_configure(manylinux=False):
         missing_vars.append("package_version")
     if not build_dir:
         missing_vars.append("BUILD_DIR")
-    
+
     if missing_vars:
         raise Exception(
             f"Missing required environment variables: {', '.join(missing_vars)}\n"
@@ -63,7 +63,7 @@ def build_configure(manylinux=False):
             f"  $env:package_version = '1.0.0'\n"
             f"  $env:BUILD_DIR = 'build'\n"
         )
-    
+
     logging.info(f"Building package {package_version}")
 
     cmd = [
