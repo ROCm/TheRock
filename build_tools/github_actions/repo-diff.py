@@ -77,6 +77,7 @@ from github_actions_utils import (
     gha_send_request,
 )
 
+
 # HTML Helper Functions
 def format_commit_date(date_string: str) -> str:
     """Format ISO date string to readable format"""
@@ -127,24 +128,32 @@ def create_commit_item_html(commit: Dict[str, Any], repo_name: str) -> str:
     )
 
 
-def create_commit_list_container(commit_items: List[str], component_status: Optional[str] = None) -> str:
+def create_commit_list_container(
+    commit_items: List[str], component_status: Optional[str] = None
+) -> str:
     """Create a scrollable container for commit items with support for component status"""
     if component_status == "newly_added":
-        content = '<div class="newly-added"><strong>NEWLY ADDED:</strong> This component was newly added. Showing current tip commit.</div>' + "".join(commit_items)
+        content = (
+            '<div class="newly-added"><strong>NEWLY ADDED:</strong> This component was newly added. Showing current tip commit.</div>'
+            + "".join(commit_items)
+        )
     elif component_status == "removed":
         content = '<div class="removed">Component removed in this version</div>'
     elif component_status == "reverted":
-        content = '<div class="reverted"><strong>REVERTED SUBMODULE:</strong> This submodule was reverted to an earlier commit. Displaying reverted commits</div>' + "".join(commit_items)
+        content = (
+            '<div class="reverted"><strong>REVERTED SUBMODULE:</strong> This submodule was reverted to an earlier commit. Displaying reverted commits</div>'
+            + "".join(commit_items)
+        )
     elif not commit_items:
         content = '<div class="no-commits">Component has no commits in this range (Superrepo Component Unchanged)</div>'
     else:
         content = "".join(commit_items)
 
-    container_classes = ['commit-list']
+    container_classes = ["commit-list"]
     if component_status == "reverted":
-        container_classes.append('reverted-bg')
+        container_classes.append("reverted-bg")
     elif component_status == "newly_added":
-        container_classes.append('newly-added-bg')
+        container_classes.append("newly-added-bg")
 
     return f"<div class='{' '.join(container_classes)}'>" f"{content}</div>"
 
@@ -157,12 +166,13 @@ def create_table_wrapper(headers: List[str], rows: List[str]) -> str:
         f"<tr>{header_html}</tr>" + "".join(rows) + "</table>"
     )
 
+
 # HTML Table Functions
 def generate_superrepo_html_table(
     allocation: Dict[str, List[str]],
     all_commits: Dict[str, List[Dict[str, Any]]],
     repo_name: str,
-    component_status: Optional[Dict[str, str]] = None
+    component_status: Optional[Dict[str, str]] = None,
 ) -> str:
     """Create a styled HTML table for superrepo commit differences with project allocation"""
     rows = []
@@ -187,8 +197,7 @@ def generate_superrepo_html_table(
         # Determine component status from parameter
         status = component_status.get(component) if component_status else None
         commit_list_html = create_commit_list_container(
-            commit_items=commit_items,
-            component_status=status
+            commit_items=commit_items, component_status=status
         )
 
         rows.append(
@@ -236,7 +245,10 @@ def generate_superrepo_html_table(
     return table + commit_projects_html
 
 
-def generate_non_superrepo_html_table(submodule_commits: Dict[str, List[Dict[str, Any]]], status_groups: Optional[Dict[str, List[str]]] = None) -> str:
+def generate_non_superrepo_html_table(
+    submodule_commits: Dict[str, List[Dict[str, Any]]],
+    status_groups: Optional[Dict[str, List[str]]] = None,
+) -> str:
     """Generate an HTML table for other components"""
     rows = []
 
@@ -254,23 +266,28 @@ def generate_non_superrepo_html_table(submodule_commits: Dict[str, List[Dict[str
         if status_groups:
             if submodule in status_groups.get("reverted", []):
                 component_status = "reverted"
-                row_classes.append('reverted-bg')
+                row_classes.append("reverted-bg")
             elif submodule in status_groups.get("newly_added", []):
                 component_status = "newly_added"
-                row_classes.append('newly-added-bg')
+                row_classes.append("newly-added-bg")
 
         # Create scrollable list for commits
         commit_list_html = create_commit_list_container(commit_items, component_status)
 
-        row_class_attr = f'class="{" ".join(row_classes)}"' if row_classes else ''
+        row_class_attr = f'class="{" ".join(row_classes)}"' if row_classes else ""
         rows.append(
-            f"<tr {row_class_attr}>" f"<td>{submodule}</td>" f"<td>{commit_list_html}</td>" f"</tr>"
+            f"<tr {row_class_attr}>"
+            f"<td>{submodule}</td>"
+            f"<td>{commit_list_html}</td>"
+            f"</tr>"
         )
 
     return create_table_wrapper(headers=["Submodule", "Commits"], rows=rows)
 
 
-def generate_summary_content(items_data: Dict[str, List[Any]], summary_type: str = "submodules") -> str:
+def generate_summary_content(
+    items_data: Dict[str, List[Any]], summary_type: str = "submodules"
+) -> str:
     """Generate HTML content for summary categories (without container wrapper)"""
     if not any(items_data.values()):
         return ""
@@ -540,6 +557,7 @@ def find_submodules(commit_sha: str) -> Dict[str, str]:
 
     return submodules
 
+
 def is_commit_newer_than(repo_name: str, sha1: str, sha2: str) -> bool:
     """Check if sha1 is newer than sha2 by comparing commit timestamps."""
     try:
@@ -551,7 +569,9 @@ def is_commit_newer_than(repo_name: str, sha1: str, sha2: str) -> bool:
         commit2_data = gha_send_request(commit2_url)
 
         if not commit1_data or not commit2_data:
-            print(f"  Warning: Could not fetch commit data for comparison in {repo_name}")
+            print(
+                f"  Warning: Could not fetch commit data for comparison in {repo_name}"
+            )
             return False
 
         # Extract commit dates
@@ -559,7 +579,9 @@ def is_commit_newer_than(repo_name: str, sha1: str, sha2: str) -> bool:
         date2_str = commit2_data.get("commit", {}).get("author", {}).get("date")
 
         if not date1_str or not date2_str:
-            print(f"  Warning: Could not extract commit dates for comparison in {repo_name}")
+            print(
+                f"  Warning: Could not extract commit dates for comparison in {repo_name}"
+            )
             return False
 
         # Parse dates and compare
@@ -572,7 +594,10 @@ def is_commit_newer_than(repo_name: str, sha1: str, sha2: str) -> bool:
         print(f"  Error comparing commit timestamps in {repo_name}: {e}")
         return False
 
-def fetch_commits_in_range(repo_name: str, start_sha: str, end_sha: str) -> List[Dict[str, Any]]:
+
+def fetch_commits_in_range(
+    repo_name: str, start_sha: str, end_sha: str
+) -> List[Dict[str, Any]]:
     """Core function to fetch commits between two SHAs."""
     commits = []
     found_start = False
@@ -609,7 +634,11 @@ def fetch_commits_in_range(repo_name: str, start_sha: str, end_sha: str) -> List
     return commits
 
 
-def detect_component_changes(start_components: List[str], end_components: List[str], repo_name: Optional[str] = None) -> Dict[str, set]:
+def detect_component_changes(
+    start_components: List[str],
+    end_components: List[str],
+    repo_name: Optional[str] = None,
+) -> Dict[str, set]:
     """Compare two component lists to find added/removed components"""
     start_set = set(start_components)
     end_set = set(end_components)
@@ -630,7 +659,9 @@ def detect_component_changes(start_components: List[str], end_components: List[s
     return {"added": added, "removed": removed}
 
 
-def get_commits_by_directories(repo_name: str, start_sha: str, end_sha: str, project_directories: List[str]) -> Tuple[Dict[str, List[Dict[str, Any]]], List[Dict[str, Any]]]:
+def get_commits_by_directories(
+    repo_name: str, start_sha: str, end_sha: str, project_directories: List[str]
+) -> Tuple[Dict[str, List[Dict[str, Any]]], List[Dict[str, Any]]]:
     """Get commits by project directories using GitHub API path parameter."""
     print(
         f"  Getting commits by directories for {repo_name} from {start_sha} to {end_sha}"
@@ -638,9 +669,7 @@ def get_commits_by_directories(repo_name: str, start_sha: str, end_sha: str, pro
 
     # Step 1: Get all commits in range
     all_commits = fetch_commits_in_range(
-        repo_name=repo_name,
-        start_sha=start_sha,
-        end_sha=end_sha
+        repo_name=repo_name, start_sha=start_sha, end_sha=end_sha
     )
 
     # Create SHA set for fast range checking when filtering directory commits
@@ -727,7 +756,9 @@ def get_commits_by_directories(repo_name: str, start_sha: str, end_sha: str, pro
 
 
 # Workflow Summary Function
-def process_superrepo_changes(submodule: str, old_sha: str, new_sha: str) -> Dict[str, Any]:
+def process_superrepo_changes(
+    submodule: str, old_sha: str, new_sha: str
+) -> Dict[str, Any]:
     """Process component changes for superrepos and generate HTML content"""
     print(f"\n=== Processing {submodule.upper()} superrepo ===")
 
@@ -739,7 +770,7 @@ def process_superrepo_changes(submodule: str, old_sha: str, new_sha: str) -> Dic
     component_changes = detect_component_changes(
         start_components=start_components,
         end_components=end_components,
-        repo_name=submodule
+        repo_name=submodule,
     )
 
     # Get all components and create directory list
@@ -753,7 +784,7 @@ def process_superrepo_changes(submodule: str, old_sha: str, new_sha: str) -> Dic
         repo_name=submodule,
         start_sha=old_sha,
         end_sha=new_sha,
-        project_directories=project_directories
+        project_directories=project_directories,
     )
 
     # Categorize components based on commit activity
@@ -788,7 +819,9 @@ def process_superrepo_changes(submodule: str, old_sha: str, new_sha: str) -> Dic
             tip_commits = gha_send_request(url)
             if tip_commits and len(tip_commits) > 0:
                 allocation[comp] = [tip_commits[0]]  # Show just the tip commit
-                print(f"  Found tip commit for newly added component {comp}: {tip_commits[0]['sha'][:7]}")
+                print(
+                    f"  Found tip commit for newly added component {comp}: {tip_commits[0]['sha'][:7]}"
+                )
             else:
                 allocation[comp] = []  # No commits found
                 print(f"  No tip commit found for newly added component {comp}")
@@ -805,7 +838,7 @@ def process_superrepo_changes(submodule: str, old_sha: str, new_sha: str) -> Dic
         allocation=allocation,
         all_commits=all_commits_for_display,
         repo_name=submodule,
-        component_status=component_status
+        component_status=component_status,
     )
 
     return {
@@ -816,7 +849,9 @@ def process_superrepo_changes(submodule: str, old_sha: str, new_sha: str) -> Dic
     }
 
 
-def create_newly_added_superrepo_html(submodule: str, new_sha: str, commit_message: str) -> str:
+def create_newly_added_superrepo_html(
+    submodule: str, new_sha: str, commit_message: str
+) -> str:
     """Create HTML for newly added superrepos"""
     commit_badge = create_commit_badge_html(new_sha, submodule)
     return f"""
@@ -900,12 +935,17 @@ def generate_step_summary(
 
 # Main Function
 def main(argv: Optional[List[str]] = None) -> int:
-    """Main entry point for the script that can be called from tests or other scripts. """
+    """Main entry point for the script that can be called from tests or other scripts."""
     # Arguments parsed
     parser = argparse.ArgumentParser(description="Generate HTML report for repo diffs")
-    parser.add_argument("--start", required=False, help="Start workflow ID or commit SHA")
+    parser.add_argument(
+        "--start", required=False, help="Start workflow ID or commit SHA"
+    )
     parser.add_argument("--end", required=True, help="End workflow ID or commit SHA")
-    parser.add_argument("--find-last-successful", help="Workflow name to find last successful run (e.g., 'ci_nightly.yml')")
+    parser.add_argument(
+        "--find-last-successful",
+        help="Workflow name to find last successful run (e.g., 'ci_nightly.yml')",
+    )
 
     args = parser.parse_args(argv)
 
@@ -921,18 +961,26 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.find_last_successful:
         print(f"Finding last successful run of workflow: {args.find_last_successful}")
         try:
-            last_run = gha_query_last_successful_workflow_run("ROCm/TheRock", args.find_last_successful, branch="main")
+            last_run = gha_query_last_successful_workflow_run(
+                "ROCm/TheRock", args.find_last_successful, branch="main"
+            )
             if last_run:
                 if mode == "workflow":
                     # In workflow mode, use the workflow run ID
-                    args.start = str(last_run['id'])
-                    print(f"Found last successful run: {last_run['id']} (workflow mode)")
+                    args.start = str(last_run["id"])
+                    print(
+                        f"Found last successful run: {last_run['id']} (workflow mode)"
+                    )
                 else:
                     # In commit mode, use the head SHA
-                    args.start = last_run['head_sha']
-                    print(f"Found last successful run: {last_run['id']} with commit {args.start} (commit mode)")
+                    args.start = last_run["head_sha"]
+                    print(
+                        f"Found last successful run: {last_run['id']} with commit {args.start} (commit mode)"
+                    )
             else:
-                print(f"No previous successful run found for {args.find_last_successful} on main branch")
+                print(
+                    f"No previous successful run found for {args.find_last_successful} on main branch"
+                )
                 return 1
         except Exception as e:
             print(f"Error finding last successful workflow run: {e}")
@@ -996,7 +1044,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "newly_added": [],
         "unchanged": [],
         "changed": [],
-        "reverted": []
+        "reverted": [],
     }
     html_reports = {}
     superrepo_component_changes = {}
@@ -1053,9 +1101,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 status_groups["unchanged"].append(submodule)
             else:
                 # Check to see if this submodule was reverted
-                if is_commit_newer_than(repo_name=submodule, sha1=old_sha, sha2=new_sha):
+                if is_commit_newer_than(
+                    repo_name=submodule, sha1=old_sha, sha2=new_sha
+                ):
                     status_groups["reverted"].append(submodule)
-                    print(f"REVERTED: {submodule} {old_sha[:7]} -> {new_sha[:7]} (reverted)")
+                    print(
+                        f"REVERTED: {submodule} {old_sha[:7]} -> {new_sha[:7]} (reverted)"
+                    )
                     # If reverted we still want to get the list of commits so switch the start and end commits
                     old_sha, new_sha = new_sha, old_sha
                 else:
@@ -1065,9 +1117,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
                 # Process superrepo using consolidated function
                 result = process_superrepo_changes(
-                    submodule=submodule,
-                    old_sha=old_sha,
-                    new_sha=new_sha
+                    submodule=submodule, old_sha=old_sha, new_sha=new_sha
                 )
                 html_reports[submodule] = {
                     "start_commit": result["start_commit"],
@@ -1083,9 +1133,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 # For other submodules, get commit history
                 submodule_commits[submodule] = fetch_commits_in_range(
-                    repo_name=submodule,
-                    start_sha=old_sha,
-                    end_sha=new_sha
+                    repo_name=submodule, start_sha=old_sha, end_sha=new_sha
                 )
 
     # Print summary
@@ -1097,30 +1145,32 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f" Changed: {len(status_groups['changed'])}")
     print(f" Reverted: {len(status_groups['reverted'])}")
     # Show detailed lists
-    if status_groups['newly_added']:
+    if status_groups["newly_added"]:
         print(f"\n NEWLY ADDED SUBMODULES:")
-        for sub in sorted(status_groups['newly_added']):
+        for sub in sorted(status_groups["newly_added"]):
             print(f"  + {sub} -> {new_submodules[sub][:7]}")
 
-    if status_groups['removed']:
+    if status_groups["removed"]:
         print(f"\n  REMOVED SUBMODULES:")
-        for sub in sorted(status_groups['removed']):
+        for sub in sorted(status_groups["removed"]):
             print(f"  - {sub} (was at {old_submodules[sub][:7]})")
 
-    if status_groups['unchanged']:
+    if status_groups["unchanged"]:
         print(f"\n UNCHANGED SUBMODULES:")
-        for sub in sorted(status_groups['unchanged']):
+        for sub in sorted(status_groups["unchanged"]):
             print(f"  = {sub} -> {new_submodules[sub][:7]}")
 
-    if status_groups['changed']:
+    if status_groups["changed"]:
         print(f"\n CHANGED SUBMODULES:")
-        for sub in sorted(status_groups['changed']):
+        for sub in sorted(status_groups["changed"]):
             print(f"  * {sub} {old_submodules[sub][:7]} -> {new_submodules[sub][:7]}")
 
-    if status_groups['reverted']:
+    if status_groups["reverted"]:
         print(f"\n REVERTED SUBMODULES:")
-        for sub in sorted(status_groups['reverted']):
-            print(f"  ↩ {sub} {old_submodules[sub][:7]} -> {new_submodules[sub][:7]} (reverted)")
+        for sub in sorted(status_groups["reverted"]):
+            print(
+                f"  ↩ {sub} {old_submodules[sub][:7]} -> {new_submodules[sub][:7]} (reverted)"
+            )
 
     # Print all the submodules and their commits
     print(f"\n=== SUBMODULE COMMIT DETAILS ===")
@@ -1144,7 +1194,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Generate HTML report for other component submodules
     print(f"\n=== Generating Other Components HTML Report ===")
-    non_superrepo_html = generate_non_superrepo_html_table(submodule_commits, status_groups)
+    non_superrepo_html = generate_non_superrepo_html_table(
+        submodule_commits, status_groups
+    )
 
     # Store non-superrepo HTML report with TheRock start/end commits
     html_reports["non-superrepo"] = {

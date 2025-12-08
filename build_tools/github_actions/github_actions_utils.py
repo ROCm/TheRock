@@ -157,7 +157,9 @@ def gha_query_workflow_run_information(github_repository: str, workflow_run_id: 
     return workflow_run
 
 
-def gha_query_last_successful_workflow_run(github_repository: str, workflow_name: str, branch: str = "main") -> dict | None:
+def gha_query_last_successful_workflow_run(
+    github_repository: str, workflow_name: str, branch: str = "main"
+) -> dict | None:
     """Find the last successful run of a specific workflow on the specified branch.
 
     Args:
