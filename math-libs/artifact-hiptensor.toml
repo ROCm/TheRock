@@ -4,6 +4,7 @@ optional = true
 [components.dev."math-libs/hipTensor/stage"]
 include = [
   "include/hiptensor/*",
+  "lib/cmake/hiptensor/*",
 ]
 [components.lib."math-libs/hipTensor/stage"]
 optional = true
