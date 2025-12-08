@@ -29,7 +29,7 @@ PLATFORM = platform.system().lower()
 cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
-extra_cmake_options = os.getenv("extra_cmake_options")
+extra_cmake_options = os.getenv("extra_cmake_options", "")  # Default to empty string
 build_dir = os.getenv("BUILD_DIR")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
@@ -45,6 +45,25 @@ platform_options = {
 
 
 def build_configure(manylinux=False):
+    # Validate required environment variables
+    missing_vars = []
+    if not amdgpu_families:
+        missing_vars.append("amdgpu_families")
+    if not package_version:
+        missing_vars.append("package_version")
+    if not build_dir:
+        missing_vars.append("BUILD_DIR")
+    
+    if missing_vars:
+        raise Exception(
+            f"Missing required environment variables: {', '.join(missing_vars)}\n"
+            f"Please set these variables before running the script.\n"
+            f"Example:\n"
+            f"  $env:amdgpu_families = 'gfx90a'\n"
+            f"  $env:package_version = '1.0.0'\n"
+            f"  $env:BUILD_DIR = 'build'\n"
+        )
+    
     logging.info(f"Building package {package_version}")
 
     cmd = [
