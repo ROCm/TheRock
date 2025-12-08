@@ -198,7 +198,7 @@ except Exception as e:
                 supported_gpus = line.split("|")[1].split(",")
             elif line.startswith("VISIBLE|"):
                 visible_gpus = line.split("|")[1].split(",")
-        
+
         if not supported_gpus or not visible_gpus:
             print(f"\n[ERROR] Failed to parse GPU info from subprocess")
             sys.exit(1)

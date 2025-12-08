@@ -10,6 +10,7 @@ from pytorch_utils import detect_amdgpu_family, detect_pytorch_version
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
+
 def cmd_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="""
@@ -48,9 +49,7 @@ By default the smoke-tests directory is determined based on this script's locati
     args = parser.parse_args(argv)
 
     if not args.smoke_tests_dir.exists():
-        parser.error(
-            f"Directory at '{args.smoke_tests_dir}' does not exist."
-        )
+        parser.error(f"Directory at '{args.smoke_tests_dir}' does not exist.")
 
     return args
 
