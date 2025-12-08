@@ -11,6 +11,7 @@ skip_tests = {
             # Greatest relative difference: 0.01495361328125 at index (3, 114, 184) (up to 0.01 allowed)
             "test_index_add_correctness",
             "test_graph_concurrent_replay",
+            "test_hip_device_count",  # This test is broken 2.7 and 2.8 and is fixed in 2.9
         ]
     },
 }
