@@ -84,7 +84,7 @@ class ROCmCoreTest(unittest.TestCase):
         )
 
         for so_path in so_paths:
-            if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
+            if "amd_smi" in str(so_path) or "amdsmi" in str(so_path):
                 # TODO: Library preloads for amdsmi need to be implement.
                 # Though this is not needed for the amd-smi client.
                 self.skipTest("Skipping amdsmi test")
