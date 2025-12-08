@@ -144,7 +144,7 @@ jobs:
 
       - name: Run PyTorch smoketests
         run: |
-          python ./external-builds/pytorch/run_linux_pytorch_smoke_tests.py
+          python ./external-builds/pytorch/run_pytorch_smoke_tests.py
 
       - name: (Linux) Run PyTorch tests
         if: ${{ contains(inputs.test_runs_on, 'linux') }}
