@@ -113,12 +113,71 @@
         color: #28a745;
         background-color: #d4edda;
         border-radius: 4px;
+        padding: 10px;
+        border-left: 4px solid #28a745;
     }
 
     .removed {
         color: #dc3545;
         background-color: #f8d7da;
         border-radius: 4px;
+    }
+
+    .commit-list .reverted {
+        background-color: #fff3cd;
+        padding: 10px;
+        border-radius: 4px;
+        border-left: 4px solid #ffc107;
+    }
+
+    /* Background colors for special status rows and containers */
+    tr.reverted-bg {
+        background-color: #fff3cd;
+    }
+
+    tr.newly-added-bg {
+        background-color: #d4edda;
+    }
+
+    .commit-list.reverted-bg {
+        background-color: #fff3cd;
+    }
+
+    .commit-list.newly-added-bg {
+        background-color: #d4edda;
+    }
+
+    /* Newly added superrepo styling */
+    .newly-added-superrepo {
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-left: 4px solid #28a745;
+        margin-bottom: 16px;
+    }
+
+    .newly-added-superrepo h3 {
+        margin-top: 0;
+        color: #28a745;
+        font-size: 1.4em;
+    }
+
+    .newly-added-superrepo p {
+        margin-bottom: 12px;
+        font-size: 1.1em;
+    }
+
+    .newly-added-superrepo .commit-info {
+        background-color: #ffffff;
+        padding: 12px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+    }
+
+    .newly-added-superrepo .note {
+        margin-top: 12px;
+        margin-bottom: 0;
+        color: #6c757d;
+        font-style: italic;
     }
 
     /* Consolidated Summary Styles */

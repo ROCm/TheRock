@@ -10,6 +10,7 @@ import base64
 import urllib.parse
 from collections import defaultdict
 from typing import Optional, Dict, List, Any, Tuple
+from datetime import datetime
 
 # Establish script's location as reference point
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -76,15 +77,23 @@ def create_commit_item_html(commit: Dict[str, Any], repo_name: str) -> str:
 def create_commit_list_container(commit_items: List[str], component_status: Optional[str] = None) -> str:
     """Create a scrollable container for commit items with support for component status"""
     if component_status == "newly_added":
-        content = '<div class="newly-added">Newly added component (no previous version to compare)</div>'
+        content = '<div class="newly-added"><strong>NEWLY ADDED:</strong> This component was newly added. Showing current tip commit.</div>' + "".join(commit_items)
     elif component_status == "removed":
         content = '<div class="removed">Component removed in this version</div>'
+    elif component_status == "reverted":
+        content = '<div class="reverted"><strong>REVERTED SUBMODULE:</strong> This submodule was reverted to an earlier commit. Displaying reverted commits</div>' + "".join(commit_items)
     elif not commit_items:
         content = '<div class="no-commits">Component has no commits in this range (Superrepo Component Unchanged)</div>'
     else:
         content = "".join(commit_items)
 
-    return f"<div class='commit-list'>" f"{content}</div>"
+    container_classes = ['commit-list']
+    if component_status == "reverted":
+        container_classes.append('reverted-bg')
+    elif component_status == "newly_added":
+        container_classes.append('newly-added-bg')
+
+    return f"<div class='{' '.join(container_classes)}'>" f"{content}</div>"
 
 
 def create_table_wrapper(headers: List[str], rows: List[str]) -> str:
@@ -94,7 +103,6 @@ def create_table_wrapper(headers: List[str], rows: List[str]) -> str:
         "<table class='report-table'>"
         f"<tr>{header_html}</tr>" + "".join(rows) + "</table>"
     )
-
 
 # HTML Table Functions
 def generate_superrepo_html_table(
@@ -175,7 +183,7 @@ def generate_superrepo_html_table(
     return table + commit_projects_html
 
 
-def generate_non_superrepo_html_table(submodule_commits: Dict[str, List[Dict[str, Any]]]) -> str:
+def generate_non_superrepo_html_table(submodule_commits: Dict[str, List[Dict[str, Any]]], status_groups: Optional[Dict[str, List[str]]] = None) -> str:
     """Generate an HTML table for other components"""
     rows = []
 
@@ -187,11 +195,23 @@ def generate_non_superrepo_html_table(submodule_commits: Dict[str, List[Dict[str
         else:
             commit_items.append("<div>No commits found</div>")
 
-        # Create scrollable list for commits
-        commit_list_html = create_commit_list_container(commit_items)
+        # Check if this submodule has special status
+        component_status = None
+        row_classes = []
+        if status_groups:
+            if submodule in status_groups.get("reverted", []):
+                component_status = "reverted"
+                row_classes.append('reverted-bg')
+            elif submodule in status_groups.get("newly_added", []):
+                component_status = "newly_added"
+                row_classes.append('newly-added-bg')
 
+        # Create scrollable list for commits
+        commit_list_html = create_commit_list_container(commit_items, component_status)
+
+        row_class_attr = f'class="{" ".join(row_classes)}"' if row_classes else ''
         rows.append(
-            f"<tr>" f"<td>{submodule}</td>" f"<td>{commit_list_html}</td>" f"</tr>"
+            f"<tr {row_class_attr}>" f"<td>{submodule}</td>" f"<td>{commit_list_html}</td>" f"</tr>"
         )
 
     return create_table_wrapper(headers=["Submodule", "Commits"], rows=rows)
@@ -244,6 +264,15 @@ def generate_summary_content(items_data: Dict[str, List[Any]], summary_type: str
             html += f"<li><code>{item}</code></li>"
         html += "</ul></div>"
 
+    # Reverted items
+    if items_data.get("reverted"):
+        html += '<div class="summary-category reverted">'
+        html += f'<h3>Reverted {summary_type.title()} ({len(items_data["reverted"])}/{total_items}):</h3>'
+        html += '<ul class="summary-list">'
+        for item in sorted(items_data["reverted"]):
+            html += f"<li><code>{item}</code></li>"
+        html += "</ul></div>"
+
     return html
 
 
@@ -251,10 +280,7 @@ def generate_therock_html_report(
     html_reports: Dict[str, Dict[str, str]],
     therock_start_commit: str,
     therock_end_commit: str,
-    removed_submodules: Optional[List[str]] = None,
-    newly_added_submodules: Optional[List[str]] = None,
-    unchanged_submodules: Optional[List[str]] = None,
-    changed_submodules: Optional[List[str]] = None,
+    status_groups: Dict[str, List[str]],
     superrepo_component_changes: Optional[Dict[str, Dict[str, List[str]]]] = None,
 ) -> None:
     """Generate a comprehensive HTML report for TheRock repository diff"""
@@ -267,10 +293,11 @@ def generate_therock_html_report(
 
     # Generate submodule changes content
     submodule_data = {
-        "added": newly_added_submodules or [],
-        "removed": removed_submodules or [],
-        "changed": changed_submodules or [],
-        "unchanged": unchanged_submodules or [],
+        "added": status_groups.get("newly_added", []),
+        "removed": status_groups.get("removed", []),
+        "changed": status_groups.get("changed", []),
+        "unchanged": status_groups.get("unchanged", []),
+        "reverted": status_groups.get("reverted", []),
     }
 
     submodule_content = generate_summary_content(submodule_data, "submodules")
@@ -460,6 +487,37 @@ def find_submodules(commit_sha: str) -> Dict[str, str]:
 
     return submodules
 
+def is_commit_newer_than(repo_name: str, sha1: str, sha2: str) -> bool:
+    """Check if sha1 is newer than sha2 by comparing commit timestamps."""
+    try:
+        # Get commit info for both SHAs
+        commit1_url = f"https://api.github.com/repos/ROCm/{repo_name}/commits/{sha1}"
+        commit2_url = f"https://api.github.com/repos/ROCm/{repo_name}/commits/{sha2}"
+
+        commit1_data = gha_send_request(commit1_url)
+        commit2_data = gha_send_request(commit2_url)
+
+        if not commit1_data or not commit2_data:
+            print(f"  Warning: Could not fetch commit data for comparison in {repo_name}")
+            return False
+
+        # Extract commit dates
+        date1_str = commit1_data.get("commit", {}).get("author", {}).get("date")
+        date2_str = commit2_data.get("commit", {}).get("author", {}).get("date")
+
+        if not date1_str or not date2_str:
+            print(f"  Warning: Could not extract commit dates for comparison in {repo_name}")
+            return False
+
+        # Parse dates and compare
+        date1 = datetime.fromisoformat(date1_str.replace("Z", "+00:00"))
+        date2 = datetime.fromisoformat(date2_str.replace("Z", "+00:00"))
+
+        return date1 > date2
+
+    except Exception as e:
+        print(f"  Error comparing commit timestamps in {repo_name}: {e}")
+        return False
 
 def fetch_commits_in_range(repo_name: str, start_sha: str, end_sha: str) -> List[Dict[str, Any]]:
     """Core function to fetch commits between two SHAs."""
@@ -665,10 +723,26 @@ def process_superrepo_changes(submodule: str, old_sha: str, new_sha: str) -> Dic
         "unchanged": unchanged_components,
     }
 
-    # Create component status mapping
+    # Create component status mapping and fetch tip commits for newly added components
     component_status = {}
     for comp in component_changes["added"]:
         component_status[comp] = "newly_added"
+        # Fetch tip commit for newly added component
+        try:
+            comp_path = comp + "/" if not comp.endswith("/") else comp
+            params = {"sha": new_sha, "path": comp_path, "per_page": 1}
+            url = f"https://api.github.com/repos/ROCm/{submodule}/commits?{urllib.parse.urlencode(params)}"
+            tip_commits = gha_send_request(url)
+            if tip_commits and len(tip_commits) > 0:
+                allocation[comp] = [tip_commits[0]]  # Show just the tip commit
+                print(f"  Found tip commit for newly added component {comp}: {tip_commits[0]['sha'][:7]}")
+            else:
+                allocation[comp] = []  # No commits found
+                print(f"  No tip commit found for newly added component {comp}")
+        except Exception as e:
+            print(f"  Error fetching tip commit for {comp}: {e}")
+            allocation[comp] = []  # Fallback to empty
+
     for comp in component_changes["removed"]:
         allocation[comp] = []  # Add removed components with empty commits
         component_status[comp] = "removed"
@@ -693,15 +767,15 @@ def create_newly_added_superrepo_html(submodule: str, new_sha: str, commit_messa
     """Create HTML for newly added superrepos"""
     commit_badge = create_commit_badge_html(new_sha, submodule)
     return f"""
-    <div style="padding: 20px; background-color: #f8f9fa; border-left: 4px solid #28a745; margin-bottom: 16px;">
-        <h3 style="margin-top: 0; color: #28a745; font-size: 1.4em;">Newly Added Superrepo</h3>
-        <p style="margin-bottom: 12px; font-size: 1.1em;">
+    <div class="newly-added-superrepo">
+        <h3>Newly Added Superrepo</h3>
+        <p>
             This <strong>{submodule}</strong> superrepo has been newly added to TheRock repository.
         </p>
-        <div style="background-color: #ffffff; padding: 12px; border-radius: 4px; border: 1px solid #dee2e6;">
+        <div class="commit-info">
             <strong>Current(Tip) Commit:</strong> {commit_badge} {commit_message}
         </div>
-        <p style="margin-top: 12px; margin-bottom: 0; color: #6c757d; font-style: italic;">
+        <p class="note">
             No previous version exists for comparison. Future reports will show detailed component-level changes.
         </p>
     </div>
@@ -713,10 +787,7 @@ def generate_step_summary(
     end_commit: str,
     html_reports: Dict[str, Dict[str, str]],
     submodule_commits: Dict[str, List[Dict[str, Any]]],
-    removed_submodules: Optional[List[str]] = None,
-    newly_added_submodules: Optional[List[str]] = None,
-    unchanged_submodules: Optional[List[str]] = None,
-    changed_submodules: Optional[List[str]] = None,
+    status_groups: Dict[str, List[str]],
     superrepo_component_changes: Optional[Dict[str, Dict[str, List[str]]]] = None,
 ) -> None:
     """Generate comprehensive GitHub Actions step summary with submodule and component change details"""
@@ -725,10 +796,11 @@ def generate_step_summary(
     total_submodules = superrepo_count + non_superrepo_count
 
     # Calculate submodule change totals
-    newly_added_count = len(newly_added_submodules or [])
-    removed_count = len(removed_submodules or [])
-    changed_count = len(changed_submodules or [])
-    unchanged_count = len(unchanged_submodules or [])
+    newly_added_count = len(status_groups.get("newly_added", []))
+    removed_count = len(status_groups.get("removed", []))
+    changed_count = len(status_groups.get("changed", []))
+    unchanged_count = len(status_groups.get("unchanged", []))
+    reverted_count = len(status_groups.get("reverted", []))
 
     summary = f"""## TheRock Repository Diff Report
 
@@ -743,7 +815,8 @@ def generate_step_summary(
 - **Newly Added:** {newly_added_count}
 - **Removed:** {removed_count}
 - **Changed:** {changed_count}
-- **Unchanged:** {unchanged_count}"""
+- **Unchanged:** {unchanged_count}
+- **Reverted:** {reverted_count}"""
 
     # Add component changes for each superrepo
     if superrepo_component_changes:
@@ -865,10 +938,13 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Compare submodules and get commit history for changed ones
     submodule_commits = {}
-    removed_submodules = []
-    newly_added_submodules = []
-    unchanged_submodules = []
-    changed_submodules = []
+    status_groups = {
+        "removed": [],
+        "newly_added": [],
+        "unchanged": [],
+        "changed": [],
+        "reverted": []
+    }
     html_reports = {}
     superrepo_component_changes = {}
 
@@ -882,12 +958,12 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         if old_sha and not new_sha:
             # Submodule was removed
-            removed_submodules.append(submodule)
+            status_groups["removed"].append(submodule)
             print(f"REMOVED: {submodule} (was at {old_sha[:7]})")
 
         elif new_sha and not old_sha:
             # Submodule was newly added
-            newly_added_submodules.append(submodule)
+            status_groups["newly_added"].append(submodule)
             print(f"NEWLY ADDED: {submodule} -> {new_sha[:7]}")
 
             # Get commit info for the tip SHA
@@ -912,28 +988,26 @@ def main(argv: Optional[List[str]] = None) -> int:
                     ),
                 }
             else:
-                submodule_commits[submodule] = [
-                    {
-                        "sha": new_sha,
-                        "commit": {
-                            "message": f"Newly added submodule: {submodule} Tip -> {commit_message}",
-                            "author": {
-                                "name": commit_data["author"],
-                                "date": commit_data["date"],
-                            },
-                        },
-                    }
-                ]
+                # Store the actual commit response for newly added submodules
+                if commit_response:
+                    submodule_commits[submodule] = [commit_response]
 
         elif old_sha and new_sha:
             # Submodule exists in both
             # Log and track changed and unchanged submodules
-            if old_sha and new_sha and old_sha == new_sha:
+            if old_sha == new_sha:
                 print(f" UNCHANGED: {submodule} -> {new_sha[:7]}")
-                unchanged_submodules.append(submodule)
+                status_groups["unchanged"].append(submodule)
             else:
-                print(f"CHANGED: {submodule} {old_sha[:7]} -> {new_sha[:7]}")
-                changed_submodules.append(submodule)
+                # Check to see if this submodule was reverted
+                if is_commit_newer_than(repo_name=submodule, sha1=old_sha, sha2=new_sha):
+                    status_groups["reverted"].append(submodule)
+                    print(f"REVERTED: {submodule} {old_sha[:7]} -> {new_sha[:7]} (reverted)")
+                    # If reverted we still want to get the list of commits so switch the start and end commits
+                    old_sha, new_sha = new_sha, old_sha
+                else:
+                    print(f"CHANGED: {submodule} {old_sha[:7]} -> {new_sha[:7]}")
+                    status_groups["changed"].append(submodule)
 
             if submodule == "rocm-systems" or submodule == "rocm-libraries":
                 # Process superrepo using consolidated function
@@ -964,33 +1038,36 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Print summary
     print(f"\n=== SUBMODULE CHANGES SUMMARY ===")
     print(f" Total submodules: {len(all_submodules)}")
-    print(f" Newly added: {len(newly_added_submodules)}")
-    print(f" Removed: {len(removed_submodules)}")
-    print(f" Unchanged: {len(unchanged_submodules)}")
-    print(f" Changed: {len(changed_submodules)}")
+    print(f" Newly added: {len(status_groups['newly_added'])}")
+    print(f" Removed: {len(status_groups['removed'])}")
+    print(f" Unchanged: {len(status_groups['unchanged'])}")
+    print(f" Changed: {len(status_groups['changed'])}")
+    print(f" Reverted: {len(status_groups['reverted'])}")
     # Show detailed lists
-    if newly_added_submodules:
+    if status_groups['newly_added']:
         print(f"\n NEWLY ADDED SUBMODULES:")
-        for sub in sorted(newly_added_submodules):
+        for sub in sorted(status_groups['newly_added']):
             print(f"  + {sub} -> {new_submodules[sub][:7]}")
 
-    if removed_submodules:
+    if status_groups['removed']:
         print(f"\n  REMOVED SUBMODULES:")
-        for sub in sorted(removed_submodules):
+        for sub in sorted(status_groups['removed']):
             print(f"  - {sub} (was at {old_submodules[sub][:7]})")
 
-    if unchanged_submodules:
+    if status_groups['unchanged']:
         print(f"\n UNCHANGED SUBMODULES:")
-        for sub in sorted(unchanged_submodules):
+        for sub in sorted(status_groups['unchanged']):
             print(f"  = {sub} -> {new_submodules[sub][:7]}")
 
-    if changed_submodules:
+    if status_groups['changed']:
         print(f"\n CHANGED SUBMODULES:")
-        for sub in sorted(changed_submodules):
+        for sub in sorted(status_groups['changed']):
             print(f"  * {sub} {old_submodules[sub][:7]} -> {new_submodules[sub][:7]}")
 
-    print(f" Changed: {len(changed_submodules)}")
-    print(f" Unchanged: {len(unchanged_submodules)}")
+    if status_groups['reverted']:
+        print(f"\n REVERTED SUBMODULES:")
+        for sub in sorted(status_groups['reverted']):
+            print(f"  ↩ {sub} {old_submodules[sub][:7]} -> {new_submodules[sub][:7]} (reverted)")
 
     # Print all the submodules and their commits
     print(f"\n=== SUBMODULE COMMIT DETAILS ===")
@@ -1014,7 +1091,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Generate HTML report for other component submodules
     print(f"\n=== Generating Other Components HTML Report ===")
-    non_superrepo_html = generate_non_superrepo_html_table(submodule_commits)
+    non_superrepo_html = generate_non_superrepo_html_table(submodule_commits, status_groups)
 
     # Store non-superrepo HTML report with TheRock start/end commits
     html_reports["non-superrepo"] = {
@@ -1028,10 +1105,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         html_reports=html_reports,
         therock_start_commit=start,
         therock_end_commit=end,
-        removed_submodules=removed_submodules,
-        newly_added_submodules=newly_added_submodules,
-        unchanged_submodules=unchanged_submodules,
-        changed_submodules=changed_submodules,
+        status_groups=status_groups,
         superrepo_component_changes=superrepo_component_changes,
     )
 
@@ -1041,10 +1115,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         end_commit=end,
         html_reports=html_reports,
         submodule_commits=submodule_commits,
-        removed_submodules=removed_submodules,
-        newly_added_submodules=newly_added_submodules,
-        unchanged_submodules=unchanged_submodules,
-        changed_submodules=changed_submodules,
+        status_groups=status_groups,
         superrepo_component_changes=superrepo_component_changes,
     )
 
