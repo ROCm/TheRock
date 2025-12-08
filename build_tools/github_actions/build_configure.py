@@ -28,9 +28,9 @@ PLATFORM = platform.system().lower()
 
 cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
-package_version = os.getenv("package_version")
+package_version = os.getenv("package_version", "0.0.0")  # Default to "0.0.0"
 extra_cmake_options = os.getenv("extra_cmake_options", "")  # Default to empty string
-build_dir = os.getenv("BUILD_DIR")
+build_dir = os.getenv("BUILD_DIR", "build")  # Default to "build"
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 
