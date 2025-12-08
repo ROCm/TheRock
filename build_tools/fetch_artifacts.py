@@ -48,7 +48,11 @@ import time
 from urllib3.exceptions import InsecureRequestWarning
 import warnings
 
-from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.artifacts import (
+    ArtifactName,
+    ArtifactPopulator,
+    _open_archive_for_read,
+)
 from github_actions.github_actions_utils import retrieve_bucket_info
 
 
@@ -114,9 +118,11 @@ def list_s3_artifacts(bucket_info: BucketMetadata, artifact_group: str) -> set[s
 
         for artifact in page["Contents"]:
             artifact_key = artifact["Key"]
+            # Match both .tar.zst (new) and .tar.xz (legacy) formats
+            is_artifact_archive = "tar.zst" in artifact_key or "tar.xz" in artifact_key
             if (
                 "sha256sum" not in artifact_key
-                and "tar.xz" in artifact_key
+                and is_artifact_archive
                 and (artifact_group in artifact_key or "generic" in artifact_key)
             ):
                 file_name = artifact_key.split("/")[-1]
@@ -249,7 +255,7 @@ def extract_artifact(
         output_dir = archive_file.parent / artifact_name
         if output_dir.exists():
             shutil.rmtree(output_dir)
-        with tarfile.TarFile.open(archive_file, mode="r:xz") as tf:
+        with _open_archive_for_read(archive_file) as tf:
             log(f"++ Extracting '{archive_file.name}' to '{artifact_name}'")
             tf.extractall(archive_file.parent / artifact_name, filter="tar")
     elif postprocess_mode == "flatten":

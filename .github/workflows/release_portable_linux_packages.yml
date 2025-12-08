@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       package_suffix:
@@ -34,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       package_suffix:
@@ -60,6 +60,8 @@ on:
 
 permissions:
   contents: read
+
+run-name: Release portable Linux packages (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})
 
 jobs:
   setup_metadata:
@@ -145,7 +147,7 @@ jobs:
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
@@ -309,7 +311,7 @@ jobs:
           workflow: build_linux_jax_wheels.yml
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
-              "python_versions": "3.12",
+              "python_version": "3.12",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "s3_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",

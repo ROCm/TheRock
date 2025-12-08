@@ -253,7 +253,7 @@ def retrieve_artifacts_by_release(args):
     artifact_group = args.artifact_group
     # Determine if version is nightly-tarball or dev-tarball
     nightly_regex_expression = (
-        "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+        "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)(a|rc)(\\d{4})(\\d{2})(\\d{2})"
     )
     dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
     nightly_release = re.search(nightly_regex_expression, args.release) != None
@@ -262,7 +262,7 @@ def retrieve_artifacts_by_release(args):
         log("This script requires a nightly-tarball or dev-tarball version.")
         log("Please retrieve the correct release version from:")
         log(
-            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball example: 6.4.0rc20250416)"
+            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
         )
         log(
             "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
