@@ -2,8 +2,10 @@
 
 import json
 import requests
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from jsonschema import validate, ValidationError
 
 from ..logger import log
 from ..exceptions import (
@@ -154,61 +156,23 @@ class ResultsAPI:
             APIServerError: For 500 errors
         """
         status_code = response.status_code
+        error_msg = response.text[:500] if response.text else "No error message provided"
+        
+        log.error(f"✗ API Error - Status Code: {status_code}")
+        log.error(f"  Message: {error_msg}")
         
         if status_code == 401:
-            log.error("✗ API Authentication Failed")
-            log.error("  Solutions:")
-            log.error("    1. Check API key in config (ResultsAPI.APIKey)")
-            log.error("    2. Verify API key is valid and not expired")
-            log.error("    3. Contact API administrator for new key")
-            raise APIAuthenticationError(f"Authentication failed (401): Invalid or missing API key")
-            
+            raise APIAuthenticationError(f"Authentication failed ({status_code}): {error_msg}")
         elif status_code == 400:
-            log.error("✗ Invalid Payload")
-            log.error(f"  Response: {response.text[:500]}")
-            log.error("  Solutions:")
-            log.error("    1. Check payload structure matches API schema")
-            log.error("    2. Verify all required fields are present")
-            log.error("    3. Check field data types are correct")
-            log.error("    4. Review API documentation")
-            raise APIValidationError(f"Invalid payload (400): {response.text[:200]}")
-            
+            raise APIValidationError(f"Invalid payload ({status_code}): {error_msg}")
         elif status_code == 403:
-            log.error("✗ API Access Forbidden")
-            log.error("  Solutions:")
-            log.error("    1. Verify API key has required permissions")
-            log.error("    2. Contact API administrator")
-            raise APIAuthenticationError(f"Access forbidden (403): Insufficient permissions")
-            
+            raise APIAuthenticationError(f"Access forbidden ({status_code}): {error_msg}")
         elif status_code == 404:
-            log.error("✗ API Endpoint Not Found")
-            log.error(f"  URL: {response.url}")
-            log.error("  Solutions:")
-            log.error("    1. Verify API URL in config is correct")
-            log.error("    2. Check API version compatibility")
-            log.error("    3. Contact API administrator")
-            raise APIServerError(f"Endpoint not found (404): {response.url}")
-            
-        elif status_code == 500:
-            log.error("✗ API Server Error")
-            log.error("  Solutions:")
-            log.error("    1. Try again later")
-            log.error("    2. Contact API administrator")
-            log.error("    3. Check API server status page")
-            raise APIServerError(f"Server error (500): Internal server error")
-            
-        elif status_code == 503:
-            log.error("✗ API Service Unavailable")
-            log.error("  Solutions:")
-            log.error("    1. Wait and retry (service may be restarting)")
-            log.error("    2. Check API server status page")
-            log.error("    3. Contact API administrator")
-            raise APIServerError(f"Service unavailable (503): API temporarily unavailable")
-            
+            raise APIServerError(f"Endpoint not found ({status_code}): {error_msg}")
+        elif status_code >= 500:
+            raise APIServerError(f"Server error ({status_code}): {error_msg}")
         else:
-            log.error(f"✗ API returned status code: {status_code}")
-            log.error(f"  Response: {response.text[:200]}")
-            raise APIServerError(f"HTTP {status_code}: {response.text[:200]}")
+            raise APIServerError(f"HTTP error ({status_code}): {error_msg}")
 
 
 def build_results_payload(
@@ -232,7 +196,7 @@ def build_results_payload(
     Returns:
         Complete results payload for API submission
     """
-    # Build BM config
+    # Build Baremetal config
     bm_config = {
         # OS Information
         "os_name": system_info.get('os', 'Unknown'),
@@ -377,8 +341,19 @@ def build_results_payload(
     return payload
 
 
+def _load_schema() -> Dict[str, Any]:
+    """Load JSON schema from file.
+    
+    Returns:
+        Dict containing the JSON schema
+    """
+    schema_path = Path(__file__).parent / 'schemas' / 'payload_schema.json'
+    with open(schema_path, 'r') as f:
+        return json.load(f)
+
+
 def validate_payload(payload: Dict[str, Any]) -> bool:
-    """Validate results payload structure and required fields.
+    """Validate results payload structure and required fields using JSON Schema.
     
     Args:
         payload: Results payload to validate
@@ -387,51 +362,14 @@ def validate_payload(payload: Dict[str, Any]) -> bool:
         True if valid, False otherwise
     """
     try:
-        # Check required top-level fields
-        required_fields = ['test_environment', 'bm_config', 'results']
-        for field in required_fields:
-            if field not in payload:
-                log.error(f"Missing required field: {field}")
-                return False
-        
-        # Check bm_config has required fields
-        bm_config = payload['bm_config']
-        required_bm_fields = ['os_name', 'cpu_model_name', 'cpu_cores']
-        for field in required_bm_fields:
-            if field not in bm_config or not bm_config[field]:
-                log.error(f"Missing or empty bm_config field: {field}")
-                return False
-        
-        # Check results is a list
-        if not isinstance(payload['results'], list):
-            log.error("results must be a list")
-            return False
-        
-        # Check each test result has required fields per API schema
-        required_result_fields = ['test_result', 'test_start_time', 'test_execution_time', 
-                                   'test_log', 'test_metrics', 'test_config']
-        for i, result in enumerate(payload['results']):
-            for field in required_result_fields:
-                if field not in result:
-                    log.error(f"Test result {i} missing required field: {field}")
-                    return False
-            
-            # Validate test_result enum
-            if result['test_result'] not in ['PASS', 'FAIL']:
-                log.error(f"Test result {i} has invalid test_result (must be PASS or FAIL)")
-                return False
-            
-            # Validate test_config has required fields
-            test_config = result.get('test_config', {})
-            required_config_fields = ['test_name', 'sub_test_name', 'python_version', 'environment_dependencies']
-            for field in required_config_fields:
-                if field not in test_config:
-                    log.error(f"Test result {i} test_config missing required field: {field}")
-                    return False
-        
+        schema = _load_schema()
+        validate(instance=payload, schema=schema)
         return True
-        
+    except ValidationError as e:
+        log.error(f"Validation error: {e.message}")
+        log.error(f"  Failed at: {' -> '.join(str(p) for p in e.path)}")
+        return False
     except Exception as e:
-        log.error(f"Validation error: {e}")
+        log.error(f"Unexpected validation error: {e}")
         return False
 

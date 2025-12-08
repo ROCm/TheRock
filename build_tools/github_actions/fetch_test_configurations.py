@@ -17,10 +17,19 @@ logging.basicConfig(level=logging.INFO)
 # Note: these paths are relative to the repository root. We could make that
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
+BENCHMARK_SCRIPT_DIR = Path("./build_tools/github_actions/benchmark_scripts")
 
 
 def _get_script_path(script_name: str) -> str:
     platform_path = SCRIPT_DIR / script_name
+    # Convert to posix (using `/` instead of `\\`) so test workflows can use
+    # 'bash' as the shell on Linux and Windows.
+    posix_path = platform_path.as_posix()
+    return str(posix_path)
+
+
+def _get_benchmark_script_path(script_name: str) -> str:
+    platform_path = BENCHMARK_SCRIPT_DIR / script_name
     # Convert to posix (using `/` instead of `\\`) so test workflows can use
     # 'bash' as the shell on Linux and Windows.
     posix_path = platform_path.as_posix()
@@ -66,10 +75,11 @@ test_matrix = {
         "job_name": "hipblaslt_bench",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_hipblaslt_benchmark.py')}",
+        "test_script": f"python {_get_benchmark_script_path('test_hipblaslt_benchmark.py')}",
         # TODO(lajagapp): Add windows test
         "platform": ["linux"],
         "total_shards": 1,
+        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
     },
     # SOLVER tests
     "hipsolver": {
@@ -93,10 +103,11 @@ test_matrix = {
         "job_name": "rocsolver_bench",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocsolver_benchmark.py')}",
+        "test_script": f"python {_get_benchmark_script_path('test_rocsolver_benchmark.py')}",
         # TODO(lajagapp): Add windows test
         "platform": ["linux"],
         "total_shards": 1,
+        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
     },
     # PRIM tests
     "rocprim": {
@@ -164,10 +175,11 @@ test_matrix = {
         "job_name": "rocrand_bench",
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocrand_benchmark.py')}",
+        "test_script": f"python {_get_benchmark_script_path('test_rocrand_benchmark.py')}",
         # TODO(lajagapp): Add windows test
         "platform": ["linux"],
         "total_shards": 1,
+        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
     },
     "hiprand": {
         "job_name": "hiprand",
@@ -191,10 +203,11 @@ test_matrix = {
         "job_name": "rocfft_bench",
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_rocfft_benchmark.py')}",
+        "test_script": f"python {_get_benchmark_script_path('test_rocfft_benchmark.py')}",
         # TODO(lajagapp): Add windows test
         "platform": ["linux"],
         "total_shards": 1,
+        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
     },
     "hipfft": {
         "job_name": "hipfft",
@@ -276,6 +289,13 @@ def run():
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
+            )
+            continue
+
+        # If the test should be skipped on smoke tests (typically benchmarks), skip it
+        if test_type == "smoke" and test_matrix[key].get("skip_on_smoke", False):
+            logging.info(
+                f"Excluding job {job_name} since it's marked to skip on smoke tests"
             )
             continue
 

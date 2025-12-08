@@ -18,6 +18,7 @@ from prettytable import PrettyTable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils import TestClient
 from utils.logger import log
+from github_actions_utils import gha_append_step_summary
 
 # Constants
 BENCHMARK_NAME = 'hipblaslt'
@@ -40,7 +41,7 @@ def run_benchmarks() -> None:
     ACTIVATION_TYPE = "none"
     
     # Load benchmark configuration
-    config_file = SCRIPT_DIR.parent / 'configs/benchmarks/hipblaslt.json'
+    config_file = SCRIPT_DIR.parent / 'configs' / 'benchmarks' / 'hipblaslt.json'
     with open(config_file, "r") as f:
         config_data = json.load(f)
     
@@ -321,6 +322,18 @@ def main():
     log.info("Comparing results with LKG")
     final_table = client.compare_results(test_name=BENCHMARK_NAME, table=table)
     log.info(f"\n{final_table}")
+    
+    # Write results to GitHub Actions job summary with collapsible details
+    gha_append_step_summary(
+        f"## hipBLASLt Benchmark Results\n\n"
+        f"**Status:** {overall_status} | "
+        f"**Passed:** {passed}/{len(test_results)} | "
+        f"**Failed:** {failed}/{len(test_results)}\n\n"
+        f"<details>\n"
+        f"<summary>View detailed results ({len(test_results)} tests)</summary>\n\n"
+        f"```\n{final_table}\n```\n\n"
+        f"</details>"
+    )
     
     # Determine final status
     if 'FinalResult' not in final_table.field_names:
