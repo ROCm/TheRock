@@ -6,6 +6,7 @@ import sys
 
 from importlib.metadata import version
 
+
 def get_visible_gpus() -> list[str]:
     """Get a list of GPUs that are visible for torch.
 
@@ -174,7 +175,7 @@ try:
     #                VISIBLE|gpu1,gpu2,gpu3
     print(f"SUPPORTED|{','.join(supported_gpus)}")
     print(f"VISIBLE|{','.join(visible_gpus)}")
-    
+
 except Exception as e:
     print(f"ERROR:{e}", file=sys.stderr)
     sys.exit(1)
