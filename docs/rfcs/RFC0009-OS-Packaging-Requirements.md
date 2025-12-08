@@ -297,7 +297,6 @@ Stable Release Version Examples:
 8.1.1        # Patch release
 
 Potential Extensions:
-8.1.0-1      # Package rebuild (no code change)
 8.1.0.1      # Point release (customer specific releases)
 ```
 
@@ -331,20 +330,20 @@ Package version in increasing order
 
 # RPM package samples
 ```
-rocm-8.1.0~20251201gf689a8e-1.x86_64.rpm                              # Development build using build no
-rocm-8.1.0~20251201gf689a8e-1234567.x86_64.rpm                        # Development build using github runid
-rocm-8.1.0~20251203-1.x86_64.rpm                                      # Nightly release
-rocm-8.1.0~rc1-1.x86_64.rpm                                           # Release Candidate 1
-rocm-8.1.0~rc2-2345678.x86_64.rpm                                     # Release Candidate 2 using github runid
-rocm-8.1.0-1.x86_64.rpm                                               # Final release
-rocm-8.2.0-3456789.x86_64.rpm                                         # Next Minor release
-rocm8.1.0~20251201gf689a8e-8.1.0~20251201gf689a8e-1.x86_64.rpm        # Versioned Development build using build no
-rocm8.1.0~20251201gf689a8e-8.1.0~20251201gf689a8e-1234567.x86_64.rpm  # Versioned Development build using github runid
-rocm8.1.0~20251203-8.1.0~20251203-1.x86_64.rpm                        # Versioned Nightly release
-rocm8.1.0~rc1-8.1.0~rc1-1.x86_64.rpm                                  # Versioned Release Candidate 1
-rocm8.1.0~rc2-8.1.0~rc2-2345678.x86_64.rpm                            # Versioned Release Candidate 2 using github runid
-rocm8.1.0-8.1.0-1.x86_64.rpm                                          # Versioned Final release
-rocm8.2.0-8.2.0-3456789.x86_64.rpm                                    # Versioned Next Minor release
+rocm-8.1.0~20251201gf689a8e-1.x86_64.rpm                   # Development build using build no
+rocm-8.1.0~20251201gf689a8e-1234567.x86_64.rpm             # Development build using github runid
+rocm-8.1.0~20251203-1.x86_64.rpm                           # Nightly release
+rocm-8.1.0~rc1-1.x86_64.rpm                                # Release Candidate 1
+rocm-8.1.0~rc2-2345678.x86_64.rpm                          # Release Candidate 2 using github runid
+rocm-8.1.0-1.x86_64.rpm                                    # Final release
+rocm-8.2.0-3456789.x86_64.rpm                              # Next Minor release
+rocm8.1-8.1.0~20251201gf689a8e-1.x86_64.rpm                # Versioned Development build using build no
+rocm8.1-8.1.0~20251201gf689a8e-1234567.x86_64.rpm          # Versioned Development build using github runid
+rocm8.1-8.1.0~20251203-1.x86_64.rpm                        # Versioned Nightly release
+rocm8.1-8.1.0~rc1-1.x86_64.rpm                             # Versioned Release Candidate 1
+rocm8.1-8.1.0~rc2-2345678.x86_64.rpm                       # Versioned Release Candidate 2 using github runid
+rocm8.1-8.1.0-1.x86_64.rpm                                 # Versioned Final release
+rocm8.2-8.2.0-3456789.x86_64.rpm                           # Versioned Next Minor release
 ```
 
 ### Debian Package
@@ -412,20 +411,20 @@ Package version in increasing order
 
 # Debian package samples
 ```
-rocm_8.1.0~20251201gf689a8e-1_amd64.deb                              # Development build using build no
-rocm_8.1.0~20251201gf689a8e-1234567_amd64.deb                        # Development build using github runid
-rocm_8.1.0~20251203-1_amd64.deb                                      # Nightly release
-rocm_8.1.0~pre1-1_amd64.deb                                          # Release Candidate 1
-rocm_8.1.0~pre2-2345678_amd64.deb                                    # Release Candidate 2 using github runid
-rocm_8.1.0-1_amd64.deb                                               # Final release
-rocm_8.2.0-3456789_amd64.deb                                         # Next Minor release
-rocm8.1.0~20251201gf689a8e_8.1.0~20251201gf689a8e-1_amd64.deb        # Versioned Development build using build no
-rocm8.1.0~20251201gf689a8e_8.1.0~20251201gf689a8e-1234567_amd64.deb  # Versioned Development build using github runid
-rocm8.1.0~20251203_8.1.0~20251203-1_amd64.deb                        # Versioned Nightly release
-rocm8.1.0~pre1_8.1.0~pre1-1_amd64.deb                                # Versioned Release Candidate 1
-rocm8.1.0~pre2_8.1.0~pre2-2345678_amd64.deb                          # Versioned Release Candidate 2 using github runid
-rocm8.1.0_8.1.0-1_amd64.deb                                          # Versioned Final release
-rocm8.2.0_8.2.0-3456789_amd64.deb                                    # Versioned Next Minor release
+rocm_8.1.0~dev20251201-1_amd64.deb                        # Development build using build no
+rocm_8.1.0~dev20251201-1234567_amd64.deb                  # Development build using github runid
+rocm_8.1.0~20251203-1_amd64.deb                           # Nightly release
+rocm_8.1.0~pre1-1_amd64.deb                               # Release Candidate 1
+rocm_8.1.0~pre2-2345678_amd64.deb                         # Release Candidate 2 using github runid
+rocm_8.1.0-1_amd64.deb                                    # Final release
+rocm_8.2.0-3456789_amd64.deb                              # Next Minor release
+rocm8.1_8.1.0~dev20251201-1_amd64.deb                # Versioned Development build using build no
+rocm8.1_8.1.0~dev20251201-1234567_amd64.deb          # Versioned Development build using github runid
+rocm8.1_8.1.0~20251203-1_amd64.deb                        # Versioned Nightly release
+rocm8.1_8.1.0~pre1-1_amd64.deb                            # Versioned Release Candidate 1
+rocm8.1_8.1.0~pre2-2345678_amd64.deb                      # Versioned Release Candidate 2 using github runid
+rocm8.1_8.1.0-1_amd64.deb                                 # Versioned Final release
+rocm8.2_8.2.0-3456789_amd64.deb                           # Versioned Next Minor release
 ```
 
 ## Windows Packaging Requirements
