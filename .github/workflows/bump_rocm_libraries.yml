@@ -3,8 +3,8 @@ name: Bump rocm-libraries submodule
 on:
   workflow_dispatch:
   schedule:
-  # 2:00 AM PST → 10:00 UTC
-    - cron: "0 10 * * *"
+    # 2:00 AM PST → 10:00 UTC, Monday–Friday
+    - cron: "0 10 * * 1-5"
 permissions:
   contents: write
   pull-requests: write

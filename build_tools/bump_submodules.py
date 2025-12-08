@@ -2,9 +2,9 @@
 """Helper script to bump TheRock's submodules, doing the following:
  * (Optional) Creates a new branch
  * Updates submodules from remote using `fetch_sources.py`
- * Creares a commit and tries to apply local patches
+ * Creates a commit and tries to apply local patches
  * (Optional) Pushed the new branch to origin
-
+ * (Optional) Create pull request from the new branch to origin (requires gh cli installed)
 The submodules to bump can be specified via `--components`.
 
 Examples:
@@ -27,6 +27,7 @@ from datetime import datetime
 import shlex
 import subprocess
 import sys
+import shutil
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -185,14 +186,6 @@ def parse_components(components: list[str]) -> list[list]:
 
 
 def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[str]):
-    date = datetime.today().strftime("%Y%m%d")
-
-    if args.create_branch or args.push_branch:
-        exec(
-            ["git", "checkout", "-b", args.branch_name],
-            cwd=THEROCK_DIR,
-        )
-
     component = args.components[0]
     old_hashes = get_hashes_for_component(component)
 
@@ -216,10 +209,28 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
     if args.pin_ck:
         pin_ck()
 
-    exec(
-        ["git", "commit", "-a", "-m", "Bump submodules " + date],
-        cwd=THEROCK_DIR,
+    # Detect new hashes BEFORE commit/branch creation
+    new_hashes = get_hashes_for_component(component)
+    old_h, new_h, changed_path = detect_hash_change(old_hashes, new_hashes)
+    if not old_h or not new_h:
+        log("No submodule changes detected – aborting without commit, branch, or PR.")
+        return
+    
+    if args.create_branch or args.push_branch or args.create_pr:
+        exec(["git", "checkout", "-b", args.branch_name], cwd=THEROCK_DIR)
+    
+    # Prepare commit/PR title/body
+    pr_title = f"Bump {component} from {old_h[:7]} to {new_h[:7]}"
+    pr_body = (
+        f"Bump happened on {datetime.today().strftime('%m%d%Y')}\n\n"
+        "### Submodule changes:\n"
+        + "".join(
+            f"- `{sm}`: {old_hashes.get(sm)} → {new_hashes.get(sm)}\n"
+            for sm in new_hashes
+        )
     )
+    commit_msg = pr_title + "\n\n" + pr_body
+    exec(["git", "commit", "-a", "-m", commit_msg], cwd=THEROCK_DIR)
 
     try:
         exec(
@@ -234,33 +245,21 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         exec(
             ["git", "push", "-u", "origin", args.branch_name],
             cwd=THEROCK_DIR,
-        )
-        new_hashes = get_hashes_for_component(component)
-        old_h, new_h, changed_path = detect_hash_change(old_hashes, new_hashes)
-        if not old_h or not new_h:
-            log("WARNING: No submodule hash changes detected for the component.")
-            pr_title = f"Bump {component} from unknown to unknown"
-        else:
-            pr_title = f"Bump {component} from {old_h[:7]} to {new_h[:7]}"
-        pr_body = f"Bump happened on {datetime.today().strftime('%m%d%Y')}\n\n"
-        pr_body += "### Submodule changes:\n"
-        for sm in new_hashes:
-            pr_body += f"- `{sm}`: {old_hashes.get(sm)} → {new_hashes.get(sm)}\n"
+        )  
         # Create PR
-        exec(
-            [
-                "gh", "pr", "create",
-                "--title", pr_title,
-                "--body", pr_body,
-                "--head", args.branch_name,
-                "--base", "main",
-                "--reviewer", "ScottTodd",
-                "--reviewer", "marbre",
-                "--reviewer", "geomin12",
-                "--reviewer", "jayhawk-commits",
-            ],
-            cwd=THEROCK_DIR,
-        )    
+        if args.create_pr:
+            if not shutil.which("gh"):
+                raise SystemExit("ERROR: --create-pr requires the `gh` CLI.\n")      
+            exec(
+                [
+                    "gh", "pr", "create",
+                    "--title", pr_title,
+                    "--body", pr_body,
+                    "--head", args.branch_name,
+                    "--base", "main",
+                ],
+                cwd=THEROCK_DIR,
+            )
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="bump_submodules")
@@ -303,6 +302,12 @@ def main(argv):
                   rocm-systems,
                   profiler
              """,
+    )
+    parser.add_argument(
+        "--create-pr",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Create a GitHub PR (requires `gh` CLI)",
     )
     args = parser.parse_args(argv)
     fetch_args, system_projects = parse_components(args.components)
