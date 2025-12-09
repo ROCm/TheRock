@@ -1591,8 +1591,11 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
     endif()
 
     # Check if working tree is pristine (no modified tracked files)
+    # TODO: Consider changing this incantation to instead consider the
+    # sub-tree, not the whole repo. See comments on: 
+    # https://github.com/ROCm/TheRock/pull/2432
     execute_process(
-      COMMAND git diff --quiet HEAD
+      COMMAND git diff --quiet --ignore-submodules HEAD
       WORKING_DIRECTORY "${dir}"
       RESULT_VARIABLE GIT_DIFF_RESULT
     )
