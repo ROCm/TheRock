@@ -212,6 +212,7 @@ jobs:
             "--version=${{ needs.setup_metadata.outputs.version }}"
 
       - name: Grant ownership over output directory
+        if: ${{ !cancelled() }}
         run: |
           sudo chown -R $(whoami) ${{ env.OUTPUT_DIR }}
 
