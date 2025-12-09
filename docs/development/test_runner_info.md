@@ -1,6 +1,10 @@
 # Test Runner Setup
 
-For TheRock CI, we get our GitHub self-hosted runner labels through the ROCm organization variable called `ROCM_THEROCK_TEST_RUNNERS`
+In the repo `TheRock`, `amdgpu_family_matrix.py` is the source of truth. We are allowed to do testing with new labels.
+
+For other external repos that use TheRock CI, they get their GitHub self-hosted runner labels through the ROCm organization variable called `ROCM_THEROCK_TEST_RUNNERS`
+
+We use the environment variable `LOAD_TEST_RUNNERS_FROM_VAR` with `amdgpu_family_matrix.py` to determine whether to pull from the `amdgpu_family_matrix.py` or `ROCm` organization variable
 
 With this organization variable, we are able to update the runner labels immediately instead of having to open 2+ PRs.
 

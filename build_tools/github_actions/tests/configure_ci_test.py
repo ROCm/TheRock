@@ -8,26 +8,10 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
 
 therock_test_runner_dict = {
-    "gfx94x": {"linux": "linux-mi325-1gpu-ossci-rocm-frac"},
     "gfx110x": {
-        "linux": "linux-gfx110X-gpu-rocm",
-        "windows": "windows-gfx110X-gpu-rocm",
+        "linux": "linux-gfx110X-gpu-rocm-test",
+        "windows": "windows-gfx110X-gpu-rocm-test",
     },
-    "gfx1151": {
-        "linux": "linux-strix-halo-gpu-rocm",
-        "windows": "windows-strix-halo-gpu-rocm",
-    },
-    "gfx950": {"linux": ""},
-    "gfx120x": {"linux": "linux-rx9070-gpu-rocm", "windows": ""},
-    "gfx90x": {"linux": "", "windows": ""},
-    "gfx101x": {"linux": "", "windows": ""},
-    "gfx103x": {
-        "linux": "linux-rx6950-gpu-rocm",
-        "windows": "windows-gfx1030-gpu-rocm",
-    },
-    "gfx1150": {"linux": "", "windows": ""},
-    "gfx1152": {"linux": "", "windows": ""},
-    "gfx1153": {"linux": "", "windows": ""},
 }
 
 os.environ["ROCM_THEROCK_TEST_RUNNERS"] = json.dumps(therock_test_runner_dict)
@@ -513,6 +497,12 @@ class ConfigureCITest(unittest.TestCase):
         for family_info in family_info_list:
             self.assertIn("amdgpu_family", family_info)
             self.assertIn("test-runs-on", family_info)
+
+    def test_rocm_org_var_names(self):
+        os.environ["LOAD_TEST_RUNNERS_FROM_VAR"] = "false"
+        test_matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
+        self.assertIn("linux-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
+        self.assertIn("windows-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
 
 
 if __name__ == "__main__":
