@@ -369,10 +369,14 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "libc6"
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "glibc"
+      "glibc",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm FFT library",
@@ -684,10 +688,12 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
+      "amdrocm-math-common",
       "amdrocm-blas"
     ],
     "RPMRequires": [
       "glibc",
+      "amdrocm-math-common",
       "amdrocm-blas"
     ],
     "RPMRecommends": [
@@ -1116,6 +1122,16 @@
             ]
           },
           {
+            "Name": "rocm_smi_lib",
+            "Components": [
+              "lib",
+              "run",
+              "dev",
+              "doc"
+            ]
+          },
+
+          {
             "Name": "rocm-core",
             "Components": [
               "lib",
@@ -1157,10 +1173,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "ocl-icd-libopencl1",
       "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
+      "(ocl-icd or ocl-icd-devel)",
       "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
@@ -1195,10 +1213,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
+      "ocl-icd-opencl-dev",
       "amdrocm-sysdeps",
       "amdrocm-opencl"
     ],
     "RPMRequires": [
+      "ocl-icd-devel",
       "amdrocm-sysdeps",
       "amdrocm-opencl"
     ],
@@ -1302,9 +1322,59 @@
 
     "Gfxarch": "True"
   },
+  {
+    "Package": "amdrocm-math-common",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+    ],
+    "RPMRequires": [
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "Common files for math library",
+    "Description_Long": "Contains host suite sparse libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "host-suite-sparse",
+        "Artifact_Subdir": [
+          {
+            "Name": "SuiteSparse",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "host-blas",
+        "Artifact_Subdir": [
+          {
+            "Name": "host-blas",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+
+    ],
+
+    "Gfxarch": "False"
+  },
 
   {
-    "Package": "amdrocm-composablekernel",
+    "Package": "amdrocm-ck",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -1319,15 +1389,24 @@
     "License": "MIT",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
-    "Components": [
-      "run"
+    "Artifactory": [
+      {
+        "Artifact": "composable-kernel",
+        "Artifact_Subdir": [
+          {
+            "Name": "composable_kernel",
+            "Components": [
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
     ],
-    "Artifact": "composable-kernel",
-    "Gfxarch": "True",
-    "DisablePackaging": "True"
+    "Gfxarch": "True"
   },
   {
-    "Package": "amdrocm-composablekernel-devel",
+    "Package": "amdrocm-ck-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -1361,12 +1440,14 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
-      "libc6"
+      "libc6",
+      "amdrocm-base",
+      "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc"
+      "glibc",
+      "amdrocm-base",
+      "amdrocm-profiler-base"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
     "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",

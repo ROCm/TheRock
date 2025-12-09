@@ -85,6 +85,20 @@ def is_key_defined(pkg_info, key):
         return False
 
 
+def is_composite_package(pkg_info):
+    """
+    Verifies whether composite key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if composite key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "composite")
+
+
 def is_rpm_stripping_disabled(pkg_info):
     """
     Verifies whether Disable_RPM_STRIP key is enabled for a package.
