@@ -87,7 +87,7 @@ on:
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://rocm.nightlies.amd.com/v2-staging/"
+        default: "https://rocm.nightlies.amd.com/v2-staging"
       jax_ref:
         description: rocm-jax repository ref/branch to check out
         type: string
@@ -109,6 +109,8 @@ jobs:
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+    outputs:
+      cp_version: ${{ env.cp_version }}
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
