@@ -387,6 +387,22 @@ def run_command_with_monitoring(
     return return_code
 
 
+def setup_signal_handlers(monitor: MemoryMonitor):
+    """Setup signal handlers for graceful shutdown."""
+    def signal_handler(signum, frame):
+        print(f"\n[SIGNAL] Received signal {signum}, stopping monitoring...")
+        monitor.stop()
+        sys.exit(0)
+
+    # Register handlers for SIGTERM and SIGINT (Ctrl+C)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # On Windows, also handle SIGBREAK (Ctrl+Break)
+    if hasattr(signal, 'SIGBREAK'):
+        signal.signal(signal.SIGBREAK, signal_handler)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Monitor memory usage during CI builds",
@@ -442,6 +458,10 @@ def main():
             phase_name=args.phase,
             log_file=args.log_file,
         )
+        
+        # Setup signal handlers for graceful shutdown
+        setup_signal_handlers(monitor)
+        
         monitor.start()
 
         try:

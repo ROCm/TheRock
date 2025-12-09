@@ -183,8 +183,8 @@ jobs:
         env:
           MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
         run: |
-          echo "Stopping memory monitor (PID: $MONITOR_PID)"
-          taskkill //PID $MONITOR_PID //F 2>/dev/null || true
+          echo "Gracefully stopping memory monitor (PID: $MONITOR_PID)"
+          python build_tools/graceful_shutdown.py $MONITOR_PID --timeout 15 --force
           echo "Memory monitor stopped"
 
           # Display the monitor output
