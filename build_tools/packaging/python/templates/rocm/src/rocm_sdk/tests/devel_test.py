@@ -39,10 +39,13 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathBin(self):
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--bin"])
         output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--bin"], capture=True
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
@@ -50,11 +53,13 @@ class ROCmDevelTest(unittest.TestCase):
         self.assertTrue(path.exists(), msg=f"Expected bin path {path} to exist")
 
     def testCLIPathCMake(self):
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--cmake"])
         output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--cmake"],
-                capture=True,
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
@@ -66,10 +71,13 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathRoot(self):
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
         output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
@@ -79,10 +87,13 @@ class ROCmDevelTest(unittest.TestCase):
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
 
     def testCLIUsesDevelRootPath(self):
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
         root_path_output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
@@ -106,10 +117,13 @@ class ROCmDevelTest(unittest.TestCase):
     def testRootLLVMSymlinkExists(self):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
         output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
@@ -118,10 +132,13 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
         _ = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
@@ -162,6 +179,9 @@ class ROCmDevelTest(unittest.TestCase):
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
-                )
+                # -P flag is only available in Python 3.11+
+                cmd = [sys.executable]
+                if sys.version_info >= (3, 11):
+                    cmd.append("-P")
+                cmd.extend(["-c", command, str(so_path)])
+                subprocess.check_call(cmd)

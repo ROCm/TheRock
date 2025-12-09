@@ -105,9 +105,12 @@ class ROCmCoreTest(unittest.TestCase):
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
-                )
+                # -P flag is only available in Python 3.11+
+                cmd = [sys.executable]
+                if sys.version_info >= (3, 11):
+                    cmd.append("-P")
+                cmd.extend(["-c", command, str(so_path)])
+                subprocess.check_call(cmd)
 
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:

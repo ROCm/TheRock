@@ -49,13 +49,13 @@ amdgpu_family_info_matrix_presubmit = {
         }
     },
     "gfx110x": {
-        "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-all",
-            # "bypass_tests_for_releases": True,  # TEMPORARILY DISABLED FOR PYTHON 3.10 TESTING
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
+    "linux": {
+        "test-runs-on": "linux-gfx110X-gpu-rocm",
+        "family": "gfx110X-all",
+        "bypass_tests_for_releases": True,
+        "build_variants": ["release"],
+        "sanity_check_only_for_family": True,
+    },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
@@ -65,13 +65,13 @@ amdgpu_family_info_matrix_presubmit = {
         },
     },
     "gfx1151": {
-        "linux": {
-            "test-runs-on": "linux-strix-halo-gpu-rocm",
-            "family": "gfx1151",
-            # "bypass_tests_for_releases": True,  # TEMPORARILY DISABLED FOR PYTHON 3.10 TESTING
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
+    "linux": {
+        "test-runs-on": "linux-strix-halo-gpu-rocm",
+        "family": "gfx1151",
+        "bypass_tests_for_releases": True,
+        "build_variants": ["release"],
+        "sanity_check_only_for_family": True,
+    },
         "windows": {
             "test-runs-on": "windows-strix-halo-gpu-rocm",
             "family": "gfx1151",

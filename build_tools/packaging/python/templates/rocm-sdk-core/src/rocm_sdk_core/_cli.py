@@ -35,7 +35,12 @@ def _is_devel_module_expanded():
 def _expand_devel_module():
     import subprocess
 
-    subprocess.check_call([sys.executable, "-P", "-m", "rocm_sdk", "init", "--quiet"])
+    # -P flag is only available in Python 3.11+
+    cmd = [sys.executable]
+    if sys.version_info >= (3, 11):
+        cmd.append("-P")
+    cmd.extend(["-m", "rocm_sdk", "init", "--quiet"])
+    subprocess.check_call(cmd)
 
 
 def _get_devel_module_path():
