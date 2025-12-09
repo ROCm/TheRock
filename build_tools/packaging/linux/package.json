@@ -1,6 +1,6 @@
 [
   {
-    "Package": "amd-smi",
+    "Package": "amdrocm-smi",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -21,14 +21,12 @@
     ],
     "RPMRecommends": [
       "python3-argcomplete",
-      "libdrm-devel",
-      "libdrm-amdgpu-devel"
+      "amdrocm-sysdeps"
     ],
 
     "DEBRecommends": [
       "python3-argcomplete",
-      "libdrm-dev",
-      "libdrm-amdgpu-dev"
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "AMD-SMILib Support <amd-smi.support@amd.com>",
     "Description_Short": "AMD System Management libraries",
@@ -47,6 +45,7 @@
             "Name": "amdsmi",
             "Components": [
               "lib",
+              "run",
               "dev",
               "doc"
             ]
@@ -57,80 +56,108 @@
     "Gfxarch": "False"
   },
   {
-    "Package": "rocm-llvm",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "python3",
-      "libc6"
-    ],
-    "RPMRequires": [
-      "python3",
-      "glibc"
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm LLVM compiler",
-    "Description_Long": "ROCm LLVM compiler with rocm-llvm, comgr and hipcc",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "ASL 2.0 with exceptions",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/llvm-project",
-    "Artifactory": [
-      {
-        "Artifact": "amd-llvm",
-        "Artifact_Subdir": [
-          {
-            "Name": "amd-llvm",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          },
-          {
-            "Name": "amd-comgr",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          },
-          {
-            "Name": "hipcc",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          }
-        ]
-      }
-    ],
-    "Gfxarch": "False",
-    "Disable_DWZ": "True",
-    "Composite": "Yes"
-  },
-  {
-    "Package": "rocm-llvm-devel",
+    "Package": "amdrocm-llvm",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
       "python3",
       "libc6",
-      "rocm-llvm"
+      "libstdc++6|libstdc++8",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
       "python3",
       "glibc",
-      "rocm-llvm"
+      "libstdc++",
+      "libgcc",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRecommends": [
+      "gcc",
+      "gcc-c++",
+      "devtoolset-7-gcc-c++"
+    ],
+    "DEBRecommends": [
+      "gcc",
+      "gcc-multilib",
+      "g++",
+      "g++-multilib"
+    ],
+
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm LLVM compiler",
+    "Description_Long": "ROCm LLVM compiler with rocm-llvm and hipcc",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "ASL 2.0 with exceptions",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/llvm-project",
+    "Artifactory": [
+      {
+        "Artifact": "amd-llvm",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-llvm",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
+          {
+            "Name": "hipcc",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False",
+    "Disable_DWZ": "True"
+  },
+  {
+    "Package": "amdrocm-llvm-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "python3",
+      "libc6",
+      "libstdc++6|libstdc++8",
+      "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
+      "libgcc-5-dev|libgcc-7-dev|libgcc-11-dev|libgcc-12-dev|libgcc-13-dev|libgcc-14-dev",
+      "amdrocm-sysdeps",
+      "amdrocm-llvm"
+    ],
+    "RPMRequires": [
+      "python3",
+      "glibc",
+      "libstdc++",
+      "libgcc",
+      "amdrocm-sysdeps",
+      "amdrocm-llvm"
+    ],
+    "RPMRecommends": [
+      "gcc",
+      "gcc-c++",
+      "devtoolset-7-gcc-c++"
+    ],
+    "DEBRecommends": [
+      "gcc",
+      "gcc-multilib",
+      "g++",
+      "g++-multilib"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD LLVM compiler libraries",
-    "Description_Long": "Contains rocm-llvm, comgr and hipcc development files",
+    "Description_Long": "Contains rocm-llvm and  hipcc development files",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -148,41 +175,46 @@
             ]
           },
           {
-            "Name": "amd-comgr",
-            "Components": [
-              "dev"
-            ]
-          },
-          {
             "Name": "hipcc",
             "Components": [
               "dev"
             ]
           }
         ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "aux-overlay",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
       }
     ],
     "Gfxarch": "False",
-    "Composite": "Yes",
     "Disable_RPM_STRIP": "True"
   },
   {
-    "Package": "rocm-runtimes",
+    "Package": "amdrocm-runtime",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1",
-      "libnuma1",
-      "libelf1"
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
     ],
     "RPMRequires": [
-      "(libdrm-amdgpu or libdrm or libdrm_amdgpu1)",
-      "(libnuma1 or numactl-libs)"
+      "amdrocm-sysdeps",
+      "amdrocm-base",
+      "amdrocm-llvm"
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "AMD HIP and HSA Runtime for ROCm platforms",
-    "Description_Long": "AMD HIP and HSA Runtime for ROCm platforms",
+    "Description_Short": "AMD HIP Runtime for ROCm platforms",
+    "Description_Long": "AMD HIP Runtime for ROCm platforms",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -209,34 +241,72 @@
             "Name": "clr",
             "Components": [
               "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-comgr",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-comgr-stub",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocprofiler-register",
+            "Components": [
+              "lib",
               "doc"
             ]
           }
         ]
       }
+
     ],
-    "Gfxarch": "False",
-    "Composite": "Yes"
+    "Gfxarch": "False"
   },
   {
-    "Package": "rocm-runtimes-devel",
+    "Package": "amdrocm-runtime-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1",
-      "libnuma1",
-      "libelf1",
-      "rocm-runtimes"
+      "amdrocm-sysdeps",
+      "amdrocm-runtime",
+      "amdrocm-llvm-devel"
     ],
     "RPMRequires": [
-      "(libdrm-amdgpu or libdrm or libdrm_amdgpu1)",
-      "(libnuma1 or numactl-libs)",
-      "rocm-runtimes"
+      "amdrocm-sysdeps",
+      "amdrocm-runtime",
+      "amdrocm-llvm-devel"
     ],
     "Maintainer": "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>",
-    "Description_Short": "AMD HIP and HSA development files for ROCm platforms",
-    "Description_Long": "AMD HIP and HSA development files for ROCm platforms",
+    "Description_Short": "AMD HIP runtime development files for ROCm platforms",
+    "Description_Long": "AMD HIP runtime development files for ROCm platforms",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -262,27 +332,46 @@
           {
             "Name": "clr",
             "Components": [
-              "dev",
-              "run"
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "amd-llvm",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-comgr",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "base",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocprofiler-register",
+            "Components": [
+              "run",
+              "dev"
             ]
           }
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Composite": "Yes"
+    "Gfxarch": "False"
   },
   {
-    "Package": "rocm-fft",
+    "Package": "amdrocm-fft",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6"
     ],
     "RPMRequires": [
-      "python3",
       "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -317,23 +406,20 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
   {
-    "Package": "rocm-fft-devel",
+    "Package": "amdrocm-fft-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6",
-      "rocm-fft"
+      "amdrocm-fft"
     ],
     "RPMRequires": [
-      "python3",
       "glibc",
-      "rocm-fft"
+      "amdrocm-fft"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm FFT library",
@@ -364,21 +450,22 @@
       }
     ],
 
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
   {
-    "Package": "rocm-blas",
+    "Package": "amdrocm-blas",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
-      "libc6"
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc"
+      "glibc",
+      "amdrocm-runtime",
+      "amdrocm-profiler-base"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for BLAS in ROCm",
@@ -410,6 +497,15 @@
             ]
           },
           {
+            "Name": "rocRoller",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
+
+          {
             "Name": "hipBLASLt",
             "Components": [
               "lib",
@@ -428,24 +524,21 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-blas-devel",
+    "Package": "amdrocm-blas-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6",
-      "rocm-blas"
+      "amdrocm-blas"
     ],
     "RPMRequires": [
-      "python3",
       "glibc",
-      "rocm-blas"
+      "amdrocm-blas"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for BLAS in ROCm",
@@ -487,22 +580,23 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-sparse",
+    "Package": "amdrocm-sparse",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
-      "libc6"
+      "libc6",
+      "amdrocm-blas",
+      "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc"
+      "glibc",
+      "amdrocm-blas",
+      "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for sparse  in ROCm",
@@ -536,24 +630,21 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-sparse-devel",
+    "Package": "amdrocm-sparse-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6",
-      "rocm-sparse"
+      "amdrocm-sparse"
     ],
     "RPMRequires": [
-      "python3",
       "glibc",
-      "rocm-sparse"
+      "amdrocm-sparse"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for Sparse  in ROCm",
@@ -583,23 +674,30 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-solver",
+    "Package": "amdrocm-solver",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
-      "libc6"
+      "libc6",
+      "amdrocm-blas"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc"
+      "glibc",
+      "amdrocm-blas"
     ],
+    "RPMRecommends": [
+      "amdrocm-sparse"
+    ],
+
+    "DEBRecommends": [
+      "amdrocm-sparse"
+    ],
+
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for solver in ROCm",
     "Description_Long": "rocsolver and hipsolver libraries ",
@@ -632,24 +730,21 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-solver-devel",
+    "Package": "amdrocm-solver-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6",
-      "rocm-solver"
+      "amdrocm-solver"
     ],
     "RPMRequires": [
-      "python3",
       "glibc",
-      "rocm-solver"
+      "amdrocm-solver"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for solver in ROCm",
@@ -679,22 +774,21 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-rand",
+    "Package": "amdrocm-rand",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
-      "libc6"
+      "libc6",
+      "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc"
+      "glibc",
+      "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": " ROCm random number generation library",
@@ -728,24 +822,21 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-rand-devel",
+    "Package": "amdrocm-rand-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6",
-      "rocm-rand"
+      "amdrocm-rand"
     ],
     "RPMRequires": [
-      "python3",
       "glibc",
-      "rocm-rand"
+      "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm random number generation library",
@@ -775,11 +866,10 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
   {
-    "Package": "rocm-ccl-devel",
+    "Package": "amdrocm-ccl-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -826,26 +916,22 @@
       }
     ],
 
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
-
   {
-    "Package": "rocm-profiler",
+    "Package": "amdrocm-profiler-base",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6"
     ],
     "RPMRequires": [
-      "python3",
       "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools ",
-    "Description_Long": "Contains rocprofiler-sdk, aqlprofile, roctracer, rocprof-trace-decoder, rocprofiler-compute and rocprofiler-systems",
+    "Description_Long": "Contains rocprofiler-sdk, aqlprofile, roctracer and rocprof-trace-decoder",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -893,7 +979,39 @@
             ]
           }
         ]
-      },
+      }
+    ],
+
+    "Gfxarch": "False"
+  },
+
+  {
+    "Package": "amdrocm-profiler",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps",
+      "amdrocm-profiler-base"
+    ],
+    "RPMRequires": [
+      "glibc",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps",
+      "amdrocm-profiler-base"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm profiler tools ",
+    "Description_Long": "Contains rocprofiler-compute and rocprofiler-systems",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
       {
         "Artifact": "rocprofiler-compute",
         "Artifact_Subdir": [
@@ -924,11 +1042,10 @@
       }
     ],
 
-    "Gfxarch": "False",
-    "Composite": "Yes"
+    "Gfxarch": "False"
   },
   {
-    "Package": "rocm-hipify",
+    "Package": "amdrocm-hipify",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -956,13 +1073,11 @@
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Composite": "Yes"
+    "Gfxarch": "False"
 
   },
   {
-    "_comment": "Composite package metadata starts from here. Artifact_Subdir tag is not requires. If Includes tag is present, then the package is created by combining the individual packages, else use the component tag for populating package contents",
-    "Package": "rocm-base",
+    "Package": "amdrocm-base",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -980,7 +1095,7 @@
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "The ROCm-base package contains essential ROCm utilities",
-    "Description_Long": "ROCm base contains components like rocm-core, rocminfo, half and rocprofiler-register",
+    "Description_Long": "ROCm base contains components like amd-smi, rocm-core, rocminfo and rocprofiler-register",
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
@@ -1033,23 +1148,21 @@
       }
     ],
 
-    "Gfxarch": "False",
-    "Composite": "yes"
+    "Gfxarch": "False"
   },
 
   {
-    "Package": "rocm-opencl",
+    "Package": "amdrocm-opencl",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1",
-      "libnuma1",
-      "libelf1"
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "(libdrm-amdgpu or libdrm or libdrm_amdgpu1)",
-      "(libnuma1 or numactl-libs)"
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "ROCm OpenCL Support <rocm-opencl.support@amd.com>",
     "Description_Short": "AMD ROCm opencl libraries",
@@ -1074,24 +1187,20 @@
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Composite": "Yes"
+    "Gfxarch": "False"
   },
   {
-    "Package": "rocm-opencl-devel",
+    "Package": "amdrocm-opencl-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1",
-      "libnuma1",
-      "libelf1",
-      "rocm-opencl"
+      "amdrocm-sysdeps",
+      "amdrocm-opencl"
     ],
     "RPMRequires": [
-      "(libdrm-amdgpu or libdrm or libdrm_amdgpu1)",
-      "(libnuma1 or numactl-libs)",
-      "rocm-opencl"
+      "amdrocm-sysdeps",
+      "amdrocm-opencl"
     ],
     "Maintainer": "ROCm OpenCL Support <rocm-opencl.support@amd.com>",
     "Description_Short": "AMD ROCm opencl development files.",
@@ -1115,20 +1224,17 @@
         ]
       }
     ],
-    "Gfxarch": "False",
-    "Composite": "Yes"
+    "Gfxarch": "False"
   },
   {
-    "Package": "rocm-sysdeps",
+    "Package": "amdrocm-sysdeps",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6"
     ],
     "RPMRequires": [
-      "python3",
       "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -1159,12 +1265,11 @@
 
     "Gfxarch": "False",
     "Disable_DWZ": "True",
-    "Disable_DEB_STRIP": "True",
-    "Composite": "Yes"
+    "Disable_DEB_STRIP": "True"
   },
 
   {
-    "Package": "hipblas-common-devel",
+    "Package": "amdrocm-hipblas-common-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -1199,7 +1304,7 @@
   },
 
   {
-    "Package": "rocm-composablekernel",
+    "Package": "amdrocm-composablekernel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -1219,19 +1324,18 @@
     ],
     "Artifact": "composable-kernel",
     "Gfxarch": "True",
-    "Composite": "Yes",
     "DisablePackaging": "True"
   },
   {
-    "Package": "rocm-composablekernel-devel",
+    "Package": "amdrocm-composablekernel-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "rocm-composablekernel"
+      "amdrocm-composablekernel"
     ],
     "RPMRequires": [
-      "rocm-composablekernel"
+      "amdrocm-composablekernel"
     ],
     "Maintainer": "MIOpen Kernels Dev Team <dl.MIOpen@amd.com>",
     "Description_Short": "High Performance Composable Kernel for AMD GPUs",
@@ -1248,12 +1352,11 @@
     ],
     "Artifact": "composable-kernel",
     "Gfxarch": "True",
-    "Composite": "Yes",
     "DisablePackaging": "True"
   },
 
   {
-    "Package": "rocm-rccl",
+    "Package": "amdrocm-rccl",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -1290,24 +1393,23 @@
       }
     ],
 
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-rccl-devel",
+    "Package": "amdrocm-rccl-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
       "python3",
       "libc6",
-      "rocm-rccl"
+      "amdrocm-rccl"
     ],
     "RPMRequires": [
       "python3",
       "glibc",
-      "rocm-rccl"
+      "amdrocm-rccl"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
     "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
@@ -1332,16 +1434,23 @@
       }
     ],
 
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
   {
-    "Package": "rocm-dnn",
+    "Package": "amdrocm-dnn",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
-    "DEBDepends": [],
-    "RPMRequires": [],
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-blas",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-blas",
+      "amdrocm-sysdeps"
+    ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
     "Description_Short": "AMD DNN Library",
     "Description_Long": "MIOpen is AMD's library for high-performance machine learning primitives",
@@ -1378,20 +1487,19 @@
       }
     ],
 
-    "Gfxarch": "True",
-    "Composite": "Yes"
+    "Gfxarch": "True"
   },
 
   {
-    "Package": "rocm-dnn-devel",
+    "Package": "amdrocm-dnn-devel",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "rocm-dnn"
+      "amdrocm-dnn"
     ],
     "RPMRequires": [
-      "rocm-dnn"
+      "amdrocm-dnn"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
     "Description_Short": "AMD DNN Library",
@@ -1428,105 +1536,6 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Composite": "Yes"
-  },
-
-  {
-    "Package": "rocm-host-blas",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "python3",
-      "libc6"
-    ],
-    "RPMRequires": [
-      "python3",
-      "glibc"
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm host BLAS libraries",
-    "Description_Long": "ROCm host BLAS libraries",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Components": [
-      "lib",
-      "dev",
-      "doc",
-      "run"
-    ],
-    "Artifact": "host-blas",
-    "Gfxarch": "False",
-    "Composite": "Yes",
-    "DisablePackaging": "True"
-  },
-  {
-    "Package": "rocm-host-suite-sparse",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "python3",
-      "libc6"
-    ],
-    "RPMRequires": [
-      "python3",
-      "glibc"
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm host suite sparse libraries",
-    "Description_Long": "ROCm host suite sparse libraries",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Components": [
-      "lib",
-      "dev",
-      "doc",
-      "run"
-    ],
-    "Artifact": "host-suite-sparse",
-    "Gfxarch": "False",
-    "Composite": "Yes",
-    "DisablePackaging": "True"
-  },
-  {
-    "Package": "rocm-support-devel",
-    "Version": "",
-    "Architecture": "amd64",
-    "BuildArch": "x86_64",
-    "DEBDepends": [
-      "python3",
-      "libc6"
-    ],
-    "RPMRequires": [
-      "python3",
-      "glibc"
-    ],
-    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm development support header files",
-    "Description_Long": "ROCm development support header files",
-    "Section": "devel",
-    "Priority": "optional",
-    "Group": "unknown",
-    "License": "MIT",
-    "Vendor": "Advanced Micro Devices, Inc",
-    "Homepage": "https://github.com/ROCm/rocm-systems",
-    "Components": [
-      "dev",
-      "doc"
-    ],
-    "Artifact": "support",
-    "Gfxarch": "True",
-    "Composite": "yes",
-    "DisablePackaging": "True"
+    "Gfxarch": "True"
   }
 ]

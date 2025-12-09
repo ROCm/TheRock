@@ -64,6 +64,7 @@ RPM_CONTENTS_DIR = None
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm"
 
+
 ################### Debian package creation #######################
 def create_deb_package(pkg_name, config: PackageConfig):
     """Create a Debian package.
@@ -368,14 +369,22 @@ def copy_package_contents(source_dir, destination_dir):
 
     # Copy each item from source to destination
     for item in os.listdir(source_dir):
-        s = os.path.join(source_dir, item)
-        d = os.path.join(destination_dir, item)
-        if os.path.isdir(s):
+        src = os.path.join(source_dir, item)
+        dst = os.path.join(destination_dir, item)
+        if os.path.isdir(src) and not os.path.islink(dst):
             shutil.copytree(
-                s, d, dirs_exist_ok=True, symlinks=True, ignore_dangling_symlinks=False
+                src,
+                dst,
+                dirs_exist_ok=True,
+                symlinks=True,
+                ignore_dangling_symlinks=True,
             )
+        elif os.path.islink(src):
+            # Copy the symlink itself (even if dangling)
+            link_target = os.readlink(src)
+            os.symlink(link_target, dst)
         else:
-            shutil.copy2(s, d, symlinks=True, ignore_dangling_symlinks=False)
+            shutil.copy2(src, dst)
 
 
 def package_with_dpkg_build(pkg_dir):
@@ -757,7 +766,7 @@ def parse_input_package_list(pkg_name):
     """Populate the package list from the provided input arguments.
 
     Parameters:
-    pkg_name : List of packages or type of packages single/composite
+    pkg_name : List of packages to be created
 
     Returns: Package list
     """
@@ -777,17 +786,10 @@ def parse_input_package_list(pkg_name):
             continue
 
         name = entry.get("Package")
-        is_composite = is_composite_package(entry)
 
         # Loop through each type in pkg_name
         for pkg in pkg_name:
-            if pkg == "single" and not is_composite:
-                pkg_list.append(name)
-                break
-            elif pkg == "composite" and is_composite:
-                pkg_list.append(name)
-                break
-            elif pkg == name:
+            if pkg == name:
                 pkg_list.append(name)
                 break
 
@@ -919,7 +921,7 @@ def main(argv: list[str]):
     p.add_argument(
         "--pkg-names",
         nargs="+",
-        help="Specify the packages to be created: single, composite or any specific package name",
+        help="Specify the packages to be created",
     )
 
     args = p.parse_args(argv)
