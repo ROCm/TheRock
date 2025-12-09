@@ -6,6 +6,8 @@ from pathlib import Path
 import glob
 import shutil
 import json
+import sys
+
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
