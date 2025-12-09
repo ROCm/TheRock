@@ -50,8 +50,6 @@ def build_configure(manylinux=False):
         raise Exception(
             "Missing required environment variable: amdgpu_families\n"
             "Please set this variable before running the script.\n"
-            "Example:\n"
-            "  $env:amdgpu_families = 'gfx90a'\n"
         )
 
     logging.info(f"Building package {package_version}")
