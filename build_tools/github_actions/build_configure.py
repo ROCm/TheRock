@@ -46,16 +46,12 @@ platform_options = {
 
 def build_configure(manylinux=False):
     # Validate required environment variables
-    missing_vars = []
     if not amdgpu_families:
-        missing_vars.append("amdgpu_families")
-
-    if missing_vars:
         raise Exception(
-            f"Missing required environment variables: {', '.join(missing_vars)}\n"
-            f"Please set these variables before running the script.\n"
-            f"Example:\n"
-            f"  $env:amdgpu_families = 'gfx90a'\n"
+            "Missing required environment variable: amdgpu_families\n"
+            "Please set this variable before running the script.\n"
+            "Example:\n"
+            "  $env:amdgpu_families = 'gfx90a'\n"
         )
 
     logging.info(f"Building package {package_version}")
