@@ -30,6 +30,7 @@ class PackageInfo:
         rocm_version: str = "",
         artifact_group: str = "",
         os_family: str = "",
+        os_id: str = ""
     ):
         """
         Initialize a PackageInfo object with data from JSON and context.
@@ -73,6 +74,7 @@ class PackageInfo:
         self.artifact_group = artifact_group
         self.gfx_suffix = self._derive_gfx_suffix(artifact_group)
         self.os_family = os_family
+        self.os_id = os_id
 
     def _derive_gfx_suffix(self, artifact_group: str) -> str:
         """
@@ -139,7 +141,7 @@ class PackageLoader:
         self.rocm_version = rocm_version
         self.artifact_group = artifact_group
         self._data = self._load_json()
-        self.os_family = get_os_id()
+        self.os_id,self.os_family = get_os_id()
 
     def _load_json(self) -> List[Dict[str, Any]]:
         """
@@ -160,7 +162,7 @@ class PackageLoader:
         list of PackageInfo : All packages with context applied.
         """
         return [
-            PackageInfo(entry, self.rocm_version, self.artifact_group, self.os_family)
+            PackageInfo(entry, self.rocm_version, self.artifact_group, self.os_family,self.os_id)
             for entry in self._data
         ]
 

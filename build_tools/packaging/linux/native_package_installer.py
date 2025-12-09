@@ -309,7 +309,7 @@ class PackageInstaller(PackageManagerBase):
             return
 
         logger.info("\n=== SUMMARY OF FAILURES ===")
-        print_dict_table( self.failed_packages )
+        print_dict_summary( self.failed_packages )
 
 
 

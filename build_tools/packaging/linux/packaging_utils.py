@@ -64,6 +64,26 @@ def print_dict_table(failure_dict):
 
     logger.info("\n" + table.get_string())
 
+def print_dict_summary(failure_dict):
+    """
+    Prints a clean summary of failures without table formatting.
+    """
+
+    if not failure_dict:
+        logger.info("All packages installed successfully.")
+        return
+
+    lines = []
+    lines.append("====== Installation Failure Summary ======\n")
+
+    for pkg, reason in failure_dict.items():
+        clean_reason = reason.strip()
+        lines.append(f" Package: {pkg}")
+        lines.append(f"  Reason : {clean_reason}\n")
+
+    summary_output = "\n".join(lines)
+    logger.info("\n" + summary_output)
+
 def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
     """
     Load a YAML configuration file and replace placeholders dynamically.
