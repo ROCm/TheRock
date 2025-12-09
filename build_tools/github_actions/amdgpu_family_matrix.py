@@ -13,7 +13,7 @@ For presubmit, postsubmit and nightly family selection:
 TODO(#2200): clarify AMD GPU family selection
 """
 
-from github_actions_utils import str2bool, _log
+from github_actions_utils import str2bool
 
 import json
 import os
@@ -265,9 +265,5 @@ def get_all_families_for_trigger_types(trigger_types):
         if trigger_type in matrix_map:
             for family_name, family_config in matrix_map[trigger_type].items():
                 result[family_name] = family_config
-                for platform in family_config:
-                    _log(
-                        f"Scheduling job: {family_config[platform]["family"]} | {platform} | Test Runner: {family_config[platform]["test-runs-on"]}"
-                    )
 
     return result
