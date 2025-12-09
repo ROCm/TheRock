@@ -88,7 +88,7 @@ jobs:
           python-version: '3.12'
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2
+          pip install pyelftools boto3 jinja2 PyYAML
 
       - name: Install System requirements
         run: |
@@ -98,7 +98,6 @@ jobs:
           sudo apt install -y llvm
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
-          sudo apt install -y python3-yaml
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
