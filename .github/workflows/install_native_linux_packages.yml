@@ -110,19 +110,21 @@ jobs:
 
       - name: Install non-composite versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package-json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package-json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly --bucket therock-deb-rpm-test
+
       - name: Install non-composite non-versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package-json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package-json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly --bucket therock-deb-rpm-test
       - name: Uninstall non-composite packages (Python script)
         run: |
           python3 ./build_tools/packaging/linux/native_package_uninstaller.py  --package-json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version ${{ env.ROCM_VERSION }}
       - name: Install composite versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package-json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package-json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly --bucket therock-deb-rpm-test
       - name: Install composite non-versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package-json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package-json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly --bucket therock-deb-rpm-test
       - name: Uninstall composite packages (Python script)
         run: |
           python3 ./build_tools/packaging/linux/native_package_uninstaller.py  --package-json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version ${{ env.ROCM_VERSION }}
