@@ -110,7 +110,7 @@ jobs:
 
       - name: Install non-composite versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP- }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
       - name: Install non-composite non-versioned packages (Python script)
         run: |
           python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
