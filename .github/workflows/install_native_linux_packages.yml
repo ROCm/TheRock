@@ -73,7 +73,7 @@ jobs:
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
-      AMDGPU_FAMILY: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
+      ARTIFACT_GROUP: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
       ROCM_VERSION: ${{ inputs.rocm_version || '7.11.0' }}
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id || 19917417466 }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
@@ -98,6 +98,7 @@ jobs:
           sudo apt install -y llvm
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
+          sudo pip install -y PyYAML
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
@@ -110,22 +111,22 @@ jobs:
 
       - name: Install non-composite versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ inputs.amdgpu_family }} --rocm-version  ${{ inputs.rocm_version }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP- }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
       - name: Install non-composite non-versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ inputs.amdgpu_family }} --rocm-version  ${{ inputs.rocm_version }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
       - name: Uninstall non-composite packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_uninstaller.py  --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ inputs.amdgpu_family }} --rocm-version ${{ inputs.rocm_version }}
+          python3 ./build_tools/packaging/linux/native_package_uninstaller.py  --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version ${{ env.ROCM_VERSION }}
       - name: Install composite versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package_json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ inputs.amdgpu_family }} --rocm-version  ${{ inputs.rocm_version }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version true --package_json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
       - name: Install composite non-versioned packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package_json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ inputs.amdgpu_family }} --rocm-version  ${{ inputs.rocm_version }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
+          python3 ./build_tools/packaging/linux/native_package_installer.py --run-id ${{ env.ARTIFACT_RUN_ID}} --version false --package_json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version  ${{ env.ROCM_VERSION }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
       - name: Uninstall composite packages (Python script)
         run: |
-          python3 ./build_tools/packaging/linux/native_package_uninstaller.py  --package_json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ inputs.amdgpu_family }} --rocm-version ${{ inputs.rocm_version }}
+          python3 ./build_tools/packaging/linux/native_package_uninstaller.py  --package_json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version ${{ env.ROCM_VERSION }}
       - name: Upload Package repo to S3
         id: upload-packages
         run: |
