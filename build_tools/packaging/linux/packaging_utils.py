@@ -16,8 +16,6 @@ import re
 import logging
 import yaml
 import copy
-from prettytable import PrettyTable
-
 
 # Create a common logger
 logger = logging.getLogger("rocm_installer")
