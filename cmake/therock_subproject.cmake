@@ -1592,7 +1592,7 @@ function(_therock_subproject_fprint_source_dir out_fprint dir)
 
     # Check if working tree is pristine (no modified tracked files)
     # TODO: Consider changing this incantation to instead consider the
-    # sub-tree, not the whole repo. See comments on: 
+    # sub-tree, not the whole repo. See comments on:
     # https://github.com/ROCm/TheRock/pull/2432
     execute_process(
       COMMAND git diff --quiet --ignore-submodules HEAD
