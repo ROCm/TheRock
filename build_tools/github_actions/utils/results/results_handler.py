@@ -13,13 +13,6 @@ from decimal import Decimal, InvalidOperation
 from ..logger import log
 from .results_api import ResultsAPI, build_results_payload, validate_payload
 from ..constants import Constants, SEPARATOR_LINE
-from ..exceptions import (
-    APIConnectionError,
-    APIAuthenticationError,
-    APITimeoutError,
-    APIValidationError,
-    APIServerError
-)
 
 
 class ResultsHandler:
@@ -217,31 +210,6 @@ class ResultsHandler:
                 log.warning("⚠ Failed to submit results to API")
                 return False
                 
-        except APIConnectionError as e:
-            log.error(f"API connection error: {e}")
-            log.warning("Results not submitted - network connectivity issue")
-            return False
-            
-        except APIAuthenticationError as e:
-            log.error(f"API authentication error: {e}")
-            log.warning("Results not submitted - check API key")
-            return False
-            
-        except APITimeoutError as e:
-            log.error(f"API timeout error: {e}")
-            log.warning("Results not submitted - API server not responding")
-            return False
-            
-        except APIValidationError as e:
-            log.error(f"API validation error: {e}")
-            log.warning("Results not submitted - invalid payload")
-            return False
-            
-        except APIServerError as e:
-            log.error(f"API server error: {e}")
-            log.warning("Results not submitted - server-side issue")
-            return False
-            
         except Exception as e:
             log.error(f"Unexpected error submitting to API: {e}")
             log.warning("Results not submitted - unexpected error")

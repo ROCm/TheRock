@@ -35,31 +35,6 @@ class TestExecutionError(FrameworkException):
     pass
 
 
-class APIConnectionError(FrameworkException):
-    """API connection failures (network, DNS, cannot reach server)."""
-    pass
-
-
-class APIAuthenticationError(FrameworkException):
-    """API authentication failures (invalid key, unauthorized access)."""
-    pass
-
-
-class APITimeoutError(FrameworkException):
-    """API request timeout (server not responding in time)."""
-    pass
-
-
-class APIValidationError(FrameworkException):
-    """API payload validation errors (400 errors, missing fields, invalid format)."""
-    pass
-
-
-class APIServerError(FrameworkException):
-    """API server errors (500 errors, internal server issues, unavailable)."""
-    pass
-
-
 class ValidationError(FrameworkException):
     """Data or input validation failures."""
     pass
