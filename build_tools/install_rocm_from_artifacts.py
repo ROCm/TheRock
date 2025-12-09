@@ -14,6 +14,7 @@ python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
+    [--run-github-repo RUN_GITHUB_REPO]
     [--blas | --no-blas]
     [--fft | --no-fft]
     [--hipdnn | --no-hipdnn]
@@ -52,6 +53,16 @@ Examples:
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 \
         --amdgpu-family gfx120X-all
+    ```
+- Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 19644138192
+  (from https://github.com/ROCm/rocm-libraries/actions/runs/19644138192) in the `ROCm/rocm-libraries` repository to the
+  default output directory `therock-build`:
+    ```
+    python build_tools/install_rocm_from_artifacts.py \
+        --run-id 19644138192 \
+        --amdgpu-family gfx94X-dcgpu \
+        --tests \
+        --run-github-repo ROCm/rocm-libraries
     ```
 
 You can select your AMD GPU family from therock_amdgpu_targets.cmake.
@@ -151,6 +162,8 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+    if args.run_github_repo:
+        argv.extend(["--run-github-repo", args.run_github_repo])
 
     # These artifacts are the "base" requirements for running tests.
     base_artifact_patterns = [
@@ -240,7 +253,7 @@ def retrieve_artifacts_by_release(args):
     artifact_group = args.artifact_group
     # Determine if version is nightly-tarball or dev-tarball
     nightly_regex_expression = (
-        "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)rc(\\d{4})(\\d{2})(\\d{2})"
+        "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)(a|rc)(\\d{4})(\\d{2})(\\d{2})"
     )
     dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
     nightly_release = re.search(nightly_regex_expression, args.release) != None
@@ -249,7 +262,7 @@ def retrieve_artifacts_by_release(args):
         log("This script requires a nightly-tarball or dev-tarball version.")
         log("Please retrieve the correct release version from:")
         log(
-            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball example: 6.4.0rc20250416)"
+            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
         )
         log(
             "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
@@ -433,6 +446,12 @@ def main(argv):
         "--input-dir",
         type=str,
         help="Pass in an existing directory of TheRock to provision and test",
+    )
+
+    parser.add_argument(
+        "--run-github-repo",
+        type=str,
+        help="GitHub repository for --run-id in 'owner/repo' format (e.g. 'ROCm/TheRock'). Defaults to GITHUB_REPOSITORY env var or 'ROCm/TheRock'",
     )
 
     args = parser.parse_args(argv)

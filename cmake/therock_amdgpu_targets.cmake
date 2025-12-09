@@ -151,6 +151,12 @@ therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-a
     rccl  # https://github.com/ROCm/TheRock/issues/150
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
 )
+therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rccl  # https://github.com/ROCm/TheRock/issues/150
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+)
 
 # gfx120X family
 therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
@@ -166,6 +172,16 @@ therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
 include(therock_custom_amdgpu_targets OPTIONAL)
 
 # Validates and normalizes AMDGPU target selection cache variables.
+#
+# This function handles two separate target lists:
+#   THEROCK_AMDGPU_TARGETS: Per-architecture targets for architecture-specific builds
+#   THEROCK_DIST_AMDGPU_TARGETS: All targets for the distribution (used by
+#     runtime components that need to support all architectures)
+#
+# In multi-arch CI, generic stages (those building architecture-independent code)
+# may have no per-arch targets but still need dist targets. In this case,
+# THEROCK_AMDGPU_TARGETS is set to a sentinel value "THEROCK_AMDGPU_TARGETS-NOTFOUND"
+# and the error is deferred until a subproject actually needs per-arch targets.
 function(therock_validate_amdgpu_targets)
   message(STATUS "Configured AMDGPU Targets:")
   string(APPEND CMAKE_MESSAGE_INDENT "  ")
@@ -174,7 +190,8 @@ function(therock_validate_amdgpu_targets)
   get_property(_available_families GLOBAL PROPERTY THEROCK_AMDGPU_TARGET_FAMILIES)
   list(REMOVE_DUPLICATES _available_families)
   get_property(_available_targets GLOBAL PROPERTY THEROCK_AMDGPU_TARGETS)
-  # Expand families.
+
+  # Expand per-arch families (THEROCK_AMDGPU_FAMILIES -> THEROCK_AMDGPU_TARGETS).
   foreach(_family ${THEROCK_AMDGPU_FAMILIES})
     list(APPEND _explicit_selections "${_family}")
     if(NOT "${_family}" IN_LIST _available_families)
@@ -193,7 +210,7 @@ function(therock_validate_amdgpu_targets)
     list(APPEND _expanded_targets ${_target})
   endforeach()
 
-  # Validate targets.
+  # Validate per-arch targets.
   list(REMOVE_DUPLICATES _expanded_targets)
   foreach(_target ${_expanded_targets})
     string(JOIN " " _targets_pretty ${_available_targets})
@@ -205,22 +222,58 @@ function(therock_validate_amdgpu_targets)
     message(STATUS "* ${_target} : ${_target_name}")
   endforeach()
 
-  # Must have a target.
-  if(NOT _expanded_targets)
+  # Expand dist families (THEROCK_DIST_AMDGPU_FAMILIES -> THEROCK_DIST_AMDGPU_TARGETS).
+  # If THEROCK_DIST_AMDGPU_FAMILIES is not set, it defaults to THEROCK_AMDGPU_FAMILIES.
+  set(_dist_families "${THEROCK_DIST_AMDGPU_FAMILIES}")
+  if(NOT _dist_families)
+    set(_dist_families "${THEROCK_AMDGPU_FAMILIES}")
+  endif()
+  set(_dist_expanded_targets)
+  foreach(_family ${_dist_families})
+    if(NOT "${_family}" IN_LIST _available_families)
+      string(JOIN " " _families_pretty ${_available_families})
+      message(FATAL_ERROR
+        "THEROCK_DIST_AMDGPU_FAMILIES value '${_family}' unknown. Available: "
+        ${_families_pretty})
+    endif()
+    get_property(_family_targets GLOBAL PROPERTY "THEROCK_AMDGPU_TARGET_FAMILY_${_family}")
+    list(APPEND _dist_expanded_targets ${_family_targets})
+  endforeach()
+  list(REMOVE_DUPLICATES _dist_expanded_targets)
+
+  # Report dist targets if different from per-arch targets.
+  if(_dist_expanded_targets AND NOT "${_dist_expanded_targets}" STREQUAL "${_expanded_targets}")
+    message(STATUS "Dist targets: ${_dist_expanded_targets}")
+  endif()
+
+  # Handle the case where per-arch targets are empty but dist targets exist.
+  # This is valid for generic stages in multi-arch CI that don't build
+  # architecture-specific code but need to know about all dist targets.
+  if(NOT _expanded_targets AND _dist_expanded_targets)
+    message(STATUS "(No per-arch targets - generic stage using dist targets only)")
+    set(THEROCK_AMDGPU_TARGETS "THEROCK_AMDGPU_TARGETS-NOTFOUND" PARENT_SCOPE)
+    set(THEROCK_AMDGPU_TARGETS_SPACES "" PARENT_SCOPE)
+  elseif(NOT _expanded_targets AND NOT _dist_expanded_targets)
     message(FATAL_ERROR
       "No AMDGPU target selected: make a selection via THEROCK_AMDGPU_FAMILIES "
-      "or THEROCK_AMDGPU_TARGETS."
+      "or THEROCK_AMDGPU_TARGETS (or THEROCK_DIST_AMDGPU_FAMILIES for dist-only)."
     )
+  else()
+    # Export per-arch targets to parent scope.
+    set(THEROCK_AMDGPU_TARGETS "${_expanded_targets}" PARENT_SCOPE)
+    string(JOIN " " _expanded_targets_spaces ${_expanded_targets})
+    set(THEROCK_AMDGPU_TARGETS_SPACES "${_expanded_targets_spaces}" PARENT_SCOPE)
   endif()
-  # Export to parent scope.
-  set(THEROCK_AMDGPU_TARGETS "${_expanded_targets}" PARENT_SCOPE)
-  string(JOIN " " _expanded_targets_spaces ${_expanded_targets})
-  set(THEROCK_AMDGPU_TARGETS_SPACES "${_expanded_targets_spaces}" PARENT_SCOPE)
 
-  # Export the dist targets as the same until we have support/need to separate
-  # them.
-  set(THEROCK_DIST_AMDGPU_TARGETS "${_expanded_targets}" PARENT_SCOPE)
-  set(THEROCK_DIST_AMDGPU_TARGETS_SPACES "${_expanded_targets_spaces}" PARENT_SCOPE)
+  # Export dist targets to parent scope.
+  if(_dist_expanded_targets)
+    set(THEROCK_DIST_AMDGPU_TARGETS "${_dist_expanded_targets}" PARENT_SCOPE)
+    string(JOIN " " _dist_expanded_targets_spaces ${_dist_expanded_targets})
+    set(THEROCK_DIST_AMDGPU_TARGETS_SPACES "${_dist_expanded_targets_spaces}" PARENT_SCOPE)
+  else()
+    set(THEROCK_DIST_AMDGPU_TARGETS "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND" PARENT_SCOPE)
+    set(THEROCK_DIST_AMDGPU_TARGETS_SPACES "" PARENT_SCOPE)
+  endif()
 
   if(NOT THEROCK_AMDGPU_DIST_BUNDLE_NAME)
     list(LENGTH _explicit_selections _explicit_count)
@@ -232,7 +285,9 @@ function(therock_validate_amdgpu_targets)
       )
     endif()
     set(THEROCK_AMDGPU_DIST_BUNDLE_NAME "${_explicit_selections}" PARENT_SCOPE)
-    message(STATUS "* Dist bundle: ${_explicit_selections}")
+    if(_explicit_selections)
+      message(STATUS "* Dist bundle: ${_explicit_selections}")
+    endif()
   else()
     message(STATUS "* Dist bundle: ${THEROCK_AMDGPU_DIST_BUNDLE_NAME}")
   endif()

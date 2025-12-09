@@ -4,11 +4,7 @@
 set -e
 
 PREFIX="${1:?Expected install prefix argument}"
-PATCHELF="${PATCHELF:-patchelf}"
-THEROCK_SOURCE_DIR="${THEROCK_SOURCE_DIR:?THEROCK_SOURCE_DIR not defined}"
-Python3_EXECUTABLE="${Python3_EXECUTABLE:?Python3_EXECUTABLE not defined}"
 
-"$Python3_EXECUTABLE" "$THEROCK_SOURCE_DIR/build_tools/patch_linux_so.py" \
-  --patchelf "${PATCHELF}" --add-prefix rocm_sysdeps_ \
-  $PREFIX/lib/libdrm.so \
-  $PREFIX/lib/libdrm_amdgpu.so
+# Create symbolic links for libdrm.so and libdrm_amdgpu.so.
+mv $PREFIX/lib/librocm_sysdeps_drm.so $PREFIX/lib/libdrm.so
+mv $PREFIX/lib/librocm_sysdeps_drm_amdgpu.so $PREFIX/lib/libdrm_amdgpu.so

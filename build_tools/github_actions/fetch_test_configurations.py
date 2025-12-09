@@ -192,7 +192,7 @@ test_matrix = {
         "fetch_artifact_args": "--hipdnn --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
     },
     # MIOpen plugin tests
@@ -201,7 +201,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
     },
     # rocWMMA tests
@@ -211,7 +211,7 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards": 5,
     },
 }
 
