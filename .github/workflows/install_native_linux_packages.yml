@@ -98,7 +98,6 @@ jobs:
           sudo apt install -y llvm
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
-          sudo pip install -y PyYAML
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
