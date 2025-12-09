@@ -10,9 +10,9 @@ from datetime import datetime
 from prettytable import PrettyTable
 from decimal import Decimal, InvalidOperation
 
-from ..logger import log, SEPARATOR_LINE
+from ..logger import log
 from .results_api import ResultsAPI, build_results_payload, validate_payload
-from ..constants import Constants
+from ..constants import Constants, SEPARATOR_LINE
 from ..exceptions import (
     APIConnectionError,
     APIAuthenticationError,

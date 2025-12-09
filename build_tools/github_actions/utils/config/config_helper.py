@@ -121,12 +121,12 @@ class ConfigHelper:
                 log_file = os.path.join(log_dir, f'test_executor_{timestamp}.log')
                 
                 # Enable file logging
-                log.enable_file_logging(
+                from ..logger import setup_file_logging
+                setup_file_logging(
                     log_file,
                     max_bytes=max_size_mb * 1024 * 1024,
                     backup_count=backup_count
                 )
-                log.info(f"File logging enabled: {log_file}")
                 
         except Exception as e:
             log.warning(f"Failed to configure logging: {e}")
