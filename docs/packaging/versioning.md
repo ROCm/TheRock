@@ -3,7 +3,16 @@
 We build and distribute packages for a variety of projects across multiple
 packaging systems, release channels, and operating systems.
 
-This document describes the version schemes we use.
+This document describes the version schemes we use for those packages.
+
+Table of contents:
+
+- [Overview](#overview)
+  - [Constraints and design guidelines](#constraints-and-design-guidelines)
+  - [Distribution channels (dev, nightly, release)](#distribution-channels-dev-nightly-release)
+- [Python package versions](#python-package-versions)
+- [Native Linux package versions](#native-linux-package-versions)
+- [Native Windows package versions](#native-windows-package-versions)
 
 ## Overview
 
@@ -23,7 +32,7 @@ library versions (for example `HIPBLASLT_PROJECT_VERSION` in
 
 <!-- TODO: mention manifest files? (data about subproject commits used in builds) -->
 
-## Constraints and design guidelines
+### Constraints and design guidelines
 
 We are limited by what each packaging system accepts as valid versions.
 
@@ -40,7 +49,7 @@ For Fedora packages see:
 
 - https://docs.fedoraproject.org/en-US/packaging-guidelines/Versioning/
 
-## Distribution channels (dev, nightly, release)
+### Distribution channels (dev, nightly, release)
 
 Most users are expected to use stable releases, but several other distribution
 channels are also available and may be of interest to project developers,
@@ -85,6 +94,10 @@ package version with our own
 
 For example, for torch version `2.9.0` built with ROCm version `7.9.0` we
 generate a composite torch version `2.9.0+rocm7.9.0`.
+
+<!-- TODO: Document [stable, rc, and dev] local version identifiers. -->
+
+<!-- See https://github.com/ROCm/TheRock/pull/2392 which may change for dev -->
 
 #### PyTorch versions
 
@@ -138,3 +151,11 @@ When working with versions please use these tools and avoid custom parsing
 <!-- TODO: code samples (e.g. how to compare python package versions) -->
 
 <!-- TODO: how to check the version for each package/tool (`--version` commands, `pip show`) -->
+
+## Native Linux package versions
+
+TODO: fill this in together with https://github.com/ROCm/TheRock/pull/2159
+
+## Native Windows package versions
+
+TODO: fill this in together with https://github.com/ROCm/TheRock/pull/2159
