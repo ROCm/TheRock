@@ -13,6 +13,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
+CATCH_TESTS_PATH = f"{THEROCK_BIN_DIR}/../share/hip/catch_tests"
 
 env = os.environ.copy()
 
@@ -51,58 +52,49 @@ def get_test_range_per_shard(total_test_count: int, total_shards, shard_index):
     return [current_index, end_index]
 
 
-if os.name == 'nt':
+if sys.platform == "win32":
     # hip and comgr dlls need to be copied to the same folder as exectuable
     dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
     dlls_to_copy = []
-    catch_tests_path = f"{THEROCK_BIN_DIR}/../catch_tests"
     for pattern in dlls_pattern:
         dlls_to_copy.append(glob.glob(os.path.join(f"{THEROCK_BIN_DIR}", pattern)))
     # convert list of lists to list
     dlls_to_copy = [item for sublist in dlls_to_copy for item in sublist]
     for dll in dlls_to_copy:
         try:
-            shutil.copy(dll, catch_tests_path)
-            print(f"Copied: {dll} to {catch_tests_path}")
+            shutil.copy(dll, CATCH_TESTS_PATH)
+            print(f"Copied: {dll} to {CATCH_TESTS_PATH}")
         except Exception as e:
-            print(f"Error copying {file_path}: {e}")
+            print(f"Error copying {dll}: {e}")
 
-    cmd = [
-        "ctest",
-        "--test-dir",
-        catch_tests_path,
-        "--output-on-failure",
-        "--timeout",
-        "600"
-    ]
-else:
-    hip_library_path = f"{THEROCK_BIN_DIR}/../lib"
-    if "LD_LIBRARY_PATH" in env:
-        env["LD_LIBRARY_PATH"] = f"{hip_library_path}:{env['LD_LIBRARY_PATH']}"
-    else:
-        env["LD_LIBRARY_PATH"] = hip_library_path
-    # Set ROCM Path, to find rocm_agent_enum etc
-    ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
-    env["ROCM_PATH"] = str(ROCM_PATH)
-    total_tests = get_test_count()
-    test_range = get_test_range_per_shard(total_tests, int(TOTAL_SHARDS), int(SHARD_INDEX))
-    index_start = test_range[0]
-    index_end = test_range[1]
+# catch/ctest framework 
+# Linux
+# does not honor LD_LIBRARY_PATH on Linux
+# tests are hardcoded to look at THEROCK_BIN_DIR or /opt/rocm/lib path
+# Windows
+# tests load the dlls present in the local exe folder
+# Set ROCM Path, to find rocm_agent_enum etc
+ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+env["ROCM_PATH"] = str(ROCM_PATH)
 
-    cmd = [
-        "sudo",
-        "-E",
-        "ctest",
-        "-I",
-        f"{index_start},{index_end}",
-        "--test-dir",
-        f"{THEROCK_BIN_DIR}/../share/hip/catch_tests",
-        "--output-on-failure",
-        "--repeat",
-        "until-pass:3",
-        "--timeout",
-        "600"
-    ]
+total_tests = get_test_count()
+test_range = get_test_range_per_shard(total_tests, int(TOTAL_SHARDS), int(SHARD_INDEX))
+index_start = test_range[0]
+index_end = test_range[1]
+cmd = [
+    "sudo",
+    "-E",
+    "ctest",
+    "-I",
+    f"{index_start},{index_end}",
+    "--test-dir",
+    CATCH_TESTS_PATH,
+    "--output-on-failure",
+    "--repeat",
+    "until-pass:3",
+    "--timeout",
+    "600"
+]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
