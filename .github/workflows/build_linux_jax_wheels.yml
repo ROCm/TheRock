@@ -66,6 +66,10 @@ on:
         description: S3 subdirectory, not including the GPU-family
         type: string
         default: "v2"
+      s3_staging_subdir:
+        description: S3 staging subdirectory, not including the GPU-family
+        type: string
+        default: "v2-staging" 
       rocm_version:
         description: ROCm version to install
         type: string
@@ -73,15 +77,14 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
-        default: "https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/rocm-7.11.0a20251209.tar.gz"
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+        default: "https://rocm.nightlies.amd.com/v2"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+        default: "https://rocm.nightlies.amd.com/v2-staging"
       jax_ref:
         description: rocm-jax repository ref/branch to check out
         type: string
