@@ -44,4 +44,3 @@ gpu --composite true
 Non-composite uninstall:
 ./uninstall_package.py --run-id 123456 --package-json ./packages.json --rocm-version 6.2.0 --artifact-group gfx94X-dc
 gpu --composite false
-

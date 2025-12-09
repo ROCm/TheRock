@@ -3,7 +3,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-""" Provides utilities to load and manage ROCm package metadata from JSON files. 
+"""Provides utilities to load and manage ROCm package metadata from JSON files.
 This file is imported by other scripts (installer, uninstaller) and is not executed directly.
 
 Load all packages from a JSON file:
@@ -208,7 +208,6 @@ class PackageLoader:
         return {entry.get("Name") for entry in self._data if "Name" in entry}
 
     def derive_package_names(self, pkg: PackageInfo, version_flag: bool) -> str:
-
         """
         Compute derived package names for a given package, including valid dependencies.
 

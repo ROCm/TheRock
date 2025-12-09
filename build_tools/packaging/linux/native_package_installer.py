@@ -71,7 +71,7 @@ class PackageInstaller(PackageManagerBase):
         self.rocm_version = rocm_version
         self.composite = composite
         self.version_flag = version_flag
-        self.os_id,self.os_family = get_os_id()
+        self.os_id, self.os_family = get_os_id()
         self.artifact_group = artifact_group
         self.package_suffix = package_suffix
         self.bucket = bucket
@@ -80,9 +80,13 @@ class PackageInstaller(PackageManagerBase):
         self.failed_packages = {}
         self.loader = loader
         self.s3_config = load_yaml_config(
-                "build_tools/packaging/linux/packaging_install.yaml",
-                variables={"artifact_group": self.artifact_group, "run_id": self.run_id, "bucket": self.bucket}
-            )
+            "build_tools/packaging/linux/packaging_install.yaml",
+            variables={
+                "artifact_group": self.artifact_group,
+                "run_id": self.run_id,
+                "bucket": self.bucket,
+            },
+        )
 
     def execute(self):
         """
@@ -194,21 +198,33 @@ class PackageInstaller(PackageManagerBase):
         logger.info(f"Populating repo file for OS: {self.os_family}")
 
         try:
-            base_url = self.s3_config.get(self.os_family, {}).get(self.release_type, {}).get("s3")
+            base_url = (
+                self.s3_config.get(self.os_family, {})
+                .get(self.release_type, {})
+                .get("s3")
+            )
             logger.info(f"Using S3 URL: {base_url}")
             if not base_url:
                 logger.info(f"Using S3 URL: {base_url}")
-                logger.info(f"OS_Family: {self.os_family}, release_type: {self.release_type} should not be empty")
+                logger.info(
+                    f"OS_Family: {self.os_family}, release_type: {self.release_type} should not be empty"
+                )
             else:
                 logger.info(f"Using S3 URL: {base_url}")
                 if self.os_family == "debian":
-                    repo_file_path = self.s3_config.get("repos", {}).get(self.os_id, {}).get("rocm_repo_file")
+                    repo_file_path = (
+                        self.s3_config.get("repos", {})
+                        .get(self.os_id, {})
+                        .get("rocm_repo_file")
+                    )
                     repo_entry = f"deb [trusted=yes] {base_url}/deb stable main\n"
 
                     logger.info(f"Writing Debian repo entry to {repo_file_path}")
 
                     cmd = f'echo "{repo_entry.strip()}" | sudo tee {repo_file_path} > /dev/null'
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    result = subprocess.run(
+                        cmd, shell=True, capture_output=True, text=True
+                    )
 
                     if result.returncode != 0:
                         logger.error(
@@ -222,7 +238,9 @@ class PackageInstaller(PackageManagerBase):
                     subprocess.run(["sudo", "apt-get", "update"], check=False)
 
                 elif os_family == "redhat":
-                    logger.info("Detected RPM-based system. Placeholder for repo setup.")
+                    logger.info(
+                        "Detected RPM-based system. Placeholder for repo setup."
+                    )
                     repo_file_path = "/etc/yum.repos.d/rocm.repo"
                     repo_entry = (
                         f"[rocm]\nname=ROCm Repo\nbaseurl={base_url}/rpm\n"
@@ -247,7 +265,7 @@ class PackageInstaller(PackageManagerBase):
 
         Parameters:
         dest_dir : str
-            Directory containing package files 
+            Directory containing package files
         derived_name : str
             Derived package name of Base package
 
@@ -309,8 +327,7 @@ class PackageInstaller(PackageManagerBase):
             return
 
         logger.info("\n=== SUMMARY OF FAILURES ===")
-        print_dict_table( self.failed_packages )
-
+        print_dict_table(self.failed_packages)
 
 
 def parse_arguments():
@@ -341,7 +358,8 @@ def parse_arguments():
         "--run-id", help="Unique identifier for this installation run (optional)"
     )
     parser.add_argument(
-        "--package-suffix", help="Unique identifier for this installation run (optional)"
+        "--package-suffix",
+        help="Unique identifier for this installation run (optional)",
     )
     parser.add_argument(
         "--release-type", help="Unique identifier for this installation run (optional)"
