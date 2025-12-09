@@ -37,35 +37,6 @@ if not logger.hasHandlers():
 
 from prettytable import PrettyTable
 
-
-def print_dict_table(failure_dict):
-    """
-    Prints a clean failure summary table using PrettyTable
-    with visual separation between entries.
-    """
-
-    if not failure_dict:
-        logger.info("All packages installed successfully.")
-        return
-
-    table = PrettyTable()
-    table.field_names = ["Package", "Failure Reason"]
-    table.align["Package"] = "l"
-    table.align["Failure Reason"] = "l"
-
-    items = list(failure_dict.items())
-
-    for idx, (pkg, reason) in enumerate(items):
-        clean_reason = reason.strip()
-
-        # Add a NEWLINE at the end to visually separate entries
-        if idx != len(items) - 1:
-            clean_reason += "\n"   # Adds spacing without breaking table borders
-
-        table.add_row([pkg, clean_reason])
-
-    logger.info("\n" + table.get_string())
-
 def print_dict_summary(failure_dict):
     """
     Prints a clean summary of failures without table formatting.
@@ -114,11 +85,13 @@ def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
 
     return replace_placeholders(copy.deepcopy(raw_config))
 
+
 # -------------------------------
 # Global OS identification lists
 # -------------------------------
 DEBIAN_OS_IDS = {"ubuntu", "debian"}
 RPM_OS_IDS = {"rhel", "centos", "sles", "almalinux", "fedora", "rocky", "redhat"}
+
 
 def get_os_id(os_release_path="/etc/os-release"):
     """
@@ -132,7 +105,7 @@ def get_os_id(os_release_path="/etc/os-release"):
     os_release_path : str, optional
         Path to the OS release file (default is "/etc/os-release").
 
-    Returns: 
+    Returns:
     str :
         OS family as one of: "debian", "redhat", "suse", "linux", or "unknown"
 
@@ -152,12 +125,12 @@ def get_os_id(os_release_path="/etc/os-release"):
     os_like = os_release.get("ID_LIKE", "").lower()
 
     if os_id in DEBIAN_OS_IDS or any(x in os_like for x in DEBIAN_OS_IDS):
-        return os_id,"debian"
+        return os_id, "debian"
 
     if os_id in RPM_OS_IDS or any(x in os_like for x in RPM_OS_IDS):
-        return os_id,"rpm"
+        return os_id, "rpm"
 
-    return os_id,"unknown"
+    return os_id, "unknown"
 
 
 def print_function_name():

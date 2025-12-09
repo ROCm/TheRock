@@ -11,7 +11,7 @@ Composite uninstall (removes all composite packages in reverse order):
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
-    --composite true 
+    --composite true
 ```
 Non-composite uninstall (removes only rocm-core and its versioned package):
 
@@ -20,9 +20,9 @@ Non-composite uninstall (removes only rocm-core and its versioned package):
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
-    --composite false 
+    --composite false
 ```
- 
+
 """
 
 import argparse
@@ -93,7 +93,6 @@ class PackageUninstaller(PackageManagerBase):
         # Print summary of failures
         self.print_summary()
 
-
     def print_summary(self):
 
         if not self.failed_packages:
@@ -101,7 +100,7 @@ class PackageUninstaller(PackageManagerBase):
             return
 
         logger.info("\n=== SUMMARY OF FAILURES ===")
-        print_dict_table( self.failed_packages )
+        print_dict_table(self.failed_packages)
 
     def _run_uninstall_command(self, pkg_name):
         """
@@ -187,7 +186,7 @@ def main():
         package_list=packages,
         rocm_version=args.rocm_version,
         composite=(args.composite.lower() == "true"),
-        loader=loader
+        loader=loader,
     )
 
     uninstaller.execute()

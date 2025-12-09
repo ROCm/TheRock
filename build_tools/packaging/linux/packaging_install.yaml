@@ -31,8 +31,5 @@ repos:
     rocm_repo_file: /etc/yum.repos.d/rocm.repo
   almalinux:
     rocm_repo_file: /etc/yum.repos.d/rocm.repo
-  sles: 
+  sles:
     rocm_repo_file: /etc/zypp/repos.d/rocm.repo
-
-
-
