@@ -104,7 +104,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_rocsolver_benchmark.py')}",
-        # TODO(lajagapp): Add windows test
+        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
         "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
@@ -176,7 +176,7 @@ test_matrix = {
         "fetch_artifact_args": "--rand --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_rocrand_benchmark.py')}",
-        # TODO(lajagapp): Add windows test
+        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
         "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
@@ -204,7 +204,7 @@ test_matrix = {
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_rocfft_benchmark.py')}",
-        # TODO(lajagapp): Add windows test
+        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
         "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)

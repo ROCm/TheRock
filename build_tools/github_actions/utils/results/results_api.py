@@ -1,4 +1,6 @@
-"""API client for submitting test results."""
+"""API client for submitting benchmark test results to the configured results tracking API.
+
+Uploads performance metrics, system metadata, and test configurations for regression detection and analysis."""
 
 import json
 import requests
