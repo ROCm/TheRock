@@ -55,7 +55,7 @@ class PackageUninstaller(PackageManagerBase):
         self.rocm_version = rocm_version
         self.composite = composite
         self.loader = loader
-        self.os_family = get_os_id()
+        self.os_id, self.os_family = get_os_id()
         self.failed_packages = {}
 
     def execute(self):
@@ -89,7 +89,6 @@ class PackageUninstaller(PackageManagerBase):
                 if derived_name:
                     for derived_pkg in derived_name:
                         self._run_uninstall_command(derived_pkg)
-        logger.info(" Uninstallation complete.")
         # Print summary of failures
         self.print_summary()
 
