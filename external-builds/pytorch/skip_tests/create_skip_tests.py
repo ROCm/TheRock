@@ -45,6 +45,7 @@ import argparse
 import importlib.util
 import os
 from pathlib import Path
+import platform
 import sys
 from typing import Dict, List
 
@@ -111,7 +112,11 @@ def import_skip_tests(pytorch_version: str = "") -> Dict[str, Dict]:
     return dict_skip_tests
 
 
-def create_list(amdgpu_family: list[str] = [], pytorch_version: str = "") -> List[str]:
+def create_list(
+    amdgpu_family: list[str] = [],
+    pytorch_version: str = "",
+    platform: str = "",
+) -> List[str]:
     """Create a list of test names based on filters.
 
     Aggregates test names from all applicable skip test definitions based on
@@ -141,6 +146,7 @@ def create_list(amdgpu_family: list[str] = [], pytorch_version: str = "") -> Lis
     # Define filters: always include "common", plus specific AMDGPU families
     filters = ["common"]
     filters += amdgpu_family
+    filters += [platform.lower()] if platform else []
 
     # Load skip_tests from generic.py and (pytorch_<version> or "all" pytorch versions)
     dict_skip_tests = import_skip_tests(pytorch_version)
@@ -174,6 +180,13 @@ Output is a pytest -k expression that can be used directly with pytest.
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
     )
     parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform.system(),
+        required=False,
+        help="""Platform (Linux or Windows) for platform-specific filtering""",
+    )
+    parser.add_argument(
         "--pytorch-version",
         type=str,
         default="",
@@ -197,6 +210,7 @@ Output can be used with 'pytest -k <list>'""",
 def get_tests(
     amdgpu_family: list[str] = [],
     pytorch_version: str = "",
+    platform: str = "",
     create_skip_list: bool = True,
 ) -> str:
     """Generate a pytest -k expression for test filtering.
@@ -227,7 +241,9 @@ def get_tests(
     )
 
     # Get the list of test names
-    tests = create_list(amdgpu_family=amdgpu_family, pytorch_version=pytorch_version)
+    tests = create_list(
+        amdgpu_family=amdgpu_family, pytorch_version=pytorch_version, platform=platform
+    )
 
     # Format as pytest -k expression
     if create_skip_list:
@@ -248,5 +264,10 @@ if __name__ == "__main__":
         family.strip() for family in args.amdgpu_family.split(",") if args.amdgpu_family
     ]
 
-    tests = get_tests(amdgpu_family, args.pytorch_version, not args.include_tests)
+    tests = get_tests(
+        amdgpu_family=amdgpu_family,
+        pytorch_version=args.pytorch_version,
+        platform=args.platform,
+        create_skip_list=not args.include_tests,
+    )
     print(tests)

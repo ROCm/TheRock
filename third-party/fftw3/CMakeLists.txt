@@ -12,6 +12,7 @@ else()
 endif()
 
 therock_cmake_subproject_declare(therock-fftw3
+  USE_DIST_AMDGPU_TARGETS
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/build_fftw3"
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
@@ -28,6 +29,7 @@ therock_cmake_subproject_activate(therock-fftw3)
 add_dependencies(therock-third-party therock-fftw3)
 
 therock_cmake_subproject_declare(therock-fftw3f
+  USE_DIST_AMDGPU_TARGETS
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/build_fftw3f"
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
