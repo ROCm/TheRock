@@ -3,43 +3,35 @@
 
 This script provides a cross-platform way to gracefully terminate a process,
 allowing it to run cleanup code before exiting. It sends appropriate termination
-signals and waits for the process to exit before optionally forcing termination.
+signals and waits for the process to exit, force killing if the timeout is exceeded.
 
 Usage:
-    python graceful_shutdown.py <PID> [--timeout SECONDS] [--force]
+    python graceful_shutdown.py <PID> [--timeout SECONDS]
 
 Examples:
-    # Gracefully stop a process with 10 second timeout
+    # Gracefully stop a process with 10 second timeout (default), force kill if needed
     python graceful_shutdown.py 12345 --timeout 10
-
-    # Try graceful shutdown, force kill after 5 seconds if needed
-    python graceful_shutdown.py 12345 --timeout 5 --force
 """
 
 import argparse
 import sys
 import time
-import platform
 import psutil
 
 
 def graceful_shutdown(
     pid: int,
     timeout_seconds: float = 10.0,
-    force_on_timeout: bool = False,
     verbose: bool = True,
+    stop_signal_file: str = None,
 ) -> bool:
     """Gracefully shutdown a process by PID.
-
-    This function sends a termination signal to the process and waits for it
-    to exit gracefully. On Windows, it uses SIGTERM. On Unix, it uses SIGTERM
-    which triggers KeyboardInterrupt in Python processes.
 
     Args:
         pid: Process ID to terminate
         timeout_seconds: How long to wait for graceful shutdown (default: 10.0)
-        force_on_timeout: If True, force kill the process if timeout is exceeded
         verbose: If True, print status messages to stdout
+        stop_signal_file: Optional path to a stop signal file (for Windows compatibility)
 
     Returns:
         True if process was terminated successfully, False otherwise
@@ -58,13 +50,71 @@ def graceful_shutdown(
         print(f"Attempting graceful shutdown of process {pid} (timeout: {timeout_seconds}s)")
 
     try:
-        # Send termination signal
-        # On Windows, terminate() sends SIGTERM
-        # On Unix, terminate() sends SIGTERM which Python's signal handler converts to KeyboardInterrupt
-        process.terminate()
+        # On Windows, if a stop_signal_file is provided, create it first
+        # This allows the process to detect it and shutdown gracefully
+        if stop_signal_file:
+            from pathlib import Path
+            stop_file = Path(stop_signal_file)
+            try:
+                stop_file.touch()
+                if verbose:
+                    print(f"Created stop signal file: {stop_signal_file}")
+                    print(f"Waiting for process to detect stop signal file...")
+                
+                # Wait for the process to detect the file and exit gracefully
+                # Check every 0.5 seconds
+                wait_time = 0
+                while wait_time < timeout_seconds:
+                    try:
+                        # Check if process is still running
+                        if not process.is_running():
+                            if verbose:
+                                print(f"Process {pid} exited gracefully via stop signal file")
+                            # Clean up the signal file
+                            try:
+                                stop_file.unlink()
+                            except:
+                                pass
+                            return True
+                    except psutil.NoSuchProcess:
+                        if verbose:
+                            print(f"Process {pid} has exited")
+                        # Clean up the signal file
+                        try:
+                            stop_file.unlink()
+                        except:
+                            pass
+                        return True
+                    
+                    time.sleep(0.5)
+                    wait_time += 0.5
+                
+                # If we get here, the stop signal file didn't work
+                if verbose:
+                    print(f"Process did not respond to stop signal file within {timeout_seconds}s")
+                # Clean up the signal file
+                try:
+                    stop_file.unlink()
+                except:
+                    pass
+                
+            except Exception as e:
+                if verbose:
+                    print(f"Warning: Could not create/use stop signal file: {e}")
+        
+        # Send termination signal as fallback (only if process is still running)
+        try:
+            if process.is_running():
+                # On Linux/Unix: terminate() sends SIGTERM which triggers signal handlers
+                # On Windows: This is a fallback if stop_signal_file didn't work
+                process.terminate()
 
-        if verbose:
-            print(f"Sent termination signal to process {pid}")
+                if verbose:
+                    print(f"Sent termination signal to process {pid}")
+        except psutil.NoSuchProcess:
+            if verbose:
+                print(f"Process {pid} already exited")
+            return True
 
         # Wait for the process to exit gracefully
         try:
@@ -76,18 +126,13 @@ def graceful_shutdown(
             if verbose:
                 print(f"WARNING: Process {pid} did not terminate within {timeout_seconds}s")
 
-            if force_on_timeout:
-                if verbose:
-                    print(f"Force killing process {pid}")
-                process.kill()
-                process.wait(timeout=5)
-                if verbose:
-                    print(f"Process {pid} was force killed")
-                return True
-            else:
-                if verbose:
-                    print(f"Process {pid} is still running")
-                return False
+            if verbose:
+                print(f"Force killing process {pid}")
+            process.kill()
+            process.wait(timeout=5)
+            if verbose:
+                print(f"Process {pid} was force killed")
+            return True
 
     except psutil.NoSuchProcess:
         if verbose:
@@ -122,15 +167,15 @@ def main():
     )
 
     parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force kill the process if it doesn't terminate gracefully within timeout",
-    )
-
-    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Suppress informational output (errors still printed)",
+    )
+
+    parser.add_argument(
+        "--stop-signal-file",
+        type=str,
+        help="Path to a stop signal file to create before terminating (useful for Windows)",
     )
 
     args = parser.parse_args()
@@ -138,8 +183,8 @@ def main():
     success = graceful_shutdown(
         pid=args.pid,
         timeout_seconds=args.timeout,
-        force_on_timeout=args.force,
         verbose=not args.quiet,
+        stop_signal_file=args.stop_signal_file,
     )
 
     return 0 if success else 1

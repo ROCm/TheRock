@@ -44,10 +44,12 @@ class MemoryMonitor:
         interval_seconds: float = 5.0,
         phase_name: str = "Unknown",
         log_file: Optional[Path] = None,
+        stop_signal_file: Optional[Path] = None,
     ):
         self.interval_seconds = interval_seconds
         self.phase_name = phase_name
         self.log_file = log_file
+        self.stop_signal_file = stop_signal_file
         self.running = False
         self.peak_memory = 0
         self.peak_swap = 0
@@ -155,6 +157,11 @@ class MemoryMonitor:
         """Main monitoring loop."""
         next_tick = time.monotonic()
         while self.running:
+            # Check for stop signal file (for Windows compatibility)
+            if self.stop_signal_file and self.stop_signal_file.exists():
+                print(f"\n[STOP_SIGNAL] Stop signal file detected, stopping monitoring...")
+                break
+            
             try:
                 stats = self.get_memory_stats()
                 self.samples.append(stats)
@@ -389,6 +396,7 @@ def run_command_with_monitoring(
 
 def setup_signal_handlers(monitor: MemoryMonitor):
     """Setup signal handlers for graceful shutdown."""
+    
     def signal_handler(signum, frame):
         print(f"\n[SIGNAL] Received signal {signum}, stopping monitoring...")
         monitor.stop()
@@ -433,6 +441,12 @@ def main():
     )
 
     parser.add_argument(
+        "--stop-signal-file",
+        type=Path,
+        help="Path to a file that, if it exists, signals the monitor to stop gracefully (useful for Windows)",
+    )
+
+    parser.add_argument(
         "--background",
         action="store_true",
         help="Run monitoring in background without executing a command",
@@ -457,6 +471,7 @@ def main():
             interval_seconds=args.interval_seconds,
             phase_name=args.phase,
             log_file=args.log_file,
+            stop_signal_file=args.stop_signal_file,
         )
         
         # Setup signal handlers for graceful shutdown
@@ -467,6 +482,16 @@ def main():
         try:
             # Keep running until interrupted
             while True:
+                # Check for stop signal file
+                if monitor.stop_signal_file and monitor.stop_signal_file.exists():
+                    print("\n[STOP] Stop signal file detected, stopping...")
+                    monitor.stop()
+                    # Clean up the signal file
+                    try:
+                        monitor.stop_signal_file.unlink()
+                    except:
+                        pass
+                    break
                 time.sleep(1)
         except KeyboardInterrupt:
             print("\n[STOP] Stopping background monitoring...")

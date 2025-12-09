@@ -137,10 +137,11 @@ jobs:
           # Create logs directory in BUILD_DIR
           mkdir -p "${{ env.BUILD_DIR }}/logs"
 
-          # Start memory monitor in background
+          # Start memory monitor in background with stop signal file support
           python build_tools/memory_monitor.py \
             --phase "Build Phase" \
             --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
+            --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal" \
             --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
 
           # Capture PID
@@ -161,7 +162,10 @@ jobs:
           MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
         run: |
           echo "Gracefully stopping memory monitor (PID: $MONITOR_PID)"
-          python build_tools/graceful_shutdown.py $MONITOR_PID --timeout 15 --force
+          python build_tools/graceful_shutdown.py $MONITOR_PID \
+            --timeout 15 \
+            --force \
+            --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal"
           echo "Memory monitor stopped"
 
           # Display the monitor output
