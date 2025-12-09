@@ -47,20 +47,23 @@ def graceful_shutdown(
         return False
 
     if verbose:
-        print(f"Attempting graceful shutdown of process {pid} (timeout: {timeout_seconds}s)")
+        print(
+            f"Attempting graceful shutdown of process {pid} (timeout: {timeout_seconds}s)"
+        )
 
     try:
         # On Windows, if a stop_signal_file is provided, create it first
         # This allows the process to detect it and shutdown gracefully
         if stop_signal_file:
             from pathlib import Path
+
             stop_file = Path(stop_signal_file)
             try:
                 stop_file.touch()
                 if verbose:
                     print(f"Created stop signal file: {stop_signal_file}")
                     print(f"Waiting for process to detect stop signal file...")
-                
+
                 # Wait for the process to detect the file and exit gracefully
                 # Check every 0.5 seconds
                 wait_time = 0
@@ -69,7 +72,9 @@ def graceful_shutdown(
                         # Check if process is still running
                         if not process.is_running():
                             if verbose:
-                                print(f"Process {pid} exited gracefully via stop signal file")
+                                print(
+                                    f"Process {pid} exited gracefully via stop signal file"
+                                )
                             # Clean up the signal file
                             try:
                                 stop_file.unlink()
@@ -85,23 +90,25 @@ def graceful_shutdown(
                         except:
                             pass
                         return True
-                    
+
                     time.sleep(0.5)
                     wait_time += 0.5
-                
+
                 # If we get here, the stop signal file didn't work
                 if verbose:
-                    print(f"Process did not respond to stop signal file within {timeout_seconds}s")
+                    print(
+                        f"Process did not respond to stop signal file within {timeout_seconds}s"
+                    )
                 # Clean up the signal file
                 try:
                     stop_file.unlink()
                 except:
                     pass
-                
+
             except Exception as e:
                 if verbose:
                     print(f"Warning: Could not create/use stop signal file: {e}")
-        
+
         # Send termination signal as fallback (only if process is still running)
         try:
             if process.is_running():
@@ -124,7 +131,9 @@ def graceful_shutdown(
             return True
         except psutil.TimeoutExpired:
             if verbose:
-                print(f"WARNING: Process {pid} did not terminate within {timeout_seconds}s")
+                print(
+                    f"WARNING: Process {pid} did not terminate within {timeout_seconds}s"
+                )
 
             if verbose:
                 print(f"Force killing process {pid}")
@@ -192,4 +201,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

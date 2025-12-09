@@ -159,9 +159,11 @@ class MemoryMonitor:
         while self.running:
             # Check for stop signal file (for Windows compatibility)
             if self.stop_signal_file and self.stop_signal_file.exists():
-                print(f"\n[STOP_SIGNAL] Stop signal file detected, stopping monitoring...")
+                print(
+                    f"\n[STOP_SIGNAL] Stop signal file detected, stopping monitoring..."
+                )
                 break
-            
+
             try:
                 stats = self.get_memory_stats()
                 self.samples.append(stats)
@@ -396,7 +398,7 @@ def run_command_with_monitoring(
 
 def setup_signal_handlers(monitor: MemoryMonitor):
     """Setup signal handlers for graceful shutdown."""
-    
+
     def signal_handler(signum, frame):
         print(f"\n[SIGNAL] Received signal {signum}, stopping monitoring...")
         monitor.stop()
@@ -407,7 +409,7 @@ def setup_signal_handlers(monitor: MemoryMonitor):
     signal.signal(signal.SIGINT, signal_handler)
 
     # On Windows, also handle SIGBREAK (Ctrl+Break)
-    if hasattr(signal, 'SIGBREAK'):
+    if hasattr(signal, "SIGBREAK"):
         signal.signal(signal.SIGBREAK, signal_handler)
 
 
@@ -473,10 +475,10 @@ def main():
             log_file=args.log_file,
             stop_signal_file=args.stop_signal_file,
         )
-        
+
         # Setup signal handlers for graceful shutdown
         setup_signal_handlers(monitor)
-        
+
         monitor.start()
 
         try:
