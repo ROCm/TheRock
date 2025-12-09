@@ -83,7 +83,7 @@ jobs:
           python-version: '3.12'
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2
+          pip install pyelftools boto3 jinja2 PyYAML
 
       - name: Install System requirements
         run: |
