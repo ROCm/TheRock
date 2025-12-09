@@ -271,7 +271,7 @@ jobs:
             --exclude "*" \
             --include "jaxlib-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
             --include "jax_rocm7_plugin-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
-            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-py3-none-manylinux_2_28_x86_64.whl" 
+            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl" 
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
