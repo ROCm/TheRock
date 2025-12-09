@@ -1,15 +1,15 @@
-if(THEROCK_ENABLE_CORE_RUNTIME)
-  # On Linux, we compile core libraries with our own LLVM. This gets us the
-  # best optimizations and, most importantly, gives us uniform access to
-  # sanitizers. Currently, some of these projects, though, are hard-coded
-  # for MSVC on Windows, so on that platform, just build them with the system
-  # compiler.
-  # TODO: Switch windows to use our own clang.
-  set(_system_toolchain "amd-llvm")
-  if(WIN32)
-    set(_system_toolchain "")
-  endif()
+# On Linux, we compile core libraries with our own LLVM. This gets us the
+# best optimizations and, most importantly, gives us uniform access to
+# sanitizers. Currently, some of these projects, though, are hard-coded
+# for MSVC on Windows, so on that platform, just build them with the system
+# compiler.
+# TODO: Switch windows to use our own clang.
+set(_system_toolchain "amd-llvm")
+if(WIN32)
+  set(_system_toolchain "")
+endif()
 
+if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -203,6 +203,51 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
+  if(THEROCK_BUILD_TESTING)
+    set(HIP_TESTS_CMAKE_ARGS)
+    set(_hip_tests_subproject_names)
+    therock_cmake_subproject_declare(hip-tests
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        amd-hip
+      CMAKE_ARGS
+        -DHIP_PLATFORM="amd"
+        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+      BUILD_DEPS
+        rocm-cmake
+        therock-boost
+        therock-catch2
+      RUNTIME_DEPS
+        hip-clr
+        ${THEROCK_BUNDLED_NUMACTL}
+      INTERFACE_LINK_DIRS
+        lib
+        lib/rocm_sysdeps/lib
+      INTERFACE_INSTALL_RPATH_DIRS
+        lib
+        lib/rocm_sysdeps/lib
+    )
+    therock_cmake_subproject_glob_c_sources(hip-tests SUBDIRS catch)
+    therock_cmake_subproject_activate(hip-tests)
+    if(WIN32)
+      set(hip-tests_artifact_file artifact-core-hiptests_win.toml)
+    else()
+      set(hip-tests_artifact_file artifact-core-hiptests.toml)
+    endif()
+    # Provide it as an artifact:
+    therock_provide_artifact(core-hiptests
+      TARGETS USE_DIST_AMDGPU_TARGETS
+      DESCRIPTOR ${hip-tests_artifact_file}
+      COMPONENTS
+        test
+      SUBPROJECT_DEPS
+        hip-tests
+    )
+    list(APPEND _hip_tests_subproject_names hip-tests)
+  endif(THEROCK_BUILD_TESTING)
 endif(THEROCK_ENABLE_HIP_RUNTIME)
 
 ################################################################################

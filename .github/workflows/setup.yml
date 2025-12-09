@@ -6,6 +6,10 @@ on:
       build_variant:
         type: string
         default: "release"
+      multi_arch:
+        type: boolean
+        default: false
+        description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -49,7 +53,7 @@ jobs:
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           # We need the parent commit to do a diff
           fetch-depth: 2
@@ -72,6 +76,7 @@ jobs:
           WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
+          MULTI_ARCH: ${{ inputs.multi_arch }}
         run: ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version
