@@ -3,11 +3,11 @@ This script runs the Linux and Windows build configurations
 
 Required environment variables:
   - amdgpu_families
-  - package_version
-  - extra_cmake_options
-  - BUILD_DIR
 
 Optional environment variables:
+  - package_version (default: "0.0.0")
+  - extra_cmake_options (default: "")
+  - BUILD_DIR (default: "build")
   - VCToolsInstallDir
   - GITHUB_WORKSPACE
 """
@@ -49,10 +49,6 @@ def build_configure(manylinux=False):
     missing_vars = []
     if not amdgpu_families:
         missing_vars.append("amdgpu_families")
-    if not package_version:
-        missing_vars.append("package_version")
-    if not build_dir:
-        missing_vars.append("BUILD_DIR")
 
     if missing_vars:
         raise Exception(
@@ -60,8 +56,6 @@ def build_configure(manylinux=False):
             f"Please set these variables before running the script.\n"
             f"Example:\n"
             f"  $env:amdgpu_families = 'gfx90a'\n"
-            f"  $env:package_version = '1.0.0'\n"
-            f"  $env:BUILD_DIR = 'build'\n"
         )
 
     logging.info(f"Building package {package_version}")
