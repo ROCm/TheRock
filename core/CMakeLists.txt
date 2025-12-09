@@ -1,15 +1,15 @@
-if(THEROCK_ENABLE_CORE_RUNTIME)
-  # On Linux, we compile core libraries with our own LLVM. This gets us the
-  # best optimizations and, most importantly, gives us uniform access to
-  # sanitizers. Currently, some of these projects, though, are hard-coded
-  # for MSVC on Windows, so on that platform, just build them with the system
-  # compiler.
-  # TODO: Switch windows to use our own clang.
-  set(_system_toolchain "amd-llvm")
-  if(WIN32)
-    set(_system_toolchain "")
-  endif()
+# On Linux, we compile core libraries with our own LLVM. This gets us the
+# best optimizations and, most importantly, gives us uniform access to
+# sanitizers. Currently, some of these projects, though, are hard-coded
+# for MSVC on Windows, so on that platform, just build them with the system
+# compiler.
+# TODO: Switch windows to use our own clang.
+set(_system_toolchain "amd-llvm")
+if(WIN32)
+  set(_system_toolchain "")
+endif()
 
+if(THEROCK_ENABLE_CORE_RUNTIME)
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -202,7 +202,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         hipInfo
     )
   endif()
-
 
   if(THEROCK_BUILD_TESTING)
     set(HIP_TESTS_CMAKE_ARGS)

@@ -88,7 +88,7 @@ detailed instructions. That information is summarized here.
 
 ### Prerequisites and setup
 
-You will need a supported Python version (3.11+) on a system which we build the
+You will need a supported Python version (3.10+) on a system which we build the
 `rocm[libraries,devel]` packages for. See the
 [`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
@@ -156,7 +156,7 @@ mix/match build steps.
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
     --output-dir $HOME/tmp/pyout
   ```
 
@@ -164,7 +164,7 @@ mix/match build steps.
 
   ```batch
   python build_prod_wheels.py build ^
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ ^
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision ^
@@ -172,6 +172,20 @@ mix/match build steps.
   ```
 
 ## Running/testing PyTorch
+
+### Prerequisites
+
+On Linux we run automated tests under our
+[`no_rocm_image_ubuntu24_04.Dockerfile`](dockerfiles/no_rocm_image_ubuntu24_04.Dockerfile)
+container. Docker is optional for developers and users. If you want to use our
+test image, run it like so:
+
+```bash
+sudo docker run -it \
+  --device=/dev/kfd --device=/dev/dri \
+  --ipc=host --group-add=video --group-add=render --group-add=110 \
+  ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+```
 
 ### Running ROCm and PyTorch sanity checks
 
@@ -196,9 +210,29 @@ pytest -v smoke-tests
 
 ### Running full PyTorch tests
 
-See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation
+We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
+which runs PyTorch unit tests using pytest with additional test exclusion
+capabilities tailored for AMD ROCm GPUs. See the script for detailed
+instructions. Here are a few examples:
 
-<!-- TODO(erman-gurses): update docs here -->
+```bash
+# Basic usage (auto-detect everything):
+python run_pytorch_tests.py
+
+# Custom test selection with pytest -k:
+python run_pytorch_tests.py -k "test_nn and not test_dropout"
+
+# Explicit pytorch repo path (for test sources) and GPU family (for filtering)
+python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+```
+
+Tests can also be run by following the ROCm documentation at
+https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation.
+For example:
+
+```bash
+PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
+```
 
 ## Nightly releases
 
@@ -222,7 +256,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   build_prod_wheels.py
-      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
       install-rocm
   ```
 
@@ -231,12 +265,12 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   ```bash
   # From therock-nightly-python
   python -m pip install \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
     rocm[libraries,devel]
 
   # OR from therock-dev-python
   python -m pip install \
-    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-dgpu/ \
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/ \
     rocm[libraries,devel]
   ```
 
@@ -250,7 +284,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   mkdir $HOME/.therock/17123441166/artifacts
   python ./build_tools/fetch_artifacts.py \
     --run-id=17123441166 \
-    --target=gfx110X-dgpu \
+    --target=gfx110X-all \
     --output-dir=$HOME/.therock/17123441166/artifacts
 
   python ./build_tools/build_python_packages.py \

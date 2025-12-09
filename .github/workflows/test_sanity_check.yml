@@ -75,6 +75,15 @@ jobs:
         with:
           repository: "ROCm/TheRock"
 
+      - name: Pre-job cleanup Docker containers on Linux
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          # Remove any stopped containers
+          docker container prune -f || true
+          # Remove dangling networks
+          docker network prune -f || true
+
       - name: Run setup test environment workflow
         uses: './.github/actions/setup_test_environment'
         with:

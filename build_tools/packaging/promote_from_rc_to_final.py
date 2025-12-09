@@ -286,7 +286,7 @@ def promote_targz_sdist(filename: pathlib.Path, prerelease_type: str) -> bool:
 
         print(f" ...done")
         print(
-            f"Repacked {package_name} as release {base_dir}/{new_archive_name}.tar.gz"
+            f"\nRepacked {package_name} as release {base_dir}/{new_archive_name}.tar.gz"
         )
         return True
 

@@ -52,21 +52,21 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         self.assertEqual(artifacts, [])
 
     def test_list_artifacts_with_files(self):
-        """Test listing artifacts with tar.xz files present."""
-        # Create some test artifact files
-        (self.backend.base_path / "blas_lib_gfx94X.tar.xz").touch()
+        """Test listing artifacts with tar.zst and tar.xz files present."""
+        # Create some test artifact files (both zstd and xz)
+        (self.backend.base_path / "blas_lib_gfx94X.tar.zst").touch()
         (self.backend.base_path / "blas_dev_gfx94X.tar.xz").touch()
-        (self.backend.base_path / "fft_lib_generic.tar.xz").touch()
+        (self.backend.base_path / "fft_lib_generic.tar.zst").touch()
         # Create a sha256sum file (should be excluded)
-        (self.backend.base_path / "blas_lib_gfx94X.tar.xz.sha256sum").touch()
+        (self.backend.base_path / "blas_lib_gfx94X.tar.zst.sha256sum").touch()
         # Create a non-artifact file (should be excluded)
         (self.backend.base_path / "README.txt").touch()
 
         artifacts = self.backend.list_artifacts()
         self.assertEqual(len(artifacts), 3)
-        self.assertIn("blas_lib_gfx94X.tar.xz", artifacts)
+        self.assertIn("blas_lib_gfx94X.tar.zst", artifacts)
         self.assertIn("blas_dev_gfx94X.tar.xz", artifacts)
-        self.assertIn("fft_lib_generic.tar.xz", artifacts)
+        self.assertIn("fft_lib_generic.tar.zst", artifacts)
 
     def test_list_artifacts_with_name_filter(self):
         """Test filtering artifacts by name prefix."""
@@ -89,13 +89,13 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         artifacts = self.backend.list_artifacts(name_filter="nonexistent")
         self.assertEqual(len(artifacts), 0)
 
-    def test_upload_and_download_artifact(self):
-        """Test uploading and downloading an artifact."""
+    def test_upload_and_download_artifact_xz(self):
+        """Test uploading and downloading a .tar.xz artifact."""
         # Create a source file to upload
         source_dir = Path(self.temp_dir) / "source"
         source_dir.mkdir()
         source_file = source_dir / "test_artifact.tar.xz"
-        source_file.write_text("test artifact content")
+        source_file.write_text("test artifact content xz")
 
         # Also create a sha256sum file
         sha_file = source_dir / "test_artifact.tar.xz.sha256sum"
@@ -119,9 +119,43 @@ class TestLocalDirectoryBackend(unittest.TestCase):
 
         # Verify content
         self.assertTrue(dest_file.exists())
-        self.assertEqual(dest_file.read_text(), "test artifact content")
+        self.assertEqual(dest_file.read_text(), "test artifact content xz")
         # Verify sha256sum was also copied
         self.assertTrue((dest_dir / "test_artifact.tar.xz.sha256sum").exists())
+
+    def test_upload_and_download_artifact_zst(self):
+        """Test uploading and downloading a .tar.zst artifact."""
+        # Create a source file to upload
+        source_dir = Path(self.temp_dir) / "source_zst"
+        source_dir.mkdir()
+        source_file = source_dir / "test_artifact.tar.zst"
+        source_file.write_text("test artifact content zst")
+
+        # Also create a sha256sum file
+        sha_file = source_dir / "test_artifact.tar.zst.sha256sum"
+        sha_file.write_text("def456  test_artifact.tar.zst\n")
+
+        # Upload
+        self.backend.upload_artifact(source_file, "test_artifact.tar.zst")
+
+        # Verify it exists in the backend
+        self.assertTrue(self.backend.artifact_exists("test_artifact.tar.zst"))
+        self.assertTrue(
+            (self.backend.base_path / "test_artifact.tar.zst.sha256sum").exists()
+        )
+
+        # Download to a new location
+        dest_dir = Path(self.temp_dir) / "dest_zst"
+        dest_dir.mkdir()
+        dest_file = dest_dir / "downloaded.tar.zst"
+
+        self.backend.download_artifact("test_artifact.tar.zst", dest_file)
+
+        # Verify content
+        self.assertTrue(dest_file.exists())
+        self.assertEqual(dest_file.read_text(), "test artifact content zst")
+        # Verify sha256sum was also copied
+        self.assertTrue((dest_dir / "test_artifact.tar.zst.sha256sum").exists())
 
     def test_download_nonexistent_artifact(self):
         """Test that downloading a nonexistent artifact raises FileNotFoundError."""
@@ -135,12 +169,19 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.backend.upload_artifact(nonexistent, "test.tar.xz")
 
-    def test_artifact_exists(self):
-        """Test artifact_exists method."""
+    def test_artifact_exists_xz(self):
+        """Test artifact_exists method with .tar.xz."""
         self.assertFalse(self.backend.artifact_exists("nonexistent.tar.xz"))
 
         (self.backend.base_path / "exists.tar.xz").touch()
         self.assertTrue(self.backend.artifact_exists("exists.tar.xz"))
+
+    def test_artifact_exists_zst(self):
+        """Test artifact_exists method with .tar.zst."""
+        self.assertFalse(self.backend.artifact_exists("nonexistent.tar.zst"))
+
+        (self.backend.base_path / "exists.tar.zst").touch()
+        self.assertTrue(self.backend.artifact_exists("exists.tar.zst"))
 
 
 class TestS3Backend(unittest.TestCase):
@@ -215,20 +256,20 @@ class TestS3Backend(unittest.TestCase):
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
     def test_list_artifacts(self, mock_client_prop):
-        """Test listing S3 artifacts."""
+        """Test listing S3 artifacts (both zstd and xz)."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
 
-        # Mock paginator
+        # Mock paginator with both zstd and xz artifacts
         mock_paginator = mock.MagicMock()
         mock_client.get_paginator.return_value = mock_paginator
         mock_paginator.paginate.return_value = [
             {
                 "Contents": [
-                    {"Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.xz"},
+                    {"Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.zst"},
                     {"Key": "external/test-run-456-linux/blas_dev_gfx94X.tar.xz"},
                     {
-                        "Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.xz.sha256sum"
+                        "Key": "external/test-run-456-linux/blas_lib_gfx94X.tar.zst.sha256sum"
                     },
                 ]
             }
@@ -236,7 +277,7 @@ class TestS3Backend(unittest.TestCase):
 
         artifacts = self.backend.list_artifacts()
         self.assertEqual(len(artifacts), 2)
-        self.assertIn("blas_lib_gfx94X.tar.xz", artifacts)
+        self.assertIn("blas_lib_gfx94X.tar.zst", artifacts)
         self.assertIn("blas_dev_gfx94X.tar.xz", artifacts)
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
@@ -261,8 +302,8 @@ class TestS3Backend(unittest.TestCase):
         self.assertIn("blas_lib_gfx94X.tar.xz", artifacts)
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
-    def test_download_artifact(self, mock_client_prop):
-        """Test downloading an artifact from S3."""
+    def test_download_artifact_xz(self, mock_client_prop):
+        """Test downloading a .tar.xz artifact from S3."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
 
@@ -277,8 +318,24 @@ class TestS3Backend(unittest.TestCase):
             )
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
-    def test_upload_artifact(self, mock_client_prop):
-        """Test uploading an artifact to S3."""
+    def test_download_artifact_zst(self, mock_client_prop):
+        """Test downloading a .tar.zst artifact from S3."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest_path = Path(temp_dir) / "downloaded.tar.zst"
+            self.backend.download_artifact("test.tar.zst", dest_path)
+
+            mock_client.download_file.assert_called_once_with(
+                "test-bucket",
+                "external/test-run-456-linux/test.tar.zst",
+                str(dest_path),
+            )
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_upload_artifact_xz(self, mock_client_prop):
+        """Test uploading a .tar.xz artifact to S3."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
 
@@ -292,6 +349,24 @@ class TestS3Backend(unittest.TestCase):
                 str(source_path),
                 "test-bucket",
                 "external/test-run-456-linux/test.tar.xz",
+            )
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_upload_artifact_zst(self, mock_client_prop):
+        """Test uploading a .tar.zst artifact to S3."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "test.tar.zst"
+            source_path.touch()
+
+            self.backend.upload_artifact(source_path, "test.tar.zst")
+
+            mock_client.upload_file.assert_called_once_with(
+                str(source_path),
+                "test-bucket",
+                "external/test-run-456-linux/test.tar.zst",
             )
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)

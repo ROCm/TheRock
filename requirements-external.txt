@@ -1,4 +1,0 @@
-# requirements.txt files from submodules will be referenced here as relative paths
-
-# rocprofiler-compute deps
--r rocm-systems/projects/rocprofiler-compute/requirements.txt

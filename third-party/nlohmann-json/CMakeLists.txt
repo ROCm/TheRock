@@ -6,6 +6,7 @@ therock_subproject_fetch(therock-nlohmann-json-sources
 )
 
 therock_cmake_subproject_declare(therock-nlohmann-json
+  USE_DIST_AMDGPU_TARGETS
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE

@@ -1261,6 +1261,26 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_filtered_gpu_targets)
   if(NOT _disable_amdgpu_targets)
     _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}")
+
+    # Check for sentinel values indicating no targets were configured.
+    # This is a lazy error - we only fail when actually building a subproject
+    # that needs targets, not at top-level configuration time.
+    if("${_filtered_gpu_targets}" MATCHES "-NOTFOUND$")
+      if("${_filtered_gpu_targets}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
+        message(FATAL_ERROR
+          "Subproject ${target_name} requires AMDGPU targets but none were selected. "
+          "Set THEROCK_AMDGPU_FAMILIES or THEROCK_AMDGPU_TARGETS.")
+      elseif("${_filtered_gpu_targets}" STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
+        message(FATAL_ERROR
+          "Subproject ${target_name} requires dist AMDGPU targets but none were set. "
+          "Set THEROCK_DIST_AMDGPU_FAMILIES.")
+      else()
+        message(FATAL_ERROR
+          "Internal error: Subproject ${target_name} received unexpected NOTFOUND sentinel "
+          "'${_filtered_gpu_targets}'. This is a bug in TheRock's AMDGPU target handling.")
+      endif()
+    endif()
+
     # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
     string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")

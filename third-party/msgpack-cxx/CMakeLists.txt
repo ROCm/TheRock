@@ -6,6 +6,7 @@ therock_subproject_fetch(therock-msgpack-cxx-sources
 )
 
 therock_cmake_subproject_declare(therock-msgpack-cxx
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS

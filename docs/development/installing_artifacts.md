@@ -43,27 +43,27 @@ TheRock provides two types of release tarballs:
 
 #### Nightly Tarballs
 
-Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.PATCHrcYYYYMMDD`
+Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYYYYMMDD`
 
 **To find and use a nightly release:**
 
-1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/)
+1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/index.html)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
-   - Example: `therock-dist-linux-gfx110X-dgpu-6.4.0rc20250514.tar.gz`
+   - Example: `therock-dist-linux-gfx110X-all-7.11.0a20251124.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
-   - In the example above, the version is: `6.4.0rc20250514`
+   - In the example above, the version is: `7.11.0a20251124`
 1. Use this version string with `--release`:
    ```bash
    python build_tools/install_rocm_from_artifacts.py \
-       --release 6.4.0rc20250514 \
-       --amdgpu-family gfx110X-dgpu
+       --release 7.11.0a20251124 \
+       --amdgpu-family gfx110X-all
    ```
 
-**Version format:** `X.Y.ZrcYYYYMMDD`
+**Version format:** `X.Y.ZaYYYYMMDD`
 
-- `X.Y.Z` = ROCm version (e.g., `6.4.0`)
-- `rc` = release candidate indicator
-- `YYYYMMDD` = build date (e.g., `20250514` = May 14, 2025)
+- `X.Y.Z` = ROCm version (e.g., `7.11.0`)
+- `a` = alpha version
+- `YYYYMMDD` = build date (e.g., `20251124` = November 24, 2025)
 
 #### Dev Tarballs
 
@@ -71,7 +71,7 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 
 **To find and use a dev release:**
 
-1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/)
+1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/index.html)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
    - Example: `therock-dist-linux-gfx94X-dcgpu-6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
@@ -112,8 +112,8 @@ python build_tools/install_rocm_from_artifacts.py \
 
 ```bash
 python build_tools/install_rocm_from_artifacts.py \
-    --run-id 15575624591 \
-    --amdgpu-family gfx110X-dgpu \
+    --run-id 19588907671 \
+    --amdgpu-family gfx110X-all \
     --blas --tests
 ```
 
@@ -230,7 +230,7 @@ Test that artifacts can be fetched with your new flag:
 # Test with a CI run
 python build_tools/install_rocm_from_artifacts.py \
     --run-id YOUR_RUN_ID \
-    --amdgpu-family gfx110X-dgpu \
+    --amdgpu-family gfx110X-all \
     --newcomponent --tests
 ```
 

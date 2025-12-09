@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       s3_subdir:
@@ -27,7 +27,7 @@ on:
         required: true
         type: string
       rocm_version:
-        description: ROCm version to pip install
+        description: ROCm version to pip install (e.g. "7.10.0a20251124")
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
@@ -48,7 +48,7 @@ on:
           - gfx950-dcgpu
         default: gfx94X-dcgpu
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       s3_subdir:
@@ -68,7 +68,7 @@ on:
         type: string
         default: "https://rocm.devreleases.amd.com/v2-staging"
       rocm_version:
-        description: ROCm version to pip install
+        description: ROCm version to pip install (e.g. "7.10.0a20251124")
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
@@ -79,22 +79,24 @@ permissions:
   id-token: write
   contents: read
 
+run-name: Release portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
+
 jobs:
   release:
-    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_version }}
+    name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
-        pytorch_version: ["release/2.7", "release/2.8", "release/2.9", "nightly"]
+        python_version: ["3.10", "3.11", "3.12", "3.13"]
+        pytorch_git_ref: ["release/2.7", "release/2.8", "release/2.9", "nightly"]
         include:
-          - pytorch_version: release/2.7
+          - pytorch_git_ref: release/2.7
             pytorch_patchset: rocm_2.7
-          - pytorch_version: release/2.8
+          - pytorch_git_ref: release/2.8
             pytorch_patchset: rocm_2.8
-          - pytorch_version: release/2.9
+          - pytorch_git_ref: release/2.9
             pytorch_patchset: rocm_2.9
-          - pytorch_version: nightly
+          - pytorch_git_ref: nightly
             pytorch_patchset: nightly
 
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
@@ -107,6 +109,6 @@ jobs:
       cloudfront_url: ${{ inputs.cloudfront_url }}
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
-      pytorch_version: ${{ matrix.pytorch_version }}
+      pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
       pytorch_patchset: ${{ matrix.pytorch_patchset }}
       ref: ${{ inputs.ref || '' }}

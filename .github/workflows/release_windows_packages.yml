@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       package_suffix:
@@ -34,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: The type of build version to produce ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       package_suffix:
@@ -64,6 +64,8 @@ on:
 
 permissions:
   contents: read
+
+run-name: Release Windows packages (${{ inputs.families || 'default' }}, ${{ inputs.release_type || 'nightly' }})
 
 jobs:
   setup_metadata:
@@ -220,10 +222,6 @@ jobs:
           git config --global core.symlinks true
           git config --global core.longpaths true
           python ./build_tools/fetch_sources.py --jobs 12
-
-      - name: Install external python deps
-        run: |
-          pip install -r requirements-external.txt
 
       - name: Configure Projects
         env:

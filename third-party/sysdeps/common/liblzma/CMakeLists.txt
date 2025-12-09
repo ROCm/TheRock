@@ -17,6 +17,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(LIBLZMA_VERSION "${CMAKE_MATCH_1}")
 
     therock_cmake_subproject_declare(therock-liblzma
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS

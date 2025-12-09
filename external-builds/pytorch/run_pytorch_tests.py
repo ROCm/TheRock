@@ -9,6 +9,7 @@ Test Exclusion Criteria
 Tests may be skipped based on:
 - AMDGPU family compatibility (e.g., gfx942, gfx1151)
 - PyTorch version-specific issues
+- Platform (Linux, Windows)
 - Known failures not yet upstreamed to PyTorch
 
 Environment Variables
@@ -34,33 +35,41 @@ HIP_VISIBLE_DEVICES : str, optional (read/write)
 Usage Examples
 --------------
 Basic usage (auto-detect everything):
-    $ python run_linux_pytorch_tests.py
+    $ python run_pytorch_tests.py
 
 Debug mode (run only skipped tests):
-    $ python run_linux_pytorch_tests.py --debug
+    $ python run_pytorch_tests.py --debug
 
 Custom test selection with pytest -k:
-    $ python run_linux_pytorch_tests.py -k "test_nn and not test_dropout"
+    $ python run_pytorch_tests.py -k "test_nn and not test_dropout"
 
 Disable pytest cache (useful in containers):
-    $ python run_linux_pytorch_tests.py --no-cache
+    $ python run_pytorch_tests.py --no-cache
 
 Exit Codes
 ----------
 0 : All tests passed
 1 : Test failures or collection errors
+? : Other exit codes from pytest
+15: SIGTERM for Windows (see notes below)
 Other : Pytest-specific error codes
 
 Side-effects
------
+------------
 - This script modifies PYTHONPATH and sys.path to include PyTorch test directory
 - Creates a temporary MIOpen cache directory for each run
 - Sets HIP_VISIBLE_DEVICES environment variable to select specific GPU(s) for testing
 - Runs tests sequentially (--numprocesses=0) by default
+
+Windows special notes
+---------------------
+To work around https://github.com/ROCm/TheRock/issues/999, this script
+writes 'run_pytorch_tests_exit_code.txt' to the current directory and then kills the process.
 """
 
 import argparse
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -378,9 +387,14 @@ def detect_amdgpu_family(amdgpu_family: str = "") -> list[str]:
         )
     else:
         # Mode 3: Specific GPU arch - validate it is visible and supported by the current PyTorch build.
+
+        # We have gfx1151 -> we want to match exactly gfx1151
+        # We have gfx950-dcgpu -> we need to match exactly gfx950
+        # So remove the suffix after '-'
+        pruned_amdgpu_family = amdgpu_family.split("-")[0]
         for idx, gpu in enumerate(visible_gpus):
             if gpu in supported_gpus:
-                if gpu == amdgpu_family or amdgpu_family in gpu:
+                if gpu == pruned_amdgpu_family or pruned_amdgpu_family in gpu:
                     selected_gpu_indices += [idx]
                     selected_gpu_archs += [gpu]
 
@@ -449,7 +463,12 @@ def main() -> int:
     print(f"Using PyTorch version: {pytorch_version}")
 
     # Get tests to skip
-    tests_to_skip = get_tests(amdgpu_family, pytorch_version, not args.debug)
+    tests_to_skip = get_tests(
+        amdgpu_family=amdgpu_family,
+        pytorch_version=pytorch_version,
+        platform=platform.system(),
+        create_skip_list=not args.debug,
+    )
 
     # Allow manual override of test selection
     if args.k:
@@ -487,6 +506,37 @@ def main() -> int:
     return retcode
 
 
+def force_exit_with_code(retcode):
+    """Forces termination to work around https://github.com/ROCm/TheRock/issues/999."""
+    import signal
+
+    # We're going to kill the current process with SIGTERM below, which will
+    # return exit code 15. This preserves the original exit code in a file.
+    # Note: this path is relative to CWD, *not the script directory*.
+    # TODO(#2258): output a test report file that can be inspected on both
+    #              Linux and Windows then remove this special file
+    retcode_file = Path("run_pytorch_tests_exit_code.txt")
+    print(f"Writing retcode {retcode} to '{retcode_file}'")
+    with open(retcode_file, "w") as f:
+        f.write(str(retcode))
+
+    print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
+
+    # Flush output before we force exit so no logs get missed.
+    sys.stdout.flush()
+
+    # In order from "asking nicely" to "tear down immediately":
+    #   1. `sys.exit(retcode)`
+    #   2. `os._exit(retcode)`
+    #   3. `os.kill(os.getpid(), signal.SIGTERM)`
+    #   4. `subprocess.Popen(f'taskkill /F /PID {os.getpid()}', shell=True)`
+    # As options (1) and (2) are not sufficient, we use option (3) here.
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
 if __name__ == "__main__":
-    # Lets make this script return pytest exit code (success or failure)
-    sys.exit(main())
+    retcode = main()
+    if platform.system() == "Windows":
+        force_exit_with_code(retcode)
+    else:
+        sys.exit(retcode)
