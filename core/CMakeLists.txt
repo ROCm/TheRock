@@ -320,7 +320,6 @@ if(THEROCK_BUILD_TESTING)
   if(THEROCK_ENABLE_CORE_RUNTIME)
 
     therock_cmake_subproject_declare(rocrtst
-      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
       BACKGROUND_BUILD
