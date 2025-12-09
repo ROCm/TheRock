@@ -16,6 +16,7 @@ import re
 import logging
 import yaml
 import copy
+from prettytable import PrettyTable
 
 
 # Create a common logger
@@ -35,7 +36,6 @@ if not logger.hasHandlers():
     logger.addHandler(ch)
 
 
-from prettytable import PrettyTable
 
 
 def print_dict_table(failure_dict):
