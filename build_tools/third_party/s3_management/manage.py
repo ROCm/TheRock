@@ -283,9 +283,12 @@ class S3Index:
                 attributes = (
                     f' data-dist-info-metadata="{pep658_sha}" data-core-metadata="{pep658_sha}"'
                 )
-            # Ugly hack: mark networkx-3.3, 3.4.2 as Python-3.10+ only to unblock https://github.com/pytorch/pytorch/issues/152191
+            # Ugly hack: mark networkx-3.3, 3.4.2, 3.5 as Python-3.11+ only to unblock https://github.com/pytorch/pytorch/issues/152191
+            # networkx 3.3+ requires Python 3.10+, but networkx 3.5+ requires Python 3.11+
             if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
                 attributes += ' data-requires-python="&gt;=3.10"'
+            elif any(obj.key.endswith(x) for x in ("networkx-3.5-py3-none-any.whl",)):
+                attributes += ' data-requires-python="&gt;=3.11"'
 
             stripped_key = obj.key.split("/")[-1]
 
