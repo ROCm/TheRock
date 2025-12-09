@@ -60,7 +60,7 @@ jobs:
     name: Build (xfail ${{ inputs.expect_failure }})
     # azure-linux-scale-rocm are used for regular CI builds
     # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
-    runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-scale-rocm-heavy' || 'azure-linux-scale-rocm' }}
+    runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-u2404-hx176-cpu-rocm' || 'azure-linux-scale-rocm' }}
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
     permissions:
@@ -154,6 +154,12 @@ jobs:
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
+
+      # Analyze ninja build log to generate per-component timing report
+      - name: Analyze Build Times
+        if: ${{ !cancelled() }}
+        run: |
+          python3 build_tools/analyze_build_times.py --build-dir build
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
