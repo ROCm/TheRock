@@ -124,7 +124,7 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
 
-       - name: Install non-composite versioned packages (Python script)
+      - name: Install non-composite versioned packages (Python script)
         run: |
 
           python3 ./build_tools/packaging/linux/native_package_installer.py --dest-dir ${{ env.PACKAGE_DIST_DIR}} --version true --package_json build_tools/packaging/linux/package.json --composite=false --artifact-group ${{ inputs.amdgpu_family }} --rocm-version  ${{ inputs.rocm_version }} --package-suffix ${{env.PACKAGE_SUFFIX}} --release-type nightly
