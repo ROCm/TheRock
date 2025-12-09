@@ -243,33 +243,7 @@ WheelNext must detect local GPUs via:
 
 ## Versioning Requirements
 
-The following versioning format will be implemented as follows.
-
-Stable releases:
-
-```
-X.Y.Z
-```
-
-Prereleases:
-
-| Type of package | Version format | Version example |
-| :------------- | :------------- | :------------- |
-| Python | X.Y.ZrcN | 7.9.0rc0 |
-| Tarball | X.Y.ZrcN | 7.9.0rc0 |
-| Fedora (rpm) | X.Y.Z-rcN | 7.9.0-rc0 |
-| Debian (deb) | X.Y.Z-preN | 7.9.0-pre0 |
-
-Nightly Releases:
-
-| Type of package | Version format | Version example |
-| :------------- | :------------- | :------------- |
-| Python | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
-| Tarball | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
-| Fedora (rpm) | X.Y.Z-aYYYYMMDD-N | 7.10.0-0a20251006-1 |
-| Debian (deb) | X.Y.Z-aYYYYMMDD | 7.10.0-0a20251006 |
-
-TheRock must automate all formats.
+For versioning requirements on packaging see the following documentation: [TheRock Versioning Requirements for Packages](https://github.com/ROCm/TheRock/pull/2116)
 
 ## Windows Packaging Requirements
 
