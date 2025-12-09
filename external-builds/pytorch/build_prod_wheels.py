@@ -995,6 +995,8 @@ def main(argv: list[str]):
     )
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
+    # TODO(scotttodd): drop the default here, derive from installed rocm packages
+    #     using the same logic we have in build_tools/github_actions/determine_version.py
     build_p.add_argument(
         "--version-suffix",
         default=f"+devrocm{formatted_date}",
