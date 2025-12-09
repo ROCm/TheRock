@@ -23,7 +23,7 @@ def get_test_count():
     cmd = ["ctest", "--show-only=json-v1"]
     result = subprocess.run(
         cmd,
-        cwd=THEROCK_DIR,
+        cwd=CATCH_TESTS_PATH,
         check=True,
         capture_output=True,
     )
@@ -84,8 +84,6 @@ test_range = get_test_range_per_shard(total_tests, int(TOTAL_SHARDS), int(SHARD_
 index_start = test_range[0]
 index_end = test_range[1]
 cmd = [
-    "sudo",
-    "-E",
     "ctest",
     "-I",
     f"{index_start},{index_end}",
