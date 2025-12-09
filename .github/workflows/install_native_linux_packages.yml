@@ -63,11 +63,11 @@ permissions:
   id-token: write
   contents: read
 
-run-name: Build native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.package_suffix }}, ${{ inputs.release_type }})
+run-name: Install native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.package_suffix }}, ${{ inputs.release_type }})
 
 jobs:
   install_native_packages:
-    name: Build Linux native Packages
+    name: Install Linux native Packages
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
