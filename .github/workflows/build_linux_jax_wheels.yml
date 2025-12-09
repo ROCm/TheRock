@@ -234,7 +234,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
-      JAX_VERSION: "${{ needs.build_jax_wheels.outputs.JAX_VERSION }}"
+      JAX_VERSION: "${{ needs.build_jax_wheels.outputs.jax_version }}"
       ROCM_VERSION: "${{ inputs.rocm_version }}"
       CP_VERSION: "${{ needs.build_jax_wheels.outputs.cp_version }}"
 
