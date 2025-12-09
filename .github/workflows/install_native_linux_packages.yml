@@ -128,12 +128,3 @@ jobs:
       - name: Uninstall composite packages (Python script)
         run: |
           python3 ./build_tools/packaging/linux/native_package_uninstaller.py  --package-json build_tools/packaging/linux/package.json --composite=true --artifact-group ${{ env.ARTIFACT_GROUP }} --rocm-version ${{ env.ROCM_VERSION }}
-      - name: Upload Package repo to S3
-        id: upload-packages
-        run: |
-          echo "Uploading to s3 bucket"
-          python ./build_tools/packaging/linux/upload_package_repo.py \
-            --pkg-type ${{ inputs.native_package_type }} \
-            --s3-bucket therock-deb-rpm-test \
-            --amdgpu-family ${{ inputs.artifact_group }} \
-            --artifact-id ${{ env.ARTIFACT_RUN_ID }}
