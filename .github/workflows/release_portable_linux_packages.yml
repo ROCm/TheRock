@@ -224,7 +224,7 @@ jobs:
           du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
 
       - name: Configure AWS Credentials
-        if: ${{ github.repository_owner == 'ROCm' }}
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
