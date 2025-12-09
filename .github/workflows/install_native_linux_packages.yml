@@ -76,7 +76,7 @@ jobs:
       ARTIFACT_GROUP: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
       ROCM_VERSION: ${{ inputs.rocm_version || '7.11.0' }}
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id || 19917417466 }}
-      PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
+      PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || None }}
       OUTPUT_DIR: ${{ github.workspace }}/output
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
