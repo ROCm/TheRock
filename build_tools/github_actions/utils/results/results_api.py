@@ -10,11 +10,6 @@ from datetime import datetime
 from jsonschema import validate, ValidationError
 
 from ..logger import log
-from ..exceptions import (
-    APIAuthenticationError,
-    APIValidationError,
-    APIServerError
-)
 from ..system import (
     format_memory_size,
     format_cache_size,
@@ -56,11 +51,6 @@ class ResultsAPI:
             
         Returns:
             True if successful, False otherwise
-            
-        Raises:
-            APIAuthenticationError: Authentication failures
-            APIValidationError: Invalid payload
-            APIServerError: Server-side errors
         """
         # Try primary URL first
         primary_success = self._try_submit(self.api_url, payload, is_fallback=False)
@@ -147,34 +137,16 @@ class ResultsAPI:
             return False
     
     def _handle_http_error(self, response: requests.Response):
-        """Handle HTTP error responses with specific exceptions.
+        """Log HTTP error responses.
         
         Args:
             response: HTTP response object
-            
-        Raises:
-            APIAuthenticationError: For 401 errors
-            APIValidationError: For 400 errors
-            APIServerError: For 500 errors
         """
         status_code = response.status_code
         error_msg = response.text[:500] if response.text else "No error message provided"
         
         log.error(f"✗ API Error - Status Code: {status_code}")
         log.error(f"  Message: {error_msg}")
-        
-        if status_code == 401:
-            raise APIAuthenticationError(f"Authentication failed ({status_code}): {error_msg}")
-        elif status_code == 400:
-            raise APIValidationError(f"Invalid payload ({status_code}): {error_msg}")
-        elif status_code == 403:
-            raise APIAuthenticationError(f"Access forbidden ({status_code}): {error_msg}")
-        elif status_code == 404:
-            raise APIServerError(f"Endpoint not found ({status_code}): {error_msg}")
-        elif status_code >= 500:
-            raise APIServerError(f"Server error ({status_code}): {error_msg}")
-        else:
-            raise APIServerError(f"HTTP error ({status_code}): {error_msg}")
 
 
 def build_results_payload(
