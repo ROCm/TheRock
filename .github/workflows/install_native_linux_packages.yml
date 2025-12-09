@@ -1,4 +1,4 @@
-name: Build Native Linux Packages
+name: Install Native Linux Packages
 
 on:
   push:
