@@ -253,18 +253,27 @@ X.Y.Z
 Prereleases:
 
 | Type of package | Version format | Version example |
-| :------------- | :------------- | :------------- |
-| Python | X.Y.ZrcN | 7.9.0rc0 |
-| Tarball | X.Y.ZrcN | 7.9.0rc0 |
+| :-------------  | :------------- | :-------------- |
+| Python       | X.Y.ZrcN   | 7.9.0rc0   |
+| Tarball      | X.Y.ZrcN   | 7.9.0rc0   |
+| Fedora (rpm) | X.Y.Z~rcN  | 7.9.0~rc0  |
+| Debian (deb) | X.Y.Z~preN | 7.9.0~pre0 |
 
 Nightly Releases:
 
 | Type of package | Version format | Version example |
-| :------------- | :------------- | :------------- |
-| Python | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
-| Tarball | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
+| :-------------  | :------------- | :-------------- |
+| Python       | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
+| Tarball      | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
+| Fedora (rpm) | X.Y.Z~YYYYMMDD | 7.9.0~20251006  |
+| Debian (deb) | X.Y.Z~YYYYMMDD | 7.9.0~20251006  |
 
 TheRock must automate all formats.
+
+## Native Packaging requirement
+Native packaging should support Fedora like OS packaging(rpm) and 
+Debian like packaging(deb) formats. To avoid conflict with distro packages
+should add amdrocm prefix to all packages as described in earlier session.
 
 ### RPM Package
 RPM packages should follow the file name format as follows
@@ -377,7 +386,6 @@ Stable Release Version Examples:
 8.1.1        # Patch release
 
 Potential Extensions:
-8.1.0-1      # Package rebuild (no code change)
 8.1.0.1      # Point release (customer specific releases)
 ```
 
