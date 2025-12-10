@@ -98,26 +98,42 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
 
-      - name: Locate GPU tools
+      # Linux: use bash + find
+      - name: Locate GPU tools (Linux)
+        if: ${{ always() && runner.os == 'Linux' }}
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Runner OS: $RUNNER_OS"
+          echo "amd-smi location:"
+          find . -name "amd-smi" -print || true
 
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "amd-smi.exe location:"
-            where.exe /r . amd-smi.exe || echo "amd-smi.exe not found"
+          echo "rocminfo location:"
+          find . -name "rocminfo" -print || true
 
-            echo "hipInfo.exe location:"
-            where.exe /r . hipInfo.exe || echo "hipInfo.exe not found"
-          else
-            echo "amd-smi location:"
-            find . -name "amd-smi" -print || true
+      # Windows: use PowerShell + Get-ChildItem
+      - name: Locate GPU tools (Windows)
+        if: ${{ always() && runner.os == 'Windows' }}
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "SilentlyContinue"
 
-            echo "rocminfo location:"
-            find . -name "rocminfo" -print || true
-          fi
+          Write-Host "amd-smi.exe location:"
+          $amdSmiExe = Get-ChildItem -Path . -Recurse -File -Filter "amd-smi.exe"
+          if ($amdSmiExe) {
+            $amdSmiExe | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "amd-smi.exe not found"
+          }
+
+          Write-Host "hipInfo.exe location:"
+          $hipInfoExe = Get-ChildItem -Path . -Recurse -File -Filter "hipInfo.exe"
+          if ($hipInfoExe) {
+            $hipInfoExe | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "hipInfo.exe not found"
+          }
+
 
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5
