@@ -119,7 +119,7 @@ except Exception as e:
         sys.exit(1)
 
 
-def get_gpu_info() -> tuple[list[str], list[str]]:
+def get_supported_and_visible_gpus() -> tuple[list[str], list[str]]:
     """Get both supported and visible GPUs in a single subprocess call.
 
     Note that the current torch build does not necessarily have
@@ -214,7 +214,7 @@ except Exception as e:
         sys.exit(1)
 
 
-def detect_amdgpu_family(amdgpu_family: str = "") -> list[str]:
+def set_visible_devices_from_amdgpu_family(amdgpu_family: str = "") -> list[str]:
     """Detect and configure AMDGPU family for testing.
 
     This function queries available GPUs and sets HIP_VISIBLE_DEVICES BEFORE
@@ -252,11 +252,11 @@ def detect_amdgpu_family(amdgpu_family: str = "") -> list[str]:
     # Query both supported and visible GPUs in a single subprocess call
     # (doesn't initialize CUDA in main process)
     print("Getting GPU information from PyTorch...", end="")
-    supported_gpus, raw_visible_gpus = get_gpu_info()
+    supported_gpus, raw_visible_gpus = get_supported_and_visible_gpus()
     print("done")
 
     # Normalize gpu names
-    # get_gpu_info() (via device_properties.gcnArchName):
+    # get_supported_and_visible_gpus() (via device_properties.gcnArchName):
     # Often returns detailed arch names like "gfx942:sramecc+:xnack-" or "gfx1100:xnack-"
     visible_gpus = [gpu.split(":")[0] for gpu in raw_visible_gpus]
 

@@ -122,11 +122,10 @@ Additional tests to be skipped can be tuned by PyTorch version and amdgpu family
 """
     )
 
-    amdgpu_family = os.getenv("AMDGPU_FAMILY")
     parser.add_argument(
         "--amdgpu-family",
         type=str,
-        default=amdgpu_family if amdgpu_family is not None else "",
+        default=os.getenv("AMDGPU_FAMILY", ""),
         required=False,
         help="""Amdgpu family (e.g. "gfx942").
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
@@ -223,7 +222,7 @@ def main() -> int:
 
     setup_env(pytorch_dir)
 
-    pytorch_args = [
+    pytest_args = [
         f"{pytorch_dir}/test/test_nn.py",
         f"{pytorch_dir}/test/test_torch.py",
         f"{pytorch_dir}/test/test_cuda.py",
@@ -243,12 +242,12 @@ def main() -> int:
     ]
 
     if args.no_cache:
-        pytorch_args += [
+        pytest_args += [
             "-p",
             "no:cacheprovider",  # Disable caching: useful when running in a container
         ]
 
-    retcode = pytest.main(pytorch_args)
+    retcode = pytest.main(pytest_args)
     print(f"Pytest finished with return code: {retcode}")
     return retcode
 

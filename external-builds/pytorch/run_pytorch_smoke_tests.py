@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from pytorch_utils import detect_amdgpu_family, detect_pytorch_version
+from pytorch_utils import set_visible_devices_from_amdgpu_family
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -18,7 +18,6 @@ Runs PyTorch smoke-tests for AMD GPUs.
 """
     )
 
-    amdgpu_family = os.getenv("AMDGPU_FAMILY")
     parser.add_argument(
         "--amdgpu-family",
         type=str,
@@ -28,28 +27,7 @@ Runs PyTorch smoke-tests for AMD GPUs.
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
     )
 
-    default_smoke_tests_dir = THIS_SCRIPT_DIR / "smoke-tests"
-    parser.add_argument(
-        "--smoke-tests-dir",
-        type=Path,
-        default=default_smoke_tests_dir,
-        help="""Path for the smoke-tests directory, where tests will be sourced from
-By default the smoke-tests directory is determined based on this script's location
-""",
-    )
-
-    parser.add_argument(
-        "--no-cache",
-        default=False,
-        required=False,
-        action=argparse.BooleanOptionalAction,
-        help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
-    )
-
     args = parser.parse_args(argv)
-
-    if not args.smoke_tests_dir.exists():
-        parser.error(f"Directory at '{args.smoke_tests_dir}' does not exist.")
 
     return args
 
@@ -62,27 +40,26 @@ def main() -> int:
     """
     args = cmd_arguments(sys.argv[1:])
 
-    smoke_tests_dir = args.smoke_tests_dir
+    # Assumes that the smoke-tests are located in the same directory as this script
+    smoke_tests_dir = THIS_SCRIPT_DIR / "smoke-tests"
+
+    if not smoke_tests_dir.exists():
+        logging.error(f"Directory at '{smoke_tests_dir}' does not exist.")
+        exit(1)
 
     # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
     # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
     # changing HIP_VISIBLE_DEVICES has no effect.
-    amdgpu_family = detect_amdgpu_family(args.amdgpu_family)
+    amdgpu_family = set_visible_devices_from_amdgpu_family(args.amdgpu_family)
     print(f"Using AMDGPU family: {amdgpu_family}")
 
-    pytorch_args = [
+    pytest_args = [
         f"{smoke_tests_dir}",
         "--log-cli-level=INFO",
         "-v",
     ]
 
-    if args.no_cache:
-        pytorch_args += [
-            "-p",
-            "no:cacheprovider",  # Disable caching: useful when running in a container
-        ]
-
-    retcode = pytest.main(pytorch_args)
+    retcode = pytest.main(pytest_args)
     print(f"Pytest finished with return code: {retcode}")
     return retcode
 
