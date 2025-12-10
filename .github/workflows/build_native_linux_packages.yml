@@ -11,9 +11,8 @@ on:
         description: workflow run id to download the artifacts from.
         required: true
         type: string
-      rocm_version:
-        description: ROCm version to append to the package(8.0.0, 8.0.1rc1, ... ).
-        required: true
+      prerelease_version:
+        description: "(Optional) Number of the prerelease"
         type: string
       native_package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
@@ -35,10 +34,9 @@ on:
       artifact_run_id:
         description: workflow run id to download the artifacts from
         type: string
-      rocm_version:
-        description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
+      prerelease_version:
+        description: "(Optional) Number of the prerelease"
         type: string
-        default: "0.0.1"
       native_package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
@@ -94,6 +92,16 @@ jobs:
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
 
+      - name: Compute package version
+        id: rocm_native_package_version
+        run: |
+          # Get the debian package version.
+          # Output will be available in env variable rocm_native_package_version
+          python ./build_tools/compute_rocm_native_package_version.py \
+            --release-type=${{ env.RELEASE_TYPE }} \
+            --package-type=inputs.native_package_type \
+            --prerelease-version=${{ inputs.prerelease_version }}
+
       - name: Fetch Artifacts
         run: |
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
@@ -109,11 +117,11 @@ jobs:
           echo "Building ${{ inputs.native_package_type }} packages for ${{ inputs.artifact_group }} ${{ inputs.artifact_run_id }}"
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --rocm-version  ${{ inputs.rocm_version }} \
+            --rocm-version  ${{ steps.rocm_native_package_version.outputs.rocm_native_package_version}} \
             --target  ${{ inputs.artifact_group }} \
             --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
             --pkg-type ${{ inputs.native_package_type }} \
-            --version-suffix ${{ env.PACKAGE_SUFFIX }}
+            --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
