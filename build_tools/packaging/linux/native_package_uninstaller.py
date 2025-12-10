@@ -95,11 +95,11 @@ class PackageUninstaller(PackageManagerBase):
     def print_summary(self):
 
         if not self.failed_packages:
-            logger.info("All packages installed successfully.")
+            logger.info("All packages uninstalled successfully.")
             return
 
         logger.info("\n=== SUMMARY OF FAILURES ===")
-        print_dict_table(self.failed_packages)
+        print_dict_summary(self.failed_packages)
 
     def _run_uninstall_command(self, pkg_name):
         """
