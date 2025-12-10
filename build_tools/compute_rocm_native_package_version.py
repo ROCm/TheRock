@@ -204,7 +204,7 @@ def main(argv):
         args.prerelease_version,
         args.override_base_version,
     )
-    
+
     # Set output variable name based on package type
     gha_set_output({rocm_native_package_version: rocm_native_package_version})
 

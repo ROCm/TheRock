@@ -237,10 +237,14 @@ class NativePackageVersionTest(unittest.TestCase):
         """Test that RPM versions follow expected patterns for ordering"""
         # Create versions with mocked dates and git SHAs
         with patch.object(
-            compute_rocm_native_package_version, "get_current_date", return_value="20251201"
+            compute_rocm_native_package_version,
+            "get_current_date",
+            return_value="20251201",
         ):
             with patch.object(
-                compute_rocm_native_package_version, "get_git_sha", return_value="f689a8ea"
+                compute_rocm_native_package_version,
+                "get_git_sha",
+                return_value="f689a8ea",
             ):
                 dev1 = compute_rocm_native_package_version.compute_version(
                     release_type="dev",
@@ -252,7 +256,9 @@ class NativePackageVersionTest(unittest.TestCase):
                 self.assertEqual(dev1, "8.1.0~20251201gf689a8ea")
 
         with patch.object(
-            compute_rocm_native_package_version, "get_current_date", return_value="20251203"
+            compute_rocm_native_package_version,
+            "get_current_date",
+            return_value="20251203",
         ):
             nightly = compute_rocm_native_package_version.compute_version(
                 release_type="nightly",
@@ -303,7 +309,9 @@ class NativePackageVersionTest(unittest.TestCase):
         """Test that DEB versions follow expected patterns for ordering"""
         # Create versions with mocked dates
         with patch.object(
-            compute_rocm_native_package_version, "get_current_date", return_value="20251201"
+            compute_rocm_native_package_version,
+            "get_current_date",
+            return_value="20251201",
         ):
             dev1 = compute_rocm_native_package_version.compute_version(
                 release_type="dev",
@@ -315,7 +323,9 @@ class NativePackageVersionTest(unittest.TestCase):
             self.assertEqual(dev1, "8.1.0~dev20251201")
 
         with patch.object(
-            compute_rocm_native_package_version, "get_current_date", return_value="20251202"
+            compute_rocm_native_package_version,
+            "get_current_date",
+            return_value="20251202",
         ):
             dev2 = compute_rocm_native_package_version.compute_version(
                 release_type="dev",
@@ -327,7 +337,9 @@ class NativePackageVersionTest(unittest.TestCase):
             self.assertEqual(dev2, "8.1.0~dev20251202")
 
         with patch.object(
-            compute_rocm_native_package_version, "get_current_date", return_value="20251203"
+            compute_rocm_native_package_version,
+            "get_current_date",
+            return_value="20251203",
         ):
             nightly = compute_rocm_native_package_version.compute_version(
                 release_type="nightly",
