@@ -99,7 +99,7 @@ jobs:
           # Output will be available in env variable rocm_native_package_version
           python ./build_tools/compute_rocm_native_package_version.py \
             --release-type=${{ env.RELEASE_TYPE }} \
-            --package-type=inputs.native_package_type \
+            --package-type=${{ inputs.native_package_type }} \
             --prerelease-version=${{ inputs.prerelease_version }}
 
       - name: Fetch Artifacts
