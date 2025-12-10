@@ -11,25 +11,17 @@ import os
 from pathlib import Path
 
 from github_actions_utils import *
+from benchmark_test_matrix import benchmark_matrix
 
 logging.basicConfig(level=logging.INFO)
 
 # Note: these paths are relative to the repository root. We could make that
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions/test_executable_scripts")
-BENCHMARK_SCRIPT_DIR = Path("./build_tools/github_actions/benchmark_scripts")
 
 
 def _get_script_path(script_name: str) -> str:
     platform_path = SCRIPT_DIR / script_name
-    # Convert to posix (using `/` instead of `\\`) so test workflows can use
-    # 'bash' as the shell on Linux and Windows.
-    posix_path = platform_path.as_posix()
-    return str(posix_path)
-
-
-def _get_benchmark_script_path(script_name: str) -> str:
-    platform_path = BENCHMARK_SCRIPT_DIR / script_name
     # Convert to posix (using `/` instead of `\\`) so test workflows can use
     # 'bash' as the shell on Linux and Windows.
     posix_path = platform_path.as_posix()
@@ -71,16 +63,6 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 6,
     },
-    "hipblaslt_bench": {
-        "job_name": "hipblaslt_bench",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_benchmark_script_path('test_hipblaslt_benchmark.py')}",
-        # TODO(lajagapp): Add windows test
-        "platform": ["linux"],
-        "total_shards": 1,
-        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
-    },
     # SOLVER tests
     "hipsolver": {
         "job_name": "hipsolver",
@@ -98,16 +80,6 @@ test_matrix = {
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
         "total_shards": 1,
-    },
-    "rocsolver_bench": {
-        "job_name": "rocsolver_bench",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_benchmark_script_path('test_rocsolver_benchmark.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
-        "platform": ["linux"],
-        "total_shards": 1,
-        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
     },
     # PRIM tests
     "rocprim": {
@@ -171,16 +143,6 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
-    "rocrand_bench": {
-        "job_name": "rocrand_bench",
-        "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_benchmark_script_path('test_rocrand_benchmark.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
-        "platform": ["linux"],
-        "total_shards": 1,
-        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
-    },
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
@@ -198,16 +160,6 @@ test_matrix = {
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards": 1,
-    },
-    "rocfft_bench": {
-        "job_name": "rocfft_bench",
-        "fetch_artifact_args": "--fft --rand --tests",
-        "timeout_minutes": 60,
-        "test_script": f"python {_get_benchmark_script_path('test_rocfft_benchmark.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
-        "platform": ["linux"],
-        "total_shards": 1,
-        "skip_on_smoke": True,  # Only run on nightly (full tests), skip on PRs (smoke tests)
     },
     "hipfft": {
         "job_name": "hipfft",
@@ -274,28 +226,29 @@ def run():
 
     logging.info(f"Selecting projects: {project_to_test}")
 
+    # For test labels that include benchmarks, merge benchmark_matrix
+    combined_test_matrix = test_matrix.copy()
+    if test_labels:
+        benchmark_labels = [label for label in test_labels if label in benchmark_matrix]
+        if benchmark_labels:
+            logging.info(f"Including benchmark tests from labels: {benchmark_labels}")
+            combined_test_matrix.update(benchmark_matrix)
+
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in project_to_test.split(",")]
 
     output_matrix = []
-    for key in test_matrix:
-        job_name = test_matrix[key]["job_name"]
+    for key in combined_test_matrix:
+        job_name = combined_test_matrix[key]["job_name"]
 
         # If the test is disabled for a particular platform, skip the test
         if (
-            "exclude_family" in test_matrix[key]
-            and platform in test_matrix[key]["exclude_family"]
-            and amdgpu_families in test_matrix[key]["exclude_family"][platform]
+            "exclude_family" in combined_test_matrix[key]
+            and platform in combined_test_matrix[key]["exclude_family"]
+            and amdgpu_families in combined_test_matrix[key]["exclude_family"][platform]
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
-            )
-            continue
-
-        # If the test should be skipped on smoke tests (typically benchmarks), skip it
-        if test_type == "smoke" and test_matrix[key].get("skip_on_smoke", False):
-            logging.info(
-                f"Excluding job {job_name} since it's marked to skip on smoke tests"
             )
             continue
 
@@ -305,11 +258,11 @@ def run():
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
-        if platform in test_matrix[key]["platform"] and (
+        if platform in combined_test_matrix[key]["platform"] and (
             key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
-            job_config_data = test_matrix[key]
+            job_config_data = combined_test_matrix[key]
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)

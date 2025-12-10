@@ -58,9 +58,10 @@ build_tools/github_actions/
 │   ├── system/                 # System detection
 │   └── results/                # Results handling & schemas
 │
-├── fetch_test_configurations.py  # Test matrix configuration
-├── configure_ci.py                # CI workflow configuration
-└── github_actions_utils.py       # GitHub Actions utilities
+├── fetch_test_configurations.py  # Regular test matrix generation
+├── benchmark_test_matrix.py      # Benchmark test matrix definitions
+├── configure_ci.py               # CI workflow configuration
+└── github_actions_utils.py          # GitHub Actions utilities
 ```
 
 ## CI/CD Integration
@@ -82,7 +83,7 @@ Benchmark tests are configured to run **only on nightly CI builds** to save time
 
 ### Available Benchmark Tests in CI
 
-The following benchmark tests are configured in `fetch_test_configurations.py` with `skip_on_smoke: True`:
+The following benchmark tests are defined in `benchmark_test_matrix.py`:
 
 | Test Name | Library | Platform | Timeout | Shards |
 |-----------|---------|----------|---------|--------|
@@ -90,6 +91,8 @@ The following benchmark tests are configured in `fetch_test_configurations.py` w
 | `rocsolver_bench` | ROCsolver | Linux | 60 min | 1 |
 | `rocrand_bench` | ROCrand | Linux | 60 min | 1 |
 | `rocfft_bench` | ROCfft | Linux | 60 min | 1 |
+
+**Implementation:** During nightly CI runs, `configure_ci.py` adds benchmark test names to test labels, which are then processed by `fetch_test_configurations.py` to include benchmarks in the test execution matrix.
 
 ## Architecture
 
@@ -136,9 +139,9 @@ Key components:
 - Define `parse_results()` - parses logs and returns structured data
 - Call `client.upload_results()` to submit to API
 
-### 2. Add to CI Test Matrix
+### 2. Add to Benchmark Test Matrix
 
-Edit `build_tools/github_actions/fetch_test_configurations.py`:
+Edit `build_tools/github_actions/benchmark_test_matrix.py`:
 
 ```python
 "your_benchmark": {
@@ -148,9 +151,10 @@ Edit `build_tools/github_actions/fetch_test_configurations.py`:
     "test_script": f"python {_get_benchmark_script_path('test_your_benchmark.py')}",
     "platform": ["linux"],
     "total_shards": 1,
-    "skip_on_smoke": True,  # Only run on nightly CI
 },
 ```
+
+The benchmark will automatically be included in nightly CI runs via test labels set by `configure_ci.py`.
 
 ### 3. Test Locally
 
