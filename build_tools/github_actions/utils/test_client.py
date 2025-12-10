@@ -65,22 +65,6 @@ class TestClient:
         # Use SystemDetector for detection
         self.system_context = self.system_detector.detect_all(verbose=True)
     
-    def get_system_context(self) -> SystemContext:
-        """Get cached system context.
-        
-        Returns:
-            SystemContext: Detected system information
-            
-        Raises:
-            RuntimeError: If system detection hasn't been run
-        """
-        if self.system_context is None:
-            raise RuntimeError(
-                "System context not available. "
-                "Call detect_system() first or initialize with auto_detect=True"
-            )
-        return self.system_context
-    
     def upload_results(self,
                       test_name: str,
                       test_results: List[Dict[str, Any]],

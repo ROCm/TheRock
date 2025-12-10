@@ -604,22 +604,6 @@ class HardwareDetector:
         """
         return self.cpu_info
     
-    def get_gpus(self) -> List[GpuInfo]:
-        """Get detected GPU list.
-        
-        Returns:
-            List[GpuInfo]: List of detected GPUs
-        """
-        return self.gpu_list
-    
-    def has_gpu(self) -> bool:
-        """Check if any GPU is detected.
-        
-        Returns:
-            bool: True if at least one GPU detected
-        """
-        return len(self.gpu_list) > 0
-    
     def get_is_cpu_initialized(self) -> bool:
         """Check if CPU detection completed.
         
@@ -635,14 +619,6 @@ class HardwareDetector:
             bool: True if GPU detection was attempted
         """
         return True  # Always true after detect_all() is called
-    
-    def getCpu(self) -> Optional[CpuInfo]:
-        """Get CPU information (camelCase compatibility alias).
-        
-        Returns:
-            CpuInfo: Detected CPU info or None
-        """
-        return self.get_cpu()
     
     def getGpu(self):
         """Get GPU handler (camelCase compatibility alias).
