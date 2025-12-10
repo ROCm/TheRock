@@ -29,7 +29,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
     CMAKE_ARGS
-      -DAQLPROFILE_BUILD_TESTS=ON
+      -DAQLPROFILE_BUILD_TESTS=${THEROCK_BUILD_TESTING}
       -DHIP_PLATFORM="amd"
     COMPILER_TOOLCHAIN
       amd-hip
@@ -193,7 +193,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       doc
       lib
       run
-      test
     SUBPROJECT_DEPS
       rocprofiler-sdk
       roctracer
