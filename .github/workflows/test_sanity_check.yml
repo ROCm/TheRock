@@ -99,16 +99,14 @@ jobs:
         run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
 
       - name: Driver / GPU sanity check
-        if: ${{ runner.os == 'Linux' }}
         run: |
           echo "amd-smi location:"
           find . -name "amd-smi"
           echo "rocminfo location:"
           find . -name "rocminfo"
-        if: ${{ runner.os == 'Windows' }}
-        run: |
-          find . -name "amd-smi"
+          echo "amd-smi.exe location:"
           find . -name "amd-smi.exe"
+          echo "hipInfo.exe location:"
           find . -name "hipInfo.exe"
 
       - name: Run ROCm Sanity Tests
