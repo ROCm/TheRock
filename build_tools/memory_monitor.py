@@ -5,6 +5,17 @@ This script monitors system memory usage at regular intervals and logs detailed
 memory statistics. When integrated with GitHub Actions workflows, it helps identify
 which build phase is causing out-of-memory errors.
 
+Thread Safety:
+    Uses threading.Event for stop signaling instead of boolean flags. This provides:
+    - Thread-safe communication between threads
+    - Immediate shutdown response via Event.wait() instead of sleep()
+    - Clear intent and standard Python threading patterns
+
+Graceful Shutdown:
+    - On Linux/Unix: Responds to SIGTERM/SIGINT via signal handlers
+    - On Windows: Checks for stop signal file (Windows has limited signal support)
+    - Both approaches call monitor.stop() which sets the stop_event and prints summary
+
 Usage:
     # Monitor a single command:
     python build_tools/memory_monitor.py --phase "Configure Projects" -- cmake ...
@@ -50,7 +61,7 @@ class MemoryMonitor:
         self.phase_name = phase_name
         self.log_file = log_file
         self.stop_signal_file = stop_signal_file
-        self.running = False
+        self.stop_event = threading.Event()
         self.peak_memory = 0
         self.peak_swap = 0
         self.samples = []
@@ -156,12 +167,13 @@ class MemoryMonitor:
     def monitor_loop(self):
         """Main monitoring loop."""
         next_tick = time.monotonic()
-        while self.running:
+        while not self.stop_event.is_set():
             # Check for stop signal file (for Windows compatibility)
             if self.stop_signal_file and self.stop_signal_file.exists():
                 print(
                     f"\n[STOP_SIGNAL] Stop signal file detected, stopping monitoring..."
                 )
+                self.stop_event.set()
                 break
 
             try:
@@ -178,11 +190,14 @@ class MemoryMonitor:
                     f"[WARNING] Stats collection took longer than interval ({self.interval_seconds}s)",
                     file=sys.stderr,
                 )
-            time.sleep(sleep_for)
+            
+            # Use wait() instead of sleep() for more responsive shutdown
+            # It will return immediately if stop_event is set
+            self.stop_event.wait(timeout=sleep_for)
 
     def start(self):
         """Start monitoring in a background thread."""
-        self.running = True
+        self.stop_event.clear()
         self.start_time = time.time()
         self.thread = threading.Thread(target=self.monitor_loop, daemon=False)
         self.thread.start()
@@ -192,7 +207,7 @@ class MemoryMonitor:
 
     def stop(self):
         """Stop monitoring and print summary."""
-        self.running = False
+        self.stop_event.set()
         self.end_time = time.time()
 
         if hasattr(self, "thread"):
@@ -483,7 +498,7 @@ def main():
 
         try:
             # Keep running until interrupted
-            while True:
+            while not monitor.stop_event.is_set():
                 # Check for stop signal file
                 if monitor.stop_signal_file and monitor.stop_signal_file.exists():
                     print("\n[STOP] Stop signal file detected, stopping...")
@@ -494,7 +509,21 @@ def main():
                     except:
                         pass
                     break
-                time.sleep(1)
+                
+                # Use wait() for more responsive shutdown
+                monitor.stop_event.wait(timeout=1)
+            
+            # If we exited the loop because stop_event was set (but not by us),
+            # we still need to call stop() to print the summary
+            if monitor.stop_event.is_set():
+                print("\n[STOP] Stop event detected, finalizing...")
+                monitor.stop()
+                # Clean up the signal file if it exists
+                if monitor.stop_signal_file and monitor.stop_signal_file.exists():
+                    try:
+                        monitor.stop_signal_file.unlink()
+                    except:
+                        pass
         except KeyboardInterrupt:
             print("\n[STOP] Stopping background monitoring...")
             monitor.stop()

@@ -88,6 +88,83 @@ def test_monitoring_loop():
             log_file.unlink()
 
 
+def test_stop_event_mechanism():
+    """Test that threading.Event is used for stop signaling."""
+    monitor = MemoryMonitor(interval_seconds=1.0, phase_name="Event Test")
+
+    # Event should not be set initially
+    assert not monitor.stop_event.is_set(), "Stop event should not be set initially"
+
+    # Start monitoring
+    monitor.start()
+    time.sleep(0.5)
+
+    # Event should still not be set while running
+    assert not monitor.stop_event.is_set(), "Stop event should not be set while running"
+
+    # Stop monitoring
+    monitor.stop()
+
+    # Event should be set after stop
+    assert monitor.stop_event.is_set(), "Stop event should be set after stop"
+
+
+def test_stop_event_responsive_shutdown():
+    """Test that Event.wait() makes shutdown responsive."""
+    monitor = MemoryMonitor(
+        interval_seconds=30.0,  # Very long interval
+        phase_name="Responsive Test",
+    )
+
+    monitor.start()
+    time.sleep(0.5)  # Very short wait
+
+    # Measure how long it takes to stop
+    start = time.time()
+    monitor.stop()
+    stop_duration = time.time() - start
+
+    # Should stop quickly, not wait for the full 30s interval
+    assert (
+        stop_duration < 2.0
+    ), f"Stop took {stop_duration:.2f}s, should be < 2s (responsive shutdown)"
+
+    # Verify some samples were collected
+    assert len(monitor.samples) >= 1, "Should have collected at least 1 sample"
+
+
+def test_stop_signal_file_with_event():
+    """Test that stop signal file detection works with threading.Event."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        stop_file = Path(tmpdir) / "stop.signal"
+
+        monitor = MemoryMonitor(
+            interval_seconds=1.0,
+            phase_name="Signal File Test",
+            stop_signal_file=stop_file,
+        )
+
+        monitor.start()
+        time.sleep(2.5)  # Let it collect a few samples
+
+        # Create stop signal file
+        stop_file.touch()
+
+        # Give it time to detect the file
+        time.sleep(2)
+
+        # The monitoring thread should have set stop_event
+        assert (
+            monitor.stop_event.is_set()
+        ), "Stop event should be set after signal file detected"
+
+        # Call stop to ensure summary is printed
+        monitor.stop()
+
+        # Verify samples were collected
+        assert len(monitor.samples) >= 2, "Should have collected multiple samples"
+
+
 def test_analysis_script():
     """Test that analysis script can process logs."""
     analysis_script = Path(__file__).parent.parent / "analyze_memory_logs.py"
