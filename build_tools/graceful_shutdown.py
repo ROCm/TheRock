@@ -14,6 +14,7 @@ Examples:
 """
 
 import argparse
+import platform
 import sys
 import time
 import psutil
@@ -40,7 +41,7 @@ def graceful_shutdown(
         process = psutil.Process(pid)
     except psutil.NoSuchProcess:
         if verbose:
-            print(f"Process {pid} does not exist (already terminated)")
+            print(f"Process {pid} has already terminated (this is fine)")
         return True
     except psutil.AccessDenied:
         print(f"ERROR: Access denied to process {pid}")
@@ -51,10 +52,20 @@ def graceful_shutdown(
             f"Attempting graceful shutdown of process {pid} (timeout: {timeout_seconds}s)"
         )
 
+    # Track remaining timeout
+    remaining_timeout = timeout_seconds
+    start_time = time.time()
+    
     try:
         # On Windows, if a stop_signal_file is provided, create it first
         # This allows the process to detect it and shutdown gracefully
-        if stop_signal_file:
+        # On Linux/Unix, we skip this and send SIGTERM directly
+        is_windows = platform.system() == "Windows"
+        
+        if stop_signal_file and not is_windows and verbose:
+            print(f"Skipping stop signal file on Linux - using SIGTERM instead")
+        
+        if stop_signal_file and is_windows:
             from pathlib import Path
 
             stop_file = Path(stop_signal_file)
@@ -95,6 +106,10 @@ def graceful_shutdown(
                     wait_time += 0.5
 
                 # If we get here, the stop signal file didn't work
+                # Update remaining timeout
+                elapsed = time.time() - start_time
+                remaining_timeout = max(0, timeout_seconds - elapsed)
+                
                 if verbose:
                     print(
                         f"Process did not respond to stop signal file within {timeout_seconds}s"
@@ -108,6 +123,9 @@ def graceful_shutdown(
             except Exception as e:
                 if verbose:
                     print(f"Warning: Could not create/use stop signal file: {e}")
+                # Update remaining timeout even if exception occurred
+                elapsed = time.time() - start_time
+                remaining_timeout = max(0, timeout_seconds - elapsed)
 
         # Send termination signal as fallback (only if process is still running)
         try:
@@ -125,14 +143,15 @@ def graceful_shutdown(
 
         # Wait for the process to exit gracefully
         try:
-            process.wait(timeout=timeout_seconds)
+            process.wait(timeout=remaining_timeout)
             if verbose:
                 print(f"Process {pid} terminated gracefully")
             return True
         except psutil.TimeoutExpired:
+            total_elapsed = time.time() - start_time
             if verbose:
                 print(
-                    f"WARNING: Process {pid} did not terminate within {timeout_seconds}s"
+                    f"WARNING: Process {pid} did not terminate within {timeout_seconds}s (total elapsed: {total_elapsed:.1f}s)"
                 )
 
             if verbose:

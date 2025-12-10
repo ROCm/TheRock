@@ -163,8 +163,7 @@ jobs:
         run: |
           echo "Gracefully stopping memory monitor (PID: $MONITOR_PID)"
           python build_tools/graceful_shutdown.py $MONITOR_PID \
-            --timeout 15 \
-            --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal"
+            --timeout 15
           echo "Memory monitor stopped"
 
           # Display the monitor output

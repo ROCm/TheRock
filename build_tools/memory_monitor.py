@@ -184,7 +184,7 @@ class MemoryMonitor:
         """Start monitoring in a background thread."""
         self.running = True
         self.start_time = time.time()
-        self.thread = threading.Thread(target=self.monitor_loop, daemon=True)
+        self.thread = threading.Thread(target=self.monitor_loop, daemon=False)
         self.thread.start()
         print(
             f"[MONITOR] Memory monitoring started for phase: {self.phase_name} (interval: {self.interval_seconds}s)"
