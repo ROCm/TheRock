@@ -13,8 +13,8 @@ Config:
     # Execution Metadata
     # Environment variables with defaults (format: ${VAR:-default})
     DeployedUser: "${DEPLOYED_USER:-therockbot}"
-    ExecutionLabel: "${EXECUTION_LABEL:-therock_pr}"
-    CIGroup: "${CI_GROUP:-therock_pr}"
+    ExecutionLabel: "${EXECUTION_LABEL:-therock_nightly}"
+    CIGroup: "${CI_GROUP:-therock_nightly}"
     
     # Results API Configuration
     UploadTestResultsToAPI: true
