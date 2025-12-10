@@ -73,7 +73,7 @@ on:
       s3_staging_subdir:
         description: S3 staging subdirectory, not including the GPU-family
         type: string
-        default: "v2-staging" 
+        default: "v2-staging"
       rocm_version:
         description: ROCm version to install
         type: string
@@ -132,7 +132,7 @@ jobs:
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: ${{ inputs.python_version }}
-      
+
       - name: Select Python version
         run: |
           python build_tools/github_actions/python_to_cp_version.py \
@@ -150,7 +150,7 @@ jobs:
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
-      
+
       - name: Extract JAX version
         run: |
             # Extract JAX version from requirements.txt (e.g., "jax==0.8.0")
@@ -226,7 +226,7 @@ jobs:
       ref: ${{ inputs.ref || '' }}
       jax_ref: ${{ inputs.jax_ref }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-  
+
   upload_jax_wheels:
     name: Release JAX Wheels to S3
     needs: [build_jax_wheels, generate_target_to_run, test_jax_wheels]
@@ -271,7 +271,7 @@ jobs:
             --exclude "*" \
             --include "jaxlib-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
             --include "jax_rocm7_plugin-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
-            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl" 
+            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
@@ -281,4 +281,3 @@ jobs:
         run: |
           pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
-
