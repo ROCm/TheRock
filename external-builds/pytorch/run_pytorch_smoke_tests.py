@@ -88,7 +88,9 @@ def main() -> int:
     # changing HIP_VISIBLE_DEVICES has no effect.
     unique_supported_devices = get_unique_supported_devices_by_arch(args.amdgpu_family)
 
-    print(f"Will run smoke tests on {len(unique_supported_devices)} device(s): {list(unique_supported_devices.keys())}")
+    print(
+        f"Will run smoke tests on {len(unique_supported_devices)} device(s): {list(unique_supported_devices.keys())}"
+    )
 
     # Track overall success
     overall_retcode = 0
@@ -99,7 +101,7 @@ def main() -> int:
 
     # Append any passthrough pytest args passed after "--"
     pytest_args.extend(passthrough_pytest_args)
-    
+
     # Run smoke tests for each device
     for arch, device_idx in unique_supported_devices.items():
         print(f"\n{'='*60}")
@@ -111,7 +113,9 @@ def main() -> int:
         print(f"Set HIP_VISIBLE_DEVICES={device_idx}")
 
         retcode = pytest.main(pytest_args)
-        print(f"Pytest finished for device {device_idx} ({arch}) with return code: {retcode}")
+        print(
+            f"Pytest finished for device {device_idx} ({arch}) with return code: {retcode}"
+        )
 
         # Track if any test run failed
         if retcode != 0:

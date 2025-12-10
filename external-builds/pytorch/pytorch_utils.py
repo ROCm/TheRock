@@ -197,7 +197,6 @@ def get_all_supported_devices_by_arch(amdgpu_family: str = "") -> dict[str, list
             )
             sys.exit(1)
 
-
     # Map logical indices back to system indices if HIP_VISIBLE_DEVICES was already set
     if original_system_indices is not None:
         # Map: logical index -> original system index
@@ -220,6 +219,7 @@ def get_all_supported_devices_by_arch(amdgpu_family: str = "") -> dict[str, list
     print(f"Detected PyTorch supported devices by architecture: {result}")
     return result
 
+
 def get_unique_supported_devices_by_arch(amdgpu_family: str = "") -> dict[str, int]:
     """
     Returns a dictionary mapping each supported architecture to a single device index (the first one for each).
@@ -233,8 +233,11 @@ def get_unique_supported_devices_by_arch(amdgpu_family: str = "") -> dict[str, i
         Dictionary: {arch: device_index} for each supported arch.
     """
     devices_by_arch = get_all_supported_devices_by_arch(amdgpu_family)
-    unique_devices = {arch: indices[0] for arch, indices in devices_by_arch.items() if indices}
+    unique_devices = {
+        arch: indices[0] for arch, indices in devices_by_arch.items() if indices
+    }
     return unique_devices
+
 
 def detect_pytorch_version() -> str:
     """Auto-detect the PyTorch version from the installed package.
