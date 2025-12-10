@@ -67,15 +67,30 @@ This branch includes **comprehensive guides** in the reorganized `docs/` directo
 - **[SELinux + ROCm Setup](docs/guides/selinux-rocm-setup.md)** - SELinux configuration
 - **[Browser Search Fix](docs/troubleshooting/browser-search-fix.md)** - Fixing OI browser.search()
 
-### Test Environment
+### Build & Test Environment
 
-This build has been tested on:
+This build has been developed and tested on:
 
-- **OS:** Fedora 43 (kernel 6.17.10)
+**System:**
+
+- **OS:** Fedora 43 Linux (kernel 6.17.10)
 - **GPU:** AMD Radeon RX 6700 XT (12GB VRAM, gfx1031/RDNA2)
 - **ROCm:** 7.11 (custom build from TheRock)
-- **Python:** 3.14 (in venv)
-- **Workloads:** llama.cpp, Ollama, PyTorch, Open Interpreter
+
+**Build Tools:**
+
+- **Python:** 3.14.0 (in venv)
+- **CMake:** 3.31.6
+- **Ninja:** 1.13.1
+- **GCC:** 15.2.1 (Red Hat 15.2.1-4)
+- **Git:** Latest from Fedora 43 repos
+
+**Tested Workloads:**
+
+- llama.cpp server with ROCm backend
+- Ollama with ROCm support
+- PyTorch with ROCm
+- Open Interpreter 0.4.3
 
 ### Modifications & Enhancements
 
@@ -112,7 +127,7 @@ TheRock includes:
 - A CMake super-project for HIP and ROCm source builds
 - Support for building PyTorch with ROCm from source
   - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
-- Operating system support including multiple Linux distributions and native Windows
+- Linux distribution support (tested on Fedora 43, Ubuntu also supported)
 - Tools for developing individual ROCm components
 - Comprehensive build and testing infrastructure
 
@@ -132,6 +147,27 @@ instructions and configurations for alternatives.
 > [!IMPORTANT]
 > Frequent setup and building problems and their solutions can be found in section [Common Issues](docs/guides/environment-setup.md#common-issues).
 
+### Setup - Fedora 43 (Tested Configuration)
+
+This is the configuration used to build and test this custom branch:
+
+```bash
+# Install Fedora dependencies
+sudo dnf install gfortran git ninja-build cmake gcc gcc-c++ pkg-config xxd patchelf automake libtool python3-devel mesa-libEGL-devel texinfo bison flex
+
+# Clone this branch
+git clone -b hashcat/rocm-7.11-gfx103X https://github.com/tlee933/TheRock.git
+cd TheRock
+
+# Init python virtual environment and install python dependencies
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Download submodules and apply patches
+python3 ./build_tools/fetch_sources.py
+```
+
 ### Setup - Ubuntu (24.04)
 
 > [!TIP]
@@ -145,8 +181,8 @@ instructions and configurations for alternatives.
 sudo apt update
 sudo apt install gfortran git ninja-build cmake g++ pkg-config xxd patchelf automake libtool python3-venv python3-dev libegl1-mesa-dev texinfo bison flex
 
-# Clone the repository
-git clone https://github.com/ROCm/TheRock.git
+# Clone this branch (or upstream)
+git clone -b hashcat/rocm-7.11-gfx103X https://github.com/tlee933/TheRock.git
 cd TheRock
 
 # Init python virtual environment and install python dependencies
@@ -156,38 +192,6 @@ pip install -r requirements.txt
 
 # Download submodules and apply patches
 python3 ./build_tools/fetch_sources.py
-```
-
-### Setup - Windows 11 (VS 2022)
-
-> [!IMPORTANT]
-> See [windows_support.md](./docs/development/windows_support.md) for setup
-> instructions on Windows, in particular
-> the section for
-> [installing tools](./docs/development/windows_support.md#install-tools).
-
-If the build system is a non-English system. Make sure to switch to `utf-8`.
-
-```cmd
-chcp 65001
-```
-
-```bash
-# Install dependencies following the Windows support guide
-
-# Clone the repository
-git clone https://github.com/ROCm/TheRock.git
-cd TheRock
-
-# Init python virtual environment and install python dependencies
-python -m venv .venv
-.venv\Scripts\Activate.bat
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Download submodules and apply patches
-# Note that dvc is used for pulling large files
-python ./build_tools/fetch_sources.py
 ```
 
 ### Build configuration
