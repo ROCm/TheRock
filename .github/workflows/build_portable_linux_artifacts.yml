@@ -137,11 +137,10 @@ jobs:
           # Create logs directory in BUILD_DIR
           mkdir -p "${{ env.BUILD_DIR }}/logs"
 
-          # Start memory monitor in background with stop signal file support
+          # Start memory monitor in background (uses SIGTERM for graceful shutdown on Linux)
           python build_tools/memory_monitor.py \
             --phase "Build Phase" \
             --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
-            --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal" \
             --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
 
           # Capture PID
