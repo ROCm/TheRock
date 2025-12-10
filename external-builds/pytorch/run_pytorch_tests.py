@@ -79,7 +79,7 @@ from pathlib import Path
 
 import pytest
 
-from pytorch_utils import detect_amdgpu_family, detect_pytorch_version
+from pytorch_utils import get_unique_supported_devices_by_arch, detect_pytorch_version
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -218,8 +218,12 @@ def main() -> int:
     # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
     # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
     # changing HIP_VISIBLE_DEVICES has no effect.
-    amdgpu_family = detect_amdgpu_family(args.amdgpu_family)
-    print(f"Using AMDGPU family: {amdgpu_family}")
+    unique_supported_devices = get_unique_supported_devices_by_arch(args.amdgpu_family)
+
+    # For unit tests, use only the first supported device
+    first_arch, first_device_idx = next(iter(unique_supported_devices.items()))
+    os.environ["HIP_VISIBLE_DEVICES"] = str(first_device_idx)
+    print(f"Using AMDGPU family: {first_arch} (device index: {first_device_idx})")
 
     # Determine PyTorch version
     pytorch_version = args.pytorch_version
@@ -229,7 +233,7 @@ def main() -> int:
 
     # Get tests to skip
     tests_to_skip = get_tests(
-        amdgpu_family=amdgpu_family,
+        amdgpu_family=first_arch,
         pytorch_version=pytorch_version,
         platform=platform.system(),
         create_skip_list=not args.debug,

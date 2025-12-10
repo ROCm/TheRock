@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from pytorch_utils import set_visible_devices_from_amdgpu_family
+from pytorch_utils import get_unique_supported_devices_by_arch
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -72,6 +72,7 @@ def main() -> int:
 
     Returns:
         Exit code from pytest (0 for success, non-zero for failures).
+        Returns non-zero if any device's tests fail.
     """
     args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
 
@@ -85,8 +86,12 @@ def main() -> int:
     # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
     # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
     # changing HIP_VISIBLE_DEVICES has no effect.
-    amdgpu_family = set_visible_devices_from_amdgpu_family(args.amdgpu_family)
-    print(f"Using AMDGPU family: {amdgpu_family}")
+    unique_supported_devices = get_unique_supported_devices_by_arch(args.amdgpu_family)
+
+    print(f"Will run smoke tests on {len(unique_supported_devices)} device(s): {list(unique_supported_devices.keys())}")
+
+    # Track overall success
+    overall_retcode = 0
 
     pytest_args = [
         f"{smoke_tests_dir}",
@@ -94,10 +99,29 @@ def main() -> int:
 
     # Append any passthrough pytest args passed after "--"
     pytest_args.extend(passthrough_pytest_args)
+    
+    # Run smoke tests for each device
+    for arch, device_idx in unique_supported_devices.items():
+        print(f"\n{'='*60}")
+        print(f"Running smoke tests on device {device_idx} ({arch})")
+        print(f"{'='*60}")
 
-    retcode = pytest.main(pytest_args)
-    print(f"Pytest finished with return code: {retcode}")
-    return retcode
+        # Set HIP_VISIBLE_DEVICES for this specific device
+        os.environ["HIP_VISIBLE_DEVICES"] = str(device_idx)
+        print(f"Set HIP_VISIBLE_DEVICES={device_idx}")
+
+        retcode = pytest.main(pytest_args)
+        print(f"Pytest finished for device {device_idx} ({arch}) with return code: {retcode}")
+
+        # Track if any test run failed
+        if retcode != 0:
+            overall_retcode = retcode
+
+    print(f"\n{'='*60}")
+    print(f"All smoke tests completed. Overall return code: {overall_retcode}")
+    print(f"{'='*60}")
+
+    return overall_retcode
 
 
 if __name__ == "__main__":
