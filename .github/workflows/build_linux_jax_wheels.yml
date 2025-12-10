@@ -111,7 +111,7 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
     outputs:
       cp_version: ${{ env.cp_version }}
-      jax_version: ${{ env.JAX_VERSION }}
+      jax_version: ${{ steps.extract_jax_version.outputs.jax_version }} 
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -152,6 +152,7 @@ jobs:
             dist_wheels
 
       - name: Extract JAX version
+        id: extract_jax_version
         run: |
             # Extract JAX version from requirements.txt (e.g., "jax==0.8.0")
             # Remove all whitespace from requirements.txt to simplify parsing
