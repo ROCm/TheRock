@@ -71,8 +71,20 @@ matches your current commit history.
 
 ### Using patches from rocm-libraries, rocm-systems, and other repositories
 
-TODO: explain the code in rocm-libraries/.github/workflows/therock-ci-linux.yml
-TODO: link to https://github.com/ROCm/rocm-libraries/blob/develop/.github/workflows/therock-ci-linux.yml
+External repositories like `rocm-libraries` and `rocm-systems` use TheRock's patches
+in their CI workflows to test changes against TheRock's build system. This creates a
+feedback loop where repositories can validate that their changes work with TheRock
+before merging.
+
+**The typical CI pattern**:
+
+1. The external repository checks out its own code at HEAD
+1. Checks out TheRock into a subdirectory (e.g., `./TheRock`)
+1. Fetches all other dependencies via TheRock's `fetch_sources.py` (excluding the external repo itself)
+1. Applies patches from `TheRock/patches/amd-mainline/<repo>/` to the external repository
+1. Builds using TheRock with the patched external repository as a source override
+
+**Example from rocm-libraries**:
 
 ```yml
 - name: Patch rocm-libraries
@@ -80,8 +92,16 @@ TODO: link to https://github.com/ROCm/rocm-libraries/blob/develop/.github/workfl
     # Remove patches here if they cannot be applied cleanly, and they have not been deleted from TheRock repo
     # rm ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
     git -c user.name="therockbot" -c "user.email=therockbot@amd.com" am --whitespace=nowarn ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
-
 ```
+
+See the full workflows:
+
+- [rocm-libraries/.github/workflows/therock-ci-linux.yml](https://github.com/ROCm/rocm-libraries/blob/develop/.github/workflows/therock-ci-linux.yml)
+- [rocm-systems/.github/workflows/therock-ci-linux.yml](https://github.com/ROCm/rocm-systems/blob/develop/.github/workflows/therock-ci-linux.yml)
+
+**Important**: The commented `rm` line is a safety valve. If a patch cannot be applied
+cleanly (e.g., after upstream changes), CI maintainers can uncomment this to remove
+problematic patches, allowing the build to proceed while the patch conflict is resolved.
 
 ## Rules for creating patches
 
