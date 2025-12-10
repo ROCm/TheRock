@@ -101,7 +101,15 @@ jobs:
       - name: Driver / GPU sanity check
         if: ${{ runner.os == 'Linux' }}
         run: |
-          python ./build_tools/print_driver_gpu_info.py
+          echo "amd-smi location:"
+          find . -name "amd-smi"
+          echo "rocminfo location:"
+          find . -name "rocminfo"
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          find . -name "amd-smi"
+          find . -name "amd-smi.exe"
+          find . -name "hipInfo.exe"
 
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5
