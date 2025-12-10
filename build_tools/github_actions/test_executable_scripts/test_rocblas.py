@@ -15,6 +15,7 @@ environ_vars = os.environ.copy()
 # For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+environ_vars["OPENBLAS_NUM_THREADS"] = "1"  # let gtest handle thread management
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,7 +26,7 @@ if test_type == "smoke":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:
     # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
-    test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
+    test_filter = ["--gtest_filter=*quick*:*pre_checkin*-*known_bug*"]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
