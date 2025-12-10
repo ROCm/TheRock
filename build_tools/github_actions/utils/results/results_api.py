@@ -87,25 +87,17 @@ class ResultsAPI:
                 timeout=30
             )
             
-            if response.status_code == 200:
-                log.info(f"✓ Results submitted successfully to {url_type} API")
-                try:
-                    response_data = response.json()
-                    log.debug(f"API Response: {json.dumps(response_data, indent=2)}")
-                except Exception:
-                    log.debug(f"Response text: {response.text[:500]}")
-                return True
-            elif response.status_code == 201:
-                log.info(f"✓ Results created successfully on {url_type} API")
-                try:
-                    response_data = response.json()
-                    log.debug(f"API Response: {json.dumps(response_data, indent=2)}")
-                except Exception:
-                    log.debug(f"Response text: {response.text[:500]}")
-                return True
-            else:
-                self._handle_http_error(response)
-                return False
+            # Raise HTTPError for bad status codes (4xx, 5xx)
+            response.raise_for_status()
+            
+            # If we reach here, request was successful
+            log.info(f"✓ Results submitted successfully to {url_type} API")
+            try:
+                response_data = response.json()
+                log.debug(f"API Response: {json.dumps(response_data, indent=2)}")
+            except Exception:
+                log.debug(f"Response text: {response.text[:500]}")
+            return True
                 
         except requests.exceptions.Timeout as e:
             url_type = "fallback" if is_fallback else "primary"
@@ -123,7 +115,9 @@ class ResultsAPI:
             
         except requests.exceptions.HTTPError as e:
             url_type = "fallback" if is_fallback else "primary"
-            log.warning(f"✗ {url_type.capitalize()} API HTTP Error: {e}")
+            status_code = e.response.status_code if e.response else "Unknown"
+            error_msg = e.response.text[:200] if e.response and e.response.text else str(e)
+            log.warning(f"✗ {url_type.capitalize()} API Error ({status_code}): {error_msg}")
             return False
             
         except json.JSONDecodeError as e:
@@ -135,18 +129,6 @@ class ResultsAPI:
             url_type = "fallback" if is_fallback else "primary"
             log.warning(f"✗ {url_type.capitalize()} API Unexpected Error: {e}")
             return False
-    
-    def _handle_http_error(self, response: requests.Response):
-        """Log HTTP error responses.
-        
-        Args:
-            response: HTTP response object
-        """
-        status_code = response.status_code
-        error_msg = response.text[:500] if response.text else "No error message provided"
-        
-        log.error(f"✗ API Error - Status Code: {status_code}")
-        log.error(f"  Message: {error_msg}")
 
 
 def build_results_payload(
