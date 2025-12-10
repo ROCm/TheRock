@@ -160,7 +160,7 @@ jobs:
             # [^#]+ matches one or more characters that are NOT '#', ensuring we stop before any inline comments
             JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
             | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
-            echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
+            echo "jax_version=$JAX_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Install AWS CLI
         if: always()
