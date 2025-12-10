@@ -42,10 +42,9 @@ def _do_init(args: argparse.Namespace):
         # if contents for development were not yet unpacked.
         root_path = _devel.get_devel_root()
     except ModuleNotFoundError as e:
-        print(f"ERROR running init: {e}", file=sys.stderr)
+        print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
-    if not args.quiet:
-        print(f"Devel contents expanded to '{root_path}'")
+    print(f"Devel contents expanded to '{root_path}'")
 
 
 def _do_test(args: argparse.Namespace):
@@ -144,11 +143,6 @@ def main(argv: list[str] | None = None):
     # 'init' subcommand.
     init_p = sub_p.add_parser(
         "init", help="Expand devel contents to initialize rocm[devel]"
-    )
-    init_p.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Run without producing output",
     )
     init_p.set_defaults(func=_do_init)
 
