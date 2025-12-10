@@ -190,7 +190,7 @@ class MemoryMonitor:
                     f"[WARNING] Stats collection took longer than interval ({self.interval_seconds}s)",
                     file=sys.stderr,
                 )
-            
+
             # Use wait() instead of sleep() for more responsive shutdown
             # It will return immediately if stop_event is set
             self.stop_event.wait(timeout=sleep_for)
@@ -509,10 +509,10 @@ def main():
                     except:
                         pass
                     break
-                
+
                 # Use wait() for more responsive shutdown
                 monitor.stop_event.wait(timeout=1)
-            
+
             # If we exited the loop because stop_event was set (but not by us),
             # we still need to call stop() to print the summary
             if monitor.stop_event.is_set():
