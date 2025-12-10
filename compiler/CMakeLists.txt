@@ -173,6 +173,7 @@ if(THEROCK_ENABLE_COMPILER)
 
   if(THEROCK_FLAG_COMGR_DELAY_LOAD)
     therock_cmake_subproject_declare("${_amd_comgr_stub_target_name}"
+      FPRINT_SOURCE_HASH
       USE_DIST_AMDGPU_TARGETS
       NO_INSTALL_RPATH
       LOGICAL_TARGET_NAME "amd-comgr-stub"
