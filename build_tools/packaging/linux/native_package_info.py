@@ -134,14 +134,42 @@ class PackageLoader:
 
         Raises:
         FileNotFoundError : if the JSON file does not exist.
+        ValueError : if json_path is empty or invalid
+        RuntimeError : if OS detection fails or JSON loading fails
         """
-        self.json_path = Path(json_path)
-        if not self.json_path.exists():
-            raise FileNotFoundError(f"Package JSON file not found: {json_path}")
-        self.rocm_version = rocm_version
-        self.artifact_group = artifact_group
-        self._data = self._load_json()
-        self.os_id,self.os_family = get_os_id()
+        try:
+            if not json_path:
+                raise ValueError("JSON path cannot be empty")
+            
+            self.json_path = Path(json_path)
+            
+            if not self.json_path.exists():
+                raise FileNotFoundError(f"Package JSON file not found: {json_path}")
+            
+            if not self.json_path.is_file():
+                raise ValueError(f"Path is not a file: {json_path}")
+            
+            self.rocm_version = rocm_version
+            self.artifact_group = artifact_group
+            
+            # Load JSON data
+            try:
+                self._data = self._load_json()
+            except json.JSONDecodeError as e:
+                raise RuntimeError(f"Invalid JSON in {json_path}: {e}") from e
+            except Exception as e:
+                raise RuntimeError(f"Failed to load JSON from {json_path}: {e}") from e
+            
+            # Detect OS
+            try:
+                self.os_id, self.os_family = get_os_id()
+            except Exception as e:
+                raise RuntimeError(f"Failed to detect operating system: {e}") from e
+                
+        except (FileNotFoundError, ValueError, RuntimeError):
+            raise
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error initializing PackageLoader: {type(e).__name__} - {str(e)}") from e
 
     def _load_json(self) -> List[Dict[str, Any]]:
         """
@@ -149,10 +177,34 @@ class PackageLoader:
 
         Returns:
         list of dict : List of package definitions.
+        
+        Raises:
+        json.JSONDecodeError : if JSON is malformed
+        FileNotFoundError : if file doesn't exist
+        PermissionError : if file cannot be read
         """
-
-        with open(self.json_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(self.json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                
+            # Validate that data is a list
+            if not isinstance(data, list):
+                raise ValueError(f"Expected JSON array, got {type(data).__name__}")
+            
+            return data
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON syntax in {self.json_path}: {e}")
+            raise
+        except FileNotFoundError as e:
+            logger.error(f"File not found: {self.json_path}")
+            raise
+        except PermissionError as e:
+            logger.error(f"Permission denied reading file: {self.json_path}")
+            raise
+        except Exception as e:
+            logger.exception(f"Unexpected error loading JSON from {self.json_path}: {e}")
+            raise
 
     def load_all_packages(self) -> List[PackageInfo]:
         """
@@ -160,11 +212,44 @@ class PackageLoader:
 
         Returns:
         list of PackageInfo : All packages with context applied.
+        
+        Raises:
+        ValueError : if package data is malformed
         """
-        return [
-            PackageInfo(entry, self.rocm_version, self.artifact_group, self.os_family,self.os_id)
-            for entry in self._data
-        ]
+        try:
+            packages = []
+            for idx, entry in enumerate(self._data):
+                try:
+                    if not isinstance(entry, dict):
+                        logger.warning(f"Skipping entry {idx}: expected dict, got {type(entry).__name__}")
+                        continue
+                    
+                    pkg = PackageInfo(
+                        entry, 
+                        self.rocm_version, 
+                        self.artifact_group, 
+                        self.os_family,
+                        self.os_id
+                    )
+                    packages.append(pkg)
+                    
+                except KeyError as e:
+                    logger.error(f"Package entry {idx} missing required field: {e}")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing package entry {idx}: {type(e).__name__} - {str(e)}")
+                    continue
+            
+            if not packages:
+                logger.warning("No valid packages loaded from JSON")
+            else:
+                logger.info(f"Loaded {len(packages)} package(s) from {self.json_path}")
+            
+            return packages
+            
+        except Exception as e:
+            logger.exception(f"Unexpected error loading all packages: {e}")
+            raise
 
     def load_composite_packages(self) -> List[PackageInfo]:
         """
@@ -195,21 +280,51 @@ class PackageLoader:
         Returns:
         PackageInfo or None : The matching package object, or None if not found.
         """
-        for pkg in self.load_all_packages():
-            if pkg.package == name:
-                return pkg
-        return None
+        try:
+            if not name:
+                logger.warning("Empty package name provided")
+                return None
+            
+            for pkg in self.load_all_packages():
+                if pkg.package == name:
+                    return pkg
+            
+            logger.debug(f"Package '{name}' not found")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error searching for package '{name}': {e}")
+            return None
 
-    def get_all_package_names(self) -> set[str]:
+    def get_all_package_names(self) -> set:
         """
         Return the set of all package names defined in the JSON.
 
         Returns:
         set of str : Package names.
         """
-        return {entry.get("Name") for entry in self._data if "Name" in entry}
+        try:
+            # Use "Package" field, not "Name" - that's what's in the JSON
+            names = set()
+            for entry in self._data:
+                if not isinstance(entry, dict):
+                    continue
+                
+                # Try "Package" field first (correct field name)
+                pkg_name = entry.get("Package")
+                if pkg_name:
+                    names.add(pkg_name)
+                # Fallback to "Name" for backwards compatibility
+                elif "Name" in entry:
+                    names.add(entry.get("Name"))
+            
+            return names
+            
+        except Exception as e:
+            logger.error(f"Error getting package names: {e}")
+            return set()
 
-    def derive_package_names(self, pkg: PackageInfo, version_flag: bool) -> str:
+    def derive_package_names(self, pkg: PackageInfo, version_flag: bool) -> List[str]:
         """
         Compute derived package names for a given package, including valid dependencies.
 
@@ -226,52 +341,105 @@ class PackageLoader:
 
         Returns:
         list of str : Flattened list of derived package names.
+        
+        Raises:
+        AttributeError : if package object is missing required attributes
+        ValueError : if package data is invalid
         """
-        derived_packages = []
+        try:
+            if not pkg:
+                raise ValueError("Package object is None")
+            
+            if not hasattr(pkg, 'package') or not pkg.package:
+                raise AttributeError("Package object missing 'package' attribute")
+            
+            derived_packages = []
 
-        # Get valid dependencies only
-        all_pkg_names = self.get_all_package_names()
-        deps = pkg.deb_depends if self.os_family == "debian" else pkg.rpm_requires
-        valid_deps = [dep for dep in deps if dep in all_pkg_names]
+            # Get valid dependencies only
+            try:
+                all_pkg_names = self.get_all_package_names()
+            except Exception as e:
+                logger.error(f"Error getting all package names: {e}")
+                all_pkg_names = set()
+            
+            # Get dependencies based on OS family
+            try:
+                deps = pkg.deb_depends if self.os_family == "debian" else pkg.rpm_requires
+                if not isinstance(deps, list):
+                    logger.warning(f"Dependencies for {pkg.package} is not a list, using empty list")
+                    deps = []
+            except AttributeError as e:
+                logger.warning(f"Package {pkg.package} missing dependency attributes: {e}")
+                deps = []
+            
+            valid_deps = [dep for dep in deps if dep in all_pkg_names]
 
-        # Combine current package + valid deps
-        pkgs_to_process = valid_deps + [pkg.package]
+            # Combine current package + valid deps
+            pkgs_to_process = valid_deps + [pkg.package]
 
-        sorted_pacakges = []
-        derived_packages = []
+            for base in pkgs_to_process:
+                try:
+                    # Find PackageInfo for this base
+                    base_pkg = self.get_package_by_name(base)
+                    if not base_pkg:
+                        logger.debug(f"Package '{base}' not found, skipping")
+                        continue
 
-        for base in pkgs_to_process:
-            # Find PackageInfo for this base
-            base_pkg = self.get_package_by_name(base)
-            if not base_pkg:
-                continue
+                    # Convert -devel to -dev on Debian
+                    if base_pkg.os_family == "debian":
+                        try:
+                            base = re.sub("-devel$", "-dev", base)
+                        except re.error as e:
+                            logger.error(f"Regex error processing package name '{base}': {e}")
+                            continue
+                    
+                    # Determine name with version / gfx suffix
+                    try:
+                        if (
+                            base_pkg.gfxarch
+                            and "devel" not in base.lower()
+                            and "dev" not in base.lower()
+                        ):
+                            if version_flag:
+                                derived_packages.append(
+                                    f"{base}{base_pkg.rocm_version}-{base_pkg.gfx_suffix}"
+                                )
+                            else:
+                                derived_packages.append(f"{base}-{base_pkg.gfx_suffix}")
+                        elif version_flag:
+                            derived_packages.append(f"{base}{base_pkg.rocm_version}")
+                        else:
+                            derived_packages.append(base)
+                    except AttributeError as e:
+                        logger.error(f"Package {base} missing required attribute for name derivation: {e}")
+                        # Fallback to base name
+                        derived_packages.append(base)
+                        
+                except Exception as e:
+                    logger.error(f"Error processing package '{base}': {type(e).__name__} - {str(e)}")
+                    continue
 
-            if base_pkg.os_family == "debian":
-                base = re.sub("-devel$", "-dev", base)
-            # Determine name with version / gfx suffix
-            if (
-                base_pkg.gfxarch
-                and "devel" not in base.lower()
-                and "dev" not in base.lower()
-            ):
-                if version_flag:
-                    derived_packages.append(
-                        f"{base}{base_pkg.rocm_version}-{base_pkg.gfx_suffix}"
+            # Flatten the list
+            try:
+                import itertools
+                flattened = list(
+                    itertools.chain.from_iterable(
+                        sublist if isinstance(sublist, list) else [sublist]
+                        for sublist in derived_packages
                     )
-                else:
-                    derived_packages.append(f"{base}-{base_pkg.gfx_suffix}")
-            elif version_flag:
-                derived_packages.append(f"{base}{base_pkg.rocm_version}")
-            else:
-                derived_packages.append(base)
-
-        import itertools
-
-        # Normalize each item to list
-        flattened = list(
-            itertools.chain.from_iterable(
-                sublist if isinstance(sublist, list) else [sublist]
-                for sublist in derived_packages
-            )
-        )
-        return flattened
+                )
+            except Exception as e:
+                logger.error(f"Error flattening package list: {e}")
+                # Fallback: assume all are strings
+                flattened = [p for p in derived_packages if isinstance(p, str)]
+            
+            if not flattened:
+                logger.warning(f"No derived package names generated for {pkg.package}")
+            
+            return flattened
+            
+        except (ValueError, AttributeError):
+            raise
+        except Exception as e:
+            logger.exception(f"Unexpected error deriving package names: {e}")
+            raise

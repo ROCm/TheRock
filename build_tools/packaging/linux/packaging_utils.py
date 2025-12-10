@@ -37,22 +37,41 @@ if not logger.hasHandlers():
 def print_dict_summary(failure_dict):
     """
     Prints a clean summary of failures without table formatting.
+    
+    Parameters:
+    failure_dict : dict
+        Dictionary mapping package names to failure reasons
+        
+    Raises:
+        None - catches all exceptions internally
     """
+    try:
+        if not failure_dict:
+            logger.info("All packages installed successfully.")
+            return
 
-    if not failure_dict:
-        logger.info("All packages installed successfully.")
-        return
+        if not isinstance(failure_dict, dict):
+            logger.error(f"Expected dict for failure summary, got {type(failure_dict).__name__}")
+            return
 
-    lines = []
-    lines.append("====== Installation Failure Summary ======\n")
+        lines = []
+        lines.append("====== Installation Failure Summary ======\n")
 
-    for pkg, reason in failure_dict.items():
-        clean_reason = reason.strip()
-        lines.append(f" Package: {pkg}")
-        lines.append(f"  Reason : {clean_reason}\n")
+        for pkg, reason in failure_dict.items():
+            try:
+                clean_reason = str(reason).strip() if reason else "Unknown error"
+                lines.append(f" Package: {pkg}")
+                lines.append(f"  Reason : {clean_reason}\n")
+            except Exception as e:
+                logger.error(f"Error formatting failure entry for {pkg}: {e}")
+                lines.append(f" Package: {pkg}")
+                lines.append(f"  Reason : <formatting error>\n")
 
-    summary_output = "\n".join(lines)
-    logger.info("\n" + summary_output)
+        summary_output = "\n".join(lines)
+        logger.info("\n" + summary_output)
+        
+    except Exception as e:
+        logger.exception(f"Unexpected error in print_dict_summary: {e}")
 
 def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
     """
@@ -61,26 +80,81 @@ def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
     :param yaml_path: Path to the YAML file.
     :param variables: Dictionary of dynamic variables to substitute (e.g., artifact_group, run_id)
     :return: Dictionary with all placeholders substituted.
+    
+    :raises FileNotFoundError: If YAML file doesn't exist
+    :raises yaml.YAMLError: If YAML syntax is invalid
+    :raises ValueError: If yaml_path is empty or invalid
     """
-    if variables is None:
-        variables = {}
+    try:
+        if not yaml_path:
+            raise ValueError("YAML path cannot be empty")
+        
+        if variables is None:
+            variables = {}
+        
+        if not isinstance(variables, dict):
+            raise TypeError(f"Variables must be a dict, got {type(variables).__name__}")
 
-    with open(yaml_path, "r") as f:
-        raw_config = yaml.safe_load(f)
+        # Check if file exists
+        if not os.path.exists(yaml_path):
+            raise FileNotFoundError(f"YAML configuration file not found: {yaml_path}")
+        
+        if not os.path.isfile(yaml_path):
+            raise ValueError(f"Path is not a file: {yaml_path}")
 
-    pattern = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+        # Load YAML file
+        try:
+            with open(yaml_path, "r", encoding="utf-8") as f:
+                raw_config = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            logger.error(f"Invalid YAML syntax in {yaml_path}: {e}")
+            raise
+        except PermissionError as e:
+            logger.error(f"Permission denied reading {yaml_path}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error reading YAML file {yaml_path}: {e}")
+            raise
 
-    def replace_placeholders(obj):
-        if isinstance(obj, dict):
-            return {k: replace_placeholders(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [replace_placeholders(v) for v in obj]
-        elif isinstance(obj, str):
-            return pattern.sub(lambda m: variables.get(m.group(1), m.group(0)), obj)
-        else:
-            return obj
+        if raw_config is None:
+            logger.warning(f"YAML file {yaml_path} is empty")
+            return {}
 
-    return replace_placeholders(copy.deepcopy(raw_config))
+        # Compile regex pattern for placeholder replacement
+        try:
+            pattern = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+        except re.error as e:
+            logger.error(f"Invalid regex pattern: {e}")
+            raise ValueError(f"Regex compilation failed: {e}") from e
+
+        def replace_placeholders(obj):
+            """Recursively replace placeholders in nested structures."""
+            try:
+                if isinstance(obj, dict):
+                    return {k: replace_placeholders(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [replace_placeholders(v) for v in obj]
+                elif isinstance(obj, str):
+                    return pattern.sub(lambda m: str(variables.get(m.group(1), m.group(0))), obj)
+                else:
+                    return obj
+            except Exception as e:
+                logger.error(f"Error replacing placeholders in {obj}: {e}")
+                return obj
+
+        try:
+            result = replace_placeholders(copy.deepcopy(raw_config))
+        except Exception as e:
+            logger.error(f"Error during placeholder replacement: {e}")
+            raise ValueError(f"Placeholder replacement failed: {e}") from e
+
+        return result
+        
+    except (FileNotFoundError, ValueError, TypeError, yaml.YAMLError):
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error loading YAML config from {yaml_path}: {e}")
+        raise RuntimeError(f"Failed to load YAML config: {e}") from e
 
 
 # -------------------------------
@@ -103,31 +177,89 @@ def get_os_id(os_release_path="/etc/os-release"):
         Path to the OS release file (default is "/etc/os-release").
 
     Returns:
-    str :
-        OS family as one of: "debian", "redhat", "suse", "linux", or "unknown"
-
+    tuple : (os_id, os_family) where:
+        - os_id: specific OS identifier (e.g., "ubuntu", "rhel")
+        - os_family: OS family as one of: "debian", "rpm", "suse", "linux", or "unknown"
+        
+    Raises:
+        RuntimeError: If OS detection fails critically
     """
     os_release = {}
+    
     try:
-        with open("/etc/os-release", "r") as f:
-            for line in f:
-                if "=" in line:
-                    k, v = line.strip().split("=", 1)
-                    os_release[k] = v.strip('"')
-    except FileNotFoundError:
-        system_name = platform.system().lower()
-        return "linux" if "linux" in system_name else "unknown"
+        # Try to read the OS release file
+        try:
+            with open(os_release_path, "r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    try:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        
+                        if "=" in line:
+                            k, v = line.split("=", 1)
+                            os_release[k] = v.strip('"').strip("'")
+                    except ValueError as e:
+                        logger.warning(f"Skipping malformed line {line_num} in {os_release_path}: {line}")
+                        continue
+                        
+        except FileNotFoundError:
+            logger.warning(f"OS release file not found: {os_release_path}")
+            # Fallback to platform detection
+            try:
+                import platform
+                system_name = platform.system().lower()
+                if "linux" in system_name:
+                    logger.info("Detected generic Linux system")
+                    return "linux", "linux"
+                else:
+                    logger.warning(f"Unknown system: {system_name}")
+                    return "unknown", "unknown"
+            except Exception as e:
+                logger.error(f"Failed to detect system using platform module: {e}")
+                return "unknown", "unknown"
+                
+        except PermissionError as e:
+            logger.error(f"Permission denied reading {os_release_path}: {e}")
+            raise RuntimeError(f"Cannot read OS release file: permission denied") from e
+        except Exception as e:
+            logger.error(f"Error reading {os_release_path}: {e}")
+            raise RuntimeError(f"Failed to read OS release file: {e}") from e
 
-    os_id = os_release.get("ID", "").lower()
-    os_like = os_release.get("ID_LIKE", "").lower()
+        # Extract OS ID and ID_LIKE
+        os_id = os_release.get("ID", "").lower().strip()
+        os_like = os_release.get("ID_LIKE", "").lower().strip()
+        
+        if not os_id:
+            logger.warning("OS ID not found in /etc/os-release")
+            return "unknown", "unknown"
 
-    if os_id in DEBIAN_OS_IDS or any(x in os_like for x in DEBIAN_OS_IDS):
-        return os_id, "debian"
+        logger.debug(f"Detected OS ID: {os_id}, ID_LIKE: {os_like}")
 
-    if os_id in RPM_OS_IDS or any(x in os_like for x in RPM_OS_IDS):
-        return os_id, "rpm"
+        # Check for Debian-based systems
+        if os_id in DEBIAN_OS_IDS or any(x in os_like for x in DEBIAN_OS_IDS):
+            logger.debug(f"Identified as Debian-based system")
+            return os_id, "debian"
 
-    return os_id, "unknown"
+        # Check for RPM-based systems (RedHat, CentOS, etc.)
+        if os_id in RPM_OS_IDS or any(x in os_like for x in RPM_OS_IDS):
+            logger.debug(f"Identified as RPM-based system")
+            return os_id, "rpm"
+
+        # Check for SUSE systems
+        if "suse" in os_id or "suse" in os_like:
+            logger.debug(f"Identified as SUSE-based system")
+            return os_id, "suse"
+
+        # Unknown OS
+        logger.warning(f"Unknown OS family for ID: {os_id}")
+        return os_id, "unknown"
+        
+    except RuntimeError:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error detecting OS: {e}")
+        raise RuntimeError(f"OS detection failed: {e}") from e
 
 
 def print_function_name():
@@ -146,11 +278,40 @@ def read_package_json_file():
     Parameters: None
 
     Returns: Parsed JSON data containing package details
+    
+    Raises:
+        FileNotFoundError: If package.json doesn't exist
+        json.JSONDecodeError: If JSON is malformed
     """
-    file_path = SCRIPT_DIR / "package.json"
-    with file_path.open("r", encoding="utf-8") as file:
-        data = json.load(file)
-    return data
+    try:
+        file_path = SCRIPT_DIR / "package.json"
+        
+        if not file_path.exists():
+            raise FileNotFoundError(f"Package JSON file not found: {file_path}")
+        
+        if not file_path.is_file():
+            raise ValueError(f"Path is not a file: {file_path}")
+        
+        try:
+            with file_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in {file_path}: {e}")
+            raise
+        except PermissionError as e:
+            logger.error(f"Permission denied reading {file_path}: {e}")
+            raise
+        
+        if not isinstance(data, list):
+            logger.warning(f"Expected list in package.json, got {type(data).__name__}")
+        
+        return data
+        
+    except (FileNotFoundError, json.JSONDecodeError, ValueError, PermissionError):
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error reading package.json: {e}")
+        raise
 
 
 def is_key_defined(pkg_info, key):
@@ -264,17 +425,40 @@ def get_package_info(pkgname):
     Parameters:
     pkgname : Package Name
 
-    Returns: Package metadata
+    Returns: Package metadata dict or None if not found
+    
+    Raises:
+        ValueError: If package name is empty
     """
+    try:
+        if not pkgname:
+            raise ValueError("Package name cannot be empty")
 
-    # Load JSON data from a file
-    data = read_package_json_file()
+        # Load JSON data from a file
+        try:
+            data = read_package_json_file()
+        except Exception as e:
+            logger.error(f"Failed to load package JSON: {e}")
+            return None
+        
+        if not isinstance(data, list):
+            logger.error(f"Expected list from package JSON, got {type(data).__name__}")
+            return None
 
-    for package in data:
-        if package.get("Package") == pkgname:
-            return package
+        for package in data:
+            if not isinstance(package, dict):
+                continue
+            if package.get("Package") == pkgname:
+                return package
 
-    return None
+        logger.debug(f"Package '{pkgname}' not found in package.json")
+        return None
+        
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.exception(f"Error retrieving package info for '{pkgname}': {e}")
+        return None
 
 
 def check_for_gfxarch(pkgname):
@@ -340,12 +524,51 @@ def version_to_str(version_str):
     version_str: ROCm version separated by dots
 
     Returns: Numeric string
+    
+    Raises:
+        ValueError: If version string is invalid
     """
+    try:
+        if not version_str:
+            raise ValueError("Version string cannot be empty")
+        
+        if not isinstance(version_str, str):
+            raise TypeError(f"Version must be a string, got {type(version_str).__name__}")
 
-    parts = version_str.split(".")
-    # Ensure we have exactly 3 parts: major, minor, patch
-    while len(parts) < 3:
-        parts.append("0")  # Default missing parts to "0"
-    major, minor, patch = parts[:3]  # Ignore extra parts
+        # Split by dots
+        try:
+            parts = version_str.split(".")
+        except AttributeError as e:
+            raise ValueError(f"Invalid version format: {version_str}") from e
+        
+        # Ensure we have exactly 3 parts: major, minor, patch
+        while len(parts) < 3:
+            parts.append("0")  # Default missing parts to "0"
+        
+        # Take first 3 parts only
+        major, minor, patch = parts[:3]
+        
+        # Convert to integers
+        try:
+            major_int = int(major)
+            minor_int = int(minor)
+            patch_int = int(patch)
+        except ValueError as e:
+            raise ValueError(f"Version parts must be numeric: {version_str}") from e
+        
+        # Validate ranges
+        if major_int < 0 or minor_int < 0 or patch_int < 0:
+            raise ValueError(f"Version parts cannot be negative: {version_str}")
+        
+        if major_int > 99 or minor_int > 99 or patch_int > 99:
+            logger.warning(f"Version parts exceed expected range (0-99): {version_str}")
 
-    return f"{int(major):01d}{int(minor):02d}{int(patch):02d}"
+        result = f"{major_int:01d}{minor_int:02d}{patch_int:02d}"
+        logger.debug(f"Converted version '{version_str}' to '{result}'")
+        return result
+        
+    except (ValueError, TypeError):
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error converting version '{version_str}': {e}")
+        raise ValueError(f"Version conversion failed: {e}") from e
