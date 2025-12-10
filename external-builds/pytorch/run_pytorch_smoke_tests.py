@@ -22,7 +22,7 @@ Runs PyTorch smoke-tests for AMD GPUs.
     parser.add_argument(
         "--amdgpu-family",
         type=str,
-        default=amdgpu_family if amdgpu_family is not None else "",
+        default=os.getenv("AMDGPU_FAMILY", ""),
         required=False,
         help="""Amdgpu family (e.g. "gfx942").
 Select (potentially) additional tests to be skipped based on the amdgpu family""",
