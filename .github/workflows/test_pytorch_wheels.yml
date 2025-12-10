@@ -7,29 +7,34 @@ on:
         description: GPU family to test
         required: true
         type: string
-        default: "gfx94X-dcgpu"
+        # default: "gfx94X-dcgpu"
+        default: "gfx110X-all"
       test_runs_on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm-frac"
+        # default: "linux-mi325-1gpu-ossci-rocm-frac"
+        default: "windows-gfx110X-gpu-rocm"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        # default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/v2-staging"
       python_version:
         required: true
         type: string
         default: "3.12"
       torch_version:
         description: torch package version to install. (e.g. "2.7.1+rocm7.10.0a20251120")
-        required: true
+        # required: true
         type: string
+        default: "2.10.0a0+rocm7.11.0a20251210"
       pytorch_git_ref:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
         type: string
-        default: "release/2.7"
+        # default: "release/2.7"
+        default: "nightly"
 
   workflow_call:
     inputs:
