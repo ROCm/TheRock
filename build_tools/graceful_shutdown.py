@@ -78,7 +78,7 @@ def graceful_shutdown(
                             # Clean up the signal file
                             try:
                                 stop_file.unlink()
-                            except:
+                            except OSError:
                                 pass
                             return True
                     except psutil.NoSuchProcess:
@@ -87,7 +87,7 @@ def graceful_shutdown(
                         # Clean up the signal file
                         try:
                             stop_file.unlink()
-                        except:
+                        except OSError:
                             pass
                         return True
 
@@ -102,7 +102,7 @@ def graceful_shutdown(
                 # Clean up the signal file
                 try:
                     stop_file.unlink()
-                except:
+                except OSError:
                     pass
 
             except Exception as e:

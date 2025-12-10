@@ -97,14 +97,14 @@ def test_graceful_shutdown_with_memory_monitor(temp_files):
         # Close output file if still open
         try:
             out_file.close()
-        except:
+        except Exception:
             pass
 
         # Clean up stop signal file if it exists
         try:
             if stop_signal_file.exists():
                 stop_signal_file.unlink()
-        except:
+        except Exception:
             pass
 
         # Ensure process is terminated even if test fails
@@ -112,7 +112,7 @@ def test_graceful_shutdown_with_memory_monitor(temp_files):
             if process.poll() is None:
                 process.terminate()
                 process.wait(timeout=2)
-        except:
+        except Exception:
             pass
 
 
@@ -171,17 +171,17 @@ time.sleep(30)
         # Process should be terminated
         assert process.poll() is not None, "Process should be terminated"
 
-    except:
+    except Exception:
         # Clean up if test fails
         try:
             process.kill()
             process.wait()
-        except:
+        except Exception:
             pass
     finally:
         # Clean up stop signal file if it exists
         try:
             if stop_signal_file.exists():
                 stop_signal_file.unlink()
-        except:
+        except Exception:
             pass
