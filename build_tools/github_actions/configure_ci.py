@@ -125,6 +125,8 @@ SKIPPABLE_PATH_PATTERNS = [
     "*.gitignore",
     "*.md",
     "*.pre-commit-config.*",
+    ".github/dependabot.yml",
+    "*CODEOWNERS",
     "*LICENSE",
     # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
     # At time of writing, workflows run in this sequence:

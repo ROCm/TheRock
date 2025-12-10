@@ -28,6 +28,10 @@ include = [
   "**/share/**",
 ]
 
+# amd-mesa
+[components.dev."third-party/sysdeps/linux/amd-mesa/build/stage"]
+[components.lib."third-party/sysdeps/linux/amd-mesa/build/stage"]
+
 # liblzma
 [components.dev."third-party/sysdeps/linux/liblzma/build/stage"]
 [components.lib."third-party/sysdeps/linux/liblzma/build/stage"]
