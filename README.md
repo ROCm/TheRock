@@ -1,42 +1,127 @@
-# TheRock
+# TheRock - Custom gfx103X Build
 
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) [![CI](https://github.com/ROCm/TheRock/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain) [![CI Nightly](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml?query=branch%3Amain)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
-TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. The project is currently in an **early preview state** but is under active development and welcomes contributors. Come try us out! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for more info.
+TheRock (The HIP Environment and ROCm Kit) is a lightweight open source build platform for HIP and ROCm. This is a **custom branch** with ROCm 7.11 optimized for AMD RDNA2 gfx103X GPUs. For the official upstream project, see [ROCm/TheRock](https://github.com/ROCm/TheRock).
+
+______________________________________________________________________
+
+## 🚀 Custom Build: ROCm 7.11 for gfx103X GPUs (hashcat branch)
+
+This branch (`hashcat/rocm-7.11-gfx103X`) contains a **custom ROCm 7.11 build** specifically optimized for **AMD RDNA2 gfx103X GPUs**, with extensive testing on the **AMD Radeon RX 6700 XT (gfx1031)**.
+
+### What's Different in This Build
+
+- **ROCm 7.11** custom build from TheRock main
+- **Native gfx103X support** (gfx1030, gfx1031, gfx1032, gfx1035, gfx1036)
+- **AI/LLM workload optimization** including:
+  - llama.cpp server integration with ROCm backend
+  - Ollama with ROCm support
+  - Open Interpreter configuration and best practices
+  - Automated Python package update tooling
+- **Comprehensive documentation** reorganized into topic-based guides
+- **Real-world testing** on Fedora 43 with AMD RX 6700 XT
+
+### Quick Start for This Build
+
+```bash
+# Clone this branch
+git clone -b hashcat/rocm-7.11-gfx103X https://github.com/tlee933/TheRock.git
+cd TheRock
+
+# Setup virtual environment
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Fetch sources
+python3 ./build_tools/fetch_sources.py
+
+# Build for gfx103X family (includes all RDNA2 consumer GPUs)
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx103X-all
+cmake --build build
+
+# Or build for specific target (e.g., RX 6700 XT)
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_TARGETS=gfx1031
+cmake --build build
+```
+
+### Supported gfx103X GPUs in This Build
+
+| Target  | GPU Model              | Type | Status       |
+| ------- | ---------------------- | ---- | ------------ |
+| gfx1030 | AMD RX 6800 / XT       | dGPU | ✅ Supported |
+| gfx1031 | AMD RX 6700 XT         | dGPU | ✅ Tested    |
+| gfx1032 | AMD RX 6600            | dGPU | ✅ Supported |
+| gfx1035 | AMD Radeon 680M Laptop | iGPU | ✅ Supported |
+| gfx1036 | AMD Raphael Integrated | iGPU | ✅ Supported |
+
+### Documentation for This Build
+
+This branch includes **comprehensive guides** in the reorganized `docs/` directory:
+
+- **[Documentation Index](docs/README.md)** - Complete guide to all documentation
+- **[Custom Build Guide](docs/guides/custom-build.md)** - Building with custom configs
+- **[Package Updates Guide](docs/guides/package-updates.md)** - Safe Python package updates
+- **[Open Interpreter Best Practices](docs/guides/open-interpreter-best-practices.md)** - OI usage tips
+- **[SELinux + ROCm Setup](docs/guides/selinux-rocm-setup.md)** - SELinux configuration
+- **[Browser Search Fix](docs/troubleshooting/browser-search-fix.md)** - Fixing OI browser.search()
+
+### Test Environment
+
+This build has been tested on:
+
+- **OS:** Fedora 43 (kernel 6.17.10)
+- **GPU:** AMD Radeon RX 6700 XT (12GB VRAM, gfx1031/RDNA2)
+- **ROCm:** 7.11 (custom build from TheRock)
+- **Python:** 3.14 (in venv)
+- **Workloads:** llama.cpp, Ollama, PyTorch, Open Interpreter
+
+### Modifications & Enhancements
+
+**Build System:**
+
+- gfx103X target family support (already in upstream, validated here)
+- Build scripts and optimization flags tested for RDNA2
+
+**AI/LLM Infrastructure:**
+
+- llama-server systemd service configuration
+- Ollama integration with ROCm backend
+- Open Interpreter profiles and custom instructions
+- Python package update automation with rollback support
+
+**Documentation:**
+
+- Reorganized into `docs/guides/`, `docs/troubleshooting/`, `docs/custom/`
+- Added comprehensive user guides for AI/ML workflows
+- Real-world testing notes and workarounds
+
+**Development Tools:**
+
+- Automated package update script with testing and rollback
+- Custom shell aliases and environment setup
+- System monitoring and performance tuning utilities
+
+______________________________________________________________________
 
 ## Features
 
 TheRock includes:
 
-- Nightly releases of ROCm and PyTorch
 - A CMake super-project for HIP and ROCm source builds
 - Support for building PyTorch with ROCm from source
   - [JAX support](https://github.com/ROCm/TheRock/issues/247) and other external project builds are in the works!
 - Operating system support including multiple Linux distributions and native Windows
 - Tools for developing individual ROCm components
-- Comprehensive CI/CD pipelines for building, testing, and releasing supported components
-
-## Installing from releases
-
-> [!IMPORTANT]
-> See the [Releases Page](RELEASES.md) for instructions on how to install prebuilt
-> ROCm and PyTorch packages.
-
-### Nightly release status
-
-Packages and Python wheels:
-
-| Platform |                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages |
-| -------- | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain) | [![Release Portable Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) |
-| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain) |                      [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |
+- Comprehensive build and testing infrastructure
 
 ## Building from source
 
 We keep the following instructions for recent, commonly used operating system
 versions. Most build failures are due to minor operating system differences in
 dependencies and project setup. Refer to the
-[Environment Setup Guide](docs/environment_setup_guide.md) for contributed
+[Environment Setup Guide](docs/guides/environment-setup.md) for contributed
 instructions and configurations for alternatives.
 
 > [!TIP]
@@ -45,7 +130,7 @@ instructions and configurations for alternatives.
 > configurations is often faster and easier.
 
 > [!IMPORTANT]
-> Frequent setup and building problems and their solutions can be found in section [Common Issues](docs/environment_setup_guide.md#common-issues).
+> Frequent setup and building problems and their solutions can be found in section [Common Issues](docs/guides/environment-setup.md#common-issues).
 
 ### Setup - Ubuntu (24.04)
 
@@ -275,13 +360,15 @@ separately.
 
 ## Development manuals
 
-- [Contribution Guidelines](CONTRIBUTING.md): Documentation for the process of contributing to this project including a quick pointer to its governance.
-- [Development Guide](docs/development/development_guide.md): Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components (i.e. vs interacting with each component build individually).
-- [Build System](docs/development/build_system.md): More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc.
-- [Environment Setup Guide](docs/environment_setup_guide.md): Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information.
-- [Git Chores](docs/development/git_chores.md): Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc.
-- [Dependencies](docs/development/dependencies.md): Further specifications on ROCm-wide standards for depending on various components.
-- [Build Containers](docs/development/build_containers.md): Further information about containers used for building TheRock on CI.
-- [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
-- [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
-- [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
+- **[Documentation Index](docs/README.md)**: Complete catalog of all documentation organized by topic
+- **[Contribution Guidelines](CONTRIBUTING.md)**: Documentation for the process of contributing to this project including a quick pointer to its governance
+- **[Development Guide](docs/development/development_guide.md)**: Documentation on how to use TheRock as a daily driver for developing any of its contained ROCm components
+- **[Build System](docs/development/build_system.md)**: More detailed information about TheRock's build system relevant to people looking to extend TheRock, add components, etc
+- **[Environment Setup Guide](docs/guides/environment-setup.md)**: Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information
+- **[Git Chores](docs/development/git_chores.md)**: Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc
+- **[Dependencies](docs/development/dependencies.md)**: Further specifications on ROCm-wide standards for depending on various components
+- **[Build Containers](docs/development/build_containers.md)**: Further information about containers used for building TheRock on CI
+- **[Build Artifacts](docs/development/artifacts.md)**: Documentation about the outputs of the build system
+- **[Releases Page](RELEASES.md)**: Documentation for how to leverage our build artifacts
+- **[Roadmap for Support](ROADMAP.md)**: Documentation for our prioritized roadmap to support AMD GPUs
+- **[Supported GPUs](docs/supported-gpus.md)**: List of all AMD GPUs supported by TheRock
