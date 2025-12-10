@@ -1,3 +1,20 @@
+"""PyTorch ROCm Smoke Tests Runner.
+
+This script runs PyTorch smoke tests using pytest.
+
+Usage Examples
+--------------
+Basic usage (auto-detect GPU):
+    $ python run_pytorch_smoke_tests.py
+
+Specify GPU family:
+    $ python run_pytorch_smoke_tests.py --amdgpu-family gfx942
+
+Pass additional pytest arguments after "--":
+    $ python run_pytorch_smoke_tests.py -- -m "slow"
+    $ python run_pytorch_tests.py -- --tb=short -x
+"""
+
 import argparse
 import os
 import sys
@@ -11,10 +28,28 @@ from pytorch_utils import set_visible_devices_from_amdgpu_family
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def cmd_arguments(argv: list[str]) -> argparse.Namespace:
+def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
+    """Parse command line arguments.
+
+    Args:
+        argv: Command line arguments (without program name).
+
+    Returns:
+        Tuple of (parsed args, passthrough pytest args passed after "--").
+    """
+    # Extract passthrough pytest args after "--"
+    try:
+        rest_pos = argv.index("--")
+    except ValueError:
+        passthrough_pytest_args = []
+    else:
+        passthrough_pytest_args = argv[rest_pos + 1 :]
+        argv = argv[:rest_pos]
+
     parser = argparse.ArgumentParser(
         description="""
 Runs PyTorch smoke-tests for AMD GPUs.
+All arguments after "--" are passed directly to pytest (e.g. -p no:cacheprovider).
 """
     )
 
@@ -29,7 +64,7 @@ Select (potentially) additional tests to be skipped based on the amdgpu family""
 
     args = parser.parse_args(argv)
 
-    return args
+    return args, passthrough_pytest_args
 
 
 def main() -> int:
@@ -38,14 +73,14 @@ def main() -> int:
     Returns:
         Exit code from pytest (0 for success, non-zero for failures).
     """
-    args = cmd_arguments(sys.argv[1:])
+    args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
 
     # Assumes that the smoke-tests are located in the same directory as this script
     smoke_tests_dir = THIS_SCRIPT_DIR / "smoke-tests"
 
     if not smoke_tests_dir.exists():
-        logging.error(f"Directory at '{smoke_tests_dir}' does not exist.")
-        exit(1)
+        print(f"ERROR: Directory at '{smoke_tests_dir}' does not exist.")
+        sys.exit(1)
 
     # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
     # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
@@ -55,9 +90,10 @@ def main() -> int:
 
     pytest_args = [
         f"{smoke_tests_dir}",
-        "--log-cli-level=INFO",
-        "-v",
     ]
+
+    # Append any passthrough pytest args passed after "--"
+    pytest_args.extend(passthrough_pytest_args)
 
     retcode = pytest.main(pytest_args)
     print(f"Pytest finished with return code: {retcode}")

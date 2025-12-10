@@ -43,8 +43,9 @@ Debug mode (run only skipped tests):
 Custom test selection with pytest -k:
     $ python run_pytorch_tests.py -k "test_nn and not test_dropout"
 
-Disable pytest cache (useful in containers):
-    $ python run_pytorch_tests.py --no-cache
+Pass additional pytest arguments after "--":
+    $ python run_pytorch_tests.py -- -m "slow"
+    $ python run_pytorch_tests.py -- --tb=short -x
 
 Exit Codes
 ----------
@@ -114,11 +115,29 @@ def setup_env(pytorch_dir: str) -> None:
         sys.path.insert(0, test_dir)
 
 
-def cmd_arguments(argv: list[str]) -> argparse.Namespace:
+def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
+    """Parse command line arguments.
+
+    Args:
+        argv: Command line arguments (without program name).
+
+    Returns:
+        Tuple of (parsed args, passthrough pytest args passed after "--").
+    """
+    # Extract passthrough pytest args after "--"
+    try:
+        rest_pos = argv.index("--")
+    except ValueError:
+        passthrough_pytest_args = []
+    else:
+        passthrough_pytest_args = argv[rest_pos + 1 :]
+        argv = argv[:rest_pos]
+
     parser = argparse.ArgumentParser(
         description="""
 Runs PyTorch pytest for AMD GPUs. Skips additional tests compared to upstream.
 Additional tests to be skipped can be tuned by PyTorch version and amdgpu family.
+All arguments after "--" are passed directly to pytest.
 """
     )
 
@@ -183,7 +202,7 @@ By default the pytorch directory is determined based on this script's location
             f"Directory at '{args.pytorch_dir}' does not exist, checkout pytorch and then set the path via --pytorch-dir or check it out in TheRock/external-build/pytorch/<your pytorch directory>"
         )
 
-    return args
+    return args, passthrough_pytest_args
 
 
 def main() -> int:
@@ -192,7 +211,7 @@ def main() -> int:
     Returns:
         Exit code from pytest (0 for success, non-zero for failures).
     """
-    args = cmd_arguments(sys.argv[1:])
+    args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
 
     pytorch_dir = args.pytorch_dir
 
@@ -229,11 +248,8 @@ def main() -> int:
         f"{pytorch_dir}/test/test_unary_ufuncs.py",
         f"{pytorch_dir}/test/test_binary_ufuncs.py",
         f"{pytorch_dir}/test/test_autograd.py",
-        "--continue-on-collection-errors",
-        "--import-mode=importlib",
         f"-k={tests_to_skip}",
         # "-n 0",  # TODO does this need rework? why should we not run this multithreaded? this does not seem to exist?
-        "-v",
         # -n numprocesses, --numprocesses=numprocesses
         #         Shortcut for '--dist=load --tx=NUM*popen'.
         #         With 'logical', attempt to detect logical CPU count (requires psutil, falls back to 'auto').
@@ -246,6 +262,8 @@ def main() -> int:
             "-p",
             "no:cacheprovider",  # Disable caching: useful when running in a container
         ]
+    # Append any passthrough pytest args passed after "--"
+    pytest_args.extend(passthrough_pytest_args)
 
     retcode = pytest.main(pytest_args)
     print(f"Pytest finished with return code: {retcode}")
