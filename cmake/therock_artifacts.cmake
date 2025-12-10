@@ -47,6 +47,22 @@ function(therock_provide_artifact slice_name)
     endif()
   endif()
 
+  # Determine if this artifact should be split into generic + arch-specific components
+  set(_should_split FALSE)
+  if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+    set(_artifact_type "${THEROCK_ARTIFACT_TYPE_${slice_name}}")
+    if(NOT _artifact_type)
+      message(FATAL_ERROR
+        "THEROCK_KPACK_SPLIT_ARTIFACTS is enabled but THEROCK_ARTIFACT_TYPE_${slice_name} "
+        "is not defined. Ensure topology_to_cmake.py has been run."
+      )
+    endif()
+    if("${_artifact_type}" STREQUAL "target-specific")
+      set(_should_split TRUE)
+      set(_split_databases "${THEROCK_ARTIFACT_SPLIT_DATABASES_${slice_name}}")
+    endif()
+  endif()
+
   # Normalize arguments.
   set(_target_name "artifact-${slice_name}")
   set(_archive_target_name "archive-${slice_name}")
@@ -150,8 +166,16 @@ function(therock_provide_artifact slice_name)
   set(_flatten_command_list)
   set(_manifest_files)
   set(_component_dirs)
+
+  # When splitting, populate to artifacts-unsplit/ first, then split to artifacts/
+  if(_should_split)
+    set(_artifacts_base_dir "${THEROCK_BINARY_DIR}/artifacts-unsplit")
+  else()
+    set(_artifacts_base_dir "${THEROCK_BINARY_DIR}/artifacts")
+  endif()
+
   foreach(_component ${ARG_COMPONENTS})
-    set(_component_dir "${THEROCK_BINARY_DIR}/artifacts/${slice_name}_${_component}${_bundle_suffix}")
+    set(_component_dir "${_artifacts_base_dir}/${slice_name}_${_component}${_bundle_suffix}")
     list(APPEND _component_dirs "${_component_dir}")
     set(_manifest_file "${_component_dir}/artifact_manifest.txt")
     list(APPEND _manifest_files "${_manifest_file}")
@@ -179,6 +203,62 @@ function(therock_provide_artifact slice_name)
       "${ARG_DESCRIPTOR}"
       "${_fileset_tool}"
   )
+
+  # When splitting is enabled, run split_artifacts.py on each component
+  if(_should_split)
+    set(_split_tool "${THEROCK_KPACK_DIR}/python/rocm_kpack/tools/split_artifacts.py")
+    set(_bundler_path "${THEROCK_BINARY_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-bundler")
+    set(_split_manifest_files)
+    set(_split_component_dirs)
+
+    foreach(_component ${ARG_COMPONENTS})
+      set(_unsplit_component_dir "${_artifacts_base_dir}/${slice_name}_${_component}${_bundle_suffix}")
+      set(_unsplit_manifest "${_unsplit_component_dir}/artifact_manifest.txt")
+      set(_artifact_prefix "${slice_name}_${_component}")
+
+      # The split output generic manifest (used as dependency tracking output)
+      set(_split_generic_dir "${THEROCK_BINARY_DIR}/artifacts/${_artifact_prefix}_generic")
+      set(_split_manifest "${_split_generic_dir}/artifact_manifest.txt")
+      list(APPEND _split_manifest_files "${_split_manifest}")
+      list(APPEND _split_component_dirs "${_split_generic_dir}")
+
+      # Build split command arguments
+      set(_split_command_args
+        --artifact-dir "${_unsplit_component_dir}"
+        --output-dir "${THEROCK_BINARY_DIR}/artifacts/"
+        --artifact-prefix "${_artifact_prefix}"
+        --clang-offload-bundler "${_bundler_path}"
+      )
+      if(_split_databases)
+        list(APPEND _split_command_args --split-databases ${_split_databases})
+      endif()
+
+      add_custom_command(
+        OUTPUT "${_split_manifest}"
+        COMMENT "Splitting ${_artifact_prefix} into generic and arch-specific artifacts"
+        COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_KPACK_DIR}/python"
+          "${Python3_EXECUTABLE}" "${_split_tool}" ${_split_command_args}
+        DEPENDS
+          "${_unsplit_manifest}"
+          "${_split_tool}"
+      )
+    endforeach()
+
+    # IMPORTANT: Redirect downstream targets to depend on split artifacts.
+    #
+    # The split command depends on the unsplit manifest, preserving the
+    # dependency chain: stage.stamp -> unsplit manifest -> split manifest.
+    #
+    # The splitter produces multiple outputs (generic + per-arch artifacts)
+    # but only the generic manifest is tracked here. This means:
+    # - Ninja will rebuild split artifacts when source changes
+    # - If someone deletes an arch-specific artifact, ninja won't notice
+    #   (the generic manifest still exists)
+    # - This is acceptable since arch-specific artifacts are derived outputs
+    set(_manifest_files ${_split_manifest_files})
+    set(_component_dirs ${_split_component_dirs})
+  endif()
+
   # If target exists from topology, create a helper target for file dependencies
   if(_target_exists)
     # Target already exists from topology - create a helper target for file dependencies
@@ -200,11 +280,26 @@ function(therock_provide_artifact slice_name)
   endif()
 
   # Generate artifact archive commands and save fingerprints.
+  #
+  # NOTE: In the multi-arch CI flow that kpack splitting enables, archive
+  # generation moves out of the build system and into the upload phase.
+  # Once fully transitioned to that model, archive generation logic here
+  # can be removed entirely.
+  #
+  # For now, skip archive generation when splitting is enabled since split
+  # produces generic + per-arch directories with different naming conventions
+  # that the current archive loop doesn't handle.
   set(_archive_files)
   set(_archive_sha_files)
   set(_artifacts_dir "${THEROCK_BINARY_DIR}/artifacts")
   file(MAKE_DIRECTORY "${_artifacts_dir}")
+  if(_should_split)
+    message(STATUS "Skipping archive generation for split artifact: ${slice_name}")
+  endif()
   foreach(_component ${ARG_COMPONENTS})
+    if(_should_split)
+      continue()
+    endif()
     set(_component_dir "${_artifacts_dir}/${slice_name}_${_component}${_bundle_suffix}")
     set(_fprint_file "${_component_dir}.fprint")
     if(_fprint_is_valid)
