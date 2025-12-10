@@ -31,6 +31,7 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 PLATFORM = platform.system().lower()
 
+
 def get_platform_options(vctools_install_dir):
     """Get platform-specific CMake options."""
     return {
@@ -116,7 +117,7 @@ if __name__ == "__main__":
         default=os.getenv("amdgpu_families"),
         help="Comma-separated list of AMD GPU families to build for (default: from amdgpu_families env var)",
     )
-    
+
     # Calculate default package version using compute_version
     default_package_version = os.getenv("package_version")
     if not default_package_version:
@@ -125,7 +126,7 @@ if __name__ == "__main__":
         except Exception:
             # Fallback to 0.0.0 if compute_version fails
             default_package_version = "0.0.0"
-    
+
     parser.add_argument(
         "--package-version",
         default=default_package_version,
