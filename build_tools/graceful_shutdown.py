@@ -55,16 +55,16 @@ def graceful_shutdown(
     # Track remaining timeout
     remaining_timeout = timeout_seconds
     start_time = time.time()
-    
+
     try:
         # On Windows, if a stop_signal_file is provided, create it first
         # This allows the process to detect it and shutdown gracefully
         # On Linux/Unix, we skip this and send SIGTERM directly
         is_windows = platform.system() == "Windows"
-        
+
         if stop_signal_file and not is_windows and verbose:
             print(f"Skipping stop signal file on Linux - using SIGTERM instead")
-        
+
         if stop_signal_file and is_windows:
             from pathlib import Path
 
@@ -109,7 +109,7 @@ def graceful_shutdown(
                 # Update remaining timeout
                 elapsed = time.time() - start_time
                 remaining_timeout = max(0, timeout_seconds - elapsed)
-                
+
                 if verbose:
                     print(
                         f"Process did not respond to stop signal file within {timeout_seconds}s"
