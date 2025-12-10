@@ -1,11 +1,6 @@
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
-  set(_system_toolchain "amd-llvm")
-  if(WIN32)
-    set(_system_toolchain "")
-  endif()
-
   ##############################################################################
   # rocprof-trace-decoder-binary
   # The trace decoder is responsible for decoding advanced thread traces from
@@ -71,13 +66,13 @@ if(THEROCK_ENABLE_ROCPROFV3)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
-    COMPILER_TOOLCHAIN
-      "${_system_toolchain}"
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
     RUNTIME_DEPS
       aqlprofile
       hip-clr
@@ -208,8 +203,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
-      COMPILER_TOOLCHAIN
-        "${_system_toolchain}"
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
         -DROCPROFSYS_BUILD_ELFUTILS=ON
@@ -219,6 +212,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_DYNINST=ON
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
+      COMPILER_TOOLCHAIN
+        amd-hip
       RUNTIME_DEPS
         amdsmi
         aqlprofile
