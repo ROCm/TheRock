@@ -278,40 +278,11 @@ def read_package_json_file():
     Parameters: None
 
     Returns: Parsed JSON data containing package details
-    
-    Raises:
-        FileNotFoundError: If package.json doesn't exist
-        json.JSONDecodeError: If JSON is malformed
     """
-    try:
-        file_path = SCRIPT_DIR / "package.json"
-        
-        if not file_path.exists():
-            raise FileNotFoundError(f"Package JSON file not found: {file_path}")
-        
-        if not file_path.is_file():
-            raise ValueError(f"Path is not a file: {file_path}")
-        
-        try:
-            with file_path.open("r", encoding="utf-8") as file:
-                data = json.load(file)
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in {file_path}: {e}")
-            raise
-        except PermissionError as e:
-            logger.error(f"Permission denied reading {file_path}: {e}")
-            raise
-        
-        if not isinstance(data, list):
-            logger.warning(f"Expected list in package.json, got {type(data).__name__}")
-        
-        return data
-        
-    except (FileNotFoundError, json.JSONDecodeError, ValueError, PermissionError):
-        raise
-    except Exception as e:
-        logger.exception(f"Unexpected error reading package.json: {e}")
-        raise
+    file_path = SCRIPT_DIR / "package.json"
+    with file_path.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+    return data
 
 
 def is_key_defined(pkg_info, key):
@@ -425,40 +396,17 @@ def get_package_info(pkgname):
     Parameters:
     pkgname : Package Name
 
-    Returns: Package metadata dict or None if not found
-    
-    Raises:
-        ValueError: If package name is empty
+    Returns: Package metadata
     """
-    try:
-        if not pkgname:
-            raise ValueError("Package name cannot be empty")
 
-        # Load JSON data from a file
-        try:
-            data = read_package_json_file()
-        except Exception as e:
-            logger.error(f"Failed to load package JSON: {e}")
-            return None
-        
-        if not isinstance(data, list):
-            logger.error(f"Expected list from package JSON, got {type(data).__name__}")
-            return None
+    # Load JSON data from a file
+    data = read_package_json_file()
 
-        for package in data:
-            if not isinstance(package, dict):
-                continue
-            if package.get("Package") == pkgname:
-                return package
+    for package in data:
+        if package.get("Package") == pkgname:
+            return package
 
-        logger.debug(f"Package '{pkgname}' not found in package.json")
-        return None
-        
-    except ValueError:
-        raise
-    except Exception as e:
-        logger.exception(f"Error retrieving package info for '{pkgname}': {e}")
-        return None
+    return None
 
 
 def check_for_gfxarch(pkgname):
@@ -524,51 +472,12 @@ def version_to_str(version_str):
     version_str: ROCm version separated by dots
 
     Returns: Numeric string
-    
-    Raises:
-        ValueError: If version string is invalid
     """
-    try:
-        if not version_str:
-            raise ValueError("Version string cannot be empty")
-        
-        if not isinstance(version_str, str):
-            raise TypeError(f"Version must be a string, got {type(version_str).__name__}")
 
-        # Split by dots
-        try:
-            parts = version_str.split(".")
-        except AttributeError as e:
-            raise ValueError(f"Invalid version format: {version_str}") from e
-        
-        # Ensure we have exactly 3 parts: major, minor, patch
-        while len(parts) < 3:
-            parts.append("0")  # Default missing parts to "0"
-        
-        # Take first 3 parts only
-        major, minor, patch = parts[:3]
-        
-        # Convert to integers
-        try:
-            major_int = int(major)
-            minor_int = int(minor)
-            patch_int = int(patch)
-        except ValueError as e:
-            raise ValueError(f"Version parts must be numeric: {version_str}") from e
-        
-        # Validate ranges
-        if major_int < 0 or minor_int < 0 or patch_int < 0:
-            raise ValueError(f"Version parts cannot be negative: {version_str}")
-        
-        if major_int > 99 or minor_int > 99 or patch_int > 99:
-            logger.warning(f"Version parts exceed expected range (0-99): {version_str}")
+    parts = version_str.split(".")
+    # Ensure we have exactly 3 parts: major, minor, patch
+    while len(parts) < 3:
+        parts.append("0")  # Default missing parts to "0"
+    major, minor, patch = parts[:3]  # Ignore extra parts
 
-        result = f"{major_int:01d}{minor_int:02d}{patch_int:02d}"
-        logger.debug(f"Converted version '{version_str}' to '{result}'")
-        return result
-        
-    except (ValueError, TypeError):
-        raise
-    except Exception as e:
-        logger.exception(f"Unexpected error converting version '{version_str}': {e}")
-        raise ValueError(f"Version conversion failed: {e}") from e
+    return f"{int(major):01d}{int(minor):02d}{int(patch):02d}"
