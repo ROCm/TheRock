@@ -126,6 +126,8 @@ SKIPPABLE_PATH_PATTERNS = [
     "*.gitignore",
     "*.md",
     "*.pre-commit-config.*",
+    ".github/dependabot.yml",
+    "*CODEOWNERS",
     "*LICENSE",
     # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
     # At time of writing, workflows run in this sequence:
@@ -506,14 +508,6 @@ def matrix_generator(
         for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
 
-        for key in lookup_matrix:
-            if (
-                platform in lookup_matrix[key]
-                and "sanity_check_only_for_family" in lookup_matrix[key][platform]
-            ):
-                # For nightly runs, we want to run full tests regardless of limited machines, so we delete the sanity_check_only_for_family option
-                del lookup_matrix[key][platform]["sanity_check_only_for_family"]
-               
         # Add benchmark labels to selected_test_names so they're included in test labels for nightly runs
         requested_benchmark_names = list(benchmark_matrix.keys())
         selected_test_names.extend(filter_known_names(requested_benchmark_names, "benchmark"))
