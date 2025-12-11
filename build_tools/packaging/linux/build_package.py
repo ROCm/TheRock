@@ -62,7 +62,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEBIAN_CONTENTS_DIR = None
 RPM_CONTENTS_DIR = None
 # Default install prefix
-DEFAULT_INSTALL_PREFIX = "/opt/rocm"
+DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
 
 
 ################### Debian package creation #######################
