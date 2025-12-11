@@ -59,9 +59,9 @@ class PackageInstaller(PackageManagerBase):
         version_flag: bool,
         upload: str,
         artifact_group: str,
-        package_suffix: Optional[str] = None,
+        release_type: str,
         bucket: Optional[str] = None,
-        release_type: Optional[str] = None,
+        package_suffix: Optional[str] = None,
         composite: bool = False,
         loader = None,
     ):
@@ -80,6 +80,9 @@ class PackageInstaller(PackageManagerBase):
             if not rocm_version:
                 raise ValueError("ROCm version is required")
             
+            if not release_type:
+                raise ValueError("Release type is required")
+            
             if upload not in ["pre", "post"]:
                 raise ValueError(f"Invalid upload mode: {upload}. Must be 'pre' or 'post'")
             
@@ -95,9 +98,9 @@ class PackageInstaller(PackageManagerBase):
             self.composite = composite
             self.version_flag = version_flag
             self.artifact_group = artifact_group
-            self.package_suffix = package_suffix or ""
+            self.release_type = release_type
             self.bucket = bucket or ""
-            self.release_type = release_type or ""
+            self.package_suffix = package_suffix or ""
             self.upload = upload
             self.failed_packages = {}
             self.loader = loader
@@ -655,8 +658,8 @@ def parse_arguments():
     )
     parser.add_argument(
         "--release-type",
-        default=None,
-        help="Release type identifier (optional, e.g., 'test', 'release')"
+        required=True,
+        help="Release type identifier (required, e.g., 'test', 'release')"
     )
     parser.add_argument(
         "--bucket",
@@ -731,9 +734,9 @@ def main():
                 version_flag=args.version.lower() == "true",
                 upload=upload,
                 artifact_group=args.artifact_group,
-                package_suffix=args.package_suffix,
-                bucket=args.bucket,
                 release_type=args.release_type,
+                bucket=args.bucket,
+                package_suffix=args.package_suffix,
                 composite=(args.composite.lower() == "true"),
                 loader=loader,
             )
