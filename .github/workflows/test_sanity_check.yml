@@ -99,8 +99,8 @@ jobs:
         if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
         run: |
-        Get-ChildItem -Path . -Recurse -File -Filter "amd-smi.exe"
-        Get-ChildItem -Path . -Recurse -File -Filter "hipInfo.exe"
+         Get-ChildItem -Path . -Recurse -File -Filter "amd-smi.exe"
+         Get-ChildItem -Path . -Recurse -File -Filter "hipInfo.exe"
   
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
