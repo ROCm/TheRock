@@ -11,6 +11,7 @@ Validate AI/ML workloads specific to Strix Edge AI use cases that are **NOT cove
 ```
 strix_ai/
 ├── vlm/              # Vision Language Models (CLIP, LLaVA)
+├── vla/              # Vision Language Action (OWL-ViT, Action Recognition)
 ├── vit/              # Vision Transformers (ViT, DINOv2, Swin)
 ├── cv/               # Computer Vision (YOLO, DETR, Segmentation)
 ├── optimization/     # Edge Inference (Quantization, ONNX)
@@ -67,6 +68,7 @@ pytest tests/strix_ai/ -m "not slow" -v
 | Category | Priority | Models | Status |
 |----------|----------|--------|--------|
 | **VLM** | 🔴 P0 | CLIP, LLaVA | ✅ Implemented |
+| **VLA** | 🔴 P0 | OWL-ViT, Action Recognition | ✅ Implemented |
 | **ViT** | 🔴 P0 | ViT-Base, DINOv2 | ✅ Implemented |
 | **CV** | 🔴 P0 | YOLOv8, DETR | ✅ Implemented |
 | **Optimization** | 🔴 P0 | Quantization | ✅ Implemented |

@@ -74,6 +74,7 @@ def pytest_configure(config):
     """Configure custom markers"""
     config.addinivalue_line("markers", "strix: Tests specific to Strix platforms")
     config.addinivalue_line("markers", "vlm: Vision Language Model tests")
+    config.addinivalue_line("markers", "vla: Vision Language Action tests")
     config.addinivalue_line("markers", "vit: Vision Transformer tests")
     config.addinivalue_line("markers", "cv: Computer Vision tests")
     config.addinivalue_line("markers", "slow: Tests that take > 30 seconds")
