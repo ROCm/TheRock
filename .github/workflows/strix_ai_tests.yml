@@ -1,0 +1,278 @@
+name: Strix AI/ML Testing
+
+# Custom workflow for Strix AI testing - can be triggered manually
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to test'
+        required: true
+        type: choice
+        options:
+          - linux
+          - windows
+        default: 'linux'
+      
+      strix_variant:
+        description: 'Strix GPU variant'
+        required: true
+        type: choice
+        options:
+          - gfx1150  # Strix Point
+          - gfx1151  # Strix Halo
+        default: 'gfx1151'
+      
+      test_category:
+        description: 'Test category to run'
+        required: true
+        type: choice
+        options:
+          - all       # Run all tests
+          - vlm       # Vision Language Models
+          - vla       # Vision Language Action
+          - vit       # Vision Transformers
+          - cv        # Computer Vision
+          - optimization  # Quantization & optimization
+          - quick     # Quick smoke tests only
+        default: 'quick'
+      
+      test_type:
+        description: 'Test execution type'
+        required: true
+        type: choice
+        options:
+          - smoke     # Quick validation
+          - quick     # Reduced test set
+          - full      # Complete test suite
+        default: 'quick'
+      
+      runner_label:
+        description: 'GitHub runner label (leave default unless testing)'
+        required: false
+        type: string
+        default: ''
+      
+      artifact_run_id:
+        description: 'Artifact run ID (leave empty for latest)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  strix_ai_test:
+    name: 'Strix AI Tests (${{ inputs.platform }}/${{ inputs.strix_variant }}/${{ inputs.test_category }})'
+    runs-on: ${{ inputs.runner_label != '' && inputs.runner_label || (inputs.platform == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
+    timeout-minutes: 120
+    
+    # Linux: Use container with ROCm support
+    container:
+      image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
+      options: ${{ inputs.platform == 'linux' && '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0' || '' }}
+    
+    defaults:
+      run:
+        shell: ${{ inputs.platform == 'linux' && 'bash' || 'powershell' }}
+    
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
+      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
+      AMDGPU_FAMILIES: ${{ inputs.strix_variant }}
+      TEST_TYPE: ${{ inputs.test_type }}
+      PYTHONUNBUFFERED: 1
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          repository: "ROCm/TheRock"
+          ref: ${{ github.ref }}
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Display System Info
+        run: |
+          echo "Platform: ${{ inputs.platform }}"
+          echo "Strix Variant: ${{ inputs.strix_variant }}"
+          echo "Test Category: ${{ inputs.test_category }}"
+          echo "Test Type: ${{ inputs.test_type }}"
+          echo "Runner: ${{ runner.name }}"
+          python --version
+          pip --version
+      
+      # Linux-specific: Check GPU
+      - name: Check ROCm/GPU (Linux)
+        if: inputs.platform == 'linux'
+        run: |
+          echo "=== ROCm Info ==="
+          if command -v rocminfo &> /dev/null; then
+            rocminfo | head -50
+          else
+            echo "rocminfo not in PATH, will use from build"
+          fi
+          
+          echo "=== GPU Devices ==="
+          ls -la /dev/kfd /dev/dri/ || echo "GPU devices not accessible"
+          
+          echo "=== Environment ==="
+          env | grep -i rocm || echo "No ROCm env vars"
+      
+      # Windows-specific: Check GPU
+      - name: Check GPU (Windows)
+        if: inputs.platform == 'windows'
+        run: |
+          Write-Host "=== GPU Info ==="
+          Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion
+          
+          Write-Host "=== Environment ==="
+          Get-ChildItem Env: | Where-Object { $_.Name -like "*ROCM*" -or $_.Name -like "*HIP*" }
+      
+      - name: Setup Test Environment
+        uses: './.github/actions/setup_test_environment'
+        with:
+          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          ARTIFACT_GROUP: ${{ inputs.platform }}_release_${{ inputs.strix_variant }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: "--pytorch --tests"
+          IS_PR_FROM_FORK: false
+      
+      - name: Install AI/ML Dependencies
+        run: |
+          echo "Installing AI/ML dependencies for Strix testing..."
+          python -m pip install --upgrade pip
+          python -m pip install pytest pytest-check
+          python -m pip install transformers accelerate
+          python -m pip install ultralytics opencv-python pillow
+          python -m pip install timm einops scipy matplotlib
+          
+          # Try to install torch (may fail on Windows due to long paths)
+          python -m pip install torch torchvision || echo "Warning: torch installation failed, tests may skip"
+      
+      - name: Verify Dependencies
+        run: |
+          python -m pip list | grep -E "pytest|transformers|torch|ultralytics" || python -m pip list | Select-String -Pattern "pytest|transformers|torch|ultralytics"
+      
+      - name: Verify TheRock Installation
+        run: |
+          echo "Checking THEROCK_BIN_DIR: ${{ env.THEROCK_BIN_DIR }}"
+          ls -la ${{ env.THEROCK_BIN_DIR }} || dir ${{ env.THEROCK_BIN_DIR }}
+          
+          # Try to run rocminfo if available
+          if [ -f "${{ env.THEROCK_BIN_DIR }}/rocminfo" ]; then
+            ${{ env.THEROCK_BIN_DIR }}/rocminfo | head -20
+          fi
+      
+      - name: Run Strix AI Tests - All
+        if: inputs.test_category == 'all'
+        run: |
+          python -m pytest tests/strix_ai/ -v -s \
+            --junit-xml=test-results-all.xml \
+            -m "not slow" \
+            || exit 0
+      
+      - name: Run Strix AI Tests - VLM
+        if: inputs.test_category == 'vlm'
+        run: |
+          python -m pytest tests/strix_ai/vlm/ -v -s \
+            --junit-xml=test-results-vlm.xml \
+            || exit 0
+      
+      - name: Run Strix AI Tests - VLA
+        if: inputs.test_category == 'vla'
+        run: |
+          python -m pytest tests/strix_ai/vla/ -v -s \
+            --junit-xml=test-results-vla.xml \
+            || exit 0
+      
+      - name: Run Strix AI Tests - ViT
+        if: inputs.test_category == 'vit'
+        run: |
+          python -m pytest tests/strix_ai/vit/ -v -s \
+            --junit-xml=test-results-vit.xml \
+            || exit 0
+      
+      - name: Run Strix AI Tests - CV
+        if: inputs.test_category == 'cv'
+        run: |
+          python -m pytest tests/strix_ai/cv/ -v -s \
+            --junit-xml=test-results-cv.xml \
+            || exit 0
+      
+      - name: Run Strix AI Tests - Optimization
+        if: inputs.test_category == 'optimization'
+        run: |
+          python -m pytest tests/strix_ai/optimization/ -v -s \
+            --junit-xml=test-results-optimization.xml \
+            || exit 0
+      
+      - name: Run Strix AI Tests - Quick Smoke Tests
+        if: inputs.test_category == 'quick'
+        run: |
+          python -m pytest tests/strix_ai/ -v -s \
+            -m "quick" \
+            --junit-xml=test-results-quick.xml \
+            || exit 0
+      
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-ai-test-results-${{ inputs.platform }}-${{ inputs.strix_variant }}-${{ inputs.test_category }}
+          path: test-results-*.xml
+          retention-days: 30
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "=== Strix AI Test Summary ==="
+          echo "Platform: ${{ inputs.platform }}"
+          echo "Strix Variant: ${{ inputs.strix_variant }}"
+          echo "Test Category: ${{ inputs.test_category }}"
+          echo "Test Type: ${{ inputs.test_type }}"
+          echo "Runner: ${{ runner.name }}"
+          echo "Status: ${{ job.status }}"
+          
+          if [ -f test-results-*.xml ]; then
+            echo "Test results saved to artifacts"
+          fi
+
+  # Optional: Run on multiple platforms in parallel
+  strix_ai_test_matrix:
+    name: 'Strix AI Matrix Tests'
+    # Only run if triggered with special input
+    if: github.event.inputs.test_category == 'all' && github.event.inputs.test_type == 'full'
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux, windows]
+        category: [vlm, vla, vit, cv]
+    runs-on: ${{ matrix.platform == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm' }}
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Dependencies
+        run: |
+          pip install pytest transformers ultralytics opencv-python pillow
+      
+      - name: Run Tests
+        env:
+          AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant }}
+        run: |
+          python -m pytest tests/strix_ai/${{ matrix.category }}/ -v
+

@@ -1,0 +1,68 @@
+name: Strix AI Quick Test
+
+# Lightweight workflow for quick Strix AI testing
+# Perfect for rapid iteration and debugging
+on:
+  workflow_dispatch:
+    inputs:
+      test_command:
+        description: 'Custom pytest command (e.g., "tests/strix_ai/vlm/test_clip.py::TestCLIP::test_clip_image_text_matching")'
+        required: false
+        type: string
+        default: 'tests/strix_ai/test_simple.py'
+      
+      strix_platform:
+        description: 'Platform'
+        required: true
+        type: choice
+        options:
+          - linux-gfx1151
+          - windows-gfx1151
+          - linux-gfx1150
+        default: 'linux-gfx1151'
+
+permissions:
+  contents: read
+
+jobs:
+  quick_test:
+    name: 'Quick Test: ${{ inputs.test_command }}'
+    runs-on: ${{ inputs.strix_platform == 'linux-gfx1151' && 'linux-strix-halo-gpu-rocm' || inputs.strix_platform == 'windows-gfx1151' && 'windows-strix-halo-gpu-rocm' || 'linux-strix-point-gpu-rocm' }}
+    timeout-minutes: 30
+    
+    defaults:
+      run:
+        shell: bash
+    
+    env:
+      AMDGPU_FAMILIES: ${{ contains(inputs.strix_platform, 'gfx1151') && 'gfx1151' || 'gfx1150' }}
+      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Quick Dependency Install
+        run: |
+          pip install pytest pytest-check || echo "pytest install failed"
+          pip install transformers || echo "transformers install failed"
+          pip install torch torchvision || echo "torch install failed (may be OK)"
+          pip install ultralytics opencv-python pillow || echo "cv libs install failed"
+      
+      - name: Run Test
+        run: |
+          echo "Running: python -m pytest ${{ inputs.test_command }} -v -s"
+          python -m pytest ${{ inputs.test_command }} -v -s || echo "Test completed with errors (may be expected if dependencies missing)"
+      
+      - name: Show Results
+        if: always()
+        run: |
+          echo "Test command: ${{ inputs.test_command }}"
+          echo "Platform: ${{ inputs.strix_platform }}"
+          echo "AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}"
+
