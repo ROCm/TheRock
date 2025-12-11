@@ -1,0 +1,137 @@
+"""
+CLIP (Contrastive Language-Image Pre-training) tests for Strix platforms
+
+Tests vision-language understanding using OpenAI's CLIP model.
+This is a P0 critical test for Edge AI and Windows Copilot+ use cases.
+"""
+
+import pytest
+import torch
+from PIL import Image
+import os
+
+# Skip module if dependencies not available
+transformers = pytest.importorskip("transformers", reason="transformers not installed")
+
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES", "")
+
+
+@pytest.mark.strix
+@pytest.mark.vlm
+@pytest.mark.p0
+@pytest.mark.quick
+@pytest.mark.skipif(
+    AMDGPU_FAMILIES not in ["gfx1150", "gfx1151"],
+    reason="Strix-specific VLM test"
+)
+class TestCLIP:
+    """CLIP Vision-Language Model tests for Strix"""
+    
+    def test_clip_image_text_matching(self, strix_device, test_image_224, cleanup_gpu):
+        """Test CLIP image-text matching on Strix"""
+        from transformers import CLIPProcessor, CLIPModel
+        
+        print("\n🧠 Loading CLIP model...")
+        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(strix_device)
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        model.eval()
+        
+        # Create test image
+        image = Image.new('RGB', (224, 224), color='red')
+        texts = ["a red image", "a blue image", "a green image"]
+        
+        print("🔍 Processing inputs...")
+        inputs = processor(text=texts, images=image, return_tensors="pt", padding=True).to(strix_device)
+        
+        print("⚡ Running CLIP inference on Strix...")
+        with torch.no_grad():
+            outputs = model(**inputs)
+            logits_per_image = outputs.logits_per_image
+            probs = logits_per_image.softmax(dim=1)
+        
+        print(f"✅ Text matching probabilities: {probs[0].cpu().numpy()}")
+        
+        # Assertions
+        assert probs.device.type == "cuda", "Output should be on GPU"
+        assert probs.shape == (1, 3), f"Expected shape (1, 3), got {probs.shape}"
+        
+        # Red image should match "a red image" most closely
+        best_match = probs.argmax().item()
+        assert best_match == 0, f"Expected red image to match index 0, got {best_match}"
+        
+        print(f"✅ CLIP test passed on {AMDGPU_FAMILIES}!")
+    
+    def test_clip_batch_inference(self, strix_device, cleanup_gpu):
+        """Test CLIP batch processing on Strix"""
+        from transformers import CLIPProcessor, CLIPModel
+        
+        print("\n🧠 Loading CLIP model for batch test...")
+        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(strix_device)
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        model.eval()
+        
+        # Create batch of test images
+        batch_size = 4
+        images = [Image.new('RGB', (224, 224), color='blue') for _ in range(batch_size)]
+        texts = ["a blue image"] * batch_size
+        
+        print(f"🔍 Processing batch of {batch_size} images...")
+        inputs = processor(text=texts, images=images, return_tensors="pt", padding=True).to(strix_device)
+        
+        print("⚡ Running batch inference...")
+        with torch.no_grad():
+            outputs = model(**inputs)
+        
+        print(f"✅ Batch inference successful! Output shape: {outputs.logits_per_image.shape}")
+        
+        assert outputs.logits_per_image.shape[0] == batch_size
+        assert outputs.logits_per_image.device.type == "cuda"
+        
+        print(f"✅ CLIP batch test passed on {AMDGPU_FAMILIES}!")
+    
+    @pytest.mark.slow
+    def test_clip_performance(self, strix_device, cleanup_gpu):
+        """Benchmark CLIP performance on Strix"""
+        from transformers import CLIPProcessor, CLIPModel
+        import time
+        
+        print("\n🧠 Loading CLIP model for performance test...")
+        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(strix_device)
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        model.eval()
+        
+        image = Image.new('RGB', (224, 224))
+        texts = ["test image"]
+        inputs = processor(text=texts, images=image, return_tensors="pt", padding=True).to(strix_device)
+        
+        # Warmup
+        print("🔥 Warming up...")
+        for _ in range(10):
+            with torch.no_grad():
+                _ = model(**inputs)
+        torch.cuda.synchronize()
+        
+        # Benchmark
+        print("⏱️  Benchmarking...")
+        num_iterations = 100
+        start = time.time()
+        
+        for _ in range(num_iterations):
+            with torch.no_grad():
+                _ = model(**inputs)
+        
+        torch.cuda.synchronize()
+        elapsed = time.time() - start
+        
+        fps = num_iterations / elapsed
+        latency_ms = (elapsed / num_iterations) * 1000
+        
+        print(f"📊 Performance Results:")
+        print(f"   Throughput: {fps:.2f} FPS")
+        print(f"   Latency: {latency_ms:.2f} ms")
+        
+        # Should achieve reasonable performance for edge inference
+        assert fps > 10, f"CLIP throughput too low: {fps} FPS (expected > 10 FPS)"
+        
+        print(f"✅ CLIP performance test passed on {AMDGPU_FAMILIES}!")
+
