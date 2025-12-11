@@ -3,14 +3,30 @@ Shared pytest fixtures for Strix AI tests
 """
 
 import pytest
-import torch
 import os
-from PIL import Image
+
+# Optional imports - skip if not available
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    Image = None
 
 
 @pytest.fixture(scope="session")
 def strix_device():
     """Get Strix GPU device"""
+    if not TORCH_AVAILABLE:
+        pytest.skip("torch not available")
+    
     if not torch.cuda.is_available():
         pytest.skip("CUDA not available")
     
@@ -28,12 +44,16 @@ def strix_device():
 @pytest.fixture(scope="session")
 def test_image_224():
     """Create standard 224x224 test image"""
+    if not PIL_AVAILABLE:
+        pytest.skip("PIL not available")
     return Image.new('RGB', (224, 224), color='blue')
 
 
 @pytest.fixture(scope="session")
 def test_image_512():
     """Create standard 512x512 test image"""
+    if not PIL_AVAILABLE:
+        pytest.skip("PIL not available")
     return Image.new('RGB', (512, 512), color='green')
 
 
@@ -41,7 +61,7 @@ def test_image_512():
 def cleanup_gpu():
     """Cleanup GPU memory after each test"""
     yield
-    if torch.cuda.is_available():
+    if TORCH_AVAILABLE and torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
 
