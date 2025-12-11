@@ -167,6 +167,7 @@ def retrieve_artifacts_by_run_id(args):
 
     # These artifacts are the "base" requirements for running tests.
     base_artifact_patterns = [
+        "amdsmi_run",
         "core-runtime_run",
         "core-runtime_lib",
         "sysdeps_lib",
@@ -174,7 +175,6 @@ def retrieve_artifacts_by_run_id(args):
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
-        "core-hipinfo",
         "core-hipInfo",
         "core-hip_lib",
         "core-hip_dev",
