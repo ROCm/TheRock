@@ -49,10 +49,6 @@ jobs:
     runs-on: ${{ (github.event.inputs.strix_platform == 'windows-gfx1151' && 'windows-strix-halo-gpu-rocm') || (github.event.inputs.strix_platform == 'linux-gfx1150' && 'linux-strix-point-gpu-rocm') || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 30
     
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      !contains(github.event.head_commit.message, '[skip-strix-tests]')
-    
     defaults:
       run:
         shell: bash

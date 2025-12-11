@@ -87,10 +87,6 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || ((github.event.inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
     timeout-minutes: 120
     
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      !contains(github.event.head_commit.message, '[skip-strix-tests]')
-    
     # Linux: Use container with ROCm support
     container:
       image: ${{ (github.event.inputs.platform || 'linux') == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
