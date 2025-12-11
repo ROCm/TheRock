@@ -4,27 +4,34 @@
 # SPDX-License-Identifier: MIT
 
 """ Installs ROCm packages either from local package files or from a remote repository.
+
 Local installation (uses .deb/.rpm files from a directory):
 ```
 ./native_package_installer.py --dest-dir ./PKG_DIR \
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
+    --release-type test \
     --version true/false \
-    --composite true/false
+    --composite true/false \
+    [--package-suffix asan] \
+    [--bucket therock-deb-rpm-test]
 ```
+
 Repository installation (uses run-id to fetch from remote repo):
 ```
 ./native_package_installer.py --run-id 123456 \
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
-    --package-suffix asan \
     --release-type test \
     --bucket therock-deb-rpm-test \
     --version true/false \
-    --composite true/false
+    --composite true/false \
+    [--package-suffix asan]
 ```
+
+Note: --bucket is REQUIRED when using --run-id, but OPTIONAL when using --dest-dir
 """
 
 import argparse
@@ -89,8 +96,11 @@ class PackageInstaller(PackageManagerBase):
             if upload == "pre" and not dest_dir:
                 raise ValueError("dest_dir is required for pre-upload mode")
                 
-            if upload == "post" and not run_id:
-                raise ValueError("run_id is required for post-upload mode")
+            if upload == "post":
+                if not run_id:
+                    raise ValueError("run_id is required for post-upload mode")
+                if not bucket:
+                    raise ValueError("bucket is required for post-upload mode (when --run-id is provided)")
             
             self.dest_dir = dest_dir
             self.run_id = run_id
@@ -664,7 +674,7 @@ def parse_arguments():
     parser.add_argument(
         "--bucket",
         default=None,
-        help="S3 bucket name for package repository (optional)"
+        help="S3 bucket name for package repository (required when --run-id is provided, optional when --dest-dir is provided)"
     )
 
     return parser.parse_args()
