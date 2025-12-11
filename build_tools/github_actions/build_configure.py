@@ -114,12 +114,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--amdgpu-families",
-        default=os.getenv("amdgpu_families"),
+        default=os.getenv("amdgpu_families", None),
         help="Comma-separated list of AMD GPU families to build for (default: from amdgpu_families env var)",
     )
 
     # Calculate default package version using compute_version
-    default_package_version = os.getenv("package_version")
+    default_package_version = os.getenv("package_version", None)
     if not default_package_version:
         try:
             default_package_version = compute_version(release_type="dev")
@@ -144,12 +144,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--cmake-preset",
-        default=os.getenv("cmake_preset"),
+        default=os.getenv("cmake_preset", None),
         help="CMake preset to use (default: from cmake_preset env var)",
     )
     parser.add_argument(
         "--vctools-install-dir",
-        default=os.getenv("VCToolsInstallDir"),
+        default=os.getenv("VCToolsInstallDir", None),
         help="Visual C++ tools install directory for Windows builds (default: from VCToolsInstallDir env var)",
     )
     args = parser.parse_args()
