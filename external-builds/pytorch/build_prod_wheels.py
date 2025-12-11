@@ -129,9 +129,7 @@ is_windows = platform.system() == "Windows"
 # List of library preloads for Linux to generate into _rocm_init.py
 LINUX_LIBRARY_PRELOADS = [
     "amd_comgr",
-    "amd_comgr_loader",  # Linux only for the moment.
     "amdhip64",
-    "hsa-runtime64",  # Linux only for the moment.
     "rocprofiler-sdk-roctx",  # Linux only for the moment.
     "roctracer64",  # Linux only for the moment.
     "roctx64",  # Linux only for the moment.
@@ -146,7 +144,6 @@ LINUX_LIBRARY_PRELOADS = [
     "hipblaslt",
     "miopen",
     "rocm_sysdeps_liblzma",
-    "rocm_sysdeps_sqlite3",  # Linux only for the moment.
     "rocm-openblas",
 ]
 
@@ -404,9 +401,9 @@ def do_build(args: argparse.Namespace):
         # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
         # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
         # See also https://github.com/ROCm/TheRock/issues/1999.
-        env["TRITON_APPEND_CMAKE_ARGS"] = (
-            "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
-        )
+        env[
+            "TRITON_APPEND_CMAKE_ARGS"
+        ] = "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
 
     if is_windows:
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
