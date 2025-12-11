@@ -137,7 +137,7 @@ jobs:
           # Create logs directory in BUILD_DIR
           mkdir -p "${{ env.BUILD_DIR }}/logs"
 
-          # Start memory monitor in background (uses SIGTERM for graceful shutdown on Linux)
+          # Start memory monitor in background
           python build_tools/memory_monitor.py \
             --phase "Build Phase" \
             --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
@@ -160,9 +160,16 @@ jobs:
         env:
           MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
         run: |
-          echo "Gracefully stopping memory monitor (PID: $MONITOR_PID)"
-          python build_tools/graceful_shutdown.py $MONITOR_PID \
-            --timeout 15
+          echo "Stopping memory monitor (PID: $MONITOR_PID)"
+
+          # Send interrupt signal to stop monitoring gracefully
+          if kill -0 $MONITOR_PID 2>/dev/null; then
+            kill -SIGINT $MONITOR_PID
+            sleep 2
+            # Force kill if still running
+            kill -9 $MONITOR_PID 2>/dev/null || true
+          fi
+
           echo "Memory monitor stopped"
 
           # Display the monitor output
