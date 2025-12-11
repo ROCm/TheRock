@@ -3,4 +3,4 @@
 /rocm-systems/          @ROCm/TheRockInfra
 
 # New patches are strongly discouraged. See patches/README.md.
-/patches/               @ScottTodd
+/patches/               @ScottTodd @marbre

@@ -145,7 +145,7 @@ Example full workflows:
 
 ## Rules for creating patches
 
-**Remember**: New patches are STRONGLY DISCOURAGED. They create maintenance
+**Remember**: New patches are **STRONGLY DISCOURAGED**. They create maintenance
 burden and can block development in external repositories.
 
 ### Prefer upstream fixes
