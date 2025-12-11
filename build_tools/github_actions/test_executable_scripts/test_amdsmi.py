@@ -1,4 +1,24 @@
 #!/usr/bin/env python3
+"""
+===============================================================================
+AMDSMI Test Runner (Manual Execution Only)
+
+This script is NOT part of automated CI runs.
+
+`amdsmitst` requires GPU device access (/dev/kfd, /dev/dri), elevated
+permissions, and execution on a ROCm-enabled system. GitHub-hosted CI
+environments do not expose these capabilities, so this script must be run
+manually by developers inside a privileged ROCm environment or container.
+
+Usage:
+    python test_amdsmi.py
+
+===============================================================================
+"""
+
+import pytest
+
+pytestmark = pytest.mark.skip("Manual execution only — requires GPU device access")
 import logging
 import os
 import shlex
@@ -16,21 +36,12 @@ py_major = sys.version_info.major
 py_minor = sys.version_info.minor
 
 VENV_SITE_PACKAGES = (
-    THEROCK_DIR
-    / ".venv"
-    / "lib"
-    / f"python{py_major}.{py_minor}"
-    / "site-packages"
+    THEROCK_DIR / ".venv" / "lib" / f"python{py_major}.{py_minor}" / "site-packages"
 )
 
 # Path to amdsmitst binary
 AMDSMITS_PATH = (
-    VENV_SITE_PACKAGES
-    / "_rocm_sdk_core"
-    / "share"
-    / "amd_smi"
-    / "tests"
-    / "amdsmitst"
+    VENV_SITE_PACKAGES / "_rocm_sdk_core" / "share" / "amd_smi" / "tests" / "amdsmitst"
 )
 
 # -----------------------------
@@ -52,9 +63,7 @@ test_type = os.getenv("TEST_TYPE", "full")
 
 if test_type == "smoke":
     logging.info("Running smoke tests only for amdsmitst")
-    test_filter = [
-        "--gtest_filter=AmdSmiDynamicMetricTest.*"
-    ]
+    test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
 else:
     # Full test mode: whitelist only passing tests because exclude filters don't work
     logging.info("Running full amdsmitst test suite (with whitelist filter)")

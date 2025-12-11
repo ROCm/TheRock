@@ -123,3 +123,55 @@ class TestROCmSanity:
         return_code = process.returncode
         check.equal(return_code, 0)
         check.is_true(output)
+
+
+class TestAmdSmiTests:
+    @pytest.mark.skipif(
+        is_windows(),
+        reason="amdsmitst is not supported on Windows",
+    )
+    def test_amdsmi_suite(self):
+        """
+        Run AMD SMI test suite with whitelist-based filtering.
+        Exclude failing tests(requiring privilege docker acccess) since amdsmitst does not support negative filters.
+        """
+
+        # Auto-detect Python version in .venv
+        py_major = sys.version_info.major
+        py_minor = sys.version_info.minor
+
+        # Build amdsmitst path dynamically
+        amdsmi_test_bin = (
+            THEROCK_BIN_DIR
+            / ".."
+            / "lib"
+            / f"python{py_major}.{py_minor}"
+            / "site-packages"
+            / "_rocm_sdk_core"
+            / "share"
+            / "amd_smi"
+            / "tests"
+            / "amdsmitst"
+        )
+        amdsmi_test_bin = amdsmi_test_bin.resolve()
+
+        # Whitelist filter (ONLY passing tests)
+        include_filter = (
+            "amdsmitstReadOnly.*:"
+            "amdsmitstReadWrite.FanReadWrite:"
+            "amdsmitstReadWrite.TestOverdriveReadWrite:"
+            "amdsmitstReadWrite.TestPciReadWrite:"
+            "amdsmitstReadWrite.TestPowerReadWrite:"
+            "amdsmitstReadWrite.TestPerfCntrReadWrite:"
+            "amdsmitstReadWrite.TestEvtNotifReadWrite:"
+            "AmdSmiDynamicMetricTest.*"
+        )
+
+        cmd = [str(amdsmi_test_bin), f"--gtest_filter={include_filter}"]
+
+        # Run the test suite
+        process = run_command(cmd, cwd=str(THEROCK_BIN_DIR))
+
+        # Validate execution
+        check.equal(process.returncode, 0, "amdsmitst returned non-zero exit code")
+        check.is_true("PASSED" in process.stdout or "OK" in process.stdout)
