@@ -409,7 +409,6 @@ disable_platforms = ["windows"]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand", "rocprofiler-sdk"]
-split_databases = ["aotriton"]
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"

@@ -253,9 +253,10 @@ def generate_validation_metadata(topology: BuildTopology, f: TextIO):
     for artifact in topology.get_artifacts():
         f.write(f'set(THEROCK_ARTIFACT_TYPE_{artifact.name} "{artifact.type}")\n')
         if artifact.split_databases:
+            # Use semicolon separator for proper CMake list handling
             f.write(
                 f"set(THEROCK_ARTIFACT_SPLIT_DATABASES_{artifact.name} "
-                f'"{" ".join(artifact.split_databases)}")\n'
+                f'"{";".join(artifact.split_databases)}")\n'
             )
     f.write("\n")
 
