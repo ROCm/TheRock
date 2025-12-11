@@ -145,10 +145,83 @@ Example full workflows:
 
 ## Rules for creating patches
 
-- If a commit in a repository like rocm-libraries or rocm-systems causes issues,
-  the first thought should be to revert that commit in that repository and then
-  pick up the latest code from that project via regular submodule updates ("roll-ups"),
-  rather than cherry-pick the revert via a local patch in TheRock
-  - Supporting legacy build and release systems or other closed source development
-    processes is NOT sufficient justification for breaking public builds and tests
-- Add context to the commit message for
+**Remember**: New patches are STRONGLY DISCOURAGED. They create maintenance
+burden and can block development in external repositories.
+
+### When patches are acceptable
+
+Patches may be used for:
+
+- **Build compatibility fixes**: Fixing build breaks on specific platforms or
+  with specific compiler versions when the fix cannot be upstreamed immediately
+- **Third-party compatibility**: Adapting third-party dependencies that lack
+  active maintenance (see `patches/third-party/`)
+- **Temporary workarounds**: Short-term fixes for critical issues while waiting
+  for proper upstream resolution
+
+Patches should NOT be used for:
+
+- Working around issues that can be fixed by reverting problematic commits in
+  the source repository
+- Supporting legacy or closed-source build systems at the expense of public
+  builds
+- Adding features that should be developed upstream
+- Long-term divergence from upstream projects
+
+### Commit message requirements
+
+Every patch must include context in the commit message:
+
+1. **Why the patch exists**: Explain the problem being solved and why a patch
+   is necessary instead of an upstream fix
+1. **Expected lifetime**: Is this temporary? Waiting on upstream? Permanent?
+1. **Upstream tracking**: Link to related upstream issues, pull requests, or
+   discussions if applicable
+1. **Reproduction info**: For bug fixes, include error messages or reproduction
+   steps
+
+**Good example** (from `patches/third-party/yaml-cpp/`):
+
+```
+emitterutils: Explicitly include <cstdint>
+
+GCC 15 will no longer include it by default, resulting in build
+failures in projects that do not explicitly include it.
+
+Error:
+src/emitterutils.cpp:221:11: error: 'uint16_t' was not declared
+
+Closes: #1307
+See-also: https://gcc.gnu.org/pipermail/gcc-cvs/2024-August/407124.html
+```
+
+**Bad example** (insufficient context):
+
+```
+Fix build issue
+```
+
+### Patch lifecycle and maintenance
+
+- **Patches are temporary**: Every patch should have a plan for removal
+- **Regular review**: Periodically check if patches can be removed because:
+  - The fix was integrated upstream and picked up via submodule update
+  - The problematic code was removed or changed upstream
+  - The issue is no longer relevant
+- **Ownership**: The person who creates a patch is responsible for monitoring
+  its status and removing it when no longer needed
+- **CI conflicts**: If your patch conflicts with new upstream changes, you must
+  resolve it promptly or the patch may be removed to unblock development
+
+### Prefer upstream fixes
+
+If a commit in a repository like `rocm-libraries` or `rocm-systems` causes
+issues:
+
+1. **First choice**: Revert the problematic commit in that repository, then
+   pick up the fix via regular submodule updates
+1. **Last resort**: Create a patch in TheRock only if the upstream revert is
+   not feasible
+
+Supporting legacy build systems or closed-source development processes is NOT
+sufficient justification for breaking public builds and tests.
