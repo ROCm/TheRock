@@ -175,6 +175,7 @@ def retrieve_artifacts_by_run_id(args):
         "amd-llvm_run",
         "amd-llvm_lib",
         "core-hipinfo",
+        "core-hipInfo",
         "core-hip_lib",
         "core-hip_dev",
         "core-ocl_lib",

@@ -100,20 +100,24 @@ jobs:
         run: |
           $ErrorActionPreference = "SilentlyContinue"
 
-          Write-Host "amd-smi.exe location:"
-          $amdSmiExe = Get-ChildItem -Path . -Recurse -File -Filter "amdsmi"
-          if ($amdSmiExe) {
-            $amdSmiExe | ForEach-Object { $_.FullName }
+          Write-Host "amd-smi / amdsmi related paths:"
+          $amdSmiItems = Get-ChildItem -Path . -Recurse -Force |
+            Where-Object { $_.Name -like "*amd-smi*" -or $_.Name -like "*amdsmi*" }
+
+          if ($amdSmiItems) {
+            $amdSmiItems | ForEach-Object { $_.FullName }
           } else {
-            Write-Host "amd-smi.exe not found"
+            Write-Host "No amd-smi/amdsmi paths found"
           }
 
-          Write-Host "hipInfo.exe location:"
-          $hipInfoExe = Get-ChildItem -Path . -Recurse -File -Filter "hipinfo"
-          if ($hipInfoExe) {
-            $hipInfoExe | ForEach-Object { $_.FullName }
+          Write-Host "hipinfo / hipInfo related paths:"
+          $hipInfoItems = Get-ChildItem -Path . -Recurse -Force |
+            Where-Object { $_.Name -like "*hipinfo*" }
+
+          if ($hipInfoItems) {
+            $hipInfoItems | ForEach-Object { $_.FullName }
           } else {
-            Write-Host "hipInfo.exe not found"
+            Write-Host "No hipinfo/hipInfo paths found"
           }
   
       - name: Set HIP_CLANG_PATH for windows
