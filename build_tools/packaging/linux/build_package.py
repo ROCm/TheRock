@@ -641,11 +641,13 @@ def update_package_name(pkg_name, config: PackageConfig):
         # Split version passed to use only major and minor version for package name
         # Split by dot and take first two components
         # Package name will be rocm8.1 and discard all other version part
-        parts = config.rocm_version.split('.')
+        parts = config.rocm_version.split(".")
         if len(parts) < 2:
-           raise ValueError(f"Version string '{args.rocm_version}' does not have major.minor versions")
-        major = re.match(r'^\d+', parts[0])
-        minor = re.match(r'^\d+', parts[1])
+            raise ValueError(
+                f"Version string '{args.rocm_version}' does not have major.minor versions"
+            )
+        major = re.match(r"^\d+", parts[0])
+        minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
     else:
         pkg_suffix = ""
@@ -830,11 +832,13 @@ def run(args: argparse.Namespace):
 
     # Split version passed to use only major and minor version for prefix folder
     # Split by dot and take first two components
-    parts = args.rocm_version.split('.')
+    parts = args.rocm_version.split(".")
     if len(parts) < 2:
-        raise ValueError(f"Version string '{args.rocm_version}' does not have major.minor versions")
-    major = re.match(r'^\d+', parts[0])
-    minor = re.match(r'^\d+', parts[1])
+        raise ValueError(
+            f"Version string '{args.rocm_version}' does not have major.minor versions"
+        )
+    major = re.match(r"^\d+", parts[0])
+    minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
     # Append rocm version to default install prefix

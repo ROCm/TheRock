@@ -229,12 +229,12 @@ The script produces these versions for rpm packages for each distribution channe
 
 The script produces these versions for debian packages for each distribution channel:
 
-| Distribution channel | Version format      | Version example                                                                                                                   |
-| -------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| stable releases      | `X.Y.Z`             | `7.10.0`                                                                                                                          |
-| prereleases          | `X.Y.Z~preN`        | `7.10.0~pre0`<br>(The first release candidate for that stable release)                                                            |
-| nightly releases     | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                          |
-| dev builds/releases  | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4) |
+| Distribution channel | Version format      | Version example                                                        |
+| -------------------- | ------------------- | ---------------------------------------------------------------------- |
+| stable releases      | `X.Y.Z`             | `7.10.0`                                                               |
+| prereleases          | `X.Y.Z~preN`        | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
+| nightly releases     | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
+| dev builds/releases  | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4)            |
 
 ## Native Windows package versions
 
