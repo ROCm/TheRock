@@ -20,15 +20,15 @@ The data for `ROCM_THEROCK_TEST_RUNNERS` is organized like so:
 {
     "gfx110x": {
         "linux": "linux-gfx110X-gpu-rocm",
-        "windows": "windows-gfx110X-gpu-rocm"
+        "windows": "windows-gfx110X-gpu-rocm",
     },
     "gfx1151": {
         "linux": "linux-strix-halo-gpu-rocm",
-        "windows": "windows-strix-halo-gpu-rocm"
+        "windows": "windows-strix-halo-gpu-rocm",
     },
     "gfx90x": {
         "linux": "",
-        "windows": ""
+        "windows": "",
     },
     ...
 }
