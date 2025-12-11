@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
-from benchmark_test_matrix import benchmark_matrix
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 
 class ConfigureCITest(unittest.TestCase):

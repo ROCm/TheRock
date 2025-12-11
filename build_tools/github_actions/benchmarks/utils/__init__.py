@@ -1,6 +1,6 @@
 """Utils package for test execution with system detection and result reporting.
 
-Provides TestClient API for collecting system info (OS, hardware, ROCm) and
+Provides BenchmarkClient API for collecting system info (OS, hardware, ROCm) and
 uploading test results to API endpoints.
 
 Organization:
@@ -17,7 +17,7 @@ __all__ = [
     'constants',
     'exceptions',
     # Main API
-    'TestClient',
+    'BenchmarkClient',
     # Commonly used exports
     'SystemContext',
     'SystemDetector',
@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 # Import main API
-from .test_client import TestClient
+from .benchmark_client import BenchmarkClient
 
 # Export commonly used classes from subdirectories
 from .system import SystemContext, SystemDetector, HardwareDetector, PlatformDetector, ROCmDetector

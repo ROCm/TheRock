@@ -60,7 +60,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
 )
 from fetch_test_configurations import test_matrix
-from benchmark_test_matrix import benchmark_matrix
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 from github_actions_utils import *
 

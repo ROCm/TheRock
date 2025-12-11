@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from github_actions_utils import *
-from benchmark_test_matrix import benchmark_matrix
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 logging.basicConfig(level=logging.INFO)
 

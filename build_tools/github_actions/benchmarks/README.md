@@ -25,43 +25,43 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 
 ### Available Benchmarks
 
-- `test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
-- `test_rocsolver_benchmark.py` - ROCsolver benchmark suite
-- `test_rocrand_benchmark.py` - ROCrand benchmark suite
-- `test_rocfft_benchmark.py` - ROCfft benchmark suite
+- `benchmarks/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
+- `benchmarks/scripts/test_rocsolver_benchmark.py` - ROCsolver benchmark suite
+- `benchmarks/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
+- `benchmarks/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
 
 ## Project Structure
 
 ```
 build_tools/github_actions/
-├── configs/
-│   ├── config.yml              # Main framework configuration
-│   ├── README.md               # This file
-│   └── benchmarks/             # Benchmark-specific configs
-│       ├── hipblaslt.json
-│       ├── rocsolver.json
-│       ├── rocrand.json
-│       └── rocfft.json
+├── benchmarks/                 # All benchmark-related code
+│   ├── scripts/                # Benchmark test implementations
+│   │   ├── benchmark_base.py   # Base class for all benchmarks
+│   │   ├── test_hipblaslt_benchmark.py
+│   │   ├── test_rocsolver_benchmark.py
+│   │   ├── test_rocrand_benchmark.py
+│   │   └── test_rocfft_benchmark.py
+│   │
+│   ├── configs/                # Benchmark configs
+│   │   ├── config.yml          # Framework configuration
+│   │   ├── hipblaslt.json      # hipBLASLt benchmark config
+│   │   └── rocfft.json         # ROCfft benchmark config
+│   │
+│   ├── utils/                  # Benchmark utilities
+│   │   ├── benchmark_client.py # Main client API
+│   │   ├── logger.py           # Logging utilities
+│   │   ├── config/             # Configuration management
+│   │   ├── system/             # System detection (GPU, ROCm, OS)
+│   │   └── results/            # Results API client & schemas
+│   │
+│   ├── benchmark_test_matrix.py  # Benchmark matrix definitions
+│   └── README.md               # This file
 │
-├── test_executable_scripts/    # Regular test scripts
+├── test_executable_scripts/    # Regular functional tests
 │
-├── benchmark_scripts/          # Benchmark test scripts
-│   ├── test_hipblaslt_benchmark.py
-│   ├── test_rocsolver_benchmark.py
-│   ├── test_rocrand_benchmark.py
-│   └── test_rocfft_benchmark.py
-│
-├── utils/                      # Framework utilities
-│   ├── test_client.py          # Main client API
-│   ├── logger.py               # Logging utilities
-│   ├── config/                 # Configuration management
-│   ├── system/                 # System detection
-│   └── results/                # Results handling & schemas
-│
-├── fetch_test_configurations.py  # Regular test matrix generation
-├── benchmark_test_matrix.py      # Benchmark test matrix definitions
-├── configure_ci.py               # CI workflow configuration
-└── github_actions_utils.py          # GitHub Actions utilities
+├── configure_ci.py             # CI workflow orchestration
+├── fetch_test_configurations.py  # Test matrix builder
+└── github_actions_utils.py     # GitHub Actions utilities
 ```
 
 ## CI/CD Integration
@@ -83,7 +83,7 @@ Benchmark tests are configured to run **only on nightly CI builds** to save time
 
 ### Available Benchmark Tests in CI
 
-The following benchmark tests are defined in `benchmark_test_matrix.py`:
+The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.py`:
 
 | Test Name | Library | Platform | Timeout | Shards |
 |-----------|---------|----------|---------|--------|
@@ -99,7 +99,7 @@ The following benchmark tests are defined in `benchmark_test_matrix.py`:
 ### Test Execution Flow
 
 ```
-1. Initialize TestClient
+1. Initialize BenchmarkClient
    ↓ Auto-detect system (GPU, OS, ROCm version)
    ↓ Load configuration from config.yml
    
@@ -131,17 +131,40 @@ To add a new benchmark test to the nightly CI:
 
 ### 1. Create Benchmark Script
 
-Create `build_tools/github_actions/benchmark_scripts/test_your_benchmark.py`. Reference existing benchmarks like `test_rocfft_benchmark.py` as a template.
+Create `benchmarks/scripts/test_your_benchmark.py`. Reference existing benchmarks like `test_rocfft_benchmark.py` as a template.
 
 Key components:
-- Import `TestClient` from `utils`
-- Define `run_benchmarks()` - executes binary and logs output
-- Define `parse_results()` - parses logs and returns structured data
-- Call `client.upload_results()` to submit to API
+- Inherit from `BenchmarkBase` class
+- Implement `run_benchmarks()` - executes binary and logs output
+- Implement `parse_results()` - parses logs and returns structured data
+- Results are automatically uploaded to API via base class
+
+Example:
+```python
+from benchmark_base import BenchmarkBase, run_benchmark_main
+
+class YourBenchmark(BenchmarkBase):
+    def __init__(self):
+        super().__init__(benchmark_name='your_lib', display_name='YourLib')
+    
+    def run_benchmarks(self) -> None:
+        """Execute benchmark binary and log output."""
+        # Your benchmark execution logic here
+        pass
+    
+    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+        """Parse log file and return (test_results, table)."""
+        # Your parsing logic here
+        # Use self.create_test_result() to build result dictionaries
+        pass
+
+if __name__ == '__main__':
+    run_benchmark_main(YourBenchmark())
+```
 
 ### 2. Add to Benchmark Test Matrix
 
-Edit `build_tools/github_actions/benchmark_test_matrix.py`:
+Edit `benchmarks/benchmark_test_matrix.py`:
 
 ```python
 "your_benchmark": {
@@ -165,11 +188,10 @@ export ARTIFACT_RUN_ID=local-test
 export AMDGPU_FAMILIES=gfx950-dcgpu
 
 # Run the benchmark
-python3 build_tools/github_actions/benchmark_scripts/test_your_benchmark.py
+python3 build_tools/github_actions/benchmarks/scripts/test_your_benchmark.py
 ```
 
 ## Related Documentation
 
-- [Main TheRock Documentation](../../../README.md)
-- [Utils Module Documentation](../utils/README.md)
+- [Utils Module Documentation](utils/README.md)
 - [CI Nightly Workflow](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml)

@@ -4,20 +4,20 @@ import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
-from abc import ABC, abstractmethod
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils import TestClient
+sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
+from utils import BenchmarkClient
 from utils.logger import log
 from github_actions_utils import gha_append_step_summary
 
 
-class BenchmarkBase(ABC):
-    """Abstract base class providing common benchmark logic.
+class BenchmarkBase:
+    """Base class providing common benchmark logic.
     
-    Child classes implement run_benchmarks() and parse_results().
+    Child classes must implement run_benchmarks() and parse_results().
     """
     
     def __init__(self, benchmark_name: str, display_name: str = None):
@@ -39,21 +39,6 @@ class BenchmarkBase(ABC):
         # Initialize test client (will be set in run())
         self.client = None
     
-    @abstractmethod
-    def run_benchmarks(self) -> None:
-        """Run benchmark binaries and save output to log file.
-        
-        Must be implemented by child class.
-        """
-        pass
-    
-    @abstractmethod
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
-        """Parse log file and return (test_results, table).
-        
-        Must be implemented by child class.
-        """
-        pass
     
     def create_test_result(self, test_name: str, subtest_name: str, status: str,
                           score: float, unit: str, flag: str, **kwargs) -> Dict[str, Any]:
@@ -192,8 +177,8 @@ class BenchmarkBase(ABC):
         """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
         log.info(f"Initializing {self.display_name} Benchmark Test")
         
-        # Initialize test client and print system info
-        self.client = TestClient(auto_detect=True)
+        # Initialize benchmark client and print system info
+        self.client = BenchmarkClient(auto_detect=True)
         self.client.print_system_summary()
         
         # Run benchmarks (implemented by child class)
@@ -228,15 +213,22 @@ class BenchmarkBase(ABC):
 
 
 def run_benchmark_main(benchmark_instance):
-    """Run benchmark with standard error handling and exit codes."""
+    """Run benchmark with standard error handling.
+    
+    Raises:
+        KeyboardInterrupt: If execution is interrupted by user
+        Exception: If benchmark execution fails
+    """
     try:
-        sys.exit(benchmark_instance.run())
+        exit_code = benchmark_instance.run()
+        if exit_code != 0:
+            raise RuntimeError(f"Benchmark failed with exit code {exit_code}")
     except KeyboardInterrupt:
         log.warning("\nExecution interrupted by user")
-        sys.exit(130)
+        raise
     except Exception as e:
         log.error(f"Execution failed: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        raise
 

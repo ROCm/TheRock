@@ -8,7 +8,7 @@ Benchmark tests run only on nightly CI builds and are merged into test_matrix by
 from pathlib import Path
 
 # Note: these paths are relative to the repository root.
-BENCHMARK_SCRIPT_DIR = Path("./build_tools/github_actions/benchmark_scripts")
+BENCHMARK_SCRIPT_DIR = Path("./build_tools/github_actions/benchmarks/scripts")
 
 
 def _get_benchmark_script_path(script_name: str) -> str:
@@ -26,7 +26,7 @@ benchmark_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_hipblaslt_benchmark.py')}",
-        # TODO(lajagapp): Add windows test
+        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
     },
