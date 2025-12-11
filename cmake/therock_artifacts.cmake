@@ -47,6 +47,18 @@ function(therock_provide_artifact slice_name)
     endif()
   endif()
 
+  # Filter subprojects based on declaration
+  foreach(subproject IN LISTS ARG_SUBPROJECT_DEPS)
+    get_target_property(_subproject_declare ${subproject} THEROCK_SUBPROJECT)
+    if(_subproject_declare STREQUAL cmake-off)
+      list(REMOVE_ITEM ARG_SUBPROJECT_DEPS ${subproject})
+    endif()
+  endforeach()
+
+  if(NOT ARG_SUBPROJECT_DEPS)
+    return()
+  endif()
+
   # Determine if this artifact should be split into generic + arch-specific components
   set(_should_split FALSE)
   if(THEROCK_KPACK_SPLIT_ARTIFACTS)
