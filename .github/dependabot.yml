@@ -10,6 +10,8 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # Submodules that can be updated independently from other submodules
   - package-ecosystem: "gitsubmodule"
     directory: "/"
     schedule:
@@ -19,8 +21,4 @@ updates:
     target-branch: "main"
     allow:
       - dependency-name: "rocm-systems"
-    reviewers:
-      - "ScottTodd"
-      - "marbre"
-      - "geomin12"
     open-pull-requests-limit: 10
