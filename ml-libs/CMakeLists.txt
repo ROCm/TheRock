@@ -93,7 +93,8 @@ if(THEROCK_ENABLE_MIOPEN)
     set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
   endif()
 
-  get_property(_hipblaslt_declared GLOBAL PROPERTY THEROCK_HIPBLASLT_DECLARED)
+  set(_is_hipblaslt_declared)
+  therock_check_is_cmake_subproject_declared(hipBLASLt _is_hipblaslt_declared)
 
   therock_cmake_subproject_declare(MIOpen
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/miopen"
@@ -109,7 +110,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DMIOPEN_TEST_DISCRETE=OFF
       -DBoost_COMPILER=${_THEROCK_MIOPEN_OVERRIDE_BOOST_COMPILER}
       "-DMIOPEN_INSTALL_GPU_DATABASES=\"${THEROCK_AMDGPU_TARGETS}\""
-      -DMIOPEN_USE_HIPBLASLT="${_hipblaslt_declared}"
+      -DMIOPEN_USE_HIPBLASLT="${_is_hipblaslt_declared}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN

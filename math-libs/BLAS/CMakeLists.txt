@@ -155,18 +155,13 @@ therock_cmake_subproject_provide_package(hipBLASLt hipblaslt lib/cmake/hipblaslt
 therock_cmake_subproject_activate(hipBLASLt)
 list(APPEND _blas_subproject_names hipBLASLt)
 
-# set global property to define hipblaslt propagation based on enablement for current gfx targets
-get_target_property(_hipBLASLt_subproject hipBLASLt THEROCK_SUBPROJECT)
-set(_hipblaslt_declared OFF)
-if(_hipBLASLt_subproject STREQUAL "cmake")
-  set(_hipblaslt_declared ON)
-endif()
-set_property(GLOBAL PROPERTY THEROCK_HIPBLASLT_DECLARED ${_hipblaslt_declared})
-
 
 ##############################################################################
 # rocBLAS
 ##############################################################################
+
+set(_is_hipblaslt_declared)
+therock_check_is_cmake_subproject_declared(hipBLASLt _is_hipblaslt_declared)
 
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
@@ -176,7 +171,7 @@ elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
 
-if(NOT _hipblaslt_declared)
+if(NOT _is_hipblaslt_declared)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
 
@@ -190,7 +185,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DROCM_DIR=
     -Dhipblaslt_path=
     -DBUILD_WITH_TENSILE=ON
-    -DBUILD_WITH_HIPBLASLT="${_hipblaslt_declared}"
+    -DBUILD_WITH_HIPBLASLT="${_is_hipblaslt_declared}"
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
     "-DTensile_TEST_LOCAL_PATH=${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile"
     # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid

@@ -49,8 +49,9 @@ function(therock_provide_artifact slice_name)
 
   # Filter subprojects based on declaration
   foreach(subproject IN LISTS ARG_SUBPROJECT_DEPS)
-    get_target_property(_subproject_declare ${subproject} THEROCK_SUBPROJECT)
-    if(_subproject_declare STREQUAL cmake-off)
+    set(_is_subproject_declared)
+    therock_check_is_cmake_subproject_declared(${subproject} _is_subproject_declared)
+    if(NOT _is_subproject_declared)
       list(REMOVE_ITEM ARG_SUBPROJECT_DEPS ${subproject})
     endif()
   endforeach()
