@@ -1,8 +1,27 @@
 name: Strix AI Quick Test
 
 # Lightweight workflow for quick Strix AI testing
-# Perfect for rapid iteration and debugging
+# Runs automatically on push/PR to Strix test files, or manually on demand
 on:
+  # Automatic triggers
+  push:
+    branches:
+      - 'users/*/strix_*'
+      - 'main'
+      - 'develop'
+    paths:
+      - 'tests/strix_ai/**'
+      - '.github/workflows/strix_ai*.yml'
+  
+  pull_request:
+    branches:
+      - 'main'
+      - 'develop'
+    paths:
+      - 'tests/strix_ai/**'
+      - '.github/workflows/strix_ai*.yml'
+  
+  # Manual trigger with options
   workflow_dispatch:
     inputs:
       test_command:
@@ -26,17 +45,22 @@ permissions:
 
 jobs:
   quick_test:
-    name: 'Quick Test: ${{ inputs.test_command }}'
-    runs-on: ${{ inputs.strix_platform == 'linux-gfx1151' && 'linux-strix-halo-gpu-rocm' || inputs.strix_platform == 'windows-gfx1151' && 'windows-strix-halo-gpu-rocm' || 'linux-strix-point-gpu-rocm' }}
+    name: Strix AI Quick Test
+    runs-on: ${{ (github.event.inputs.strix_platform == 'windows-gfx1151' && 'windows-strix-halo-gpu-rocm') || (github.event.inputs.strix_platform == 'linux-gfx1150' && 'linux-strix-point-gpu-rocm') || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 30
+    
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message, '[skip-strix-tests]')
     
     defaults:
       run:
         shell: bash
     
     env:
-      AMDGPU_FAMILIES: ${{ contains(inputs.strix_platform, 'gfx1151') && 'gfx1151' || 'gfx1150' }}
+      AMDGPU_FAMILIES: ${{ contains(github.event.inputs.strix_platform, 'gfx1151') && 'gfx1151' || (contains(github.event.inputs.strix_platform, 'gfx1150') && 'gfx1150' || 'gfx1151') }}
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
+      TEST_COMMAND: ${{ github.event.inputs.test_command || 'tests/strix_ai/test_simple.py' }}
     
     steps:
       - name: Checkout
@@ -54,15 +78,26 @@ jobs:
           pip install torch torchvision || echo "torch install failed (may be OK)"
           pip install ultralytics opencv-python pillow || echo "cv libs install failed"
       
+      - name: Display Test Info
+        run: |
+          echo "=== Strix AI Quick Test ==="
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Test command: ${{ env.TEST_COMMAND }}"
+          echo "Platform: ${{ github.event.inputs.strix_platform || 'linux-gfx1151' }}"
+          echo "AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}"
+      
       - name: Run Test
         run: |
-          echo "Running: python -m pytest ${{ inputs.test_command }} -v -s"
-          python -m pytest ${{ inputs.test_command }} -v -s || echo "Test completed with errors (may be expected if dependencies missing)"
+          echo "Running: python -m pytest ${{ env.TEST_COMMAND }} -v -s"
+          python -m pytest ${{ env.TEST_COMMAND }} -v -s || echo "Test completed with errors (may be expected if dependencies missing)"
       
       - name: Show Results
         if: always()
         run: |
-          echo "Test command: ${{ inputs.test_command }}"
-          echo "Platform: ${{ inputs.strix_platform }}"
+          echo "=== Test Summary ==="
+          echo "Test command: ${{ env.TEST_COMMAND }}"
+          echo "Platform: ${{ github.event.inputs.strix_platform || 'linux-gfx1151' }}"
           echo "AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}"
+          echo "Status: ${{ job.status }}"
 
