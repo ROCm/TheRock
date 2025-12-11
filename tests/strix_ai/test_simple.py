@@ -18,3 +18,12 @@ def test_environment():
     print(f"Python executable: {sys.executable}")
     assert sys.version_info >= (3, 8)
 
+
+def test_automatic_workflow_trigger():
+    """Test that workflows trigger on push"""
+    import os
+    amdgpu = os.getenv("AMDGPU_FAMILIES", "not-set")
+    print(f"AMDGPU_FAMILIES: {amdgpu}")
+    print("✅ Workflow triggered successfully!")
+    assert True
+
