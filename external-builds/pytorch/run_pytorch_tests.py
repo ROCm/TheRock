@@ -79,7 +79,10 @@ from pathlib import Path
 
 import pytest
 
-from pytorch_utils import get_unique_supported_devices_by_arch, detect_pytorch_version
+from pytorch_utils import (
+    set_gpu_execution_policy,
+    detect_pytorch_version,
+)
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -211,67 +214,68 @@ def main() -> int:
     Returns:
         Exit code from pytest (0 for success, non-zero for failures).
     """
-    args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
+    try:
+        args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
 
-    pytorch_dir = args.pytorch_dir
+        pytorch_dir = args.pytorch_dir
 
-    # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
-    # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
-    # changing HIP_VISIBLE_DEVICES has no effect.
-    unique_supported_devices = get_unique_supported_devices_by_arch(args.amdgpu_family)
+        # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
+        # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
+        # changing HIP_VISIBLE_DEVICES has no effect.
+        # For unit tests, run only on the first supported device (policy="single")
+        (first_arch, _), = set_gpu_execution_policy(args.amdgpu_family, policy="single")
+        print(f"Using AMDGPU family: {first_arch}")
 
-    # For unit tests, use only the first supported device
-    first_arch, first_device_idx = next(iter(unique_supported_devices.items()))
-    os.environ["HIP_VISIBLE_DEVICES"] = str(first_device_idx)
-    print(f"Using AMDGPU family: {first_arch} (device index: {first_device_idx})")
+        # Determine PyTorch version
+        pytorch_version = args.pytorch_version
+        if not pytorch_version:
+            pytorch_version = detect_pytorch_version()
+        print(f"Using PyTorch version: {pytorch_version}")
 
-    # Determine PyTorch version
-    pytorch_version = args.pytorch_version
-    if not pytorch_version:
-        pytorch_version = detect_pytorch_version()
-    print(f"Using PyTorch version: {pytorch_version}")
+        # Get tests to skip
+        tests_to_skip = get_tests(
+            amdgpu_family=first_arch,
+            pytorch_version=pytorch_version,
+            platform=platform.system(),
+            create_skip_list=not args.debug,
+        )
 
-    # Get tests to skip
-    tests_to_skip = get_tests(
-        amdgpu_family=first_arch,
-        pytorch_version=pytorch_version,
-        platform=platform.system(),
-        create_skip_list=not args.debug,
-    )
+        # Allow manual override of test selection
+        if args.k:
+            tests_to_skip = args.k
 
-    # Allow manual override of test selection
-    if args.k:
-        tests_to_skip = args.k
+        setup_env(pytorch_dir)
 
-    setup_env(pytorch_dir)
-
-    pytest_args = [
-        f"{pytorch_dir}/test/test_nn.py",
-        f"{pytorch_dir}/test/test_torch.py",
-        f"{pytorch_dir}/test/test_cuda.py",
-        f"{pytorch_dir}/test/test_unary_ufuncs.py",
-        f"{pytorch_dir}/test/test_binary_ufuncs.py",
-        f"{pytorch_dir}/test/test_autograd.py",
-        f"-k={tests_to_skip}",
-        # "-n 0",  # TODO does this need rework? why should we not run this multithreaded? this does not seem to exist?
-        # -n numprocesses, --numprocesses=numprocesses
-        #         Shortcut for '--dist=load --tx=NUM*popen'.
-        #         With 'logical', attempt to detect logical CPU count (requires psutil, falls back to 'auto').
-        #         With 'auto', attempt to detect physical CPU count. If physical CPU count cannot be determined, falls back to 1.
-        #         Forced to 0 (disabled) when used with --pdb.
-    ]
-
-    if args.no_cache:
-        pytest_args += [
-            "-p",
-            "no:cacheprovider",  # Disable caching: useful when running in a container
+        pytest_args = [
+            f"{pytorch_dir}/test/test_nn.py",
+            f"{pytorch_dir}/test/test_torch.py",
+            f"{pytorch_dir}/test/test_cuda.py",
+            f"{pytorch_dir}/test/test_unary_ufuncs.py",
+            f"{pytorch_dir}/test/test_binary_ufuncs.py",
+            f"{pytorch_dir}/test/test_autograd.py",
+            f"-k={tests_to_skip}",
+            # "-n 0",  # TODO does this need rework? why should we not run this multithreaded? this does not seem to exist?
+            # -n numprocesses, --numprocesses=numprocesses
+            #         Shortcut for '--dist=load --tx=NUM*popen'.
+            #         With 'logical', attempt to detect logical CPU count (requires psutil, falls back to 'auto').
+            #         With 'auto', attempt to detect physical CPU count. If physical CPU count cannot be determined, falls back to 1.
+            #         Forced to 0 (disabled) when used with --pdb.
         ]
-    # Append any passthrough pytest args passed after "--"
-    pytest_args.extend(passthrough_pytest_args)
 
-    retcode = pytest.main(pytest_args)
-    print(f"Pytest finished with return code: {retcode}")
-    return retcode
+        if args.no_cache:
+            pytest_args += [
+                "-p",
+                "no:cacheprovider",  # Disable caching: useful when running in a container
+            ]
+        # Append any passthrough pytest args passed after "--"
+        pytest_args.extend(passthrough_pytest_args)
+
+        retcode = pytest.main(pytest_args)
+        print(f"Pytest finished with return code: {retcode}")
+        return retcode
+    except (ValueError, IndexError) as e:
+        print(f"[ERROR] Exception in PyTorch unit-tests runner: {e}")
+        sys.exit(1)
 
 
 def force_exit_with_code(retcode):

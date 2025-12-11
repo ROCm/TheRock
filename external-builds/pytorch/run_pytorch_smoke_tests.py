@@ -23,7 +23,10 @@ from pathlib import Path
 
 import pytest
 
-from pytorch_utils import get_unique_supported_devices_by_arch
+from pytorch_utils import (
+    get_unique_supported_devices_count,
+    set_gpu_execution_policy,
+)
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -74,58 +77,61 @@ def main() -> int:
         Exit code from pytest (0 for success, non-zero for failures).
         Returns non-zero if any device's tests fail.
     """
-    args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
+    try:
+        args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
 
-    # Assumes that the smoke-tests are located in the same directory as this script
-    smoke_tests_dir = THIS_SCRIPT_DIR / "smoke-tests"
+        # Assumes that the smoke-tests are located in the same directory as this script
+        smoke_tests_dir = THIS_SCRIPT_DIR / "smoke-tests"
 
-    if not smoke_tests_dir.exists():
-        print(f"ERROR: Directory at '{smoke_tests_dir}' does not exist.")
-        sys.exit(1)
+        if not smoke_tests_dir.exists():
+            print(f"ERROR: Directory at '{smoke_tests_dir}' does not exist.")
+            sys.exit(1)
 
-    # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
-    # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
-    # changing HIP_VISIBLE_DEVICES has no effect.
-    unique_supported_devices = get_unique_supported_devices_by_arch(args.amdgpu_family)
+        # CRITICAL: Query unique device count for iteration.
+        # HIP_VISIBLE_DEVICES will be set inside set_gpu_execution_policy.
+        unique_device_count = get_unique_supported_devices_count(args.amdgpu_family)
 
-    print(
-        f"Will run smoke tests on {len(unique_supported_devices)} device(s): {list(unique_supported_devices.keys())}"
-    )
+        print(f"Will run smoke tests on {unique_device_count} unique device(s)")
 
-    # Track overall success
-    overall_retcode = 0
+        # Track overall success
+        overall_retcode = 0
 
-    pytest_args = [
-        f"{smoke_tests_dir}",
-    ]
+        pytest_args = [
+            f"{smoke_tests_dir}",
+        ]
 
-    # Append any passthrough pytest args passed after "--"
-    pytest_args.extend(passthrough_pytest_args)
+        # Append any passthrough pytest args passed after "--"
+        pytest_args.extend(passthrough_pytest_args)
 
-    # Run smoke tests for each device
-    for arch, device_idx in unique_supported_devices.items():
+        # Run smoke tests for each unique device iteratively using offset
+        for offset in range(unique_device_count):
+            # Set HIP_VISIBLE_DEVICES for this specific device using "unique-single" policy
+            (arch, device_idx), = set_gpu_execution_policy(
+                args.amdgpu_family, policy="unique-single", offset=offset
+            )
+
+            print(f"\n{'='*60}")
+            print(f"Running smoke tests on device {device_idx} ({arch})")
+            print(f"{'='*60}")
+
+            retcode = pytest.main(pytest_args)
+            print(
+                f"Pytest finished for device {device_idx} ({arch}) with return code: {retcode}"
+            )
+
+            # Track if any test run failed
+            if retcode != 0:
+                overall_retcode = retcode
+
         print(f"\n{'='*60}")
-        print(f"Running smoke tests on device {device_idx} ({arch})")
+        print(f"All smoke tests completed. Overall return code: {overall_retcode}")
         print(f"{'='*60}")
 
-        # Set HIP_VISIBLE_DEVICES for this specific device
-        os.environ["HIP_VISIBLE_DEVICES"] = str(device_idx)
-        print(f"Set HIP_VISIBLE_DEVICES={device_idx}")
+        return overall_retcode
 
-        retcode = pytest.main(pytest_args)
-        print(
-            f"Pytest finished for device {device_idx} ({arch}) with return code: {retcode}"
-        )
-
-        # Track if any test run failed
-        if retcode != 0:
-            overall_retcode = retcode
-
-    print(f"\n{'='*60}")
-    print(f"All smoke tests completed. Overall return code: {overall_retcode}")
-    print(f"{'='*60}")
-
-    return overall_retcode
+    except (ValueError, IndexError) as e:
+        print(f"[ERROR] Exception in PyTorch smoke-tests runner: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
