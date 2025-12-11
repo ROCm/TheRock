@@ -25,7 +25,6 @@ This command:
 1. Checks out the specified submodules
 1. Looks for patch files in `patches/<patch-tag>/<project>/*.patch`
 1. Applies patches using `git am --whitespace=nowarn` (as user `therockbot`)
-1. Only applies patches for projects that were included in the fetch
 
 To skip applying patches:
 
@@ -48,7 +47,8 @@ After applying patches, the script:
 
 ### Saving patches with `save_patches.sh`
 
-Use [`build_tools/save_patches.sh`](/build_tools/save_patches.sh) to save local commits as patch files:
+Use [`build_tools/save_patches.sh`](/build_tools/save_patches.sh) to save local
+commits for a given submodule as patch files:
 
 ```bash
 # Syntax
@@ -63,45 +63,85 @@ This script:
 1. Removes existing `*.patch` files in `patches/<patch_subdir>/<project_name>/`
 1. Uses `git format-patch` to generate patches for all commits since `<base_tag>`
 1. Saves the patches to `patches/<patch_subdir>/<project_name>/`
-
-**Typical workflow**: When working with already-patched submodules, this script will
-regenerate the same patch files (or updated versions if you've modified commits).
-The "remove existing patch files" step ensures the patch directory stays clean and
-matches your current commit history.
+   - When working with an already-patched submodule, this script will
+     regenerate the same patch files (or updated versions if you've modified
+     commits).
 
 ### Using patches from rocm-libraries, rocm-systems, and other repositories
 
-External repositories like `rocm-libraries` and `rocm-systems` use TheRock's patches
-in their CI workflows to test changes against TheRock's build system. This creates a
-feedback loop where repositories can validate that their changes work with TheRock
-before merging.
+Several external repositories like
+[`rocm-libraries`](https://github.com/ROCm/rocm-libraries) and
+[`rocm-systems`](https://github.com/ROCm/rocm-systems) use the build system from
+TheRock in their own CI workflows. If there are patches in TheRock for those
+submodules, then those CI workflows may need to handle them carefully.
 
 **The typical CI pattern**:
 
 1. The external repository checks out its own code at HEAD
 1. Checks out TheRock into a subdirectory (e.g., `./TheRock`)
-1. Fetches all other dependencies via TheRock's `fetch_sources.py` (excluding the external repo itself)
+1. Fetches all _other_ dependencies via TheRock's `fetch_sources.py` (excluding
+   the external repo itself)
 1. Applies patches from `TheRock/patches/amd-mainline/<repo>/` to the external repository
 1. Builds using TheRock with the patched external repository as a source override
 
 **Example from rocm-libraries**:
 
 ```yml
-- name: Patch rocm-libraries
-  run: |
-    # Remove patches here if they cannot be applied cleanly, and they have not been deleted from TheRock repo
-    # rm ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
-    git -c user.name="therockbot" -c "user.email=therockbot@amd.com" am --whitespace=nowarn ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
+      # (1)
+      - name: "Checking out repository for rocm-libraries"
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # (2)
+      - name: Checkout TheRock repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: "ROCm/TheRock"
+          path: TheRock
+          ref: a1f6b57cc31890c05ab0094212ae0b269765db8e # 2025-11-25 commit
+
+      # (3)
+      - name: Fetch sources
+        run: |
+          ./TheRock/build_tools/fetch_sources.py --jobs 12 \
+              --no-include-rocm-libraries --no-include-ml-frameworks
+
+      # (4)
+      - name: Patch rocm-libraries
+        run: |
+          # Remove patches here if they cannot be applied cleanly, and they have not been deleted from TheRock repo
+          # rm ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
+          git -c user.name="therockbot" -c "user.email=therockbot@amd.com" am \
+              --whitespace=nowarn ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
+
+      # (5)
+      - name: Configure Projects
+        env:
+          extra_cmake_options: "-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=../"
+          BUILD_DIR: build
+        run: python3 TheRock/build_tools/github_actions/build_configure.py
+      - name: Build therock-dist
+        run: cmake --build TheRock/build --target therock-dist
 ```
 
-See the full workflows:
+Example full workflows:
 
-- [rocm-libraries/.github/workflows/therock-ci-linux.yml](https://github.com/ROCm/rocm-libraries/blob/develop/.github/workflows/therock-ci-linux.yml)
-- [rocm-systems/.github/workflows/therock-ci-linux.yml](https://github.com/ROCm/rocm-systems/blob/develop/.github/workflows/therock-ci-linux.yml)
+- [rocm-libraries - `.github/workflows/therock-ci-linux.yml`](https://github.com/ROCm/rocm-libraries/blob/develop/.github/workflows/therock-ci-linux.yml)
+- [rocm-systems - `.github/workflows/therock-ci-linux.yml`](https://github.com/ROCm/rocm-systems/blob/develop/.github/workflows/therock-ci-linux.yml)
 
-**Important**: The commented `rm` line is a safety valve. If a patch cannot be applied
-cleanly (e.g., after upstream changes), CI maintainers can uncomment this to remove
-problematic patches, allowing the build to proceed while the patch conflict is resolved.
+#### Resolving conflicts with patches
+
+> [!IMPORTANT]
+> If a patch does not apply, such as when another commit modifies a file that
+> the patch modifies, the workflow will fail.
+>
+> - If the conflicting commit is itself equivalent to the patch, then the patch
+>   can be deleted via the (commented out) `rm ...` line. When TheRock picks up
+>   the equivalent commit and the external repository in turns picks up a new
+>   the commit `ref` for TheRock, the `rm ...` line can be removed again.
+> - If the conflicting commit is NOT equivalent to the patch, for example if it
+>   modifies unrelated lines in one of the patched files, then a different
+>   resolution is needed. **This is why patches are expensive and should be
+>   avoided at all costs - they can block regular project development!**
 
 ## Rules for creating patches
 
