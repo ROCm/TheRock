@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Checks out PyTorch Audio.
+"""Checks out Rocm Apex.
 
 There is nothing that this script does which you couldn't do by hand, but because of
 the following, getting PyTorch sources ready to build with ToT TheRock built SDKs
@@ -13,7 +13,7 @@ consists of multiple steps:
 
 Primary usage:
 
-    ./pytorch_audio_repo.py checkout
+    ./pytorch_apex_repo.py checkout
 
 The checkout process combines the following activities:
 
@@ -35,11 +35,11 @@ import sys
 
 import repo_management
 
-THIS_MAIN_REPO_NAME = "pytorch_audio"
+THIS_MAIN_REPO_NAME = "apex"
 THIS_DIR = Path(__file__).resolve().parent
 
-DEFAULT_ORIGIN = "https://github.com/pytorch/audio.git"
-DEFAULT_HASHTAG = "nightly"
+DEFAULT_ORIGIN = "https://github.com/ROCm/apex.git"
+DEFAULT_HASHTAG = "master"
 DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 DEFAULT_PATCHSET = None
 
@@ -93,18 +93,16 @@ def main(cl_args: list[str]):
             help="Directory of the torch checkout, for loading the related_commits file that can populate alternate default values for --gitrepo-origin, --repo-hashtag, and --patchset. If missing then fallback/upstream defaults will be used",
         )
 
-    p = argparse.ArgumentParser("pytorch_audio_repo.py")
+    p = argparse.ArgumentParser("pytorch_apex_repo.py")
     sub_p = p.add_subparsers(required=True)
-    checkout_p = sub_p.add_parser(
-        "checkout", help="Clone PyTorch Audio locally and checkout"
-    )
+    checkout_p = sub_p.add_parser("checkout", help="Clone Apex locally and checkout")
     add_common(checkout_p)
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
     checkout_p.add_argument("--jobs", type=int, help="Number of fetch jobs")
     checkout_p.add_argument(
         "--hipify",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Run hipify",
     )
     checkout_p.add_argument(
@@ -136,7 +134,7 @@ def main(cl_args: list[str]):
     ) = repo_management.read_pytorch_rocm_pins(
         args.torch_dir,
         os="centos",  # Read pins for "centos" on Linux and Windows
-        project="torchaudio",
+        project="apex",
         default_origin=DEFAULT_ORIGIN,
         default_hashtag=DEFAULT_HASHTAG,
         default_patchset=DEFAULT_PATCHSET,
@@ -144,7 +142,7 @@ def main(cl_args: list[str]):
 
     if args.require_related_commit and not has_related_commit:
         raise ValueError(
-            f"Could not find torchaudio in '{args.torch_dir}/related_commits' (did you mean to set a different --torch-dir?)"
+            f"Could not find apex in '{args.torch_dir}/related_commits' (did you mean to set a different --torch-dir?)"
         )
 
     # Priority order:
