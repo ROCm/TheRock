@@ -1,2 +1,3 @@
 # hipDNN Samples
-[components.test."ml-libs/hipdnn_samples/stage"]
+# No artifacts to archive at this time.
+# hipdnn samples build is just to ensure compilation succeeds in CI.
