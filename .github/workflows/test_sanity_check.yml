@@ -97,10 +97,10 @@ jobs:
       # Windows: use PowerShell + Get-ChildItem
       - name: Locate GPU tools (Windows)
         if: ${{ always() && runner.os == 'Windows' }}
-        shell: powershell
+        shell: shell
         run: |
-         Get-ChildItem -Path . -Recurse -File -Filter "amd-smi.exe"
-         Get-ChildItem -Path . -Recurse -File -Filter "hipInfo.exe"
+         find . -name "amd-smi.exe"
+         find . -name "hipInfo.exe"
   
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
