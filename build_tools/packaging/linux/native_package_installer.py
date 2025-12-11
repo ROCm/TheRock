@@ -30,7 +30,7 @@ Repository installation (uses run-id to fetch from remote repo):
 import argparse
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from packaging_base_manager import PackageManagerBase
 from native_package_info import PackageInfo
 from native_package_info import PackageLoader
@@ -59,11 +59,11 @@ class PackageInstaller(PackageManagerBase):
         version_flag: bool,
         upload: str,
         artifact_group: str,
-        package_suffix: str,
-        bucket: str,
-        release_type: str,
-        composite: bool,
-        loader,
+        package_suffix: Optional[str] = None,
+        bucket: Optional[str] = None,
+        release_type: Optional[str] = None,
+        composite: bool = False,
+        loader = None,
     ):
         """
         Initialize PackageInstaller with configuration and package list.
@@ -95,9 +95,9 @@ class PackageInstaller(PackageManagerBase):
             self.composite = composite
             self.version_flag = version_flag
             self.artifact_group = artifact_group
-            self.package_suffix = package_suffix
-            self.bucket = bucket
-            self.release_type = release_type
+            self.package_suffix = package_suffix or ""
+            self.bucket = bucket or ""
+            self.release_type = release_type or ""
             self.upload = upload
             self.failed_packages = {}
             self.loader = loader
@@ -650,13 +650,18 @@ def parse_arguments():
     )
     parser.add_argument(
         "--package-suffix",
-        help="Unique identifier for this installation run (optional)",
+        default=None,
+        help="Package suffix for custom builds (optional, e.g., 'asan' for AddressSanitizer builds)",
     )
     parser.add_argument(
-        "--release-type", help="Unique identifier for this installation run (optional)"
+        "--release-type",
+        default=None,
+        help="Release type identifier (optional, e.g., 'test', 'release')"
     )
     parser.add_argument(
-        "--bucket", help="Unique identifier for this installation run (optional)"
+        "--bucket",
+        default=None,
+        help="S3 bucket name for package repository (optional)"
     )
 
     return parser.parse_args()
