@@ -102,7 +102,9 @@ except Exception as e:
         sys.exit(1)
 
 
-def get_all_supported_devices(amdgpu_family: str = "", log: bool = True) -> dict[str, list[int]]:
+def get_all_supported_devices(
+    amdgpu_family: str = "", log: bool = True
+) -> dict[str, list[int]]:
     """Detect supported AMDGPU devices and return mapping of arch to device indices.
 
     This function queries available GPUs and returns a mapping of architecture
@@ -227,7 +229,10 @@ def get_all_supported_devices(amdgpu_family: str = "", log: bool = True) -> dict
     return result
 
 
-def get_unique_supported_devices(amdgpu_family: str = "", log: bool = True) -> dict[str, int]:
+def get_unique_supported_devices(
+    amdgpu_family: str = "",
+    log: bool = False
+) -> dict[str, int]:
     """
     Returns a dictionary mapping each supported architecture to a single device index (the first one for each).
     This is a convenience wrapper over get_all_supported_devices for situations where
@@ -247,7 +252,9 @@ def get_unique_supported_devices(amdgpu_family: str = "", log: bool = True) -> d
     return unique_devices
 
 
-def get_unique_supported_devices_count(amdgpu_family: str = "", log: bool = False) -> int:
+def get_unique_supported_devices_count(
+    amdgpu_family: str = "", log: bool = False
+) -> int:
     """Get the number of unique supported architectures.
 
     Args:
@@ -303,9 +310,15 @@ def set_gpu_execution_policy(
 
     if policy == "single":
         # Flatten all (arch, idx) pairs and select using offset.
-        flat_devices = [(arch, idx) for arch, indices in supported_devices.items() for idx in indices]
+        flat_devices = [
+            (arch, idx)
+            for arch, indices in supported_devices.items()
+            for idx in indices
+        ]
         if offset < 0 or offset >= len(flat_devices):
-            raise IndexError(f"Offset {offset} out of range for {len(flat_devices)} total devices")
+            raise IndexError(
+                f"Offset {offset} out of range for {len(flat_devices)} total devices"
+            )
         arch, device_idx = flat_devices[offset]
         os.environ["HIP_VISIBLE_DEVICES"] = str(device_idx)
         if log:
@@ -316,7 +329,9 @@ def set_gpu_execution_policy(
         # Selects a single device (first device) from unique architectures using offset.
         flat_unique_devices = [(arch, idx) for arch, idx in supported_devices.items()]
         if offset < 0 or offset >= len(flat_unique_devices):
-            raise IndexError(f"Offset {offset} out of range for {len(flat_unique_devices)} unique devices")
+            raise IndexError(
+                f"Offset {offset} out of range for {len(flat_unique_devices)} unique devices"
+            )
         arch, device_idx = flat_unique_devices[offset]
         os.environ["HIP_VISIBLE_DEVICES"] = str(device_idx)
         if log:
@@ -325,7 +340,10 @@ def set_gpu_execution_policy(
 
     elif policy == "unique":
         # Use one device per architecture (first device of each arch) simultaneously
-        flat_devices = [(arch, idx) for arch, idx in supported_devices.items()]
+        flat_devices = [
+            (arch, idx)
+            for arch, idx in supported_devices.items()
+        ]
         device_indices_str = ",".join(str(idx) for _, idx in flat_devices)
         os.environ["HIP_VISIBLE_DEVICES"] = device_indices_str
         if log:
@@ -335,7 +353,11 @@ def set_gpu_execution_policy(
 
     else:
         # "all" policy: Use all supported devices (can have multiple per arch)
-        flat_devices = [(arch, idx) for arch, indices in supported_devices.items() for idx in indices]
+        flat_devices = [
+            (arch, idx)
+            for arch, indices in supported_devices.items()
+            for idx in indices
+        ]
         device_indices_str = ",".join(str(idx) for _, idx in flat_devices)
         os.environ["HIP_VISIBLE_DEVICES"] = device_indices_str
         if log:

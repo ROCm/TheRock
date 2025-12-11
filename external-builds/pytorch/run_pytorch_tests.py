@@ -223,7 +223,9 @@ def main() -> int:
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
         # changing HIP_VISIBLE_DEVICES has no effect.
         # For unit tests, run only on the first supported device (policy="single")
-        (first_arch, _), = set_gpu_execution_policy(args.amdgpu_family, policy="single")
+        ((first_arch, _),) = set_gpu_execution_policy(
+            args.amdgpu_family, policy="single"
+        )
         print(f"Using AMDGPU family: {first_arch}")
 
         # Determine PyTorch version

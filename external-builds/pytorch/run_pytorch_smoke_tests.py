@@ -106,7 +106,7 @@ def main() -> int:
         # Run smoke tests for each unique device iteratively using offset
         for offset in range(unique_device_count):
             # Set HIP_VISIBLE_DEVICES for this specific device using "unique-single" policy
-            (arch, device_idx), = set_gpu_execution_policy(
+            ((arch, device_idx),) = set_gpu_execution_policy(
                 args.amdgpu_family, policy="unique-single", offset=offset
             )
 
