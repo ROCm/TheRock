@@ -124,8 +124,7 @@ if __name__ == "__main__":
         try:
             default_package_version = compute_version(release_type="dev")
         except Exception:
-            # Fallback to 0.0.0 if compute_version fails
-            default_package_version = "0.0.0"
+            default_package_version = "ADHOCBUILD"
 
     parser.add_argument(
         "--package-version",
