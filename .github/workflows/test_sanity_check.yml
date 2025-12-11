@@ -100,23 +100,9 @@ jobs:
         if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
         run: |
-          $ErrorActionPreference = "SilentlyContinue"
-
-          Write-Host "amd-smi.exe location:"
-          $amdSmiExe = Get-ChildItem -Path . -Recurse -File -Filter "amd-smi.exe"
-          if ($amdSmiExe) {
-            $amdSmiExe | ForEach-Object { $_.FullName }
-          } else {
-            Write-Host "amd-smi.exe not found"
-          }
-
-          Write-Host "hipInfo.exe location:"
-          $hipInfoExe = Get-ChildItem -Path . -Recurse -File -Filter "hipInfo.exe"
-          if ($hipInfoExe) {
-            $hipInfoExe | ForEach-Object { $_.FullName }
-          } else {
-            Write-Host "hipInfo.exe not found"
-          }
+        Get-ChildItem -Path . -Recurse -File -Filter "amd-smi.exe
+        Get-ChildItem -Path . -Recurse -File -Filter "hipInfo.exe
+  
 
 
       - name: Set HIP_CLANG_PATH for windows
