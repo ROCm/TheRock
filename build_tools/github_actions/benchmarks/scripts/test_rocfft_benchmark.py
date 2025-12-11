@@ -33,7 +33,7 @@ class ROCfftBenchmark(BenchmarkBase):
         NUM_ITERATIONS = 20  # Number of benchmark iterations
         
         # Load benchmark configuration
-        config_file = self.script_dir.parent / 'configs' / 'benchmarks' / 'rocfft.json'
+        config_file = self.script_dir.parent / 'configs' / 'rocfft.json'
         with open(config_file, "r") as f:
             data = json.load(f)
         

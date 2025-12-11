@@ -141,14 +141,26 @@ Key components:
 
 Example:
 ```python
+import sys
+from pathlib import Path
+from typing import Dict, List, Tuple, Any
+from prettytable import PrettyTable
+
+sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
+sys.path.insert(0, str(Path(__file__).parent))         # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
+from utils.logger import log
 
 class YourBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name='your_lib', display_name='YourLib')
+        self.log_file = self.script_dir / "your_lib_bench.log"
     
     def run_benchmarks(self) -> None:
         """Execute benchmark binary and log output."""
+        # Load config if needed
+        config_file = self.script_dir.parent / 'configs' / 'your_lib.json'
+        
         # Your benchmark execution logic here
         pass
     
@@ -159,7 +171,7 @@ class YourBenchmark(BenchmarkBase):
         pass
 
 if __name__ == '__main__':
-    run_benchmark_main(YourBenchmark())
+    run_benchmark_main(YourBenchmark())  # Handles sys.exit() internally
 ```
 
 ### 2. Add to Benchmark Test Matrix

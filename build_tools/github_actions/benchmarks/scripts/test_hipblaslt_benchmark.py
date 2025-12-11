@@ -37,7 +37,7 @@ class HipblasltBenchmark(BenchmarkBase):
         ACTIVATION_TYPE = "none"
         
         # Load benchmark configuration
-        config_file = self.script_dir.parent / 'configs' / 'benchmarks' / 'hipblaslt.json'
+        config_file = self.script_dir.parent / 'configs' / 'hipblaslt.json'
         with open(config_file, "r") as f:
             config_data = json.load(f)
         
