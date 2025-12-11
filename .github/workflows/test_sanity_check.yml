@@ -94,13 +94,38 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--base-only"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      # Windows: use PowerShell + Get-ChildItem
       - name: Locate GPU tools (Windows)
         if: ${{ always() && runner.os == 'Windows' }}
-        shell: shell
+        shell: powershell
         run: |
-         find . -name "amd-smi.exe"
-         find . -name "hipInfo.exe"
+          $ErrorActionPreference = "SilentlyContinue"
+
+          Write-Host "=== hipInfo via PATH (where.exe) ==="
+          where.exe hipInfo.exe 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "hipInfo.exe not found on PATH via where.exe"
+          }
+
+          Write-Host "=== hipInfo via PATH (Get-Command) ==="
+          $hipInfoCmd = Get-Command hipInfo.exe -ErrorAction SilentlyContinue
+          if ($hipInfoCmd) {
+            $hipInfoCmd | ForEach-Object { $_.Source }
+          } else {
+            Write-Host "hipInfo.exe not found by Get-Command"
+          }
+
+          Write-Host "=== hipInfo.exe under workspace ==="
+          $root = $env:GITHUB_WORKSPACE
+          Write-Host "Searching under: $root"
+
+          $hipInfoFiles = Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'hipInfo.exe' }
+
+          if ($hipInfoFiles) {
+            $hipInfoFiles | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "No hipInfo.exe found under workspace"
+          }
   
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
