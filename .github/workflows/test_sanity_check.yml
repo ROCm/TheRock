@@ -100,24 +100,44 @@ jobs:
         run: |
           $ErrorActionPreference = "SilentlyContinue"
 
-          Write-Host "amd-smi / amdsmi related paths:"
+          Write-Host "=== amd-smi / amdsmi related paths (excluding .git) ==="
           $amdSmiItems = Get-ChildItem -Path . -Recurse -Force |
-            Where-Object { $_.Name -like "*amd-smi*" -or $_.Name -like "*amdsmi*" }
+            Where-Object {
+              $_.FullName -notmatch '\\\.git(\\|$)' -and
+              ($_.Name -like "*amd-smi*" -or $_.Name -like "*amdsmi*")
+            }
 
           if ($amdSmiItems) {
             $amdSmiItems | ForEach-Object { $_.FullName }
           } else {
-            Write-Host "No amd-smi/amdsmi paths found"
+            Write-Host "No amd-smi/amdsmi paths found (other than git metadata)"
           }
 
-          Write-Host "hipinfo / hipInfo related paths:"
+          Write-Host "=== hipinfo / hipInfo related paths (excluding .git) ==="
           $hipInfoItems = Get-ChildItem -Path . -Recurse -Force |
-            Where-Object { $_.Name -like "*hipinfo*" }
+            Where-Object {
+              $_.FullName -notmatch '\\\.git(\\|$)' -and
+              $_.Name -ilike "*hipinfo*"
+            }
 
           if ($hipInfoItems) {
             $hipInfoItems | ForEach-Object { $_.FullName }
           } else {
             Write-Host "No hipinfo/hipInfo paths found"
+          }
+
+          Write-Host "=== Try running hipInfo.exe from THEROCK_BIN_DIR ==="
+          if ($env:THEROCK_BIN_DIR) {
+            $hipInfoPath = Join-Path $env:THEROCK_BIN_DIR "hipInfo.exe"
+            if (Test-Path $hipInfoPath) {
+              Write-Host "Found hipInfo.exe at $hipInfoPath"
+              & $hipInfoPath --help  # or whatever args you want
+              Write-Host "hipInfo.exe finished with exit code $LASTEXITCODE"
+            } else {
+              Write-Host "hipInfo.exe not found under THEROCK_BIN_DIR='$env:THEROCK_BIN_DIR'"
+            }
+          } else {
+            Write-Host "THEROCK_BIN_DIR is not set; skipping hipInfo.exe run"
           }
   
       - name: Set HIP_CLANG_PATH for windows
