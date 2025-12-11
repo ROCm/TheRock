@@ -17,7 +17,39 @@ These workflows can be triggered **manually** and run on actual Strix hardware w
 
 **Purpose:** Comprehensive AI/ML testing with full control over test parameters
 
-### **How to Run**
+**Triggers:**
+- ✅ **Automatic:** Runs on push/PR to Strix test files
+- ✅ **Manual:** Can be triggered on-demand with custom parameters
+
+### **Automatic Triggers**
+
+The workflow runs automatically when you push changes to:
+
+```yaml
+Branches:
+  - users/*/strix_*      # Any user's strix branch
+  - main                 # Main branch
+  - develop              # Develop branch
+
+Paths (must change at least one):
+  - tests/strix_ai/**                  # Any Strix AI test file
+  - .github/workflows/strix_ai*.yml    # Workflow files
+  - build_tools/_therock_utils/**      # Utility files
+```
+
+**Automatic Run Configuration:**
+- Platform: Linux (default)
+- Strix Variant: gfx1151 (Strix Halo)
+- Test Category: quick (smoke tests)
+- Test Type: quick
+
+**Skip Automatic Run:**
+Add `[skip-strix-tests]` to your commit message:
+```bash
+git commit -m "Update docs [skip-strix-tests]"
+```
+
+### **Manual Trigger (Override Defaults)**
 
 #### **Via GitHub UI:**
 
@@ -100,6 +132,43 @@ curl -X POST \
 | **smoke** | Quick validation tests | Sanity checking |
 | **quick** | Reduced test set | Regular validation |
 | **full** | Complete test suite | Before merge, comprehensive validation |
+
+---
+
+## 🔄 **Automatic vs Manual Behavior**
+
+| Aspect | Automatic (Push/PR) | Manual (workflow_dispatch) |
+|--------|---------------------|----------------------------|
+| **Trigger** | On file changes | On demand |
+| **Platform** | Linux (default) | Choose: Linux or Windows |
+| **Strix Variant** | gfx1151 (default) | Choose: gfx1150 or gfx1151 |
+| **Test Category** | quick (default) | Choose: all, vlm, vla, vit, cv, etc. |
+| **Test Type** | quick (default) | Choose: smoke, quick, or full |
+| **Duration** | 5-10 min | Depends on selection |
+
+**Example Automatic Run:**
+```bash
+# Push to your branch
+git add tests/strix_ai/vlm/test_clip.py
+git commit -m "Improve CLIP test"
+git push
+
+# Workflow automatically runs:
+# - Platform: linux
+# - Variant: gfx1151
+# - Category: quick
+# - Type: quick
+```
+
+**Example Manual Run:**
+```bash
+# Override all defaults
+gh workflow run strix_ai_tests.yml \
+  -f platform=windows \
+  -f strix_variant=gfx1150 \
+  -f test_category=all \
+  -f test_type=full
+```
 
 ---
 

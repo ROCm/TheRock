@@ -1,7 +1,27 @@
 name: Strix AI/ML Testing
 
-# Custom workflow for Strix AI testing - can be triggered manually
+# Runs automatically on push/PR to Strix test files, or manually on demand
 on:
+  # Automatic triggers
+  push:
+    branches:
+      - 'users/*/strix_*'      # Any user's strix branch
+      - 'main'                  # Main branch
+      - 'develop'               # Develop branch
+    paths:
+      - 'tests/strix_ai/**'     # Strix AI tests
+      - '.github/workflows/strix_ai*.yml'  # This workflow
+      - 'build_tools/_therock_utils/**'    # Utilities used by tests
+  
+  pull_request:
+    branches:
+      - 'main'
+      - 'develop'
+    paths:
+      - 'tests/strix_ai/**'
+      - '.github/workflows/strix_ai*.yml'
+  
+  # Manual trigger with options
   workflow_dispatch:
     inputs:
       platform:
@@ -63,26 +83,35 @@ permissions:
 
 jobs:
   strix_ai_test:
-    name: 'Strix AI Tests (${{ inputs.platform }}/${{ inputs.strix_variant }}/${{ inputs.test_category }})'
-    runs-on: ${{ inputs.runner_label != '' && inputs.runner_label || (inputs.platform == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
+    # Use defaults for automatic triggers (push/PR), or manual inputs for workflow_dispatch
+    name: 'Strix AI Tests (${{ inputs.platform || 'linux' }}/${{ inputs.strix_variant || 'gfx1151' }}/${{ inputs.test_category || 'quick' }})'
+    runs-on: ${{ inputs.runner_label != '' && inputs.runner_label || ((inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
     timeout-minutes: 120
+    
+    # Skip if commit message contains [skip-strix-tests]
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message, '[skip-strix-tests]')
     
     # Linux: Use container with ROCm support
     container:
-      image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
-      options: ${{ inputs.platform == 'linux' && '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0' || '' }}
+      image: ${{ (inputs.platform || 'linux') == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
+      options: ${{ (inputs.platform || 'linux') == 'linux' && '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0' || '' }}
     
     defaults:
       run:
-        shell: ${{ inputs.platform == 'linux' && 'bash' || 'powershell' }}
+        shell: ${{ (inputs.platform || 'linux') == 'linux' && 'bash' || 'powershell' }}
     
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}
       OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
-      AMDGPU_FAMILIES: ${{ inputs.strix_variant }}
-      TEST_TYPE: ${{ inputs.test_type }}
+      # Use defaults for automatic triggers
+      AMDGPU_FAMILIES: ${{ inputs.strix_variant || 'gfx1151' }}
+      TEST_TYPE: ${{ inputs.test_type || 'quick' }}
+      TEST_CATEGORY: ${{ inputs.test_category || 'quick' }}
+      PLATFORM: ${{ inputs.platform || 'linux' }}
       PYTHONUNBUFFERED: 1
     
     steps:
@@ -99,17 +128,23 @@ jobs:
       
       - name: Display System Info
         run: |
-          echo "Platform: ${{ inputs.platform }}"
-          echo "Strix Variant: ${{ inputs.strix_variant }}"
-          echo "Test Category: ${{ inputs.test_category }}"
-          echo "Test Type: ${{ inputs.test_type }}"
+          echo "=== Strix AI Test Run ==="
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Platform: ${{ env.PLATFORM }}"
+          echo "Strix Variant: ${{ env.AMDGPU_FAMILIES }}"
+          echo "Test Category: ${{ env.TEST_CATEGORY }}"
+          echo "Test Type: ${{ env.TEST_TYPE }}"
           echo "Runner: ${{ runner.name }}"
+          echo ""
+          echo "=== Python Info ==="
           python --version
           pip --version
       
       # Linux-specific: Check GPU
       - name: Check ROCm/GPU (Linux)
-        if: inputs.platform == 'linux'
+        if: env.PLATFORM == 'linux'
         run: |
           echo "=== ROCm Info ==="
           if command -v rocminfo &> /dev/null; then
@@ -126,7 +161,7 @@ jobs:
       
       # Windows-specific: Check GPU
       - name: Check GPU (Windows)
-        if: inputs.platform == 'windows'
+        if: env.PLATFORM == 'windows'
         run: |
           Write-Host "=== GPU Info ==="
           Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion
@@ -135,10 +170,13 @@ jobs:
           Get-ChildItem Env: | Where-Object { $_.Name -like "*ROCM*" -or $_.Name -like "*HIP*" }
       
       - name: Setup Test Environment
+        # Skip setup_test_environment if running on branch without artifacts
+        if: env.ARTIFACT_RUN_ID != github.run_id
+        continue-on-error: true
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
-          ARTIFACT_GROUP: ${{ inputs.platform }}_release_${{ inputs.strix_variant }}
+          ARTIFACT_GROUP: ${{ env.PLATFORM }}_release_${{ env.AMDGPU_FAMILIES }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--pytorch --tests"
@@ -171,7 +209,7 @@ jobs:
           fi
       
       - name: Run Strix AI Tests - All
-        if: inputs.test_category == 'all'
+        if: env.TEST_CATEGORY == 'all'
         run: |
           python -m pytest tests/strix_ai/ -v -s \
             --junit-xml=test-results-all.xml \
@@ -179,42 +217,42 @@ jobs:
             || exit 0
       
       - name: Run Strix AI Tests - VLM
-        if: inputs.test_category == 'vlm'
+        if: env.TEST_CATEGORY == 'vlm'
         run: |
           python -m pytest tests/strix_ai/vlm/ -v -s \
             --junit-xml=test-results-vlm.xml \
             || exit 0
       
       - name: Run Strix AI Tests - VLA
-        if: inputs.test_category == 'vla'
+        if: env.TEST_CATEGORY == 'vla'
         run: |
           python -m pytest tests/strix_ai/vla/ -v -s \
             --junit-xml=test-results-vla.xml \
             || exit 0
       
       - name: Run Strix AI Tests - ViT
-        if: inputs.test_category == 'vit'
+        if: env.TEST_CATEGORY == 'vit'
         run: |
           python -m pytest tests/strix_ai/vit/ -v -s \
             --junit-xml=test-results-vit.xml \
             || exit 0
       
       - name: Run Strix AI Tests - CV
-        if: inputs.test_category == 'cv'
+        if: env.TEST_CATEGORY == 'cv'
         run: |
           python -m pytest tests/strix_ai/cv/ -v -s \
             --junit-xml=test-results-cv.xml \
             || exit 0
       
       - name: Run Strix AI Tests - Optimization
-        if: inputs.test_category == 'optimization'
+        if: env.TEST_CATEGORY == 'optimization'
         run: |
           python -m pytest tests/strix_ai/optimization/ -v -s \
             --junit-xml=test-results-optimization.xml \
             || exit 0
       
       - name: Run Strix AI Tests - Quick Smoke Tests
-        if: inputs.test_category == 'quick'
+        if: env.TEST_CATEGORY == 'quick'
         run: |
           python -m pytest tests/strix_ai/ -v -s \
             -m "quick" \
@@ -225,7 +263,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: strix-ai-test-results-${{ inputs.platform }}-${{ inputs.strix_variant }}-${{ inputs.test_category }}
+          name: strix-ai-test-results-${{ env.PLATFORM }}-${{ env.AMDGPU_FAMILIES }}-${{ env.TEST_CATEGORY }}
           path: test-results-*.xml
           retention-days: 30
       
@@ -233,10 +271,12 @@ jobs:
         if: always()
         run: |
           echo "=== Strix AI Test Summary ==="
-          echo "Platform: ${{ inputs.platform }}"
-          echo "Strix Variant: ${{ inputs.strix_variant }}"
-          echo "Test Category: ${{ inputs.test_category }}"
-          echo "Test Type: ${{ inputs.test_type }}"
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Platform: ${{ env.PLATFORM }}"
+          echo "Strix Variant: ${{ env.AMDGPU_FAMILIES }}"
+          echo "Test Category: ${{ env.TEST_CATEGORY }}"
+          echo "Test Type: ${{ env.TEST_TYPE }}"
           echo "Runner: ${{ runner.name }}"
           echo "Status: ${{ job.status }}"
           
@@ -247,8 +287,8 @@ jobs:
   # Optional: Run on multiple platforms in parallel
   strix_ai_test_matrix:
     name: 'Strix AI Matrix Tests'
-    # Only run if triggered with special input
-    if: github.event.inputs.test_category == 'all' && github.event.inputs.test_type == 'full'
+    # Only run if triggered manually with 'all' category and 'full' test type
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_category == 'all' && github.event.inputs.test_type == 'full'
     strategy:
       fail-fast: false
       matrix:
@@ -272,7 +312,7 @@ jobs:
       
       - name: Run Tests
         env:
-          AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant }}
+          AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
         run: |
           python -m pytest tests/strix_ai/${{ matrix.category }}/ -v
 
