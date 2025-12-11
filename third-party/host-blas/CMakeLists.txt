@@ -41,6 +41,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     endif()
 
     therock_cmake_subproject_declare(therock-host-blas
+      USE_DIST_AMDGPU_TARGETS
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL
       NO_MERGE_COMPILE_COMMANDS

@@ -60,7 +60,7 @@ jobs:
     steps:
       - name: "Fetch 'build_tools' from repository"
         if: ${{ runner.os == 'Windows' }}
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           sparse-checkout: build_tools
           path: prejob
@@ -71,9 +71,18 @@ jobs:
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: "ROCm/TheRock"
+
+      - name: Pre-job cleanup Docker containers on Linux
+        if: ${{ runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          # Remove any stopped containers
+          docker container prune -f || true
+          # Remove dangling networks
+          docker network prune -f || true
 
       - name: Run setup test environment workflow
         uses: './.github/actions/setup_test_environment'
@@ -88,6 +97,11 @@ jobs:
       - name: Set HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
         run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
+
+      - name: Driver / GPU sanity check
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          python ./build_tools/print_driver_gpu_info.py
 
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5

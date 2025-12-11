@@ -6,11 +6,11 @@ on:
       amdgpu_family:
         required: true
         type: string
-      python_versions:
+      python_version:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: true
         type: string
       s3_subdir:
@@ -22,6 +22,21 @@ on:
         type: string
       tar_url:
         description: URL to TheRock tarball to build against
+        type: string
+      cloudfront_url:
+        description: CloudFront URL pointing to Python index
+        required: true
+        type: string
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout. Defaults to `ROCm/TheRock`."
+        type: string
+        default: "ROCm/TheRock"
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
   workflow_dispatch:
     inputs:
@@ -38,12 +53,12 @@ on:
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
-      python_versions:
+      python_version:
         required: true
         type: string
         default: "3.12"
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: true
         type: string
         default: "dev"
@@ -57,10 +72,24 @@ on:
       tar_url:
         description: URL to TheRock tarball to build against
         type: string
+      cloudfront_url:
+        description: CloudFront base URL pointing to Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2"
+      cloudfront_staging_url:
+        description: CloudFront base URL pointing to staging Python index
+        type: string
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2-staging"
+      jax_ref:
+        description: rocm-jax repository ref/branch to check out
+        type: string
+        default: rocm-jaxlib-v0.8.0
 
 permissions:
   id-token: write
   contents: read
+
+run-name: Build Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
 
 jobs:
   build_jax_wheels:
@@ -74,10 +103,10 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
     steps:
       - name: Checkout TheRock
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Checkout JAX
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           path: jax
           repository: rocm/rocm-jax
@@ -89,9 +118,9 @@ jobs:
           git config --global user.email "therockbot@amd.com"
 
       - name: "Setting up Python"
-        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
         with:
-          python-version: ${{ inputs.python_versions }}
+          python-version: ${{ inputs.python_version }}
 
       - name: Build JAX Wheels
         env:
@@ -101,7 +130,7 @@ jobs:
           pushd jax
           python3 build/ci_build \
             --compiler=clang \
-            --python-versions="${{ inputs.python_versions }}" \
+            --python-versions="${{ inputs.python_version }}" \
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
@@ -112,7 +141,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
@@ -130,3 +159,43 @@ jobs:
           source .venv/bin/activate
           pip3 install boto3 packaging
           python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+
+  generate_target_to_run:
+    name: Generate target_to_run
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.amdgpu_family }}
+          PLATFORM: "linux"
+        run: python ./build_tools/github_actions/configure_target_run.py
+
+  test_jax_wheels:
+    name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    needs: [build_jax_wheels, generate_target_to_run]
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/test_linux_jax_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      release_type: ${{ inputs.release_type }}
+      s3_subdir: ${{ inputs.s3_subdir }}
+      package_index_url: ${{ inputs.cloudfront_url }}
+      rocm_version: ${{ inputs.rocm_version }}
+      tar_url: ${{ inputs.tar_url }}
+      python_version: ${{ inputs.python_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
+      jax_ref: ${{ inputs.jax_ref }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}

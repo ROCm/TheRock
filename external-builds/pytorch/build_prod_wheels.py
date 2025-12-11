@@ -113,7 +113,6 @@ from datetime import date
 import json
 import os
 from pathlib import Path
-from packaging.version import Version, parse
 import platform
 import shutil
 import shlex
@@ -401,9 +400,9 @@ def do_build(args: argparse.Namespace):
         # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
         # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
         # See also https://github.com/ROCm/TheRock/issues/1999.
-        env[
-            "TRITON_APPEND_CMAKE_ARGS"
-        ] = "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+        env["TRITON_APPEND_CMAKE_ARGS"] = (
+            "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+        )
 
     if is_windows:
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
@@ -628,8 +627,7 @@ def do_build_pytorch(
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
-    pytorch_build_version_parsed = parse(pytorch_build_version)
-    print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+    print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
     ## Disable FBGEMM_GENAI on Linux for PyTorch, as not available for 2.7 on rocm/pytorch
     ## and causes build failures for PyTorch >= 2.8.
@@ -821,7 +819,7 @@ def do_build_pytorch_audio(
     # Compute version.
     build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch audio BUILD_VERSION: {build_version}")
+    print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -851,7 +849,7 @@ def do_build_pytorch_vision(
     # Compute version.
     build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch vision BUILD_VERSION: {build_version}")
+    print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -997,10 +995,12 @@ def main(argv: list[str]):
     )
     today = date.today()
     formatted_date = today.strftime("%Y%m%d")
+    # TODO(scotttodd): drop the default here, derive from installed rocm packages
+    #     using the same logic we have in build_tools/github_actions/determine_version.py
     build_p.add_argument(
         "--version-suffix",
-        default=f"+rocmsdk{formatted_date}",
-        help="PyTorch version suffix",
+        default=f"+devrocm{formatted_date}",
+        help="PyTorch version suffix (favor computing with build_tools/github_actions/determine_version.py and passing explicitly)",
     )
     build_p.add_argument(
         "--clean",
