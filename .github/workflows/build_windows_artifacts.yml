@@ -151,44 +151,38 @@ jobs:
           ccache -z
           python3 build_tools/github_actions/build_configure.py
 
+      - name: Start memory monitoring (detached)
+        if: ${{ inputs.monitor_memory }}
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path "${env:BUILD_DIR}\logs" | Out-Null
+          $args = @(
+            "build_tools\memory_monitor.py",
+            "--phase", "Build Phase",
+            "--log-file", "${env:BUILD_DIR}\logs\build_memory_log_${env:GITHUB_JOB}.jsonl",
+            "--stop-signal-file", "${env:BUILD_DIR}\logs\stop_monitor_${env:GITHUB_JOB}.signal",
+            "--background"
+          )
+          $p = Start-Process -FilePath "python" -ArgumentList $args -PassThru
+          "$($p.Id)" | Out-File -FilePath "${env:BUILD_DIR}\logs\memory_monitor.pid" -Encoding ASCII
+          Write-Host "Memory monitoring started with PID: $($p.Id)"
+
       - name: Build therock-archives and therock-dist
         shell: bash
         run: |
-          # Start memory monitoring if enabled
-          if [ "${{ inputs.monitor_memory }}" == "true" ]; then
-            # Create logs directory in BUILD_DIR
-            mkdir -p "${{ env.BUILD_DIR }}/logs"
-
-            # Start memory monitor in background with stop signal file support
-            python build_tools/memory_monitor.py \
-              --phase "Build Phase" \
-              --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
-              --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal" \
-              --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
-
-            # Capture PID
-            MONITOR_PID=$!
-            echo "Memory monitoring started with PID: $MONITOR_PID"
-            sleep 2
-          fi
-
-          # Run the build
           cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
-          # Stop memory monitoring if it was started
-          if [ "${{ inputs.monitor_memory }}" == "true" ] && [ ! -z "$MONITOR_PID" ]; then
-            echo "Gracefully stopping memory monitor (PID: $MONITOR_PID)"
-            python build_tools/graceful_shutdown.py $MONITOR_PID \
-              --timeout 15 \
-              --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal" || true
-            echo "Memory monitor stopped"
-
-            # Display the monitor output
-            if [ -f "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" ]; then
-              echo "=== Memory Monitor Output ==="
-              cat "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt"
-            fi
-          fi
+      - name: Stop memory monitoring
+        if: ${{ always() && inputs.monitor_memory }}
+        shell: powershell
+        run: |
+          $pid = Get-Content "${env:BUILD_DIR}\logs\memory_monitor.pid" | Select-Object -First 1
+          Write-Host "Gracefully stopping memory monitor (PID: $pid)"
+          python build_tools\graceful_shutdown.py $pid --timeout 60 --stop-signal-file "${env:BUILD_DIR}\logs\stop_monitor_${env:GITHUB_JOB}.signal"
+          if (Test-Path "${env:BUILD_DIR}\logs\monitor_output_${env:GITHUB_JOB}.txt") {
+            Write-Host "=== Memory Monitor Output ==="
+            Get-Content "${env:BUILD_DIR}\logs\monitor_output_${env:GITHUB_JOB}.txt"
+          }
 
       - name: Report
         if: ${{ !cancelled() }}
