@@ -230,8 +230,7 @@ def get_all_supported_devices(
 
 
 def get_unique_supported_devices(
-    amdgpu_family: str = "",
-    log: bool = False
+    amdgpu_family: str = "", log: bool = False
 ) -> dict[str, int]:
     """
     Returns a dictionary mapping each supported architecture to a single device index (the first one for each).
@@ -340,10 +339,7 @@ def set_gpu_execution_policy(
 
     elif policy == "unique":
         # Use one device per architecture (first device of each arch) simultaneously
-        flat_devices = [
-            (arch, idx)
-            for arch, idx in supported_devices.items()
-        ]
+        flat_devices = [(arch, idx) for arch, idx in supported_devices.items()]
         device_indices_str = ",".join(str(idx) for _, idx in flat_devices)
         os.environ["HIP_VISIBLE_DEVICES"] = device_indices_str
         if log:
