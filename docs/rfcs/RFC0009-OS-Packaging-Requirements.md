@@ -265,8 +265,8 @@ Nightly Releases:
 | :-------------  | :------------- | :-------------- |
 | Python       | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
 | Tarball      | X.Y.ZaYYYYMMDD | 7.10.0a20251006 |
-| Fedora (rpm) | X.Y.Z~YYYYMMDD | 7.9.0~20251006  |
-| Debian (deb) | X.Y.Z~YYYYMMDD | 7.9.0~20251006  |
+| Fedora (rpm) | X.Y.Z~YYYYMMDD | 7.10.0~20251006  |
+| Debian (deb) | X.Y.Z~YYYYMMDD | 7.10.0~20251006  |
 
 TheRock must automate all formats.
 
