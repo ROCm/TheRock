@@ -151,49 +151,43 @@ jobs:
           ccache -z
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Start memory monitoring
-        if: ${{ inputs.monitor_memory }}
-        id: memory-monitor
-        shell: bash
-        continue-on-error: true
-        run: |
-          # Create logs directory in BUILD_DIR
-          mkdir -p "${{ env.BUILD_DIR }}/logs"
-
-          # Start memory monitor in background with stop signal file support
-          python build_tools/memory_monitor.py \
-            --phase "Build Phase" \
-            --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
-            --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal" \
-            --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
-
-          # Capture PID
-          MONITOR_PID=$!
-          echo "monitor-pid=$MONITOR_PID" >> $GITHUB_OUTPUT
-          echo "Memory monitoring started with PID: $MONITOR_PID"
-          sleep 2
-
       - name: Build therock-archives and therock-dist
+        shell: bash
         run: |
+          # Start memory monitoring if enabled
+          if [ "${{ inputs.monitor_memory }}" == "true" ]; then
+            # Create logs directory in BUILD_DIR
+            mkdir -p "${{ env.BUILD_DIR }}/logs"
+
+            # Start memory monitor in background with stop signal file support
+            python build_tools/memory_monitor.py \
+              --phase "Build Phase" \
+              --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
+              --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal" \
+              --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
+
+            # Capture PID
+            MONITOR_PID=$!
+            echo "Memory monitoring started with PID: $MONITOR_PID"
+            sleep 2
+          fi
+
+          # Run the build
           cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
-      - name: Stop memory monitoring
-        if: ${{ always() && inputs.monitor_memory && steps.memory-monitor.outputs.monitor-pid }}
-        shell: bash
-        continue-on-error: true
-        env:
-          MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
-        run: |
-          echo "Gracefully stopping memory monitor (PID: $MONITOR_PID)"
-          python build_tools/graceful_shutdown.py $MONITOR_PID \
-            --timeout 15 \
-            --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal"
-          echo "Memory monitor stopped"
+          # Stop memory monitoring if it was started
+          if [ "${{ inputs.monitor_memory }}" == "true" ] && [ ! -z "$MONITOR_PID" ]; then
+            echo "Gracefully stopping memory monitor (PID: $MONITOR_PID)"
+            python build_tools/graceful_shutdown.py $MONITOR_PID \
+              --timeout 15 \
+              --stop-signal-file "${{ env.BUILD_DIR }}/logs/stop_monitor_${{ github.job }}.signal" || true
+            echo "Memory monitor stopped"
 
-          # Display the monitor output
-          if [ -f "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" ]; then
-            echo "=== Memory Monitor Output ==="
-            cat "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt"
+            # Display the monitor output
+            if [ -f "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" ]; then
+              echo "=== Memory Monitor Output ==="
+              cat "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt"
+            fi
           fi
 
       - name: Report
