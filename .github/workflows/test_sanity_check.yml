@@ -101,7 +101,7 @@ jobs:
           $ErrorActionPreference = "SilentlyContinue"
 
           Write-Host "amd-smi.exe location:"
-          $amdSmiExe = Get-ChildItem -Path . -Recurse -File -Filter "amd-smi.exe"
+          $amdSmiExe = Get-ChildItem -Path . -Recurse -File -Filter "amdsmi"
           if ($amdSmiExe) {
             $amdSmiExe | ForEach-Object { $_.FullName }
           } else {
@@ -109,7 +109,7 @@ jobs:
           }
 
           Write-Host "hipInfo.exe location:"
-          $hipInfoExe = Get-ChildItem -Path . -Recurse -File -Filter "hipInfo.exe"
+          $hipInfoExe = Get-ChildItem -Path . -Recurse -File -Filter "hipInfo"
           if ($hipInfoExe) {
             $hipInfoExe | ForEach-Object { $_.FullName }
           } else {
