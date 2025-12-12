@@ -149,6 +149,20 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
         ],
     },
+    # Special notes for Windows:
+    #   * Some tests hang and *must* be skipped for testing to complete.
+    #     That is likely related to processes not terminating on their own:
+    #     https://github.com/ROCm/TheRock/issues/999. Note that even if
+    #     _test cases_ themselves terminate, the parent process still
+    #     hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
+    #     force termination.
+    #   * Linux has substantial testing on datacenter GPUs while Windows support
+    #     is newer and skews towards consumer GPUs with lower specs. We disable
+    #     some tests that are resource intensive or otherwise degrade CI
+    #     stability. We are also conservative in disabling some tests for all
+    #     pytorch versions and all GPUs. Perfect is the enemy of the good and
+    #     we would rather run a subset of tests with high confidence than run
+    #     all tests with low confidence.
     "windows": {
         "autograd": [
             # JIT compilation without MSVC installed then device mismatch:
@@ -164,12 +178,6 @@ skip_tests = {
             #   AssertionError: "Simulate error" does not match "grad can be implicitly created only for scalar outputs"
             "test_reentrant_parent_error_on_cpu_cuda",
         ],
-        # Some tests hang and *must* be skipped for testing to complete.
-        # That is likely related to processes not terminating on their own:
-        # https://github.com/ROCm/TheRock/issues/999. Note that even if
-        # _test cases_ themselves terminate, the parent process still
-        # hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
-        # force termination.
         "cuda": [
             # RuntimeError: miopenStatusUnknownError
             "test_autocast_rnn",
@@ -200,8 +208,10 @@ skip_tests = {
             # At least [gfx1151, torch 2.9], possibly others.
             #   Mismatched elements: 4 / 4 (100.0%)
             #   Mismatched elements: 96 / 96 (100.0%)
+            # We may want to disable all of test_Conv*...
             "test_Conv1d_pad1size1_cuda",
             "test_Conv1d_pad2size1_cuda",
+            "test_Conv2d_depthwise_cuda",  # failing on gfx1101
             "test_Conv2d_depthwise_dilated_cuda",
             "test_Conv2d_depthwise_padded_cuda",
             "test_Conv2d_depthwise_with_multiplier_cuda",
@@ -217,6 +227,8 @@ skip_tests = {
             "test_warp_softmax_64bit_indexing_cuda_float16",
         ],
         "torch": [
+            # Large test that isn't very CI-friendly (takes 1-180 seconds depending on runner and torch version)
+            "test_conv_transposed_large_cuda",
             # Test hang (see above)
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
