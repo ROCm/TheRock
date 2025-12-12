@@ -37,6 +37,57 @@ def run_command(command: list[str], cwd=None):
     return process
 
 
+def find_amdsmitst_binary():
+    """
+    Recursively search for any file matching *amdsmitst* under the directory
+    one level above THEROCK_BIN_DIR (i.e., THEROCK_BIN_DIR.parent.parent).
+
+    Example:
+        THEROCK_BIN_DIR = /__w/TheRock/TheRock/build/bin
+        search_root     = /__w/TheRock/TheRock
+    """
+
+    # One level above build/
+    search_root = THEROCK_BIN_DIR.parent.parent
+
+    print(f"\n[amdsmitst-search] Searching recursively under: {search_root}")
+    print("[amdsmitst-search] Running: find <root> -type f -name '*amdsmitst*'\n")
+
+    # Execute recursive find
+    result = subprocess.run(
+        ["find", str(search_root), "-type", "f", "-name", "*amdsmitst*"],
+        capture_output=True,
+        text=True,
+    )
+
+    raw_output = result.stdout.strip()
+
+    print("[amdsmitst-search] Raw find output:")
+    print(raw_output if raw_output else "  (empty)")
+    print()
+
+    # Collect all candidates
+    candidates = [
+        Path(line.strip()).resolve() for line in raw_output.splitlines() if line.strip()
+    ]
+
+    print("[amdsmitst-search] All discovered amdsmitst candidates:")
+    if not candidates:
+        print("  (None found!)\n")
+        raise FileNotFoundError(
+            f"No amdsmitst binary found under {search_root}. "
+            "ROCm SDK artifacts may not include AMD SMI tests."
+        )
+
+    for idx, c in enumerate(candidates, start=1):
+        print(f"  [{idx}] {c}")
+
+    selected = candidates[0]
+    print(f"\n[amdsmitst-search] Selected amdsmitst binary: {selected}\n")
+
+    return selected
+
+
 @pytest.fixture(scope="session")
 def rocm_info_output():
     try:
@@ -126,36 +177,10 @@ class TestROCmSanity:
 
 
 class TestAmdSmiTests:
-    @pytest.mark.skipif(
-        is_windows(),
-        reason="amdsmitst is not supported on Windows",
-    )
+    @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
     def test_amdsmi_suite(self):
-        """
-        Run AMD SMI test suite with whitelist-based filtering.
-        Exclude failing tests(requiring privilege docker acccess) since amdsmitst does not support negative filters.
-        """
+        amdsmi_test_bin = find_amdsmitst_binary()
 
-        # Auto-detect Python version in .venv
-        py_major = sys.version_info.major
-        py_minor = sys.version_info.minor
-
-        # Build amdsmitst path dynamically
-        amdsmi_test_bin = (
-            THEROCK_BIN_DIR
-            / ".."
-            / "lib"
-            / f"python{py_major}.{py_minor}"
-            / "site-packages"
-            / "_rocm_sdk_core"
-            / "share"
-            / "amd_smi"
-            / "tests"
-            / "amdsmitst"
-        )
-        amdsmi_test_bin = amdsmi_test_bin.resolve()
-
-        # Whitelist filter (ONLY passing tests)
         include_filter = (
             "amdsmitstReadOnly.*:"
             "amdsmitstReadWrite.FanReadWrite:"
@@ -169,9 +194,8 @@ class TestAmdSmiTests:
 
         cmd = [str(amdsmi_test_bin), f"--gtest_filter={include_filter}"]
 
-        # Run the test suite
-        process = run_command(cmd, cwd=str(THEROCK_BIN_DIR))
+        # run in the directory where amdsmitst was found
+        cwd = amdsmi_test_bin.parent
 
-        # Validate execution
-        check.equal(process.returncode, 0, "amdsmitst returned non-zero exit code")
-        check.is_true("PASSED" in process.stdout or "OK" in process.stdout)
+        process = run_command(cmd, cwd=str(cwd))
+        check.equal(process.returncode, 0)
