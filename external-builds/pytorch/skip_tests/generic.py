@@ -232,6 +232,8 @@ skip_tests = {
             # *** Test hang (see above) ***
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
+            # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
+            "test_memory_format_operators_cuda"
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])
