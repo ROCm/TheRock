@@ -27,9 +27,10 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES", "")
 class TestViTBase:
     """Vision Transformer tests for Strix"""
     
-    def test_vit_image_classification(self, strix_device, test_image_224, cleanup_gpu):
+    def test_vit_image_classification(self, strix_device, test_image_224, cleanup_gpu, record_property):
         """Test ViT-Base image classification on Strix"""
         from transformers import ViTForImageClassification, ViTImageProcessor
+        import time
         
         print("\n🧠 Loading ViT-Base model...")
         processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
@@ -41,12 +42,25 @@ class TestViTBase:
         inputs = processor(images=test_image_224, return_tensors="pt").to(strix_device)
         
         print("⚡ Running ViT inference on Strix...")
+        start = time.time()
         with torch.no_grad():
             outputs = model(**inputs)
             logits = outputs.logits
             predicted_class = logits.argmax(-1).item()
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+            confidence = probs[0, predicted_class].item()
+        torch.cuda.synchronize()
+        inference_time_ms = (time.time() - start) * 1000
+        
+        # Record metrics
+        record_property("metric_predicted_class", predicted_class)
+        record_property("metric_confidence", f"{confidence:.4f}")
+        record_property("metric_inference_time_ms", f"{inference_time_ms:.2f}")
+        record_property("gpu_family", AMDGPU_FAMILIES)
         
         print(f"✅ Predicted class: {predicted_class}")
+        print(f"   Confidence: {confidence:.4f}")
+        print(f"   Inference time: {inference_time_ms:.2f} ms")
         print(f"   Logits shape: {logits.shape}")
         print(f"   Device: {logits.device}")
         
@@ -57,11 +71,14 @@ class TestViTBase:
         
         print(f"✅ ViT classification test passed on {AMDGPU_FAMILIES}!")
     
-    def test_vit_mixed_precision(self, strix_device, test_image_224, cleanup_gpu):
+    def test_vit_mixed_precision(self, strix_device, test_image_224, cleanup_gpu, record_property):
         """Test ViT with FP16 mixed precision for efficiency"""
         from transformers import ViTForImageClassification, ViTImageProcessor
+        import time
         
         print("\n🧠 Loading ViT-Base with FP16...")
+        torch.cuda.reset_peak_memory_stats()
+        
         processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
         model = ViTForImageClassification.from_pretrained(
             'google/vit-base-patch16-224',
@@ -73,21 +90,34 @@ class TestViTBase:
         inputs = processor(images=test_image_224, return_tensors="pt").to(strix_device)
         
         print("⚡ Running FP16 inference...")
+        start = time.time()
         with torch.no_grad():
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 outputs = model(**inputs)
+        torch.cuda.synchronize()
+        inference_time_ms = (time.time() - start) * 1000
+        peak_memory_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
+        
+        # Record metrics
+        record_property("metric_dtype", str(outputs.logits.dtype))
+        record_property("metric_inference_time_ms", f"{inference_time_ms:.2f}")
+        record_property("metric_peak_memory_mb", f"{peak_memory_mb:.2f}")
+        record_property("gpu_family", AMDGPU_FAMILIES)
         
         print(f"✅ FP16 inference successful!")
         print(f"   Output dtype: {outputs.logits.dtype}")
+        print(f"   Inference time: {inference_time_ms:.2f} ms")
+        print(f"   Peak memory: {peak_memory_mb:.2f} MB")
         
         assert outputs.logits.device.type == "cuda"
         # FP16 should save memory on iGPU
         
         print(f"✅ ViT FP16 test passed on {AMDGPU_FAMILIES}!")
     
-    def test_vit_batch_processing(self, strix_device, cleanup_gpu):
+    def test_vit_batch_processing(self, strix_device, cleanup_gpu, record_property):
         """Test ViT batch inference on Strix"""
         from transformers import ViTForImageClassification, ViTImageProcessor
+        import time
         
         print("\n🧠 Loading ViT-Base for batch test...")
         processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
@@ -103,11 +133,23 @@ class TestViTBase:
         inputs = processor(images=images, return_tensors="pt").to(strix_device)
         
         print("⚡ Running batch inference...")
+        start = time.time()
         with torch.no_grad():
             outputs = model(**inputs)
+        torch.cuda.synchronize()
+        batch_time_ms = (time.time() - start) * 1000
+        time_per_image_ms = batch_time_ms / batch_size
+        
+        # Record metrics
+        record_property("metric_batch_size", batch_size)
+        record_property("metric_batch_time_ms", f"{batch_time_ms:.2f}")
+        record_property("metric_time_per_image_ms", f"{time_per_image_ms:.2f}")
+        record_property("gpu_family", AMDGPU_FAMILIES)
         
         print(f"✅ Batch inference successful!")
         print(f"   Output shape: {outputs.logits.shape}")
+        print(f"   Batch time: {batch_time_ms:.2f} ms")
+        print(f"   Time per image: {time_per_image_ms:.2f} ms")
         
         assert outputs.logits.shape[0] == batch_size
         assert outputs.logits.device.type == "cuda"
