@@ -250,6 +250,10 @@ class TheRockLogger(logging.LoggerAdapter):
         Usage:
             with logger.timed_operation("database_query"):
                 execute_query()
+        
+        Logs:
+            DEBUG: "Starting operation: {operation_name}"
+            INFO: "✅ Completed operation: {operation_name} ({duration}ms)"
         """
         start_time = time.time()
         self.debug(f"Starting operation: {operation_name}")
@@ -259,7 +263,7 @@ class TheRockLogger(logging.LoggerAdapter):
         finally:
             duration_ms = (time.time() - start_time) * 1000
             self.info(
-                f"Completed operation: {operation_name}",
+                f"✅ Completed operation: {operation_name} ({duration_ms:.2f}ms)",
                 extra={"duration_ms": duration_ms, "operation": operation_name}
             )
     
