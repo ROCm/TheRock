@@ -22,7 +22,9 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
+if test_type == "full":
+    test_filter = []
+elif test_type == "smoke":
     test_filter = [
         "--yaml",
         f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
