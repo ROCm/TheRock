@@ -16,15 +16,19 @@ on:
           - migration    # Migration examples
         default: 'all'
   
-  # Auto-trigger on push to logging files
+  # Auto-trigger on any push to logging branches
   push:
     branches:
       - 'users/*/logging_*'
+      - 'users/rponnuru/logging_poc'
       - 'main'
-    paths:
-      - 'build_tools/_therock_utils/logging_*.py'
-      - 'build_tools/_therock_utils/LOGGING_*.md'
-      - '.github/workflows/logging_demo.yml'
+      - 'develop'
+  
+  # Also trigger on pull requests
+  pull_request:
+    branches:
+      - 'main'
+      - 'develop'
 
 permissions:
   contents: read
