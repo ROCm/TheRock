@@ -14,6 +14,7 @@ add_subdirectory(yaml-cpp)
 add_subdirectory(Catch2)
 add_subdirectory(FunctionalPlus)
 add_subdirectory(fftw3)
+add_subdirectory(tbb)
 
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)
@@ -37,6 +38,9 @@ if(THEROCK_BUNDLE_SYSDEPS)
     add_subdirectory(sysdeps/windows)
   endif()
 endif()
+
+# dyninst depends on elfutils, boost, tbb
+add_subdirectory(dyninst)
 
 # gRPC: Static library for RDC (built on-demand when depended upon)
 # See: docs/rfcs/RFC0007-rdc-therock-integration.md
