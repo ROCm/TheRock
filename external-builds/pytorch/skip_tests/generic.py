@@ -185,7 +185,7 @@ skip_tests = {
             #   AssertionError: False is not true
             #   self.assertTrue(abs(check_workspace_size(a) - default_workspace_size) < 524288)
             "test_cublas_workspace_explicit_allocation",
-            # Test hang (see above)
+            # *** Test hang (see above) ***
             "test_graph_error",
             # This test conflicts with how our test script and runners are
             # configured.
@@ -229,7 +229,7 @@ skip_tests = {
         "torch": [
             # Large test that isn't very CI-friendly (takes 1-180 seconds depending on runner and torch version)
             "test_conv_transposed_large_cuda",
-            # Test hang (see above)
+            # *** Test hang (see above) ***
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Flaky tests hanging on some gfx1151 machines...
