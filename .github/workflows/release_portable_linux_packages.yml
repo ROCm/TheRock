@@ -222,6 +222,12 @@ jobs:
           echo "------------"
           du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
 
+      # Analyze ninja build log to generate per-component timing report
+      - name: Analyze Build Times
+        if: ${{ !cancelled() }}
+        run: |
+          python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
+
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1

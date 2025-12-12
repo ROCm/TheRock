@@ -79,6 +79,9 @@ class Artifact:
     python_requires: List[str] = field(
         default_factory=list
     )  # pip install args (e.g., ["-r path/to/req.txt"])
+    split_databases: List[str] = field(
+        default_factory=list
+    )  # Database handlers to use when splitting artifacts (e.g., ["rocblas", "hipblaslt"])
 
 
 class BuildTopology:
@@ -164,6 +167,7 @@ class BuildTopology:
                 feature_group=artifact_data.get("feature_group"),
                 disable_platforms=artifact_data.get("disable_platforms", []),
                 python_requires=python_requires,
+                split_databases=artifact_data.get("split_databases", []),
             )
 
     def get_build_stages(self) -> List[BuildStage]:

@@ -221,7 +221,7 @@ def retrieve_bucket_info(
             workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
         )
         curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
-        commit_to_compare_dt = datetime.fromisoformat("2025-11-11 08:18:48 -0800")
+        commit_to_compare_dt = datetime.fromisoformat("2025-11-11T16:18:48+00:00")
     else:
         is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
         _log(f"  (implicit) is_pr_from_fork  : {is_pr_from_fork}")

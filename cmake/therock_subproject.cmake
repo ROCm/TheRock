@@ -183,6 +183,14 @@ function(therock_subproject_fetch target_name)
     ${_extra}
     ${ARG_UNPARSED_ARGUMENTS}
   )
+
+  # Write a .smrev file that is used to compute fingerprints. This matches the
+  # logic for the source code control system when it is providing a stable hash
+  # for patched source checkouts.
+  cmake_path(GET ARG_SOURCE_DIR PARENT_PATH _source_parent)
+  cmake_path(GET ARG_SOURCE_DIR FILENAME _source_basename)
+  set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
+  file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
 endfunction()
 
 # therock_cmake_subproject_declare
@@ -297,12 +305,29 @@ endfunction()
 #
 # Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
 # transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
+#
+# Fingerprinting:
+# Various build system caching approaches require each sub-project to be able
+# to compute a stable fingerprint (fprint). For normal git-based sub-projects,
+# this requires no further configuration. But for exotic situations, more control
+# is available:
+#
+# FPRINT_SOURCE_DIR: Derive the source directory fingerprint from an alternative
+#   directory. This uses the usual heuristics of looking for a ".{basename}.smrev"
+#   file as a stable fingerprint (this is populated by some source systems and from
+#   therock_subproject_fetch). If not given, then the expolitic EXTERNAL_SOURCE_DIR
+#   or implicit source dir is used.
+# FPRINT_FILE_GLOBS: List of additional file globs to include in the fingerprint.
+# FPRINT_SOURCE_HASH: If present, indicates that the source directory should have
+#   all files hashed instead of querying the source control system. This is used for
+#   certain small, in-tree directories where we don't want them fingerprinted from
+#   TheRock's commit but based on content.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -501,6 +526,11 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_private_install_rpath_dirs}"
     THEROCK_INSTALL_RPATH_EXECUTABLE_DIR "${ARG_INSTALL_RPATH_EXECUTABLE_DIR}"
     THEROCK_INSTALL_RPATH_LIBRARY_DIR "${ARG_INSTALL_RPATH_LIBRARY_DIR}"
+
+    # Fingeprinting
+    THEROCK_FPRINT_SOURCE_DIR "${ARG_FPRINT_SOURCE_DIR}"
+    THEROCK_FPRINT_FILE_GLOBS "${ARG_FPRINT_FILE_GLOBS}"
+    THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
 
   if(ARG_ACTIVATE)
@@ -576,6 +606,14 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(THEROCK_INSTALL_RPATH_EXECUTABLE_DIR "${target_name}" THEROCK_INSTALL_RPATH_EXECUTABLE_DIR)
   get_target_property(THEROCK_INSTALL_RPATH_LIBRARY_DIR "${target_name}" THEROCK_INSTALL_RPATH_LIBRARY_DIR)
 
+  # Fingerprint properties.
+  get_target_property(_fprint_source_dir "${target_name}" THEROCK_FPRINT_SOURCE_DIR)
+  get_target_property(_fprint_file_globs "${target_name}" THEROCK_FPRINT_FILE_GLOBS)
+  get_target_property(_fprint_source_hash "${target_name}" THEROCK_FPRINT_SOURCE_HASH)
+  if(NOT _fprint_source_dir)
+    set(_fprint_source_dir "${_external_source_dir}")
+  endif()
+
   # Stamp file paths.
   set(_configure_stamp_file "${_stamp_dir}/configure.stamp")
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
@@ -590,13 +628,38 @@ function(therock_cmake_subproject_activate target_name)
   set(_configure_comment_suffix)
   set(_build_comment_suffix)
 
+  # Fingerprint management.
+  # List of files and content that participates in fingerprinting.
+  set(_fprint_is_valid TRUE)
+  set(_fprint_files)
+  set(_fprint_content)
+  if(NOT _fprint_source_hash)
+    _therock_subproject_fprint_source_dir(_fprint_src "${_fprint_source_dir}")
+    if(_fprint_src)
+      list(APPEND _fprint_content "SOURCE=${_fprint_src}")
+    else()
+      set(_fprint_is_valid FALSE)
+    endif()
+  else()
+    file(GLOB_RECURSE _fprint_source_globs "${_fprint_source_dir}/*")
+    list(APPEND _fprint_files ${_fprint_source_globs})
+  endif()
+  if(_fprint_file_globs)
+    file(GLOB_RECURSE _fprint_file_globs_resolved ${_fprint_file_globs})
+    list(APPEND _fprint_files ${_fprint_file_globs_resolved})
+  endif()
+
   # Detect pre/post hooks.
   set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${_logical_target_name}.cmake")
-  if(NOT EXISTS "${_pre_hook_path}")
+  if(EXISTS "${_pre_hook_path}")
+    list(APPEND _fprint_files "${_pre_hook_path}")
+  else()
     set(_pre_hook_path)
   endif()
   set(_post_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/post_hook_${_logical_target_name}.cmake")
-  if(NOT EXISTS "${_post_hook_path}")
+  if(EXISTS "${_post_hook_path}")
+    list(APPEND _fprint_files "${_post_hook_path}")
+  else()
     set(_post_hook_path)
   endif()
 
@@ -635,6 +698,7 @@ function(therock_cmake_subproject_activate target_name)
   set(_compiler_toolchain_init_contents)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
+  list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
@@ -651,6 +715,20 @@ function(therock_cmake_subproject_activate target_name)
   set(_dep_provider_file)
   if(_build_deps OR _runtime_deps)
     set(_dep_provider_file "${THEROCK_SOURCE_DIR}/cmake/therock_subproject_dep_provider.cmake")
+    list(APPEND _fprint_files "${_dep_provider_file}")
+
+    # Get sub-project dep content.
+    foreach(_dep_target ${_build_deps} ${_runtime_deps})
+      get_target_property(_dep_fprint "${_dep_target}" THEROCK_FPRINT)
+      if(_dep_fprint)
+        list(APPEND _fprint_content "DEP ${_dep_target}=${_dep_fprint}")
+      else()
+        set(_fprint_is_valid FALSE)
+        if(THEROCK_VERBOSE)
+          message(STATUS "  DEP FPRINT INVALID: ${_dep_target}")
+        endif()
+      endif()
+    endforeach()
   endif()
 
   set(_init_contents)
@@ -743,6 +821,7 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
   endforeach()
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
+  list(APPEND _fprint_files "${_cmake_project_init_file}")
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
   # on the stage.stamp file). These are a dependency for configure.
@@ -768,6 +847,7 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  list(APPEND _fprint_files "${_fileset_tool}")
   _therock_cmake_subproject_get_stage_dirs(
     _dist_source_dirs "${target_name}" ${_runtime_deps})
 
@@ -830,6 +910,20 @@ function(therock_cmake_subproject_activate target_name)
       LABEL "${target_name} configure"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
+
+    # Finger-print vital configure content.
+    cmake_path(RELATIVE_PATH _stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_dir)
+    cmake_path(RELATIVE_PATH _stage_destination_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_destination_dir)
+    cmake_path(RELATIVE_PATH _cmake_source_dir BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _rel_cmake_source_dir)
+    list(APPEND _fprint_content
+      "CONFIGURE"
+      "CMAKE_BUILD_TYPE=${_cmake_build_type}"
+      "CMAKE_SOURCE_DIR=${_rel_cmake_source_dir}"
+      "STAGE_DIR=${_rel_stage_dir}"
+      "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
+    )
+
+    # Configure command.
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND
@@ -960,6 +1054,20 @@ function(therock_cmake_subproject_activate target_name)
       ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}"
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
+
+  # Process fingerprints.
+  _therock_subproject_fprint_files(_fprint_content "${_fprint_files}")
+  set(_fprint)
+  if(_fprint_is_valid)
+    string(SHA256 _fprint "${_fprint_content}")
+  endif()
+  set_target_properties("${target_name}" PROPERTIES
+    THEROCK_FPRINT "${_fprint}"
+  )
+  if(THEROCK_VERBOSE)
+    message(STATUS "  FPRINT = ${_fprint}")
+    message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
+  endif()
 endfunction()
 
 # therock_cmake_subproject_glob_c_sources
@@ -1428,4 +1536,90 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
   file(CONFIGURE OUTPUT "${toolchain_file}" CONTENT "${_toolchain_contents}" @ONLY ESCAPE_QUOTES)
+endfunction()
+
+
+# Fingerprints a source directory. If the source directory is considered dirty
+# then the output fingerprint will be the empty string (invalid).
+function(_therock_subproject_fprint_source_dir out_fprint dir)
+  set(fprint)
+  cmake_path(GET dir PARENT_PATH _source_parent)
+  cmake_path(GET dir FILENAME _source_basename)
+  set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
+
+  if(EXISTS "${_smrev_file}")
+    # The source control system has hard-coded a stable fingerprint that should
+    # be taken verbatim.
+    file(READ "${_smrev_file}" fprint)
+  endif()
+
+  # Determine if a git repo.
+  execute_process(
+      COMMAND git rev-parse --git-dir
+      WORKING_DIRECTORY "${dir}"
+      RESULT_VARIABLE GIT_CHECK_RESULT
+      OUTPUT_QUIET
+      ERROR_QUIET
+  )
+  if(GIT_CHECK_RESULT EQUAL 0)
+      set(IN_GIT_REPO TRUE)
+  else()
+      set(IN_GIT_REPO FALSE)
+  endif()
+
+  # Handle git repo.
+  if(IN_GIT_REPO)
+    if(NOT fprint)
+      # Process as git directory.
+      # Get the HEAD commit hash
+      execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${dir}"
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_HASH_RESULT
+        ERROR_QUIET
+      )
+      if(GIT_HASH_RESULT EQUAL 0)
+        set(fprint "${GIT_COMMIT_HASH}")
+      else()
+        if(THEROCK_VERBOSE)
+          message(STATUS "  FPRINT: Could not read git commit")
+        endif()
+        set(fprint)
+      endif()
+    endif()
+
+    # Check if working tree is pristine (no modified tracked files)
+    # TODO: Consider changing this incantation to instead consider the
+    # sub-tree, not the whole repo. See comments on:
+    # https://github.com/ROCm/TheRock/pull/2432
+    execute_process(
+      COMMAND git diff --quiet --ignore-submodules HEAD
+      WORKING_DIRECTORY "${dir}"
+      RESULT_VARIABLE GIT_DIFF_RESULT
+    )
+
+    if(NOT GIT_DIFF_RESULT EQUAL 0)
+        if(THEROCK_VERBOSE)
+          message(STATUS "  FPRINT: Git directory is dirty: ${dir}")
+        endif()
+      set(fprint)
+    endif()
+  endif()
+
+  if(THEROCK_VERBOSE)
+    message(STATUS "  FPRINT: '${fprint}'")
+  endif()
+  set("${out_fprint}" "${fprint}" PARENT_SCOPE)
+endfunction()
+
+function(_therock_subproject_fprint_files out_content files)
+  set(content "${${out_content}}")
+  foreach(file ${files})
+    file(SHA256 "${file}" fprint)
+    cmake_path(GET file FILENAME basename)
+    list(APPEND content "${basename}=${fprint}")
+  endforeach()
+  set("${out_content}" "${content}" PARENT_SCOPE)
 endfunction()

@@ -1,5 +1,6 @@
 # All system deps (alpha unless if different dependency order needed).
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/bzip2" "${CMAKE_CURRENT_BINARY_DIR}/bzip2")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/libbacktrace" "${CMAKE_CURRENT_BINARY_DIR}/libbacktrace")
 add_subdirectory(libcap)
 add_subdirectory(libdrm)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/liblzma" "${CMAKE_CURRENT_BINARY_DIR}/liblzma")
@@ -10,6 +11,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_B
 
 # System deps that depend on the above.
 add_subdirectory(elfutils)
+add_subdirectory(amd-mesa)
 
 therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
@@ -22,6 +24,7 @@ therock_provide_artifact(sysdeps
   SUBPROJECT_DEPS
     therock-bzip2
     therock-elfutils
+    therock-libbacktrace
     therock-libcap
     therock-libdrm
     therock-liblzma
@@ -29,4 +32,5 @@ therock_provide_artifact(sysdeps
     therock-sqlite3
     therock-zlib
     therock-zstd
+    therock-amd-mesa
 )

@@ -24,6 +24,9 @@ skip_tests = {
             "test_mempool_empty_cache_inactive",
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
+            # This test was fixed in torch 2.9, see
+            # https://github.com/ROCm/TheRock/issues/2206
+            "test_hip_device_count",
         ]
     },
     "gfx950": {
