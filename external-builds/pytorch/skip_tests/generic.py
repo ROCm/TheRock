@@ -42,6 +42,11 @@ skip_tests = {
             # "test_hip_device_count"
             # "test_nvtx"
             # ----------------
+            # Change detector test (Cublaslt vs Cublas depending on gcn_arch and torch version)
+            # See
+            #   * https://github.com/ROCm/pytorch/pull/2742
+            #   * https://github.com/ROCm/pytorch/pull/2873
+            "test_preferred_blas_library_settings",
         ],
         "nn": [
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
@@ -145,17 +150,67 @@ skip_tests = {
         ],
     },
     "windows": {
-        # Skip tests that hang. Perhaps related to processes not terminating
-        # on their own: https://github.com/ROCm/TheRock/issues/999.
-        # Even if _test cases_ themselves terminate, the parent process still
+        "autograd": [
+            # JIT compilation without MSVC installed then device mismatch:
+            #   Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+            #   AssertionError: Object comparison failed: <torch.cuda.Stream device=cuda:0 cuda_stream=0x1fa05550b50> != <torch.cuda.Stream device=cuda:0 cuda_stream=0x0>
+            # We should fix the test to fail/skip more gracefully.
+            "test_consumer_to_single_producer_case_2_correctness",
+            # This test JIT compiles and fails if MSVC is not installed on Windows:
+            #   subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+            # We should fix the test to fail/skip more gracefully.
+            "test_multi_grad_all_hooks",
+        ],
+        # Some tests hang and *must* be skipped for testing to complete.
+        # That is likely related to processes not terminating on their own:
+        # https://github.com/ROCm/TheRock/issues/999. Note that even if
+        # _test cases_ themselves terminate, the parent process still
         # hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
         # force termination.
+        "cuda": [
+            # RuntimeError: miopenStatusUnknownError
+            "test_autocast_rnn",
+            # On some test runners
+            #   AssertionError: False is not true
+            #   self.assertTrue(abs(check_workspace_size(a) - default_workspace_size) < 524288)
+            "test_cublas_workspace_explicit_allocation",
+            # Test hang (see above)
+            "test_graph_error",
+            # Multi-processing forking code that may not work on Windows?
+            "test_is_pinned_no_context",
+            # Bug, needs triage:
+            #   AssertionError: Scalars are not equal!
+            #   Expected 0 but got 2173342911312.
+            "test_streams",
+        ],
+        "nn": [
+            # RuntimeError: miopenStatusUnknownError
+            "test_cudnn_weight_format",
+            "test_rnn_retain_variables_cuda_float16",
+            "test_rnn_retain_variables_cuda_float32",
+            "test_variable_sequence_cuda_float16",
+            "test_variable_sequence_cuda_float32",
+            # Convs are failing numerics on some test machines.
+            # At least [gfx1151, torch 2.9], possibly others.
+            #   Mismatched elements: 4 / 4 (100.0%)
+            #   Mismatched elements: 96 / 96 (100.0%)
+            "test_Conv1d_pad1size1_cuda",
+            "test_Conv1d_pad2size1_cuda",
+            "test_Conv2d_depthwise_dilated_cuda",
+            "test_Conv2d_depthwise_padded_cuda",
+            "test_Conv2d_depthwise_with_multiplier_cuda",
+            "test_Conv2d_pad_same_cuda",
+            "test_Conv2d_pad_same_dilated_cuda",
+            "test_ConvTranspose1d_cuda",
+            "test_ConvTranspose1d_no_bias_cuda",
+            "test_ConvTranspose2d_cuda",
+            "test_ConvTranspose2d_groups_cuda",
+            "test_ConvTranspose2d_no_bias_cuda",
+        ],
         "torch": [
+            # Test hang (see above)
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
-        ],
-        "cuda": [
-            "test_graph_error",
         ],
     },
 }
