@@ -16,19 +16,10 @@ on:
           - migration    # Migration examples
         default: 'all'
   
-  # Auto-trigger on any push to logging branches
+  # Auto-trigger on push
   push:
     branches:
-      - 'users/*/logging_*'
       - 'users/rponnuru/logging_poc'
-      - 'main'
-      - 'develop'
-  
-  # Also trigger on pull requests
-  pull_request:
-    branches:
-      - 'main'
-      - 'develop'
 
 permissions:
   contents: read
