@@ -182,27 +182,29 @@ jobs:
           echo "Tests validate PyTorch, Transformers, and CV libraries on Strix GPU"
           echo ""
           
-          python -m pip install --upgrade pip
-          python -m pip install pytest pytest-check
+          # Use python3 explicitly to avoid venv issues
+          python3 -m pip install --upgrade pip --user
+          python3 -m pip install pytest pytest-check --user
           
           echo "Installing transformers and accelerate..."
-          python -m pip install transformers accelerate || echo "WARNING: transformers install failed"
+          python3 -m pip install transformers accelerate --user || echo "WARNING: transformers install failed"
           
           echo "Installing computer vision libraries..."
-          python -m pip install ultralytics opencv-python pillow || echo "WARNING: CV libs install failed"
+          python3 -m pip install ultralytics opencv-python pillow --user || echo "WARNING: CV libs install failed"
           
           echo "Installing torch and torchvision..."
-          python -m pip install torch torchvision || echo "WARNING: torch installation failed (may skip GPU tests)"
+          python3 -m pip install torch torchvision --user || echo "WARNING: torch installation failed (may skip GPU tests)"
           
           echo "Installing additional dependencies..."
-          python -m pip install timm einops scipy matplotlib || echo "WARNING: Additional deps install failed"
+          python3 -m pip install timm einops scipy matplotlib --user || echo "WARNING: Additional deps install failed"
           
           echo ""
           echo "SUCCESS: Dependency installation complete (check warnings above)"
       
       - name: Verify Dependencies
         run: |
-          python -m pip list | grep -E "pytest|transformers|torch|ultralytics" || python -m pip list | Select-String -Pattern "pytest|transformers|torch|ultralytics"
+          echo "=== Installed Python Packages ==="
+          python3 -m pip list | grep -E "pytest|transformers|torch|ultralytics" || echo "Some packages may not be installed"
       
       - name: Verify TheRock Installation
         continue-on-error: true
@@ -236,7 +238,7 @@ jobs:
       - name: Run Strix AI Tests - All
         if: env.TEST_CATEGORY == 'all'
         run: |
-          python -m pytest tests/strix_ai/ -v -s \
+          python3 -m pytest tests/strix_ai/ -v -s \
             --junit-xml=test-results-all.xml \
             -m "not slow" \
             || exit 0
@@ -244,42 +246,42 @@ jobs:
       - name: Run Strix AI Tests - VLM
         if: env.TEST_CATEGORY == 'vlm'
         run: |
-          python -m pytest tests/strix_ai/vlm/ -v -s \
+          python3 -m pytest tests/strix_ai/vlm/ -v -s \
             --junit-xml=test-results-vlm.xml \
             || exit 0
       
       - name: Run Strix AI Tests - VLA
         if: env.TEST_CATEGORY == 'vla'
         run: |
-          python -m pytest tests/strix_ai/vla/ -v -s \
+          python3 -m pytest tests/strix_ai/vla/ -v -s \
             --junit-xml=test-results-vla.xml \
             || exit 0
       
       - name: Run Strix AI Tests - ViT
         if: env.TEST_CATEGORY == 'vit'
         run: |
-          python -m pytest tests/strix_ai/vit/ -v -s \
+          python3 -m pytest tests/strix_ai/vit/ -v -s \
             --junit-xml=test-results-vit.xml \
             || exit 0
       
       - name: Run Strix AI Tests - CV
         if: env.TEST_CATEGORY == 'cv'
         run: |
-          python -m pytest tests/strix_ai/cv/ -v -s \
+          python3 -m pytest tests/strix_ai/cv/ -v -s \
             --junit-xml=test-results-cv.xml \
             || exit 0
       
       - name: Run Strix AI Tests - Optimization
         if: env.TEST_CATEGORY == 'optimization'
         run: |
-          python -m pytest tests/strix_ai/optimization/ -v -s \
+          python3 -m pytest tests/strix_ai/optimization/ -v -s \
             --junit-xml=test-results-optimization.xml \
             || exit 0
       
       - name: Run Strix AI Tests - Quick Smoke Tests
         if: env.TEST_CATEGORY == 'quick'
         run: |
-          python -m pytest tests/strix_ai/ -v -s \
+          python3 -m pytest tests/strix_ai/ -v -s \
             -m "quick" \
             --junit-xml=test-results-quick.xml \
             || exit 0

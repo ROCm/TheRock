@@ -69,10 +69,10 @@ jobs:
       
       - name: Quick Dependency Install
         run: |
-          pip install pytest pytest-check || echo "pytest install failed"
-          pip install transformers || echo "transformers install failed"
-          pip install torch torchvision || echo "torch install failed (may be OK)"
-          pip install ultralytics opencv-python pillow || echo "cv libs install failed"
+          python3 -m pip install pytest pytest-check --user || echo "pytest install failed"
+          python3 -m pip install transformers --user || echo "transformers install failed"
+          python3 -m pip install torch torchvision --user || echo "torch install failed (may be OK)"
+          python3 -m pip install ultralytics opencv-python pillow --user || echo "cv libs install failed"
       
       - name: Display Test Info
         run: |
@@ -85,8 +85,8 @@ jobs:
       
       - name: Run Test
         run: |
-          echo "Running: python -m pytest ${{ env.TEST_COMMAND }} -v -s"
-          python -m pytest ${{ env.TEST_COMMAND }} -v -s || echo "Test completed with errors (may be expected if dependencies missing)"
+          echo "Running: python3 -m pytest ${{ env.TEST_COMMAND }} -v -s"
+          python3 -m pytest ${{ env.TEST_COMMAND }} -v -s || echo "Test completed with errors (may be expected if dependencies missing)"
       
       - name: Show Results
         if: always()
