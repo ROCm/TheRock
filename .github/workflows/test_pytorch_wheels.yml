@@ -70,11 +70,11 @@ on:
 permissions:
   contents: read
 
-run-name: Test PyTorch Wheels (${{ inputs.amdgpu_family }}, torch==${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
+run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
 
 jobs:
   test_wheels:
-    name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
+    name: Test PyTorch | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
