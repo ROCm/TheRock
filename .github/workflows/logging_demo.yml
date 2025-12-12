@@ -67,39 +67,6 @@ jobs:
           echo "✅ Demo completed!"
           echo "::endgroup::"
       
-      - name: 📊 Display Log Files
-        if: always()
-        run: |
-          echo "::group::📊 Generated Log Files"
-          echo "=========================================="
-          echo "  Log Files Created"
-          echo "=========================================="
-          echo ""
-          
-          cd build_tools/_therock_utils
-          
-          if ls logs/*.log 1> /dev/null 2>&1; then
-            echo "Found log files:"
-            ls -lh logs/*.log
-            echo ""
-            
-            for log_file in logs/*.log; do
-              if [ -f "$log_file" ]; then
-                echo "::group::📄 $(basename $log_file)"
-                echo "---------- Content ----------"
-                head -100 "$log_file"
-                echo ""
-                line_count=$(wc -l < "$log_file")
-                echo "Total lines: $line_count"
-                echo "::endgroup::"
-              fi
-            done
-          else
-            echo "No log files generated (console-only logging)"
-          fi
-          
-          echo "::endgroup::"
-      
       - name: ✅ Demo Summary
         if: always()
         run: |
