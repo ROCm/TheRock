@@ -28,7 +28,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: List[str | Path], cwd: Optional[Path] = None) -> None:
+def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
     args = [str(arg) for arg in args]
     if cwd is None:
         cwd = Path.cwd()
@@ -63,14 +63,14 @@ def run_candidates(label: str, candidates: List[List[str]]) -> None:
         if resolved:
             cmd_to_run = [resolved] + cmd[1:]
             log(f"\n=== {label} ===")
-            exec(cmd_to_run)
+            run_command(cmd_to_run)
             return
 
         resolved_path = Path(exe)
         if resolved_path.exists():
             cmd_to_run = [str(resolved_path)] + cmd[1:]
             log(f"\n=== {label} ===")
-            exec(cmd_to_run)
+            run_command(cmd_to_run)
             return
 
     # Nothing found
