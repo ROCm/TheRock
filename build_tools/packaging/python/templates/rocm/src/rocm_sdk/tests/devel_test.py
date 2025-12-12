@@ -129,9 +129,12 @@ class ROCmDevelTest(unittest.TestCase):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
                 continue
-            if "lib/rocprofiler-sdk/" in str(
-                so_path
-            ) or "libexec/rocprofiler-sdk/" in str(so_path):
+            if (
+                "lib/rocprofiler-sdk/" in str(so_path)
+                or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "libpyrocpd" in str(so_path)
+                or "libpyroctx" in str(so_path)
+            ):
                 # Internal rocprofiler-sdk libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
                 continue
