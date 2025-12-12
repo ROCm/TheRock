@@ -216,8 +216,14 @@ capabilities tailored for AMD ROCm GPUs. See the script for detailed
 instructions. Here are a few examples:
 
 ```bash
-# Basic usage (auto-detect everything):
+# Basic usage (auto-detect everything, no extra args):
 python run_pytorch_tests.py
+
+# Typical usage on CI, passing through some useful pytest args:
+python run_pytorch_tests.py -- \
+  --continue-on-collection-errors \
+  --import-mode=importlib \
+  -v
 
 # Custom test selection with pytest -k:
 python run_pytorch_tests.py -k "test_nn and not test_dropout"
