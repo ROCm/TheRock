@@ -187,7 +187,7 @@ jobs:
             -v
 
       - name: (Windows) Read and propagate exit code
-        if: ${{ runner.os == 'Windows' }}
+        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
         run: |
           if [ -f run_pytorch_tests_exit_code.txt ]; then
             EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
