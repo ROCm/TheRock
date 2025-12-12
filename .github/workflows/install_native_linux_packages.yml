@@ -74,8 +74,8 @@ jobs:
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
       ARTIFACT_GROUP: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
-      ROCM_VERSION: ${{ inputs.rocm_version || '7.11.0a20251124' }}
-      ARTIFACT_RUN_ID: '19623151173' 
+      ROCM_VERSION: ${{ inputs.rocm_version || '7.11.0' }}
+      ARTIFACT_RUN_ID: '20087096634' 
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || 'None' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
