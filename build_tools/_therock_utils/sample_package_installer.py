@@ -4,12 +4,12 @@ Sample Package Installer - Demonstrates logging framework usage
 """
 
 import time
-from logging_config import TheRockLogger
+from logging_config import get_logger
 
 
 def install_packages(packages):
     """Sample package installation with logging"""
-    logger = TheRockLogger.get_logger("PackageInstaller")
+    logger = get_logger(__name__, component="PackageInstaller", operation="install")
     
     logger.info("Starting package installation", extra={
         "total_packages": len(packages),
@@ -17,7 +17,7 @@ def install_packages(packages):
     })
     
     for i, package in enumerate(packages, 1):
-        with logger.time_operation(f"Installing {package}"):
+        with logger.timed_operation(f"Installing {package}"):
             logger.info(f"Installing package {i}/{len(packages)}: {package}", extra={
                 "package_name": package,
                 "progress": f"{i}/{len(packages)}"
@@ -39,7 +39,7 @@ def install_packages(packages):
 
 def verify_installation(packages):
     """Sample verification with error handling"""
-    logger = TheRockLogger.get_logger("PackageInstaller")
+    logger = get_logger(__name__, component="PackageInstaller", operation="verify")
     
     logger.info("Verifying package installation")
     
@@ -68,7 +68,7 @@ def main():
     print("="*60 + "\n")
     
     # Setup logger
-    logger = TheRockLogger.get_logger("PackageInstaller")
+    logger = get_logger(__name__, component="PackageInstaller")
     logger.info("Package Installer Demo Started")
     
     # Demo packages
@@ -79,7 +79,7 @@ def main():
     ]
     
     # Run installation
-    with logger.time_operation("Complete Installation"):
+    with logger.timed_operation("Complete Installation"):
         install_packages(packages)
         verify_installation(packages)
     

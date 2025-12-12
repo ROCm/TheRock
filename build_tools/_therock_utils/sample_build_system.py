@@ -4,12 +4,12 @@ Sample Build System - Demonstrates logging framework usage
 """
 
 import time
-from logging_config import TheRockLogger
+from logging_config import get_logger
 
 
 def configure_build(config):
     """Sample build configuration with logging"""
-    logger = TheRockLogger.get_logger("BuildSystem")
+    logger = get_logger(__name__, component="BuildSystem", operation="configure")
     
     logger.info("Configuring build environment", extra={
         "build_type": config.get("type", "release"),
@@ -30,7 +30,7 @@ def configure_build(config):
 
 def compile_components(components):
     """Sample compilation with performance tracking"""
-    logger = TheRockLogger.get_logger("BuildSystem")
+    logger = get_logger(__name__, component="BuildSystem", operation="compile")
     
     logger.info(f"Starting compilation of {len(components)} components", extra={
         "component_count": len(components),
@@ -38,7 +38,7 @@ def compile_components(components):
     })
     
     for component in components:
-        with logger.time_operation(f"Compiling {component}"):
+        with logger.timed_operation(f"Compiling {component}"):
             logger.info(f"Compiling component: {component}", extra={
                 "component": component,
                 "status": "compiling"
@@ -55,7 +55,7 @@ def compile_components(components):
 
 def run_tests(components):
     """Sample test execution with error scenarios"""
-    logger = TheRockLogger.get_logger("BuildSystem")
+    logger = get_logger(__name__, component="BuildSystem", operation="test")
     
     logger.info("Running post-build tests")
     
@@ -93,7 +93,7 @@ def main():
     print("="*60 + "\n")
     
     # Setup logger
-    logger = TheRockLogger.get_logger("BuildSystem")
+    logger = get_logger(__name__, component="BuildSystem")
     logger.info("Build System Demo Started")
     
     # Build configuration
@@ -111,7 +111,7 @@ def main():
     ]
     
     # Run build process
-    with logger.time_operation("Complete Build Process"):
+    with logger.timed_operation("Complete Build Process"):
         configure_build(config)
         compile_components(components)
         run_tests(components)
