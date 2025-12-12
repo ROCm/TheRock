@@ -51,11 +51,11 @@ def find_amdsmitst_binary():
     search_root = THEROCK_BIN_DIR.parent.parent
 
     print(f"\n[amdsmitst-search] Searching recursively under: {search_root}")
-    print("[amdsmitst-search] Running: find <root> -type f -name '*amdsmitst*'\n")
+    print("[amdsmitst-search] Running: find <root> -type f -name 'amdsmitst'\n")
 
     # Execute recursive find
     result = subprocess.run(
-        ["find", str(search_root), "-type", "f", "-name", "*amdsmitst*"],
+        ["find", str(search_root), "-type", "f", "-name", "amdsmitst"],
         capture_output=True,
         text=True,
     )
