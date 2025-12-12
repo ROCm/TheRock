@@ -205,13 +205,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
-        -DROCPROFSYS_BUILD_ELFUTILS=ON
         -DROCPROFSYS_BUILD_TBB=ON
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
-        -DCMAKE_C_COMPILER:FILEPATH=/opt/rh/gcc-toolset-13/root/usr/bin/gcc 
-        -DCMAKE_CXX_COMPILER:FILEPATH=/opt/rh/gcc-toolset-13/root/usr/bin/g++ 
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       COMPILER_TOOLCHAIN
@@ -222,6 +219,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        ${THEROCK_BUNDLED_ELFUTILS}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
     )
