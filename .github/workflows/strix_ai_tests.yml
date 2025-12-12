@@ -220,76 +220,67 @@ jobs:
           echo "=== Critical: PyTorch GPU Detection ==="
           python3 -c "import torch, sys; print('PyTorch:', torch.__version__); print('CUDA/ROCm available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count() if torch.cuda.is_available() else 0); print('Device name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE'); sys.exit(0 if torch.cuda.is_available() else 1)" || { echo "ERROR: PyTorch cannot detect GPU - all tests will be SKIPPED!"; exit 1; }
       
-      - name: Run Strix AI Tests - All
-        if: env.TEST_CATEGORY == 'all'
-        env:
-          AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
-        run: |
-          echo "=== Pre-test PyTorch Check ==="
-          python3 -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count() if torch.cuda.is_available() else 0)"
-          echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
-          echo ""
-          
-          python3 -m pytest tests/strix_ai/ -v -s -rs \
-            --junit-xml=test-results-all.xml \
-            -m "not slow" \
-            || exit 0
-      
       - name: Run Strix AI Tests - VLM
-        if: env.TEST_CATEGORY == 'vlm'
+        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'vlm'
         env:
           AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
         run: |
+          echo "=== Running VLM Tests ==="
           echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
           python3 -m pytest tests/strix_ai/vlm/ -v -s \
             --junit-xml=test-results-vlm.xml \
             || exit 0
       
       - name: Run Strix AI Tests - VLA
-        if: env.TEST_CATEGORY == 'vla'
+        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'vla'
         env:
           AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
         run: |
+          echo "=== Running VLA Tests ==="
           echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
           python3 -m pytest tests/strix_ai/vla/ -v -s \
             --junit-xml=test-results-vla.xml \
             || exit 0
       
       - name: Run Strix AI Tests - ViT
-        if: env.TEST_CATEGORY == 'vit'
+        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'vit'
         env:
           AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
         run: |
+          echo "=== Running ViT Tests ==="
           echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
           python3 -m pytest tests/strix_ai/vit/ -v -s \
             --junit-xml=test-results-vit.xml \
             || exit 0
       
       - name: Run Strix AI Tests - CV
-        if: env.TEST_CATEGORY == 'cv'
+        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'cv'
         env:
           AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
         run: |
+          echo "=== Running CV Tests ==="
           echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
           python3 -m pytest tests/strix_ai/cv/ -v -s \
             --junit-xml=test-results-cv.xml \
             || exit 0
       
       - name: Run Strix AI Tests - Optimization
-        if: env.TEST_CATEGORY == 'optimization'
+        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'optimization'
         env:
           AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
         run: |
+          echo "=== Running Optimization Tests ==="
           echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
           python3 -m pytest tests/strix_ai/optimization/ -v -s \
             --junit-xml=test-results-optimization.xml \
             || exit 0
       
       - name: Run Strix AI Tests - Quick Smoke Tests
-        if: env.TEST_CATEGORY == 'quick'
+        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'quick'
         env:
           AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
         run: |
+          echo "=== Running Quick Smoke Tests ==="
           echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
           python3 -m pytest tests/strix_ai/ -v -s \
             -m "quick" \
