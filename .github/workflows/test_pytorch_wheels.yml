@@ -167,12 +167,18 @@ jobs:
             --import-mode=importlib \
             -v
 
+      # Windows testing is a recent addition and is being enabled incrementally.
+      # See https://github.com/ROCm/TheRock/issues/2258.
+      #
+      # Many tests are failing on torch 2.10+ so we limit testing to 2.9.
+      # (Obviously that's not ideal, but we need to start somewhere)
+      #
       # HACK: The test process does not terminate on its own gracefully,
       # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
       # After killing the process we read the return code to signal it normally.
       # See https://github.com/ROCm/TheRock/issues/999.
       - name: (Windows) Run PyTorch tests
-        if: ${{ runner.os == 'Windows' }}
+        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
         continue-on-error: true
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
