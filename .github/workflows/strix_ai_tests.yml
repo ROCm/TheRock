@@ -239,23 +239,23 @@ jobs:
           
           echo ""
           echo "=== PyTorch GPU Check ==="
-          /usr/bin/python3 -c "
+          /usr/bin/python3 <<'PYTHON_SCRIPT' || echo "PyTorch verification failed"
 import sys
 try:
     import torch
-    print(f'✓ PyTorch {torch.__version__} imported successfully')
-    print(f'  CUDA available: {torch.cuda.is_available()}')
+    print(f"PyTorch {torch.__version__} imported successfully")
+    print(f"  CUDA available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
-        print(f'  Device count: {torch.cuda.device_count()}')
-        print(f'  Device name: {torch.cuda.get_device_name(0)}')
-        print(f'  Device capability: {torch.cuda.get_device_capability(0)}')
+        print(f"  Device count: {torch.cuda.device_count()}")
+        print(f"  Device name: {torch.cuda.get_device_name(0)}")
+        print(f"  Device capability: {torch.cuda.get_device_capability(0)}")
     else:
-        print('  ✗ WARNING: CUDA/ROCm not available to PyTorch')
-        print('  GPU tests will be skipped')
+        print("  WARNING: CUDA/ROCm not available to PyTorch")
+        print("  GPU tests will be skipped")
 except Exception as e:
-    print(f'✗ ERROR: Failed to import torch: {e}')
-    sys.exit(0)  # Don't fail the workflow, just warn
-" || echo "PyTorch verification failed"
+    print(f"ERROR: Failed to import torch: {e}")
+    sys.exit(0)
+PYTHON_SCRIPT
       
       - name: Verify TheRock Installation
         continue-on-error: true
