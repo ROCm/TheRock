@@ -52,11 +52,40 @@ def run_migration_examples():
     migration_main()
 
 
+def run_sample_demos():
+    """Run sample component demos - showcases unified logging across modules"""
+    print("\n" + "="*70)
+    print("  UNIFIED LOGGING FRAMEWORK DEMO")
+    print("  Showcasing same logging framework across different components")
+    print("="*70 + "\n")
+    
+    print("Both samples use TheRockLogger with consistent formatting,")
+    print("structured data, performance timing, and error handling.\n")
+    
+    # Run sample 1
+    from sample_package_installer import main as installer_main
+    installer_main()
+    
+    # Run sample 2
+    from sample_build_system import main as build_main
+    build_main()
+    
+    print("\n" + "="*70)
+    print("  KEY OBSERVATIONS:")
+    print("="*70)
+    print("✅ Both samples use the same TheRockLogger")
+    print("✅ Consistent log format across different components")
+    print("✅ Structured data (extra fields) for better tracking")
+    print("✅ Performance timing with context managers")
+    print("✅ Exception handling with tracebacks")
+    print("="*70 + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Run logging framework demos')
     parser.add_argument(
         'demo_type',
-        choices=['all', 'basic', 'advanced', 'migration'],
+        choices=['all', 'basic', 'advanced', 'migration', 'samples'],
         default='all',
         help='Which demo to run'
     )
@@ -71,6 +100,8 @@ def main():
         run_advanced_examples()
     elif args.demo_type == 'migration':
         run_migration_examples()
+    elif args.demo_type == 'samples':
+        run_sample_demos()
 
 
 if __name__ == '__main__':
