@@ -71,12 +71,6 @@ on:
         required: false
         type: string
         default: ''
-      
-      artifact_run_id:
-        description: 'Artifact run ID (leave empty for latest)'
-        required: false
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -98,10 +92,7 @@ jobs:
         shell: bash
     
     env:
-      VENV_DIR: ${{ github.workspace }}/.venv
-      ARTIFACT_RUN_ID: ${{ github.event.inputs.artifact_run_id || github.run_id }}
-      OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
-      THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
+      # Note: Using rocm/pytorch container - no need for artifact/venv management
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_TYPE: ${{ github.event.inputs.test_type || 'quick' }}
       TEST_CATEGORY: ${{ github.event.inputs.test_category || 'quick' }}
@@ -186,27 +177,8 @@ jobs:
           Write-Host "=== Environment ==="
           Get-ChildItem Env: | Where-Object { $_.Name -like "*ROCM*" -or $_.Name -like "*HIP*" }
       
-      - name: Install Container Dependencies
-        if: env.PLATFORM == 'linux'
-        run: |
-          echo "=== Installing required packages for container ==="
-          apt-get update -qq
-          apt-get install -y -qq unzip curl git wget
-          echo "✓ Container dependencies installed"
-      
-      - name: Setup Test Environment
-        # Optional: Fetch pre-built TheRock artifacts
-        # For AI/ML tests, this is not strictly required as tests can run standalone
-        # Note: --pytorch is not a valid argument for install_rocm_from_artifacts.py
-        continue-on-error: true
-        uses: './.github/actions/setup_test_environment'
-        with:
-          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
-          ARTIFACT_GROUP: ${{ env.PLATFORM }}_release_${{ env.AMDGPU_FAMILIES }}
-          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
-          VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: "--tests"
-          IS_PR_FROM_FORK: false
+      # Note: No need to install ROCm or fetch artifacts - rocm/pytorch container has everything
+      # No need for setup_test_environment - AI/ML tests run standalone with PyTorch
       
       - name: Install AI/ML Dependencies
         run: |
@@ -239,35 +211,6 @@ jobs:
           echo ""
           echo "=== PyTorch GPU Check ==="
           python3 -c 'import torch; print("PyTorch version:", torch.__version__); print("CUDA available:", torch.cuda.is_available()); print("Device count:", torch.cuda.device_count() if torch.cuda.is_available() else 0); print("Device name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A")' 2>&1 || echo "PyTorch not installed or GPU not available"
-      
-      - name: Verify TheRock Installation
-        continue-on-error: true
-        run: |
-          echo "Checking THEROCK_BIN_DIR: ${{ env.THEROCK_BIN_DIR }}"
-          
-          if [ -d "${{ env.THEROCK_BIN_DIR }}" ]; then
-            echo "SUCCESS: Build directory exists"
-            ls -la ${{ env.THEROCK_BIN_DIR }} || true
-            
-            # Try to run rocminfo if available
-            if [ -f "${{ env.THEROCK_BIN_DIR }}/rocminfo" ]; then
-              echo "Running rocminfo..."
-              ${{ env.THEROCK_BIN_DIR }}/rocminfo | head -20 || true
-            else
-              echo "WARNING: rocminfo not found in build"
-            fi
-          else
-            echo "WARNING: Build directory not found - tests will use system ROCm (if available)"
-            echo "This is OK for AI/ML tests that primarily need PyTorch"
-            
-            # Check for system rocminfo
-            if command -v rocminfo &> /dev/null; then
-              echo "SUCCESS: System rocminfo found"
-              rocminfo | head -20 || true
-            else
-              echo "INFO: No rocminfo available"
-            fi
-          fi
       
       - name: Run Strix AI Tests - All
         if: env.TEST_CATEGORY == 'all'
