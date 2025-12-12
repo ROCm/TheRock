@@ -186,6 +186,14 @@ jobs:
           Write-Host "=== Environment ==="
           Get-ChildItem Env: | Where-Object { $_.Name -like "*ROCM*" -or $_.Name -like "*HIP*" }
       
+      - name: Install Container Dependencies
+        if: env.PLATFORM == 'linux'
+        run: |
+          echo "=== Installing required packages for container ==="
+          apt-get update -qq
+          apt-get install -y -qq unzip curl git wget
+          echo "✓ Container dependencies installed"
+      
       - name: Setup Test Environment
         # Optional: Fetch pre-built TheRock artifacts
         # For AI/ML tests, this is not strictly required as tests can run standalone
