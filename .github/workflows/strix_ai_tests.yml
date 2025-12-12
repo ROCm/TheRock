@@ -148,7 +148,7 @@ jobs:
           echo "=== ROCm Info ==="
           if command -v rocminfo &> /dev/null; then
             echo "✓ ROCm is installed!"
-            rocminfo | head -50
+            rocminfo | head -50 || true
           else
             echo "✗ WARNING: rocminfo not found in PATH"
             echo "This means ROCm is NOT installed in the container"
