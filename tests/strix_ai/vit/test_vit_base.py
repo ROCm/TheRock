@@ -115,7 +115,7 @@ class TestViTBase:
         print(f"✅ ViT batch test passed on {AMDGPU_FAMILIES}!")
     
     @pytest.mark.slow
-    def test_vit_throughput(self, strix_device, test_image_224, cleanup_gpu):
+    def test_vit_throughput(self, strix_device, test_image_224, cleanup_gpu, record_property):
         """Benchmark ViT throughput on Strix"""
         from transformers import ViTForImageClassification, ViTImageProcessor
         import time
@@ -150,6 +150,12 @@ class TestViTBase:
         fps = num_iterations / elapsed
         latency_ms = (elapsed / num_iterations) * 1000
         
+        # Record metrics
+        record_property("metric_throughput_fps", f"{fps:.2f}")
+        record_property("metric_latency_ms", f"{latency_ms:.2f}")
+        record_property("metric_iterations", num_iterations)
+        record_property("gpu_family", AMDGPU_FAMILIES)
+        
         print(f"📊 Performance Results:")
         print(f"   Throughput: {fps:.2f} FPS")
         print(f"   Latency: {latency_ms:.2f} ms")
@@ -163,7 +169,7 @@ class TestViTBase:
         
         print(f"✅ ViT throughput test passed on {AMDGPU_FAMILIES}!")
     
-    def test_vit_memory_usage(self, strix_device, test_image_224, cleanup_gpu):
+    def test_vit_memory_usage(self, strix_device, test_image_224, cleanup_gpu, record_property):
         """Test ViT memory usage on Strix iGPU"""
         from transformers import ViTForImageClassification, ViTImageProcessor
         
@@ -187,6 +193,10 @@ class TestViTBase:
         torch.cuda.synchronize()
         
         peak_memory_mb = torch.cuda.max_memory_allocated() / 1024 / 1024
+        
+        # Record metrics
+        record_property("metric_peak_memory_mb", f"{peak_memory_mb:.2f}")
+        record_property("gpu_family", AMDGPU_FAMILIES)
         
         print(f"📊 Memory Usage:")
         print(f"   Peak: {peak_memory_mb:.2f} MB")

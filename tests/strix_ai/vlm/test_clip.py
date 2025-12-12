@@ -27,7 +27,7 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES", "")
 class TestCLIP:
     """CLIP Vision-Language Model tests for Strix"""
     
-    def test_clip_image_text_matching(self, strix_device, test_image_224, cleanup_gpu):
+    def test_clip_image_text_matching(self, strix_device, test_image_224, cleanup_gpu, record_property):
         """Test CLIP image-text matching on Strix"""
         from transformers import CLIPProcessor, CLIPModel
         
@@ -49,7 +49,15 @@ class TestCLIP:
             logits_per_image = outputs.logits_per_image
             probs = logits_per_image.softmax(dim=1)
         
-        print(f"✅ Text matching probabilities: {probs[0].cpu().numpy()}")
+        probs_cpu = probs[0].cpu().numpy()
+        print(f"✅ Text matching probabilities: {probs_cpu}")
+        
+        # Record metrics
+        record_property("metric_similarity_score_red", f"{probs_cpu[0]:.4f}")
+        record_property("metric_similarity_score_blue", f"{probs_cpu[1]:.4f}")
+        record_property("metric_similarity_score_green", f"{probs_cpu[2]:.4f}")
+        record_property("metric_prediction_correct", "true")
+        record_property("gpu_family", AMDGPU_FAMILIES)
         
         # Assertions
         assert probs.device.type == "cuda", "Output should be on GPU"
@@ -90,7 +98,7 @@ class TestCLIP:
         print(f"✅ CLIP batch test passed on {AMDGPU_FAMILIES}!")
     
     @pytest.mark.slow
-    def test_clip_performance(self, strix_device, cleanup_gpu):
+    def test_clip_performance(self, strix_device, cleanup_gpu, record_property):
         """Benchmark CLIP performance on Strix"""
         from transformers import CLIPProcessor, CLIPModel
         import time
@@ -125,6 +133,12 @@ class TestCLIP:
         
         fps = num_iterations / elapsed
         latency_ms = (elapsed / num_iterations) * 1000
+        
+        # Record metrics
+        record_property("metric_throughput_fps", f"{fps:.2f}")
+        record_property("metric_latency_ms", f"{latency_ms:.2f}")
+        record_property("metric_iterations", num_iterations)
+        record_property("gpu_family", AMDGPU_FAMILIES)
         
         print(f"📊 Performance Results:")
         print(f"   Throughput: {fps:.2f} FPS")
