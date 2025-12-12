@@ -498,6 +498,7 @@ def main():
 
         try:
             # Keep running until interrupted
+            stopped_via_signal_file = False
             while not monitor.stop_event.is_set():
                 # Check for stop signal file
                 if monitor.stop_signal_file and monitor.stop_signal_file.exists():
@@ -508,14 +509,15 @@ def main():
                         monitor.stop_signal_file.unlink()
                     except:
                         pass
+                    stopped_via_signal_file = True
                     break
 
                 # Use wait() for more responsive shutdown
                 monitor.stop_event.wait(timeout=1)
 
-            # If we exited the loop because stop_event was set (but not by us),
-            # we still need to call stop() to print the summary
-            if monitor.stop_event.is_set():
+            # If we exited the loop because stop_event was set by a signal handler
+            # (not by the stop signal file check above), we need to call stop() to print the summary
+            if monitor.stop_event.is_set() and not stopped_via_signal_file:
                 print("\n[STOP] Stop event detected, finalizing...")
                 monitor.stop()
                 # Clean up the signal file if it exists

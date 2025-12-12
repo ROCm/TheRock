@@ -166,8 +166,7 @@ jobs:
               "--background"
             )
             $p = Start-Process -FilePath "python" -ArgumentList $args -PassThru `
-              -RedirectStandardOutput "${env:BUILD_DIR}\logs\monitor_output_${env:GITHUB_JOB}.txt" `
-              -RedirectStandardError "${env:BUILD_DIR}\logs\monitor_error_${env:GITHUB_JOB}.txt"
+              -RedirectStandardOutput "${env:BUILD_DIR}\logs\monitor_output_${env:GITHUB_JOB}.txt"
             "$($p.Id)" | Out-File -FilePath "${env:BUILD_DIR}\logs\memory_monitor.pid" -Encoding ASCII
             Write-Host "Memory monitoring started with PID: $($p.Id)"
           }
@@ -183,10 +182,6 @@ jobs:
             if (Test-Path "${env:BUILD_DIR}\logs\monitor_output_${env:GITHUB_JOB}.txt") {
               Write-Host "=== Memory Monitor Output ==="
               Get-Content "${env:BUILD_DIR}\logs\monitor_output_${env:GITHUB_JOB}.txt"
-            }
-            if (Test-Path "${env:BUILD_DIR}\logs\monitor_error_${env:GITHUB_JOB}.txt") {
-              Write-Host "=== Memory Monitor Errors ==="
-              Get-Content "${env:BUILD_DIR}\logs\monitor_error_${env:GITHUB_JOB}.txt"
             }
           }
 
