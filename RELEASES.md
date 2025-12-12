@@ -114,9 +114,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx950-dcgpu
@@ -130,9 +128,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx110X-all
@@ -149,9 +145,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx1151
@@ -165,9 +159,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx120X-all
@@ -182,9 +174,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ "rocm[libraries,devel]"
 ```
 
 ### Using ROCm Python packages
@@ -297,9 +287,7 @@ Supported devices in this family:
 | MI300A/MI300X | gfx942     |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx950-dcgpu
@@ -311,9 +299,7 @@ Supported devices in this family:
 | MI350X/MI355X | gfx950     |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx110X-all
@@ -328,9 +314,7 @@ Supported devices in this family:
 | AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx1151
@@ -342,9 +326,7 @@ Supported devices in this family:
 | AMD Strix Halo iGPU | gfx1151    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx120X-all
@@ -357,9 +339,7 @@ Supported devices in this family:
 | AMD RX 9070 / XT | gfx1201    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ --pre torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages

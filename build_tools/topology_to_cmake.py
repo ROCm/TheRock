@@ -4,6 +4,34 @@ Generate CMake includes from BUILD_TOPOLOGY.toml.
 
 This tool reads the build topology and generates CMake targets and variables
 that can be included in the main build system.
+
+Generated CMake Targets:
+    artifact-{name}     Custom target for each artifact defined in topology
+
+Generated CMake Variables:
+    THEROCK_BUILD_ORDER
+        Ordered list of build stage names for dependency resolution
+
+    THEROCK_TOPOLOGY_ARTIFACTS
+        List of all artifact names defined in the topology
+
+    THEROCK_ARTIFACT_GROUP_{artifact}
+        Maps artifact name to its artifact_group (e.g., "math-libs")
+
+    THEROCK_ARTIFACT_TYPE_{artifact}
+        Artifact type: "target-neutral" or "target-specific"
+        Uses artifact name as-is (e.g., THEROCK_ARTIFACT_TYPE_core-runtime)
+
+    THEROCK_ARTIFACT_SPLIT_DATABASES_{artifact}
+        Space-separated list of database handlers for kpack splitting
+        (only set for artifacts with split_databases defined)
+        Uses artifact name as-is (e.g., THEROCK_ARTIFACT_SPLIT_DATABASES_blas)
+
+    THEROCK_GROUP_ARTIFACTS_{group}
+        List of artifact names belonging to each artifact group
+
+Note: Some older variables normalize artifact names (hyphens to underscores),
+but the ARTIFACT_TYPE and ARTIFACT_SPLIT_DATABASES variables use names as-is.
 """
 
 import argparse
@@ -217,6 +245,18 @@ def generate_validation_metadata(topology: BuildTopology, f: TextIO):
             f.write(
                 f"set(THEROCK_ARTIFACT_GROUP_{artifact.name.replace('-', '_')} "
                 f'"{artifact.artifact_group}")\n'
+            )
+    f.write("\n")
+
+    # Generate artifact type and split_databases for kpack splitting
+    f.write("# Artifact type and split database metadata for kpack splitting\n")
+    for artifact in topology.get_artifacts():
+        f.write(f'set(THEROCK_ARTIFACT_TYPE_{artifact.name} "{artifact.type}")\n')
+        if artifact.split_databases:
+            # Use semicolon separator for proper CMake list handling
+            f.write(
+                f"set(THEROCK_ARTIFACT_SPLIT_DATABASES_{artifact.name} "
+                f'"{";".join(artifact.split_databases)}")\n'
             )
     f.write("\n")
 

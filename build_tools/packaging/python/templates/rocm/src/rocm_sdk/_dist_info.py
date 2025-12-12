@@ -211,33 +211,24 @@ LibraryEntry("amdhip64", "core", "libamdhip64.so*", "amdhip64*.dll")
 # The DLL glob here uses '0' from the version to avoid matching 'hiprtc-builtins'.
 # If DLLs with no version suffix are later added we will need a different pattern.
 LibraryEntry("hiprtc", "core", "libhiprtc.so*", "hiprtc0*.dll")
-LibraryEntry("hsa-runtime64", "core", "libhsa-runtime64.so*", "")
 LibraryEntry("roctx64", "core", "libroctx64.so*", "")
 LibraryEntry("rocprofiler-sdk-roctx", "core", "librocprofiler-sdk-roctx.so*", "")
 LibraryEntry("roctracer64", "core", "libroctracer64.so*", "")
 LibraryEntry(
     "rocm_sysdeps_liblzma",
     "core",
-    "librocm_sysdeps_liblzma.so*",
-    "",
-    "lib/rocm_sysdeps/lib",
-)
-LibraryEntry(
-    "rocm_sysdeps_sqlite3",
-    "core",
-    "librocm_sysdeps_sqlite3.so*",
+    "librocm_sysdeps_liblzma.so.*",
     "",
     "lib/rocm_sysdeps/lib",
 )
 LibraryEntry(
     "rocm-openblas",
     "core",
-    "librocm-openblas.so*",
+    "librocm-openblas.so.*",
     "rocm-openblas*.dll",
     "lib/host-math/lib",
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
-LibraryEntry("amd_comgr_loader", "core", "libamd_comgr_loader.so*", "")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")

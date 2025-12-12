@@ -299,6 +299,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
 
   therock_cmake_subproject_declare(ocl-clr
     USE_DIST_AMDGPU_TARGETS
+    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ocl-clr"
     INTERFACE_PROGRAM_DIRS
@@ -319,8 +320,10 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       "lib/opencl"
     INTERFACE_LINK_DIRS
       "lib"
+      "lib/opencl"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+      "lib/opencl"
   )
   therock_cmake_subproject_glob_c_sources(ocl-clr SUBDIRS .)
   therock_cmake_subproject_provide_package(ocl-clr ocl-icd lib/cmake/ocl-icd)

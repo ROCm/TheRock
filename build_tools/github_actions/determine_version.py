@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """Determines the SDK version and version suffix to pass as additional
-arguments to `external-builds/pytorch/build_prod_wheels.py`.
+arguments to scripts like `external-builds/pytorch/build_prod_wheels.py`.
 
 Example usage:
 
@@ -19,6 +19,7 @@ Writing the output to the "GITHUB_ENV" file can be suppressed by passing
 #       This overlaps with compute_package_version used for rocm python packages
 #       Maybe unify with write_torch_versions.py too? These should also work
 #       together and follow a similar style.
+# TODO: Or share with JAX builds? Could use a different name in that case too.
 
 from packaging.version import parse
 
@@ -28,16 +29,47 @@ import sys
 from github_actions_utils import *
 
 
+def derive_version_suffix(rocm_version: str) -> str:
+    # Compute a version suffix to be used as a local version identifier:
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
+    #
+    # For example, torch with base version `2.9.0` built with rocm `7.10.0`
+    # support can use this suffix in its version as `2.9.0+rocm7.10.0`.
+    #
+    # We take extra care here to sort final > nightly > dev and only include
+    # a single `+` in the suffix.
+    #
+    # For example:
+    #
+    # | description | rocm version       | suffix                     |
+    # | ----------- | ------------------ | -------------------------- |
+    # | final       | 7.10.0             | +rocm7.10.0                |
+    # | nightly     | 7.10.0a20251124    | +rocm7.10.0a20251124       |
+    # | dev         | 7.10.0.dev0+efed3c | +devrocm7.10.0.dev0-efed3c |
+    #                                       ^                 ^
+    #                                       |                 |-- no `+` here
+    #                                       |
+    #                                       |--- devrocm sorts older than rocm
+
+    parsed_version = parse(rocm_version)
+    base_name = "devrocm" if "dev" in rocm_version else "rocm"
+    version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
+
+    return version_suffix
+
+
 def derive_versions(rocm_version: str, verbose_output: bool) -> str:
-    version = parse(rocm_version)
-    rocm_sdk_version = f"=={version}"
-    version_suffix = f"+rocm{str(version).replace('+','-')}"
+    parsed_version = parse(rocm_version)
+    rocm_sdk_version = f"=={parsed_version}"
+
+    version_suffix = derive_version_suffix(rocm_version)
+
     optional_build_prod_arguments = (
         f"--rocm-sdk-version {rocm_sdk_version} --version-suffix {version_suffix}"
     )
 
     if verbose_output:
-        print(f"ROCm version: {version}")
+        print(f"ROCm version: {parsed_version}")
         print(f"`--rocm-sdk-version`\t: {rocm_sdk_version}")
         print(f"`--version-suffix`\t: {version_suffix}")
         print()
