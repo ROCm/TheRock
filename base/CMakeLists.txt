@@ -61,6 +61,7 @@ if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion g
 
 therock_cmake_subproject_declare(amdsmi
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
