@@ -160,6 +160,9 @@ skip_tests = {
             #   subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
             # We should fix the test to fail/skip more gracefully.
             "test_multi_grad_all_hooks",
+            # This is/was also failing on gfx942 linux, see the 2.9 and 2.10 skip test files.
+            #   AssertionError: "Simulate error" does not match "grad can be implicitly created only for scalar outputs"
+            "test_reentrant_parent_error_on_cpu_cuda",
         ],
         # Some tests hang and *must* be skipped for testing to complete.
         # That is likely related to processes not terminating on their own:
