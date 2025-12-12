@@ -9,7 +9,7 @@ See also the
 [Roadmap for support](ROADMAP.md) and
 [Build artifacts overview](docs/development/artifacts.md) pages.
 
-> [!WARNING]
+> [!IMPORTANT]
 > These instructions assume familiarity with how to use ROCm.
 > Please see https://rocm.docs.amd.com/ for general information about the ROCm software
 > platform. 
