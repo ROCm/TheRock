@@ -125,6 +125,10 @@ class ROCmDevelTest(unittest.TestCase):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
                 continue
+            if "libLLVMOffload" in str(so_path):
+                # recent addition from upstream, issue tracked in
+                # https://github.com/ROCm/TheRock/issues/2537
+                continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
