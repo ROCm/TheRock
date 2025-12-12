@@ -39,14 +39,14 @@ CONFIG_PRESETS_MAP = {
     # For initial implementation, pre and post submit will be the same
     "github-oss-presubmit": {
         "secondary_storage": CACHE_SRV,
-        "log_file": REPO_ROOT / "build/logs/ccache.log",
-        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "log_file": "ccache.log",
+        "stats_log": "ccache_stats.log",
         "max_size": "5G",
     },
     "github-oss-postsubmit": {
         "secondary_storage": CACHE_SRV,
-        "log_file": REPO_ROOT / "build/logs/ccache.log",
-        "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
+        "log_file": "ccache.log",
+        "stats_log": "ccache_stats.log",
         "max_size": "5G",
     },
 }
@@ -64,7 +64,8 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
         lines.append(f"{k} = {v}")
         # Ensure full dir path for logs exists, else ccache will fail and stop CI
         if k == "log_file" or k == "stats_log":
-            log_dir = v.parent.absolute()
+            log_dir = args.log_dir / v
+            log_dir = log_dir.parent.absolute()
             if not log_dir.exists():
                 log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -160,6 +161,14 @@ def main(argv: list[str]):
         default=REPO_ROOT / ".ccache",
         help="Location of the .ccache directory (defaults to ../.ccache)",
     )
+
+    p.add_argument(
+        "--log-dir",
+        type=Path,
+        default=REPO_ROOT / "build/logs/",
+        help="Location of the logs directory (defaults to ../build/logs)",
+    )
+
     p.add_argument(
         "--reset-stats",
         action=argparse.BooleanOptionalAction,
