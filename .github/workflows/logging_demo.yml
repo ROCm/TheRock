@@ -1,21 +1,12 @@
 name: Logging Framework Demo
 
 # Demo workflow for TheRock standardized logging framework
+# Demonstrates two sample applications using the unified logging framework:
+# 1. Package Installer
+# 2. Build System
 on:
   # Manual trigger
   workflow_dispatch:
-    inputs:
-      demo_type:
-        description: 'Which demo to run'
-        required: true
-        type: choice
-        options:
-          - samples      # Two sample components (recommended for demo)
-          - all          # Run all examples
-          - basic        # Basic usage only
-          - advanced     # Advanced features
-          - migration    # Migration examples
-        default: 'samples'
   
   # Auto-trigger on push
   push:
@@ -47,21 +38,21 @@ jobs:
           echo ""
           echo "Trigger: ${{ github.event_name }}"
           echo "Branch: ${{ github.ref_name }}"
-          echo "Demo Type: ${{ github.event.inputs.demo_type || 'samples' }}"
+          echo "Demo: Package Installer + Build System"
           echo ""
       
       - name: 📋 Run Logging Framework Demo
         run: |
           echo "::group::📝 Running Logging Framework Demo"
           echo "=========================================="
-          echo "  TheRock Logging Framework Examples"
+          echo "  TheRock Unified Logging Framework"
+          echo "  Sample 1: Package Installer"
+          echo "  Sample 2: Build System"
           echo "=========================================="
-          echo ""
-          echo "Demo Type: ${{ github.event.inputs.demo_type || 'samples' }}"
           echo ""
           
           cd build_tools/_therock_utils
-          python3 run_logging_demos.py ${{ github.event.inputs.demo_type || 'samples' }}
+          python3 run_logging_demos.py
           
           echo ""
           echo "✅ Demo completed!"
@@ -75,7 +66,7 @@ jobs:
           echo "  Demo Summary"
           echo "=========================================="
           echo ""
-          echo "Demo Type: ${{ github.event.inputs.demo_type || 'samples' }}"
+          echo "Samples Run: Package Installer + Build System"
           echo "Status: ${{ job.status }}"
           echo ""
           echo "✅ Logging framework demo completed!"
