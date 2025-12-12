@@ -210,8 +210,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
-        -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc
-        -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++
+        -DCMAKE_C_COMPILER:FILEPATH=/opt/rh/gcc-toolset-13/root/usr/bin/gcc 
+        -DCMAKE_CXX_COMPILER:FILEPATH=/opt/rh/gcc-toolset-13/root/usr/bin/g++ 
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       COMPILER_TOOLCHAIN
