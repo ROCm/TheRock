@@ -287,26 +287,38 @@ jobs:
             --junit-xml=test-results-quick.xml \
             || exit 0
       
-      - name: Display Test Results
+      - name: 📊 Display Test Results XML
         if: always()
         run: |
-          echo "=== Test Results Summary ==="
+          echo "::group::📊 Test Results XML Files"
+          echo ""
+          echo "=============================================="
+          echo "   STRIX AI/ML TEST RESULTS - XML OUTPUT"
+          echo "=============================================="
+          echo ""
+          
           for xml_file in test-results-*.xml; do
             if [ -f "$xml_file" ]; then
               echo ""
-              echo "##################################################"
-              echo "## Results from: $xml_file"
-              echo "##################################################"
+              echo "::group::📄 $xml_file"
+              echo "----------------------------------------------"
               cat "$xml_file"
+              echo "----------------------------------------------"
+              echo "::endgroup::"
               echo ""
             fi
           done
           
-          if [ ! -f test-results-*.xml ]; then
-            echo "No test result XML files found"
+          if ls test-results-*.xml 1> /dev/null 2>&1; then
+            echo ""
+            echo "✅ All XML files displayed above"
+            echo "   No need to download artifacts!"
+          else
+            echo "❌ No test result XML files found"
           fi
+          echo "::endgroup::"
       
-      - name: Upload Test Results
+      - name: 💾 Archive Test Results (Optional - XML already displayed above)
         if: always()
         uses: actions/upload-artifact@v4
         with:
