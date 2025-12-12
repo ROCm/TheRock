@@ -287,12 +287,26 @@ jobs:
             --junit-xml=test-results-quick.xml \
             || exit 0
       
+      - name: Check Test Results Files
+        if: always()
+        run: |
+          echo "=== Checking for test result files ==="
+          ls -la test-results-*.xml 2>/dev/null || echo "No test result XML files found"
+          echo ""
+          echo "Files in current directory:"
+          ls -la *.xml 2>/dev/null || echo "No XML files in current directory"
+          echo ""
+          echo "Current working directory: $(pwd)"
+      
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: strix-ai-test-results-${{ env.PLATFORM }}-${{ env.AMDGPU_FAMILIES }}-${{ env.TEST_CATEGORY }}
-          path: test-results-*.xml
+          path: |
+            test-results-*.xml
+            *.xml
+          if-no-files-found: warn
           retention-days: 30
       
       - name: Test Summary
