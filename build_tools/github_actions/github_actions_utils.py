@@ -3,6 +3,7 @@
 See also https://pypi.org/project/github-action-utils/.
 """
 
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -112,10 +113,14 @@ def gha_get_request_headers():
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    # If GITHUB_TOKEN environment variable is available, include it in the API request to avoid a lower rate limit
+
+    # If GITHUB_TOKEN environment variable is available, include it in the API
+    # request to avoid a lower rate limit
     gh_token = os.getenv("GITHUB_TOKEN", "")
     if gh_token:
         headers["Authorization"] = f"Bearer {gh_token}"
+    else:
+        _log(f"Warning: GITHUB_TOKEN not set, requests may be rate limited")
 
     return headers
 
@@ -159,10 +164,13 @@ def retrieve_bucket_info(
     """Given a github repository and a workflow run, retrieves bucket information.
 
     This is intended to segment artifacts by repository and trust level, with
-    artifacts split across three buckets:
-      * therock-artifacts
+    artifacts split across several buckets:
+      * therock-ci-artifacts
+      * therock-ci-artifacts-external
       * therock-artifacts-internal
-      * therock-artifacts-external
+      * therock-dev-artifacts
+      * therock-nightly-artifacts
+      * therock-release-artifacts
 
     Typically while run as a continious CI/CD pipeline, this function should
     return the same bucket information for each stage of the pipeline. While
@@ -188,6 +196,8 @@ def retrieve_bucket_info(
 
     _log("Retrieving bucket info...")
 
+    curr_commit_dt = None
+
     if github_repository:
         _log(f"  (explicit) github_repository: {github_repository}")
     if not github_repository:
@@ -204,6 +214,14 @@ def retrieve_bucket_info(
         is_pr_from_fork = head_github_repository != github_repository
         _log(f"  head_github_repository      : {head_github_repository}")
         _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
+
+        # From TheRock #2046 onward, a new S3 bucket was used.
+        # This datetime comparison will determine whether to download from older bucket or newer bucket.
+        curr_commit_dt = datetime.strptime(
+            workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
+        )
+        curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
+        commit_to_compare_dt = datetime.fromisoformat("2025-11-11T16:18:48+00:00")
     else:
         is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
         _log(f"  (implicit) is_pr_from_fork  : {is_pr_from_fork}")
@@ -215,12 +233,25 @@ def retrieve_bucket_info(
         else f"{owner}-{repo_name}/"
     )
 
-    if external_repo == "":
-        bucket = "therock-artifacts"
-    elif repo_name == "therock-releases" and owner == "ROCm" and not is_pr_from_fork:
-        bucket = "therock-artifacts-internal"
+    release_type = os.getenv("RELEASE_TYPE")
+    if release_type:
+        _log(f"  (implicit) RELEASE_TYPE: {release_type}")
+        bucket = f"therock-{release_type}-artifacts"
     else:
-        bucket = "therock-artifacts-external"
+        if external_repo == "":
+            bucket = "therock-ci-artifacts"
+            if curr_commit_dt and curr_commit_dt <= commit_to_compare_dt:
+                bucket = "therock-artifacts"
+        elif (
+            repo_name == "therock-releases-internal"
+            and owner == "ROCm"
+            and not is_pr_from_fork
+        ):
+            bucket = "therock-artifacts-internal"
+        else:
+            bucket = "therock-ci-artifacts-external"
+            if curr_commit_dt and curr_commit_dt <= commit_to_compare_dt:
+                bucket = "therock-artifacts-external"
 
     _log("Retrieved bucket info:")
     _log(f"  external_repo: {external_repo}")

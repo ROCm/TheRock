@@ -56,12 +56,12 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -99,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -109,11 +109,10 @@ inline system deps into the audio and vision wheels as needed.
 """
 
 import argparse
-from datetime import date
 import json
 import os
 from pathlib import Path
-from packaging.version import Version, parse
+from packaging.version import parse
 import platform
 import shutil
 import shlex
@@ -219,6 +218,19 @@ def get_installed_package_version(dist_package_name: str) -> str:
     raise ValueError(
         f"Did not find Version for installed package '{dist_package_name}' in output:\n{joined_lines}"
     )
+
+
+def get_version_suffix_for_installed_rocm_package() -> str:
+    rocm_version = get_installed_package_version("rocm")
+    print(f"Computing version suffix for installed rocm package: {rocm_version}")
+    # Compute a version suffix to be used as a local version identifier:
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
+    # This logic is copied from build_tools/github_actions/determine_version.py.
+    parsed_version = parse(rocm_version)
+    base_name = "devrocm" if "dev" in rocm_version else "rocm"
+    version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
+    print(f"Version suffix is: {version_suffix}")
+    return version_suffix
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -333,6 +345,9 @@ def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
 
+    if not args.version_suffix:
+        args.version_suffix = get_version_suffix_for_installed_rocm_package()
+
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
@@ -401,9 +416,9 @@ def do_build(args: argparse.Namespace):
         # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
         # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
         # See also https://github.com/ROCm/TheRock/issues/1999.
-        env[
-            "TRITON_APPEND_CMAKE_ARGS"
-        ] = "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+        env["TRITON_APPEND_CMAKE_ARGS"] = (
+            "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+        )
 
     if is_windows:
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
@@ -628,26 +643,26 @@ def do_build_pytorch(
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
-    pytorch_build_version_parsed = parse(pytorch_build_version)
-    print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+    print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    ## Disable FBGEMM_GENAI and flash_attention only for Linux on 2.8 and higher Pytorch version
-    ## https://github.com/ROCm/TheRock/issues/1619
+    ## Disable FBGEMM_GENAI on Linux for PyTorch, as not available for 2.7 on rocm/pytorch
+    ## and causes build failures for PyTorch >= 2.8.
+    ## Warn user when enabling it manually.
+    ## https://github.com/ROCm/TheRock/issues/2056
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
         if args.enable_pytorch_fbgemm_genai_linux is None:
-            # Default behavior — based on PyTorch version
-            if pytorch_build_version_parsed.release < (2, 8):
-                use_fbgemm_genai = "ON"
-            else:
-                use_fbgemm_genai = "OFF"
-            print(
-                f"FBGEMM_GENAI default behavior based on PyTorch version: {use_fbgemm_genai}"
-            )
+            use_fbgemm_genai = "OFF"
         else:
             # Explicit override: user has set the flag to true/false
             use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
-            print(f"FBGEMM_GENAI override set by flag: {use_fbgemm_genai}")
+            if use_fbgemm_genai == "ON":
+                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
+                print(
+                    f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
+for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2056
+                      """
+                )
 
         env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
@@ -655,8 +670,11 @@ def do_build_pytorch(
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
+            if "gfx103" in env["PYTORCH_ROCM_ARCH"]:
+                # no aotriton support for gfx103X
+                use_flash_attention = "OFF"
             print(
-                f"Flash Attention default behavior (based on triton): {use_flash_attention}"
+                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
             )
         else:
             # Explicit override: user has set the flag to true/false
@@ -817,7 +835,7 @@ def do_build_pytorch_audio(
     # Compute version.
     build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch audio BUILD_VERSION: {build_version}")
+    print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -847,7 +865,7 @@ def do_build_pytorch_vision(
     # Compute version.
     build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch vision BUILD_VERSION: {build_version}")
+    print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -991,12 +1009,9 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-    today = date.today()
-    formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
         "--version-suffix",
-        default=f"+rocmsdk{formatted_date}",
-        help="PyTorch version suffix",
+        help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
     )
     build_p.add_argument(
         "--clean",

@@ -9,6 +9,7 @@ add_subdirectory(googletest)
 add_subdirectory(libdivide)
 add_subdirectory(msgpack-cxx)
 add_subdirectory(nlohmann-json)
+add_subdirectory(simde)
 add_subdirectory(yaml-cpp)
 add_subdirectory(Catch2)
 add_subdirectory(FunctionalPlus)
@@ -40,3 +41,7 @@ endif()
 
 # dyninst depends on elfutils, boost, tbb
 add_subdirectory(dyninst)
+
+# gRPC: Static library for RDC (built on-demand when depended upon)
+# See: docs/rfcs/RFC0007-rdc-therock-integration.md
+add_subdirectory(grpc)

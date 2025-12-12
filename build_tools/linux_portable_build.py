@@ -5,7 +5,7 @@ Example usage:
 
     # Build for a specific family. Note that all options after the "--" are
     # passed verbatim to CMake.
-    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 
     # Build with podman vs docker.
     python linux_build_portable.py --docker=podman
@@ -128,7 +128,7 @@ def main(argv: list[str]):
     p.add_argument("--docker", default="docker", help="Docker or podman binary")
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6",
         help="Build docker image",
     )
     p.add_argument(

@@ -26,6 +26,7 @@ project wide:
   bundling is not enabled or supported for the target OS):
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
+  - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
   - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_NUMACTL`
@@ -68,6 +69,14 @@ Supported sub-libraries: `libelf`, `libdw`.
 - Import library: `libdw::libdw`
 - Alternatives: `pkg_check_modules(DW libdw)`
 
+## libcap
+
+Provides Linux capabilities for privileged operations (used by RDC).
+
+- Canonical method: `find_package(Libcap)`
+- Import library: `Libcap::Libcap`
+- Alternatives: `pkg_check_modules(LIBCAP libcap)` or direct linking (used by RDC)
+
 ## libdrm
 
 Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
@@ -99,6 +108,16 @@ Provides the `libnuma` library. Tools are not included in bundled sysdeps.
 - Vars: `NUMA_INCLUDE_DIRS`, `NUMA_INCLUDE_LIBRARIES` (can be used to avoid
   a hard-coded dep on `numa::numa`, which seems to vary across systems)
 - Alternatives: `pkg_check_modules(NUMA numa)`
+
+## simde
+
+SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics.
+
+- Canonical method: `pkg_check_modules(simde REQUIRED IMPORTED_TARGET simde)`
+- Import library: `PkgConfig::simde`
+- Vars: `simde_INCLUDE_DIRS`
+- Alternatives: none
+- Note: Header-only library, provides portable SIMD intrinsics (SSE, AVX, NEON, etc.)
 
 ## sqlite3
 

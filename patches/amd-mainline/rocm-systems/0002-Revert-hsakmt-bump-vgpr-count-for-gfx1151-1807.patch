@@ -1,0 +1,38 @@
+From 7ea46718d91398dbdb3ba98eeab4e2e778709519 Mon Sep 17 00:00:00 2001
+From: Joseph Macaranas <Joseph.Macaranas@amd.com>
+Date: Fri, 28 Nov 2025 11:54:21 -0500
+Subject: [PATCH] Revert "hsakmt: bump vgpr count for gfx1151 (#1807)"
+
+This reverts commit 770f30bc4c72d763742e39932e2c0583813d531f.
+---
+ projects/rocr-runtime/libhsakmt/src/libhsakmt.h | 1 -
+ projects/rocr-runtime/libhsakmt/src/queues.c    | 1 -
+ 2 files changed, 2 deletions(-)
+
+diff --git a/projects/rocr-runtime/libhsakmt/src/libhsakmt.h b/projects/rocr-runtime/libhsakmt/src/libhsakmt.h
+index 9581f7bdd4..4ac445c025 100644
+--- a/projects/rocr-runtime/libhsakmt/src/libhsakmt.h
++++ b/projects/rocr-runtime/libhsakmt/src/libhsakmt.h
+@@ -171,7 +171,6 @@ enum full_gfx_versions {
+ 	GFX_VERSION_YELLOW_CARP	 	= 0x0A0305,
+ 	GFX_VERSION_PLUM_BONITO		= 0x0B0000,
+ 	GFX_VERSION_WHEAT_NAS		= 0x0B0001,
+-	GFX_VERSION_GFX1151		= 0x0B0501,
+ 	GFX_VERSION_GFX1200		= 0x0C0000,
+ 	GFX_VERSION_GFX1201		= 0x0C0001,
+ };
+diff --git a/projects/rocr-runtime/libhsakmt/src/queues.c b/projects/rocr-runtime/libhsakmt/src/queues.c
+index b48235f86f..c2a00734ea 100644
+--- a/projects/rocr-runtime/libhsakmt/src/queues.c
++++ b/projects/rocr-runtime/libhsakmt/src/queues.c
+@@ -116,7 +116,6 @@ uint32_t hsakmt_get_vgpr_size_per_cu(uint32_t gfxv)
+
+ 	else if (gfxv == GFX_VERSION_PLUM_BONITO ||
+ 		 gfxv == GFX_VERSION_WHEAT_NAS ||
+-		 gfxv == GFX_VERSION_GFX1151 ||
+ 		 gfxv == GFX_VERSION_GFX1200 ||
+ 		 gfxv == GFX_VERSION_GFX1201)
+ 		vgpr_size = 0x60000;
+--
+2.43.0
+

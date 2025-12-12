@@ -29,4 +29,4 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_BUNDLE_SYSDEPS=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build"
+time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist

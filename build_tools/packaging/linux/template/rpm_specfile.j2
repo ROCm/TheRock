@@ -1,5 +1,9 @@
 # Use LLVM tools for stripping / objcopy
+{% if disable_rpm_strip %}
+%global __strip   /bin/true
+{% else %}
 %global __strip   /usr/bin/llvm-strip
+{% endif %}
 %global __objcopy /usr/bin/llvm-objcopy
 
 
@@ -16,13 +20,24 @@ Group: {{ group }}
 License: {{ pkg_license }}
 Vendor: {{ vendor }}
 Prefix: {{ install_prefix }}
-{% if requires %}
+{%- if requires %}
 Requires: {{ requires }}
-{% endif %}
-{% if rpmrecommends %}
+{%- endif %}
+{%- if rpmrecommends %}
 Recommends: {{ rpmrecommends }}
-{% endif %}
-
+{%- endif %}
+{%- if rpmsuggests %}
+Suggests: {{ rpmsuggests }}
+{%- endif %}
+{%- if provides %}
+Provides: {{ provides }}
+{%- endif %}
+{%- if obsoletes %}
+Obsoletes: {{ obsoletes }}
+{%- endif %}
+{%- if conflicts %}
+Conflicts: {{ conflicts }}
+{%- endif %}
 %description
 {{ description_long }}
 

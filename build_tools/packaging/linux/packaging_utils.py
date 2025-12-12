@@ -3,6 +3,8 @@
 
 
 import json
+import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -97,6 +99,20 @@ def is_composite_package(pkg_info):
     return is_key_defined(pkg_info, "composite")
 
 
+def is_rpm_stripping_disabled(pkg_info):
+    """
+    Verifies whether Disable_RPM_STRIP key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if Disable_RPM_STRIP key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "Disable_RPM_STRIP")
+
+
 def is_debug_package_disabled(pkg_info):
     """
     Verifies whether Disable_Debug_Package key is enabled for a package.
@@ -178,6 +194,19 @@ def get_package_list():
 
     pkg_list = [pkg["Package"] for pkg in data if not is_packaging_disabled(pkg)]
     return pkg_list
+
+
+def remove_dir(dir_name):
+    """Remove the directory if it exists
+
+    Parameters:
+    dir_name : Directory to be removed
+
+    Returns: None
+    """
+    if os.path.exists(dir_name) and os.path.isdir(dir_name):
+        shutil.rmtree(dir_name)
+        print(f"Removed directory: {dir_name}")
 
 
 def version_to_str(version_str):

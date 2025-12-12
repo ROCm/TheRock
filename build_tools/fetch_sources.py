@@ -2,6 +2,14 @@
 # Fetches sources from a specified branch/set of projects.
 # This script is available for users, but it is primarily the mechanism
 # the CI uses to get to a clean state.
+#
+# Stage-aware fetching:
+#   Use --stage <stage_name> to fetch only submodules needed for a build stage.
+#   This uses BUILD_TOPOLOGY.toml to determine which submodules are required.
+#
+# Legacy flag-based fetching:
+#   Use --include-* flags to control which project groups to fetch.
+#   This is the original behavior and is still supported.
 
 import argparse
 import hashlib
@@ -11,10 +19,12 @@ import shlex
 import shutil
 import subprocess
 import sys
+from typing import List, Optional
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
+TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
 
 
 def is_windows() -> bool:
@@ -33,7 +43,42 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def get_enabled_projects(args) -> list[str]:
+def get_projects_from_topology(stage: str) -> List[str]:
+    """Get submodule names for a build stage from BUILD_TOPOLOGY.toml."""
+    from _therock_utils.build_topology import BuildTopology
+
+    if not TOPOLOGY_PATH.exists():
+        raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+
+    topology = BuildTopology(str(TOPOLOGY_PATH))
+    submodules = topology.get_submodules_for_stage(stage)
+    return [s.name for s in submodules]
+
+
+def get_available_stages() -> List[str]:
+    """Get list of available build stages from BUILD_TOPOLOGY.toml."""
+    from _therock_utils.build_topology import BuildTopology
+
+    if not TOPOLOGY_PATH.exists():
+        return []
+
+    topology = BuildTopology(str(TOPOLOGY_PATH))
+    return [s.name for s in topology.get_build_stages()]
+
+
+def get_enabled_projects(args) -> List[str]:
+    """Get list of submodule names to fetch.
+
+    If --stage is provided, uses BUILD_TOPOLOGY.toml to determine submodules.
+    Otherwise, uses the legacy --include-* flags.
+    """
+    # Stage-aware mode: use topology
+    if args.stage:
+        projects = get_projects_from_topology(args.stage)
+        log(f"Stage '{args.stage}' requires submodules: {projects}")
+        return projects
+
+    # Legacy flag-based mode
     projects = []
     if args.include_system_projects:
         projects.extend(args.system_projects)
@@ -45,6 +90,8 @@ def get_enabled_projects(args) -> list[str]:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
+    if args.include_rocm_media:
+        projects.extend(args.rocm_media_projects)
     return projects
 
 
@@ -81,8 +128,6 @@ def run(args):
         ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
         cwd=THEROCK_DIR,
     )
-
-    populate_ancillary_sources(args)
 
     # Remove any stale .smrev files.
     remove_smrev_files(args, projects)
@@ -248,42 +293,29 @@ def get_submodule_revision(submodule_path: str) -> str:
     return ls_line.split()[1]
 
 
-def populate_ancillary_sources(args):
-    """Various subprojects have their own mechanisms for populating ancillary sources
-    needed to build. There is often something in CMake that attempts to automate it,
-    but it is also often broken. So we just do the right thing here as a transitionary
-    step to fixing the underlying software packages."""
-    populate_submodules_if_exists(args, THEROCK_DIR / "base" / "rocprofiler-register")
-    populate_submodules_if_exists(args, THEROCK_DIR / "profiler" / "rocprofiler-sdk")
-
-    # TODO(#36): Enable once rocprofiler-systems can be checked out on Windows
-    #     error: invalid path 'src/counter_analysis_toolkit/scripts/sample_data/L2_RQSTS:ALL_DEMAND_REFERENCES.data.reads.stat'
-    #  Upstream issues:
-    #   https://github.com/ROCm/rocprofiler-systems/issues/105
-    #   https://github.com/icl-utk-edu/papi/issues/321
-    if not is_windows():
-        populate_submodules_if_exists(
-            args, THEROCK_DIR / "profiler" / "rocprofiler-systems"
-        )
-
-
-def populate_submodules_if_exists(args, git_dir: Path):
-    if not git_dir.exists():
-        print(f"Not populating submodules for {git_dir} (does not exist)")
-        return
-    print(f"Populating submodules for {git_dir}:")
-    update_args = []
-    if args.depth is not None:
-        update_args = ["--depth", str(args.depth)]
-    if args.jobs:
-        update_args += ["--jobs", str(args.jobs)]
-    if args.progress:
-        update_args += ["--progress"]
-    exec(["git", "submodule", "update", "--init"] + update_args, cwd=git_dir)
-
-
 def main(argv):
-    parser = argparse.ArgumentParser(prog="fetch_sources")
+    parser = argparse.ArgumentParser(
+        prog="fetch_sources",
+        description="Fetch sources for TheRock build. Use --stage for stage-aware "
+        "fetching or --include-* flags for legacy mode.",
+    )
+
+    # Stage-aware fetching (preferred for CI)
+    available_stages = get_available_stages()
+    parser.add_argument(
+        "--stage",
+        type=str,
+        choices=available_stages if available_stages else None,
+        help=f"Build stage to fetch sources for. Uses BUILD_TOPOLOGY.toml. "
+        f"Available: {', '.join(available_stages) if available_stages else 'none'}",
+    )
+    parser.add_argument(
+        "--list-stages",
+        action="store_true",
+        help="List available build stages and their submodules, then exit",
+    )
+
+    # Legacy options
     parser.add_argument(
         "--patch-tag",
         type=str,
@@ -354,6 +386,12 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
+        "--include-rocm-media",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include media projects that are part of ROCM",
+    )
+    parser.add_argument(
         "--system-projects",
         nargs="+",
         type=str,
@@ -390,6 +428,19 @@ def main(argv):
         ),
     )
     parser.add_argument(
+        "--rocm-media-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "amd-mesa",
+            ]
+        ),
+    )
+    parser.add_argument(
         # projects that use DVC to manage large files
         "--dvc-projects",
         nargs="+",
@@ -406,6 +457,28 @@ def main(argv):
         ),
     )
     args = parser.parse_args(argv)
+
+    # Handle --list-stages
+    if args.list_stages:
+        from _therock_utils.build_topology import BuildTopology
+
+        if not TOPOLOGY_PATH.exists():
+            print(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+            sys.exit(1)
+
+        topology = BuildTopology(str(TOPOLOGY_PATH))
+        print("Available build stages and their submodules:\n")
+        for stage in topology.get_build_stages():
+            submodules = topology.get_submodules_for_stage(stage.name)
+            submodule_names = [s.name for s in submodules]
+            print(f"  {stage.name} ({stage.type}):")
+            print(f"    {stage.description}")
+            print(
+                f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
+            )
+            print()
+        sys.exit(0)
+
     run(args)
 
 
