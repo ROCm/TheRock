@@ -4,7 +4,7 @@ Sample Build System - Demonstrates logging framework usage
 """
 
 import time
-from logging_config import get_logger
+from logging_config import get_logger, setup_logging
 
 
 def configure_build(config):
@@ -29,7 +29,13 @@ def configure_build(config):
 
 
 def compile_components(components):
-    """Sample compilation with performance tracking"""
+    """
+    Sample compilation with performance tracking
+    
+    Demonstrates:
+    - timed_operation: Automatic timing for each component compilation
+    - Nested operations with automatic duration tracking
+    """
     logger = get_logger(__name__, component="BuildSystem", operation="compile")
     
     logger.info(f"Starting compilation of {len(components)} components", extra={
@@ -38,8 +44,11 @@ def compile_components(components):
     })
     
     for component in components:
+        # timed_operation automatically tracks duration and logs:
+        # - DEBUG: "Starting operation: Compiling {component}"
+        # - INFO: "Completed operation: Compiling {component}" (duration_ms in extra)
         with logger.timed_operation(f"Compiling {component}"):
-            logger.info(f"Compiling component: {component}", extra={
+            logger.info(f"🔨 Compiling component: {component}", extra={
                 "component": component,
                 "status": "compiling"
             })
@@ -47,7 +56,7 @@ def compile_components(components):
             # Simulate compilation
             time.sleep(0.8)
             
-            logger.info(f"Component {component} compiled successfully", extra={
+            logger.info(f"✅ Component {component} compiled successfully", extra={
                 "component": component,
                 "status": "success"
             })
@@ -88,6 +97,9 @@ def run_tests(components):
 
 def main():
     """Main demo function"""
+    # Initialize logging with DEBUG level to see timed_operation's automatic logs
+    setup_logging(console_log_level='DEBUG')
+    
     print("\n" + "="*60)
     print("  Sample 2: Build System with Logging")
     print("="*60 + "\n")
@@ -95,6 +107,7 @@ def main():
     # Setup logger
     logger = get_logger(__name__, component="BuildSystem")
     logger.info("Build System Demo Started")
+    logger.debug("🔧 Logging initialized at DEBUG level - automatic timing enabled")
     
     # Build configuration
     config = {
