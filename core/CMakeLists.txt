@@ -315,6 +315,8 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocm-core
       ocl-icd
       ${OCL_CLR_RUNTIME_DEPS}
+    INSTALL_RPATH_LIBRARY_DIR
+      "lib/opencl"
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
