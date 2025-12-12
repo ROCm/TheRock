@@ -4,7 +4,8 @@ Sample Package Installer - Demonstrates logging framework usage
 """
 
 import time
-from logging_config import get_logger, setup_logging
+import logging
+from logging_config import get_logger, configure_root_logger
 
 
 def install_packages(packages):
@@ -89,7 +90,7 @@ def verify_installation(packages):
 def main():
     """Main demo function"""
     # Initialize logging with DEBUG level to see timed_operation's automatic logs
-    setup_logging(console_log_level='DEBUG')
+    configure_root_logger(level=logging.DEBUG)
     
     print("\n" + "="*60)
     print("  Sample 1: Package Installer with Logging")
