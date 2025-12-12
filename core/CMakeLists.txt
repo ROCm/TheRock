@@ -309,6 +309,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       ${OCL_CLR_CMAKE_ARGS}
     BUILD_DEPS
       rocm-cmake
+      therock-simde
     RUNTIME_DEPS
       amd-llvm
       amd-comgr

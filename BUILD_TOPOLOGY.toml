@@ -56,6 +56,7 @@
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
+#   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
 # ==============================================================================
 
@@ -369,6 +370,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
+split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
 artifact_group = "math-libs"
@@ -392,7 +394,7 @@ artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.support]
 artifact_group = "math-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = []
 
 # --- ML Libraries (per-arch) ---

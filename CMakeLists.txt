@@ -104,6 +104,13 @@ set(ROCM_SYMLINK_LIBS OFF)
 
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
+# Kpack artifact splitting
+option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
+set(THEROCK_KPACK_DIR "" CACHE PATH "Path to rocm-kpack repository (required when THEROCK_KPACK_SPLIT_ARTIFACTS=ON)")
+if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
+  message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
+endif()
+
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
 
@@ -344,6 +351,7 @@ endif()
 
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
+set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
@@ -365,6 +373,7 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)

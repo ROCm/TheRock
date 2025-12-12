@@ -148,6 +148,10 @@ if(THEROCK_ENABLE_COMPILER)
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
   )
   if(NOT THEROCK_FLAG_COMGR_DELAY_LOAD)
     therock_cmake_subproject_provide_package("${_amd_comgr_target_name}" amd_comgr lib/cmake/amd_comgr)
@@ -184,6 +188,10 @@ if(THEROCK_ENABLE_COMPILER)
         -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
       RUNTIME_DEPS
         "${_amd_comgr_target_name}"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
     )
     therock_cmake_subproject_glob_c_sources("${_amd_comgr_stub_target_name}" SUBDIRS src)
     therock_cmake_subproject_provide_package("${_amd_comgr_stub_target_name}" amd_comgr lib/cmake/amd_comgr_stub)
