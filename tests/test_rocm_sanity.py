@@ -198,4 +198,11 @@ class TestAmdSmiTests:
         cwd = amdsmi_test_bin.parent
 
         process = run_command(cmd, cwd=str(cwd))
+        stdout = process.stdout
+
+        # Look for GTest summary line: [==========] X tests from ...
+        for line in stdout.splitlines():
+            if "[==========]" in line:
+                print(f"[amdsmitst-summary] {line}")
+
         check.equal(process.returncode, 0)
