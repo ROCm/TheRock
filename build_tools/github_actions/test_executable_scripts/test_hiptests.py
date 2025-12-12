@@ -59,22 +59,20 @@ if sys.platform == "win32":
     dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
     dlls_to_copy = []
     for pattern in dlls_pattern:
-        dlls_to_copy.append(glob.glob(os.path.join(f"{THEROCK_BIN_DIR}", pattern)))
-    # convert list of lists to list
-    dlls_to_copy = [item for sublist in dlls_to_copy for item in sublist]
+        dlls_to_copy.extend(Path(THEROCK_BIN_DIR).glob(pattern))
     for dll in dlls_to_copy:
         try:
             shutil.copy(dll, CATCH_TESTS_PATH)
-            print(f"Copied: {dll} to {CATCH_TESTS_PATH}")
+            logging.info(f"++ Copied: {dll} to {CATCH_TESTS_PATH}")
         except Exception as e:
-            print(f"Error copying {dll}: {e}")
+            logging.info(f"Error copying {dll}: {e}")
 
 # catch/ctest framework 
 # Linux
-# does not honor LD_LIBRARY_PATH on Linux
-# tests are hardcoded to look at THEROCK_BIN_DIR or /opt/rocm/lib path
+#   does not honor LD_LIBRARY_PATH on Linux
+#   tests are hardcoded to look at THEROCK_BIN_DIR or /opt/rocm/lib path
 # Windows
-# tests load the dlls present in the local exe folder
+#   tests load the dlls present in the local exe folder
 # Set ROCM Path, to find rocm_agent_enum etc
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 env["ROCM_PATH"] = str(ROCM_PATH)
