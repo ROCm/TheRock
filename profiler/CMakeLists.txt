@@ -24,16 +24,21 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
-    # TODO: Tests do not build properly for explicit targets: Switch to
-    # USE_DIST_AMDGPU_TARGETS once fixed.
-    # See: https://github.com/ROCm/aqlprofile/issues/2
-    DISABLE_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DAQLPROFILE_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DHIP_PLATFORM="amd"
+    COMPILER_TOOLCHAIN
+      amd-hip
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
+    BUILD_DEPS
+      therock-googletest
     RUNTIME_DEPS
+      hip-clr
       amd-llvm
       ROCR-Runtime
   )
@@ -41,6 +46,19 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBDIRS .
   )
   therock_cmake_subproject_activate(aqlprofile)
+
+  therock_provide_artifact(aqlprofile
+    DESCRIPTOR artifact-aqlprofile.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      aqlprofile
+  )
 
   ##############################################################################
   # rocprofiler-sdk
@@ -174,7 +192,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       lib
       run
     SUBPROJECT_DEPS
-      aqlprofile
       rocprofiler-sdk
       roctracer
       ${_rocprofiler_sdk_optional_deps}
@@ -191,7 +208,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       run
       test
     SUBPROJECT_DEPS
-      aqlprofile
       rocprofiler-sdk
       rocprofiler-compute
       roctracer
