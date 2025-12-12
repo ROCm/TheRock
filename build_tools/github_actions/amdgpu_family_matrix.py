@@ -66,14 +66,14 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            "test-runs-on": "linux-strix-halo-gpu-rocm",
+            "test-runs-on": "linux-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-strix-halo-gpu-rocm",
+            "test-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "build_variants": ["release"],
         },
@@ -93,7 +93,7 @@ amdgpu_family_info_matrix_postsubmit = {
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-rx9070-gpu-rocm",
+            "test-runs-on": "linux-gfx1201-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -146,7 +146,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx103x": {
         "linux": {
-            "test-runs-on": "linux-rx6950-gpu-rocm",
+            "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -162,7 +162,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1150": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "build_variants": ["release"],
         },
@@ -188,7 +188,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1153": {
         "linux": {
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
             "expect_failure": True,
             "build_variants": ["release"],
