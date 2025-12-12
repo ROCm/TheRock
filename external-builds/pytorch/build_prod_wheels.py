@@ -109,11 +109,10 @@ inline system deps into the audio and vision wheels as needed.
 """
 
 import argparse
-from datetime import date
 import json
 import os
 from pathlib import Path
-from packaging.version import Version, parse
+from packaging.version import parse
 import platform
 import shutil
 import shlex
@@ -219,6 +218,19 @@ def get_installed_package_version(dist_package_name: str) -> str:
     raise ValueError(
         f"Did not find Version for installed package '{dist_package_name}' in output:\n{joined_lines}"
     )
+
+
+def get_version_suffix_for_installed_rocm_package() -> str:
+    rocm_version = get_installed_package_version("rocm")
+    print(f"Computing version suffix for installed rocm package: {rocm_version}")
+    # Compute a version suffix to be used as a local version identifier:
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
+    # This logic is copied from build_tools/github_actions/determine_version.py.
+    parsed_version = parse(rocm_version)
+    base_name = "devrocm" if "dev" in rocm_version else "rocm"
+    version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
+    print(f"Version suffix is: {version_suffix}")
+    return version_suffix
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -332,6 +344,9 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
 def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
+
+    if not args.version_suffix:
+        args.version_suffix = get_version_suffix_for_installed_rocm_package()
 
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
@@ -628,8 +643,7 @@ def do_build_pytorch(
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
-    pytorch_build_version_parsed = parse(pytorch_build_version)
-    print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+    print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
     ## Disable FBGEMM_GENAI on Linux for PyTorch, as not available for 2.7 on rocm/pytorch
     ## and causes build failures for PyTorch >= 2.8.
@@ -821,7 +835,7 @@ def do_build_pytorch_audio(
     # Compute version.
     build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch audio BUILD_VERSION: {build_version}")
+    print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -851,7 +865,7 @@ def do_build_pytorch_vision(
     # Compute version.
     build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch vision BUILD_VERSION: {build_version}")
+    print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -995,12 +1009,9 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-    today = date.today()
-    formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
         "--version-suffix",
-        default=f"+rocmsdk{formatted_date}",
-        help="PyTorch version suffix",
+        help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
     )
     build_p.add_argument(
         "--clean",
