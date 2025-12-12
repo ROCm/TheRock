@@ -1,1 +1,0 @@
-set(CMAKE_INSTALL_RPATH "$ORIGIN/opencl")
