@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from github_actions_utils import *
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 logging.basicConfig(level=logging.INFO)
 
@@ -225,18 +226,26 @@ def run():
 
     logging.info(f"Selecting projects: {project_to_test}")
 
+    # For test labels that include benchmarks, merge benchmark_matrix
+    combined_test_matrix = test_matrix.copy()
+    if test_labels:
+        benchmark_labels = [label for label in test_labels if label in benchmark_matrix]
+        if benchmark_labels:
+            logging.info(f"Including benchmark tests from labels: {benchmark_labels}")
+            combined_test_matrix.update(benchmark_matrix)
+
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in project_to_test.split(",")]
 
     output_matrix = []
-    for key in test_matrix:
-        job_name = test_matrix[key]["job_name"]
+    for key in combined_test_matrix:
+        job_name = combined_test_matrix[key]["job_name"]
 
         # If the test is disabled for a particular platform, skip the test
         if (
-            "exclude_family" in test_matrix[key]
-            and platform in test_matrix[key]["exclude_family"]
-            and amdgpu_families in test_matrix[key]["exclude_family"][platform]
+            "exclude_family" in combined_test_matrix[key]
+            and platform in combined_test_matrix[key]["exclude_family"]
+            and amdgpu_families in combined_test_matrix[key]["exclude_family"][platform]
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
@@ -249,11 +258,11 @@ def run():
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
-        if platform in test_matrix[key]["platform"] and (
+        if platform in combined_test_matrix[key]["platform"] and (
             key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
-            job_config_data = test_matrix[key]
+            job_config_data = combined_test_matrix[key]
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
