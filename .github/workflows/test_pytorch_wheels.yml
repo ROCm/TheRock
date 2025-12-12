@@ -70,6 +70,8 @@ on:
 permissions:
   contents: read
 
+run-name: Test PyTorch Wheels (${{ inputs.amdgpu_family }}, torch==${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
+
 jobs:
   test_wheels:
     name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
