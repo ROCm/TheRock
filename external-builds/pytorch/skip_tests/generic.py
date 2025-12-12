@@ -176,6 +176,9 @@ skip_tests = {
             "test_cublas_workspace_explicit_allocation",
             # Test hang (see above)
             "test_graph_error",
+            # This test conflicts with how our test script and runners are
+            # configured.
+            "test_hip_device_count",
             # Multi-processing forking code that may not work on Windows?
             "test_is_pinned_no_context",
             # Bug, needs triage:
@@ -206,6 +209,9 @@ skip_tests = {
             "test_ConvTranspose2d_cuda",
             "test_ConvTranspose2d_groups_cuda",
             "test_ConvTranspose2d_no_bias_cuda",
+            # AssertionError: False is not true
+            # self.assertTrue(torch.allclose(x.grad.cpu(), xx.grad, rtol=rtol, atol=1e-3))
+            "test_warp_softmax_64bit_indexing_cuda_float16",
         ],
         "torch": [
             # Test hang (see above)

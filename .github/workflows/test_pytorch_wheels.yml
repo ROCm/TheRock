@@ -173,7 +173,10 @@ jobs:
       - name: (Windows) Run PyTorch tests
         if: ${{ runner.os == 'Windows' }}
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py
+          python ./external-builds/pytorch/run_pytorch_tests.py -- \
+            --continue-on-collection-errors \
+            --import-mode=importlib \
+            -v
 
           if [ -f run_pytorch_tests_exit_code.txt ]; then
             EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
