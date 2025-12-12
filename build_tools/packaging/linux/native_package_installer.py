@@ -663,7 +663,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--package-suffix",
-        default=None,
+        default=None,nargs="?",
         help="Package suffix for custom builds (optional, e.g., 'asan' for AddressSanitizer builds)",
     )
     parser.add_argument(
