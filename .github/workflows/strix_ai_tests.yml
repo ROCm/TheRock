@@ -98,7 +98,7 @@ jobs:
       # Note: Using rocm/pytorch container - no need for artifact/venv management
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_TYPE: ${{ github.event.inputs.test_type || 'quick' }}
-      TEST_CATEGORY: ${{ github.event.inputs.test_category || 'quick' }}
+      TEST_CATEGORY: ${{ github.event.inputs.test_category || 'all' }}
       PLATFORM: ${{ github.event.inputs.platform || 'linux' }}
       PYTHONUNBUFFERED: 1
     
