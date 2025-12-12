@@ -69,10 +69,14 @@ jobs:
       
       - name: Quick Dependency Install
         run: |
-          python3 -m pip install pytest pytest-check --user || echo "pytest install failed"
-          python3 -m pip install transformers --user || echo "transformers install failed"
-          python3 -m pip install torch torchvision --user || echo "torch install failed (may be OK)"
-          python3 -m pip install ultralytics opencv-python pillow --user || echo "cv libs install failed"
+          # Deactivate venv if present and use system python
+          unset VIRTUAL_ENV
+          export PATH=$(echo $PATH | sed 's|/__w/TheRock/TheRock/.venv/bin:||')
+          
+          /usr/bin/python3 -m pip install pytest pytest-check --user || echo "pytest install failed"
+          /usr/bin/python3 -m pip install transformers --user || echo "transformers install failed"
+          /usr/bin/python3 -m pip install torch torchvision --user || echo "torch install failed (may be OK)"
+          /usr/bin/python3 -m pip install ultralytics opencv-python pillow --user || echo "cv libs install failed"
       
       - name: Display Test Info
         run: |
@@ -85,8 +89,9 @@ jobs:
       
       - name: Run Test
         run: |
-          echo "Running: python3 -m pytest ${{ env.TEST_COMMAND }} -v -s"
-          python3 -m pytest ${{ env.TEST_COMMAND }} -v -s || echo "Test completed with errors (may be expected if dependencies missing)"
+          unset VIRTUAL_ENV
+          echo "Running: /usr/bin/python3 -m pytest ${{ env.TEST_COMMAND }} -v -s"
+          /usr/bin/python3 -m pytest ${{ env.TEST_COMMAND }} -v -s || echo "Test completed with errors (may be expected if dependencies missing)"
       
       - name: Show Results
         if: always()
