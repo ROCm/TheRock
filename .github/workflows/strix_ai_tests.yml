@@ -109,10 +109,8 @@ jobs:
           repository: "ROCm/TheRock"
           ref: ${{ github.ref }}
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      # Note: Do NOT use actions/setup-python - it overrides container's ROCm Python!
+      # The rocm/pytorch container already has Python + PyTorch with ROCm support
       
       - name: Display System Info
         run: |
@@ -127,8 +125,11 @@ jobs:
           echo "Runner: ${{ runner.name }}"
           echo ""
           echo "=== Python Info ==="
-          python --version
-          pip --version
+          which python3
+          python3 --version
+          which pip3
+          pip3 --version
+          echo "Python path: $(python3 -c 'import sys; print(sys.executable)')"
       
       # Linux-specific: Check GPU and ROCm
       - name: Check ROCm/GPU (Linux)
@@ -190,18 +191,22 @@ jobs:
           echo "Installing additional AI/ML libraries for testing"
           echo ""
           
+          # Verify we're using container's Python with ROCm
+          echo "Checking PyTorch before installing additional deps:"
+          python3 -c "import torch; print('PyTorch:', torch.__version__)"
+          
           # Container already has PyTorch, just add testing libraries
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pytest pytest-check
+          pip3 install --upgrade pip
+          pip3 install pytest pytest-check
           
           echo "Installing transformers and accelerate..."
-          python3 -m pip install transformers accelerate || echo "WARNING: transformers install failed"
+          pip3 install transformers accelerate || echo "WARNING: transformers install failed"
           
           echo "Installing computer vision libraries..."
-          python3 -m pip install ultralytics opencv-python pillow || echo "WARNING: CV libs install failed"
+          pip3 install ultralytics opencv-python pillow || echo "WARNING: CV libs install failed"
           
           echo "Installing additional dependencies..."
-          python3 -m pip install timm einops scipy matplotlib || echo "WARNING: Additional deps install failed"
+          pip3 install timm einops scipy matplotlib || echo "WARNING: Additional deps install failed"
           
           echo ""
           echo "SUCCESS: Dependency installation complete (check warnings above)"
