@@ -49,89 +49,21 @@ jobs:
           echo "Demo Type: ${{ github.event.inputs.demo_type || 'all' }}"
           echo ""
       
-      - name: 📋 Run All Logging Examples
-        if: github.event.inputs.demo_type == 'all' || github.event.inputs.demo_type == '' || github.event_name != 'workflow_dispatch'
+      - name: 📋 Run Logging Framework Demo
         run: |
-          echo "::group::📝 Running All Logging Examples"
+          echo "::group::📝 Running Logging Framework Demo"
           echo "=========================================="
-          echo "  Example 1-12: All Features"
+          echo "  TheRock Logging Framework Examples"
           echo "=========================================="
+          echo ""
+          echo "Demo Type: ${{ github.event.inputs.demo_type || 'all' }}"
           echo ""
           
           cd build_tools/_therock_utils
-          python3 logging_examples.py
+          python3 run_logging_demos.py ${{ github.event.inputs.demo_type || 'all' }}
           
           echo ""
-          echo "✅ All examples completed!"
-          echo "::endgroup::"
-      
-      - name: 🚀 Run Basic Examples
-        if: github.event.inputs.demo_type == 'basic'
-        run: |
-          echo "::group::🚀 Basic Logging Examples"
-          echo "=========================================="
-          echo "  Basic Usage Patterns"
-          echo "=========================================="
-          echo ""
-          
-          cd build_tools/_therock_utils
-          python3 -c "
-from logging_examples import example1_basic_usage, example2_component_logging
-print('\\n=== Example 1: Basic Usage ===')
-example1_basic_usage()
-print('\\n=== Example 2: Component Logging ===')
-example2_component_logging()
-"
-          
-          echo ""
-          echo "✅ Basic examples completed!"
-          echo "::endgroup::"
-      
-      - name: 🔧 Run Advanced Examples
-        if: github.event.inputs.demo_type == 'advanced'
-        run: |
-          echo "::group::🔧 Advanced Logging Features"
-          echo "=========================================="
-          echo "  Advanced Features Demo"
-          echo "=========================================="
-          echo ""
-          
-          cd build_tools/_therock_utils
-          python3 -c "
-from logging_examples import (
-    example5_performance_timing,
-    example6_exception_handling,
-    example7_structured_logging,
-    example8_log_levels
-)
-print('\\n=== Example 5: Performance Timing ===')
-example5_performance_timing()
-print('\\n=== Example 6: Exception Handling ===')
-example6_exception_handling()
-print('\\n=== Example 7: Structured Logging ===')
-example7_structured_logging()
-print('\\n=== Example 8: Log Levels ===')
-example8_log_levels()
-"
-          
-          echo ""
-          echo "✅ Advanced examples completed!"
-          echo "::endgroup::"
-      
-      - name: 🔄 Run Migration Examples
-        if: github.event.inputs.demo_type == 'migration'
-        run: |
-          echo "::group::🔄 Migration Examples"
-          echo "=========================================="
-          echo "  Before & After Migration Patterns"
-          echo "=========================================="
-          echo ""
-          
-          cd build_tools/_therock_utils
-          python3 logging_demo_migration.py
-          
-          echo ""
-          echo "✅ Migration examples completed!"
+          echo "✅ Demo completed!"
           echo "::endgroup::"
       
       - name: 📊 Display Log Files
