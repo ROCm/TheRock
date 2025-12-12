@@ -69,6 +69,7 @@ jobs:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
       options: -v /runner/config:/home/awsconfig/
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
@@ -177,20 +178,25 @@ jobs:
             --build-dir build \
             --upload
 
-      # - name: Upload job metrics to Redshift database
-      #   if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-      #   env:
-      #     RUN_ID: ${{ github.run_id }}
-      #     ATTEMPT: ${{ github.run_attempt }}
-      #   run: |
-      #     # Fetch job summary and store it
-      #     JOB_SUMMARY=$(python3 build_tools/github_actions/fetch_job_status.py)
-      #     # Populate Redshift Database tables
-      #     python3 build_tools/github_actions/populate_redshift_db.py \
-      #       --api-output "$JOB_SUMMARY" \
-      #       --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
-      #       --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
-      #       --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
-      #       --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
-      #       --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
-      #       --run-id ${{ github.run_number }}
+      - name: Upload job metrics to Redshift database
+        if: ${{ always() && github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
+        shell: bash
+        env:
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          echo "Fetching job summary..."
+          python3 build_tools/github_actions/fetch_job_status.py > job_summary.json
+          echo "Job summary written to job_summary.json"
+          echo "Contents:"
+          cat job_summary.json
+          JOB_SUMMARY=$(cat job_summary.json)
+          echo "Invoking Redshift Database population script..."
+          python3 build_tools/github_actions/populate_redshift_db.py \
+            --api-output "$JOB_SUMMARY" \
+            --redshift-cluster-endpoint "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ENDPOINT }}" \
+            --redshift-username  "${{ secrets.THEROCK_REDSHIFT_CLUSTER_USERNAME }}"\
+            --dbname "${{ secrets.THEROCK_REDSHIFT_CLUSTER_DBNAME }}" \
+            --redshift-password "${{ secrets.THEROCK_REDSHIFT_CLUSTER_PASSWORD }}" \
+            --redshift-port "${{ secrets.THEROCK_REDSHIFT_CLUSTER_ACCESS_PORT }}" \
+            --run-id ${{ github.run_number }}
