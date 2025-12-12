@@ -31,18 +31,22 @@ logging.basicConfig(level=logging.INFO)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Detect current Python major/minor version
-py_major = sys.version_info.major
-py_minor = sys.version_info.minor
 
-VENV_SITE_PACKAGES = (
-    THEROCK_DIR / ".venv" / "lib" / f"python{py_major}.{py_minor}" / "site-packages"
-)
+def find_amdsmitst_binary():
+    result = subprocess.run(
+        ["find", str(THEROCK_DIR), "-type", "f", "-name", "amdsmitst"],
+        capture_output=True,
+        text=True,
+    )
+    candidates = [
+        Path(x.strip()).resolve() for x in result.stdout.splitlines() if x.strip()
+    ]
+    if not candidates:
+        raise FileNotFoundError("amdsmitst not found")
+    return candidates[0]
 
-# Path to amdsmitst binary
-AMDSMITS_PATH = (
-    VENV_SITE_PACKAGES / "_rocm_sdk_core" / "share" / "amd_smi" / "tests" / "amdsmitst"
-)
+
+AMDSMITS_PATH = find_amdsmitst_binary()
 
 # -----------------------------
 # GTest sharding
