@@ -35,7 +35,7 @@ def compile_components(components):
     
     Demonstrates:
     - timed_operation: Automatic timing for each component compilation
-    - Nested operations with automatic duration tracking
+    - Structured logging with extra fields
     """
     logger = get_logger(__name__, component="BuildSystem", operation="compile")
     
@@ -64,36 +64,44 @@ def compile_components(components):
 
 
 def run_tests(components):
-    """Sample test execution with error scenarios"""
+    """
+    Sample test execution with error scenarios
+    
+    Demonstrates:
+    - timed_operation: Automatic timing for test execution
+    - log_exception: Unified exception handling
+    """
     logger = get_logger(__name__, component="BuildSystem", operation="test")
     
     logger.info("Running post-build tests")
     
     for i, component in enumerate(components):
-        try:
-            logger.info(f"Testing component: {component}", extra={
-                "component": component,
-                "test_phase": "unit_tests"
-            })
-            
-            # Simulate test failure on second component
-            if i == 1:
-                raise RuntimeError(f"Unit tests failed for {component}")
-            
-            logger.info(f"Tests passed for {component}", extra={
-                "component": component,
-                "test_result": "passed"
-            })
-            
-        except Exception as e:
-            logger.error(f"Tests failed for {component}", extra={
-                "component": component,
-                "test_result": "failed",
-                "error_type": type(e).__name__
-            }, exc_info=True)
-            
-            # Continue with other components
-            logger.warning(f"Continuing with remaining components despite failure")
+        # Using timed_operation for automatic timing
+        with logger.timed_operation(f"Test {component}"):
+            try:
+                logger.info(f"Testing component: {component}", extra={
+                    "component": component,
+                    "test_phase": "unit_tests"
+                })
+                
+                # Simulate test failure on second component
+                if i == 1:
+                    raise RuntimeError(f"Unit tests failed for {component}")
+                
+                logger.info(f"✅ Tests passed for {component}", extra={
+                    "component": component,
+                    "test_result": "passed"
+                })
+                
+            except Exception as e:
+                # Using log_exception for unified error handling
+                logger.log_exception(e, f"❌ Tests failed for {component}", extra={
+                    "component": component,
+                    "test_result": "failed"
+                })
+                
+                # Continue with other components
+                logger.warning(f"Continuing with remaining components despite failure")
 
 
 def main():

@@ -13,8 +13,8 @@ def install_packages(packages):
     Sample package installation with logging
     
     Demonstrates:
-    - timed_operation: Automatically logs start (DEBUG) and completion (INFO) with duration_ms
-    - Manual timing: Explicit control over timing messages
+    - timed_operation: Automatic timing for each package installation
+    - Structured logging with extra fields
     """
     logger = get_logger(__name__, component="PackageInstaller", operation="install")
     
@@ -52,39 +52,33 @@ def verify_installation(packages):
     Sample verification with error handling
     
     Demonstrates:
-    - Exception handling with exc_info=True for full traceback
-    - Manual timing for explicit control
+    - timed_operation: Automatic timing for verification
+    - log_exception: Unified exception handling with traceback
     """
     logger = get_logger(__name__, component="PackageInstaller", operation="verify")
     
     logger.info("Verifying package installation")
     
     for package in packages:
-        # Manual timing - explicit start/end messages with duration
-        start_time = time.time()
-        logger.info(f"🔍 Starting verification: {package}")
-        
-        try:
-            # Simulate verification
-            time.sleep(0.3)
-            
-            if "rocm" in package.lower():
-                duration_ms = (time.time() - start_time) * 1000
-                logger.info(f"✅ {package} verified in {duration_ms:.2f}ms", extra={
+        # Using timed_operation for automatic timing
+        with logger.timed_operation(f"Verify {package}"):
+            try:
+                # Simulate verification
+                time.sleep(0.3)
+                
+                if "rocm" in package.lower():
+                    logger.info(f"✅ {package} verification passed", extra={
+                        "package_name": package,
+                        "verification": "passed"
+                    })
+                else:
+                    raise ValueError(f"Package {package} not found in system")
+            except Exception as e:
+                # Using log_exception for unified error handling
+                logger.log_exception(e, f"❌ Verification failed for {package}", extra={
                     "package_name": package,
-                    "verification": "passed",
-                    "duration_ms": duration_ms
+                    "verification": "failed"
                 })
-            else:
-                raise ValueError(f"Package {package} not found in system")
-        except Exception as e:
-            duration_ms = (time.time() - start_time) * 1000
-            logger.error(f"❌ Verification failed for {package} after {duration_ms:.2f}ms", extra={
-                "package_name": package,
-                "verification": "failed",
-                "error": str(e),
-                "duration_ms": duration_ms
-            }, exc_info=True)
 
 
 def main():
