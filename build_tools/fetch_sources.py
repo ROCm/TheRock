@@ -92,6 +92,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.ml_framework_projects)
     if args.include_rocm_media:
         projects.extend(args.rocm_media_projects)
+    if args.include_math_libraries:
+        projects.extend(args.math_library_projects)
     return projects
 
 
@@ -356,6 +358,12 @@ def main(argv):
         default=None,
     )
     parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -453,6 +461,19 @@ def main(argv):
             if is_windows()
             else [
                 "rocm-libraries",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--math-library-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "libhipcxx",
             ]
         ),
     )
