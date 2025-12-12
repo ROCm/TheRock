@@ -87,9 +87,10 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || ((github.event.inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
     timeout-minutes: 120
     
-    # Linux: Use container with ROCm support
+    # Linux: Use container with ROCm pre-installed
+    # Note: Using rocm/dev-ubuntu-24.04 which includes ROCm runtime and development tools
     container:
-      image: ${{ (github.event.inputs.platform || 'linux') == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
+      image: ${{ (github.event.inputs.platform || 'linux') == 'linux' && 'rocm/dev-ubuntu-24.04:latest' || null }}
       options: ${{ (github.event.inputs.platform || 'linux') == 'linux' && '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0' || '' }}
     
     defaults:
@@ -135,22 +136,45 @@ jobs:
           python --version
           pip --version
       
-      # Linux-specific: Check GPU
+      # Linux-specific: Check GPU and ROCm
       - name: Check ROCm/GPU (Linux)
         if: env.PLATFORM == 'linux'
         run: |
+          echo "=== Container/System Info ==="
+          cat /etc/os-release || true
+          uname -a
+          
+          echo ""
           echo "=== ROCm Info ==="
           if command -v rocminfo &> /dev/null; then
+            echo "✓ ROCm is installed!"
             rocminfo | head -50
           else
-            echo "rocminfo not in PATH, will use from build"
+            echo "✗ WARNING: rocminfo not found in PATH"
+            echo "This means ROCm is NOT installed in the container"
+            echo "AI/ML tests may not be able to use the GPU"
           fi
           
+          echo ""
+          echo "=== HIP Info ==="
+          if command -v hipconfig &> /dev/null; then
+            echo "✓ HIP is available"
+            hipconfig --version || true
+          else
+            echo "✗ WARNING: HIP not found"
+          fi
+          
+          echo ""
           echo "=== GPU Devices ==="
           ls -la /dev/kfd /dev/dri/ || echo "GPU devices not accessible"
           
-          echo "=== Environment ==="
-          env | grep -i rocm || echo "No ROCm env vars"
+          echo ""
+          echo "=== ROCm Environment Variables ==="
+          env | grep -i rocm || echo "No ROCm env vars set"
+          
+          echo ""
+          echo "=== Checking for ROCm Libraries ==="
+          ldconfig -p | grep -i "rocm\|hip\|hsa" | head -20 || echo "No ROCm libraries found in ldconfig"
       
       # Windows-specific: Check GPU
       - name: Check GPU (Windows)
@@ -195,8 +219,11 @@ jobs:
           echo "Installing computer vision libraries..."
           /usr/bin/python3 -m pip install ultralytics opencv-python pillow --user || echo "WARNING: CV libs install failed"
           
-          echo "Installing torch and torchvision..."
-          /usr/bin/python3 -m pip install torch torchvision --user || echo "WARNING: torch installation failed (may skip GPU tests)"
+          echo "Installing torch and torchvision with ROCm support..."
+          # Install PyTorch with ROCm 6.2 support (adjust version as needed)
+          /usr/bin/python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.2 --user || \
+          /usr/bin/python3 -m pip install torch torchvision --user || \
+          echo "WARNING: torch installation failed (may skip GPU tests)"
           
           echo "Installing additional dependencies..."
           /usr/bin/python3 -m pip install timm einops scipy matplotlib --user || echo "WARNING: Additional deps install failed"
@@ -209,6 +236,26 @@ jobs:
           unset VIRTUAL_ENV
           echo "=== Installed Python Packages ==="
           /usr/bin/python3 -m pip list | grep -E "pytest|transformers|torch|ultralytics" || echo "Some packages may not be installed"
+          
+          echo ""
+          echo "=== PyTorch GPU Check ==="
+          /usr/bin/python3 -c "
+import sys
+try:
+    import torch
+    print(f'✓ PyTorch {torch.__version__} imported successfully')
+    print(f'  CUDA available: {torch.cuda.is_available()}')
+    if torch.cuda.is_available():
+        print(f'  Device count: {torch.cuda.device_count()}')
+        print(f'  Device name: {torch.cuda.get_device_name(0)}')
+        print(f'  Device capability: {torch.cuda.get_device_capability(0)}')
+    else:
+        print('  ✗ WARNING: CUDA/ROCm not available to PyTorch')
+        print('  GPU tests will be skipped')
+except Exception as e:
+    print(f'✗ ERROR: Failed to import torch: {e}')
+    sys.exit(0)  # Don't fail the workflow, just warn
+" || echo "PyTorch verification failed"
       
       - name: Verify TheRock Installation
         continue-on-error: true
@@ -346,11 +393,13 @@ jobs:
       
       - name: Install Dependencies
         run: |
-          pip install pytest transformers ultralytics opencv-python pillow
+          unset VIRTUAL_ENV
+          /usr/bin/python3 -m pip install pytest transformers ultralytics opencv-python pillow torch torchvision --user
       
       - name: Run Tests
         env:
           AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
         run: |
-          python -m pytest tests/strix_ai/${{ matrix.category }}/ -v
+          unset VIRTUAL_ENV
+          /usr/bin/python3 -m pytest tests/strix_ai/${{ matrix.category }}/ -v
 
