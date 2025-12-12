@@ -1,0 +1,221 @@
+name: Logging Framework Demo
+
+# Demo workflow for TheRock standardized logging framework
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      demo_type:
+        description: 'Which demo to run'
+        required: true
+        type: choice
+        options:
+          - all          # Run all examples
+          - basic        # Basic usage only
+          - advanced     # Advanced features
+          - migration    # Migration examples
+        default: 'all'
+  
+  # Auto-trigger on push to logging files
+  push:
+    branches:
+      - 'users/*/logging_*'
+      - 'main'
+    paths:
+      - 'build_tools/_therock_utils/logging_*.py'
+      - 'build_tools/_therock_utils/LOGGING_*.md'
+      - '.github/workflows/logging_demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  logging_demo:
+    name: Logging Framework Demo
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Display Demo Info
+        run: |
+          echo "=========================================="
+          echo "  TheRock Logging Framework Demo"
+          echo "=========================================="
+          echo ""
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Demo Type: ${{ github.event.inputs.demo_type || 'all' }}"
+          echo ""
+      
+      - name: 📋 Run All Logging Examples
+        if: github.event.inputs.demo_type == 'all' || github.event.inputs.demo_type == '' || github.event_name != 'workflow_dispatch'
+        run: |
+          echo "::group::📝 Running All Logging Examples"
+          echo "=========================================="
+          echo "  Example 1-12: All Features"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          python3 logging_examples.py
+          
+          echo ""
+          echo "✅ All examples completed!"
+          echo "::endgroup::"
+      
+      - name: 🚀 Run Basic Examples
+        if: github.event.inputs.demo_type == 'basic'
+        run: |
+          echo "::group::🚀 Basic Logging Examples"
+          echo "=========================================="
+          echo "  Basic Usage Patterns"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          python3 -c "
+from logging_examples import example1_basic_usage, example2_component_logging
+print('\\n=== Example 1: Basic Usage ===')
+example1_basic_usage()
+print('\\n=== Example 2: Component Logging ===')
+example2_component_logging()
+"
+          
+          echo ""
+          echo "✅ Basic examples completed!"
+          echo "::endgroup::"
+      
+      - name: 🔧 Run Advanced Examples
+        if: github.event.inputs.demo_type == 'advanced'
+        run: |
+          echo "::group::🔧 Advanced Logging Features"
+          echo "=========================================="
+          echo "  Advanced Features Demo"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          python3 -c "
+from logging_examples import (
+    example5_performance_timing,
+    example6_exception_handling,
+    example7_structured_logging,
+    example8_log_levels
+)
+print('\\n=== Example 5: Performance Timing ===')
+example5_performance_timing()
+print('\\n=== Example 6: Exception Handling ===')
+example6_exception_handling()
+print('\\n=== Example 7: Structured Logging ===')
+example7_structured_logging()
+print('\\n=== Example 8: Log Levels ===')
+example8_log_levels()
+"
+          
+          echo ""
+          echo "✅ Advanced examples completed!"
+          echo "::endgroup::"
+      
+      - name: 🔄 Run Migration Examples
+        if: github.event.inputs.demo_type == 'migration'
+        run: |
+          echo "::group::🔄 Migration Examples"
+          echo "=========================================="
+          echo "  Before & After Migration Patterns"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          python3 logging_demo_migration.py
+          
+          echo ""
+          echo "✅ Migration examples completed!"
+          echo "::endgroup::"
+      
+      - name: 📊 Display Log Files
+        if: always()
+        run: |
+          echo "::group::📊 Generated Log Files"
+          echo "=========================================="
+          echo "  Log Files Created"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          
+          if ls logs/*.log 1> /dev/null 2>&1; then
+            echo "Found log files:"
+            ls -lh logs/*.log
+            echo ""
+            
+            for log_file in logs/*.log; do
+              if [ -f "$log_file" ]; then
+                echo "::group::📄 $(basename $log_file)"
+                echo "---------- Content ----------"
+                head -100 "$log_file"
+                echo ""
+                line_count=$(wc -l < "$log_file")
+                echo "Total lines: $line_count"
+                echo "::endgroup::"
+              fi
+            done
+          else
+            echo "No log files generated (console-only logging)"
+          fi
+          
+          echo "::endgroup::"
+      
+      - name: 📚 Display Documentation Links
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "  Logging Framework Documentation"
+          echo "=========================================="
+          echo ""
+          echo "📖 User Guide:"
+          echo "   build_tools/_therock_utils/LOGGING_README.md"
+          echo ""
+          echo "🚀 Quick Start:"
+          echo "   build_tools/_therock_utils/LOGGING_QUICK_START.md"
+          echo ""
+          echo "🔄 Migration Guide:"
+          echo "   build_tools/_therock_utils/LOGGING_MIGRATION_GUIDE.md"
+          echo ""
+          echo "📊 POC Summary:"
+          echo "   build_tools/_therock_utils/LOGGING_POC_SUMMARY.md"
+          echo ""
+          echo "💡 Examples Code:"
+          echo "   build_tools/_therock_utils/logging_examples.py"
+          echo ""
+      
+      - name: ✅ Demo Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "  Demo Summary"
+          echo "=========================================="
+          echo ""
+          echo "Demo Type: ${{ github.event.inputs.demo_type || 'all' }}"
+          echo "Status: ${{ job.status }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo ""
+          echo "✅ Logging framework demo completed!"
+          echo ""
+          echo "Next Steps:"
+          echo "  1. Review log output above"
+          echo "  2. Check 'Display Log Files' for file-based logs"
+          echo "  3. Read LOGGING_QUICK_START.md for usage"
+          echo "  4. Follow LOGGING_MIGRATION_GUIDE.md to adopt"
+          echo ""
+
+
