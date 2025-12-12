@@ -211,8 +211,8 @@ class PackageInstaller(PackageManagerBase):
         """
 
         try:
-            if not pkg_name:
-                error_msg = "Package name is None, cannot install."
+            if not pkg_name or pkg_name == "rocmamd-smi":
+                error_msg = "Package name is None/rocmamd-smi, cannot install."
                 logger.error(error_msg)
                 self.failed_packages["Unknown"] = error_msg
                 return
