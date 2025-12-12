@@ -11,11 +11,13 @@ See also the
 
 > [!WARNING]
 > These instructions assume familiarity with how to use ROCm.
-> We recommend installing the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation) on Linux and [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows.
 > Please see https://rocm.docs.amd.com/ for general information about the ROCm software
-> platform. In addition, Linux users, please be aware of the [prerequisites](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access), including enabling GPU access, needed to run ROCm.
+> platform. 
 >
-> **Note: these install steps are a substitute for those on that website**.
+> Prerequisites:
+>
+> * We recommend installing the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation) on Linux and [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+> * Linux users, please be aware of [Configuring permissions for GPU access](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access) needed for ROCm
 
 Table of contents:
 
