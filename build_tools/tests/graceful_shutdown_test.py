@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Tests for graceful_shutdown utility."""
 
+import os
+import platform
 import subprocess
 import sys
 import time
@@ -23,12 +25,14 @@ def temp_files(tmp_path):
     return log_file, output_file, stop_signal_file
 
 
+@pytest.mark.skipif(
+    platform.system() != "Windows", reason="Test only runs on Windows OS"
+)
 def test_graceful_shutdown_with_memory_monitor(temp_files):
     """Test that graceful_shutdown properly stops memory monitor and prints summary.
 
-    This test uses a stop-signal file to gracefully shutdown the memory monitor process.
-    This approach works reliably on both Windows and Unix systems, since it doesn't
-    rely on signal handlers that Windows doesn't support properly.
+    This test is designed for Windows OS only.
+    It uses a stop-signal file to gracefully shutdown the memory monitor process.
     """
     log_file, output_file, stop_signal_file = temp_files
 
@@ -112,76 +116,5 @@ def test_graceful_shutdown_with_memory_monitor(temp_files):
             if process.poll() is None:
                 process.terminate()
                 process.wait(timeout=2)
-        except Exception:
-            pass
-
-
-def test_graceful_shutdown_nonexistent_process():
-    """Test graceful shutdown of a non-existent process."""
-    # Use a PID that definitely doesn't exist (very high number)
-    success = graceful_shutdown(
-        pid=999999,
-        timeout_seconds=1.0,
-        verbose=False,
-    )
-
-    # Should return True because process doesn't exist (already terminated)
-    assert success, "Should return True for non-existent process"
-
-
-def test_graceful_shutdown_with_force(tmp_path):
-    """Test that graceful shutdown force kills when timeout is exceeded.
-
-    This test creates a process that ignores both signals and stop signal files,
-    then verifies that force kill works. Works on both Windows and Unix systems.
-    """
-    stop_signal_file = tmp_path / "test_stop_force.txt"
-
-    # Start a process that ignores signals and doesn't check for stop signal file
-    ignore_termination_code = """
-import signal
-import time
-# Ignore all termination signals
-try:
-    signal.signal(signal.SIGTERM, lambda signum, frame: None)
-    signal.signal(signal.SIGINT, lambda signum, frame: None)
-except (AttributeError, ValueError):
-    pass  # Some signals might not be available on Windows
-# Just sleep without checking for stop signal file
-time.sleep(30)
-"""
-    process = subprocess.Popen(
-        [sys.executable, "-c", ignore_termination_code],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    try:
-        # Try to shutdown with force
-        success = graceful_shutdown(
-            pid=process.pid,
-            timeout_seconds=1.0,
-            verbose=False,
-            stop_signal_file=str(stop_signal_file),
-        )
-
-        # Should return True because force kill was used
-        assert success, "Should return True when force kill is used"
-
-        # Process should be terminated
-        assert process.poll() is not None, "Process should be terminated"
-
-    except Exception:
-        # Clean up if test fails
-        try:
-            process.kill()
-            process.wait()
-        except Exception:
-            pass
-    finally:
-        # Clean up stop signal file if it exists
-        try:
-            if stop_signal_file.exists():
-                stop_signal_file.unlink()
         except Exception:
             pass

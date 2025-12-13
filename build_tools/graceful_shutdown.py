@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Graceful process shutdown utility.
 
-This script provides a cross-platform way to gracefully terminate a process,
+This script provides a way to gracefully terminate a process on Windows,
 allowing it to run cleanup code before exiting. It sends appropriate termination
 signals and waits for the process to exit, force killing if the timeout is exceeded.
 
@@ -14,9 +14,9 @@ Examples:
 """
 
 import argparse
-import platform
 import sys
 import time
+from pathlib import Path
 import psutil
 
 
@@ -32,11 +32,24 @@ def graceful_shutdown(
         pid: Process ID to terminate
         timeout_seconds: How long to wait for graceful shutdown (default: 10.0)
         verbose: If True, print status messages to stdout
-        stop_signal_file: Optional path to a stop signal file (for Windows compatibility)
+        stop_signal_file: Optional path to a stop signal file
 
     Returns:
         True if process was terminated successfully, False otherwise
     """
+
+    def cleanup_stop_file(stop_file: Path) -> None:
+        """Helper to safely cleanup stop signal file."""
+        try:
+            stop_file.unlink()
+        except OSError:
+            pass
+
+    def update_remaining_timeout(start: float, total: float) -> float:
+        """Calculate remaining timeout based on elapsed time."""
+        elapsed = time.time() - start
+        return max(0, total - elapsed)
+
     try:
         process = psutil.Process(pid)
     except psutil.NoSuchProcess:
@@ -52,22 +65,12 @@ def graceful_shutdown(
             f"Attempting graceful shutdown of process {pid} (timeout: {timeout_seconds}s)"
         )
 
-    # Track remaining timeout
-    remaining_timeout = timeout_seconds
     start_time = time.time()
 
     try:
-        # On Windows, if a stop_signal_file is provided, create it first
+        # If a stop_signal_file is provided, create it first
         # This allows the process to detect it and shutdown gracefully
-        # On Linux/Unix, we skip this and send SIGTERM directly
-        is_windows = platform.system() == "Windows"
-
-        if stop_signal_file and not is_windows and verbose:
-            print(f"Skipping stop signal file on Linux - using SIGTERM instead")
-
-        if stop_signal_file and is_windows:
-            from pathlib import Path
-
+        if stop_signal_file:
             stop_file = Path(stop_signal_file)
             try:
                 stop_file.touch()
@@ -86,54 +89,34 @@ def graceful_shutdown(
                                 print(
                                     f"Process {pid} exited gracefully via stop signal file"
                                 )
-                            # Clean up the signal file
-                            try:
-                                stop_file.unlink()
-                            except OSError:
-                                pass
+                            cleanup_stop_file(stop_file)
                             return True
                     except psutil.NoSuchProcess:
                         if verbose:
                             print(f"Process {pid} has exited")
-                        # Clean up the signal file
-                        try:
-                            stop_file.unlink()
-                        except OSError:
-                            pass
+                        cleanup_stop_file(stop_file)
                         return True
 
                     time.sleep(0.5)
                     wait_time += 0.5
 
                 # If we get here, the stop signal file didn't work
-                # Update remaining timeout
-                elapsed = time.time() - start_time
-                remaining_timeout = max(0, timeout_seconds - elapsed)
-
                 if verbose:
                     print(
                         f"Process did not respond to stop signal file within {timeout_seconds}s"
                     )
-                # Clean up the signal file
-                try:
-                    stop_file.unlink()
-                except OSError:
-                    pass
+                cleanup_stop_file(stop_file)
 
             except Exception as e:
                 if verbose:
                     print(f"Warning: Could not create/use stop signal file: {e}")
-                # Update remaining timeout even if exception occurred
-                elapsed = time.time() - start_time
-                remaining_timeout = max(0, timeout_seconds - elapsed)
 
         # Send termination signal as fallback (only if process is still running)
+        remaining_timeout = update_remaining_timeout(start_time, timeout_seconds)
+
         try:
             if process.is_running():
-                # On Linux/Unix: terminate() sends SIGTERM which triggers signal handlers
-                # On Windows: This is a fallback if stop_signal_file didn't work
                 process.terminate()
-
                 if verbose:
                     print(f"Sent termination signal to process {pid}")
         except psutil.NoSuchProcess:
@@ -153,8 +136,6 @@ def graceful_shutdown(
                 print(
                     f"WARNING: Process {pid} did not terminate within {timeout_seconds}s (total elapsed: {total_elapsed:.1f}s)"
                 )
-
-            if verbose:
                 print(f"Force killing process {pid}")
             process.kill()
             process.wait(timeout=5)
@@ -203,7 +184,7 @@ def main():
     parser.add_argument(
         "--stop-signal-file",
         type=str,
-        help="Path to a stop signal file to create before terminating (useful for Windows)",
+        help="Path to a stop signal file to create before terminating",
     )
 
     args = parser.parse_args()

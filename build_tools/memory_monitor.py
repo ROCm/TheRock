@@ -39,12 +39,10 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import signal
 import threading
+import psutil
 
-try:
-    import psutil
-except ImportError:
-    print("ERROR: psutil is not installed. Install it with: pip install psutil")
-    sys.exit(1)
+sys.path.insert(0, str(Path(__file__).parent))
+from github_actions.github_actions_utils import gha_append_step_summary
 
 
 class MemoryMonitor:
@@ -291,51 +289,43 @@ class MemoryMonitor:
         max_swap_percent,
     ):
         """Write summary to GitHub Actions step summary."""
-        try:
-            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-                # Determine status indicator
-                if max_memory_percent > 90:
-                    status = "CRITICAL"
-                elif max_memory_percent > 75:
-                    status = "WARNING"
-                else:
-                    status = "OK"
+        # Determine status indicator
+        if max_memory_percent > 90:
+            status = "CRITICAL"
+        elif max_memory_percent > 75:
+            status = "WARNING"
+        else:
+            status = "OK"
 
-                f.write(f"\n## [{status}] Memory Stats: {self.phase_name}\n\n")
+        # Build the summary markdown
+        summary = f"## [{status}] Memory Stats: {self.phase_name}\n\n"
 
-                # Main statistics table
-                f.write("| Metric | Value |\n")
-                f.write("|:-------|------:|\n")
-                f.write(f"| **Duration** | {duration:.1f}s |\n")
-                f.write(f"| **Samples Collected** | {len(self.samples)} |\n")
-                f.write(f"| **Average Memory** | {avg_memory_percent:.1f}% |\n")
-                f.write(
-                    f"| **Peak Memory** | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n"
-                )
-                f.write(f"| **Average Swap** | {avg_swap_percent:.1f}% |\n")
-                f.write(
-                    f"| **Peak Swap** | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n"
-                )
+        # Main statistics table
+        summary += "| Metric | Value |\n"
+        summary += "|:-------|------:|\n"
+        summary += f"| **Duration** | {duration:.1f}s |\n"
+        summary += f"| **Samples Collected** | {len(self.samples)} |\n"
+        summary += f"| **Average Memory** | {avg_memory_percent:.1f}% |\n"
+        summary += f"| **Peak Memory** | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n"
+        summary += f"| **Average Swap** | {avg_swap_percent:.1f}% |\n"
+        summary += (
+            f"| **Peak Swap** | {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB) |\n"
+        )
 
-                # Add warnings as alerts if needed
-                if max_memory_percent > 90:
-                    f.write("\n> [!CAUTION]\n")
-                    f.write(
-                        "> Memory usage exceeded 90% during this phase! This phase is likely causing out-of-memory issues.\n"
-                    )
-                elif max_memory_percent > 75:
-                    f.write("\n> [!WARNING]\n")
-                    f.write("> Memory usage exceeded 75% during this phase.\n")
+        # Add warnings as alerts if needed
+        if max_memory_percent > 90:
+            summary += "\n> [!CAUTION]\n"
+            summary += "> Memory usage exceeded 90% during this phase! This phase is likely causing out-of-memory issues.\n"
+        elif max_memory_percent > 75:
+            summary += "\n> [!WARNING]\n"
+            summary += "> Memory usage exceeded 75% during this phase.\n"
 
-                if max_swap_percent > 50:
-                    f.write("\n> [!WARNING]\n")
-                    f.write(
-                        f"> Significant swap usage detected ({max_swap_percent:.1f}%). Consider increasing available memory or reducing parallel jobs.\n"
-                    )
+        if max_swap_percent > 50:
+            summary += "\n> [!WARNING]\n"
+            summary += f"> Significant swap usage detected ({max_swap_percent:.1f}%). Consider increasing available memory or reducing parallel jobs.\n"
 
-                f.write("\n")
-        except Exception as e:
-            print(f"Warning: Failed to write GitHub summary: {e}", file=sys.stderr)
+        # Use the centralized function to append to GitHub Actions step summary
+        gha_append_step_summary(summary)
 
 
 def run_command_with_monitoring(
