@@ -1618,5 +1618,218 @@
       }
     ],
     "Gfxarch": "True"
+  },
+  {
+    "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages. Gfxarch should be false for meta packages",
+    "Package": "amdrocm-core",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-base",
+      "amdrocm-runtime",
+      "amdrocm-llvm"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-runtime",
+      "amdrocm-llvm"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm core metapackage",
+    "Description_Long": "ROCm core runtime components",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-core-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-base",
+      "amdrocm-runtime-dev",
+      "amdrocm-llvm-dev"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-runtime-devel",
+      "amdrocm-llvm-devel"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm core metapackage",
+    "Description_Long": "ROCm core development components",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-tools-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-base",
+      "amdrocm-profiler-base",
+      "amdrocm-profiler"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-profiler-base",
+      "amdrocm-profiler"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm development tools metapackage",
+    "Description_Long": "ROCm development tools",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-fortran",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-base",
+      "amdrocm-profiler-base",
+      "amdrocm-profiler"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-profiler-base",
+      "amdrocm-profiler"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Fortran",
+    "Description_Long": "ROCm Fortran",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
+  },
+  {
+    "Package": "amdrocm-opencl-meta",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-base",
+      "amdrocm-runtime",
+      "amdrocm-opencl"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-runtime",
+      "amdrocm-opencl"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm opencl",
+    "Description_Long": "ROCm opencl",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
+  },
+  {
+    "Package": "amdrocm-openmp",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-base",
+      "amdrocm-llvm",
+      "amdrocm-runtime"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-llvm",
+      "amdrocm-runtime"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm openmp metapackage",
+    "Description_Long": "ROCm openmp",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
+  },
+  {
+    "Package": "rocm-core-sdk",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-base",
+      "amdrocm-llvm",
+      "amdrocm-runtime",
+      "amdrocm-profiler-base",
+      "amdrocm-profiler",
+      "amdrocm-blas",
+      "amdrocm-fft",
+      "amdrocm-solver",
+      "amdrocm-sparse",
+      "amdrocm-ck",
+      "amdrocm-dnn",
+      "amdrocm-rccl"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-llvm",
+      "amdrocm-runtime",
+      "amdrocm-profiler-base",
+      "amdrocm-profiler",
+      "amdrocm-blas",
+      "amdrocm-fft",
+      "amdrocm-solver",
+      "amdrocm-sparse",
+      "amdrocm-ck",
+      "amdrocm-dnn",
+      "amdrocm-rccl"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm core sdk metapackage",
+    "Description_Long": "ROCm runtime and math libraries",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Metapackage": "True",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
   }
+
 ]
