@@ -209,6 +209,9 @@ jobs:
         env:
           TARGET: ${{ inputs.amdgpu_family }}
           PLATFORM: "linux"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_jax_wheels:
