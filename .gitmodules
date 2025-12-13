@@ -49,3 +49,9 @@
 	path = base/amdsmi
 	url = https://github.com/ROCm/amdsmi.git
 	branch = amd-staging
+# The amd-dbgapi module is temporary until migration procedures
+# are agreed upon.
+[submodule "amd-dbgapi"]
+	path = debug-tools/amd-dbgapi
+	url = https://github.com/ROCm/ROCdbgapi.git
+	branch = amd-staging

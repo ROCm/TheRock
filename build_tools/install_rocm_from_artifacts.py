@@ -15,6 +15,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--output-dir OUTPUT_DIR]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
     [--run-github-repo RUN_GITHUB_REPO]
+    [--amd-dbgapi | --no-amd-dbgapi]
     [--blas | --no-blas]
     [--fft | --no-fft]
     [--hipdnn | --no-hipdnn]
@@ -186,6 +187,7 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
     elif any(
         [
+            args.amd_dbgapi,
             args.blas,
             args.fft,
             args.hipdnn,
@@ -202,6 +204,8 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        if args.amd_dbgapi:
+            extra_artifacts.append("amd-dbgapi")
         if args.blas:
             extra_artifacts.append("blas")
         if args.fft:
@@ -354,6 +358,13 @@ def main(argv):
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
+    artifacts_group.add_argument(
+        "--amd-dbgapi",
+        default=False,
+        help="Include 'amd-dbgapi' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
     artifacts_group.add_argument(
         "--blas",
         default=False,
