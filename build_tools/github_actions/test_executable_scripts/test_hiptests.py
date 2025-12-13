@@ -39,17 +39,14 @@ def get_test_range_per_shard(total_test_count: int, total_shards, shard_index):
     if shard_index == total_shards:
         # Adjust last few tests
         end_index = total_test_count
-    print(
-        "Shard index: ",
-        shard_index,
-        " total shards: ",
-        total_shards,
-        " tests per shard: ",
-        tests_per_shard,
-        " current index: ",
-        current_index,
-        " to: ",
-        end_index,
+    logging.info(
+        """
+        Shard index: {shard_index},
+        total shards: {total_shards},
+        tests per shard: {tests_per_shard},
+        current index: {current_index},
+        to: {end_index}
+        """
     )
     return [current_index, end_index]
 
