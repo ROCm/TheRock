@@ -1,0 +1,13 @@
+# composable-kernel
+[components.dbg."math-libs/composable_kernel/stage"]
+[components.dev."math-libs/composable_kernel/stage"]
+include = [
+  "include/ck/**/*",
+  "lib/cmake/composable_kernel/*",
+]
+[components.doc."math-libs/composable_kernel/stage"]
+[components.lib."math-libs/composable_kernel/stage"]
+include = [
+  "share/composable_kernel/**",
+]
+[components.run."math-libs/composable_kernel/stage"]

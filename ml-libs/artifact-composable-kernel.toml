@@ -1,9 +1,0 @@
-# composable-kernel
-[components.dbg."ml-libs/composable_kernel/stage"]
-[components.dev."ml-libs/composable_kernel/stage"]
-[components.doc."ml-libs/composable_kernel/stage"]
-[components.lib."ml-libs/composable_kernel/stage"]
-include = [
-  "share/composable_kernel/**",
-]
-[components.run."ml-libs/composable_kernel/stage"]
