@@ -1447,6 +1447,16 @@ function(_therock_cmake_subproject_setup_toolchain
     endif()
   endif()
 
+  # Apply performance optimization flags if enabled.
+  if(THEROCK_ENABLE_PERFORMANCE_MODE)
+    therock_get_performance_flags(_perf_c_flags _perf_cxx_flags _perf_linker_flags)
+
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_C_FLAGS_INIT \" ${_perf_c_flags}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_CXX_FLAGS_INIT \" ${_perf_cxx_flags}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" ${_perf_linker_flags}\")\n")
+    string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" ${_perf_linker_flags}\")\n")
+  endif()
+
   # Configure sanitizer.
   set(_sanitizer_stanza)
   set(_sanitizer_enabled)

@@ -50,6 +50,7 @@ include(therock_python_setup)
 include(therock_build_options)
 include(therock_feature_groups)
 include(therock_bundled_sysdeps)
+include(therock_performance_opts)
 
 # Feature detection
 include(therock_detect_python_versions)
