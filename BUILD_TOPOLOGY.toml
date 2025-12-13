@@ -99,6 +99,10 @@ submodules = ["rccl", "rccl-tests"]
 description = "Additional profiler submodules"
 submodules = ["rocprof-trace-decoder"]
 
+[source_sets.iree-libs]
+description = "IREE integration submodules"
+submodules = ["iree", "fusilli"]
+
 # ==============================================================================
 # BUILD STAGES - Pipeline jobs that build sets of artifact groups
 # ==============================================================================
@@ -140,9 +144,9 @@ artifact_groups = ["dctools-core"]
 # artifact_groups = ["dctools-rocm"]
 # depends_on = ["math-libs"]  # Will need math/ML libraries
 
-# [build_stages.iree-libs]
-# description = "IREE and Fusilli integration (parallel to compiler-runtime)"
-# artifact_groups = ["iree-libs"]
+[build_stages.iree-libs]
+description = "IREE and Fusilli integration"
+artifact_groups = ["iree-libs"]
 
 [build_stages.profiler-apps]
 description = "Profiler applications (depends on profiler-core)"
@@ -239,10 +243,11 @@ type = "generic"
 artifact_group_deps = ["profiler-core", "compiler"]
 source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
 
-# [artifact_groups.iree-libs]
-# description = "IREE and Fusilli integration"
-# type = "generic"
-# artifact_group_deps = ["third-party-sysdeps", "base"]
+[artifact_groups.iree-libs]
+description = "IREE and Fusilli integration"
+type = "generic"
+artifact_group_deps = ["hip-runtime"]
+source_sets = ["iree-libs"]
 
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
@@ -419,6 +424,14 @@ artifact_deps = ["core-runtime", "core-hip"]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
+
+# --- IREE Integration ---
+
+[artifacts.fusilli-plugin]
+artifact_group = "iree-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+disable_platforms = ["windows"]
 
 # --- Communication Libraries (per-arch) ---
 
