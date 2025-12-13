@@ -133,21 +133,14 @@ jobs:
         id: memory-monitor
         shell: bash
         continue-on-error: true
+        env:
+          BUILD_DIR: ${{ env.BUILD_DIR }}
+          JOB_NAME: ${{ github.job }}
+          PHASE: "Build Phase"
         run: |
-          # Create logs directory in BUILD_DIR
-          mkdir -p "${{ env.BUILD_DIR }}/logs"
-
-          # Start memory monitor in background
-          python build_tools/memory_monitor.py \
-            --phase "Build Phase" \
-            --log-file "${{ env.BUILD_DIR }}/logs/build_memory_log_${{ github.job }}.jsonl" \
-            --background > "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" 2>&1 &
-
-          # Capture PID
-          MONITOR_PID=$!
+          # Run the memory monitor start script and capture PID
+          MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
           echo "monitor-pid=$MONITOR_PID" >> $GITHUB_OUTPUT
-          echo "Memory monitoring started with PID: $MONITOR_PID"
-          sleep 2
 
       - name: Build therock-archives and therock-dist
         run: |
@@ -159,24 +152,11 @@ jobs:
         continue-on-error: true
         env:
           MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
+          BUILD_DIR: ${{ env.BUILD_DIR }}
+          JOB_NAME: ${{ github.job }}
         run: |
-          echo "Stopping memory monitor (PID: $MONITOR_PID)"
-
-          # Send interrupt signal to stop monitoring gracefully
-          if kill -0 $MONITOR_PID 2>/dev/null; then
-            kill -SIGINT $MONITOR_PID
-            sleep 2
-            # Force kill if still running
-            kill -9 $MONITOR_PID 2>/dev/null || true
-          fi
-
-          echo "Memory monitor stopped"
-
-          # Display the monitor output
-          if [ -f "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt" ]; then
-            echo "=== Memory Monitor Output ==="
-            cat "${{ env.BUILD_DIR }}/logs/monitor_output_${{ github.job }}.txt"
-          fi
+          # Run the memory monitor stop script
+          bash build_tools/github_actions/stop_memory_monitor.sh
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}

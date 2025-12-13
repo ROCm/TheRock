@@ -8,9 +8,9 @@ if ($MonitorMemory -eq "true") {
   $outputFile = "${env:BUILD_DIR}\logs\monitor_output_${env:GITHUB_JOB}.txt"
 
   if (Test-Path $pidFile) {
-    $pid = Get-Content $pidFile
-    Write-Host "Stopping memory monitor (PID: $pid)"
-    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    $monitorPid = Get-Content $pidFile
+    Write-Host "Stopping memory monitor (PID: $monitorPid)"
+    Stop-Process -Id $monitorPid -Force -ErrorAction SilentlyContinue
   }
 
   # Display the monitor output file if it exists
