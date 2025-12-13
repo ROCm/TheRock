@@ -167,6 +167,7 @@ def retrieve_artifacts_by_run_id(args):
 
     # These artifacts are the "base" requirements for running tests.
     base_artifact_patterns = [
+        "core-hipinfo_run",
         "core-runtime_run",
         "core-runtime_lib",
         "sysdeps_lib",
