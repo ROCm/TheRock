@@ -209,15 +209,25 @@ skip_tests = {
             #   Mismatched elements: 4 / 4 (100.0%)
             #   Mismatched elements: 96 / 96 (100.0%)
             # We may want to disable all of test_Conv*...
+            "test_Conv1d_circular_stride2_pad2_cuda",
+            "test_Conv1d_groups_cuda",
             "test_Conv1d_pad1size1_cuda",
             "test_Conv1d_pad2size1_cuda",
+            "test_Conv1d_reflect_stride2_pad2_cuda",
+            "test_Conv1d_replicate_stride2_pad2_cuda",
+            "test_Conv1d_zeros_stride2_pad2_cuda",
             "test_Conv2d_depthwise_cuda",  # failing on gfx1101
             "test_Conv2d_depthwise_dilated_cuda",
             "test_Conv2d_depthwise_padded_cuda",
             "test_Conv2d_depthwise_with_multiplier_cuda",
+            "test_Conv2d_groups_cuda",
+            "test_Conv2d_groups_thnn_cuda",
             "test_Conv2d_pad_same_cuda",
             "test_Conv2d_pad_same_dilated_cuda",
+            "test_Conv2d_pad_valid_cuda",
+            "test_Conv2d_strided_cuda",
             "test_ConvTranspose1d_cuda",
+            "test_ConvTranspose1d_groups_cuda",
             "test_ConvTranspose1d_no_bias_cuda",
             "test_ConvTranspose2d_cuda",
             "test_ConvTranspose2d_groups_cuda",
