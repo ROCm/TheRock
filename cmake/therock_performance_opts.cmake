@@ -107,9 +107,14 @@ function(therock_get_performance_flags OUT_C_FLAGS OUT_CXX_FLAGS OUT_LINKER_FLAG
   # Auto-Vectorization
   ############################################################################
   # Enables automatic SIMD vectorization for loops
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Clang supports both flags
     list(APPEND _c_flags "-fvectorize" "-ftree-vectorize")
     list(APPEND _cxx_flags "-fvectorize" "-ftree-vectorize")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # GCC only supports -ftree-vectorize
+    list(APPEND _c_flags "-ftree-vectorize")
+    list(APPEND _cxx_flags "-ftree-vectorize")
   endif()
 
   ############################################################################

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # patch_third_party_source.py is designed to act as the PATCH_COMMAND for
 #  therock_subproject_fetch
 #  ExternalProject_Add
