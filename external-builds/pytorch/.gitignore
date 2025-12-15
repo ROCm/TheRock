@@ -3,6 +3,7 @@ src/
 /pytorch
 /pytorch_vision
 /pytorch_audio
+/pytorch_torchcodec
 /triton
 
 # Written by run_pytorch_tests.py on Windows as a workaround for
