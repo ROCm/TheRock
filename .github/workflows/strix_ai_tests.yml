@@ -53,6 +53,7 @@ on:
           - vit       # Vision Transformers
           - cv        # Computer Vision
           - optimization  # Quantization & optimization
+          - profiling # ROCProfiler tests
           - quick     # Quick smoke tests only
         default: 'quick'
       
@@ -273,6 +274,36 @@ jobs:
           echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
           python3 -m pytest tests/strix_ai/optimization/ -v -s \
             --junit-xml=test-results-optimization.xml \
+            || exit 0
+      
+      - name: Run Strix AI Tests - ROCProfiler Integration
+        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'profiling'
+        env:
+          AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
+        run: |
+          echo "=== Running ROCProfiler Tests ==="
+          echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
+          echo "These tests profile PyTorch and AI/ML workloads on Strix GPUs"
+          
+          # Check if rocprof tools are available
+          echo "Checking for ROCProfiler tools..."
+          if command -v rocprof &> /dev/null; then
+            echo "✓ rocprof is available"
+            rocprof --version || true
+          else
+            echo "⚠ rocprof not found (roctracer may not be installed)"
+          fi
+          
+          if command -v rocprofv3 &> /dev/null; then
+            echo "✓ rocprofv3 is available"
+            rocprofv3 --version || true
+          else
+            echo "⚠ rocprofv3 not found (rocprofiler-sdk may not be installed)"
+          fi
+          
+          # Run profiling tests
+          python3 -m pytest tests/strix_ai/profiling/ -v -s \
+            --junit-xml=test-results-profiling.xml \
             || exit 0
       
       - name: Run Strix AI Tests - Quick Smoke Tests

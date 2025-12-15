@@ -90,6 +90,58 @@ def is_strix_point(amdgpu_family):
     return amdgpu_family == "gfx1150"
 
 
+@pytest.fixture(scope="session")
+def rocprof_available():
+    """Check if rocprof is available"""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["rocprof", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+@pytest.fixture(scope="session")
+def rocprofiler_sdk_available():
+    """Check if rocprofiler-sdk (rocprofv3) is available"""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["rocprofv3", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+@pytest.fixture(scope="function")
+def profiler_context():
+    """Context for running profiled operations"""
+    if not TORCH_AVAILABLE:
+        pytest.skip("torch not available for profiling")
+    
+    import tempfile
+    from pathlib import Path
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        profile_dir = Path(tmpdir) / "profiles"
+        profile_dir.mkdir()
+        yield profile_dir
+        
+        # Cleanup GPU memory after profiling
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+
+
 def pytest_configure(config):
     """Configure custom markers"""
     config.addinivalue_line("markers", "strix: Tests specific to Strix platforms")
@@ -97,6 +149,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "vla: Vision Language Action tests")
     config.addinivalue_line("markers", "vit: Vision Transformer tests")
     config.addinivalue_line("markers", "cv: Computer Vision tests")
+    config.addinivalue_line("markers", "profiling: ROCProfiler integration tests")
     config.addinivalue_line("markers", "slow: Tests that take > 30 seconds")
     config.addinivalue_line("markers", "quick: Quick smoke tests")
     config.addinivalue_line("markers", "windows: Windows-specific tests")

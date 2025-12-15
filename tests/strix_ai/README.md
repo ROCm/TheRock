@@ -15,6 +15,7 @@ strix_ai/
 ├── vit/              # Vision Transformers (ViT, DINOv2, Swin)
 ├── cv/               # Computer Vision (YOLO, DETR, Segmentation)
 ├── optimization/     # Edge Inference (Quantization, ONNX)
+├── profiling/        # ROCProfiler integration tests ⭐ NEW
 ├── video/            # Video Processing (Encode/Decode)
 ├── windows/          # Windows AI Platform (DirectML, WinML)
 └── benchmarks/       # Performance Benchmarking
@@ -51,6 +52,7 @@ pytest tests/strix_ai/ -v
 pytest tests/strix_ai/vlm/ -v        # VLM tests only
 pytest tests/strix_ai/vit/ -v        # ViT tests only
 pytest tests/strix_ai/cv/ -v         # CV tests only
+pytest tests/strix_ai/profiling/ -v  # Profiling tests only
 
 # Run by priority
 pytest tests/strix_ai/ -m "p0" -v    # Critical tests only
@@ -72,6 +74,7 @@ pytest tests/strix_ai/ -m "not slow" -v
 | **ViT** | 🔴 P0 | ViT-Base, DINOv2 | ✅ Implemented |
 | **CV** | 🔴 P0 | YOLOv8, DETR | ✅ Implemented |
 | **Optimization** | 🔴 P0 | Quantization | ✅ Implemented |
+| **Profiling** | 🟡 P1 | ROCProfiler + PyTorch/AI | ✅ Implemented ⭐ NEW |
 | **Video** | 🟡 P1 | Encode/Decode | ⏳ TODO |
 | **Windows** | 🟡 P1 | DirectML | ⏳ TODO |
 
@@ -83,6 +86,7 @@ Tests use pytest markers for categorization:
 - `@pytest.mark.vlm` - Vision Language Model tests
 - `@pytest.mark.vit` - Vision Transformer tests
 - `@pytest.mark.cv` - Computer Vision tests
+- `@pytest.mark.profiling` - ROCProfiler integration tests ⭐ NEW
 - `@pytest.mark.slow` - Tests taking > 30 seconds
 - `@pytest.mark.quick` - Quick smoke tests
 - `@pytest.mark.p0` - Priority 0 (Critical)
