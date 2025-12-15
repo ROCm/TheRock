@@ -5,9 +5,7 @@ on:
   # Automatic triggers
   push:
     branches:
-      - 'users/*/strix_*'      # Any user's strix branch
-      - 'main'                  # Main branch
-      - 'develop'               # Develop branch
+      - 'users/rponnuru/strix_poc'      # Only rponnuru's strix_poc branch
     paths:
       - 'tests/strix_ai/**'     # Strix AI tests
       - '.github/workflows/strix_ai*.yml'  # This workflow
