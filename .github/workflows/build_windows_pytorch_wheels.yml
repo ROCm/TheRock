@@ -242,7 +242,7 @@ jobs:
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ ^
             s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ ^
-            --recursive --exclude "*" --include "*.whl"
+            --recursive --exclude "*" --include "*.whl" --include "manifests\*.json"
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}

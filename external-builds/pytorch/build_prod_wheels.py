@@ -510,6 +510,31 @@ def do_build(args: argparse.Namespace):
 
     print("--- Builds all completed")
 
+    # Write manifest for built wheels (into <output-dir>/manifests).
+    if args.write_manifest:
+        manifest_script = script_dir / "generate_pytorch_manifest.py"
+        cmd = [
+            sys.executable,
+            manifest_script,
+            "--output-dir",
+            args.output_dir,
+            "--rocm-sdk-version",
+            rocm_sdk_version,
+            "--pytorch-rocm-arch",
+            pytorch_rocm_arch,
+            "--version-suffix",
+            args.version_suffix,
+        ]
+        if pytorch_dir:
+            cmd += ["--pytorch-dir", pytorch_dir]
+        if pytorch_audio_dir:
+            cmd += ["--pytorch-audio-dir", pytorch_audio_dir]
+        if pytorch_vision_dir:
+            cmd += ["--pytorch-vision-dir", pytorch_vision_dir]
+        if triton_dir:
+            cmd += ["--triton-dir", triton_dir]
+        exec(cmd, cwd=script_dir)
+
     if args.use_ccache:
         ccache_stats_output = capture(
             ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
@@ -1053,6 +1078,12 @@ def main(argv: list[str]):
         "--clean",
         action=argparse.BooleanOptionalAction,
         help="Clean build directories before building",
+    )
+    build_p.add_argument(
+        "--write-manifest",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write a manifest JSON alongside built wheels (default True)",
     )
     build_p.set_defaults(func=do_build)
 
