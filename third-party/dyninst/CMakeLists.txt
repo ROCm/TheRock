@@ -21,7 +21,7 @@ therock_cmake_subproject_declare(therock-dyninst
   CMAKE_ARGS
     -DLibIberty_ROOT_DIR="/opt/rh/gcc-toolset-13/root/usr"
 )
-therock_cmake_subproject_provide_package(therock-dyninst dyninst lib/cmake)
+therock_cmake_subproject_provide_package(therock-dyninst Dyninst lib/cmake)
 therock_cmake_subproject_activate(therock-dyninst)
 
 add_dependencies(therock-third-party therock-dyninst)
