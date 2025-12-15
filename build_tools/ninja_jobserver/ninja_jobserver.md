@@ -42,45 +42,6 @@ A simple Python wrapper that starts jobserver mode by running:
 We still need a top-level `Makefile` with a `therock` target that calls `build_the_rock.py`.
 
 ---
-
-## Step-by-step setup
-
-### 1) Add these files
-
-Place this directory into your repo at:
-
-```
-therock/build_tools/ninja_jobserver/
-  build_the_rock.py
-  build_with_jobserver.py
-  ninja_jobserver.md   (this file)
-```
-
-Make them executable (optional but handy):
-
-```bash
-chmod +x build_tools/ninja_jobserver/*.py
-```
-
-### 2) Add a top-level `Makefile`
-
-Create **`therock/Makefile`** (repo root) with:
-
-```make
-.PHONY: all therock configure build
-
-all: therock
-
-configure:
-	python3 build_tools/ninja_jobserver/build_the_rock.py configure
-
-build:
-	python3 build_tools/ninja_jobserver/build_the_rock.py build
-
-therock:
-	python3 build_tools/ninja_jobserver/build_the_rock.py all
-```
-
 #### Local usage
 
 - Standalone (no jobserver):  
