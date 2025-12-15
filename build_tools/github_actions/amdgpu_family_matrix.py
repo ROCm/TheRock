@@ -75,6 +75,7 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
@@ -90,7 +91,7 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             # Networking issue: https://github.com/ROCm/TheRock/issues/1660
             # Label is "linux-mi355-1gpu-ossci-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -169,7 +170,6 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -197,7 +197,6 @@ amdgpu_family_info_matrix_nightly = {
             "family": "gfx1153",
             "expect_failure": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
