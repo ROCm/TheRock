@@ -633,12 +633,14 @@ def main(base_args, linux_families, windows_families):
     if is_schedule:
         enable_build_jobs = True
         test_type = "full"
+    # For workflow_dispatch with explicit GPU families specified, always enable build jobs
+    elif is_workflow_dispatch and (linux_variants_output or windows_variants_output):
+        print("Enabling build jobs for workflow_dispatch with explicit GPU families")
+        enable_build_jobs = True
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")
-        # TODO(#199): other behavior changes
-        #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
         enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
         # If the modified path contains any git submodules, we want to run a full test suite.

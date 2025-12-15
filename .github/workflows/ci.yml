@@ -10,6 +10,10 @@
 #
 # For push to main branch, all AMD families will built and tested from `amdgpu_family_matrix.py`.
 #
+# For workflow_dispatch, specify GPU families using lowercase keys from `amdgpu_family_matrix.py`:
+#   - Valid keys: gfx94x, gfx110x, gfx120x, gfx1151, gfx950, gfx90x, gfx101x, gfx103x, gfx1150, gfx1152, gfx1153
+#   - Example: gfx94x, gfx120x (comma-separated)
+#
 # Note: If a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
 
 name: CI
@@ -22,7 +26,7 @@ on:
     inputs:
       linux_amdgpu_families:
         type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94x, gfx120x (use lowercase keys)"
         default: ""
       linux_test_labels:
         type: string
@@ -33,7 +37,7 @@ on:
         description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
       windows_amdgpu_families:
         type: string
-        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94x, gfx120x (use lowercase keys)"
         default: ""
       windows_test_labels:
         type: string
