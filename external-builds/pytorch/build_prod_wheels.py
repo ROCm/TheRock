@@ -30,6 +30,7 @@ python pytorch_torch_repo.py checkout
 python pytorch_audio_repo.py checkout
 python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
+python pytorch_torchcodec_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
 python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
@@ -352,6 +353,7 @@ def do_build(args: argparse.Namespace):
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
     pytorch_vision_dir: Path | None = args.pytorch_vision_dir
+    pytorch_torchcodec_dir: Path | None = args.pytorch_torchcodec_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
     cmake_prefix = get_rocm_path("cmake")
@@ -469,7 +471,7 @@ def do_build(args: argparse.Namespace):
         env["BLAS"] = "OpenBLAS"
         env["OpenBLAS_HOME"] = str(host_math_path)
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
-
+    """
     # Build triton.
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):
@@ -507,6 +509,17 @@ def do_build(args: argparse.Namespace):
         do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
+    """
+    # Build pytorch torchcodec
+    if args.build_pytorch_torchcodec or (
+        args.build_pytorch_torchcodec is None and pytorch_torchcodec_dir
+    ):
+        assert (
+            pytorch_torchcodec_dir
+        ), "Must specify --pytorch-torchcodec-dir if --build-pytorch-torchcodec"
+        do_build_pytorch_torchcodec(args, pytorch_torchcodec_dir, dict(env))
+    else:
+        print("--- Not build pytorch-torchcodec (no --pytorch-torchcodec-dir)")
 
     print("--- Builds all completed")
 
@@ -895,6 +908,46 @@ def do_build_pytorch_vision(
     copy_to_output(args, built_wheel)
 
 
+def do_build_pytorch_torchcodec(
+    args: argparse.Namespace, pytorch_torchcodec_dir: Path, env: dict[str, str]
+):
+    # Compute version.
+    build_version = (pytorch_torchcodec_dir / "version.txt").read_text().strip()
+    # add version.suffix only once, not on each build run to avoid having it there multiple times
+    if args.version_suffix not in build_version:
+        build_version += args.version_suffix
+    env["BUILD_VERSION"] = build_version
+    env["VERSION_NAME"] = build_version
+    env["BUILD_NUMBER"] = args.pytorch_build_number
+
+    env.update(
+        {
+            "ENABLE_CUDA": "0",
+            "TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR": "1",
+            "BUILD_AGAINST_ALL_FFMPEG_FROM_S3": "1",
+        }
+    )
+
+    remove_dir_if_exists(pytorch_torchcodec_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(pytorch_torchcodec_dir / "build")
+
+    # ensure that we have new enought setuptools installed before building torchcodec
+    exec(
+        [sys.executable, "-m", "pip", "install", "setuptools>80.0"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
+    exec(
+        [sys.executable, "-m", "build", "--wheel", "-vvv", "--no-isolation"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(pytorch_torchcodec_dir / "dist", "torchcodec")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
 
@@ -961,6 +1014,12 @@ def main(argv: list[str]):
         help="pytorch_vision source directory",
     )
     build_p.add_argument(
+        "--pytorch-torchcodec-dir",
+        default=directory_if_exists(script_dir / "pytorch_torchcodec"),
+        type=Path,
+        help="pytorch_torchcodec source directory",
+    )
+    build_p.add_argument(
         "--triton-dir",
         default=directory_if_exists(script_dir / "triton"),
         type=Path,
@@ -990,6 +1049,12 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch vision (requires --pytorch-vision-dir)",
+    )
+    build_p.add_argument(
+        "--build-pytorch-torchcodec",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torchcodec (requires --pytorch-torchcodec-dir)",
     )
     build_p.add_argument(
         "--enable-pytorch-flash-attention-windows",
