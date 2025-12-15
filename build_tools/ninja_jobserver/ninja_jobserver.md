@@ -4,7 +4,7 @@ This folder contains a small, **Python-only** build entrypoint that makes Ninja 
 
 ## Why jobserver matters
 
-When you have a “top-level” orchestrator (often GNU `make`) running with a global parallelism limit (e.g. `make -j32`), you want *all* nested build tools to cooperate with that same limit. GNU make provides this via the **jobserver** mechanism and exports the necessary details through `MAKEFLAGS` (e.g. `--jobserver-auth=...`).
+When we have a “top-level” orchestrator (eg. GNU `make`) running with a global parallelism limit (e.g. `make -j32`), we want *all* nested build tools to cooperate with that same limit. GNU make provides this via the **jobserver** mechanism and exports the necessary details through `MAKEFLAGS` (e.g. `--jobserver-auth=...`).
 
 Ninja supports joining the GNU make jobserver **automatically**, but only if:
 - `MAKEFLAGS` contains `--jobserver-auth=...` (meaning an outer `make -jN` started a jobserver), and
