@@ -370,6 +370,9 @@ Standalone "ROCm SDK tarballs" are assembled from the same
 [installed using pip](#installing-releases-using-pip), without the additional
 wrapper Python wheels or utility scripts.
 
+> [!NOTE]
+> Tarball installations require `gcc` to be installed on your system.
+
 ### Installing release tarballs
 
 Release tarballs are automatically uploaded to AWS S3 buckets.
