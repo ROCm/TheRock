@@ -254,7 +254,7 @@ endif()
 
 cmake_dependent_option(THEROCK_ROCWMMA_USE_ROCBLAS
   "Enables rocBLAS validation in rocWMMA" ON
-  "THEROCK_ENABLE_ROCWMMA;THEROCK_ENABLE_BLAS" OFF)
+  "THEROCK_ENABLE_ROCWMMA" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
