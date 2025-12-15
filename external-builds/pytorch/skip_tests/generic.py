@@ -13,6 +13,10 @@ skip_tests = {
         # "binary_ufuncs": [ "test_cuda_tensor_pow_scalar_tensor_cuda" ]
         # ----------------
         "cuda": [
+            # Always skip as this test is very basic and needs manual addition in the torch/test_cuda.py
+            # for new architectures to be run - and it just checks if hipblaslt is the preferred library
+            # for AMD Instinct GPUs.
+            "test_preferred_blas_library_settings",
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
