@@ -197,7 +197,10 @@ class TestViTProfiling:
         
         import os
         import time
-        os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+        import ctypes.util
+        # Only set ROCProfiler if library is available (prevents hanging in CI)
+        if ctypes.util.find_library('rocprofiler64'):
+            os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
         
         torch.cuda.synchronize()
         start = time.perf_counter()
@@ -257,7 +260,10 @@ class TestViTProfiling:
         
         import os
         import time
-        os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+        import ctypes.util
+        # Only set ROCProfiler if library is available (prevents hanging in CI)
+        if ctypes.util.find_library('rocprofiler64'):
+            os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
         
         for batch_size in batch_sizes:
             print(f"\n--- Profiling Batch Size: {batch_size} ---")
@@ -355,7 +361,10 @@ class TestYOLOProfiling:
         
         import os
         import time
-        os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+        import ctypes.util
+        # Only set ROCProfiler if library is available (prevents hanging in CI)
+        if ctypes.util.find_library('rocprofiler64'):
+            os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
         
         torch.cuda.synchronize()
         start = time.perf_counter()

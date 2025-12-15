@@ -138,10 +138,13 @@ class TestPyTorchProfiling:
         # Profile with ROCProfiler
         print("\n=== Running ROCProfiler-instrumented inference ===")
         
-        # Use ROCM_CALL_STATS environment variable for lightweight profiling
+        # Use ROCM_CALL_STATS environment variable for lightweight profiling (optional)
         import os
-        os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
-        os.environ['ROCP_HSA_INTERCEPT'] = '1'
+        import ctypes.util
+        # Only set if rocprofiler library exists
+        if ctypes.util.find_library('rocprofiler64'):
+            os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+            os.environ['ROCP_HSA_INTERCEPT'] = '1'
         
         import time
         start = time.perf_counter()
