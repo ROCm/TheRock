@@ -87,16 +87,25 @@ class ROCmCoreTest(unittest.TestCase):
             if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
                 # TODO: Library preloads for amdsmi need to be implement.
                 # Though this is not needed for the amd-smi client.
-                self.skipTest("Skipping amdsmi test")
-            if "clang_rt" in so_path.name:
+                continue
+            if "clang_rt" in str(so_path):
+                # clang_rt and sanitizer libraries are not all intended to be
+                # loadable arbitrarily.
+                continue
+            if "libLLVMOffload" in str(so_path):
+                # recent addition from upstream, issue tracked in
+                # https://github.com/ROCm/TheRock/issues/2537
                 continue
             if "lib/roctracer" in str(so_path) or "share/roctracer" in str(so_path):
                 # Internal roctracer libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
                 continue
-            if "lib/rocprofiler-sdk/" in str(
-                so_path
-            ) or "libexec/rocprofiler-sdk/" in str(so_path):
+            if (
+                "lib/rocprofiler-sdk/" in str(so_path)
+                or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "libpyrocpd" in str(so_path)
+                or "libpyroctx" in str(so_path)
+            ):
                 # Internal rocprofiler-sdk libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
                 continue
