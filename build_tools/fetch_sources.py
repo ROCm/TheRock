@@ -51,7 +51,8 @@ def get_projects_from_topology(stage: str) -> List[str]:
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
 
     topology = BuildTopology(str(TOPOLOGY_PATH))
-    submodules = topology.get_submodules_for_stage(stage)
+    current_platform = platform.system().lower()
+    submodules = topology.get_submodules_for_stage(stage, platform=current_platform)
     return [s.name for s in submodules]
 
 
