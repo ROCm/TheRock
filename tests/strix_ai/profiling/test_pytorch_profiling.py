@@ -41,6 +41,28 @@ def check_rocprofv3_available():
         return False
 
 
+def check_rocprof_available():
+    """
+    DEPRECATED: Check if legacy rocprof is available
+    For Strix, use check_rocprofv3_available() instead
+    """
+    try:
+        result = subprocess.run(
+            ["rocprof", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def check_rocprofiler_sdk():
+    """Alias for check_rocprofv3_available()"""
+    return check_rocprofv3_available()
+
+
 class SimpleNet(nn.Module):
     """Simple neural network for profiling tests"""
     def __init__(self):
