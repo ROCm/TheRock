@@ -73,11 +73,13 @@ jobs:
   # Automatically run a dev release from the PR head SHA when rocm-libraries is bumped.
   # This uses the existing release workflow, which will dispatch the PyTorch release workflow (big matrix).
   dev_release_on_rocm_libraries_bump:
-    needs: [detect_rocm_libraries_bump]
-    if: >
-      github.event_name == 'pull_request' &&
-      needs.detect_rocm_libraries_bump.outputs.bump == 'true' &&
-      github.event.pull_request.head.repo.fork == false
+    needs: [setup]
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        needs.setup.outputs.rocm_libraries_bump == 'true' &&
+        github.event.pull_request.head.repo.fork == false
+      }}
     permissions:
       contents: write
       actions: write
@@ -164,7 +166,6 @@ jobs:
     if: always()
     needs:
       - setup
-      - detect_rocm_libraries_bump
       - dev_release_on_rocm_libraries_bump
       - linux_build_and_test
       - windows_build_and_test
