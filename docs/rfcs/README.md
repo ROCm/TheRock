@@ -21,6 +21,7 @@ benefit from further discussion.
 - [RFC0003: Build Tree Normalization](./RFC0003-Build-Tree-Normalization.md)
 - [RFC0004: Fusilli+IREE Kernel Provider for hipDNN](./RFC0004-Fusilli-IREE-Kernel-Provider-hipDNN.md)
 - [RFC0005: hipDNN Project Integration](./RFC0005-hipDNN-Project-Integration.md)
+- [RFC0009: Optiq Project Integration](./RFC0005-Optiq-Project-Integration.md)
 
 ## Adding an RFC
 
