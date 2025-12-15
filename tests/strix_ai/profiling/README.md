@@ -1,10 +1,12 @@
 # ROCProfiler Tests for Strix AI/ML Workloads
 
-This directory contains ROCProfiler integration tests for Strix AI/ML workloads running on AMD Strix GPUs (gfx1150, gfx1151).
+This directory contains **ROCProfiler** (ROCm profiling component) integration tests for Strix AI/ML workloads running on AMD Strix GPUs (gfx1150, gfx1151).
 
 ## 📋 Overview
 
-These tests validate and profile AI/ML workloads using ROCProfiler tools on Strix integrated GPUs. They help measure performance, identify bottlenecks, and ensure ROCm profiling tools work correctly with PyTorch and AI models.
+These tests validate and profile AI/ML workloads using **ROCProfiler tools** (rocprof, rocprofv3) on Strix integrated GPUs. ROCProfiler is AMD's low-level profiling infrastructure that provides detailed HIP kernel traces, hardware counter statistics, and GPU performance metrics.
+
+**Key Focus**: These tests use **ROCm's native profiling tools** (not PyTorch's built-in profiler) to get hardware-level insights specific to AMD GPUs.
 
 ## 🎯 Test Categories
 
@@ -99,39 +101,63 @@ Install dependencies:
 pip install pytest pytest-check torch transformers ultralytics pillow
 ```
 
-## 📊 Profiling Tools
+## 📊 Profiling Tools (ROCm Components)
 
-### PyTorch Built-in Profiler
-All tests use PyTorch's built-in profiler which integrates with ROCm:
-```python
-with torch.profiler.profile(
-    activities=[
-        torch.profiler.ProfilerActivity.CPU,
-        torch.profiler.ProfilerActivity.CUDA,
-    ],
-    record_shapes=True,
-) as prof:
-    # Your code here
-    model(input)
-    torch.cuda.synchronize()
+These tests use **ROCProfiler** - AMD's native profiling tools for ROCm. This provides deeper insights than generic profilers.
 
-# View results
-print(prof.key_averages().table(sort_by="cuda_time_total"))
-```
-
-### External ROCProfiler Tools
-
-#### rocprof (roctracer)
-Legacy profiling tool:
+### Primary: rocprof (roctracer)
+ROCm's profiling tool for HIP kernel tracing and statistics:
 ```bash
+# Basic profiling with statistics
 rocprof --stats -o results.csv python my_script.py
+
+# HIP API tracing
+rocprof --hip-trace --stats python my_script.py
+
+# HSA tracing for low-level GPU operations
+rocprof --hsa-trace --stats python my_script.py
+
+# Full trace with all options
+rocprof --hip-trace --hsa-trace --stats -d output_dir python my_script.py
 ```
 
-#### rocprofv3 (rocprofiler-sdk)
-New SDK-based profiler:
+**What it captures:**
+- HIP kernel execution times
+- API call traces (hipMemcpy, hipLaunchKernel, etc.)
+- HSA dispatch information
+- GPU hardware counters
+- Memory transfers (Host ↔ Device)
+
+### Advanced: rocprofv3 (rocprofiler-sdk)
+Next-generation profiler with enhanced capabilities:
 ```bash
-rocprofv3 --hip-trace python my_script.py
+# Kernel and HIP tracing
+rocprofv3 --hip-trace --kernel-trace -d output_dir -o profile -- python my_script.py
+
+# Hardware counter collection
+rocprofv3 --hip-trace --kernel-trace --counter-collection -- python my_script.py
 ```
+
+**What it captures:**
+- All features of rocprof
+- Enhanced hardware counter support
+- Better multi-GPU support
+- JSON output format
+- Advanced filtering options
+
+### Why ROCProfiler (not PyTorch profiler)?
+
+| Feature | ROCProfiler (ROCm) | PyTorch Profiler |
+|---------|-------------------|------------------|
+| **HIP Kernel Traces** | ✅ Detailed | ❌ Limited |
+| **Hardware Counters** | ✅ Full access | ❌ No access |
+| **HSA API Traces** | ✅ Yes | ❌ No |
+| **Memory Transfers** | ✅ Detailed | ⚠️ Basic |
+| **GPU-Specific Metrics** | ✅ AMD-optimized | ⚠️ Generic |
+| **Overhead** | ✅ Low | ⚠️ Higher |
+| **Export Formats** | ✅ CSV, JSON, SQL | ⚠️ Chrome trace |
+
+**TL;DR**: ROCProfiler provides AMD GPU-specific insights that PyTorch's profiler cannot access.
 
 ## 🎨 Test Markers
 
