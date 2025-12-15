@@ -1,7 +1,6 @@
 skip_tests = {
     "gfx950": {
         "cuda": {
-            "test_preferred_blas_library_settings",
             "test_autocast_torch_bf16",
             "test_autocast_torch_fp16",
         }
@@ -13,10 +12,6 @@ skip_tests = {
         # "binary_ufuncs": [ "test_cuda_tensor_pow_scalar_tensor_cuda" ]
         # ----------------
         "cuda": [
-            # Always skip as this test is very basic and needs manual addition in the torch/test_cuda.py
-            # for new architectures to be run - and it just checks if hipblaslt is the preferred library
-            # for AMD Instinct GPUs.
-            "test_preferred_blas_library_settings",
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
             # AssertionError: String comparison failed: '8, 1' != '8, 8'
@@ -40,6 +35,12 @@ skip_tests = {
             # NEW ERROR
             # RuntimeError: Error building extension 'dummy_allocator'
             "test_mempool_with_allocator",
+            # Change detector test (Cublaslt vs Cublas depending on gcn_arch and torch version)
+            # Always skip as this test is very basic and needs manual intervention for new architectures
+            # See
+            #   * https://github.com/ROCm/pytorch/pull/2742
+            #   * https://github.com/ROCm/pytorch/pull/2873
+            "test_preferred_blas_library_settings",
             # ----------------
             # maybe failing
             # ----------------
