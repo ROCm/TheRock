@@ -108,9 +108,14 @@ class TestVLMProfiling:
         # Profile inference with ROCProfiler timing
         print("\n=== Profiling CLIP Inference with ROCProfiler ===")
         
-        # Enable ROCProfiler environment
+        # Enable ROCProfiler environment (only if available)
         import os
-        os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+        import ctypes.util
+        if ctypes.util.find_library('rocprofiler64'):
+            os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+            print("✓ ROCProfiler library found and enabled")
+        else:
+            print("⚠ ROCProfiler library not found, using basic timing")
         
         import time
         torch.cuda.synchronize()
@@ -431,7 +436,13 @@ def test_quick_ai_profiling_smoke(strix_device):
     # Profile with ROCProfiler timing
     import os
     import time
-    os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+    import ctypes.util
+    # Only set ROCProfiler if library is available (prevents hanging in CI)
+    if ctypes.util.find_library('rocprofiler64'):
+        os.environ['HSA_TOOLS_LIB'] = 'librocprofiler64.so.1'
+        print("✓ ROCProfiler library found and enabled")
+    else:
+        print("⚠ ROCProfiler library not found, using basic timing")
     
     torch.cuda.synchronize()
     start = time.perf_counter()
