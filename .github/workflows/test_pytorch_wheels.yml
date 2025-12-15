@@ -144,12 +144,18 @@ jobs:
 
       - name: Run PyTorch smoketests
         run: |
-          pytest --log-cli-level=INFO -v external-builds/pytorch/smoke-tests
+          python ./external-builds/pytorch/run_pytorch_smoke_tests.py -- \
+            --log-cli-level=INFO \
+            -v
 
       - name: (Linux) Run PyTorch tests
         if: ${{ contains(inputs.test_runs_on, 'linux') }}
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py
+          python ./external-builds/pytorch/run_pytorch_tests.py -- \
+            --continue-on-collection-errors \
+            --import-mode=importlib \
+            -v
+
 
       # TODO(#2258): Enable this code to run tests on Windows
 
