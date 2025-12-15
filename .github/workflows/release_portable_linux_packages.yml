@@ -128,6 +128,9 @@ jobs:
         env:
           AMDGPU_FAMILIES: ${{ inputs.families }}
           THEROCK_PACKAGE_PLATFORM: "linux"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
   portable_linux_packages:

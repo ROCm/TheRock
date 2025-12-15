@@ -1,6 +1,6 @@
 # Regularly updated submodules
-/rocm-libraries/        @ROCm/TheRockInfra
-/rocm-systems/          @ROCm/TheRockInfra
+/rocm-libraries         @ROCm/TheRockInfra
+/rocm-systems           @ROCm/TheRockInfra
 
 # New patches are strongly discouraged. See patches/README.md.
 /patches/               @ScottTodd @marbre
