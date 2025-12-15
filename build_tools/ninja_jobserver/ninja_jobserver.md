@@ -31,7 +31,7 @@ It decides whether to pass `-j` to Ninja:
 - **If jobserver is present** (`MAKEFLAGS` contains `--jobserver-auth=`):  
   it **does not** pass `-j`, so Ninja can join the jobserver pool.
 
-- **If jobserver is not present** (typical CI shell step):  
+- **If jobserver is not present** ( may be in CI shell step):  
   it passes `-j<cpu_count>` (or `-j$JOBS`) for fast standalone builds.
 
 ### ` build_therock_withJobserver.py`
