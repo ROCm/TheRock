@@ -37,57 +37,6 @@ def run_command(command: list[str], cwd=None):
     return process
 
 
-def find_amdsmitst_binary():
-    """
-    Recursively search for any file matching *amdsmitst* under the directory
-    one level above THEROCK_BIN_DIR (i.e., THEROCK_BIN_DIR.parent.parent).
-
-    Example:
-        THEROCK_BIN_DIR = /__w/TheRock/TheRock/build/bin
-        search_root     = /__w/TheRock/TheRock
-    """
-
-    # One level above build/
-    search_root = THEROCK_BIN_DIR.parent.parent
-
-    print(f"\n[amdsmitst-search] Searching recursively under: {search_root}")
-    print("[amdsmitst-search] Running: find <root> -type f -name 'amdsmitst'\n")
-
-    # Execute recursive find
-    result = subprocess.run(
-        ["find", str(search_root), "-type", "f", "-name", "amdsmitst"],
-        capture_output=True,
-        text=True,
-    )
-
-    raw_output = result.stdout.strip()
-
-    print("[amdsmitst-search] Raw find output:")
-    print(raw_output if raw_output else "  (empty)")
-    print()
-
-    # Collect all candidates
-    candidates = [
-        Path(line.strip()).resolve() for line in raw_output.splitlines() if line.strip()
-    ]
-
-    print("[amdsmitst-search] All discovered amdsmitst candidates:")
-    if not candidates:
-        print("  (None found!)\n")
-        raise FileNotFoundError(
-            f"No amdsmitst binary found under {search_root}. "
-            "ROCm SDK artifacts may not include AMD SMI tests."
-        )
-
-    for idx, c in enumerate(candidates, start=1):
-        print(f"  [{idx}] {c}")
-
-    selected = candidates[0]
-    print(f"\n[amdsmitst-search] Selected amdsmitst binary: {selected}\n")
-
-    return selected
-
-
 @pytest.fixture(scope="session")
 def rocm_info_output():
     try:
@@ -179,18 +128,30 @@ class TestROCmSanity:
 class TestAmdSmiTests:
     @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
     def test_amdsmi_suite(self):
-        amdsmi_test_bin = find_amdsmitst_binary()
+        # Expected location of amdsmitst binary
+        amdsmi_test_bin = (
+            THEROCK_BIN_DIR.parent / "share" / "amd_smi" / "tests" / "amdsmitst"
+        ).resolve()
 
-        include_filter = (
-            "amdsmitstReadOnly.*:"
-            "amdsmitstReadWrite.FanReadWrite:"
-            "amdsmitstReadWrite.TestOverdriveReadWrite:"
-            "amdsmitstReadWrite.TestPciReadWrite:"
-            "amdsmitstReadWrite.TestPowerReadWrite:"
-            "amdsmitstReadWrite.TestPerfCntrReadWrite:"
-            "amdsmitstReadWrite.TestEvtNotifReadWrite:"
-            "AmdSmiDynamicMetricTest.*"
-        )
+        assert (
+            amdsmi_test_bin.exists()
+        ), f"amdsmitst not found at expected location: {amdsmi_test_bin}"
+        assert os.access(
+            amdsmi_test_bin, os.X_OK
+        ), f"amdsmitst is not executable: {amdsmi_test_bin}"
+
+        include_tests = [
+            "amdsmitstReadOnly.*",
+            "amdsmitstReadWrite.FanReadWrite",
+            "amdsmitstReadWrite.TestOverdriveReadWrite",
+            "amdsmitstReadWrite.TestPciReadWrite",
+            "amdsmitstReadWrite.TestPowerReadWrite",
+            "amdsmitstReadWrite.TestPerfCntrReadWrite",
+            "amdsmitstReadWrite.TestEvtNotifReadWrite",
+            "AmdSmiDynamicMetricTest.*",
+        ]
+
+        include_filter = ":".join(include_tests)
 
         cmd = [str(amdsmi_test_bin), f"--gtest_filter={include_filter}"]
 

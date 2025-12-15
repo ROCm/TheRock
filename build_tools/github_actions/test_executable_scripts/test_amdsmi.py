@@ -31,22 +31,9 @@ logging.basicConfig(level=logging.INFO)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-
-def find_amdsmitst_binary():
-    result = subprocess.run(
-        ["find", str(THEROCK_DIR), "-type", "f", "-name", "amdsmitst"],
-        capture_output=True,
-        text=True,
-    )
-    candidates = [
-        Path(x.strip()).resolve() for x in result.stdout.splitlines() if x.strip()
-    ]
-    if not candidates:
-        raise FileNotFoundError("amdsmitst not found")
-    return candidates[0]
-
-
-AMDSMITS_PATH = find_amdsmitst_binary()
+AMDSMITST_BIN = (
+    THEROCK_DIR / "build" / "share" / "amd_smi" / "tests" / "amdsmitst"
+).resolve()
 
 # -----------------------------
 # GTest sharding
@@ -73,23 +60,25 @@ else:
     logging.info("Running full amdsmitst test suite (with whitelist filter)")
 
     # Passing tests from amdsmitst
-    INCLUDE_FILTER = (
-        "amdsmitstReadOnly.*:"
-        "amdsmitstReadWrite.FanReadWrite:"
-        "amdsmitstReadWrite.TestOverdriveReadWrite:"
-        "amdsmitstReadWrite.TestPciReadWrite:"
-        "amdsmitstReadWrite.TestPowerReadWrite:"
-        "amdsmitstReadWrite.TestPerfCntrReadWrite:"
-        "amdsmitstReadWrite.TestEvtNotifReadWrite:"
-        "AmdSmiDynamicMetricTest.*"
-    )
+    include_tests = [
+        "amdsmitstReadOnly.*",
+        "amdsmitstReadWrite.FanReadWrite",
+        "amdsmitstReadWrite.TestOverdriveReadWrite",
+        "amdsmitstReadWrite.TestPciReadWrite",
+        "amdsmitstReadWrite.TestPowerReadWrite",
+        "amdsmitstReadWrite.TestPerfCntrReadWrite",
+        "amdsmitstReadWrite.TestEvtNotifReadWrite",
+        "AmdSmiDynamicMetricTest.*",
+    ]
 
-    test_filter = [f"--gtest_filter={INCLUDE_FILTER}"]
+    include_filter = ":".join(include_tests)
+
+    test_filter = [f"--gtest_filter={include_filter}"]
 
 # -----------------------------
 # Build command
 # -----------------------------
-cmd = [str(AMDSMITS_PATH)] + test_filter
+cmd = [str(AMDSMITST_BIN)] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
