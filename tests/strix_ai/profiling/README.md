@@ -1,353 +1,228 @@
-# ROCProfiler Tests for Strix AI/ML Workloads
+# Strix AI Profiling Tests
 
-This directory contains **ROCProfiler** (ROCm profiling component) integration tests for Strix AI/ML workloads running on AMD Strix GPUs (gfx1150, gfx1151).
+This directory contains profiling tests that use **Option 1 approach**: running `rocprofv3` on existing test files without code duplication.
 
-## 📋 Overview
+## 🎯 **Philosophy**
 
-These tests validate and profile AI/ML workloads using **ROCProfiler tools** (rocprof, rocprofv3) on Strix integrated GPUs. ROCProfiler is AMD's low-level profiling infrastructure that provides detailed HIP kernel traces, hardware counter statistics, and GPU performance metrics.
+**No code duplication!** Instead of duplicating CLIP/ViT/YOLO code here, we:
+1. Keep existing tests in `vlm/`, `vit/`, `cv/`, etc.
+2. Profile them using `rocprofv3` wrapper from this folder
+3. Centralize all profiling tests in one place
 
-**Key Focus**: These tests use **ROCm's native profiling tools** (not PyTorch's built-in profiler) to get hardware-level insights specific to AMD GPUs.
+## 📁 **File Organization**
 
-## 🎯 Test Categories
-
-### 1. PyTorch Profiling (`test_pytorch_profiling.py`)
-Tests basic ROCProfiler integration with PyTorch operations:
-- ✅ **GPU availability check** - Verify Strix GPU is detected
-- ✅ **ROCProfiler installation** - Check rocprof and rocprofv3 tools
-- ✅ **Simple inference profiling** - Profile basic neural network inference
-- ✅ **Training step profiling** - Profile forward/backward pass with gradients
-- ✅ **External profiling** - Test rocprof command-line tool
-- ✅ **Quick smoke test** - Fast validation of profiling capability
-
-### 2. AI Workload Profiling (`test_ai_workload_profiling.py`)
-Profiles real-world AI models on Strix:
-- 🖼️ **CLIP profiling** - Vision-Language Model (openai/clip-vit-base-patch32)
-- 🎨 **ViT profiling** - Vision Transformer (google/vit-base-patch16-224)
-- 🎯 **YOLO profiling** - Object detection (YOLOv8)
-- 📊 **Batch size analysis** - Profile different batch sizes
-- ⚡ **Quick smoke test** - Fast Conv2d operation profiling
-
-## 🚀 Running Tests
-
-### Run All Profiling Tests
-```bash
-# From TheRock root directory
-python3 -m pytest tests/strix_ai/profiling/ -v -s
+```
+tests/strix_ai/
+├── vlm/test_clip.py              ← Existing CLIP test
+├── vit/test_vit_base.py          ← Existing ViT test  
+├── cv/test_yolo.py               ← Existing YOLO test
+└── profiling/
+    ├── test_profile_existing_tests.py  ← Profiles all existing tests
+    ├── test_strix_rocprofv3.py         ← Advanced rocprofv3 tests (optional)
+    └── README.md                        ← This file
 ```
 
-### Run Specific Test Categories
-```bash
-# PyTorch profiling only
-python3 -m pytest tests/strix_ai/profiling/test_pytorch_profiling.py -v -s
+## 🚀 **How to Run**
 
-# AI workload profiling only
-python3 -m pytest tests/strix_ai/profiling/test_ai_workload_profiling.py -v -s
-
-# Quick smoke tests only
-python3 -m pytest tests/strix_ai/profiling/ -v -s -m quick
-
-# VLM profiling only
-python3 -m pytest tests/strix_ai/profiling/ -v -s -m vlm
-
-# ViT profiling only
-python3 -m pytest tests/strix_ai/profiling/ -v -s -m vit
-```
-
-### Run with Specific GPU
-```bash
-# Strix Halo (gfx1151)
-AMDGPU_FAMILIES=gfx1151 python3 -m pytest tests/strix_ai/profiling/ -v -s
-
-# Strix Point (gfx1150)
-AMDGPU_FAMILIES=gfx1150 python3 -m pytest tests/strix_ai/profiling/ -v -s
-```
-
-### Generate JUnit XML Results
-```bash
-python3 -m pytest tests/strix_ai/profiling/ -v -s \
-  --junit-xml=profiling-results.xml
-```
-
-## 🔧 Prerequisites
-
-### Container Environment (Recommended)
-Using the `rocm/pytorch:latest` container (as configured in CI):
-```bash
-docker run -it --rm \
-  --ipc=host \
-  --group-add video \
-  --device /dev/kfd \
-  --device /dev/dri \
-  -v $(pwd):/workspace \
-  rocm/pytorch:latest \
-  bash
-
-# Inside container
-cd /workspace
-pip install pytest pytest-check transformers ultralytics
-python3 -m pytest tests/strix_ai/profiling/ -v -s
-```
-
-### Native Installation
-Requirements:
-- ✅ **ROCm 6.x** or later
-- ✅ **PyTorch with ROCm** support
-- ✅ **rocprofiler-sdk** (provides rocprofv3) OR **roctracer** (provides rocprof)
-- ✅ **Python 3.8+**
-- ✅ **Strix GPU** (gfx1150 or gfx1151)
-
-Install dependencies:
-```bash
-pip install pytest pytest-check torch transformers ultralytics pillow
-```
-
-## 📊 Profiling Tools (ROCm Components)
-
-These tests use **ROCProfiler** - AMD's native profiling tools for ROCm. This provides deeper insights than generic profilers.
-
-### Primary: rocprof (roctracer)
-ROCm's profiling tool for HIP kernel tracing and statistics:
-```bash
-# Basic profiling with statistics
-rocprof --stats -o results.csv python my_script.py
-
-# HIP API tracing
-rocprof --hip-trace --stats python my_script.py
-
-# HSA tracing for low-level GPU operations
-rocprof --hsa-trace --stats python my_script.py
-
-# Full trace with all options
-rocprof --hip-trace --hsa-trace --stats -d output_dir python my_script.py
-```
-
-**What it captures:**
-- HIP kernel execution times
-- API call traces (hipMemcpy, hipLaunchKernel, etc.)
-- HSA dispatch information
-- GPU hardware counters
-- Memory transfers (Host ↔ Device)
-
-### Advanced: rocprofv3 (rocprofiler-sdk)
-Next-generation profiler with enhanced capabilities:
-```bash
-# Kernel and HIP tracing
-rocprofv3 --hip-trace --kernel-trace -d output_dir -o profile -- python my_script.py
-
-# Hardware counter collection
-rocprofv3 --hip-trace --kernel-trace --counter-collection -- python my_script.py
-```
-
-**What it captures:**
-- All features of rocprof
-- Enhanced hardware counter support
-- Better multi-GPU support
-- JSON output format
-- Advanced filtering options
-
-### Why ROCProfiler (not PyTorch profiler)?
-
-| Feature | ROCProfiler (ROCm) | PyTorch Profiler |
-|---------|-------------------|------------------|
-| **HIP Kernel Traces** | ✅ Detailed | ❌ Limited |
-| **Hardware Counters** | ✅ Full access | ❌ No access |
-| **HSA API Traces** | ✅ Yes | ❌ No |
-| **Memory Transfers** | ✅ Detailed | ⚠️ Basic |
-| **GPU-Specific Metrics** | ✅ AMD-optimized | ⚠️ Generic |
-| **Overhead** | ✅ Low | ⚠️ Higher |
-| **Export Formats** | ✅ CSV, JSON, SQL | ⚠️ Chrome trace |
-
-**TL;DR**: ROCProfiler provides AMD GPU-specific insights that PyTorch's profiler cannot access.
-
-## 🎨 Test Markers
-
-Tests are organized with pytest markers:
-- `@pytest.mark.strix` - Strix platform tests
-- `@pytest.mark.profiling` - Profiling tests
-- `@pytest.mark.vlm` - Vision Language Model tests
-- `@pytest.mark.vit` - Vision Transformer tests
-- `@pytest.mark.cv` - Computer Vision tests
-- `@pytest.mark.quick` - Quick smoke tests
-- `@pytest.mark.slow` - Long-running tests (>30s)
-- `@pytest.mark.p0` - Priority 0 (Critical)
-- `@pytest.mark.p1` - Priority 1 (High)
-- `@pytest.mark.p2` - Priority 2 (Medium)
-
-Run by marker:
-```bash
-pytest tests/strix_ai/profiling/ -m "profiling and quick"
-pytest tests/strix_ai/profiling/ -m "vlm or vit"
-pytest tests/strix_ai/profiling/ -m "p0 or p1"
-```
-
-## 📈 Interpreting Results
-
-### Profiling Output Example
-```
-=== Top 15 GPU Operations ===
--------------------------------------------------------  ------------  ------------  
-Name                                                     CPU time      CUDA time     
--------------------------------------------------------  ------------  ------------  
-aten::linear                                             1.234 ms      45.678 ms     
-aten::matmul                                             0.567 ms      23.456 ms     
-aten::addmm                                              0.345 ms      12.345 ms     
-...
-
-✓ Total GPU time: 123.45 ms
-✓ Total CPU time: 23.45 ms
-```
-
-### Key Metrics
-- **CUDA time** - GPU execution time (most important for GPU workloads)
-- **CPU time** - Host CPU time (data prep, host-side operations)
-- **Operations** - Individual kernel launches and operations
-- **Shapes** - Tensor dimensions (helps identify memory usage)
-
-### Performance Tips
-1. **GPU Time >> CPU Time** - Good GPU utilization
-2. **Many small operations** - Consider operator fusion
-3. **Large data transfers** - Consider pinned memory or data caching
-4. **Long CPU times** - Bottleneck in data preprocessing
-
-## 🔍 Troubleshooting
-
-### GPU Not Detected
-```bash
-# Check GPU visibility
-rocminfo | grep gfx115
-
-# Check PyTorch GPU detection
-python3 -c "import torch; print(torch.cuda.is_available())"
-```
-
-### ROCProfiler Not Found
-```bash
-# Check for rocprof (roctracer)
-which rocprof
-rocprof --version
-
-# Check for rocprofv3 (rocprofiler-sdk)
-which rocprofv3
-rocprofv3 --version
-
-# In container, install if needed
-apt-get update && apt-get install -y rocprofiler-dev
-```
-
-### Test Skipped
-Tests may skip if:
-- Not running on Strix GPU (gfx1150/gfx1151)
-- PyTorch/GPU not available
-- Required libraries not installed (transformers, ultralytics)
-- ROCProfiler tools not found
-
-Check skip reasons:
-```bash
-pytest tests/strix_ai/profiling/ -v -ra
-```
-
-### Memory Issues
-```bash
-# Clear GPU cache between tests
-python3 -c "import torch; torch.cuda.empty_cache()"
-
-# Monitor GPU memory
-rocm-smi
-watch -n 1 rocm-smi
-```
-
-## 🔗 Integration with CI/CD
-
-### GitHub Actions Workflow
-Tests automatically run via `.github/workflows/strix_ai_tests.yml`:
+### **Run All Profiling Tests**
 
 ```bash
-# Manual trigger with profiling category
-gh workflow run strix_ai_tests.yml \
-  -f platform=linux \
-  -f strix_variant=gfx1151 \
-  -f test_category=profiling \
-  -f test_type=full
+# Run all profiling tests (profiles VLM, ViT, CV, VLA)
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py -v -s
+
+# Quick smoke test only
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py::TestProfileQuick -v -s
 ```
 
-### Quick Run
+### **Run Specific Category Profiling**
+
 ```bash
-# Quick smoke tests (for PR validation)
-gh workflow run strix_ai_tests.yml \
-  -f test_category=profiling \
-  -f test_type=quick
+# Profile CLIP (VLM)
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py::TestProfileVLM::test_profile_clip -v -s
+
+# Profile ViT
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py::TestProfileViT::test_profile_vit_inference -v -s
+
+# Profile YOLO (CV)
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py::TestProfileCV::test_profile_yolo -v -s
+
+# Profile VLA
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py::TestProfileVLA::test_profile_vla -v -s
+
+# Profile ALL categories
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py::TestProfileAll::test_profile_all_categories -v -s
 ```
 
-### Full Validation
+## 📊 **What Gets Profiled**
+
+| Test Class | Profiles | Existing Test File |
+|------------|----------|-------------------|
+| `TestProfileVLM` | CLIP model | `tests/strix_ai/vlm/test_clip.py` |
+| `TestProfileViT` | ViT model | `tests/strix_ai/vit/test_vit_base.py` |
+| `TestProfileCV` | YOLO detection | `tests/strix_ai/cv/test_yolo.py` |
+| `TestProfileVLA` | OWL-ViT action | `tests/strix_ai/vla/test_action_prediction.py` |
+| `TestProfileAll` | All categories | All test directories |
+| `TestProfileQuick` | Quick smoke | Quick marked tests |
+
+## 🔧 **How It Works**
+
+Each profiling test runs this command internally:
+
 ```bash
-# All profiling tests
-gh workflow run strix_ai_tests.yml \
-  -f test_category=profiling \
-  -f test_type=full
+rocprofv3 \
+  --hip-trace \
+  --kernel-trace \
+  --memory-copy-trace \
+  --output-format pftrace \
+  -d OUTPUT_DIR \
+  -- \
+  pytest EXISTING_TEST_PATH -v -s
 ```
 
-## 📚 Related Documentation
+**Example:**
+```python
+# test_profile_clip() runs:
+rocprofv3 [...] -- pytest tests/strix_ai/vlm/test_clip.py::TestCLIP::test_clip_image_text_matching -v -s
+```
 
-- [Strix AI Testing Guide](../docs/development/STRIX_TESTING_GUIDE.md)
-- [Strix Client Architecture](../docs/development/STRIX_CLIENT_ARCHITECTURE.md)
-- [ROCProfiler Documentation](https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/)
-- [PyTorch Profiler Guide](https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html)
+## ✅ **Benefits**
 
-## 🤝 Contributing
+| Benefit | Explanation |
+|---------|-------------|
+| ✅ **No Duplication** | Reuse existing test code |
+| ✅ **Single Source of Truth** | Tests in `vlm/`, `vit/`, `cv/` are canonical |
+| ✅ **Easy Maintenance** | Update test once, profiling gets it automatically |
+| ✅ **Organized** | All profiling tests in one folder |
+| ✅ **Flexible** | Easy to add/remove profiled tests |
 
-When adding new profiling tests:
-1. Follow the existing test structure
-2. Use appropriate pytest markers
-3. Include warmup iterations before profiling
-4. Always call `torch.cuda.synchronize()` before/after timing
-5. Print clear profiling results with units
-6. Add test to appropriate class (PyTorch vs AI Workload)
-7. Document expected behavior and metrics
+## 📝 **Adding New Profiling Tests**
 
-Example:
+To profile a new test category:
+
 ```python
 @pytest.mark.strix
 @pytest.mark.profiling
 @pytest.mark.p1
-def test_my_model_profile(self, strix_device, cleanup_gpu):
-    """Profile my custom model"""
-    model = MyModel().to(strix_device)
-    model.eval()
+class TestProfileNewCategory:
+    """Profile New Category tests"""
     
-    # Warmup
-    for _ in range(3):
-        with torch.no_grad():
-            _ = model(input)
-    torch.cuda.synchronize()
-    
-    # Profile
-    with torch.profiler.profile(...) as prof:
-        with torch.no_grad():
-            output = model(input)
-            torch.cuda.synchronize()
-    
-    # Print results
-    print(prof.key_averages().table(...))
+    def test_profile_new_test(self, cleanup_gpu):
+        """Profile existing new test using rocprofv3"""
+        if not check_rocprofv3_available():
+            pytest.skip("rocprofv3 not available")
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "new_traces"
+            output_dir.mkdir()
+            
+            # Profile the existing test
+            test_path = "tests/strix_ai/new_category/test_new.py::TestNew::test_function"
+            
+            result = run_rocprofv3_on_test(test_path, output_dir, timeout=300)
+            
+            # Check for trace files
+            trace_files = list(output_dir.glob("*"))
+            print(f"Generated {len(trace_files)} trace files")
 ```
 
-## ✅ Test Status
+## 🔍 **Output**
 
-| Test Category | Status | Priority | Notes |
-|--------------|--------|----------|-------|
-| GPU Detection | ✅ Done | P0 | Critical |
-| ROCProf Installation | ✅ Done | P0 | Critical |
-| Simple PyTorch | ✅ Done | P1 | Basic profiling |
-| Training Step | ✅ Done | P1 | Backward pass |
-| CLIP Profiling | ✅ Done | P1 | VLM workload |
-| ViT Profiling | ✅ Done | P1 | Transformer |
-| YOLO Profiling | ✅ Done | P1 | Object detection |
-| Batch Analysis | ✅ Done | P2 | Performance |
-| External rocprof | ✅ Done | P2 | CLI tool |
+Each profiling test creates temporary directories with trace files:
 
-## 📞 Support
+```
+/tmp/tmpXXXXXX/
+├── clip_traces/
+│   ├── trace_0.pftrace
+│   └── ...
+├── vit_traces/
+│   ├── trace_0.pftrace
+│   └── ...
+└── yolo_traces/
+    ├── trace_0.pftrace
+    └── ...
+```
 
-For issues or questions:
-- Check [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
-- Review [Strix Testing Guide](../docs/development/STRIX_TESTING_GUIDE.md)
-- Open an issue on [ROCm/TheRock](https://github.com/ROCm/TheRock/issues)
+**Viewing traces:**
+1. Open https://ui.perfetto.dev
+2. Upload the `.pftrace` file
+3. Analyze timeline, kernels, memory transfers
 
+## 🎯 **CI Integration**
+
+Add to `.github/workflows/strix_ai_tests.yml`:
+
+```yaml
+- name: Run Strix Profiling Tests
+  if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'profiling'
+  run: |
+    echo "=== Running Profiling Tests ==="
+    python3 -m pytest tests/strix_ai/profiling/test_profile_existing_tests.py -v -s \
+      --junit-xml=test-results-profiling.xml
+```
+
+## 📚 **Related Documentation**
+
+- **Option 1 Guide**: `PROFILING_GUIDE.md` - Complete guide on profiling approaches
+- **rocprofv3 Guide**: `README_ROCPROFV3.md` - rocprofv3 command reference
+- **Migration Guide**: `MIGRATION_GUIDE.md` - Migration from legacy rocprof
+
+## 🔧 **Prerequisites**
+
+- ✅ rocprofv3 installed (`rocprofv3 --version`)
+- ✅ ROCm 6.2+ with rocprofiler-sdk
+- ✅ Strix GPU (gfx1150 or gfx1151)
+- ✅ Existing tests in `vlm/`, `vit/`, `cv/`, `vla/`
+
+## 💡 **Tips**
+
+1. **Timeout**: Profiling adds overhead, increase timeout if needed
+2. **Cleanup**: Temporary directories are auto-deleted after tests
+3. **Markers**: Use `-m profiling` to run only profiling tests
+4. **Quick**: Use `TestProfileQuick` for fast validation
+
+## ❓ **FAQ**
+
+### Q: Why not duplicate test code in profiling/?
+**A:** Reduces maintenance burden. One test file = one source of truth.
+
+### Q: Can I still profile tests manually?
+**A:** Yes! Just run: `rocprofv3 [...] -- pytest test_path -v -s`
+
+### Q: What if a test fails?
+**A:** Profiling test passes if rocprofv3 runs. Individual test failures don't fail profiling.
+
+### Q: How do I profile only one test?
+**A:** Run specific test class, e.g., `TestProfileVLM::test_profile_clip`
+
+## 🎉 **Example Run**
+
+```bash
+$ pytest tests/strix_ai/profiling/test_profile_existing_tests.py::TestProfileVLM -v -s
+
+============================================================
+Profiling VLM: CLIP Test
+============================================================
+
+🔍 Profiling command:
+   rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --output-format pftrace -d /tmp/tmp.../clip_traces -- python3 -m pytest tests/strix_ai/vlm/test_clip.py::TestCLIP::test_clip_image_text_matching -v -s
+
+============================================================
+Profiling Result: ✅ SUCCESS
+============================================================
+
+✅ Generated 3 profiling trace file(s):
+   - trace_0.pftrace (1.2 MB)
+   - trace_1.pftrace (856 KB)
+   - metadata.json (4 KB)
+
+📂 Traces saved to: /tmp/tmp.../clip_traces
+
+✅ CLIP profiling completed
+PASSED
+```
+
+---
+
+**For questions or issues:**
+- [Strix Testing Guide](../../../docs/development/STRIX_TESTING_GUIDE.md)
+- [TheRock Issues](https://github.com/ROCm/TheRock/issues)
