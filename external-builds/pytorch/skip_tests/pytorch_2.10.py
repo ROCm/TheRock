@@ -136,13 +136,6 @@ skip_tests = {
             # AssertionError: Tensor-likes are not close!
             "test_non_contig_pow_cuda_complex64",
         ],
-        "torch": [
-            # SEGMENTATION FAULT!!!!!
-            # Kernel Name: _ZN2at6native13reduce_kernelILi512ELi1ENS0_8ReduceOpIbNS0_14func_wrapper_tIbZZZNS0_15and_kernel_cudaERNS_14TensorIteratorEENKUlvE_clEvENKUlvE10_clEvEUlbbE_EEjbLi4ELi4EEEEEvT1_
-            # :0:rocdevice.cpp            :3603: 1544877169487 us:  Callback: Queue 0x7f599b800000 Aborting with error : HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the necessary resources. This error may also occur when the core runtime library needs to spawn threads or create internal OS-specific events. Code: 0x1008 Available Free mem : 17592186044276 MB
-            # see pytorch_2.9.py for more details
-            "test_masked_scatter_cuda_uint8 "
-        ],
     },
     "windows": {
         "torch": [
