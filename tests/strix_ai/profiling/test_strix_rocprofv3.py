@@ -1,7 +1,9 @@
 """
 ROCProfiler v3 tests for Strix AI/ML workloads
 Uses rocprofv3 with Strix-specific flags for comprehensive GPU profiling
-Command format: rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace --output-format pftrace -d ./v3_traces -- python3 app.py
+Command format: rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --output-format pftrace -d ./v3_traces -- python3 app.py
+
+Note: --rccl-trace is NOT used for Strix (single iGPU, RCCL excluded from Strix builds)
 """
 
 import pytest
@@ -54,15 +56,19 @@ def run_rocprofv3(script_path, output_dir, timeout=120):
     Run rocprofv3 with Strix-specific profiling flags
     
     Command format:
-    rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace 
+    rocprofv3 --hip-trace --kernel-trace --memory-copy-trace 
               --output-format pftrace -d ./v3_traces -- python3 app.py
+    
+    Note: --rccl-trace is NOT used for Strix:
+      - Strix is a single iGPU (no multi-GPU communication)
+      - RCCL is excluded from Strix builds (Issue #150)
     """
     cmd = [
         "rocprofv3",
         "--hip-trace",           # Trace HIP API calls
         "--kernel-trace",        # Trace kernel launches
         "--memory-copy-trace",   # Trace memory copy operations
-        "--rccl-trace",          # Trace RCCL operations
+        # NOTE: --rccl-trace omitted - RCCL excluded from Strix builds
         "--output-format", "pftrace",  # Output format for performance traces
         "-d", str(output_dir),   # Output directory
         "--",                    # Separator
@@ -126,8 +132,8 @@ class TestStrixRocprofv3:
         print("  --hip-trace          : Trace HIP API calls")
         print("  --kernel-trace       : Trace kernel launches")
         print("  --memory-copy-trace  : Trace memory copy operations")
-        print("  --rccl-trace         : Trace RCCL operations")
         print("  --output-format pftrace : Performance trace format")
+        print("\n⚠ Note: --rccl-trace NOT used (RCCL excluded from Strix builds)")
     
     def test_rocprofv3_pytorch_inference(self, strix_device, cleanup_gpu):
         """Profile PyTorch inference using rocprofv3 with Strix flags"""

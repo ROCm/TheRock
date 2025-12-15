@@ -7,9 +7,14 @@ This guide explains how to use `rocprofv3` for profiling AI/ML workloads on AMD 
 ### **Command Format**
 
 ```bash
-rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
+rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --output-format pftrace -d ./v3_traces -- python3 app.py
 ```
+
+**⚠ Note:** `--rccl-trace` is **NOT used for Strix** because:
+- Strix is a **single iGPU** (no multi-GPU communication)
+- **RCCL is excluded** from Strix builds ([Issue #150](https://github.com/ROCm/TheRock/issues/150))
+- RCCL (ROCm Communication Collectives) is for multi-GPU scenarios only
 
 ## 🚀 **Quick Start**
 
@@ -43,16 +48,16 @@ python3 -m pytest test_strix_rocprofv3.py::TestStrixRocprofv3::test_rocprofv3_cl
 ### **3. Profile Your Own Scripts**
 
 ```bash
-# Template
-rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
+# Template for Strix
+rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --output-format pftrace -d OUTPUT_DIR -- python3 YOUR_SCRIPT.py
 
 # Example: Profile PyTorch training
-rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
+rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --output-format pftrace -d ./strix_train_traces -- python3 train.py
 
 # Example: Profile inference
-rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
+rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --output-format pftrace -d ./strix_infer_traces -- python3 inference.py
 ```
 
@@ -65,21 +70,26 @@ rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
 | `--hip-trace` | Trace HIP API calls | Captures hipMalloc, hipMemcpy, hipLaunchKernel, etc. |
 | `--kernel-trace` | Trace GPU kernel launches | Records kernel execution times and parameters |
 | `--memory-copy-trace` | Trace memory operations | Tracks host↔device and device↔device transfers |
-| `--rccl-trace` | Trace RCCL operations | Captures multi-GPU collective communications |
 | `--output-format pftrace` | Output format | Generates performance traces |
 | `-d <directory>` | Output directory | Where to save trace files |
 | `--` | Separator | Required before the python command |
 
+**⚠ Flag NOT Used for Strix:**
+
+| Flag | Why NOT Used |
+|------|--------------|
+| `~~--rccl-trace~~` | ❌ RCCL excluded from Strix builds ([Issue #150](https://github.com/ROCm/TheRock/issues/150))<br>❌ Strix is single iGPU (no multi-GPU comms)<br>❌ RCCL is for multi-GPU scenarios only |
+
 ### **Additional Useful Flags**
 
 ```bash
-# Add more detailed tracing
-rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
+# Add HSA-level tracing (lower-level than HIP)
+rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --hsa-trace \                    # HSA API tracing
           --output-format pftrace \
           -d ./traces -- python3 app.py
 
-# Filter specific APIs
+# Filter specific HIP APIs
 rocprofv3 --hip-trace \
           --hip-api-filter "hipMemcpy,hipLaunchKernel" \
           --output-format pftrace \
@@ -180,7 +190,7 @@ print(f"Inference complete: {y.shape}")
 
 ```bash
 # Profile it
-rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
+rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --output-format pftrace -d ./my_model_traces -- python3 my_model.py
 ```
 
@@ -191,7 +201,7 @@ rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
 python3 -m pytest test_strix_rocprofv3.py::TestStrixRocprofv3::test_rocprofv3_clip_inference -v -s
 
 # Or profile your own CLIP script
-rocprofv3 --hip-trace --kernel-trace --memory-copy-trace --rccl-trace \
+rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --output-format pftrace -d ./clip_traces -- python3 my_clip_inference.py
 ```
 
