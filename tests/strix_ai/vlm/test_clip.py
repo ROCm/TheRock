@@ -30,10 +30,39 @@ class TestCLIP:
     def test_clip_image_text_matching(self, strix_device, test_image_224, cleanup_gpu, record_property):
         """Test CLIP image-text matching on Strix"""
         from transformers import CLIPProcessor, CLIPModel
+        import signal
         
-        print("\n🧠 Loading CLIP model...")
-        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(strix_device)
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Model loading timeout (60s) - likely network issue downloading from Hugging Face")
+        
+        print("\n🧠 Loading CLIP model (with 60s timeout)...")
+        
+        # Set timeout for model loading (handles network download hangs)
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(60)  # 60 second timeout
+        
+        try:
+            # Try to load from cache first, download if needed
+            model = CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch32",
+                resume_download=True,  # Resume interrupted downloads
+                force_download=False,  # Use cache if available
+            ).to(strix_device)
+            processor = CLIPProcessor.from_pretrained(
+                "openai/clip-vit-base-patch32",
+                resume_download=True,
+                force_download=False,
+            )
+            signal.alarm(0)  # Cancel timeout
+            print("✅ Model loaded successfully")
+        except TimeoutError as e:
+            signal.alarm(0)
+            pytest.skip(f"Model loading timeout: {e}")
+        except Exception as e:
+            signal.alarm(0)
+            print(f"❌ Model loading failed: {e}")
+            raise
+        
         model.eval()
         
         # Create test image
@@ -72,10 +101,34 @@ class TestCLIP:
     def test_clip_batch_inference(self, strix_device, cleanup_gpu):
         """Test CLIP batch processing on Strix"""
         from transformers import CLIPProcessor, CLIPModel
+        import signal
         
-        print("\n🧠 Loading CLIP model for batch test...")
-        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(strix_device)
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Model loading timeout")
+        
+        print("\n🧠 Loading CLIP model for batch test (with timeout)...")
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(60)
+        
+        try:
+            model = CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch32",
+                resume_download=True,
+                force_download=False,
+            ).to(strix_device)
+            processor = CLIPProcessor.from_pretrained(
+                "openai/clip-vit-base-patch32",
+                resume_download=True,
+                force_download=False,
+            )
+            signal.alarm(0)
+        except TimeoutError as e:
+            signal.alarm(0)
+            pytest.skip(f"Model loading timeout: {e}")
+        except Exception as e:
+            signal.alarm(0)
+            raise
+        
         model.eval()
         
         # Create batch of test images
@@ -102,10 +155,34 @@ class TestCLIP:
         """Benchmark CLIP performance on Strix"""
         from transformers import CLIPProcessor, CLIPModel
         import time
+        import signal
         
-        print("\n🧠 Loading CLIP model for performance test...")
-        model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(strix_device)
-        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Model loading timeout")
+        
+        print("\n🧠 Loading CLIP model for performance test (with timeout)...")
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(60)
+        
+        try:
+            model = CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch32",
+                resume_download=True,
+                force_download=False,
+            ).to(strix_device)
+            processor = CLIPProcessor.from_pretrained(
+                "openai/clip-vit-base-patch32",
+                resume_download=True,
+                force_download=False,
+            )
+            signal.alarm(0)
+        except TimeoutError as e:
+            signal.alarm(0)
+            pytest.skip(f"Model loading timeout: {e}")
+        except Exception as e:
+            signal.alarm(0)
+            raise
+        
         model.eval()
         
         image = Image.new('RGB', (224, 224))
