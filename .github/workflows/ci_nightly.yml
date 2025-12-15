@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Generate Diff Report
-        uses: ./.github/workflows/therock-repo-diff.yml
+        uses: ./.github/workflows/manifest-diff.yml
         with:
           end_commit: ${{ github.sha }}
           find_last_successful: "ci_nightly.yml"

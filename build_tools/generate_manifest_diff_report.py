@@ -1,31 +1,17 @@
 """
-TheRock Repository Diff Report Generator
+TheRock Manifest Diff Report Generator
 
 OVERVIEW:
 This script generates comprehensive HTML reports highlighting commit differences for each component
 between two TheRock builds. It analyzes submodule changes, superrepo component changes, and provides
 visual indicators for different types of changes (added, removed, changed, unchanged, reverted).
 
-HOW IT WORKS:
-1. Fetches submodule information from two TheRock commits using GitHub API
-2. Compares submodules to identify added, removed, changed, unchanged, and reverted components
-3. For superrepos (rocm-libraries, rocm-systems), analyzes component-level changes within projects/ and shared/ directories
-4. For regular submodules, fetches commit history between the two versions
-5. Detects reverted submodules by comparing commit timestamps
-6. Generates styled HTML report with visual indicators and commit details
-7. Creates GitHub Actions step summary for CI integration
-
-USAGE IN CI:
-- Automatically runs in ci_nightly.yml workflow to compare latest build with last successful build
-- Uses --find-last-successful flag to automatically find the previous successful run
-- Generates reports for nightly build comparisons and failure analysis
-
 LOCAL USAGE:
 Basic commit comparison:
-  python repo-diff.py --start <start_commit_sha> --end <end_commit_sha>
+  python generate_manifest_diff_report.py --start <start_commit_sha> --end <end_commit_sha>
 
 Compare with last successful CI run:
-  python repo-diff.py --end <current_commit> --find-last-successful ci_nightly.yml
+  python generate_manifest_diff_report.py --end <current_commit> --find-last-successful ci_nightly.yml
 
 ARGUMENTS:
   --start COMMIT_SHA         Start commit SHA for comparison (required unless using --find-last-successful)
@@ -38,14 +24,6 @@ OUTPUT:
 - TheRockReport.html: Comprehensive HTML report with visual styling
 - GitHub Actions step summary: CI-friendly summary of changes
 - Console output: Detailed logging of the analysis process
-
-FEATURES:
-- Visual status indicators (green=newly added, yellow=reverted, standard=changed)
-- Commit history with badges linking to GitHub
-- Component-level analysis for superrepos
-- Reversion detection using timestamp comparison
-- Responsive HTML design with filtering capabilities
-- Support for both workflow run IDs and direct commit SHAs
 
 ENVIRONMENT MODES:
 - COMMIT mode (default): Direct commit SHA comparison
@@ -67,10 +45,10 @@ from datetime import datetime
 
 # Establish script's location as reference point
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent
 
 # Import GitHub Actions utilities
-from github_actions_utils import (
+from github_actions.github_actions_utils import (
     gha_append_step_summary,
     gha_query_workflow_run_information,
     gha_query_last_successful_workflow_run,
