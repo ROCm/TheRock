@@ -69,14 +69,14 @@ jobs:
     with:
       build_variant: "release"
 
-  # Detect whether this PR bumps the rocm-libraries submodule (or .gitmodules).
+  # Detect whether this PR bumps the rocm-libraries submodule.
   detect_rocm_libraries_bump:
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     outputs:
       bump: ${{ steps.detect.outputs.bump }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
 
@@ -91,14 +91,14 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD")"
           echo "$CHANGED"
 
-          if echo "$CHANGED" | grep -qx "rocm-libraries" || echo "$CHANGED" | grep -qx ".gitmodules"; then
+          if echo "$CHANGED" | grep -qx "rocm-libraries"; then
             echo "bump=true" >> "$GITHUB_OUTPUT"
           else
             echo "bump=false" >> "$GITHUB_OUTPUT"
           fi
 
   # Automatically run a dev release from the PR head SHA when rocm-libraries is bumped.
-  # This uses the existing release workflow, which will dispatch the PyTorch release workflow.
+  # This uses the existing release workflow, which will dispatch the PyTorch release workflow (big matrix).
   dev_release_on_rocm_libraries_bump:
     needs: [detect_rocm_libraries_bump]
     if: >
