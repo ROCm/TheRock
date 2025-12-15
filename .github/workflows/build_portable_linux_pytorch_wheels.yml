@@ -197,6 +197,7 @@ jobs:
             build \
             --install-rocm \
             --pip-cache-dir /tmp/pipcache \
+            --enable-pytorch-fbgemm-genai-linux \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
