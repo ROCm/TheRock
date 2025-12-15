@@ -316,10 +316,14 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocm-core
       ocl-icd
       ${OCL_CLR_RUNTIME_DEPS}
+    INSTALL_RPATH_LIBRARY_DIR
+      "lib/opencl"
     INTERFACE_LINK_DIRS
       "lib"
+      "lib/opencl"
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
+      "lib/opencl"
   )
   therock_cmake_subproject_glob_c_sources(ocl-clr SUBDIRS .)
   therock_cmake_subproject_provide_package(ocl-clr ocl-icd lib/cmake/ocl-icd)
