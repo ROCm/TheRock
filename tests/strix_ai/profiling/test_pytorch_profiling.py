@@ -22,22 +22,13 @@ except ImportError:
     nn = None
 
 
-def check_rocprof_available():
-    """Check if rocprof is available in the system"""
-    try:
-        result = subprocess.run(
-            ["rocprof", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
-def check_rocprofiler_sdk():
-    """Check if rocprofiler-sdk is available"""
+def check_rocprofv3_available():
+    """
+    Check if rocprofv3 (ROCProfiler v3) is available for Strix profiling
+    
+    NOTE: For Strix, use rocprofv3 ONLY (not legacy rocprof)
+    See test_strix_rocprofv3.py for Strix-optimized profiling tests
+    """
     try:
         result = subprocess.run(
             ["rocprofv3", "--version"],
@@ -219,8 +210,14 @@ class TestPyTorchProfiling:
         print("      use test_rocprof_external_profile or test_rocprofv3_external_profile")
     
     @pytest.mark.slow
+    @pytest.mark.skip(reason="DEPRECATED: Use test_strix_rocprofv3.py for Strix profiling with rocprofv3")
     def test_rocprof_external_profile(self, strix_device, cleanup_gpu):
-        """Test external rocprof (roctracer) profiling of a PyTorch script - PRIMARY TEST"""
+        """
+        DEPRECATED: Legacy rocprof (roctracer) test
+        
+        For Strix profiling, use test_strix_rocprofv3.py instead:
+          pytest tests/strix_ai/profiling/test_strix_rocprofv3.py -v -s
+        """
         if not TORCH_AVAILABLE:
             pytest.skip("PyTorch not available")
         
@@ -352,8 +349,14 @@ print("=== Profiling completed ===")
 
 
     @pytest.mark.slow
+    @pytest.mark.skip(reason="MOVED: Use test_strix_rocprofv3.py for comprehensive rocprofv3 profiling")
     def test_rocprofv3_external_profile(self, strix_device, cleanup_gpu):
-        """Test rocprofv3 (rocprofiler-sdk) profiling - NEW GENERATION PROFILER"""
+        """
+        MOVED to test_strix_rocprofv3.py
+        
+        For Strix profiling with rocprofv3, use:
+          pytest tests/strix_ai/profiling/test_strix_rocprofv3.py::TestStrixRocprofv3::test_rocprofv3_pytorch_inference -v -s
+        """
         if not TORCH_AVAILABLE:
             pytest.skip("PyTorch not available")
         
@@ -461,24 +464,28 @@ print("rocprofv3 profiling completed")
 @pytest.mark.quick
 @pytest.mark.p0
 def test_quick_profiling_smoke():
-    """Quick smoke test for ROCProfiler availability"""
+    """Quick smoke test for rocprofv3 availability (Strix uses rocprofv3 only)"""
     if not TORCH_AVAILABLE:
         pytest.skip("PyTorch not available")
     
     if not torch.cuda.is_available():
         pytest.skip("GPU not available")
     
-    print("\n=== Quick ROCProfiler Smoke Test ===")
+    print("\n=== Quick rocprofv3 Smoke Test (Strix) ===")
     
-    # Check ROCProfiler tools
-    has_rocprof = check_rocprof_available()
-    has_rocprofv3 = check_rocprofiler_sdk()
+    # Check rocprofv3 only (Strix uses rocprofv3, not legacy rocprof)
+    has_rocprofv3 = check_rocprofv3_available()
     
-    print(f"✓ rocprof (roctracer): {'Available' if has_rocprof else 'Not found'}")
     print(f"✓ rocprofv3 (rocprofiler-sdk): {'Available' if has_rocprofv3 else 'Not found'}")
     
-    assert has_rocprof or has_rocprofv3, \
-        "No ROCProfiler tools found. Install roctracer or rocprofiler-sdk"
+    if not has_rocprofv3:
+        print("\n⚠ rocprofv3 not found!")
+        print("  Install: ROCm 6.2+ includes rocprofiler-sdk")
+        print("  For full profiling tests, use:")
+        print("    pytest tests/strix_ai/profiling/test_strix_rocprofv3.py -v -s")
+    
+    assert has_rocprofv3, \
+        "rocprofv3 not found. Install rocprofiler-sdk (included in ROCm 6.2+)"
     
     # Quick GPU operation timing
     device = torch.device("cuda")
