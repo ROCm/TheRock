@@ -3,49 +3,36 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
-import pytest
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# GTest sharding
+SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
+TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
+environ_vars = os.environ.copy()
+# For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
+environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
+environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+
 logging.basicConfig(level=logging.INFO)
 
+cmd = [
+    f"{THEROCK_BIN_DIR}/rccl-UnitTests",
+]
 
-class TestRCCL:
-    def test_rccl_unittests(self):
-        # Executing rccl gtest from rccl repo
-        cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
-        logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(
-            cmd,
-            cwd=THEROCK_DIR,
-            check=False,
-        )
-        assert result.returncode == 0
+# If smoke tests are enabled, we run smoke tests only.
+# Otherwise, we run the normal test suite
+test_type = os.getenv("TEST_TYPE", "full")
+if test_type == "smoke":
+    cmd += [f"--gtest_filter=*sum_float32*"]
 
-    # Executing rccl performance and correctness tests from rccl-tests repo
-    @pytest.mark.parametrize(
-        "executable",
-        [
-            "all_gather_perf",
-            "alltoallv_perf",
-            "broadcast_perf",
-            "alltoall_perf",
-            "all_reduce_perf",
-            "reduce_perf",
-            "hypercube_perf",
-            "gather_perf",
-            "scatter_perf",
-            "sendrecv_perf",
-            "reduce_scatter_perf",
-        ],
-    )
-    def test_rccl_correctness_tests(self, executable):
-        cmd = [f"{THEROCK_BIN_DIR}/{executable}"]
-        logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(
-            cmd,
-            cwd=THEROCK_DIR,
-            check=False,
-        )
-        assert result.returncode == 0
+
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+subprocess.run(
+    cmd,
+    cwd=THEROCK_DIR,
+    check=True,
+    env=environ_vars,
+)

@@ -181,8 +181,16 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_rccl.py')}",
+        "platform": ["linux"],
+        "total_shards": 4,
+    },
+    "rccl_perf": {
+        "job_name": "rccl_perf",
+        "fetch_artifact_args": "--rccl --tests",
         "timeout_minutes": 15,
-        "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
+        "test_script": f"pytest {_get_script_path('test_rccl_perf.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
         "total_shards": 1,
     },
