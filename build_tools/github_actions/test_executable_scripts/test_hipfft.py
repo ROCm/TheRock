@@ -21,7 +21,9 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
+if test_type == "full":
+    test_filter = []
+elif test_type == "smoke":
     test_filter = ["--smoketest"]
 else:
     # "--test_prob" is the probability that a given test will run.
@@ -34,8 +36,4 @@ else:
 
 cmd = [f"{THEROCK_BIN_DIR}/hipfft-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)

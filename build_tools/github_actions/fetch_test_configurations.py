@@ -32,10 +32,10 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards": 6,
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -66,19 +66,19 @@ test_matrix = {
     "hipsolver": {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipsolver.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards": 4,
     },
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards": 6,
     },
     # PRIM tests
     "rocprim": {
@@ -117,7 +117,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 6,
@@ -154,28 +154,28 @@ test_matrix = {
     "rocfft": {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards": 6,
     },
     "hipfft": {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hipfft.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards": 6,
     },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux"],
-        "total_shards": 4,
+        "total_shards": 6,
     },
     # RCCL tests
     "rccl": {
