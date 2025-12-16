@@ -151,7 +151,7 @@ jobs:
             -v
 
       - name: (Linux) Run PyTorch tests
-        if: ${{ contains(inputs.test_runs_on, 'linux') }}
+        if: ${{ runner.os == 'Linux' }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
             --continue-on-collection-errors \
