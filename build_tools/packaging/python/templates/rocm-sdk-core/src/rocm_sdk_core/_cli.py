@@ -72,6 +72,7 @@ def _get_module_path(should_expand_devel: bool) -> Path:
 
     return _get_core_module_path()
 
+
 PLATFORM_NAME = CORE_PACKAGE.get_py_package_name()
 PLATFORM_MODULE = importlib.import_module(PLATFORM_NAME)
 # NOTE: dependent on there being an __init__.py in the platform package.
