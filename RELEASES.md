@@ -388,7 +388,7 @@ also install `jaxlib`, `jax-rocm7-plugin`, and `jax-rocm7-pjrt`.
 > | -------------- | ------------------------ | ---------------------- |
 > | 0.8.0          | 0.8.0                    | 0.8.0                  |
 >
-> For example, `jax` 0.8.0 and compatible wheels can be installed by specifying
+> For example, `JAX 0.8.0` and compatible wheels can be installed by specifying
 >
 > ```
 > jax-rocm7-plugin==0.8.0 jax-rocm7-pjrt==0.8.0 jaxlib==0.8.0
@@ -397,15 +397,14 @@ also install `jaxlib`, `jax-rocm7-plugin`, and `jax-rocm7-pjrt`.
 > See also
 >
 > - [Supported Jax versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/jax#supported-jax-versions)
-> - [Installing previous versions of Jax](https://github.com/ROCm/rocm-jax/releases/)
 
 > [!TIP]
-> The `jax` packages depend on `rocm tarball`, so ROCm packages should
+> The `JAX` packages depend on `rocm tarball`, so ROCm packages should
 > be installed First.
 > [!NOTE]
 > We will update the installation of ROCm automalically soon just by installing jax wheels.
 
-#### jax for gfx94X-dcgpu
+#### JAX for gfx94X-dcgpu
 
 Supported devices in this family:
 
