@@ -1645,7 +1645,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm",
@@ -1668,7 +1668,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-core-devel",
@@ -1677,18 +1677,18 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-core",
-      "amdrocm-runtime-dev",
-      "amdrocm-llvm-dev",
-      "amdrocm-fft-dev",
-      "amdrocm-blas-dev",
-      "amdrocm-sparse-dev",
-      "amdrocm-solver-dev",
-      "amdrocm-rand-dev",
-      "amdrocm-ccl-dev",
-      "amdrocm-opencl-dev",
-      "amdrocm-hipblas-common-dev",
-      "amdrocm-rccl-dev",
-      "amdrocm-dnn-dev"
+      "amdrocm-runtime-devel",
+      "amdrocm-llvm-devel",
+      "amdrocm-fft-devel",
+      "amdrocm-blas-devel",
+      "amdrocm-sparse-devel",
+      "amdrocm-solver-devel",
+      "amdrocm-rand-devel",
+      "amdrocm-ccl-devel",
+      "amdrocm-opencl-devel",
+      "amdrocm-hipblas-common-devel",
+      "amdrocm-rccl-devel",
+      "amdrocm-dnn-devel"
 
     ],
     "RPMRequires": [
@@ -1716,7 +1716,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-developer-tools",
@@ -1829,7 +1829,7 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-core-dev",
+      "amdrocm-core-devel",
       "amdrocm-developer-tools",
       "amdrocm-opencl"
     ],
@@ -1848,7 +1848,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Gfxarch": "False"
+    "Gfxarch": "True"
   }
 
 ]
