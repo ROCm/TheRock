@@ -35,6 +35,7 @@
 #   [source_sets.<name>]
 #   description = "Human-readable description"
 #   submodules = ["submodule1", "submodule2"]  # Git submodule directory names
+#   disable_platforms = ["windows"]            # Optional: platforms where disabled
 #
 #   [build_stages.<name>]
 #   description = "Human-readable description"
@@ -56,6 +57,7 @@
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
+#   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
 # ==============================================================================
 
@@ -72,7 +74,7 @@ description = "TheRock artifact-based build topology"
 
 [source_sets.base]
 description = "Base infrastructure submodules"
-submodules = ["half", "rocm-cmake"]
+submodules = ["half", "rocm-cmake", "amdsmi"]
 
 [source_sets.compilers]
 description = "Compiler toolchain submodules"
@@ -97,6 +99,15 @@ submodules = ["rccl", "rccl-tests"]
 [source_sets.profiler-extras]
 description = "Additional profiler submodules"
 submodules = ["rocprof-trace-decoder"]
+
+[source_sets.rocm-media]
+description = "ROCm media submodules (Mesa for VA-API)"
+submodules = ["amd-mesa"]
+disable_platforms = ["windows"]
+
+[source_sets.iree-libs]
+description = "IREE integration submodules"
+submodules = ["iree", "fusilli"]
 
 # ==============================================================================
 # BUILD STAGES - Pipeline jobs that build sets of artifact groups
@@ -139,9 +150,9 @@ artifact_groups = ["dctools-core"]
 # artifact_groups = ["dctools-rocm"]
 # depends_on = ["math-libs"]  # Will need math/ML libraries
 
-# [build_stages.iree-libs]
-# description = "IREE and Fusilli integration (parallel to compiler-runtime)"
-# artifact_groups = ["iree-libs"]
+[build_stages.iree-libs]
+description = "IREE and Fusilli integration"
+artifact_groups = ["iree-libs"]
 
 [build_stages.profiler-apps]
 description = "Profiler applications (depends on profiler-core)"
@@ -155,7 +166,7 @@ artifact_groups = ["profiler-apps"]
 [artifact_groups.third-party-sysdeps]
 description = "Critical system dependencies (always needed)"
 type = "generic"
-source_sets = []  # No submodules - uses vendored/in-tree deps
+source_sets = ["rocm-media"]  # rocm-media disabled on Windows via source_set
 
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
@@ -238,10 +249,11 @@ type = "generic"
 artifact_group_deps = ["profiler-core", "compiler"]
 source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
 
-# [artifact_groups.iree-libs]
-# description = "IREE and Fusilli integration"
-# type = "generic"
-# artifact_group_deps = ["third-party-sysdeps", "base"]
+[artifact_groups.iree-libs]
+description = "IREE and Fusilli integration"
+type = "generic"
+artifact_group_deps = ["hip-runtime"]
+source_sets = ["iree-libs"]
 
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
@@ -369,6 +381,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
+split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
 artifact_group = "math-libs"
@@ -392,7 +405,7 @@ artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.support]
 artifact_group = "math-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = []
 
 # --- ML Libraries (per-arch) ---
@@ -417,6 +430,14 @@ artifact_deps = ["core-runtime", "core-hip"]
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
+
+# --- IREE Integration ---
+
+[artifacts.fusilli-plugin]
+artifact_group = "iree-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+disable_platforms = ["windows"]
 
 # --- Communication Libraries (per-arch) ---
 

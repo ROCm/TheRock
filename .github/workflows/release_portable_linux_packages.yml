@@ -128,6 +128,9 @@ jobs:
         env:
           AMDGPU_FAMILIES: ${{ inputs.families }}
           THEROCK_PACKAGE_PLATFORM: "linux"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
   portable_linux_packages:
@@ -221,6 +224,12 @@ jobs:
           echo "Full SDK du:"
           echo "------------"
           du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
+
+      # Analyze ninja build log to generate per-component timing report
+      - name: Analyze Build Times
+        if: ${{ !cancelled() }}
+        run: |
+          python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
