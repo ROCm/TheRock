@@ -49,6 +49,12 @@ if(THEROCK_ENABLE_RCCL)
   list(APPEND _rccl_subproject_names rccl)
 
   if(THEROCK_BUILD_TESTING)
+
+    set(_rccl_tests_optional_deps)
+    if(THEROCK_ENABLE_MPI)
+      set(_rccl_tests_optional_deps "therock-openmpi")
+    endif()
+
     therock_cmake_subproject_declare(rccl-tests
       EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_TESTS_SOURCE_DIR}"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
@@ -67,6 +73,7 @@ if(THEROCK_ENABLE_RCCL)
         hip-clr
         hipify
         rccl
+        ${_rccl_tests_optional_deps}
     )
     therock_cmake_subproject_glob_c_sources(rccl-tests
       SUBDIRS
