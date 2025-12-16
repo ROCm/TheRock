@@ -76,7 +76,9 @@ permissions:
 
 jobs:
   strix_ai_test:
-    name: Strix AI Tests
+    name: Strix AI Tests (VLM/VLA/ViT/CV/Optimization)
+    # Skip this job if only profiling tests are requested
+    if: github.event.inputs.test_category != 'profiling'
     runs-on: ${{ github.event.inputs.runner_label || ((github.event.inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
     timeout-minutes: 120
     
@@ -274,36 +276,6 @@ jobs:
             --junit-xml=test-results-optimization.xml \
             || exit 0
       
-      - name: Run Strix AI Tests - ROCProfiler Integration
-        if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'profiling'
-        env:
-          AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
-        run: |
-          echo "=== Running ROCProfiler Tests ==="
-          echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
-          echo "These tests profile PyTorch and AI/ML workloads on Strix GPUs"
-          
-          # Check if rocprof tools are available
-          echo "Checking for ROCProfiler tools..."
-          if command -v rocprof &> /dev/null; then
-            echo "✓ rocprof is available"
-            rocprof --version || true
-          else
-            echo "⚠ rocprof not found (roctracer may not be installed)"
-          fi
-          
-          if command -v rocprofv3 &> /dev/null; then
-            echo "✓ rocprofv3 is available"
-            rocprofv3 --version || true
-          else
-            echo "⚠ rocprofv3 not found (rocprofiler-sdk may not be installed)"
-          fi
-          
-          # Run profiling tests
-          python3 -m pytest tests/strix_ai/profiling/ -v -s \
-            --junit-xml=test-results-profiling.xml \
-            || exit 0
-      
       - name: Run Strix AI Tests - Quick Smoke Tests
         if: env.TEST_CATEGORY == 'all' || env.TEST_CATEGORY == 'quick'
         env:
@@ -371,6 +343,155 @@ jobs:
           
           if [ -f test-results-*.xml ]; then
             echo "Test results saved to artifacts"
+          fi
+
+  # Separate job for ROCProfiler tests
+  strix_ai_profiling:
+    name: Strix AI Tests (ROCProfiler Integration)
+    # Run profiling tests if 'all' or 'profiling' category selected
+    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'profiling' || github.event_name != 'workflow_dispatch'
+    runs-on: ${{ github.event.inputs.runner_label || ((github.event.inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
+    timeout-minutes: 60
+    
+    container:
+      image: ${{ (github.event.inputs.platform || 'linux') == 'linux' && 'rocm/pytorch:latest' || null }}
+      options: ${{ (github.event.inputs.platform || 'linux') == 'linux' && '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0' || '' }}
+    
+    defaults:
+      run:
+        shell: bash
+    
+    env:
+      AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
+      TEST_TYPE: ${{ github.event.inputs.test_type || 'quick' }}
+      TEST_CATEGORY: 'profiling'
+      PLATFORM: ${{ github.event.inputs.platform || 'linux' }}
+      PYTHONUNBUFFERED: 1
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          repository: "ROCm/TheRock"
+          ref: ${{ github.ref }}
+      
+      - name: Display System Info
+        run: |
+          echo "=== Strix ROCProfiler Test Run ==="
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Platform: ${{ env.PLATFORM }}"
+          echo "Strix Variant: ${{ env.AMDGPU_FAMILIES }}"
+          echo "Test Category: profiling"
+          echo "Runner: ${{ runner.name }}"
+          echo ""
+          echo "=== Python Info ==="
+          which python3
+          python3 --version
+          python3 -c "import sys; print('Python path:', sys.executable)"
+      
+      - name: Check ROCm/GPU
+        if: env.PLATFORM == 'linux'
+        run: |
+          echo "=== ROCm Info ==="
+          if command -v rocminfo &> /dev/null; then
+            echo "✓ ROCm is installed!"
+            rocminfo | head -30 || true
+          else
+            echo "✗ WARNING: rocminfo not found"
+          fi
+          
+          echo ""
+          echo "=== ROCProfiler Tools Check ==="
+          if command -v rocprof &> /dev/null; then
+            echo "✓ rocprof is available"
+            rocprof --version || true
+          else
+            echo "⚠ rocprof not found (legacy roctracer)"
+          fi
+          
+          if command -v rocprofv3 &> /dev/null; then
+            echo "✓ rocprofv3 is available (RECOMMENDED for Strix)"
+            rocprofv3 --version || true
+          else
+            echo "⚠ rocprofv3 not found (rocprofiler-sdk not installed)"
+          fi
+          
+          echo ""
+          echo "=== GPU Devices ==="
+          ls -la /dev/kfd /dev/dri/ || echo "GPU devices not accessible"
+      
+      - name: Install Dependencies
+        run: |
+          echo "=== Installing Profiling Test Dependencies ==="
+          pip3 install --upgrade pip
+          pip3 install pytest pytest-check
+          pip3 install transformers accelerate ultralytics opencv-python pillow || echo "WARNING: Some deps failed"
+          pip3 install timm einops || echo "WARNING: Optional deps failed"
+          
+          echo ""
+          echo "=== Verify PyTorch GPU ==="
+          python3 -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available())"
+      
+      - name: Run ROCProfiler Integration Tests
+        env:
+          AMDGPU_FAMILIES: ${{ env.AMDGPU_FAMILIES }}
+        run: |
+          echo "=== Running ROCProfiler Integration Tests ==="
+          echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
+          echo ""
+          echo "Test files:"
+          echo "  1. test_strix_rocprofv3.py       - ROCProfiler v3 validation tests"
+          echo "  2. test_profile_existing_tests.py - Profile existing VLM/ViT/CV/VLA tests"
+          echo ""
+          
+          python3 -m pytest tests/strix_ai/profiling/ -v -s \
+            --junit-xml=test-results-profiling.xml \
+            || exit 0
+      
+      - name: 📊 Display Profiling Test Results
+        if: always()
+        run: |
+          echo "::group::📊 ROCProfiler Test Results"
+          if [ -f test-results-profiling.xml ]; then
+            echo "----------------------------------------------"
+            cat test-results-profiling.xml
+            echo "----------------------------------------------"
+          else
+            echo "❌ No test results found"
+          fi
+          echo "::endgroup::"
+      
+      - name: 💾 Archive Profiling Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-profiling-test-results-${{ env.PLATFORM }}-${{ env.AMDGPU_FAMILIES }}
+          path: |
+            test-results-profiling.xml
+            v3_traces*/
+            *_traces/
+          if-no-files-found: warn
+          retention-days: 30
+      
+      - name: Profiling Test Summary
+        if: always()
+        run: |
+          echo "=== Strix ROCProfiler Test Summary ==="
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Platform: ${{ env.PLATFORM }}"
+          echo "Strix Variant: ${{ env.AMDGPU_FAMILIES }}"
+          echo "Test Category: profiling"
+          echo "Runner: ${{ runner.name }}"
+          echo "Status: ${{ job.status }}"
+          
+          if [ -f test-results-profiling.xml ]; then
+            echo ""
+            echo "✅ Profiling test results available"
+            echo "   - XML results displayed above"
+            echo "   - Trace files (if any) archived as artifacts"
           fi
 
   # Optional: Run on multiple platforms in parallel
