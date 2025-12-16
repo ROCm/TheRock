@@ -132,7 +132,8 @@ jobs:
       contents: read
       id-token: write
 
-  # Automatically build a small PyTorch wheel matrix from the PR head SHA when rocm-libraries is bumped.
+  # Automatically run a dev release from the PR head SHA when rocm-libraries is bumped.
+  # This will rebuild ROCm packages that other CI jobs may already build.
   dev_release_on_rocm_libraries_bump:
     needs: [setup]
     if: >-
@@ -142,35 +143,18 @@ jobs:
         github.event.pull_request.head.repo.fork == false
       }}
     permissions:
-      contents: read
+      contents: write
+      actions: write
       id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        python_version: ["3.12"]
-        pytorch_git_ref: ["release/2.8", "nightly"]
-        include:
-          - pytorch_git_ref: release/2.8
-            pytorch_patchset: rocm_2.8
-          - pytorch_git_ref: nightly
-            pytorch_patchset: nightly
-    uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
+    uses: ./.github/workflows/release_portable_linux_packages.yml
     secrets: inherit
     with:
-      amdgpu_family: gfx94X-dcgpu
-      python_version: ${{ matrix.python_version }}
-      release_type: dev
-      s3_subdir: v2
-      s3_staging_subdir: v2-staging
-      cloudfront_url: https://rocm.devreleases.amd.com/v2
-      cloudfront_staging_url: https://rocm.devreleases.amd.com/v2-staging
-      pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
-      pytorch_patchset: ${{ matrix.pytorch_patchset }}
+      release_type: "dev"
+      families: "gfx94X-dcgpu"
+      s3_subdir: "v2"
+      s3_staging_subdir: "v2-staging"
+      repository: ${{ github.repository }}
       ref: ${{ github.event.pull_request.head.sha }}
-
-  # build_python_packages:
-  #   name: Build Python Packages
-  #   uses: ./.github/workflows/build_python_packages.yml
 
   ci_summary:
     name: CI Summary
