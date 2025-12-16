@@ -79,9 +79,9 @@ We support simple flow. The path uses TheRock tarballs for ROCm install.
   example for `therock-path=https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0a20251120.tar.gz`
   `rocm_version=7.10.0a20251120`
 
-- Locate built wheels 
+- Locate built wheels
   After successfull build, wheel will be available in:
-   `jax_rocm_plugin/wheelhouse/`
+  `jax_rocm_plugin/wheelhouse/`
 
 ## Test instructions
 
@@ -94,7 +94,6 @@ We support simple flow. The path uses TheRock tarballs for ROCm install.
 ### Local Testing with Built Wheels Steps
 
 After building wheels locally, you can test them:
-
 
 - Checkout TheRock Repo
 
@@ -122,7 +121,7 @@ After building wheels locally, you can test them:
    python3 -m venv jax_test_env
    source jax_test_env/bin/activate
    python3 build_tools/setup_venv.py jax_test_env/.bin
-   ```
+  ```
 
 - Install requriements
 
