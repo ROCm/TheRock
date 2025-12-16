@@ -132,6 +132,10 @@ jobs:
       contents: read
       id-token: write
 
+  # build_python_packages:
+  #   name: Build Python Packages
+  #   uses: ./.github/workflows/build_python_packages.yml
+
   # Automatically run a dev release from the PR head SHA when rocm-libraries is bumped.
   # This will rebuild ROCm packages that other CI jobs may already build.
   dev_release_on_rocm_libraries_bump:
