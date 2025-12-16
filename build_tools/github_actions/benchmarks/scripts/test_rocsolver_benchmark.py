@@ -42,11 +42,8 @@ class ROCsolverBenchmark(BenchmarkBase):
                 "-n", "250"
             ]
             
-            # Set environment variable
-            env = os.environ.copy()
-            env['HIP_VISIBLE_DEVICES'] = '0'
-            log.info(f"++ Exec [{self.therock_dir}]$ HIP_VISIBLE_DEVICES=0 {shlex.join(cmd)}")
-            f.write(f"HIP_VISIBLE_DEVICES=0 {shlex.join(cmd)}\n")
+            log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
+            f.write(f"{shlex.join(cmd)}\n")
             
             process = subprocess.Popen(
                 cmd,
@@ -54,8 +51,7 @@ class ROCsolverBenchmark(BenchmarkBase):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1,
-                env=env
+                bufsize=1
             )
             
             for line in process.stdout:

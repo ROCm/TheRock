@@ -8,11 +8,11 @@ Benchmark tests run only on nightly CI builds and are merged into test_matrix by
 from pathlib import Path
 
 # Note: these paths are relative to the repository root.
-BENCHMARK_SCRIPT_DIR = Path("./build_tools/github_actions/benchmarks/scripts")
+SCRIPT_DIR = Path(__file__).resolve().parent / "scripts"
 
 
 def _get_benchmark_script_path(script_name: str) -> str:
-    platform_path = BENCHMARK_SCRIPT_DIR / script_name
+    platform_path = SCRIPT_DIR / script_name
     # Convert to posix (using `/` instead of `\\`) so test workflows can use
     # 'bash' as the shell on Linux and Windows.
     posix_path = platform_path.as_posix()

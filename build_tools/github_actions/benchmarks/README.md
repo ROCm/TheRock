@@ -19,7 +19,7 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 - **Performance Tracking** - LKG (Last Known Good) comparison
 - **Comprehensive Logging** - File rotation and configurable log levels
 - **Modular Architecture** - Extensible design for adding new benchmarks
-- **CI/CD Integration** - Smart test scheduling (smoke vs full tests)
+- **CI/CD Integration** - Parallel execution with regular tests in nightly CI
 
 ## Quick Start
 
@@ -70,12 +70,14 @@ build_tools/github_actions/
 
 Benchmark tests run **only on nightly CI builds** to save time and resources on pull request validation:
 
-| Workflow Trigger | Test Type | Benchmark Tests | Regular Tests |
-|------------------|-----------|-----------------|---------------|
-| **Pull Request (PR)** | `smoke` | Skipped | Run (1 shard) |
-| **Nightly CI (scheduled)** | `full` | Run (in parallel) | Run (in parallel) |
-| **Push to main** | `smoke` | Skipped | Run (1 shard) |
-| **Manual workflow** | configurable | Optional | Optional |
+| Workflow Trigger | Benchmark Tests | Regular Tests |
+|------------------|-----------------|---------------|
+| **Pull Request (PR)** | Skipped | Run (smoke: 1 shard) |
+| **Nightly CI (scheduled)** | Run (in parallel, always full) | Run (full: all shards) |
+| **Push to main** | Skipped | Run (smoke: 1 shard) |
+| **Manual workflow** | Optional | Optional |
+
+**Note:** Benchmarks always run with `total_shards=1` and do not use `test_type` or `test_labels` filtering.
 
 ### Parallel Execution Architecture
 

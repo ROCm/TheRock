@@ -90,12 +90,11 @@ jobs:
 
   test_linux_benchmarks:
     needs: [build_portable_linux_artifacts]
-    name: Test Benchmarks
+    name: Test Linux Benchmarks
     # Run benchmarks if:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure
     # - Benchmark runner is available (benchmark_runs_on is set)
-    # - Test labels contain benchmark tests
     if: >-
       ${{
         !failure() &&
@@ -105,8 +104,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
         inputs.expect_failure == false &&
-        inputs.benchmark_runs_on != '' &&
-        contains(inputs.test_labels, 'bench')
+        inputs.benchmark_runs_on != ''
       }}
     uses: ./.github/workflows/test_benchmarks.yml
     with:
@@ -114,8 +112,6 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.benchmark_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      test_type: ${{ inputs.test_type }}
-      test_labels: ${{ inputs.test_labels }}
 
   build_portable_linux_python_packages:
     needs: [build_portable_linux_artifacts]
