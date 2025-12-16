@@ -22,7 +22,6 @@ Table of contents:
   - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
-  - [Installing JAX Python packages](#installing-jax-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
   - [Installing release tarballs](#installing-release-tarballs)
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
@@ -374,55 +373,6 @@ print(torch.cuda.get_device_name(0))
 See also the
 [Testing the PyTorch installation](https://rocm.docs.amd.com/projects/install-on-linux/en/develop/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation)
 instructions in the AMD ROCm documentation.
-
-### Installing JAX Python packages
-
-Using the index pages [listed above](#installing-rocm-python-packages), you can
-also install `jaxlib`, `jax-rocm7-plugin`, and `jax-rocm7-pjrt`.
-
-> [!NOTE]
-> By default, pip will install the latest versions of each package. If you want to
-> install older versions take note of the compatibility matrix:
->
-> | jaxlib version | jax-rocm7-plugin version | jax-rocm7-pjrt version |
-> | -------------- | ------------------------ | ---------------------- |
-> | 0.8.0          | 0.8.0                    | 0.8.0                  |
->
-> For example, `JAX 0.8.0` and compatible wheels can be installed by specifying
->
-> ```
-> jax-rocm7-plugin==0.8.0 jax-rocm7-pjrt==0.8.0 jaxlib==0.8.0
-> ```
->
-> See also
->
-> - [Supported Jax versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/jax#supported-jax-versions)
-
-> [!TIP]
-> The `JAX` packages depend on `rocm tarball`, so ROCm packages should
-> be installed First.
-> [!NOTE]
-> We will update the installation of ROCm automalically soon just by installing jax wheels.
-
-#### JAX for gfx94X-dcgpu
-
-Supported devices in this family:
-
-| Product Name                                        | GFX Target |
-| --------------------------------------------------- | ---------- |
-| MI300A/MI300X                                       | gfx942     |
-| Set the desired JAX and ROCm versions as variables: |            |
-
-```bash
-JAX_VERSION=0.8.0
-ROCM_VERSION=7.10.0a20251109
-
-pip install --index-url "https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/" \
-  "jaxlib==${JAX_VERSION}+rocm${ROCM_VERSION}" \
-  "jax-rocm7-plugin==${JAX_VERSION}+rocm${ROCM_VERSION}" \
-  "jax-rocm7-pjrt==${JAX_VERSION}+rocm${ROCM_VERSION}"
-pip install --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
-```
 
 ## Installing from tarballs
 

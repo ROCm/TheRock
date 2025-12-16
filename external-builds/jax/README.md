@@ -171,3 +171,4 @@ After building wheels locally, you can test them:
 
 > [!NOTE]
 > We are planning to expand our test coverage and update the testing workflow. Upcoming changes will include running smoke tests, unit tests, and multi-GPU tests using the `pip install` packaging method for improved reliability and consistency.
+> Tracking issue: [ROCm/TheRock#2592](https://github.com/ROCm/TheRock/issues/2592)
