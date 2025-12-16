@@ -35,6 +35,7 @@
 #   [source_sets.<name>]
 #   description = "Human-readable description"
 #   submodules = ["submodule1", "submodule2"]  # Git submodule directory names
+#   disable_platforms = ["windows"]            # Optional: platforms where disabled
 #
 #   [build_stages.<name>]
 #   description = "Human-readable description"
@@ -73,7 +74,7 @@ description = "TheRock artifact-based build topology"
 
 [source_sets.base]
 description = "Base infrastructure submodules"
-submodules = ["half", "rocm-cmake"]
+submodules = ["half", "rocm-cmake", "amdsmi"]
 
 [source_sets.compilers]
 description = "Compiler toolchain submodules"
@@ -98,6 +99,11 @@ submodules = ["rccl", "rccl-tests"]
 [source_sets.profiler-extras]
 description = "Additional profiler submodules"
 submodules = ["rocprof-trace-decoder"]
+
+[source_sets.rocm-media]
+description = "ROCm media submodules (Mesa for VA-API)"
+submodules = ["amd-mesa"]
+disable_platforms = ["windows"]
 
 [source_sets.iree-libs]
 description = "IREE integration submodules"
@@ -160,7 +166,7 @@ artifact_groups = ["profiler-apps"]
 [artifact_groups.third-party-sysdeps]
 description = "Critical system dependencies (always needed)"
 type = "generic"
-source_sets = []  # No submodules - uses vendored/in-tree deps
+source_sets = ["rocm-media"]  # rocm-media disabled on Windows via source_set
 
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
