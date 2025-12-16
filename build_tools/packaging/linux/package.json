@@ -1824,18 +1824,18 @@
     "DisablePackaging": "True"
   },
   {
-    "Package": "rocm-core-sdk",
+    "Package": "amdrocm-core-sdk",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-core-dev",
-      "rocm-developer-tools",
+      "amdrocm-developer-tools",
       "amdrocm-opencl"
     ],
     "RPMRequires": [
       "amdrocm-core-devel",
-      "rocm-developer-tools",
+      "amdrocm-developer-tools",
       "amdrocm-opencl"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
