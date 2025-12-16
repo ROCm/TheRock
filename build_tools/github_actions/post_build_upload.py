@@ -269,8 +269,8 @@ def write_gha_build_summary(artifact_group: str, bucket_url: str, job_status: st
         analysis_url = f"{bucket_url}/logs/{artifact_group}/build_time_analysis.html"
         gha_append_step_summary(f"[Build Time Analysis]({analysis_url})")
 
-    # Only add artifact links if the job succeeded
-    if job_status == "success":
+    # Only add artifact links if the job not failed
+    if not job_status or job_status == "success":
         artifact_url = f"{bucket_url}/index-{artifact_group}.html"
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
 
@@ -305,8 +305,8 @@ def run(args):
     log("----------------------")
     write_time_sync_log()
 
-    # Upload artifacts only if the job succeeded
-    if args.job_status == "success":
+    # Upload artifacts only if the job not failed
+    if not args.job_status or args.job_status == "success":
         log("Upload build artifacts")
         log("----------------------")
         upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
@@ -348,7 +348,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
     parser.add_argument(
-        "--job-status", required=True, type=str, help="Status of this Job"
+        "--job-status", type=str, help="Status of this Job"
     )
     args = parser.parse_args()
 
