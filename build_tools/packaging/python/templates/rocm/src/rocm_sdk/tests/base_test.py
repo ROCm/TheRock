@@ -38,11 +38,7 @@ class ROCmBaseTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "version"])
-        output = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        output = utils.exec(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn(".", output)
 
@@ -52,11 +48,7 @@ class ROCmBaseTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "targets"])
-        output = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        output = utils.exec(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn("gfx", output)
 

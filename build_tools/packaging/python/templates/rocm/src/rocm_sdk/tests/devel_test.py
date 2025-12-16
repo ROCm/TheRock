@@ -44,11 +44,7 @@ class ROCmDevelTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "path", "--bin"])
-        output = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected bin path {path} to exist")
 
@@ -58,11 +54,7 @@ class ROCmDevelTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "path", "--cmake"])
-        output = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected cmake path {path} to exist")
         hip_file = path / "hip" / "hip-config.cmake"
@@ -76,11 +68,7 @@ class ROCmDevelTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "path", "--root"])
-        output = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected root path {path} to exist")
         bin_path = path / "bin"
@@ -92,11 +80,7 @@ class ROCmDevelTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "path", "--root"])
-        root_path_output = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        root_path_output = utils.exec(cmd, capture=True).decode().strip()
         root_path = Path(root_path_output)
 
         # CLI scripts by default run from _rocm_sdk_core.
@@ -122,11 +106,7 @@ class ROCmDevelTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "path", "--root"])
-        output = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output) / "llvm" / "bin" / "clang++"
         self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
 
@@ -137,11 +117,7 @@ class ROCmDevelTest(unittest.TestCase):
         if sys.version_info >= (3, 11):
             cmd.append("-P")
         cmd.extend(["-m", "rocm_sdk", "path", "--root"])
-        _ = (
-            utils.exec(cmd, capture=True)
-            .decode()
-            .strip()
-        )
+        _ = utils.exec(cmd, capture=True).decode().strip()
 
         # Ensure that the platform package exists now.
         mod_name = di.ALL_PACKAGES["devel"].get_py_package_name(
