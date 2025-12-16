@@ -28,7 +28,7 @@ and thus leave less room for interpretation than in upstream repositories.
 We support building various Jax versions compatible with the latest ROCm
 sources and release packages.
 
-Support for JAX is provided via the stable `rocm-jaxlib-v0.8.0` release branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax). Developers can build using the `rocm-jaxlib-v0.8.0` branch to suit their requirements.
+Support for JAX is provided via the stable release branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax). Can build using the stable release branch (for example, `rocm-jaxlib-v0.8.0`) to suit your requirements.
 
 See the following table for supported version:
 
