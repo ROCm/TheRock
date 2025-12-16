@@ -34,8 +34,12 @@ from packaging_utils import *
 from pathlib import Path
 from runpath_to_rpath import *
 
-# Initialize unified logging for packaging
-logger = get_packaging_logger(operation="build_package")
+# Add unified logging support
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "_therock_utils"))
+
+from logging_config import get_logger, configure_root_logger
+import logging
 
 
 # User inputs required for packaging
@@ -58,9 +62,6 @@ class PackageConfig:
     gfx_arch: str
     enable_rpath: bool = field(default=False)
     versioned_pkg: bool = field(default=True)
-
-
-SCRIPT_DIR = Path(__file__).resolve().parent
 # Directory for debian and RPM packaging
 DEBIAN_CONTENTS_DIR = None
 RPM_CONTENTS_DIR = None
@@ -858,6 +859,10 @@ def run(args: argparse.Namespace):
 
 def main(argv: list[str]):
     """Main entry point for package building with unified logging"""
+    # Initialize logging at entry point
+    configure_root_logger(level=logging.INFO)
+    logger = get_logger(__name__, component="packaging", operation="build_package")
+    
     logger.info("Starting ROCm package build process")
     
     p = argparse.ArgumentParser()
