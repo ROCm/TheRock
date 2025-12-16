@@ -69,31 +69,6 @@ jobs:
     with:
       build_variant: "release"
 
-
-  # Automatically run a dev release from the PR head SHA when rocm-libraries is bumped.
-  # This uses the existing release workflow, which will dispatch the PyTorch release workflow (big matrix).
-  dev_release_on_rocm_libraries_bump:
-    needs: [setup]
-    if: >-
-      ${{
-        github.event_name == 'pull_request' &&
-        needs.setup.outputs.rocm_libraries_bump == 'true' &&
-        github.event.pull_request.head.repo.fork == false
-      }}
-    permissions:
-      contents: write
-      actions: write
-      id-token: write
-    uses: ./.github/workflows/release_portable_linux_packages.yml
-    secrets: inherit
-    with:
-      release_type: "dev"
-      families: "gfx94X-dcgpu"
-      s3_subdir: "v2"
-      s3_staging_subdir: "v2-staging"
-      repository: ${{ github.repository }}
-      ref: ${{ github.event.pull_request.head.sha }}
-
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
     needs: setup
@@ -156,6 +131,42 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  # Automatically build a small PyTorch wheel matrix from the PR head SHA when rocm-libraries is bumped.
+  dev_release_on_rocm_libraries_bump:
+    needs: [setup]
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        needs.setup.outputs.rocm_libraries_bump == 'true' &&
+        github.event.pull_request.head.repo.fork == false
+      }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        python_version: ["3.12"]
+        pytorch_git_ref: ["release/2.8", "nightly"]
+        include:
+          - pytorch_git_ref: release/2.8
+            pytorch_patchset: rocm_2.8
+          - pytorch_git_ref: nightly
+            pytorch_patchset: nightly
+    uses: ./.github/workflows/build_portable_linux_pytorch_wheels.yml
+    secrets: inherit
+    with:
+      amdgpu_family: gfx94X-dcgpu
+      python_version: ${{ matrix.python_version }}
+      release_type: dev
+      s3_subdir: v2
+      s3_staging_subdir: v2-staging
+      cloudfront_url: https://rocm.devreleases.amd.com/v2
+      cloudfront_staging_url: https://rocm.devreleases.amd.com/v2-staging
+      pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
+      pytorch_patchset: ${{ matrix.pytorch_patchset }}
+      ref: ${{ github.event.pull_request.head.sha }}
 
   # build_python_packages:
   #   name: Build Python Packages
