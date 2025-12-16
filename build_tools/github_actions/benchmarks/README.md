@@ -68,18 +68,33 @@ build_tools/github_actions/
 
 ### When Benchmark Tests Run
 
-Benchmark tests are configured to run **only on nightly CI builds** to save time and resources on pull request validation:
+Benchmark tests run **only on nightly CI builds** to save time and resources on pull request validation:
 
 | Workflow Trigger | Test Type | Benchmark Tests | Regular Tests |
 |------------------|-----------|-----------------|---------------|
 | **Pull Request (PR)** | `smoke` | Skipped | Run (1 shard) |
-| **Nightly CI (scheduled)** | `full` | Run | Run (all shards) |
-| **Push to main** | `smoke` | Skipped* | Run (1 shard) |
-| **Manual workflow** | configurable | Depends on inputs | Depends on inputs |
+| **Nightly CI (scheduled)** | `full` | Run (in parallel) | Run (in parallel) |
+| **Push to main** | `smoke` | Skipped | Run (1 shard) |
+| **Manual workflow** | configurable | Optional | Optional |
 
-*\*Push to main can trigger full tests if:*
-- *Git submodules are modified, OR*
-- *Test labels (e.g., `test:rocfft_bench`) are specified*
+### Parallel Execution Architecture
+
+Benchmarks run **in parallel** with regular tests for faster CI execution:
+
+```
+ci_nightly.yml → ci_linux.yml
+                   │
+                   ├─ build_artifacts (30 min)
+                   │
+                   ├─ test_artifacts (45 min) ────┐
+                   │   └─ Regular tests            │  Run in
+                   │      (rocblas, hipblas, ...)  │  PARALLEL
+                   │                                │
+                   └─ test_benchmarks (60 min) ────┘
+                        └─ Benchmark tests
+                           (hipblaslt_bench, rocfft_bench, ...)
+
+```
 
 ### Available Benchmark Tests in CI
 
@@ -92,11 +107,34 @@ The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.p
 | `rocrand_bench` | ROCrand | Linux | 60 min | 1 |
 | `rocfft_bench` | ROCfft | Linux | 60 min | 1 |
 
-**Implementation:** During nightly CI runs, `configure_ci.py` adds benchmark test names to test labels, which are then processed by `fetch_test_configurations.py` to include benchmarks in the test execution matrix.
+### Implementation Details
+
+1. **Nightly Trigger:** `configure_ci.py` adds benchmark test names to test labels
+2. **Parallel Jobs:** `ci_linux.yml` spawns two parallel jobs:
+   - `test_artifacts` → Regular tests via `test_artifacts.yml`
+   - `test_benchmarks` → Benchmarks via `test_benchmarks.yml`
+3. **Matrix Generation:** `fetch_test_configurations.py` uses `IS_BENCHMARK_WORKFLOW=true` flag to select only benchmarks from `benchmark_test_matrix.py`
+4. **Dedicated Runners:** Benchmarks can use dedicated GPU runners specified by `benchmark-runs-on` in `amdgpu_family_matrix.py`
 
 ## Architecture
 
-### Test Execution Flow
+### Workflow Integration
+
+```
+.github/workflows/ci_nightly.yml
+  └─ calls → ci_linux.yml
+              ├─ job: build_artifacts
+              ├─ job: test_artifacts (parallel)
+              └─ job: test_benchmarks (parallel) ← NEW
+                    └─ calls → test_benchmarks.yml
+                                ├─ configure_benchmark_matrix
+                                │   └─ fetch_test_configurations.py
+                                │      (IS_BENCHMARK_WORKFLOW=true)
+                                └─ run_benchmarks
+                                    └─ test_component.yml (matrix)
+```
+
+### Benchmark Script Execution Flow
 
 ```
 1. Initialize BenchmarkClient
@@ -189,7 +227,11 @@ Edit `benchmarks/benchmark_test_matrix.py`:
 },
 ```
 
-The benchmark will automatically be included in nightly CI runs via test labels set by `configure_ci.py`.
+The benchmark will automatically be included in nightly CI runs:
+- `configure_ci.py` adds benchmark names to test labels
+- `ci_linux.yml` spawns `test_benchmarks` job
+- `test_benchmarks.yml` calls `fetch_test_configurations.py` with `IS_BENCHMARK_WORKFLOW=true`
+- Only benchmarks from `benchmark_test_matrix.py` are executed
 
 ### 3. Test Locally
 
@@ -205,5 +247,6 @@ python3 build_tools/github_actions/benchmarks/scripts/test_your_benchmark.py
 
 ## Related Documentation
 
-- [Utils Module Documentation](utils/README.md)
-- [CI Nightly Workflow](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml)
+- [Utils Module Documentation](utils/README.md) - Utility modules reference
+- [CI Nightly Workflow](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml) - GitHub Actions
+- [Test Benchmarks Workflow](../../.github/workflows/test_benchmarks.yml) - Benchmark execution workflow
