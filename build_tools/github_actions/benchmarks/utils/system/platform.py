@@ -89,8 +89,7 @@ class PlatformDetector:
                     ['dmidecode', '-s', 'bios-version'],
                     capture_output=True,
                     text=True,
-                    timeout=5,
-                    stderr=subprocess.PIPE
+                    timeout=5
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     logger.debug(f"SBIOS from dmidecode: {result.stdout.strip()}")

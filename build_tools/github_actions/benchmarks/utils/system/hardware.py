@@ -241,7 +241,13 @@ class HardwareDetector:
             import logging
             logger = logging.getLogger(__name__)
             
-            # Run lspci to find AMD GPUs
+            # Try amd-smi FIRST as primary detection (works without lspci)
+            logger.debug("Trying amd-smi for primary GPU detection...")
+            if self._detect_gpu_with_amd_smi():
+                logger.debug(f"Successfully detected {len(self.gpu_list)} GPU(s) with amd-smi")
+                return self.gpu_list
+            
+            # Fallback to lspci if amd-smi not available
             logger.debug("Running lspci to detect AMD GPUs...")
             result = subprocess.run(
                 ['lspci', '-d', '1002:', '-nn'],
@@ -353,6 +359,156 @@ class HardwareDetector:
             pass
         
         return self.gpu_list
+    
+    def _detect_gpu_with_amd_smi(self) -> bool:
+        """Detect GPUs using amd-smi as primary detection method.
+        
+        This is used when lspci is not available or fails.
+        
+        Returns:
+            True if GPUs were detected, False otherwise
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            amd_smi_cmd = _get_rocm_tool_path('amd-smi')
+            logger.debug(f"Trying {amd_smi_cmd} static --json for primary detection...")
+            result = subprocess.run(
+                [amd_smi_cmd, 'static', '--json'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                logger.debug(f"amd-smi not available (exit code {result.returncode})")
+                return False
+            
+            logger.debug(f"amd-smi static output: {result.stdout[:200]}...")
+            
+            import json
+            data = json.loads(result.stdout)
+            
+            # amd-smi can return various formats
+            gpu_data_list = []
+            
+            if isinstance(data, list):
+                # Format 1: Direct list of GPU objects
+                gpu_data_list = data
+                
+            elif isinstance(data, dict):
+                # Format 2: Dict with "gpu_data" key containing list
+                if 'gpu_data' in data and isinstance(data['gpu_data'], list):
+                    gpu_data_list = data['gpu_data']
+                    
+                # Format 3: Dict with GPU IDs as keys (e.g., {"gpu_0": {...}, "gpu_1": {...}})
+                elif any(key.startswith('gpu') for key in data.keys()):
+                    gpu_data_list = [data[key] for key in sorted(data.keys()) if key.startswith('gpu')]
+                    
+                # Format 4: Single GPU dict with direct properties
+                elif 'asic' in data or 'vram' in data:
+                    gpu_data_list = [data]
+            
+            if not gpu_data_list:
+                logger.debug("amd-smi returned no GPU data")
+                return False
+            
+            # Create GpuInfo objects from amd-smi data
+            for i, gpu_data in enumerate(gpu_data_list):
+                # Skip if gpu_data is not a dict
+                if not isinstance(gpu_data, dict):
+                    logger.debug(f"Skipping GPU {i}: data is not a dict (type={type(gpu_data).__name__})")
+                    continue
+                
+                # Extract device ID (e.g., "0x740f")
+                device_id = ''
+                asic_data = gpu_data.get('asic', {})
+                if isinstance(asic_data, dict):
+                    device_id = asic_data.get('device_id', '')
+                    if device_id and device_id.startswith('0x'):
+                        device_id = device_id[2:]  # Remove "0x" prefix
+                
+                # Extract product name
+                product_name = 'AMD GPU'
+                if isinstance(asic_data, dict):
+                    product_name = asic_data.get('market_name', 'AMD GPU')
+                
+                # Extract VRAM size (in MB, convert to GB)
+                vram_size_gb = 0
+                vram_data = gpu_data.get('vram', {})
+                if isinstance(vram_data, dict):
+                    vram_total = vram_data.get('total', {})
+                    if isinstance(vram_total, dict):
+                        vram_size_gb = vram_total.get('value', 0) // 1024
+                    elif isinstance(vram_total, (int, float)):
+                        vram_size_gb = int(vram_total) // 1024
+                
+                # Extract VBIOS from ifwi object
+                vbios_version = 'Unknown'
+                ifwi = gpu_data.get('ifwi', {})
+                if isinstance(ifwi, dict):
+                    vbios_version = ifwi.get('version', 'Unknown')
+                
+                # Extract PCI address (e.g., "0000:c1:00.0" -> "c1:00.0")
+                pci_address = ''
+                bus_data = gpu_data.get('bus', {})
+                if isinstance(bus_data, dict):
+                    pci_address = bus_data.get('bdf', '')
+                if pci_address and pci_address.startswith('0000:'):
+                    pci_address = pci_address[5:]  # Remove "0000:" prefix
+                
+                # Create GpuInfo object
+                gpu = GpuInfo(
+                    device_id=device_id,
+                    revision_id='',  # amd-smi doesn't provide this easily
+                    product_name=product_name.strip() if product_name else 'AMD GPU',
+                    vendor="AMD",
+                    vram_size_gb=vram_size_gb,
+                    pci_address=pci_address,
+                    vbios=vbios_version
+                )
+                
+                # Extract partition mode
+                partition = gpu_data.get('partition')
+                if partition:
+                    gpu.partition_mode = str(partition) if not isinstance(partition, str) else partition
+                
+                # Extract XGMI info
+                xgmi_info = gpu_data.get('xgmi')
+                if xgmi_info:
+                    if isinstance(xgmi_info, dict):
+                        xgmi_type = xgmi_info.get('type')
+                        if xgmi_type:
+                            gpu.xgmi_type = str(xgmi_type)
+                    else:
+                        gpu.xgmi_type = str(xgmi_info)
+                
+                # Extract driver info
+                driver = gpu_data.get('driver') or gpu_data.get('driver_version')
+                if driver:
+                    gpu.host_driver = str(driver) if not isinstance(driver, str) else driver
+                
+                # Extract firmware info
+                firmware_data = gpu_data.get('firmware')
+                if firmware_data and isinstance(firmware_data, dict):
+                    for fw_name, fw_version in firmware_data.items():
+                        gpu.firmwares.append({
+                            'name': str(fw_name),
+                            'version': str(fw_version)
+                        })
+                
+                self.gpu_list.append(gpu)
+                logger.debug(f"Detected GPU {i}: {product_name} (device_id={device_id}, vram={vram_size_gb}GB)")
+            
+            return len(self.gpu_list) > 0
+            
+        except FileNotFoundError:
+            logger.debug("amd-smi command not found")
+            return False
+        except Exception as e:
+            logger.debug(f"Error detecting GPUs with amd-smi: {e}")
+            return False
     
     def _enhance_gpu_with_rocm(self):
         """Enhance GPU info with ROCm tools (amd-smi or rocm-smi) for VRAM, clocks, and firmware."""
