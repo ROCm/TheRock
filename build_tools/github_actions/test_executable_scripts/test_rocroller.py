@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-import logging
 import os
-import shlex
-import subprocess
+import sys
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+# Add _therock_utils to path for unified logging
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "_therock_utils"))
+
+from test_runner import TestRunner
+from logging_config import configure_root_logger, get_logger
+import logging
+
+# Configure unified logging with INFO level
+configure_root_logger(level=logging.INFO)
+logger = get_logger(__name__, component="rocroller", operation="test")
 
 # repo + dirs
-SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
 platform = os.getenv("RUNNER_OS", "linux").lower()
@@ -38,9 +45,11 @@ bin_candidates.append(
 
 test_bin = next((p for p in bin_candidates if p.is_file()), None)
 if not test_bin:
-    raise FileNotFoundError(
-        f"rocroller-tests not found in: {', '.join(map(str, bin_candidates))}"
-    )
+    error_msg = f"rocroller-tests not found in: {', '.join(map(str, bin_candidates))}"
+    logger.error(error_msg)
+    raise FileNotFoundError(error_msg)
+
+logger.info(f"Found rocroller-tests at: {test_bin}")
 
 # Runtime libs
 if platform == "linux":
@@ -100,10 +109,22 @@ else:
 cmd = [str(test_bin)]
 if test_filter_arg:
     cmd.append(test_filter_arg)
+    logger.info(f"Test filter: {test_filter_arg}")
 
 extra = os.getenv("EXTRA_GTEST_ARGS", "")
 if extra:
+    import shlex
     cmd += shlex.split(extra)
+    logger.info(f"Extra args: {extra}")
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=str(THEROCK_DIR), check=True, env=env)
+# Initialize test runner with unified logging
+TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
+runner = TestRunner(component="rocroller", test_type=TEST_TYPE)
+
+# Run GTest with unified logging
+runner.run_gtest(
+    cmd=cmd,
+    cwd=THEROCK_DIR,
+    env=env,
+    capture_output=True
+)

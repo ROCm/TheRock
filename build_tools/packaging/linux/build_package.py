@@ -34,6 +34,9 @@ from packaging_utils import *
 from pathlib import Path
 from runpath_to_rpath import *
 
+# Initialize unified logging for packaging
+logger = get_packaging_logger(operation="build_package")
+
 
 # User inputs required for packaging
 # dest_dir - For saving the rpm/deb packages
@@ -854,7 +857,9 @@ def run(args: argparse.Namespace):
 
 
 def main(argv: list[str]):
-
+    """Main entry point for package building with unified logging"""
+    logger.info("Starting ROCm package build process")
+    
     p = argparse.ArgumentParser()
     p.add_argument(
         "--artifacts-dir",
@@ -919,7 +924,21 @@ def main(argv: list[str]):
     )
 
     args = p.parse_args(argv)
-    run(args)
+    
+    logger.info(f"Package type: {args.pkg_type}")
+    logger.info(f"ROCm version: {args.rocm_version}")
+    logger.info(f"Target: {args.target}")
+    logger.info(f"Artifacts directory: {args.artifacts_dir}")
+    logger.info(f"Destination directory: {args.dest_dir}")
+    
+    try:
+        with logger.github_group(f"📦 Building {args.pkg_type} Packages"):
+            run(args)
+        logger.github_info(f"✅ Package build completed successfully")
+    except Exception as e:
+        logger.github_error(f"❌ Package build failed: {e}", file="build_package.py")
+        logger.log_exception(e, "Package build error")
+        raise
 
 
 if __name__ == "__main__":

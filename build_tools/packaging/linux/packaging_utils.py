@@ -8,19 +8,53 @@ import shutil
 import sys
 from pathlib import Path
 
-
+# Add unified logging support
 SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "_therock_utils"))
+
+from logging_config import get_logger, configure_root_logger
+import logging
+
+# Configure unified logging with INFO level (normal verbosity for packaging)
+configure_root_logger(level=logging.INFO)
+_packaging_logger = get_logger(__name__, component="packaging")
+
 currentFuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
 
 
 def print_function_name():
-    """Print the name of the calling function.
+    """Print the name of the calling function (deprecated - use logger instead).
 
     Parameters: None
 
     Returns: None
     """
-    print("In function:", currentFuncName(1))
+    func_name = currentFuncName(1)
+    print("In function:", func_name)
+    _packaging_logger.debug(f"Entering function: {func_name}")
+
+
+def get_packaging_logger(operation: str = None):
+    """
+    Get a logger instance for packaging operations with unified logging.
+    
+    This provides consistent logging across all packaging scripts with:
+    - INFO level by default (normal verbosity)
+    - GitHub Actions annotations in CI
+    - Structured logging with metadata
+    
+    Args:
+        operation: Specific operation name (e.g., "build_deb", "build_rpm", "upload")
+    
+    Returns:
+        Logger instance with unified logging configuration
+        
+    Example:
+        logger = get_packaging_logger(operation="build_deb")
+        logger.info("Building DEB package for rocm-core")
+        logger.github_info("✅ Package created successfully")
+    """
+    return get_logger(__name__, component="packaging", operation=operation)
 
 
 def read_package_json_file():

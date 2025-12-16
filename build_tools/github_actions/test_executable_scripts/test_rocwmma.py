@@ -1,13 +1,22 @@
-import logging
 import os
-import shlex
-import subprocess
+import sys
 from pathlib import Path
 
+# Add _therock_utils to path for unified logging
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "_therock_utils"))
+
+from test_runner import TestRunner
+from logging_config import configure_root_logger
+import logging
+
+# Configure unified logging with INFO level
+configure_root_logger(level=logging.INFO)
+
+# Environment setup
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 platform = os.getenv("RUNNER_OS").lower()
-SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 # GTest sharding
@@ -20,8 +29,6 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 # Enable GTest "brief" output: only show failures and the final results
 environ_vars["GTEST_BRIEF"] = str(1)
-
-logging.basicConfig(level=logging.INFO)
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
@@ -41,21 +48,14 @@ elif test_type == "regression":
     test_subdir = "/regression"
     timeout = "720"
 
-cmd = [
-    "ctest",
-    "--test-dir",
-    f"{THEROCK_BIN_DIR}/rocwmma{test_subdir}",
-    "--output-on-failure",
-    "--parallel",
-    "8",
-    "--timeout",
-    timeout,
-]
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+# Initialize test runner with unified logging
+runner = TestRunner(component="rocwmma", test_type=test_type)
 
-subprocess.run(
-    cmd,
+# Run CTest with unified logging
+runner.run_ctest(
+    test_dir=Path(f"{THEROCK_BIN_DIR}/rocwmma{test_subdir}"),
+    parallel=8,
+    timeout=timeout,
     cwd=THEROCK_DIR,
-    check=True,
-    env=environ_vars,
+    env=environ_vars
 )
