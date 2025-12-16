@@ -1,7 +1,6 @@
 skip_tests = {
     "gfx950": {
         "cuda": {
-            "test_preferred_blas_library_settings",
             "test_autocast_torch_bf16",
             "test_autocast_torch_fp16",
         }
@@ -36,6 +35,12 @@ skip_tests = {
             # NEW ERROR
             # RuntimeError: Error building extension 'dummy_allocator'
             "test_mempool_with_allocator",
+            # Change detector test (Cublaslt vs Cublas depending on gcn_arch and torch version)
+            # Always skip as this test is very basic and needs manual intervention for new architectures
+            # See
+            #   * https://github.com/ROCm/pytorch/pull/2742
+            #   * https://github.com/ROCm/pytorch/pull/2873
+            "test_preferred_blas_library_settings",
             # ----------------
             # maybe failing
             # ----------------
