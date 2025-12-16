@@ -1,7 +1,7 @@
 ---
 author: Jason Bonnell (jbonnell-amd)
 created: 2025-12-15
-modified: 2025-12-15
+modified: 2025-12-16
 status: draft
 ---
 
@@ -11,7 +11,7 @@ This RFC proposes the integration of [roc-optiq](https://github.com/ROCm/roc-opt
 
 ## Overview
 
-roc-optiq is a visualizer tool for the ROCm profiler tools. It is deployed as a single executable.
+roc-optiq is a visualizer tool for the ROCm profiler tools.
 
 ## Platform(s)
 
@@ -34,8 +34,12 @@ As a first step, we'll need to migrate roc-optiq to the rocm-systems super-repo
 
 ### Run-time Dependencies
 
-- ROCm profiler tools (already included in TheRock)
+- GLFW
+  - On Windows, this is distributed as `glfw3.dll` via the installer
+  - On Linux, this dependency is handled as part of the package installation
 - Being able to launch a GUI application (cannot be run on a headless server)
+
+There are plans to potentially integrate with rocprofiler-compute analysis scripts in the future, which may result in a rocprofiler-compute runtime dependency being added at a later date.
 
 ## Deployment
 
