@@ -1,0 +1,26 @@
+@PACKAGE_INIT@
+
+set_and_check(MPI_ROOT "${PACKAGE_PREFIX_DIR}")
+set_and_check(MPI_INCLUDE_DIRS "${MPI_ROOT}/include")
+set_and_check(MPI_LIBRARIES "${MPI_ROOT}/lib/lib/libmpi.so")
+
+set_and_check(MPIEXEC "${MPI_ROOT}/lib/bin/mpiexec")
+set_and_check(MPIEXEC_EXECUTABLE "${MPIEXEC}")
+
+if(NOT TARGET MPI::MPI_C)
+    add_library(MPI::MPI_C INTERFACE IMPORTED)
+    set_target_properties(MPI::MPI_C PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${MPI_INCLUDE_DIRS}"
+        INTERFACE_LINK_LIBRARIES "${MPI_LIBRARIES}"
+    )
+endif()
+
+# Create an alias
+if(NOT TARGET MPI::MPI_CXX)
+    add_library(MPI::MPI_CXX ALIAS MPI::MPI_C)
+endif()
+
+# Backward compatibility variables
+set(MPI_FOUND TRUE)
+set(MPI_INCLUDE_PATH "${MPI_INCLUDE_DIRS}")
+set(MPI_LIBRARIES "${MPI_LIBRARIES}")

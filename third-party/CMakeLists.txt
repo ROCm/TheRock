@@ -29,6 +29,11 @@ if(THEROCK_ENABLE_HOST_SUITE_SPARSE)
   add_subdirectory(SuiteSparse)
 endif()
 
+# OpenMPI implementation of MPI
+if(THEROCK_ENABLE_MPI)
+  add_subdirectory(OpenMPI)
+endif()
+
 # TODO: Relocate non header-only libraries here (i.e. boost, host-blas).
 if(THEROCK_BUNDLE_SYSDEPS)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
