@@ -29,10 +29,10 @@ PACKAGES_PER_PROJECT = {
     "sympy": {"version": "latest", "project": "torch"},
     "mpmath": {"version": "latest", "project": "torch"},
     "pillow": {"version": "latest", "project": "torch"},
-    "networkx": {"version": "latest", "project": "torch"},
+    "networkx": {"version": ["3.2.1", "latest"], "project": "torch"},  # 3.2.1 for Python 3.10, latest for 3.11+
     "numpy": {"version": "latest", "project": "torch"},
     "jinja2": {"version": "latest", "project": "torch"},
-    "markupsafe": {"version": "latest", "project": "torch"},
+    "markupsafe": {"version": ["2.1.5", "latest"], "project": "torch"},  # 2.1.5 has cp310 wheels
     "filelock": {"version": "latest", "project": "torch"},
     "fsspec": {"version": "latest", "project": "torch"},
     "typing-extensions": {"version": "latest", "project": "torch"},
@@ -143,11 +143,10 @@ def upload_missing_whls(
         # Skip riscv64 packages
         if "riscv64" in pkg:
             continue
-        # Skip unsupported Python version
+        # Skip unsupported Python versions (keeping 3.10+ only)
         if "cp39" in pkg:
             continue
-        if "cp310" in pkg:
-            continue
+        # Python 3.10 is now supported
         if "cp313t" in pkg:
             continue
         if "cp314" in pkg:
@@ -182,6 +181,7 @@ def main() -> None:
     parser.add_argument("--package", choices=project_paths, default="torch")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--only-pypi", action="store_true")
+    parser.add_argument("--arch", help="Specific architecture to update (e.g., gfx110X-all)")
     args = parser.parse_args()
 
     SUBFOLDERS =  [
@@ -195,6 +195,14 @@ def main() -> None:
         "gfx94X-dcgpu",
         "gfx950-dcgpu",
     ]
+    
+    # If specific arch is provided, only update that one
+    if args.arch:
+        if args.arch not in SUBFOLDERS:
+            print(f"Error: Architecture '{args.arch}' not in valid list: {SUBFOLDERS}")
+            return
+        SUBFOLDERS = [args.arch]
+        print(f"Updating only architecture: {args.arch}")
 
     for prefix in SUBFOLDERS:
         # Filter packages by the selected project path
@@ -210,13 +218,19 @@ def main() -> None:
                 else:
                     full_path = f"{VERSION}/{prefix}"
 
-                upload_missing_whls(
-                    pkg_name,
-                    full_path,
-                    dry_run=args.dry_run,
-                    only_pypi=args.only_pypi,
-                    target_version=pkg_info["version"],
-                )
+                # Handle multiple versions if specified as a list
+                versions = pkg_info["version"]
+                if not isinstance(versions, list):
+                    versions = [versions]
+                
+                for version in versions:
+                    upload_missing_whls(
+                        pkg_name,
+                        full_path,
+                        dry_run=args.dry_run,
+                        only_pypi=args.only_pypi,
+                        target_version=version,
+                    )
 
 
 if __name__ == "__main__":
