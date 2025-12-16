@@ -112,7 +112,7 @@ if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
 endif()
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
-option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" ON)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
 
