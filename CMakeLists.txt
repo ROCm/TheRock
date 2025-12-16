@@ -222,9 +222,10 @@ option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_E
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
-option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
+# TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
+option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
