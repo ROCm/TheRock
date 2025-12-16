@@ -109,17 +109,17 @@ class ROCmCoreTest(unittest.TestCase):
                 # Internal rocprofiler-sdk libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
                 continue
-            if "libtest_linking_lib" in str(so_path):
-                # rocprim unit tests, not actual library files
-                continue
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
-                )
+                # -P flag is only available in Python 3.11+
+                cmd = [sys.executable]
+                if sys.version_info >= (3, 11):
+                    cmd.append("-P")
+                cmd.extend(["-c", command, str(so_path)])
+                subprocess.check_call(cmd)
 
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
