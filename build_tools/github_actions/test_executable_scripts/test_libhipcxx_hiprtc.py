@@ -42,6 +42,7 @@ environ_vars["HIP_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["CMAKE_PREFIX_PATH"] = str(OUTPUT_ARTIFACTS_PATH)
 environ_vars["HIP_PLATFORM"] = "amd"
 environ_vars["ROCM_VERSION"] = str(ROCM_VERSION)
+environ_vars["CMAKE_GENERATOR"] = "Ninja"
 
 # Add ROCm binaries to PATH
 rocm_bin = str(THEROCK_BIN_PATH)
@@ -76,12 +77,12 @@ except FileNotFoundError as e:
 
 cmd = [
     "cmake",
-    "..",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
     f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
     f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
     "-DLIBHIPCXX_TEST_WITH_HIPRTC=ON",
     "-GNinja",
+    "..",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
