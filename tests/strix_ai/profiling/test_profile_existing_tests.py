@@ -9,11 +9,34 @@ import sys
 import tempfile
 from pathlib import Path
 import shutil
+import os
 
 
 def check_rocprofv3_available():
     """Check if rocprofv3 is available"""
     return shutil.which("rocprofv3") is not None
+
+
+def get_trace_output_dir(category_name):
+    """
+    Get output directory for traces that will be preserved for artifact upload
+    
+    Args:
+        category_name: Name of the test category (e.g., "vlm_clip", "vit")
+    
+    Returns:
+        Path object for the output directory
+    """
+    # Use workspace directory for CI, or local profiling_traces/ for manual runs
+    if os.getenv("GITHUB_ACTIONS"):
+        # In CI: save to workspace root so GitHub Actions can find them
+        output_dir = Path.cwd() / f"{category_name}_traces"
+    else:
+        # Local: save to profiling_traces/ subdirectory
+        output_dir = Path("profiling_traces") / f"{category_name}_traces"
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
 
 
 def run_rocprofv3_on_test(test_path, output_dir, timeout=300):
@@ -70,15 +93,14 @@ class TestProfileVLM:
         print("Profiling VLM: CLIP Test")
         print("="*70)
         
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_dir = Path(tmpdir) / "clip_traces"
-            output_dir.mkdir()
-            
-            # Profile the existing CLIP test
-            test_path = "tests/strix_ai/vlm/test_clip.py::TestCLIP::test_clip_image_text_matching"
-            
-            print(f"📊 Profiling: {test_path}")
-            result = run_rocprofv3_on_test(test_path, output_dir, timeout=300)
+        # Use persistent directory for traces (will be archived as artifacts)
+        output_dir = get_trace_output_dir("vlm_clip")
+        
+        # Profile the existing CLIP test
+        test_path = "tests/strix_ai/vlm/test_clip.py::TestCLIP::test_clip_image_text_matching"
+        
+        print(f"📊 Profiling: {test_path}")
+        result = run_rocprofv3_on_test(test_path, output_dir, timeout=300)
             
             # Check if profiling succeeded
             print(f"\n{'='*70}")
