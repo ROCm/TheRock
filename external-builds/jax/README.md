@@ -155,12 +155,10 @@ After building wheels locally, you can test them:
   export WHEEL_DIR="jax_rocm_plugin/wheelhouse"
 
   # Install the built wheels
-  pip install ${WHEEL_DIR}/jaxlib-${JAX_VERSION}+rocm${ROCM_VERSION}-*.whl
-  pip install ${WHEEL_DIR}/jax_rocm7_plugin-${JAX_VERSION}+rocm${ROCM_VERSION}-*.whl
-  pip install ${WHEEL_DIR}/jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-*.whl
+  pip install ${WHEEL_DIR}/*.whl
 
   # Install JAX from PyPI to match the version
-  pip install jax==${JAX_VERSION}
+  pip install --extra-index-url https://pypi.org/simple jax==${JAX_VERSION}
   ```
 
 - Run Test jax wheels
