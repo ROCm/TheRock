@@ -82,7 +82,6 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     print(f"Package Name: {pkg_name}")
 
     # Non-versioned packages are not required for RPATH packages
@@ -107,7 +106,6 @@ def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     # Set versioned_pkg flag to False
     config.versioned_pkg = False
 
@@ -142,7 +140,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     config.versioned_pkg = True
     package_dir = Path(DEBIAN_CONTENTS_DIR) / f"{pkg_name}{config.rocm_version}"
     deb_dir = package_dir / "debian"
@@ -191,7 +188,6 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     changelog = Path(deb_dir) / "changelog"
 
     pkg_name = update_package_name(pkg_info.get("Package"), config)
@@ -235,7 +231,6 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     # Note: pkg_info is not used currently:
     # May be required in future to populate any context
     install_file = Path(deb_dir) / "install"
@@ -261,7 +256,6 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     rules_file = Path(deb_dir) / "rules"
     disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
@@ -289,7 +283,6 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     control_file = Path(deb_dir) / "control"
 
     pkg_name = pkg_info.get("Package")
@@ -363,7 +356,6 @@ def copy_package_contents(source_dir, destination_dir):
 
     Returns: None
     """
-    print_function_name()
     if not os.path.isdir(source_dir):
         print(f"Directory does not exist: {source_dir}")
         return
@@ -390,7 +382,6 @@ def package_with_dpkg_build(pkg_dir):
 
     Returns: None
     """
-    print_function_name()
     current_dir = Path.cwd()
     os.chdir(Path(pkg_dir))
     # Build the command
@@ -420,7 +411,6 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     config.versioned_pkg = False
     package_dir = Path(RPM_CONTENTS_DIR) / pkg_name
     specfile = package_dir / "specfile"
@@ -443,7 +433,6 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     config.versioned_pkg = True
     package_dir = Path(RPM_CONTENTS_DIR) / f"{pkg_name}{config.rocm_version}"
     specfile = package_dir / "specfile"
@@ -463,7 +452,6 @@ def create_rpm_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     print(f"Package Name: {pkg_name}")
 
     if not config.enable_rpath:
@@ -485,7 +473,6 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)
@@ -575,7 +562,6 @@ def package_with_rpmbuild(spec_file):
 
     Returns: None
     """
-    print_function_name()
     package_rpm = os.path.dirname(spec_file)
 
     try:
@@ -599,7 +585,6 @@ def move_packages_to_destination(pkg_name, config: PackageConfig):
 
     Returns: None
     """
-    print_function_name()
 
     # Create destination dir to move the packages created
     os.makedirs(config.dest_dir, exist_ok=True)
@@ -640,7 +625,6 @@ def update_package_name(pkg_name, config: PackageConfig):
 
     Returns: Updated package name
     """
-    print_function_name()
     if config.versioned_pkg:
         pkg_suffix = config.rocm_version
     else:
@@ -673,7 +657,6 @@ def debian_replace_devel_name(pkg_name):
 
     Returns: Updated package name
     """
-    print_function_name()
     # Only required for debian developement package
     pkg_name = pkg_name.replace("-devel", "-dev")
 
@@ -692,7 +675,6 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
 
     Returns: A string of comma separated versioned packages
     """
-    print_function_name()
     # This function is to add Version dependency
     # Make sure the flag is set to True
 
@@ -719,7 +701,6 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
 
     Returns: List of directories
     """
-    print_function_name()
 
     pkg_info = get_package_info(pkg_name)
     is_composite = is_composite_package(pkg_info)
@@ -761,7 +742,6 @@ def parse_input_package_list(pkg_name):
 
     Returns: Package list
     """
-    print_function_name()
     pkg_list = []
     # If pkg_name is None, include all packages
     if pkg_name is None:
@@ -805,7 +785,6 @@ def clean_package_build_dir(artifacts_dir):
 
     Returns: None
     """
-    print_function_name()
     PYCACHE_DIR = Path(SCRIPT_DIR) / "__pycache__"
 
     remove_dir(RPM_CONTENTS_DIR)
