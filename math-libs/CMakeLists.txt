@@ -299,6 +299,9 @@ if(THEROCK_ENABLE_ROCWMMA)
       "-DROCWMMA_BUILD_BENCHMARK_TESTS=$<BOOL:${THEROCK_ROCWMMA_ENABLE_BENCHMARKS}>"
       -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
       -DROCWMMA_USE_SYSTEM_GOOGLETEST=ON # Use therock-googletest
+      # Disable ccache for rocWMMA to avoid caching issues
+      -DCMAKE_C_COMPILER_LAUNCHER=
+      -DCMAKE_CXX_COMPILER_LAUNCHER=
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
