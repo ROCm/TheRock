@@ -7,7 +7,7 @@ status: draft
 
 # Optiq Integration into TheRock
 
-This RFC proposes the integration of [roc-optiq](https://github.com/ROCm/roc-optiq), a graph-based deep learning library for AMD GPUs, into TheRock's build system and CI/CD infrastructure.
+This RFC proposes the integration of [roc-optiq](https://github.com/ROCm/roc-optiq) into TheRock's build system and CI/CD infrastructure.
 
 ## Overview
 
