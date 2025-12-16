@@ -201,11 +201,17 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 ### Running PyTorch smoketests
 
-We have additional smoketests that run some sample computations. See
-[smoke-tests](./smoke-tests/) for details, or just run:
+We have additional smoketests in [smoke-tests](./smoke-tests/) that run some
+sample computations. To run these tests:
 
 ```bash
+# Basic usage (no wrapper script)
 pytest -v smoke-tests
+
+# Wrapper script, passing through some useful pytest args:
+python run_pytorch_smoke_tests.py -- \
+  --log-cli-level=INFO \
+  -v
 ```
 
 ### Running full PyTorch tests
