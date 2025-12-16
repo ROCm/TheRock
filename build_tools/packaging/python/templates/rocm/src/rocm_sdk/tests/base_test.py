@@ -24,16 +24,22 @@ class ROCmBaseTest(unittest.TestCase):
             os.environ.pop("ROCM_SDK_PRELOAD_LIBRARIES", None)
 
     def testCLI(self):
-        output = utils.exec(
-            [sys.executable, "-P", "-m", "rocm_sdk", "--help"], capture=True
-        ).decode()
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "--help"])
+        output = utils.exec(cmd, capture=True).decode()
         self.assertIn("usage:", output)
 
     def testVersion(self):
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "version"])
         output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "version"], capture=True
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
@@ -41,10 +47,13 @@ class ROCmBaseTest(unittest.TestCase):
         self.assertIn(".", output)
 
     def testTargets(self):
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "targets"])
         output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "targets"], capture=True
-            )
+            utils.exec(cmd, capture=True)
             .decode()
             .strip()
         )
