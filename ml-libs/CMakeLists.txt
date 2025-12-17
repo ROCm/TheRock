@@ -60,7 +60,7 @@ if(THEROCK_ENABLE_MIOPEN)
   # gfx950. For other GPU families, building MIOpen with CK enabled, the build is
   # failing with linker errors which need further investigation.
   if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
-    set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950)
+    set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1151)
     foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
       if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
         message(WARNING
@@ -96,7 +96,7 @@ if(THEROCK_ENABLE_MIOPEN)
     # TODO(#1407): re-enable MIOpen tests on Windows when they don't crash clang on CI builders
     #   We also don't run MIOpen tests on Windows, see
     #   build_tools/github_actions/fetch_test_configurations.py
-    set(_THEROCK_MIOPEN_ENABLE_TESTING OFF)
+    set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
   else()
     set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
   endif()
