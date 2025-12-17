@@ -207,7 +207,7 @@ def main(argv):
 
     # Set output variable name based on package type
     gha_set_output(
-        {f"rocm_native_{package_type}_package_version": rocm_native_package_version}
+        {f"rocm_native_{args.package_type}_package_version": rocm_native_package_version}
     )
 
 
