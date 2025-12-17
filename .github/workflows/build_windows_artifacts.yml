@@ -67,9 +67,11 @@ jobs:
       fail-fast: true
     env:
       BUILD_DIR: B:\build
-      CACHE_DIR: "${{github.workspace}}/.cache"
-      CCACHE_DIR: "${{github.workspace}}/.cache/ccache"
-      CCACHE_MAXSIZE: "4000M"
+      # For Windows CI, build dir must use temp disk vs. default repo workspace
+      # set cache dir for setup_ccache.py to save logs in temp disk build dir for upload
+      CACHE_DIR: B:\.cache
+      # The ccache.conf will be written by setup_ccache.py before this gets used.
+      CCACHE_CONFIGPATH: B:\.ccache\ccache.conf
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
@@ -107,6 +109,14 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache" \
+            --log-dir "$BUILD_DIR/logs/"
+
       - name: Runner health status
         run: |
           ccache --zero-stats
@@ -115,16 +125,6 @@ jobs:
       - name: Test build_tools
         run: |
           python -m pytest build_tools/tests build_tools/github_actions/tests
-
-      # TODO: We shouldn't be using a cache on actual release branches, but it
-      # really helps for iteration time.
-      - name: Enable cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
-          restore-keys: |
-            windows-build-packages-v4-${{ inputs.amdgpu_families }}-
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -180,6 +180,7 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
+
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
@@ -196,10 +197,3 @@ jobs:
             --artifact-group ${{ inputs.artifact_group }} \
             --build-dir ${{ env.BUILD_DIR }} \
             --upload
-
-      - name: Save cache
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
