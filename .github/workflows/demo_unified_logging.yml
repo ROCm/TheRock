@@ -3,13 +3,8 @@ name: Demo - Unified Logging Framework
 on:
   workflow_dispatch:
     inputs:
-      artifact_run_id:
-        description: 'Artifact Run ID to download binaries from'
-        required: true
-        default: '20151692873'
-        type: string
       test_type:
-        description: 'Test type'
+        description: 'Test type (for demo purposes)'
         required: true
         default: 'smoke'
         type: choice
@@ -44,15 +39,11 @@ jobs:
         component: [rocroller, rocwmma]
     
     env:
-      # Use real artifacts from specified run ID
-      ARTIFACT_RUN_ID: ${{ github.event.inputs.artifact_run_id || '20151692873' }}
-      ARTIFACT_GROUP: "gfx94X-dcgpu"
+      # Demo environment (no artifact download needed)
       COMPONENT: ${{ matrix.component }}
       TEST_TYPE: ${{ github.event.inputs.test_type || 'smoke' }}
-      OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       THEROCK_BUILD_DIR: "./build"
-      AMDGPU_FAMILIES: "gfx94X"
       RUNNER_OS: "Linux"
       SHARD_INDEX: "1"
       TOTAL_SHARDS: "1"
@@ -70,16 +61,14 @@ jobs:
           echo "=========================================="
           echo ""
           echo "ℹ️  NOTE: This demonstrates the logging framework"
-          echo "   Tests run but may fail due to missing GPU"
-          echo "   Focus: Observe the logging output structure"
+          echo "   Using mock test binaries to show logging structure"
+          echo "   Focus: Observe the unified logging output"
           echo ""
           echo "🐳 Container: rocm/dev-ubuntu-22.04:7.0"
-          echo "   ROCm 7.0 libraries available"
+          echo "   ROCm 7.0 pre-installed (no download needed)"
           echo ""
           echo "Component: $COMPONENT"
           echo "Test Type: $TEST_TYPE"
-          echo "Artifact Run ID: $ARTIFACT_RUN_ID"
-          echo "Artifact Group: $ARTIFACT_GROUP"
           echo ""
           echo "📋 Logging Features to Observe:"
           echo "  ✅ Unified format: timestamp - logger - level - message"
@@ -105,11 +94,6 @@ jobs:
           echo "Log Format: timestamp - logger_name - level - message"
           echo "Log Level: INFO (controlled via configure_root_logger)"
           echo ""
-          echo "🐳 Using ROCm Docker image: rocm/dev-ubuntu-22.04:7.0"
-          echo "   • ROCm pre-installed"
-          echo "   • No need to download/install ROCm"
-          echo "   • Only downloading test binaries"
-          echo ""
       
       - name: Setup Python and Install Dependencies
         run: |
@@ -117,16 +101,52 @@ jobs:
           pip3 install --upgrade pip
           pip3 install -r requirements-test.txt
       
-      - name: Download Test Artifacts Only
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Create Mock Test Binaries for Demo
         run: |
-          echo "📦 Downloading test binaries from Run ID: $ARTIFACT_RUN_ID"
-          python3 ./build_tools/install_rocm_from_artifacts.py \
-            --run-id=${ARTIFACT_RUN_ID} \
-            --artifact-group=${ARTIFACT_GROUP} \
-            --output-dir=${OUTPUT_ARTIFACTS_DIR} \
-            ${{ matrix.component == 'rocroller' && '--blas --tests' || '--tests' }}
+          echo "📦 Creating mock test binaries for logging demo"
+          mkdir -p ${THEROCK_BIN_DIR}
+          mkdir -p ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test
+          
+          if [ "$COMPONENT" = "rocroller" ]; then
+            # Create mock GTest binary
+            cat > ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests << 'EOF'
+          #!/bin/bash
+          echo "[==========] Running 5 tests from 2 test suites."
+          echo "[----------] Global test environment set-up."
+          echo "[----------] 3 tests from ArgumentLoaderTest"
+          echo "[ RUN      ] ArgumentLoaderTest.BasicTest"
+          sleep 0.1
+          echo "[       OK ] ArgumentLoaderTest.BasicTest (10 ms)"
+          echo "[ RUN      ] ArgumentLoaderTest.ConfigTest"
+          sleep 0.1
+          echo "[       OK ] ArgumentLoaderTest.ConfigTest (8 ms)"
+          echo "[ RUN      ] ArgumentLoaderTest.ValidationTest"
+          sleep 0.1
+          echo "[       OK ] ArgumentLoaderTest.ValidationTest (12 ms)"
+          echo "[----------] 3 tests from ArgumentLoaderTest (30 ms total)"
+          echo ""
+          echo "[----------] 2 tests from AssemblerTest"
+          echo "[ RUN      ] AssemblerTest.BasicAssembly"
+          sleep 0.1
+          echo "[       OK ] AssemblerTest.BasicAssembly (15 ms)"
+          echo "[ RUN      ] AssemblerTest.ComplexAssembly"
+          sleep 0.1
+          echo "[       OK ] AssemblerTest.ComplexAssembly (20 ms)"
+          echo "[----------] 2 tests from AssemblerTest (35 ms total)"
+          echo ""
+          echo "[----------] Global test environment tear-down"
+          echo "[==========] 5 tests from 2 test suites ran. (65 ms total)"
+          echo "[  PASSED  ] 5 tests."
+          exit 0
+          EOF
+            chmod +x ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo "✅ Created mock rocroller-tests binary"
+          else
+            # Create mock CTest directory
+            mkdir -p ${THEROCK_BIN_DIR}/rocwmma/regression
+            echo "✅ Created mock rocwmma test directory"
+            echo "   (CTest will show 0 tests - demonstrates logging without actual tests)"
+          fi
       
       - name: Run ${{ matrix.component }} Test with Unified Logging
         run: |
@@ -149,43 +169,45 @@ jobs:
           echo ""
           echo "✅ Demonstrated Features:"
           echo ""
-          echo "1️⃣  Real Test Execution"
-          echo "   • Downloaded test binaries from Run ID: $ARTIFACT_RUN_ID"
-          echo "   • Ran actual $COMPONENT tests (not mocks)"
-          echo "   • Used real GTest/CTest binaries"
-          echo "   • ROCm pre-installed in Docker container"
-          echo ""
-          echo "2️⃣  Unified Logging Configuration"
+          echo "1️⃣  Unified Logging Configuration"
           echo "   • Single LOG_FORMAT across all outputs"
           echo "   • Consistent: timestamp - logger - level - message"
           echo "   • No environment-specific formatting"
+          echo "   • Same format for console and file output"
           echo ""
-          echo "3️⃣  TestRunner Integration"
+          echo "2️⃣  TestRunner Integration"
           echo "   • Captures GTest/CTest output"
           echo "   • Parses test results"
           echo "   • Structured logging with context"
           echo "   • Performance timing built-in"
           echo ""
-          echo "4️⃣  Log Output Features"
-          echo "   • Component tracking ($COMPONENT)"
+          echo "3️⃣  Context Tracking"
+          echo "   • Component: $COMPONENT"
+          echo "   • Test Type: $TEST_TYPE"
           echo "   • Operation timing with timed_operation()"
-          echo "   • Test result summaries"
-          echo "   • Exception logging"
+          echo "   • Structured metadata in log records"
           echo ""
-          echo "5️⃣  Simplicity & Efficiency"
+          echo "4️⃣  Log Output Features"
+          echo "   • Startup banners with configuration info"
+          echo "   • Binary location and file size logging"
+          echo "   • Test configuration details"
+          echo "   • Exception logging with context"
+          echo ""
+          echo "5️⃣  Simplicity & Portability"
           echo "   • No GitHub Actions-specific code"
-          echo "   • No JSON formatting"
-          echo "   • No threading locks"
-          echo "   • Works same locally and in CI"
-          echo "   • ROCm container = faster setup"
+          echo "   • No JSON formatting complexity"
+          echo "   • No threading locks overhead"
+          echo "   • Works same in local, CI, and GitHub Actions"
+          echo "   • Single unified approach everywhere"
           echo ""
           echo "🐳 Container Info:"
           echo "   • Image: rocm/dev-ubuntu-22.04:7.0"
-          echo "   • ROCm pre-installed (no download needed)"
-          echo "   • Only downloaded test binaries"
+          echo "   • ROCm 7.0 pre-installed"
+          echo "   • No artifact downloads needed"
+          echo "   • Mock tests used for logging demo"
           echo ""
           echo "📁 Key Files:"
-          echo "   • logging_config.py - Core framework (~400 lines)"
+          echo "   • logging_config.py - Core framework (~410 lines, simplified)"
           echo "   • test_runner.py - Test execution wrapper"
           echo "   • test_${COMPONENT}.py - Component test script"
           echo ""
