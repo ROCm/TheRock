@@ -57,7 +57,7 @@ cmd = [
     "--timeout",
     timeout,
     "--exclude-regex",
-    "|".join(negative_filter)
+    "|".join(negative_filter),
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
