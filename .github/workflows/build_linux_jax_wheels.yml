@@ -225,7 +225,6 @@ jobs:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       release_type: ${{ inputs.release_type }}
       package_index_url: ${{ inputs.cloudfront_staging_url }}
-      s3_subdir: ${{ inputs.s3_staging_subdir }}
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
       python_version: ${{ inputs.python_version }}

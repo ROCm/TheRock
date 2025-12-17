@@ -9,9 +9,6 @@ on:
       release_type:
         required: true
         type: string
-      s3_subdir:
-        required: false
-        type: string
       package_index_url:
         description: Base CloudFront URL for the Python package index
         required: true
@@ -62,11 +59,6 @@ on:
         required: true
         type: string
         default: dev
-      s3_subdir:
-        description: S3 subdirectory, not including the GPU-family
-        required: false
-        type: string
-        default: v2
       package_index_url:
         description: Base CloudFront URL for the Python package index
         required: true
