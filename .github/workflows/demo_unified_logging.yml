@@ -36,8 +36,8 @@ jobs:
     timeout-minutes: 45
     container:
       # Use ROCm Docker image with ROCm 7.0 pre-installed
+      # Note: No GPU devices needed - this is a logging demo only
       image: rocm/dev-ubuntu-22.04:7.0
-      options: --device /dev/kfd --device /dev/dri --security-opt seccomp=unconfined --group-add video
     strategy:
       fail-fast: false
       matrix:
@@ -69,22 +69,25 @@ jobs:
           echo "🎯 Unified Logging Framework Demo"
           echo "=========================================="
           echo ""
+          echo "ℹ️  NOTE: This demonstrates the logging framework"
+          echo "   Tests run but may fail due to missing GPU"
+          echo "   Focus: Observe the logging output structure"
+          echo ""
           echo "🐳 Container: rocm/dev-ubuntu-22.04:7.0"
-          echo "   ROCm 7.0 is pre-installed ✅"
+          echo "   ROCm 7.0 libraries available"
           echo ""
           echo "Component: $COMPONENT"
           echo "Test Type: $TEST_TYPE"
           echo "Artifact Run ID: $ARTIFACT_RUN_ID"
           echo "Artifact Group: $ARTIFACT_GROUP"
           echo ""
-          echo "📋 Logging Features:"
-          echo "  ✅ Centralized configuration"
-          echo "  ✅ Single unified log format"
-          echo "  ✅ Context-aware logging (component, operation)"
-          echo "  ✅ Performance timing"
-          echo "  ✅ Structured logging"
-          echo "  ✅ Exception tracking"
-          echo "  ✅ No GitHub Actions-specific code"
+          echo "📋 Logging Features to Observe:"
+          echo "  ✅ Unified format: timestamp - logger - level - message"
+          echo "  ✅ Context tracking: component, operation, test_type"
+          echo "  ✅ Performance timing with timed_operation()"
+          echo "  ✅ Structured logging with extra metadata"
+          echo "  ✅ Exception handling and error logging"
+          echo "  ✅ Works same in local, CI, and GitHub Actions"
           echo ""
           echo "📁 Key Files:"
           echo "  • build_tools/_therock_utils/logging_config.py"
