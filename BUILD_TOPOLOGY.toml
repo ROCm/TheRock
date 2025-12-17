@@ -401,7 +401,7 @@ artifact_deps = ["core-runtime", "core-hip"]
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "blas"]
 
 [artifacts.support]
 artifact_group = "math-libs"
