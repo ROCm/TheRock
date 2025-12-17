@@ -9,7 +9,6 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1))
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -89,17 +88,6 @@ logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
 # Run the tests using lit
-cmd = [
-    "bash",
-    "../ci/build_libhipcxx.sh",
-    "-cmake-options",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
-]
-
-logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
-
-subprocess.run(cmd, check=True, env=environ_vars)
-
 cmd = [
     "bash",
     "../ci/test_libhipcxx.sh",
