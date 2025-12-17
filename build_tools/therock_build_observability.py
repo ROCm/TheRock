@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tooling for TheRock build system. The goal is to have single unified view across build resource utilization for therock compoments and systems locally as well as in CI
+Tooling for TheRock build system. The goal is to have single unified view across build resource utilization for TheRock compoments and systems locally as well as in CI
 
 Features:
 - Acts as CMake compiler launcher (C/C++).
