@@ -485,16 +485,6 @@ def matrix_generator(
                 | amdgpu_family_info_matrix_postsubmit
             ):
                 selected_target_names.append(target)
-        elif branch_name == "logging_poc_2":
-            # Special handling for unified logging POC branch:
-            # - Only run on Linux with gfx94x (single GPU)
-            # - Skip Windows entirely to reduce resource usage
-            print(
-                f"[PUSH - LOGGING_POC_2] Generating minimal build matrix for logging demo"
-            )
-            if platform == "linux":
-                selected_target_names.append("gfx94x")
-            # Windows matrix will be empty for this branch
         else:
             print(
                 f"[PUSH - {branch_name}] Generating build matrix with {str(base_args)}"
@@ -643,8 +633,14 @@ def main(base_args, linux_families, windows_families):
 
     test_type = "smoke"
 
+    # Special handling for logging_poc_2 branch - always enable builds
+    branch_name = base_args.get("branch_name")
+    if branch_name == "logging_poc_2":
+        enable_build_jobs = True
+        test_type = "smoke"
+        print(f"[LOGGING_POC_2] Enabling build jobs for logging demo branch")
     # In the case of a scheduled run, we always want to build and we want to run full tests
-    if is_schedule:
+    elif is_schedule:
         enable_build_jobs = True
         test_type = "full"
     else:

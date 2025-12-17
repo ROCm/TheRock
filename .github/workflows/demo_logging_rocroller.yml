@@ -1,10 +1,10 @@
-name: Demo - Unified Logging with Rocroller
+name: Demo - Unified Logging with Rocroller (Prebuilt Artifacts)
 
 on:
   workflow_dispatch:
     inputs:
       artifact_run_id:
-        description: 'Artifact Run ID to download test binaries from'
+        description: 'Artifact Run ID to download test binaries from (prebuilt - no compilation)'
         required: true
         default: '20151692873'
         type: string
@@ -17,14 +17,6 @@ on:
           - smoke
           - regression
           - full
-  push:
-    branches:
-      - users/rponnuru/logging_poc_2
-    paths:
-      - 'build_tools/_therock_utils/logging_config.py'
-      - 'build_tools/_therock_utils/test_runner.py'
-      - 'build_tools/github_actions/test_executable_scripts/test_rocroller.py'
-      - '.github/workflows/demo_logging_rocroller.yml'
 
 permissions:
   contents: read
@@ -70,10 +62,13 @@ jobs:
           echo "🎯 Unified Logging Framework Demo"
           echo "=========================================="
           echo ""
+          echo "⚡ FAST DEMO - Using Prebuilt Artifacts"
+          echo "   No ROCm compilation required!"
+          echo ""
           echo "🖥️  Runner: linux-mi325-1gpu-ossci-rocm-frac (MI325)"
           echo "📦 Component: rocroller"
           echo "🧪 Test Type: $TEST_TYPE"
-          echo "📥 Artifact Run ID: $ARTIFACT_RUN_ID"
+          echo "📥 Artifact Run ID: $ARTIFACT_RUN_ID (prebuilt binaries)"
           echo ""
           echo "📋 Key Features to Observe:"
           echo "  • Unified log format across all outputs"
@@ -81,6 +76,9 @@ jobs:
           echo "  • Performance timing with timed_operation()"
           echo "  • Structured logging with metadata"
           echo "  • Real test execution on actual GPU"
+          echo ""
+          echo "⏱️  Expected Duration: ~5-10 minutes"
+          echo "   (downloads prebuilt binaries, no compilation)"
           echo ""
           echo "=========================================="
       
@@ -119,12 +117,14 @@ jobs:
           echo "📊 Demo Summary - Rocroller"
           echo "=========================================="
           echo ""
+          echo "⚡ FAST DEMO COMPLETE - Used Prebuilt Artifacts"
+          echo ""
           echo "✅ Demonstrated Features:"
           echo ""
-          echo "1️⃣  Real Test Execution"
+          echo "1️⃣  Real Test Execution (No Build Required!)"
           echo "   • Ran actual rocroller tests on MI325 GPU"
-          echo "   • Downloaded artifacts from Run ID: $ARTIFACT_RUN_ID"
-          echo "   • Used real GTest binaries"
+          echo "   • Downloaded prebuilt artifacts from Run ID: $ARTIFACT_RUN_ID"
+          echo "   • Used real GTest binaries (no compilation time)"
           echo ""
           echo "2️⃣  Unified Logging Framework"
           echo "   • Single LOG_FORMAT: timestamp - logger - level - message"
