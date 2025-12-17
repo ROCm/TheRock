@@ -9,7 +9,6 @@ Features:
     - comp-summary.csv  (per-component summary)
     - comp-summary.md   (Markdown table per-component)
 - NEVER fails the build if profiling/reporting fails.
-  
 - Only propagates the real compiler's exit code.
 
 Usage in CMake configure:
