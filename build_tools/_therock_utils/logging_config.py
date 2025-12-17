@@ -69,22 +69,8 @@ class LogLevel:
     CRITICAL = logging.CRITICAL
 
 
-class LogFormat:
-    """Predefined log formats"""
-    # Simple format for console output
-    SIMPLE = "%(levelname)s - %(message)s"
-    
-    # Detailed format with timestamp and module
-    DETAILED = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    
-    # Format optimized for CI/CD logs
-    CI = "%(asctime)s [%(levelname)s] [%(component)s] %(message)s"
-    
-    # Full diagnostic format
-    DIAGNOSTIC = (
-        "%(asctime)s - %(name)s - %(levelname)s - "
-        "[%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s"
-    )
+# Unified log format for all outputs
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
 # Environment detection
@@ -236,7 +222,6 @@ _config_lock = threading.Lock()
 
 def configure_root_logger(
     level: int = None,
-    format_style: str = None,
     log_file: Union[str, Path] = None,
     use_colors: bool = True,
 ):
@@ -247,8 +232,6 @@ def configure_root_logger(
     -----------
     level : int, optional
         Logging level (default: INFO in CI, DEBUG otherwise)
-    format_style : str, optional
-        Log format to use (default: CI format in CI, DETAILED otherwise)
     log_file : str or Path, optional
         Path to log file (default: None)
     use_colors : bool
@@ -265,14 +248,10 @@ def configure_root_logger(
         # Remove existing handlers
         root_logger.handlers.clear()
         
-        # Determine format
-        if format_style is None:
-            format_style = LogFormat.CI if IS_CI else LogFormat.DETAILED
-        
         # Console handler
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(level)
-        console_formatter = ColoredFormatter(format_style, use_color=use_colors)
+        console_formatter = ColoredFormatter(LOG_FORMAT, use_color=use_colors)
         console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
         
@@ -283,7 +262,7 @@ def configure_root_logger(
             
             file_handler = logging.FileHandler(log_path, encoding="utf-8")
             file_handler.setLevel(level)
-            file_formatter = logging.Formatter(LogFormat.DIAGNOSTIC)
+            file_formatter = logging.Formatter(LOG_FORMAT)
             file_handler.setFormatter(file_formatter)
             root_logger.addHandler(file_handler)
         
