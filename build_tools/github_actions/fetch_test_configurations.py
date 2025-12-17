@@ -204,6 +204,16 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
+    # enabled by default.
+    # "fusilli_plugin": {
+    #     "job_name": "fusilli_plugin",
+    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --tests",
+    #     "timeout_minutes": 15,
+    #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
+    #     "platform": ["linux"],
+    #     "total_shards": 1,
+    # },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",

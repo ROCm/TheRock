@@ -53,6 +53,11 @@ Implementation notes for each library is below:
 - Alternatives: None (some OS vendors will provide alternatives but the source
   distribution of bzip2 has no opinion)
 
+## GMP
+
+- Canonical method: `find_package(gmp)`
+- Import library: `gmp::gmp`
+
 ## ELFUTILS
 
 Supported sub-libraries: `libelf`, `libdw`.

@@ -3,6 +3,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork")
 
     therock_cmake_subproject_declare(therock-amd-mesa
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
