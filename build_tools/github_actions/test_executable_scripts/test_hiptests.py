@@ -7,6 +7,7 @@ import glob
 import shutil
 import json
 import sys
+import platform
 
 logging.basicConfig(level=logging.INFO)
 THEROCK_BIN_DIR_STR = os.getenv("THEROCK_BIN_DIR")
@@ -20,6 +21,9 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
 CATCH_TESTS_PATH = f"{THEROCK_BIN_DIR}/../share/hip/catch_tests"
+if not os.path.isdir(CATCH_TESTS_PATH):
+    logging.info(f"++ Error: catch tests not found in {CATCH_TESTS_PATH}")
+    sys.exit(1)
 
 env = os.environ.copy()
 
@@ -41,14 +45,14 @@ def get_test_range_per_shard(total_test_count: int, total_shards, shard_index):
     current_index = (tests_per_shard * (shard_index - 1)) + 1
     end_index = current_index + tests_per_shard - 1
     if shard_index == total_shards:
-        # Adjust last few tests
+        # Retrieve remaining tests
         end_index = total_test_count
     logging.info(
         f"""++ hip-tests ctest: shard {shard_index} / {total_shards}. Running:{tests_per_shard} tests""")
     return [current_index, end_index]
 
 
-if sys.platform == "win32":
+if platform.system() == "Windows":
     # hip and comgr dlls need to be copied to the same folder as exectuable
     dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
     dlls_to_copy = []
