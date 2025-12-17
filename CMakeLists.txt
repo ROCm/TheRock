@@ -420,6 +420,7 @@ add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 add_subdirectory(iree-libs)
+add_subdirectory(storage-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)
