@@ -152,6 +152,11 @@ negative_filter.append(
     "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
 )  # https://github.com/ROCm/TheRock/issues/1682
 
+# Skipping failures in this pr https://github.com/ROCm/TheRock/pull/2533
+negative_filter.append("Full/GPU_SoftMarginLossForward_BFP16")
+negative_filter.append("Full/GPU_SoftMarginLossForward_FP16")
+negative_filter.append("Full/GPU_SoftMarginLossForward_FP32")
+
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
     negative_filter.append("*DBSync*")
