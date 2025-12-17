@@ -35,24 +35,17 @@ permissions:
 jobs:
   demo_logging:
     name: 'Demo Unified Logging - ${{ github.event.inputs.component || ''rocroller'' }}'
-    runs-on: [self-hosted, Linux, AMD, gfx94x]
-    timeout-minutes: 60
-    container:
-      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
-      options: --ipc host
-        --group-add video
-        --device /dev/kfd
-        --device /dev/dri
-        --group-add 110
-        --env-file /etc/podinfo/gha-gpu-isolation-settings
-        --user 0:0
+    # Use any available Linux runner (no GPU needed for logging demo)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     
     env:
+      # Demo configuration (no real GPU/ROCm needed - just demonstrating logging)
       COMPONENT: ${{ github.event.inputs.component || 'rocroller' }}
       TEST_TYPE: ${{ github.event.inputs.test_type || 'smoke' }}
       THEROCK_BIN_DIR: "./build/bin"
       THEROCK_BUILD_DIR: "./build"
-      AMDGPU_FAMILIES: "gfx94x"
+      AMDGPU_FAMILIES: "demo"
       RUNNER_OS: "Linux"
       SHARD_INDEX: "1"
       TOTAL_SHARDS: "1"
@@ -69,12 +62,17 @@ jobs:
           echo "🎯 Unified Logging Framework Demo"
           echo "=========================================="
           echo ""
+          echo "ℹ️  NOTE: This is a LOGGING DEMO only"
+          echo "   • Uses mock test binaries"
+          echo "   • No real GPU/ROCm needed"
+          echo "   • Focus: Demonstrate logging framework"
+          echo ""
           echo "Component: $COMPONENT"
           echo "Test Type: $TEST_TYPE"
           echo ""
           echo "📋 Logging Features:"
           echo "  ✅ Centralized configuration"
-          echo "  ✅ Colored console output"
+          echo "  ✅ Colored console output (if TTY)"
           echo "  ✅ Context-aware logging (component, operation)"
           echo "  ✅ Performance timing"
           echo "  ✅ Structured logging"
