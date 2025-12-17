@@ -1,5 +1,6 @@
 # This CI workflow is triggered by:
 #   - push to main branch
+#   - push to users/rponnuru/logging_poc_2 branch (for unified logging framework)
 #   - pull request
 #   - workflow dispatch
 #
@@ -18,6 +19,11 @@ on:
   push:
     branches:
       - main
+      - users/rponnuru/logging_poc_2
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!*.md'
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
