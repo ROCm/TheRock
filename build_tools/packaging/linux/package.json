@@ -336,18 +336,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "base",
-        "Artifact_Subdir": [
-          {
-            "Name": "rocprofiler-register",
-            "Components": [
-              "run",
-              "dev"
-            ]
-          }
-        ]
       }
     ],
     "Gfxarch": "False"
