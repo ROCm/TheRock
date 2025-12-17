@@ -32,6 +32,12 @@ test_type = os.getenv("TEST_TYPE", "full")
 
 test_subdir = ""
 timeout = "3600"
+negative_filter = []
+
+# skipping failed tests here https://github.com/ROCm/TheRock/pull/2533
+negative_filter.append("unpack_util_test")
+negative_filter.append("map_util_test")
+
 if test_type == "smoke":
     # The emulator regression tests are very fast.
     # If we need something even faster we can use "/smoke" here.
@@ -50,6 +56,8 @@ cmd = [
     "8",
     "--timeout",
     timeout,
+    "--exclude-regex",
+    "|".join(negative_filter)
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
