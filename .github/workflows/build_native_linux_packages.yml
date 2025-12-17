@@ -11,9 +11,9 @@ on:
         description: workflow run id to download the artifacts from.
         required: true
         type: string
-      prerelease_version:
-        description: "(Optional) Number of the prerelease"
-        type: string
+      rocm_version:
+        description: ROCm version to append to the package(8.0.0, 8.0.1rc1, ... ).
+        required: true
       native_package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
@@ -34,9 +34,8 @@ on:
       artifact_run_id:
         description: workflow run id to download the artifacts from
         type: string
-      prerelease_version:
-        description: "(Optional) Number of the prerelease"
-        type: string
+      rocm_version:
+        description: ROCm version to append to the package(8.0.0, 8.0.1rc1, ... ).
       native_package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
@@ -58,7 +57,7 @@ permissions:
   id-token: write
   contents: read
 
-run-name: Build native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.native_package_type }}, ${{ inputs.package_suffix }}, ${{ inputs.release_type }})
+run-name: Build native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.package_suffix }}, ${{ inputs.release_type }})
 
 jobs:
   build_native_packages:
@@ -92,16 +91,6 @@ jobs:
           sudo apt install -y rpm debhelper-compat build-essential
           sudo apt install -y dpkg-dev createrepo-c
 
-      - name: Compute package version
-        id: rocm_native_package_version
-        run: |
-          # Get the debian package version.
-          # Output will be available in env variable rocm_native_package_version
-          python ./build_tools/compute_rocm_native_package_version.py \
-            --release-type=${{ env.RELEASE_TYPE }} \
-            --package-type=${{ inputs.native_package_type }} \
-            --prerelease-version=${{ inputs.prerelease_version }}
-
       - name: Fetch Artifacts
         run: |
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
@@ -117,7 +106,7 @@ jobs:
           echo "Building ${{ inputs.native_package_type }} packages for ${{ inputs.artifact_group }} ${{ inputs.artifact_run_id }}"
           python ./build_tools/packaging/linux/build_package.py \
             --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --rocm-version  ${{ steps.rocm_native_package_version.outputs.rocm_native_package_version}} \
+            --rocm-version  ${{ inputs.rocm_version }} \
             --target  ${{ inputs.artifact_group }} \
             --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
             --pkg-type ${{ inputs.native_package_type }} \
