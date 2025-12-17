@@ -14,12 +14,15 @@ logging.basicConfig(level=logging.INFO)
 class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
+        environ_vars = os.environ.copy()
+        environ_vars["UT_MAX_GPUS"] = "4"
         cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(
             cmd,
             cwd=THEROCK_DIR,
             check=False,
+            env=environ_vars
         )
         assert result.returncode == 0
 
