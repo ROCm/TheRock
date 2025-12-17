@@ -158,8 +158,8 @@ jobs:
       s3_subdir: "v2"
       s3_staging_subdir: "v2-staging"
       repository: ${{ github.repository }}
-      ref: ${{ github.event.pull_request.head.ref }}
-
+      dispatch_ref: ${{ github.event.pull_request.head.ref }}
+      checkout_ref: ${{ github.event.pull_request.head.sha }}
   ci_summary:
     name: CI Summary
     if: always()
