@@ -43,7 +43,7 @@ endif()
 
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(SQLITE3_BUILD VERSION 3.49.1)
+project(SQLITE3_BUILD VERSION 3.50.04)
 include(CMakeDependentOption)
 include(CMakePackageConfigHelpers)
 
