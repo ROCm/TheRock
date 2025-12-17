@@ -11,7 +11,7 @@ A unified logging framework for consistent logging across all TheRock components
 
 Features:
 - Centralized configuration
-- Multiple output formats (console, file, JSON)
+- Multiple output formats (console, file)
 - Context-aware logging (component, operation, user)
 - Performance/timing tracking
 - Structured logging support
@@ -54,7 +54,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 from contextlib import contextmanager
-import traceback
 
 
 # ============================================================================
@@ -86,9 +85,6 @@ class LogFormat:
         "%(asctime)s - %(name)s - %(levelname)s - "
         "[%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s"
     )
-    
-    # JSON structured format
-    JSON = "json"
 
 
 # Environment detection
@@ -134,41 +130,6 @@ class ColoredFormatter(logging.Formatter):
             record.levelname = logging.getLevelName(record.levelno)
         
         return result
-
-
-class JSONFormatter(logging.Formatter):
-    """Formatter that outputs structured JSON logs"""
-    
-    def format(self, record: logging.LogRecord) -> str:
-        log_data = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-        }
-        
-        # Add extra fields if present
-        if hasattr(record, "component"):
-            log_data["component"] = record.component
-        if hasattr(record, "operation"):
-            log_data["operation"] = record.operation
-        if hasattr(record, "duration_ms"):
-            log_data["duration_ms"] = record.duration_ms
-        if hasattr(record, "error_code"):
-            log_data["error_code"] = record.error_code
-        
-        # Add exception info if present
-        if record.exc_info:
-            log_data["exception"] = {
-                "type": record.exc_info[0].__name__,
-                "message": str(record.exc_info[1]),
-                "traceback": traceback.format_exception(*record.exc_info),
-            }
-        
-        return json.dumps(log_data)
 
 
 class ContextFilter(logging.Filter):
@@ -277,7 +238,6 @@ def configure_root_logger(
     level: int = None,
     format_style: str = None,
     log_file: Union[str, Path] = None,
-    json_output: bool = False,
     use_colors: bool = True,
 ):
     """
@@ -291,8 +251,6 @@ def configure_root_logger(
         Log format to use (default: CI format in CI, DETAILED otherwise)
     log_file : str or Path, optional
         Path to log file (default: None)
-    json_output : bool
-        Enable JSON formatted output (default: False)
     use_colors : bool
         Enable colored console output (default: True)
     """
@@ -314,14 +272,7 @@ def configure_root_logger(
         # Console handler
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(level)
-        
-        if json_output:
-            console_formatter = JSONFormatter()
-        elif format_style == LogFormat.JSON:
-            console_formatter = JSONFormatter()
-        else:
-            console_formatter = ColoredFormatter(format_style, use_color=use_colors)
-        
+        console_formatter = ColoredFormatter(format_style, use_color=use_colors)
         console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
         
@@ -332,12 +283,7 @@ def configure_root_logger(
             
             file_handler = logging.FileHandler(log_path, encoding="utf-8")
             file_handler.setLevel(level)
-            
-            if json_output or format_style == LogFormat.JSON:
-                file_formatter = JSONFormatter()
-            else:
-                file_formatter = logging.Formatter(LogFormat.DIAGNOSTIC)
-            
+            file_formatter = logging.Formatter(LogFormat.DIAGNOSTIC)
             file_handler.setFormatter(file_formatter)
             root_logger.addHandler(file_handler)
         
