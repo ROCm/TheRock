@@ -35,7 +35,6 @@ ENVIRONMENT MODES:
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 import argparse
 import base64
 import urllib.parse
@@ -46,6 +45,13 @@ from datetime import datetime
 # Establish script's location as reference point
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
+
+# Superrepos that require special component-level processing
+SUPERREPOS = {"rocm-systems", "rocm-libraries"}
+
+# Pagination constants for GitHub API requests
+MAX_PAGES = 20
+PER_PAGE = 100
 
 # Import GitHub Actions utilities
 from github_actions.github_actions_utils import (
@@ -62,11 +68,9 @@ def format_commit_date(date_string: str) -> str:
     if date_string == "Unknown" or not date_string:
         return "Unknown"
     try:
-        from datetime import datetime
-
         dt = datetime.fromisoformat(date_string.replace("Z", "+00:00"))
         return dt.strftime("%b %d, %Y")
-    except:
+    except (ValueError, TypeError):
         return date_string
 
 
@@ -147,8 +151,8 @@ def create_table_wrapper(headers: List[str], rows: List[str]) -> str:
 
 # HTML Table Functions
 def generate_superrepo_html_table(
-    allocation: Dict[str, List[str]],
-    all_commits: Dict[str, List[Dict[str, Any]]],
+    allocation: Dict[str, List[Dict[str, Any]]],
+    all_commits: List[Dict[str, Any]],
     repo_name: str,
     component_status: Optional[Dict[str, str]] = None,
 ) -> str:
@@ -245,7 +249,7 @@ def generate_non_superrepo_html_table(
             if submodule in status_groups.get("reverted", []):
                 component_status = "reverted"
                 row_classes.append("reverted-bg")
-            elif submodule in status_groups.get("newly_added", []):
+            elif submodule in status_groups.get("added", []):
                 component_status = "newly_added"
                 row_classes.append("newly-added-bg")
 
@@ -341,7 +345,7 @@ def generate_therock_html_report(
 
     # Generate submodule changes content
     submodule_data = {
-        "added": status_groups.get("newly_added", []),
+        "added": status_groups.get("added", []),
         "removed": status_groups.get("removed", []),
         "changed": status_groups.get("changed", []),
         "unchanged": status_groups.get("unchanged", []),
@@ -526,8 +530,6 @@ def find_submodules(commit_sha: str) -> Dict[str, str]:
                 print(
                     f"Found submodule: {submodule_name} (path: {path}) -> {content_data['sha']}"
                 )
-                if path == "compiler/amd-llvm":
-                    print(f"  DEBUG: compiler/amd-llvm path mapped to {submodule_name}")
             else:
                 print(f"Warning: {path} is not a valid submodule")
         except Exception as e:
@@ -580,12 +582,11 @@ def fetch_commits_in_range(
     commits = []
     found_start = False
     page = 1
-    max_pages = 20
 
     print(f"  Getting commits for {repo_name} from {start_sha[:7]} to {end_sha[:7]}")
 
-    while not found_start and page <= max_pages:
-        params = {"sha": end_sha, "per_page": 100, "page": page}
+    while not found_start and page <= MAX_PAGES:
+        params = {"sha": end_sha, "per_page": PER_PAGE, "page": page}
         url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
 
         try:
@@ -664,11 +665,10 @@ def get_commits_by_directories(
 
         # Query commits that touched this specific directory path
         page = 1
-        max_pages = 20
         directory_commits = []
 
-        while page <= max_pages:
-            params = {"sha": end_sha, "path": directory, "per_page": 100, "page": page}
+        while page <= MAX_PAGES:
+            params = {"sha": end_sha, "path": directory, "per_page": PER_PAGE, "page": page}
             url = f"https://api.github.com/repos/ROCm/{repo_name}/commits?{urllib.parse.urlencode(params)}"
 
             try:
@@ -862,7 +862,7 @@ def generate_step_summary(
     total_submodules = superrepo_count + non_superrepo_count
 
     # Calculate submodule change totals
-    newly_added_count = len(status_groups.get("newly_added", []))
+    newly_added_count = len(status_groups.get("added", []))
     removed_count = len(status_groups.get("removed", []))
     changed_count = len(status_groups.get("changed", []))
     unchanged_count = len(status_groups.get("unchanged", []))
@@ -1019,7 +1019,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     submodule_commits = {}
     status_groups = {
         "removed": [],
-        "newly_added": [],
+        "added": [],
         "unchanged": [],
         "changed": [],
         "reverted": [],
@@ -1042,7 +1042,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         elif new_sha and not old_sha:
             # Submodule was newly added
-            status_groups["newly_added"].append(submodule)
+            status_groups["added"].append(submodule)
             print(f"NEWLY ADDED: {submodule} -> {new_sha[:7]}")
 
             # Get commit info for the tip SHA
@@ -1058,7 +1058,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"  Retrieved commit info for newly added {submodule}")
 
             # Process newly added submodule
-            if submodule == "rocm-systems" or submodule == "rocm-libraries":
+            if submodule in SUPERREPOS:
                 html_reports[submodule] = {
                     "start_commit": "N/A (newly added)",
                     "end_commit": new_sha,
@@ -1092,7 +1092,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(f"CHANGED: {submodule} {old_sha[:7]} -> {new_sha[:7]}")
                     status_groups["changed"].append(submodule)
 
-            if submodule == "rocm-systems" or submodule == "rocm-libraries":
+            if submodule in SUPERREPOS:
                 # Process superrepo using consolidated function
                 result = process_superrepo_changes(
                     submodule=submodule, old_sha=old_sha, new_sha=new_sha
@@ -1117,15 +1117,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Print summary
     print(f"\n=== SUBMODULE CHANGES SUMMARY ===")
     print(f" Total submodules: {len(all_submodules)}")
-    print(f" Newly added: {len(status_groups['newly_added'])}")
+    print(f" Newly added: {len(status_groups['added'])}")
     print(f" Removed: {len(status_groups['removed'])}")
     print(f" Unchanged: {len(status_groups['unchanged'])}")
     print(f" Changed: {len(status_groups['changed'])}")
     print(f" Reverted: {len(status_groups['reverted'])}")
     # Show detailed lists
-    if status_groups["newly_added"]:
+    if status_groups["added"]:
         print(f"\n NEWLY ADDED SUBMODULES:")
-        for sub in sorted(status_groups["newly_added"]):
+        for sub in sorted(status_groups["added"]):
             print(f"  + {sub} -> {new_submodules[sub][:7]}")
 
     if status_groups["removed"]:
