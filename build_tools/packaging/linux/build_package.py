@@ -41,6 +41,16 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "_therock_utils"))
 from logging_config import get_logger, configure_root_logger
 import logging
 
+# Module-level logger (initialized in main())
+_logger = None
+
+def _get_logger():
+    """Get the module logger, creating it if needed"""
+    global _logger
+    if _logger is None:
+        _logger = get_logger(__name__, component="packaging", operation="build_package")
+    return _logger
+
 
 # User inputs required for packaging
 # dest_dir - For saving the rpm/deb packages
@@ -73,7 +83,7 @@ DEFAULT_INSTALL_PREFIX = "/opt/rocm"
 def create_deb_package(pkg_name, config: PackageConfig):
     """Create a Debian package.
 
-    This function invokes the creation of versioned and non-versioned packages
+    This function invokes the versioned and non-versioned packages
     and moves the resulting `.deb` files to the destination directory.
 
     Parameters:
@@ -82,6 +92,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
     Returns: None
     """
+    _get_logger().debug("Entering: create_deb_package")
     print(f"Package Name: {pkg_name}")
 
     # Non-versioned packages are not required for RPATH packages
@@ -96,6 +107,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
     """Create a non-versioned Debian meta package (.deb).
+    _get_logger().debug("Entering: create_nonversioned_deb_package")
 
     Builds a minimal Debian binary package whose payload is empty and whose primary
     purpose is to express dependencies. The package name does not embed a version
@@ -126,6 +138,7 @@ def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
 
 def create_versioned_deb_package(pkg_name, config: PackageConfig):
     """Create a versioned Debian package (.deb).
+    _get_logger().debug("Entering: create_versioned_deb_package")
 
     This function automates the process of building a Debian package by:
     1) Retrieving package metadata and validating required fields.
@@ -180,6 +193,7 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
 def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
     """Generate a Debian changelog entry in `debian/changelog`.
+    _get_logger().debug("Entering: generate_changelog_file")
 
     Parameters:
     pkg_info : Package details from the Json file
@@ -223,6 +237,7 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
 
 def generate_install_file(pkg_info, deb_dir, config: PackageConfig):
     """Generate a Debian install entry in `debian/install`.
+    _get_logger().debug("Entering: generate_install_file")
 
     Parameters:
     pkg_info : Package details from the Json file
@@ -248,6 +263,7 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig):
 
 def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     """Generate a Debian rules entry in `debian/rules`.
+    _get_logger().debug("Entering: generate_rules_file")
 
     Parameters:
     pkg_info : Package details from the Json file
@@ -275,6 +291,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
 
 def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     """Generate a Debian control file entry in `debian/control`.
+    _get_logger().debug("Entering: generate_control_file")
 
     Parameters:
     pkg_info: Package details parsed from a JSON file
@@ -349,6 +366,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
 def copy_package_contents(source_dir, destination_dir):
     """Copy package contents from artfactory to package build directory
+    _get_logger().debug("Entering: copy_package_contents")
 
     Parameters:
     source_dir : Source directory
@@ -375,6 +393,7 @@ def copy_package_contents(source_dir, destination_dir):
 
 def package_with_dpkg_build(pkg_dir):
     """Generate a Debian package using `dpkg-buildpackage`
+    _get_logger().debug("Entering: package_with_dpkg_build")
 
     Parameters:
     pkg_dir: Path to the directory containing the package contents and the `debian/`
@@ -401,6 +420,7 @@ def package_with_dpkg_build(pkg_dir):
 ######################## RPM package creation ####################
 def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     """Create a non-versioned RPM meta package (.rpm).
+    _get_logger().debug("Entering: create_nonversioned_rpm_package")
 
     Builds a minimal RPM binary package whose payload is empty and whose primary
     purpose is to express dependencies. The package name does not embed a version
@@ -421,6 +441,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
 
 def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     """Create a versioned RPM package (.rpm).
+    _get_logger().debug("Entering: create_versioned_rpm_package")
 
     This function automates the process of building a RPM package by:
     1) Generating the spec file with appropriate fields (Package,
@@ -442,6 +463,7 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
 
 def create_rpm_package(pkg_name, config: PackageConfig):
     """Create an RPM package.
+    _get_logger().debug("Entering: create_rpm_package")
 
     This function invokes the creation of versioned and non-versioned packages
     and moves the resulting `.rpm` files to the destination directory.
@@ -465,6 +487,7 @@ def create_rpm_package(pkg_name, config: PackageConfig):
 
 def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     """Generate an RPM spec file.
+    _get_logger().debug("Entering: generate_spec_file")
 
     Parameters:
     pkg_name : Package name
@@ -556,6 +579,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
 def package_with_rpmbuild(spec_file):
     """Generate a RPM package using `rpmbuild`
+    _get_logger().debug("Entering: package_with_rpmbuild")
 
     Parameters:
     spec_file: Specfile for RPM package
@@ -578,6 +602,7 @@ def package_with_rpmbuild(spec_file):
 ############### Common functions for packaging ##################
 def move_packages_to_destination(pkg_name, config: PackageConfig):
     """Move the generated Debian package from the build directory to the destination directory.
+    _get_logger().debug("Entering: move_packages_to_destination")
 
     Parameters:
     pkg_name : Package name
@@ -613,6 +638,7 @@ def move_packages_to_destination(pkg_name, config: PackageConfig):
 
 def update_package_name(pkg_name, config: PackageConfig):
     """Update the package name by adding ROCm version and graphics architecture.
+    _get_logger().debug("Entering: update_package_name")
 
     Based on conditions, the function may append:
     - ROCm version
@@ -648,6 +674,7 @@ def update_package_name(pkg_name, config: PackageConfig):
 
 def debian_replace_devel_name(pkg_name):
     """Replace '-devel' with '-dev' in the package name.
+    _get_logger().debug("Entering: debian_replace_devel_name")
 
     Development package names are defined as -devel in json file
     For Debian packages -dev should be used instead.
@@ -665,6 +692,7 @@ def debian_replace_devel_name(pkg_name):
 
 def convert_to_versiondependency(dependency_list, config: PackageConfig):
     """Change ROCm package dependencies to versioned ones.
+    _get_logger().debug("Entering: convert_to_versiondependency")
 
     If a package depends on any packages listed in `pkg_list`,
     this function appends the dependency name with the specified ROCm version.
@@ -691,6 +719,7 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
 
 def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
     """Get the list of Artifactory directories required for creating the package.
+    _get_logger().debug("Entering: filter_components_fromartifactory")
 
     The `package.json` file defines the required artifactories for each package.
 
@@ -736,6 +765,7 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
 
 def parse_input_package_list(pkg_name):
     """Populate the package list from the provided input arguments.
+    _get_logger().debug("Entering: parse_input_package_list")
 
     Parameters:
     pkg_name : List of packages or type of packages single/composite
@@ -777,6 +807,7 @@ def parse_input_package_list(pkg_name):
 
 def clean_package_build_dir(artifacts_dir):
     """Clean the package build directories
+    _get_logger().debug("Entering: clean_package_build_dir")
 
     If artifactory directory is provided, clean the same as well
 
@@ -915,12 +946,12 @@ def main(argv: list[str]):
     logger.info(f"Artifacts directory: {args.artifacts_dir}")
     logger.info(f"Destination directory: {args.dest_dir}")
     
+    logger.info(f"📦 Building {args.pkg_type} Packages")
     try:
-        with logger.github_group(f"📦 Building {args.pkg_type} Packages"):
-            run(args)
-        logger.github_info(f"✅ Package build completed successfully")
+        run(args)
+        logger.info(f"✅ Package build completed successfully")
     except Exception as e:
-        logger.github_error(f"❌ Package build failed: {e}", file="build_package.py")
+        logger.error(f"❌ Package build failed: {e}")
         logger.log_exception(e, "Package build error")
         raise
 

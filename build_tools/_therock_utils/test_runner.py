@@ -67,67 +67,66 @@ class TestRunner:
         Raises:
             subprocess.CalledProcessError: If test fails
         """
-        with self.logger.github_group(f"🧪 Running {self.component} GTest ({self.test_type})"):
-            self.logger.info(f"Command: {shlex.join(cmd)}")
-            self.logger.info(f"Working directory: {cwd}")
-            
-            if env:
-                shard_info = []
-                if "GTEST_SHARD_INDEX" in env:
-                    shard_info.append(f"shard {int(env['GTEST_SHARD_INDEX'])+1}/{env.get('GTEST_TOTAL_SHARDS', '?')}")
-                if shard_info:
-                    self.logger.info(f"Sharding: {', '.join(shard_info)}")
-            
-            try:
-                with self.logger.timed_operation(f"{self.component}_gtest_execution"):
-                    if capture_output:
-                        result = subprocess.run(
-                            cmd,
-                            cwd=cwd,
-                            env=env,
-                            capture_output=True,
-                            text=True,
-                            check=False
+        self.logger.info(f"🧪 Running {self.component} GTest ({self.test_type})")
+        self.logger.info(f"Command: {shlex.join(cmd)}")
+        self.logger.info(f"Working directory: {cwd}")
+        
+        if env:
+            shard_info = []
+            if "GTEST_SHARD_INDEX" in env:
+                shard_info.append(f"shard {int(env['GTEST_SHARD_INDEX'])+1}/{env.get('GTEST_TOTAL_SHARDS', '?')}")
+            if shard_info:
+                self.logger.info(f"Sharding: {', '.join(shard_info)}")
+        
+        try:
+            with self.logger.timed_operation(f"{self.component}_gtest_execution"):
+                if capture_output:
+                    result = subprocess.run(
+                        cmd,
+                        cwd=cwd,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                    
+                    # Parse gtest output
+                    test_results = self._parse_gtest_output(result.stdout)
+                    self._log_test_results(test_results, result.returncode)
+                    
+                    # Log full output at DEBUG level
+                    if result.stdout:
+                        self.logger.debug("=== Test Output ===")
+                        for line in result.stdout.splitlines():
+                            self.logger.debug(line)
+                    
+                    if result.stderr:
+                        for line in result.stderr.splitlines():
+                            if line.strip():
+                                self.logger.warning(f"stderr: {line}")
+                    
+                    if result.returncode != 0:
+                        raise subprocess.CalledProcessError(
+                            result.returncode, cmd, result.stdout, result.stderr
                         )
-                        
-                        # Parse gtest output
-                        test_results = self._parse_gtest_output(result.stdout)
-                        self._log_test_results(test_results, result.returncode)
-                        
-                        # Log full output at DEBUG level
-                        if result.stdout:
-                            self.logger.debug("=== Test Output ===")
-                            for line in result.stdout.splitlines():
-                                self.logger.debug(line)
-                        
-                        if result.stderr:
-                            for line in result.stderr.splitlines():
-                                if line.strip():
-                                    self.logger.warning(f"stderr: {line}")
-                        
-                        if result.returncode != 0:
-                            raise subprocess.CalledProcessError(
-                                result.returncode, cmd, result.stdout, result.stderr
-                            )
-                        
-                        return result.returncode
-                    else:
-                        # Direct output to console (no parsing)
-                        result = subprocess.run(
-                            cmd,
-                            cwd=cwd,
-                            env=env,
-                            check=True
-                        )
-                        self.logger.github_info(f"✅ {self.component} GTest completed successfully")
-                        return result.returncode
-                        
-            except subprocess.CalledProcessError as e:
-                self.logger.github_error(
-                    f"❌ {self.component} GTest failed (exit code {e.returncode})",
-                    file=f"test_executable_scripts/test_{self.component}.py"
-                )
-                raise
+                    
+                    return result.returncode
+                else:
+                    # Direct output to console (no parsing)
+                    result = subprocess.run(
+                        cmd,
+                        cwd=cwd,
+                        env=env,
+                        check=True
+                    )
+                    self.logger.info(f"✅ {self.component} GTest completed successfully")
+                    return result.returncode
+                    
+        except subprocess.CalledProcessError as e:
+            self.logger.error(
+                f"❌ {self.component} GTest failed (exit code {e.returncode})"
+            )
+            raise
     
     def run_ctest(
         self,
@@ -181,53 +180,52 @@ class TestRunner:
         if cwd is None:
             cwd = test_dir.parent if test_dir.parent else Path.cwd()
         
-        with self.logger.github_group(f"🧪 Running {self.component} CTest ({self.test_type})"):
-            self.logger.info(f"Command: {shlex.join(cmd)}")
-            self.logger.info(f"Test directory: {test_dir}")
-            self.logger.info(f"Working directory: {cwd}")
-            self.logger.info(f"Parallelism: {parallel} jobs")
-            if timeout:
-                self.logger.info(f"Timeout: {timeout}s per test")
-            
-            try:
-                with self.logger.timed_operation(f"{self.component}_ctest_execution"):
-                    result = subprocess.run(
-                        cmd,
-                        cwd=cwd,
-                        env=env,
-                        capture_output=True,
-                        text=True,
-                        check=False
-                    )
-                    
-                    # Parse ctest output
-                    test_results = self._parse_ctest_output(result.stdout)
-                    self._log_test_results(test_results, result.returncode)
-                    
-                    # Log output
-                    if result.stdout:
-                        self.logger.debug("=== CTest Output ===")
-                        for line in result.stdout.splitlines():
-                            self.logger.debug(line)
-                    
-                    if result.stderr:
-                        for line in result.stderr.splitlines():
-                            if line.strip():
-                                self.logger.warning(f"stderr: {line}")
-                    
-                    if result.returncode != 0:
-                        raise subprocess.CalledProcessError(
-                            result.returncode, cmd, result.stdout, result.stderr
-                        )
-                    
-                    return result.returncode
-                    
-            except subprocess.CalledProcessError as e:
-                self.logger.github_error(
-                    f"❌ {self.component} CTest failed (exit code {e.returncode})",
-                    file=f"test_executable_scripts/test_{self.component}.py"
+        self.logger.info(f"🧪 Running {self.component} CTest ({self.test_type})")
+        self.logger.info(f"Command: {shlex.join(cmd)}")
+        self.logger.info(f"Test directory: {test_dir}")
+        self.logger.info(f"Working directory: {cwd}")
+        self.logger.info(f"Parallelism: {parallel} jobs")
+        if timeout:
+            self.logger.info(f"Timeout: {timeout}s per test")
+        
+        try:
+            with self.logger.timed_operation(f"{self.component}_ctest_execution"):
+                result = subprocess.run(
+                    cmd,
+                    cwd=cwd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False
                 )
-                raise
+                
+                # Parse ctest output
+                test_results = self._parse_ctest_output(result.stdout)
+                self._log_test_results(test_results, result.returncode)
+                
+                # Log output
+                if result.stdout:
+                    self.logger.debug("=== CTest Output ===")
+                    for line in result.stdout.splitlines():
+                        self.logger.debug(line)
+                
+                if result.stderr:
+                    for line in result.stderr.splitlines():
+                        if line.strip():
+                            self.logger.warning(f"stderr: {line}")
+                
+                if result.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        result.returncode, cmd, result.stdout, result.stderr
+                    )
+                
+                return result.returncode
+                
+        except subprocess.CalledProcessError as e:
+            self.logger.error(
+                f"❌ {self.component} CTest failed (exit code {e.returncode})"
+            )
+            raise
     
     def _parse_gtest_output(self, output: str) -> Dict:
         """
@@ -320,23 +318,20 @@ class TestRunner:
         
         if returncode == 0:
             if total > 0:
-                self.logger.github_info(f"✅ {self.component}: All {total} tests passed")
+                self.logger.info(f"✅ {self.component}: All {total} tests passed")
             else:
-                self.logger.github_info(f"✅ {self.component}: Tests completed successfully")
+                self.logger.info(f"✅ {self.component}: Tests completed successfully")
         else:
             # Log each failed test as a separate error
             for failed_test in results.get("failed_tests", []):
-                self.logger.github_error(
-                    f"Test failed: {failed_test}",
-                    file=f"test_executable_scripts/test_{self.component}.py"
-                )
+                self.logger.error(f"Test failed: {failed_test}")
             
             if failed > 0:
-                self.logger.github_error(
+                self.logger.error(
                     f"❌ {self.component}: {failed}/{total} tests failed"
                 )
             else:
-                self.logger.github_error(
+                self.logger.error(
                     f"❌ {self.component}: Tests failed with exit code {returncode}"
                 )
 

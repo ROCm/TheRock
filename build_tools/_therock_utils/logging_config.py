@@ -14,7 +14,6 @@ Features:
 - Multiple output formats (console, file, JSON)
 - Context-aware logging (component, operation, user)
 - Performance/timing tracking
-- GitHub Actions integration
 - Structured logging support
 - Log level management
 - Exception tracking
@@ -38,10 +37,11 @@ With Timing:
     with logger.timed_operation("package_installation"):
         install_package()
 
-GitHub Actions:
-    logger.github_info("Build completed")
-    logger.github_warning("Deprecated API used")
-    logger.github_error("Build failed")
+Exception Handling:
+    try:
+        risky_operation()
+    except Exception as e:
+        logger.log_exception(e, "Operation failed")
 """
 
 import logging
@@ -93,7 +93,6 @@ class LogFormat:
 
 # Environment detection
 IS_CI = bool(os.getenv("CI"))
-IS_GITHUB_ACTIONS = bool(os.getenv("GITHUB_ACTIONS"))
 IS_WINDOWS = sys.platform == "win32"
 
 # Default log directory
@@ -190,30 +189,6 @@ class ContextFilter(logging.Filter):
 
 
 # ============================================================================
-# GitHub Actions Integration
-# ============================================================================
-
-class GitHubActionsHandler(logging.Handler):
-    """Handler that outputs GitHub Actions workflow commands"""
-    
-    def emit(self, record: logging.LogRecord):
-        try:
-            msg = self.format(record)
-            
-            # Format based on log level
-            if record.levelno >= logging.ERROR:
-                print(f"::error::{msg}")
-            elif record.levelno >= logging.WARNING:
-                print(f"::warning::{msg}")
-            else:
-                print(f"::notice::{msg}")
-            
-            sys.stdout.flush()
-        except Exception:
-            self.handleError(record)
-
-
-# ============================================================================
 # Enhanced Logger Class
 # ============================================================================
 
@@ -288,59 +263,6 @@ class TheRockLogger(logging.LoggerAdapter):
             logger.log_dict({"status": "success", "count": 42}, message="Results")
         """
         self.log(level, f"{message}\n{json.dumps(data, indent=2)}")
-    
-    # GitHub Actions integration
-    def github_info(self, message: str, **kwargs):
-        """Log an info message in GitHub Actions format"""
-        if IS_GITHUB_ACTIONS:
-            print(f"::notice::{message}")
-            sys.stdout.flush()
-        self.info(message, **kwargs)
-    
-    def github_warning(self, message: str, file: str = None, line: int = None, **kwargs):
-        """Log a warning in GitHub Actions format"""
-        if IS_GITHUB_ACTIONS:
-            annotation = f"::warning"
-            if file:
-                annotation += f" file={file}"
-            if line:
-                annotation += f",line={line}"
-            annotation += f"::{message}"
-            print(annotation)
-            sys.stdout.flush()
-        self.warning(message, **kwargs)
-    
-    def github_error(self, message: str, file: str = None, line: int = None, **kwargs):
-        """Log an error in GitHub Actions format"""
-        if IS_GITHUB_ACTIONS:
-            annotation = f"::error"
-            if file:
-                annotation += f" file={file}"
-            if line:
-                annotation += f",line={line}"
-            annotation += f"::{message}"
-            print(annotation)
-            sys.stdout.flush()
-        self.error(message, **kwargs)
-    
-    @contextmanager
-    def github_group(self, title: str):
-        """
-        Create a collapsible group in GitHub Actions logs
-        
-        Usage:
-            with logger.github_group("Installation Steps"):
-                install_packages()
-        """
-        if IS_GITHUB_ACTIONS:
-            print(f"::group::{title}")
-            sys.stdout.flush()
-        try:
-            yield
-        finally:
-            if IS_GITHUB_ACTIONS:
-                print("::endgroup::")
-                sys.stdout.flush()
 
 
 # ============================================================================
@@ -357,7 +279,6 @@ def configure_root_logger(
     log_file: Union[str, Path] = None,
     json_output: bool = False,
     use_colors: bool = True,
-    enable_github_actions: bool = None,
 ):
     """
     Configure the root logger for TheRock
@@ -374,8 +295,6 @@ def configure_root_logger(
         Enable JSON formatted output (default: False)
     use_colors : bool
         Enable colored console output (default: True)
-    enable_github_actions : bool, optional
-        Enable GitHub Actions integration (default: auto-detect)
     """
     with _config_lock:
         root_logger = logging.getLogger("therock")
@@ -421,15 +340,6 @@ def configure_root_logger(
             
             file_handler.setFormatter(file_formatter)
             root_logger.addHandler(file_handler)
-        
-        # GitHub Actions handler
-        if enable_github_actions is None:
-            enable_github_actions = IS_GITHUB_ACTIONS
-        
-        if enable_github_actions:
-            gh_handler = GitHubActionsHandler()
-            gh_handler.setLevel(logging.WARNING)  # Only warnings and errors
-            root_logger.addHandler(gh_handler)
         
         # Prevent propagation to avoid duplicate logs
         root_logger.propagate = False
@@ -567,14 +477,10 @@ if __name__ == "__main__":
     with logger.timed_operation("slow_operation"):
         time.sleep(0.1)
     
-    # Example 3: GitHub Actions integration
-    logger.github_info("Build started")
-    logger.github_warning("Deprecated API usage detected")
-    
-    # Example 4: Structured logging
+    # Example 3: Structured logging
     logger.log_dict({"status": "success", "items_processed": 42}, message="Results")
     
-    # Example 5: Exception logging
+    # Example 4: Exception logging
     try:
         raise ValueError("Something went wrong")
     except Exception as e:
