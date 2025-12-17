@@ -480,14 +480,9 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "composable_kernel",
-            ]
-        ),
+        default=[
+            "composable_kernel",
+        ],
     )
     parser.add_argument(
         "--rocm-media-projects",
