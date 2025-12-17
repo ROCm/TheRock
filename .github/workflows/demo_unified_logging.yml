@@ -1,0 +1,185 @@
+name: Demo - Unified Logging Framework
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'Component to test (rocroller or rocwmma)'
+        required: true
+        default: 'rocroller'
+        type: choice
+        options:
+          - rocroller
+          - rocwmma
+      test_type:
+        description: 'Test type'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - regression
+          - full
+  push:
+    branches:
+      - users/rponnuru/logging_poc_2
+    paths:
+      - 'build_tools/_therock_utils/logging_config.py'
+      - 'build_tools/_therock_utils/test_runner.py'
+      - 'build_tools/github_actions/test_executable_scripts/test_*.py'
+      - '.github/workflows/demo_unified_logging.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  demo_logging:
+    name: 'Demo Unified Logging - ${{ github.event.inputs.component || ''rocroller'' }}'
+    runs-on: [self-hosted, Linux, AMD, gfx90a]
+    timeout-minutes: 60
+    container:
+      image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0
+    
+    env:
+      COMPONENT: ${{ github.event.inputs.component || 'rocroller' }}
+      TEST_TYPE: ${{ github.event.inputs.test_type || 'smoke' }}
+      THEROCK_BIN_DIR: "./build/bin"
+      THEROCK_BUILD_DIR: "./build"
+      AMDGPU_FAMILIES: "gfx90a"
+      RUNNER_OS: "Linux"
+      SHARD_INDEX: "1"
+      TOTAL_SHARDS: "1"
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: users/rponnuru/logging_poc_2
+      
+      - name: Display Logging Framework Info
+        run: |
+          echo "=========================================="
+          echo "🎯 Unified Logging Framework Demo"
+          echo "=========================================="
+          echo ""
+          echo "Component: $COMPONENT"
+          echo "Test Type: $TEST_TYPE"
+          echo ""
+          echo "📋 Logging Features:"
+          echo "  ✅ Centralized configuration"
+          echo "  ✅ Colored console output"
+          echo "  ✅ Context-aware logging (component, operation)"
+          echo "  ✅ Performance timing"
+          echo "  ✅ Structured logging"
+          echo "  ✅ Exception tracking"
+          echo ""
+          echo "📁 Key Files:"
+          echo "  • build_tools/_therock_utils/logging_config.py"
+          echo "  • build_tools/_therock_utils/test_runner.py"
+          echo "  • build_tools/github_actions/test_executable_scripts/test_${COMPONENT}.py"
+          echo ""
+          echo "=========================================="
+      
+      - name: Show Logging Configuration
+        run: |
+          echo "📝 Current Logging Configuration:"
+          echo ""
+          cat build_tools/_therock_utils/logging_config.py | grep -A 5 "^LOG_FORMAT"
+          echo ""
+          echo "Log Format: timestamp - logger_name - level - message"
+          echo "Log Level: INFO (controlled via configure_root_logger)"
+          echo ""
+      
+      - name: Download Pre-built Artifacts (Mock)
+        run: |
+          echo "ℹ️  In real CI, artifacts would be downloaded from previous build job"
+          echo "   For this demo, we'll create mock test binaries"
+          mkdir -p ${THEROCK_BIN_DIR}
+          mkdir -p ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test
+          
+          # Create mock test executables
+          if [ "$COMPONENT" = "rocroller" ]; then
+            echo '#!/bin/bash' > ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[==========] Running 3 tests from 1 test suite."' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[----------] Global test environment set-up."' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[----------] 3 tests from ArgumentLoaderTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[ RUN      ] ArgumentLoaderTest.BasicTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[       OK ] ArgumentLoaderTest.BasicTest (1 ms)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[ RUN      ] ArgumentLoaderTest.ConfigTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[       OK ] ArgumentLoaderTest.ConfigTest (2 ms)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[ RUN      ] ArgumentLoaderTest.ValidationTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[       OK ] ArgumentLoaderTest.ValidationTest (1 ms)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[----------] 3 tests from ArgumentLoaderTest (4 ms total)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo ""' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[----------] Global test environment tear-down"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[==========] 3 tests from 1 test suite ran. (4 ms total)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            echo 'echo "[  PASSED  ] 3 tests."' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+            chmod +x ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
+          else
+            mkdir -p ${THEROCK_BIN_DIR}/rocwmma/regression
+            echo "Mock CTest setup for rocwmma"
+          fi
+          
+          echo "✅ Mock artifacts ready"
+      
+      - name: Run Test with Unified Logging
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "🚀 Running $COMPONENT Tests"
+          echo "=========================================="
+          echo ""
+          
+          # Run the test script which uses unified logging
+          if [ "$COMPONENT" = "rocroller" ]; then
+            python3 build_tools/github_actions/test_executable_scripts/test_rocroller.py
+          else
+            python3 build_tools/github_actions/test_executable_scripts/test_rocwmma.py
+          fi
+      
+      - name: Demo Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "📊 Demo Summary"
+          echo "=========================================="
+          echo ""
+          echo "✅ Demonstrated Features:"
+          echo ""
+          echo "1️⃣  Unified Logging Configuration"
+          echo "   • Single LOG_FORMAT across all outputs"
+          echo "   • Consistent timestamp - logger - level - message"
+          echo ""
+          echo "2️⃣  TestRunner Integration"
+          echo "   • Captures GTest/CTest output"
+          echo "   • Parses test results"
+          echo "   • Structured logging with context"
+          echo ""
+          echo "3️⃣  Log Output Features"
+          echo "   • Colored console output (if terminal supports)"
+          echo "   • Component tracking (rocroller/rocwmma)"
+          echo "   • Operation timing"
+          echo "   • Test result summaries"
+          echo ""
+          echo "4️⃣  Simplicity"
+          echo "   • No GitHub Actions-specific code"
+          echo "   • No JSON formatting"
+          echo "   • No threading locks"
+          echo "   • Works same locally and in CI"
+          echo ""
+          echo "📁 Files Modified:"
+          echo "   • logging_config.py - Core framework (simplified)"
+          echo "   • test_runner.py - Test execution wrapper"
+          echo "   • test_rocroller.py - GTest integration"
+          echo "   • test_rocwmma.py - CTest integration"
+          echo ""
+          echo "=========================================="
+

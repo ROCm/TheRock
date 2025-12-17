@@ -15,8 +15,13 @@ import logging
 configure_root_logger(level=logging.INFO)
 logger = get_logger(__name__, component="rocroller", operation="test")
 
+logger.info("=" * 60)
+logger.info("🚀 Starting rocROLLER GTest Execution")
+logger.info("=" * 60)
+
 # repo + dirs
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+logger.debug(f"TheRock directory: {THEROCK_DIR}")
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
@@ -47,9 +52,14 @@ test_bin = next((p for p in bin_candidates if p.is_file()), None)
 if not test_bin:
     error_msg = f"rocroller-tests not found in: {', '.join(map(str, bin_candidates))}"
     logger.error(error_msg)
+    logger.error(f"Searched locations: {len(bin_candidates)}")
+    for idx, candidate in enumerate(bin_candidates, 1):
+        logger.error(f"  {idx}. {candidate}")
     raise FileNotFoundError(error_msg)
 
-logger.info(f"Found rocroller-tests at: {test_bin}")
+logger.info(f"✅ Found rocroller-tests binary")
+logger.info(f"   Location: {test_bin}")
+logger.info(f"   Size: {test_bin.stat().st_size:,} bytes")
 
 # Runtime libs
 if platform == "linux":
@@ -75,6 +85,10 @@ if platform == "linux":
 
 # TEST_TYPE → gtest filter
 TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
+logger.info(f"📋 Test Configuration:")
+logger.info(f"   Test Type: {TEST_TYPE}")
+logger.info(f"   Shard: {env.get('GTEST_SHARD_INDEX', 0)} of {env.get('GTEST_TOTAL_SHARDS', 1)}")
+
 test_filter_arg = None
 if TEST_TYPE == "smoke":
     # keep this subset (TODO: add more tests)

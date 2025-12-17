@@ -7,11 +7,16 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "_therock_utils"))
 
 from test_runner import TestRunner
-from logging_config import configure_root_logger
+from logging_config import configure_root_logger, get_logger
 import logging
 
 # Configure unified logging with INFO level
 configure_root_logger(level=logging.INFO)
+logger = get_logger(__name__, component="rocwmma", operation="test")
+
+logger.info("=" * 60)
+logger.info("🚀 Starting rocWMMA CTest Execution")
+logger.info("=" * 60)
 
 # Environment setup
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -34,6 +39,12 @@ environ_vars["GTEST_BRIEF"] = str(1)
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
+logger.info(f"📋 Test Configuration:")
+logger.info(f"   Test Type: {test_type}")
+logger.info(f"   Shard: {environ_vars.get('GTEST_SHARD_INDEX', 0)} of {environ_vars.get('GTEST_TOTAL_SHARDS', 1)}")
+logger.info(f"   Platform: {platform}")
+logger.info(f"   GPU Families: {AMDGPU_FAMILIES}")
+
 # If there are devices for which the full set is too slow, we can
 # programatically set test_type to "regression" here.
 
@@ -50,6 +61,10 @@ elif test_type == "regression":
 
 # Initialize test runner with unified logging
 runner = TestRunner(component="rocwmma", test_type=test_type)
+
+logger.info(f"✅ Test directory: {THEROCK_BIN_DIR}/rocwmma{test_subdir}")
+logger.info(f"⏱️  Timeout: {timeout}s per test")
+logger.info(f"🔧 Parallel jobs: 8")
 
 # Run CTest with unified logging
 runner.run_ctest(
