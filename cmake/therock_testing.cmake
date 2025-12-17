@@ -22,8 +22,9 @@ function(therock_test_validate_shared_lib)
     add_test(
       NAME therock-validate-shared-lib-${lib_name}
       COMMAND
+        ${THEROCK_SANITIZER_LAUNCHER}
         "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/validate_shared_library.py"
-          "${ARG_PATH}/${lib_name}"
+        "${ARG_PATH}/${lib_name}"
     )
   endforeach()
 endfunction()
