@@ -3,14 +3,11 @@ name: Demo - Unified Logging Framework
 on:
   workflow_dispatch:
     inputs:
-      component:
-        description: 'Component to test (rocroller or rocwmma)'
+      artifact_run_id:
+        description: 'Artifact Run ID to download binaries from'
         required: true
-        default: 'rocroller'
-        type: choice
-        options:
-          - rocroller
-          - rocwmma
+        default: '20151692873'
+        type: string
       test_type:
         description: 'Test type'
         required: true
@@ -34,18 +31,25 @@ permissions:
 
 jobs:
   demo_logging:
-    name: 'Demo Unified Logging - ${{ github.event.inputs.component || ''rocroller'' }}'
-    # Use any available Linux runner (no GPU needed for logging demo)
+    name: 'Demo Unified Logging - ${{ matrix.component }}'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [rocroller, rocwmma]
     
     env:
-      # Demo configuration (no real GPU/ROCm needed - just demonstrating logging)
-      COMPONENT: ${{ github.event.inputs.component || 'rocroller' }}
+      # Use real artifacts from specified run ID
+      ARTIFACT_RUN_ID: ${{ github.event.inputs.artifact_run_id || '20151692873' }}
+      ARTIFACT_GROUP: "gfx94X-dcgpu"
+      COMPONENT: ${{ matrix.component }}
       TEST_TYPE: ${{ github.event.inputs.test_type || 'smoke' }}
+      VENV_DIR: ${{ github.workspace }}/.venv
+      OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       THEROCK_BUILD_DIR: "./build"
-      AMDGPU_FAMILIES: "demo"
+      AMDGPU_FAMILIES: "gfx94X"
       RUNNER_OS: "Linux"
       SHARD_INDEX: "1"
       TOTAL_SHARDS: "1"
@@ -62,21 +66,19 @@ jobs:
           echo "🎯 Unified Logging Framework Demo"
           echo "=========================================="
           echo ""
-          echo "ℹ️  NOTE: This is a LOGGING DEMO only"
-          echo "   • Uses mock test binaries"
-          echo "   • No real GPU/ROCm needed"
-          echo "   • Focus: Demonstrate logging framework"
-          echo ""
           echo "Component: $COMPONENT"
           echo "Test Type: $TEST_TYPE"
+          echo "Artifact Run ID: $ARTIFACT_RUN_ID"
+          echo "Artifact Group: $ARTIFACT_GROUP"
           echo ""
           echo "📋 Logging Features:"
           echo "  ✅ Centralized configuration"
-          echo "  ✅ Colored console output (if TTY)"
+          echo "  ✅ Single unified log format"
           echo "  ✅ Context-aware logging (component, operation)"
           echo "  ✅ Performance timing"
           echo "  ✅ Structured logging"
           echo "  ✅ Exception tracking"
+          echo "  ✅ No GitHub Actions-specific code"
           echo ""
           echo "📁 Key Files:"
           echo "  • build_tools/_therock_utils/logging_config.py"
@@ -89,95 +91,75 @@ jobs:
         run: |
           echo "📝 Current Logging Configuration:"
           echo ""
-          cat build_tools/_therock_utils/logging_config.py | grep -A 5 "^LOG_FORMAT"
+          grep -A 1 "^LOG_FORMAT" build_tools/_therock_utils/logging_config.py || true
           echo ""
           echo "Log Format: timestamp - logger_name - level - message"
           echo "Log Level: INFO (controlled via configure_root_logger)"
           echo ""
       
-      - name: Download Pre-built Artifacts (Mock)
-        run: |
-          echo "ℹ️  In real CI, artifacts would be downloaded from previous build job"
-          echo "   For this demo, we'll create mock test binaries"
-          mkdir -p ${THEROCK_BIN_DIR}
-          mkdir -p ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test
-          
-          # Create mock test executables
-          if [ "$COMPONENT" = "rocroller" ]; then
-            echo '#!/bin/bash' > ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[==========] Running 3 tests from 1 test suite."' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[----------] Global test environment set-up."' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[----------] 3 tests from ArgumentLoaderTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[ RUN      ] ArgumentLoaderTest.BasicTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[       OK ] ArgumentLoaderTest.BasicTest (1 ms)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[ RUN      ] ArgumentLoaderTest.ConfigTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[       OK ] ArgumentLoaderTest.ConfigTest (2 ms)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[ RUN      ] ArgumentLoaderTest.ValidationTest"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[       OK ] ArgumentLoaderTest.ValidationTest (1 ms)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[----------] 3 tests from ArgumentLoaderTest (4 ms total)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo ""' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[----------] Global test environment tear-down"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[==========] 3 tests from 1 test suite ran. (4 ms total)"' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            echo 'echo "[  PASSED  ] 3 tests."' >> ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-            chmod +x ${THEROCK_BUILD_DIR}/math-libs/BLAS/rocRoller/build/test/rocroller-tests
-          else
-            mkdir -p ${THEROCK_BIN_DIR}/rocwmma/regression
-            echo "Mock CTest setup for rocwmma"
-          fi
-          
-          echo "✅ Mock artifacts ready"
+      - name: Download Real Artifacts
+        uses: './.github/actions/setup_test_environment'
+        with:
+          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          ARTIFACT_GROUP: ${{ env.ARTIFACT_GROUP }}
+          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
+          VENV_DIR: ${{ env.VENV_DIR }}
+          FETCH_ARTIFACT_ARGS: ${{ matrix.component == 'rocroller' && '--blas --tests' || '--tests' }}
+          IS_PR_FROM_FORK: false
       
-      - name: Run Test with Unified Logging
+      - name: Run ${{ matrix.component }} Test with Unified Logging
         run: |
           echo ""
           echo "=========================================="
-          echo "🚀 Running $COMPONENT Tests"
+          echo "🚀 Running $COMPONENT Tests with Unified Logging"
           echo "=========================================="
           echo ""
           
-          # Run the test script which uses unified logging
-          if [ "$COMPONENT" = "rocroller" ]; then
-            python3 build_tools/github_actions/test_executable_scripts/test_rocroller.py
-          else
-            python3 build_tools/github_actions/test_executable_scripts/test_rocwmma.py
-          fi
+          # Run the test script which uses unified logging framework
+          python3 build_tools/github_actions/test_executable_scripts/test_${COMPONENT}.py
       
       - name: Demo Summary
         if: always()
         run: |
           echo ""
           echo "=========================================="
-          echo "📊 Demo Summary"
+          echo "📊 Demo Summary - $COMPONENT"
           echo "=========================================="
           echo ""
           echo "✅ Demonstrated Features:"
           echo ""
-          echo "1️⃣  Unified Logging Configuration"
-          echo "   • Single LOG_FORMAT across all outputs"
-          echo "   • Consistent timestamp - logger - level - message"
+          echo "1️⃣  Real Test Execution"
+          echo "   • Downloaded artifacts from Run ID: $ARTIFACT_RUN_ID"
+          echo "   • Ran actual $COMPONENT tests (not mocks)"
+          echo "   • Used real GTest/CTest binaries"
           echo ""
-          echo "2️⃣  TestRunner Integration"
+          echo "2️⃣  Unified Logging Configuration"
+          echo "   • Single LOG_FORMAT across all outputs"
+          echo "   • Consistent: timestamp - logger - level - message"
+          echo "   • No environment-specific formatting"
+          echo ""
+          echo "3️⃣  TestRunner Integration"
           echo "   • Captures GTest/CTest output"
           echo "   • Parses test results"
           echo "   • Structured logging with context"
+          echo "   • Performance timing built-in"
           echo ""
-          echo "3️⃣  Log Output Features"
-          echo "   • Colored console output (if terminal supports)"
-          echo "   • Component tracking (rocroller/rocwmma)"
-          echo "   • Operation timing"
+          echo "4️⃣  Log Output Features"
+          echo "   • Component tracking ($COMPONENT)"
+          echo "   • Operation timing with timed_operation()"
           echo "   • Test result summaries"
+          echo "   • Exception logging"
           echo ""
-          echo "4️⃣  Simplicity"
+          echo "5️⃣  Simplicity & Consistency"
           echo "   • No GitHub Actions-specific code"
           echo "   • No JSON formatting"
           echo "   • No threading locks"
           echo "   • Works same locally and in CI"
           echo ""
-          echo "📁 Files Modified:"
-          echo "   • logging_config.py - Core framework (simplified)"
+          echo "📁 Key Files:"
+          echo "   • logging_config.py - Core framework (~400 lines, simplified)"
           echo "   • test_runner.py - Test execution wrapper"
-          echo "   • test_rocroller.py - GTest integration"
-          echo "   • test_rocwmma.py - CTest integration"
+          echo "   • test_${COMPONENT}.py - Component test script"
           echo ""
           echo "=========================================="
 
