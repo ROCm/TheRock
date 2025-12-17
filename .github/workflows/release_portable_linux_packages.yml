@@ -105,13 +105,13 @@ jobs:
           python ./build_tools/compute_rocm_native_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
-            --prerelease-version="rpm"
+            --package-type="rpm"
           # Compute debian package version
           # Output will be available in env variable rocm_deb_package_version
           python ./build_tools/compute_rocm_native_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
-            --prerelease-version="deb"
+            --package-type="deb"
 
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
