@@ -78,11 +78,16 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             if key.endswith(".tar.gz") and os.path.dirname(key) == prefix:
-                # Only append the filename without the full path.
+                # Append a tuple for each .tar.gz file found in the specified directory:
+                # (
+                #   filename (str, relative to prefix if set),
+                #   last modified time as epoch seconds (int, from S3 LastModified),
+                #   file size in bytes (int, from S3 Size)
+                # )
                 files.append(
                     (
                         key.removeprefix(f"{prefix}/") if prefix else key,
-                        int(obj["LastModified"].timestamp()),
+                        int(obj.get("LastModified", datetime.now(timezone.utc)).timestamp()),
                         int(obj.get("Size", 0)),
                     )
                 )
