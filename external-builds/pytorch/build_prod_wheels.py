@@ -657,7 +657,8 @@ def do_build_pytorch(
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
         if is_pytorch_2_9:
             # Default ON for 2.9.x, unless explicitly disabled
-            # args.enable_pytorch_fbgemm_genai_linux can be set to false by using --no-enable-pytorch-fbgemm-genai-linux
+            # args.enable_pytorch_fbgemm_genai_linux can be set to false
+            # by passing --no-enable-pytorch-fbgemm-genai-linux as input
             if args.enable_pytorch_fbgemm_genai_linux is False:
                 use_fbgemm_genai = "OFF"
                 print(f"  [WARN] User-requested override to set FBGEMM_GENAI = OFF.")
