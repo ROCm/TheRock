@@ -485,6 +485,16 @@ def matrix_generator(
                 | amdgpu_family_info_matrix_postsubmit
             ):
                 selected_target_names.append(target)
+        elif branch_name == "logging_poc_2":
+            # Special handling for unified logging POC branch:
+            # - Only run on Linux with gfx94x (single GPU)
+            # - Skip Windows entirely to reduce resource usage
+            print(
+                f"[PUSH - LOGGING_POC_2] Generating minimal build matrix for logging demo"
+            )
+            if platform == "linux":
+                selected_target_names.append("gfx94x")
+            # Windows matrix will be empty for this branch
         else:
             print(
                 f"[PUSH - {branch_name}] Generating build matrix with {str(base_args)}"

@@ -11,6 +11,9 @@
 #
 # For push to main branch, all AMD families will built and tested from `amdgpu_family_matrix.py`.
 #
+# For push to users/rponnuru/logging_poc_2, only Linux gfx94X tests run (no Windows).
+#   This minimal configuration demonstrates the unified logging framework efficiently.
+#
 # Note: If a test machine is not available for a specific AMD GPU family in `amdgpu_family_matrix.py`, tests will be skipped.
 
 name: CI
