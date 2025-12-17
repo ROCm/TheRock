@@ -14,6 +14,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-libbacktrace
+      USE_DIST_AMDGPU_TARGETS
       FPRINT_SOURCE_DIR "${_source_dir}"
       FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
       EXTERNAL_SOURCE_DIR .

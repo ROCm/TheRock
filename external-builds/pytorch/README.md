@@ -88,7 +88,7 @@ detailed instructions. That information is summarized here.
 
 ### Prerequisites and setup
 
-You will need a supported Python version (3.10+) on a system which we build the
+You will need a supported Python version (3.11+) on a system which we build the
 `rocm[libraries,devel]` packages for. See the
 [`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
@@ -201,11 +201,17 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 ### Running PyTorch smoketests
 
-We have additional smoketests that run some sample computations. See
-[smoke-tests](./smoke-tests/) for details, or just run:
+We have additional smoketests in [smoke-tests](./smoke-tests/) that run some
+sample computations. To run these tests:
 
 ```bash
+# Basic usage (no wrapper script)
 pytest -v smoke-tests
+
+# Wrapper script, passing through some useful pytest args:
+python run_pytorch_smoke_tests.py -- \
+  --log-cli-level=INFO \
+  -v
 ```
 
 ### Running full PyTorch tests
@@ -216,8 +222,14 @@ capabilities tailored for AMD ROCm GPUs. See the script for detailed
 instructions. Here are a few examples:
 
 ```bash
-# Basic usage (auto-detect everything):
+# Basic usage (auto-detect everything, no extra args):
 python run_pytorch_tests.py
+
+# Typical usage on CI, passing through some useful pytest args:
+python run_pytorch_tests.py -- \
+  --continue-on-collection-errors \
+  --import-mode=importlib \
+  -v
 
 # Custom test selection with pytest -k:
 python run_pytorch_tests.py -k "test_nn and not test_dropout"
