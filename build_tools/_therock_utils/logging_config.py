@@ -17,7 +17,6 @@ Features:
 - Structured logging support
 - Log level management
 - Exception tracking
-- Thread-safe operations
 
 Usage Examples:
 ---------------
@@ -49,7 +48,6 @@ import json
 import os
 import sys
 import time
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
@@ -217,7 +215,6 @@ class TheRockLogger(logging.LoggerAdapter):
 # ============================================================================
 
 _configured_loggers: Dict[str, TheRockLogger] = {}
-_config_lock = threading.Lock()
 
 
 def configure_root_logger(
@@ -237,37 +234,36 @@ def configure_root_logger(
     use_colors : bool
         Enable colored console output (default: True)
     """
-    with _config_lock:
-        root_logger = logging.getLogger("therock")
+    root_logger = logging.getLogger("therock")
+    
+    # Set level
+    if level is None:
+        level = LogLevel.INFO if IS_CI else LogLevel.DEBUG
+    root_logger.setLevel(level)
+    
+    # Remove existing handlers
+    root_logger.handlers.clear()
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(level)
+    console_formatter = ColoredFormatter(LOG_FORMAT, use_color=use_colors)
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
+    
+    # File handler
+    if log_file:
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Set level
-        if level is None:
-            level = LogLevel.INFO if IS_CI else LogLevel.DEBUG
-        root_logger.setLevel(level)
-        
-        # Remove existing handlers
-        root_logger.handlers.clear()
-        
-        # Console handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(level)
-        console_formatter = ColoredFormatter(LOG_FORMAT, use_color=use_colors)
-        console_handler.setFormatter(console_formatter)
-        root_logger.addHandler(console_handler)
-        
-        # File handler
-        if log_file:
-            log_path = Path(log_file)
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            file_handler = logging.FileHandler(log_path, encoding="utf-8")
-            file_handler.setLevel(level)
-            file_formatter = logging.Formatter(LOG_FORMAT)
-            file_handler.setFormatter(file_formatter)
-            root_logger.addHandler(file_handler)
-        
-        # Prevent propagation to avoid duplicate logs
-        root_logger.propagate = False
+        file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        file_handler.setLevel(level)
+        file_formatter = logging.Formatter(LOG_FORMAT)
+        file_handler.setFormatter(file_formatter)
+        root_logger.addHandler(file_handler)
+    
+    # Prevent propagation to avoid duplicate logs
+    root_logger.propagate = False
 
 
 def get_logger(
