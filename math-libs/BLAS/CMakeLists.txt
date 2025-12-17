@@ -98,7 +98,7 @@ set(hipBLASLt_optional_deps)
 if(NOT WIN32)
   # hipBLASLt is hard-coded to not expect rocm-smi on Windows.
   list(APPEND hipBLASLt_optional_deps
-    amdsmi
+    rocm_smi_lib amdsmi
   )
 endif()
 
