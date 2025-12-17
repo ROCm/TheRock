@@ -134,29 +134,5 @@ skip_tests = {
             # AssertionError: Tensor-likes are not close!
             "test_non_contig_pow_cuda_complex64",
         ],
-        "torch": [
-            # SEGMENTATION FAULT!!!!!
-            # external-builds/pytorch/pytorch/test/test_torch.py::TestTorchDeviceTypeCUDA::test_masked_scatter_cuda_uint8 Kernel Name: _ZN2at6native13reduce_kernelILi512ELi1ENS0_8ReduceOpIbNS0_14func_wrapper_tIbZZZNS0_15and_kernel_cudaERNS_14TensorIteratorEENKUlvE_clEvENKUlvE10_clEvEUlbbE_EEjbLi4ELi4EEEEEvT1_
-            # :0:rocdevice.cpp            :3603: 1545695326084 us:  Callback: Queue 0x7f3dd8000000 Aborting with error : HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the necessary resources. This error may also occur when the core runtime library needs to spawn threads or create internal OS-specific events. Code: 0x1008 Available Free mem : 17592186044276 MB
-            # Thread 0x00007f4b4fd88b80 (most recent call first):
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_comparison.py", line 1087 in _compare_regular_values_close
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_comparison.py", line 905 in _compare_values
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_comparison.py", line 747 in compare
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_comparison.py", line 1298 in not_close_error_metas
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_internal/common_utils.py", line 4248 in assertEqual
-            # File "/__w/TheRock/TheRock/external-builds/pytorch/pytorch/test/test_torch.py", line 3683 in test_masked_scatter
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_internal/common_device_type.py", line 1473 in only_fn
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_internal/common_device_type.py", line 428 in instantiated_test
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_internal/common_utils.py", line 3332 in wrapper
-            # File "/__w/_tool/Python/3.11.14/x64/lib/python3.11/unittest/case.py", line 579 in _callTestMethod
-            # File "/__w/_tool/Python/3.11.14/x64/lib/python3.11/unittest/case.py", line 623 in run
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_internal/common_utils.py", line 3484 in _run_custom
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_internal/common_utils.py", line 3514 in run
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/torch/testing/_internal/common_device_type.py", line 519 in run
-            # File "/__w/_tool/Python/3.11.14/x64/lib/python3.11/unittest/case.py", line 678 in __call__
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/_pytest/unittest.py", line 351 in runtest
-            # File "/__w/TheRock/TheRock/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 174 in pytest_runtest_call
-            "test_masked_scatter_cuda_uint8 "
-        ],
     },
 }

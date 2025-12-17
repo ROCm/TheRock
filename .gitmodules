@@ -49,3 +49,11 @@
 	path = base/amdsmi
 	url = https://github.com/ROCm/amdsmi.git
 	branch = amd-staging
+[submodule "iree"]
+	path = iree-libs/iree
+	url = https://github.com/iree-org/iree.git
+	branch = main
+[submodule "fusilli"]
+	path = iree-libs/fusilli
+	url = https://github.com/iree-org/fusilli.git
+	branch = main

@@ -39,6 +39,7 @@ class SourceSet:
     name: str
     description: str
     submodules: List[Submodule] = field(default_factory=list)
+    disable_platforms: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -128,6 +129,7 @@ class BuildTopology:
                 name=set_name,
                 description=set_data.get("description", ""),
                 submodules=submodules,
+                disable_platforms=set_data.get("disable_platforms", []),
             )
 
         # Parse build stages
@@ -383,6 +385,15 @@ class BuildTopology:
                         f"(expected: {valid_platforms})"
                     )
 
+        # Validate source set disable_platforms
+        for source_set_name, source_set in self.source_sets.items():
+            for platform in source_set.disable_platforms:
+                if platform not in valid_platforms:
+                    errors.append(
+                        f"Source set '{source_set_name}' has invalid disable_platform '{platform}' "
+                        f"(expected: {valid_platforms})"
+                    )
+
         return errors
 
     def validate_topology(self) -> List[str]:
@@ -578,7 +589,9 @@ class BuildTopology:
             raise ValueError(f"Source set '{source_set_name}' not found")
         return self.source_sets[source_set_name].submodules
 
-    def get_submodules_for_stage(self, build_stage: str) -> List[Submodule]:
+    def get_submodules_for_stage(
+        self, build_stage: str, platform: Optional[str] = None
+    ) -> List[Submodule]:
         """
         Get all submodules needed to build a specific stage.
 
@@ -588,6 +601,8 @@ class BuildTopology:
 
         Args:
             build_stage: Name of the build stage
+            platform: Current platform (e.g., "linux", "windows"). If provided,
+                source_sets with this platform in disable_platforms are skipped.
 
         Returns:
             List of Submodule objects needed for this stage
@@ -605,7 +620,11 @@ class BuildTopology:
             group = self.artifact_groups[group_name]
             for source_set_name in group.source_sets:
                 if source_set_name in self.source_sets:
-                    for submodule in self.source_sets[source_set_name].submodules:
+                    source_set = self.source_sets[source_set_name]
+                    # Skip source sets disabled for this platform
+                    if platform and platform in source_set.disable_platforms:
+                        continue
+                    for submodule in source_set.submodules:
                         # TODO: When adding sparse_checkout, merge specs here
                         if submodule.name not in submodules_by_name:
                             submodules_by_name[submodule.name] = submodule

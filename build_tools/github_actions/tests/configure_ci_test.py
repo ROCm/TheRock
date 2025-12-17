@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import os
 import sys
@@ -5,6 +6,15 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
+
+therock_test_runner_dict = {
+    "gfx110x": {
+        "linux": "linux-gfx110X-gpu-rocm-test",
+        "windows": "windows-gfx110X-gpu-rocm-test",
+    },
+}
+
+os.environ["ROCM_THEROCK_TEST_RUNNERS"] = json.dumps(therock_test_runner_dict)
 
 
 class ConfigureCITest(unittest.TestCase):
@@ -487,6 +497,12 @@ class ConfigureCITest(unittest.TestCase):
         for family_info in family_info_list:
             self.assertIn("amdgpu_family", family_info)
             self.assertIn("test-runs-on", family_info)
+
+    def test_rocm_org_var_names(self):
+        os.environ["LOAD_TEST_RUNNERS_FROM_VAR"] = "false"
+        test_matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
+        self.assertIn("linux-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
+        self.assertIn("windows-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
 
 
 if __name__ == "__main__":

@@ -120,12 +120,12 @@ PyTorch packages versions are handled via scripts:
 
 The scripts produce these versions for each distribution channel:
 
-| Package name        | Example release version | Example nightly version        |
-| ------------------- | ----------------------- | ------------------------------ |
-| torch               | `2.7.1+rocm7.9.0rc1`    | `2.10.0a0+rocm7.10.0a20251024` |
-| torchaudio          | `2.7.1a0+rocm7.9.0rc1`  | `2.10.0a0+rocm7.10.0a20251024` |
-| torchvision         | `0.22.1+rocm7.9.0rc1`   | `0.24.0+rocm7.11.0a20251124`   |
-| pytorch-triton-rocm | `3.3.1+rocm7.9.0rc1`    | `3.5.1+rocm7.11.0a20251124`    |
+| Package name | Example release version | Example nightly version        |
+| ------------ | ----------------------- | ------------------------------ |
+| torch        | `2.7.1+rocm7.9.0rc1`    | `2.10.0a0+rocm7.10.0a20251024` |
+| torchaudio   | `2.7.1a0+rocm7.9.0rc1`  | `2.10.0a0+rocm7.10.0a20251024` |
+| torchvision  | `0.22.1+rocm7.9.0rc1`   | `0.24.0+rocm7.11.0a20251124`   |
+| triton       | `3.3.1+rocm7.9.0rc1`    | `3.5.1+rocm7.11.0a20251124`    |
 
 #### JAX versions
 
