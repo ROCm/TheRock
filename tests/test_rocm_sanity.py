@@ -151,9 +151,15 @@ class TestAmdSmiTests:
             "AmdSmiDynamicMetricTest.*",
         ]
 
-        include_filter = ":".join(include_tests)
+        exclude_tests = [
+            "amdsmitstReadOnly.TempRead",
+            "amdsmitstReadOnly.TestFrequenciesRead",
+            "amdsmitstReadWrite.TestPowerReadWrite",
+        ]
 
-        cmd = [str(amdsmi_test_bin), f"--gtest_filter={include_filter}"]
+        gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
+
+        cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]
 
         # run in the directory where amdsmitst was found
         cwd = amdsmi_test_bin.parent

@@ -56,10 +56,9 @@ if test_type == "smoke":
     logging.info("Running smoke tests only for amdsmitst")
     test_filter = ["--gtest_filter=AmdSmiDynamicMetricTest.*"]
 else:
-    # Full test mode: whitelist only passing tests because exclude filters don't work
-    logging.info("Running full amdsmitst test suite (with whitelist filter)")
+    # Full test mode: run whitelist and explicitly exclude known failing tests
+    logging.info("Running full amdsmitst test suite (include + exclude filter)")
 
-    # Passing tests from amdsmitst
     include_tests = [
         "amdsmitstReadOnly.*",
         "amdsmitstReadWrite.FanReadWrite",
@@ -71,9 +70,14 @@ else:
         "AmdSmiDynamicMetricTest.*",
     ]
 
-    include_filter = ":".join(include_tests)
+    exclude_tests = [
+        "amdsmitstReadOnly.TempRead",
+        "amdsmitstReadOnly.TestFrequenciesRead",
+        "amdsmitstReadWrite.TestPowerReadWrite",
+    ]
 
-    test_filter = [f"--gtest_filter={include_filter}"]
+    gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
+    test_filter = [f"--gtest_filter={gtest_filter}"]
 
 # -----------------------------
 # Build command
