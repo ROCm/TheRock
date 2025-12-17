@@ -245,6 +245,7 @@ def retrieve_artifacts_by_run_id(args):
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
+            argv.append("base_dev_generic")
 
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
