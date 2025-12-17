@@ -34,6 +34,10 @@ jobs:
     name: 'Demo Unified Logging - ${{ matrix.component }}'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    container:
+      # Use ROCm Docker image with ROCm 7.0 pre-installed
+      image: rocm/dev-ubuntu-22.04:7.0
+      options: --device /dev/kfd --device /dev/dri --security-opt seccomp=unconfined --group-add video
     strategy:
       fail-fast: false
       matrix:
@@ -45,7 +49,6 @@ jobs:
       ARTIFACT_GROUP: "gfx94X-dcgpu"
       COMPONENT: ${{ matrix.component }}
       TEST_TYPE: ${{ github.event.inputs.test_type || 'smoke' }}
-      VENV_DIR: ${{ github.workspace }}/.venv
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       THEROCK_BUILD_DIR: "./build"
@@ -65,6 +68,9 @@ jobs:
           echo "=========================================="
           echo "🎯 Unified Logging Framework Demo"
           echo "=========================================="
+          echo ""
+          echo "🐳 Container: rocm/dev-ubuntu-22.04:7.0"
+          echo "   ROCm 7.0 is pre-installed ✅"
           echo ""
           echo "Component: $COMPONENT"
           echo "Test Type: $TEST_TYPE"
@@ -96,16 +102,28 @@ jobs:
           echo "Log Format: timestamp - logger_name - level - message"
           echo "Log Level: INFO (controlled via configure_root_logger)"
           echo ""
+          echo "🐳 Using ROCm Docker image: rocm/dev-ubuntu-22.04:7.0"
+          echo "   • ROCm pre-installed"
+          echo "   • No need to download/install ROCm"
+          echo "   • Only downloading test binaries"
+          echo ""
       
-      - name: Download Real Artifacts
-        uses: './.github/actions/setup_test_environment'
-        with:
-          ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
-          ARTIFACT_GROUP: ${{ env.ARTIFACT_GROUP }}
-          OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
-          VENV_DIR: ${{ env.VENV_DIR }}
-          FETCH_ARTIFACT_ARGS: ${{ matrix.component == 'rocroller' && '--blas --tests' || '--tests' }}
-          IS_PR_FROM_FORK: false
+      - name: Setup Python and Install Dependencies
+        run: |
+          apt-get update && apt-get install -y python3-pip
+          pip3 install --upgrade pip
+          pip3 install -r requirements-test.txt
+      
+      - name: Download Test Artifacts Only
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo "📦 Downloading test binaries from Run ID: $ARTIFACT_RUN_ID"
+          python3 ./build_tools/install_rocm_from_artifacts.py \
+            --run-id=${ARTIFACT_RUN_ID} \
+            --artifact-group=${ARTIFACT_GROUP} \
+            --output-dir=${OUTPUT_ARTIFACTS_DIR} \
+            ${{ matrix.component == 'rocroller' && '--blas --tests' || '--tests' }}
       
       - name: Run ${{ matrix.component }} Test with Unified Logging
         run: |
@@ -129,9 +147,10 @@ jobs:
           echo "✅ Demonstrated Features:"
           echo ""
           echo "1️⃣  Real Test Execution"
-          echo "   • Downloaded artifacts from Run ID: $ARTIFACT_RUN_ID"
+          echo "   • Downloaded test binaries from Run ID: $ARTIFACT_RUN_ID"
           echo "   • Ran actual $COMPONENT tests (not mocks)"
           echo "   • Used real GTest/CTest binaries"
+          echo "   • ROCm pre-installed in Docker container"
           echo ""
           echo "2️⃣  Unified Logging Configuration"
           echo "   • Single LOG_FORMAT across all outputs"
@@ -150,14 +169,20 @@ jobs:
           echo "   • Test result summaries"
           echo "   • Exception logging"
           echo ""
-          echo "5️⃣  Simplicity & Consistency"
+          echo "5️⃣  Simplicity & Efficiency"
           echo "   • No GitHub Actions-specific code"
           echo "   • No JSON formatting"
           echo "   • No threading locks"
           echo "   • Works same locally and in CI"
+          echo "   • ROCm container = faster setup"
+          echo ""
+          echo "🐳 Container Info:"
+          echo "   • Image: rocm/dev-ubuntu-22.04:7.0"
+          echo "   • ROCm pre-installed (no download needed)"
+          echo "   • Only downloaded test binaries"
           echo ""
           echo "📁 Key Files:"
-          echo "   • logging_config.py - Core framework (~400 lines, simplified)"
+          echo "   • logging_config.py - Core framework (~400 lines)"
           echo "   • test_runner.py - Test execution wrapper"
           echo "   • test_${COMPONENT}.py - Component test script"
           echo ""
