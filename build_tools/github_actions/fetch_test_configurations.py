@@ -32,7 +32,7 @@ test_matrix = {
     "hip-tests": {
         "job_name": "hip-tests",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 120, # it failed for 120 mins, fix it when we address sharding.
+        "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,

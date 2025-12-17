@@ -8,8 +8,12 @@ import shutil
 import json
 import sys
 
-
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+logging.basicConfig(level=logging.INFO)
+THEROCK_BIN_DIR_STR = os.getenv("THEROCK_BIN_DIR")
+if THEROCK_BIN_DIR_STR is None:
+    logging.info("++ Error: env(THEROCK_BIN_DIR) is not set. Please set it before executing tests.")
+    sys.exit(1)
+THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -40,14 +44,7 @@ def get_test_range_per_shard(total_test_count: int, total_shards, shard_index):
         # Adjust last few tests
         end_index = total_test_count
     logging.info(
-        """
-        Shard index: {shard_index},
-        total shards: {total_shards},
-        tests per shard: {tests_per_shard},
-        current index: {current_index},
-        to: {end_index}
-        """
-    )
+        f"""++ hip-tests ctest: shard {shard_index} / {total_shards}. Running:{tests_per_shard} tests""")
     return [current_index, end_index]
 
 
@@ -56,28 +53,35 @@ if sys.platform == "win32":
     dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
     dlls_to_copy = []
     for pattern in dlls_pattern:
-        dlls_to_copy.extend(Path(THEROCK_BIN_DIR).glob(pattern))
+        dlls_to_copy.extend(f"{THEROCK_BIN_DIR}.glob(pattern)")
     for dll in dlls_to_copy:
         try:
             shutil.copy(dll, CATCH_TESTS_PATH)
             logging.info(f"++ Copied: {dll} to {CATCH_TESTS_PATH}")
         except Exception as e:
-            logging.info(f"Error copying {dll}: {e}")
+            logging.info(f"++ Error copying {dll}: {e}")
+else:
+    HIP_LIB_PATH = f"{THEROCK_BIN_DIR}/../lib"
+    logging.info(f"++ Setting LD_LIBRARY_PATH={HIP_LIB_PATH}")
+    if "LD_LIBRARY_PATH" in env:
+        env["LD_LIBRARY_PATH"] = f"{HIP_LIB_PATH}:{env['LD_LIBRARY_PATH']}"
+    else:
+        env["LD_LIBRARY_PATH"] = HIP_LIB_PATH
+
 
 # catch/ctest framework 
 # Linux
-#   does not honor LD_LIBRARY_PATH on Linux
+#   LD_LIBRARY_PATH needs to be used
 #   tests are hardcoded to look at THEROCK_BIN_DIR or /opt/rocm/lib path
 # Windows
 #   tests load the dlls present in the local exe folder
 # Set ROCM Path, to find rocm_agent_enum etc
-ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+ROCM_PATH = f"{THEROCK_BIN_DIR}.resolve().parent"
 env["ROCM_PATH"] = str(ROCM_PATH)
 
+
 total_tests = get_test_count()
-test_range = get_test_range_per_shard(total_tests, int(TOTAL_SHARDS), int(SHARD_INDEX))
-index_start = test_range[0]
-index_end = test_range[1]
+index_start, index_end = get_test_range_per_shard(total_tests, int(TOTAL_SHARDS), int(SHARD_INDEX))
 cmd = [
     "ctest",
     "-I",
@@ -85,8 +89,6 @@ cmd = [
     "--test-dir",
     CATCH_TESTS_PATH,
     "--output-on-failure",
-    "--repeat",
-    "until-pass:3",
     "--timeout",
     "600"
 ]
