@@ -15,8 +15,8 @@ class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
         environ_vars = os.environ.copy()
+        environ_vars["UT_MIN_GPUS"] = "2"
         environ_vars["UT_MAX_GPUS"] = "4"
-        environ_vars["UT_POW2_GPUs"] = "4"
         cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(
