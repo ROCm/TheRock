@@ -184,9 +184,9 @@ def check_for_gfxarch(pkgname):
     bool : True if Gfxarch is set else False.
             False if devel package
     """
- #  Disabling this for time being as per the requirements
- #   if pkgname.endswith("-devel"):
- #       return False
+    #  Disabling this for time being as per the requirements
+    #   if pkgname.endswith("-devel"):
+    #       return False
 
     pkg_info = get_package_info(pkgname)
     if str(pkg_info.get("Gfxarch", "false")).strip().lower() == "true":
