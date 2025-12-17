@@ -35,7 +35,7 @@ permissions:
 jobs:
   demo_logging:
     name: 'Demo Unified Logging - ${{ github.event.inputs.component || ''rocroller'' }}'
-    runs-on: [self-hosted, Linux, AMD, gfx90a]
+    runs-on: [self-hosted, Linux, AMD, gfx94x]
     timeout-minutes: 60
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
@@ -52,7 +52,7 @@ jobs:
       TEST_TYPE: ${{ github.event.inputs.test_type || 'smoke' }}
       THEROCK_BIN_DIR: "./build/bin"
       THEROCK_BUILD_DIR: "./build"
-      AMDGPU_FAMILIES: "gfx90a"
+      AMDGPU_FAMILIES: "gfx94x"
       RUNNER_OS: "Linux"
       SHARD_INDEX: "1"
       TOTAL_SHARDS: "1"
