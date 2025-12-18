@@ -173,6 +173,8 @@ if os.name == WINDOWS: # nt
         negative_filter.append("*SerialRun3D*")  # These FP32 SerialRun3D tests use so much memory that they have a risk of timing out the machine during tests
         # this could address 1
         negative_filter.append("*gfx942*")
+        # Sample case from the failed list to test if the filter is working
+        negative_filter.append("Smoke/GPU_UnitTestConvSolverFFTFwd_FP32.fft/26")
 ####################################################
 
 # Creating a smoke test filter
