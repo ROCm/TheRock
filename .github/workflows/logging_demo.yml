@@ -1,13 +1,13 @@
 name: Logging Framework Demo
 
 # Demo workflow for TheRock standardized logging framework
-# Demonstrates core logging samples and test framework integration:
+# Demonstrates core logging samples with timed operations and exception handling:
 # Core Samples:
-#   1. Package Installer
-#   2. Build System
+#   1. Package Installer (timed operations, structured data, exception logs)
+#   2. Build System (timed operations, structured data, exception logs)
 # Test Integration:
-#   3. rocROLLER GTest (Success & Failure scenarios)
-#   4. rocWMMA CTest (Success & Failure scenarios)
+#   3. rocROLLER GTest (Failure scenarios with exception logging)
+#   4. rocWMMA CTest (Failure scenarios with exception logging)
 on:
   # Manual trigger
   workflow_dispatch:
@@ -44,9 +44,9 @@ jobs:
           echo "Branch: ${{ github.ref_name }}"
           echo ""
           echo "Demo Structure:"
-          echo "  Core: Package Installer + Build System"
+          echo "  Core: Package Installer + Build System (with timed ops & structured logs)"
           echo "  Test Integration: rocROLLER GTest + rocWMMA CTest"
-          echo "  Scenarios: Success + Failure cases"
+          echo "  Focus: Timed operations, structured data, exception handling"
           echo ""
       
       - name: 📋 Run Package Installer Demo
@@ -81,28 +81,6 @@ jobs:
           echo "✅ Build system demo completed!"
           echo "::endgroup::"
       
-      - name: 🧪 Run rocROLLER GTest Demo (Success Case)
-        run: |
-          echo "::group::🧪 rocROLLER GTest Demo - All Tests Pass"
-          echo "=========================================="
-          echo "  Demonstrating GTest Integration"
-          echo "  with Unified Logging Framework"
-          echo "  Scenario: All tests passing"
-          echo "=========================================="
-          echo ""
-          
-          cd build_tools/github_actions/test_executable_scripts
-          python3 demo_test_rocroller.py
-          
-          echo ""
-          echo "✅ rocROLLER demo completed successfully!"
-          echo "::endgroup::"
-        env:
-          TEST_TYPE: smoke
-          SHARD_INDEX: 1
-          TOTAL_SHARDS: 1
-          RUNNER_OS: Linux
-      
       - name: 🧪 Run rocROLLER GTest Demo (Failure Case)
         continue-on-error: true
         run: |
@@ -126,29 +104,6 @@ jobs:
           RUNNER_OS: Linux
           DEMO_FAILURES: "3,7"
           DEMO_SKIPS: "5"
-      
-      - name: 🔬 Run rocWMMA CTest Demo (Success Case)
-        run: |
-          echo "::group::🔬 rocWMMA CTest Demo - All Tests Pass"
-          echo "=========================================="
-          echo "  Demonstrating CTest Integration"
-          echo "  with Unified Logging Framework"
-          echo "  Scenario: All tests passing"
-          echo "=========================================="
-          echo ""
-          
-          cd build_tools/github_actions/test_executable_scripts
-          python3 demo_test_rocwmma.py
-          
-          echo ""
-          echo "✅ rocWMMA demo completed successfully!"
-          echo "::endgroup::"
-        env:
-          TEST_TYPE: regression
-          SHARD_INDEX: 1
-          TOTAL_SHARDS: 1
-          AMDGPU_FAMILIES: gfx942
-          RUNNER_OS: Linux
       
       - name: 🔬 Run rocWMMA CTest Demo (Failure Case)
         continue-on-error: true
@@ -184,14 +139,12 @@ jobs:
           echo "=========================================="
           echo ""
           echo "Core Logging Samples:"
-          echo "  1. Package Installer (install & verify)"
-          echo "  2. Build System (configure, compile & test)"
+          echo "  1. Package Installer (timed operations & structured logs)"
+          echo "  2. Build System (timed operations & exception handling)"
           echo ""
           echo "Test Framework Integration Demos:"
-          echo "  3. rocROLLER GTest (Success Scenario)"
-          echo "  4. rocROLLER GTest (Failure Scenario)"
-          echo "  5. rocWMMA CTest (Success Scenario)"
-          echo "  6. rocWMMA CTest (Failure Scenario)"
+          echo "  3. rocROLLER GTest (Failure Scenario with exception logs)"
+          echo "  4. rocWMMA CTest (Failure Scenario with exception logs)"
           echo ""
           echo "Status: ${{ job.status }}"
           echo ""
@@ -200,13 +153,13 @@ jobs:
           echo "Key Features Demonstrated:"
           echo "  - Unified logging across all components"
           echo "  - Structured logging with extra fields"
-          echo "  - Automatic timing with timed_operation"
+          echo "  - Automatic timing with timed_operation context manager"
           echo "  - Exception handling with log_exception"
           echo "  - GTest/CTest integration and result parsing"
           echo "  - Test sharding configuration"
           echo "  - Test filtering (smoke/regression/full)"
-          echo "  - Success AND failure logging scenarios"
-          echo "  - Performance metrics tracking"
+          echo "  - Failure logging scenarios with detailed exception traces"
+          echo "  - Performance metrics tracking with duration_ms"
           echo ""
 
 
