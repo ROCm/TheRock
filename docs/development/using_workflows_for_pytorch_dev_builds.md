@@ -3,7 +3,7 @@
 > **⚠️ Important Context**
 >
 > This guide documents the current process for triggering pytorch dev builds to assist with debugging and development of changes in TheRock and ROCm software stack.
-> Please review issues [#2587](https://github.com/ROCm/TheRock/issues/2587) and [#2608](https://github.com/ROCm/TheRock/issues/2608) for known limitations and ongoing improvements processes and documentation.
+> Please review issues [#2587](https://github.com/ROCm/TheRock/issues/2587) and [#2608](https://github.com/ROCm/TheRock/issues/2608) for known limitations and ongoing improvements to processes and documentation.
 
 ## Overview
 
