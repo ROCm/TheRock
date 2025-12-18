@@ -327,19 +327,13 @@ jobs:
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
           workflow: build_linux_jax_wheels.yml
-          ref: ${{ inputs.dispatch_ref != '' && inputs.dispatch_ref || github.head_ref || github.ref_name }}
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "python_version": "3.12",
               "release_type": "${{ env.RELEASE_TYPE }}",
-              "s3_subdir": "${{ env.S3_SUBDIR }}",
-              "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
+              "s3_subdir": "${{ env.S3_STAGING_SUBDIR }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
-              "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}",
-              "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
-              "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
-              "repository": "${{ inputs.repository || github.repository }}",
-              "ref": "${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.sha }}"
+              "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}"
             }
 
       - name: Trigger build native rpm package
