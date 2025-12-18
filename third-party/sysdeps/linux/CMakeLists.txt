@@ -39,7 +39,7 @@ therock_provide_artifact(sysdeps
 )
 
 # Optional sysdep: amd-mesa
-if(THEROCK_ENABLE_MEDIA)
+if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   add_subdirectory(amd-mesa)
   therock_provide_artifact(sysdeps-amd-mesa
     TARGET_NEUTRAL
