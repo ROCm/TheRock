@@ -68,8 +68,10 @@ jobs:
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
     # If we are expecting a build failure, do not run tests to save machine capacity
+    # TEMPORARY: Disabled for trial nightly workflow with only benchmarks
     if: >-
       ${{
+        false &&
         !failure() &&
         !cancelled() &&
         (
@@ -120,8 +122,10 @@ jobs:
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
+    # TEMPORARY: Disabled for trial nightly workflow with only benchmarks
     if: >-
       ${{
+        false &&
         !failure() &&
         !cancelled() &&
         (
