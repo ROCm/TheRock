@@ -35,13 +35,15 @@ cmd = [
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
-    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml", f"--gtest_filter=-{exclusion_list}"]
+    cmd += [
+        "--yaml",
+        f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml",
+        f"--gtest_filter=-{exclusion_list}",
+    ]
 else:
     # TODO(#2616): Enable full tests once known machine issues are resolved
     cmd += [f"--gtest_filter=*pre_checkin*-{exclusion_list}"]
 
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-result = subprocess.run(
-    cmd, cwd=THEROCK_DIR, env=environ_vars
-)
+result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars)
