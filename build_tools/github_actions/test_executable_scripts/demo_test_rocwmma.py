@@ -4,6 +4,14 @@ Mock rocWMMA Test Runner - Demo Version
 ========================================
 Demonstrates CTest integration with unified logging framework
 without requiring actual GPU hardware or compiled binaries.
+
+Environment Variables:
+- TEST_TYPE: smoke|regression|full (default: full)
+- SHARD_INDEX: 1-based shard index (default: 1)
+- TOTAL_SHARDS: Total number of shards (default: 1)
+- AMDGPU_FAMILIES: GPU architecture (default: gfx942)
+- DEMO_FAILURES: Comma-separated test indices to fail (e.g., "2,5")
+- DEMO_SKIPS: Comma-separated test indices to skip (e.g., "8")
 """
 
 import os
@@ -37,12 +45,22 @@ SHARD_INDEX = int(os.getenv("SHARD_INDEX", "1")) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", "1"))
 test_type = os.getenv("TEST_TYPE", "full").lower()
 
+# Mock failure configuration (for demonstrating error logging)
+DEMO_FAILURES = os.getenv("DEMO_FAILURES", "")
+DEMO_SKIPS = os.getenv("DEMO_SKIPS", "")
+fail_indices = set(int(x.strip()) for x in DEMO_FAILURES.split(",") if x.strip())
+skip_indices = set(int(x.strip()) for x in DEMO_SKIPS.split(",") if x.strip())
+
 logger.info(f"📋 Test Configuration:")
 logger.info(f"   Component: rocWMMA")
 logger.info(f"   Test Type: {test_type}")
 logger.info(f"   Shard: {SHARD_INDEX + 1} of {TOTAL_SHARDS}")
 logger.info(f"   Platform: {platform}")
 logger.info(f"   GPU Families: {AMDGPU_FAMILIES}")
+if fail_indices:
+    logger.warning(f"   ⚠️  Mock failures enabled for test indices: {sorted(fail_indices)}")
+if skip_indices:
+    logger.warning(f"   ⚠️  Mock skips enabled for test indices: {sorted(skip_indices)}")
 
 # Mock CTest cases (realistic rocWMMA test names)
 ALL_CTESTS = [
@@ -117,10 +135,22 @@ with logger.timed_operation("rocwmma_ctest_execution"):
         test_duration = random.uniform(0.5, 2.0)
         time.sleep(test_duration / 10)  # Speed up for demo
         
-        # Simulate test results (all pass for demo)
-        test_result = "Passed"
-        passed_tests += 1
-        logger.info(f"   ✅ {test_result} ({test_duration:.2f}s)")
+        # Check if this test should fail or skip (for demo purposes)
+        if i in fail_indices:
+            test_result = "Failed"
+            failed_tests += 1
+            logger.error(f"   ❌ {test_result}")
+            logger.error(f"      Reason: Matrix dimensions mismatch - expected [16,16], got [16,8]")
+            logger.error(f"      Duration: {test_duration:.2f}s")
+        elif i in skip_indices:
+            test_result = "Skipped"
+            skipped_tests += 1
+            logger.warning(f"   ⚠️  {test_result}")
+            logger.warning(f"      Reason: GPU architecture {AMDGPU_FAMILIES} not supported for this test")
+        else:
+            test_result = "Passed"
+            passed_tests += 1
+            logger.info(f"   ✅ {test_result} ({test_duration:.2f}s)")
         
         total_duration += test_duration
 

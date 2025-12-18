@@ -4,6 +4,13 @@ Mock rocROLLER Test Runner - Demo Version
 ==========================================
 Demonstrates GTest integration with unified logging framework
 without requiring actual GPU hardware or compiled binaries.
+
+Environment Variables:
+- TEST_TYPE: smoke|quick|full (default: full)
+- SHARD_INDEX: 1-based shard index (default: 1)
+- TOTAL_SHARDS: Total number of shards (default: 1)
+- DEMO_FAILURES: Comma-separated test indices to fail (e.g., "3,7")
+- DEMO_SKIPS: Comma-separated test indices to skip (e.g., "5")
 """
 
 import os
@@ -35,11 +42,21 @@ SHARD_INDEX = int(os.getenv("SHARD_INDEX", "1")) - 1
 TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", "1"))
 TEST_TYPE = os.getenv("TEST_TYPE", "full").lower()
 
+# Mock failure configuration (for demonstrating error logging)
+DEMO_FAILURES = os.getenv("DEMO_FAILURES", "")
+DEMO_SKIPS = os.getenv("DEMO_SKIPS", "")
+fail_indices = set(int(x.strip()) for x in DEMO_FAILURES.split(",") if x.strip())
+skip_indices = set(int(x.strip()) for x in DEMO_SKIPS.split(",") if x.strip())
+
 logger.info(f"📋 Test Configuration:")
 logger.info(f"   Component: rocROLLER")
 logger.info(f"   Test Type: {TEST_TYPE}")
 logger.info(f"   Shard: {SHARD_INDEX + 1} of {TOTAL_SHARDS}")
 logger.info(f"   Platform: {platform}")
+if fail_indices:
+    logger.warning(f"   ⚠️  Mock failures enabled for test indices: {sorted(fail_indices)}")
+if skip_indices:
+    logger.warning(f"   ⚠️  Mock skips enabled for test indices: {sorted(skip_indices)}")
 
 # Mock test cases
 ALL_TESTS = [
@@ -101,13 +118,25 @@ with logger.timed_operation("rocroller_test_execution"):
         
         # Simulate test execution time
         test_start = time.time()
-        time.sleep(random.uniform(0.05, 0.2))
-        
-        # Simulate test results (all pass for demo)
-        test_result = "PASSED"
-        passed_tests += 1
+        time.sleep(0.05)  # Consistent timing
         test_duration = (time.time() - test_start) * 1000
-        logger.info(f"   ✅ {test_name}: {test_result} ({test_duration:.1f}ms)")
+        
+        # Check if this test should fail or skip (for demo purposes)
+        if i in fail_indices:
+            test_result = "FAILED"
+            failed_tests += 1
+            logger.error(f"   ❌ {test_name}: {test_result}")
+            logger.error(f"      Expected: 42, Got: 41")
+            logger.error(f"      Duration: {test_duration:.1f}ms")
+        elif i in skip_indices:
+            test_result = "SKIPPED"
+            skipped_tests += 1
+            logger.warning(f"   ⚠️  {test_name}: {test_result}")
+            logger.warning(f"      Reason: Test requires specific GPU feature")
+        else:
+            test_result = "PASSED"
+            passed_tests += 1
+            logger.info(f"   ✅ {test_name}: {test_result} ({test_duration:.1f}ms)")
 
 logger.info("")
 logger.info("=" * 60)
