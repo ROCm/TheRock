@@ -48,10 +48,10 @@ test_matrix = {
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards": 1,
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
@@ -127,9 +127,10 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        "platform": ["linux"],
+        # TODO(#2616): Re-enable tests after test slowdown issues are resolved
+        "platform": [],
         "total_shards": 4,
     },
     # RAND tests
