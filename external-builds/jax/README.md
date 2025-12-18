@@ -93,7 +93,6 @@ TheRock provides a streamlined workflow for building JAX with ROCm support, leve
 
 After building wheels locally, you can test them:
 
-
 - Checkout jax test repo
 
   ```bash
@@ -126,9 +125,8 @@ After building wheels locally, you can test them:
     --output-dir "/opt/rocm-<rocm_version>"
   ```
 
-> Example: 
+> Example:
 > For detailed instructions and example usage, see the [official TheRock documentation](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-tarballs-using-install_rocm_from_artifactspy).
-
 
 - Install JAX wheels
 
