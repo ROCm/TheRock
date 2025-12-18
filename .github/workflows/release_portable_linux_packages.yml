@@ -327,6 +327,7 @@ jobs:
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
           workflow: build_linux_jax_wheels.yml
+          ref: ${{ inputs.dispatch_ref != '' && inputs.dispatch_ref || github.head_ref || github.ref_name }}
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "python_version": "3.12",
