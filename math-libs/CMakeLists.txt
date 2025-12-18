@@ -353,7 +353,6 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     RUNTIME_DEPS
       amd-llvm
       hip-clr
-      ROCR-Runtime
       hipcc
   )
   therock_cmake_subproject_glob_c_sources(libhipcxx
