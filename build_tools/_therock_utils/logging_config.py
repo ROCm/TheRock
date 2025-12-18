@@ -122,7 +122,10 @@ class ColoredFormatter(logging.Formatter):
         if self.show_structured_data:
             extra_data = {}
             for key, value in record.__dict__.items():
-                if key not in self.STANDARD_FIELDS and not key.startswith('_'):
+                # Skip standard fields, private fields, and None values
+                if (key not in self.STANDARD_FIELDS and 
+                    not key.startswith('_') and 
+                    value is not None):
                     extra_data[key] = value
             
             if extra_data:
