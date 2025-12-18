@@ -3,7 +3,7 @@ name: Install Native Linux Packages
 on:
   push:
     branches:
-      - users/rponnuru/native_linux_installation
+      - users/rponnuru/native_linux_installation_clean
   workflow_call:
     inputs:
       artifact_group:
