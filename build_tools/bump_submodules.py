@@ -138,7 +138,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
 
     run_command(
         [
-            sys.run_executable,
+            sys.executable,
             "./build_tools/fetch_sources.py",
             "--remote",
             "--no-apply-patches",
@@ -158,7 +158,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
 
     try:
         run_command(
-            [sys.run_executable, "./build_tools/fetch_sources.py"],
+            [sys.executable, "./build_tools/fetch_sources.py"],
             cwd=THEROCK_DIR,
         )
     except subprocess.CalledProcessError as patching_error:
