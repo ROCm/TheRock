@@ -108,8 +108,8 @@ logger.info("=" * 60)
 
 # Simulate test execution
 passed_tests = 0
-failed_tests = 0
-skipped_tests = 0
+failed_tests = []
+skipped_tests = []
 
 with logger.timed_operation("rocroller_test_execution"):
     for i, test_name in enumerate(shard_tests, 1):
@@ -124,13 +124,13 @@ with logger.timed_operation("rocroller_test_execution"):
         # Check if this test should fail or skip (for demo purposes)
         if i in fail_indices:
             test_result = "FAILED"
-            failed_tests += 1
+            failed_tests.append(test_name)
             logger.error(f"   ❌ {test_name}: {test_result}")
             logger.error(f"      Expected: 42, Got: 41")
             logger.error(f"      Duration: {test_duration:.1f}ms")
         elif i in skip_indices:
             test_result = "SKIPPED"
-            skipped_tests += 1
+            skipped_tests.append(test_name)
             logger.warning(f"   ⚠️  {test_name}: {test_result}")
             logger.warning(f"      Reason: Test requires specific GPU feature")
         else:
@@ -142,21 +142,53 @@ logger.info("")
 logger.info("=" * 60)
 logger.info("📊 Test Results Summary")
 logger.info("=" * 60)
-logger.info(f"   Total Tests: {len(shard_tests)}")
-logger.info(f"   ✅ Passed: {passed_tests}")
-logger.info(f"   ❌ Failed: {failed_tests}")
-logger.info(f"   ⚠️  Skipped: {skipped_tests}")
 
-if failed_tests > 0:
-    success_rate = (passed_tests / len(shard_tests)) * 100
-    logger.warning(f"   Success Rate: {success_rate:.1f}%")
-else:
-    logger.info(f"   Success Rate: 100%")
+# Calculate metrics
+total_tests = len(shard_tests)
+num_failed = len(failed_tests)
+num_skipped = len(skipped_tests)
+success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
+
+# Log summary with structured data
+test_results = {
+    "component": "rocroller",
+    "test_type": TEST_TYPE,
+    "total": total_tests,
+    "passed": passed_tests,
+    "failed": num_failed,
+    "skipped": num_skipped,
+    "success_rate": f"{success_rate:.1f}%"
+}
+
+logger.info(
+    f"Results: {passed_tests}/{total_tests} passed, {num_failed} failed, {num_skipped} skipped",
+    extra=test_results
+)
+
+logger.info(f"   Total Tests: {total_tests}")
+logger.info(f"   ✅ Passed: {passed_tests}")
+logger.info(f"   ❌ Failed: {num_failed}")
+logger.info(f"   ⚠️  Skipped: {num_skipped}")
+logger.info(f"   Success Rate: {success_rate:.1f}%")
+
+# Log failed test names (matching TestRunner behavior)
+if failed_tests:
+    logger.info("")
+    logger.error(f"❌ {num_failed} test(s) failed:")
+    for test_name in failed_tests:
+        logger.error(f"   - {test_name}")
+
+# Log skipped test names
+if skipped_tests:
+    logger.info("")
+    logger.warning(f"⚠️  {num_skipped} test(s) skipped:")
+    for test_name in skipped_tests:
+        logger.warning(f"   - {test_name}")
 
 logger.info("=" * 60)
 
 # Exit with appropriate code
-if failed_tests > 0:
+if num_failed > 0:
     logger.error("❌ Some tests failed!")
     sys.exit(1)
 else:

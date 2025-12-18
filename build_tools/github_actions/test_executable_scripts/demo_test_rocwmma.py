@@ -121,8 +121,8 @@ logger.info("=" * 60)
 
 # Simulate CTest execution
 passed_tests = 0
-failed_tests = 0
-skipped_tests = 0
+failed_tests = []
+skipped_tests = []
 total_duration = 0
 
 with logger.timed_operation("rocwmma_ctest_execution"):
@@ -138,13 +138,13 @@ with logger.timed_operation("rocwmma_ctest_execution"):
         # Check if this test should fail or skip (for demo purposes)
         if i in fail_indices:
             test_result = "Failed"
-            failed_tests += 1
+            failed_tests.append(test_name)
             logger.error(f"   ❌ {test_result}")
             logger.error(f"      Reason: Matrix dimensions mismatch - expected [16,16], got [16,8]")
             logger.error(f"      Duration: {test_duration:.2f}s")
         elif i in skip_indices:
             test_result = "Skipped"
-            skipped_tests += 1
+            skipped_tests.append(test_name)
             logger.warning(f"   ⚠️  {test_result}")
             logger.warning(f"      Reason: GPU architecture {AMDGPU_FAMILIES} not supported for this test")
         else:
@@ -158,29 +158,64 @@ logger.info("")
 logger.info("=" * 60)
 logger.info("📊 CTest Results Summary")
 logger.info("=" * 60)
-logger.info(f"   Total Tests: {len(shard_tests)}")
-logger.info(f"   ✅ Passed: {passed_tests}")
-logger.info(f"   ❌ Failed: {failed_tests}")
-logger.info(f"   ⚠️  Skipped: {skipped_tests}")
-logger.info(f"   ⏱️  Total Time: {total_duration:.2f}s")
 
-if failed_tests > 0:
-    success_rate = (passed_tests / len(shard_tests)) * 100
-    logger.warning(f"   Success Rate: {success_rate:.1f}%")
-else:
-    logger.info(f"   Success Rate: 100%")
+# Calculate metrics
+total_tests = len(shard_tests)
+num_failed = len(failed_tests)
+num_skipped = len(skipped_tests)
+success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
+avg_duration = total_duration / total_tests if total_tests > 0 else 0
+
+# Log summary with structured data
+test_results = {
+    "component": "rocwmma",
+    "test_type": test_type,
+    "total": total_tests,
+    "passed": passed_tests,
+    "failed": num_failed,
+    "skipped": num_skipped,
+    "success_rate": f"{success_rate:.1f}%",
+    "total_duration_sec": f"{total_duration:.2f}",
+    "avg_duration_sec": f"{avg_duration:.2f}"
+}
+
+logger.info(
+    f"Results: {passed_tests}/{total_tests} passed, {num_failed} failed, {num_skipped} skipped",
+    extra=test_results
+)
+
+logger.info(f"   Total Tests: {total_tests}")
+logger.info(f"   ✅ Passed: {passed_tests}")
+logger.info(f"   ❌ Failed: {num_failed}")
+logger.info(f"   ⚠️  Skipped: {num_skipped}")
+logger.info(f"   ⏱️  Total Time: {total_duration:.2f}s")
+logger.info(f"   Success Rate: {success_rate:.1f}%")
+
+# Log failed test names (matching TestRunner behavior)
+if failed_tests:
+    logger.info("")
+    logger.error(f"❌ {num_failed} test(s) failed:")
+    for test_name in failed_tests:
+        logger.error(f"   - {test_name}")
+
+# Log skipped test names
+if skipped_tests:
+    logger.info("")
+    logger.warning(f"⚠️  {num_skipped} test(s) skipped:")
+    for test_name in skipped_tests:
+        logger.warning(f"   - {test_name}")
 
 logger.info("")
 logger.info("=" * 60)
 logger.info("🎯 Performance Metrics")
 logger.info("=" * 60)
-logger.info(f"   Average test duration: {total_duration / len(shard_tests):.2f}s")
+logger.info(f"   Average test duration: {avg_duration:.2f}s")
 logger.info(f"   Tests per minute: {len(shard_tests) / (total_duration / 60):.1f}")
 logger.info(f"   GPU utilization: {random.randint(75, 95)}% (simulated)")
 logger.info("=" * 60)
 
 # Exit with appropriate code
-if failed_tests > 0:
+if num_failed > 0:
     logger.error("❌ Some tests failed!")
     sys.exit(1)
 else:
