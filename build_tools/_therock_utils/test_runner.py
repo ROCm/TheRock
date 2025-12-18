@@ -236,13 +236,16 @@ class TestRunner:
             [  PASSED  ] 43 tests.
             [  FAILED  ] 2 tests, listed below:
             [  FAILED  ] TestSuite.TestName
+            [  SKIPPED ] 1 test, listed below:
+            [  SKIPPED ] TestSuite.SkippedTest
         """
         results = {
             "total": 0,
             "passed": 0,
             "failed": 0,
             "skipped": 0,
-            "failed_tests": []
+            "failed_tests": [],
+            "skipped_tests": []
         }
         
         for line in output.splitlines():
@@ -255,13 +258,22 @@ class TestRunner:
                 results["passed"] = int(match.group(1))
             
             # [  FAILED  ] 2 tests, listed below:
-            elif match := re.search(r'\[  FAILED  \] (\d+) tests', line):
+            elif match := re.search(r'\[  FAILED  \] (\d+) tests?', line):
                 results["failed"] = int(match.group(1))
+            
+            # [  SKIPPED ] 1 test, listed below:
+            elif match := re.search(r'\[  SKIPPED \] (\d+) tests?', line):
+                results["skipped"] = int(match.group(1))
             
             # [  FAILED  ] TestSuite.TestName
             elif match := re.search(r'\[  FAILED  \] (.+)', line):
-                if "tests, listed below" not in line:
-                    results["failed_tests"].append(match.group(1))
+                if "listed below" not in line:
+                    results["failed_tests"].append(match.group(1).strip())
+            
+            # [  SKIPPED ] TestSuite.TestName
+            elif match := re.search(r'\[  SKIPPED \] (.+)', line):
+                if "listed below" not in line:
+                    results["skipped_tests"].append(match.group(1).strip())
         
         return results
     
@@ -273,6 +285,8 @@ class TestRunner:
             Test project /path/to/tests
             Start 1: TestName1
             1/10 Test #1: TestName1 ........................   Passed    0.52 sec
+            2/10 Test #2: TestName2 ........................***Skipped   0.00 sec
+            3/10 Test #3: TestName3 ........................***Failed    1.23 sec
             ...
             100% tests passed, 0 tests failed out of 10
         """
@@ -281,7 +295,8 @@ class TestRunner:
             "passed": 0,
             "failed": 0,
             "skipped": 0,
-            "failed_tests": []
+            "failed_tests": [],
+            "skipped_tests": []
         }
         
         for line in output.splitlines():
@@ -289,12 +304,19 @@ class TestRunner:
             if match := re.search(r'(\d+)% tests passed, (\d+) tests failed out of (\d+)', line):
                 results["total"] = int(match.group(3))
                 results["failed"] = int(match.group(2))
-                results["passed"] = results["total"] - results["failed"]
+                results["passed"] = results["total"] - results["failed"] - results["skipped"]
             
-            # Failed test lines
-            elif "***Failed" in line or "***Timeout" in line:
-                if match := re.search(r'Test #\d+: (.+?) \.*', line):
-                    results["failed_tests"].append(match.group(1))
+            # Test result lines with status
+            # Format: Test #N: TestName ....... Passed/Failed/Skipped  X.XX sec
+            elif match := re.search(r'Test\s+#\d+:\s+(\S+)\s+\.+\s*\*?\*?\*?(\w+)', line):
+                test_name = match.group(1)
+                status = match.group(2)
+                
+                if status == "Failed" or status == "Timeout":
+                    results["failed_tests"].append(test_name)
+                elif status == "Skipped" or status == "Disabled" or status == "NotRun":
+                    results["skipped_tests"].append(test_name)
+                    results["skipped"] += 1
         
         return results
     
@@ -303,29 +325,45 @@ class TestRunner:
         total = results.get("total", 0)
         passed = results.get("passed", 0)
         failed = results.get("failed", 0)
+        skipped = results.get("skipped", 0)
+        failed_tests = results.get("failed_tests", [])
+        skipped_tests = results.get("skipped_tests", [])
         
         if total > 0:
             self.logger.info(
-                f"Test Results: {passed}/{total} passed, {failed} failed",
+                f"Test Results: {passed}/{total} passed, {failed} failed, {skipped} skipped",
                 extra={
                     "test_total": total,
                     "test_passed": passed,
                     "test_failed": failed,
+                    "test_skipped": skipped,
                     "component": self.component,
                     "test_type": self.test_type
                 }
             )
         
+        # Log failed test names
+        if failed_tests:
+            self.logger.error(f"❌ {len(failed_tests)} test(s) failed:")
+            for failed_test in failed_tests:
+                self.logger.error(f"   - {failed_test}")
+        
+        # Log skipped test names
+        if skipped_tests:
+            self.logger.warning(f"⚠️  {len(skipped_tests)} test(s) skipped:")
+            for skipped_test in skipped_tests:
+                self.logger.warning(f"   - {skipped_test}")
+        
+        # Log summary status
         if returncode == 0:
             if total > 0:
-                self.logger.info(f"✅ {self.component}: All {total} tests passed")
+                if skipped > 0:
+                    self.logger.info(f"✅ {self.component}: {passed}/{total} tests passed ({skipped} skipped)")
+                else:
+                    self.logger.info(f"✅ {self.component}: All {total} tests passed")
             else:
                 self.logger.info(f"✅ {self.component}: Tests completed successfully")
         else:
-            # Log each failed test as a separate error
-            for failed_test in results.get("failed_tests", []):
-                self.logger.error(f"Test failed: {failed_test}")
-            
             if failed > 0:
                 self.logger.error(
                     f"❌ {self.component}: {failed}/{total} tests failed"
