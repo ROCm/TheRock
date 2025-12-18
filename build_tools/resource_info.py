@@ -263,7 +263,7 @@ def generate_summaries(log_dir: str) -> None:
         for name in os.listdir(log_dir):
             if not name.endswith(".log"):
                 continue
-            path = os.path.join(log_dir, name)
+            path = Path(log_dir) / name
             parse_log_file(path, stats)
 
         # Build list of components
