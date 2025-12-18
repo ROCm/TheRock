@@ -112,7 +112,11 @@ def generate_cmake_args(
     Returns:
         List of CMake argument strings
     """
-    args = []
+    args = [
+        # DO NOT SUBMIT TO MAIN
+        # Temp flag flip to enable KPACK on this branch.
+        "-DTHEROCK_KPACK_SPLIT_ARTIFACTS=ON",
+    ]
 
     if include_comments:
         args.append(f"# CMake arguments for stage: {stage_name}")
