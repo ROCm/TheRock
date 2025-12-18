@@ -121,6 +121,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import sysconfig
 
 script_dir = Path(__file__).resolve().parent
 
@@ -906,6 +907,19 @@ def do_build_pytorch_vision(
     copy_to_output(args, built_wheel)
 
 
+def get_python_home_dir():
+    """
+    Returns the home directory for current Python executable.
+    """
+    # sys.executable provides the absolute path to the Python interpreter binary.
+    executable_path = sys.executable
+    # os.path.dirname gets the directory part of the path.
+    res = Path(executable_path)
+    ret = str(res.parent.parent.absolute())
+    print("ret: " + ret)
+    return ret
+
+
 def do_build_pytorch_torchcodec(
     args: argparse.Namespace, pytorch_torchcodec_dir: Path, env: dict[str, str]
 ):
@@ -917,12 +931,19 @@ def do_build_pytorch_torchcodec(
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
+    # env["Python_FIND_STRATEGY"] = "LOCATION"
+    # env["Python3_ROOT_DIR"] = get_python_home_dir()
+    # print("Python3_ROOT_DIR: " + get_python_home_dir())
+    print()
 
     env.update(
         {
             "ENABLE_CUDA": "0",
             "TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR": "1",
             "BUILD_AGAINST_ALL_FFMPEG_FROM_S3": "1",
+            "Python3_ROOT_DIR": get_python_home_dir(),
+            "PYTHON_LIBRARY": sysconfig.get_config_var("LIBDIR"),
+            "PYTHON_INCLUDE_DIR": sysconfig.get_path("include"),
         }
     )
 
