@@ -1,0 +1,4 @@
+# Python requirements for GTest samples and logging demo
+PyYAML>=6.0
+
+
