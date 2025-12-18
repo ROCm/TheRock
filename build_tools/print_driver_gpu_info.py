@@ -12,7 +12,6 @@ On Windows:
 This script prints only raw command output.
 """
 
-import argparse
 import os
 from pathlib import Path
 import platform
@@ -50,82 +49,79 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
         log(f"{args[0]}: command not found")
 
 
-def run_candidates(label: str, candidates: List[List[str]]) -> None:
+def run_command_with_search(
+    label: str,
+    command: str,
+    args: List[str],
+    extra_command_search_paths: List[Path],
+) -> None:
     """
-    Try a list of commands and run the first one that exists.
+    Run a command, searching in extra paths first, then PATH.
 
-    Uses shutil.which() for PATH resolution, otherwise accepts an explicit path.
+    Example:
+        run_command_with_search(
+            label="amd-smi static",
+            command="amd-smi",
+            args=["static"],
+            extra_command_search_paths=[bin_dir],
+        )
     """
-    for cmd in candidates:
-        exe = cmd[0]
-
-        resolved = shutil.which(exe)
-        if resolved:
-            cmd_to_run = [resolved] + cmd[1:]
+    # Try explicit directories first (e.g. THEROCK_DIR/build/bin)
+    for base in extra_command_search_paths:
+        candidate = base / command
+        if candidate.exists():
             log(f"\n=== {label} ===")
-            run_command(cmd_to_run)
+            run_command([candidate] + args)
             return
 
-        resolved_path = Path(exe)
-        if resolved_path.exists():
-            cmd_to_run = [str(resolved_path)] + cmd[1:]
-            log(f"\n=== {label} ===")
-            run_command(cmd_to_run)
-            return
+    # Then fall back to PATH
+    resolved = shutil.which(command)
+    if resolved:
+        log(f"\n=== {label} ===")
+        run_command([resolved] + args)
+        return
 
     # Nothing found
-    exe_name = candidates[0][0] if candidates else "<unknown>"
     log(f"\n=== {label} ===")
-    log(f"{exe_name}: command not found")
+    log(f"{command}: command not found")
 
 
 def run_sanity(os_name: str) -> None:
-
     THIS_SCRIPT_DIR = Path(__file__).resolve().parent
     THEROCK_DIR = THIS_SCRIPT_DIR.parent
     bin_dir = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
+
     log("=== Sanity check: driver / GPU info ===")
 
     if os_name.lower() == "windows":
-        hipinfo_candidates = [
-            [str(bin_dir / "hipInfo.exe")],
-            ["hipInfo.exe"],
-        ]
-        run_candidates("hipInfo.exe", hipinfo_candidates)
+        # Windows: only hipInfo.exe
+        run_command_with_search(
+            label="hipInfo.exe",
+            command="hipInfo.exe",
+            args=[],
+            extra_command_search_paths=[bin_dir],
+        )
     else:
-        amd_smi_candidates = [
-            [str(bin_dir / "amd-smi"), "static"],
-            ["amd-smi", "static"],
-        ]
-        rocminfo_candidates = [
-            [str(bin_dir / "rocminfo")],
-            ["rocminfo"],
-        ]
-        run_candidates("amd-smi static", amd_smi_candidates)
-        run_candidates("rocminfo", rocminfo_candidates)
+        # Linux: amd-smi static + rocminfo
+        run_command_with_search(
+            label="amd-smi static",
+            command="amd-smi",
+            args=["static"],
+            extra_command_search_paths=[bin_dir],
+        )
+        run_command_with_search(
+            label="rocminfo",
+            command="rocminfo",
+            args=[],
+            extra_command_search_paths=[bin_dir],
+        )
 
     log("\n=== End of sanity check ===")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Sanity check script to log driver / GPU info on CI runners."
-    )
-    parser.add_argument(
-        "--os",
-        dest="os_name",
-        help="Override OS (Linux or Windows).",
-    )
-    args = parser.parse_args(argv)
-
-    detected = platform.system().lower()
-    os_name = (
-        args.os_name
-        if args.os_name
-        else ("Windows" if detected == "windows" else "Linux")
-    )
-
-    run_sanity(os_name)
+    detected = platform.system()
+    run_sanity(detected)
     return 0
 
 

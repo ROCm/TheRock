@@ -100,7 +100,7 @@ jobs:
 
       - name: Driver / GPU sanity check
         run: |
-          python ./build_tools/print_driver_gpu_info.py --os "${{ runner.os }}"
+          python ./build_tools/print_driver_gpu_info.py
 
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5
