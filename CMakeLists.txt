@@ -105,7 +105,8 @@ set(ROCM_SYMLINK_LIBS OFF)
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
 # Kpack artifact splitting
-option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
+# DO NOT SUBMIT TO main: Default kpack to on.
+option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" ON)
 # TODO: Once rocm-kpack is moved into the rocm-systems repo, hard-code the path.
 # Check for unset OR empty to handle -DTHEROCK_KPACK_DIR="" edge case.
 if(NOT THEROCK_KPACK_DIR)
