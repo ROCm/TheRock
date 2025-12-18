@@ -11,7 +11,7 @@ is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
 
 
-def exec(args: list[str | Path], cwd: Path | None = None, capture: bool = False):
+def run_command(args: list[str | Path], cwd: Path | None = None, capture: bool = False):
     args = [str(arg) for arg in args]
     if cwd is None:
         cwd = Path.cwd()
