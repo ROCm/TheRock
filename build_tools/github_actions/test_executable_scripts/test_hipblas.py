@@ -29,14 +29,16 @@ exclusion_list = ":".join(tests_to_exclude)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/hipblas-test",
-    f"--gtest_filter=-{exclusion_list}",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
-    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml"]
+    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml", f"--gtest_filter=-{exclusion_list}"]
+else:
+    # TODO(#2616): Enable full tests once known machine issues are resolved
+    cmd += [f"--gtest_filter=*pre_checkin*-{exclusion_list}"]
 
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

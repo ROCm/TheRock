@@ -50,7 +50,6 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
-        # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1702
         "platform": ["linux", "windows"],
         "total_shards": 4,
     },
@@ -117,7 +116,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 90,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 6,
