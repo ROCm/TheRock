@@ -347,7 +347,7 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
-    parser.add_argument("--job-status", type=str, help="Status of this Job")
+    parser.add_argument("--job-status", type=str, help="Status of this Job ('success', 'failure')")
     args = parser.parse_args()
 
     # Check preconditions for provided arguments before proceeding.
