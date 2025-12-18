@@ -2,11 +2,12 @@
 """
 Logging Framework Demo Runner
 
-Runs two sample applications that demonstrate TheRock's unified logging framework:
+Runs three sample applications that demonstrate TheRock's unified logging framework:
 1. Package Installer - shows installation workflow with logging
 2. Build System - shows build process with logging
+3. GTest Runner - shows test execution with logging
 
-Both samples use the same logging framework with:
+All samples use the same logging framework with:
 - Consistent formatting
 - Structured data (extra fields)
 - Performance timing
@@ -15,13 +16,13 @@ Both samples use the same logging framework with:
 
 
 def main():
-    """Run the logging framework demo with both sample applications"""
+    """Run the logging framework demo with all sample applications"""
     print("\n" + "="*70)
     print("  UNIFIED LOGGING FRAMEWORK DEMO")
     print("  Showcasing same logging framework across different components")
     print("="*70 + "\n")
     
-    print("Both samples use TheRockLogger with consistent formatting,")
+    print("All samples use TheRockLogger with consistent formatting,")
     print("structured data, performance timing, and error handling.\n")
     
     # Run sample 1: Package Installer
@@ -32,15 +33,21 @@ def main():
     from sample_build_system import main as build_main
     build_main()
     
+    # Run sample 3: GTest Runner
+    from sample_gtest_runner import main as gtest_main
+    gtest_main()
+    
     print("\n" + "="*70)
     print("  KEY OBSERVATIONS:")
     print("="*70)
-    print("✅ Both samples use the same TheRockLogger")
+    print("✅ All samples use the same TheRockLogger")
     print("✅ Consistent log format across different components")
     print("✅ Structured data (extra fields) for better tracking")
     print("✅ Automatic timing with timed_operation context manager")
     print("✅ Manual timing examples for explicit control")
     print("✅ Exception handling with full tracebacks")
+    print("✅ GTest integration with result parsing")
+    print("✅ Test filtering and suite management")
     print("="*70 + "\n")
 
 

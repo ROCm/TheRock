@@ -1,9 +1,10 @@
 name: Logging Framework Demo
 
 # Demo workflow for TheRock standardized logging framework
-# Demonstrates two sample applications using the unified logging framework:
+# Demonstrates three sample applications using the unified logging framework:
 # 1. Package Installer
 # 2. Build System
+# 3. GTest Runner
 on:
   # Manual trigger
   workflow_dispatch:
@@ -39,7 +40,7 @@ jobs:
           echo ""
           echo "Trigger: ${{ github.event_name }}"
           echo "Branch: ${{ github.ref_name }}"
-          echo "Demo: Package Installer + Build System"
+          echo "Demo: Package Installer + Build System + GTest Runner"
           echo ""
       
       - name: 📋 Run Logging Framework Demo
@@ -49,6 +50,7 @@ jobs:
           echo "  TheRock Unified Logging Framework"
           echo "  Sample 1: Package Installer"
           echo "  Sample 2: Build System"
+          echo "  Sample 3: GTest Runner"
           echo "=========================================="
           echo ""
           
@@ -56,7 +58,7 @@ jobs:
           python3 run_logging_demos.py
           
           echo ""
-          echo "✅ Demo completed!"
+          echo "✅ All demos completed!"
           echo "::endgroup::"
       
       - name: ✅ Demo Summary
@@ -67,10 +69,21 @@ jobs:
           echo "  Demo Summary"
           echo "=========================================="
           echo ""
-          echo "Samples Run: Package Installer + Build System"
+          echo "Samples Run:"
+          echo "  1. Package Installer (install & verify)"
+          echo "  2. Build System (configure, compile & test)"
+          echo "  3. GTest Runner (execute, parse & filter)"
+          echo ""
           echo "Status: ${{ job.status }}"
           echo ""
           echo "✅ Logging framework demo completed!"
+          echo ""
+          echo "Key Features Demonstrated:"
+          echo "  - Unified logging across all components"
+          echo "  - Structured logging with extra fields"
+          echo "  - Automatic timing with timed_operation"
+          echo "  - Exception handling with log_exception"
+          echo "  - GTest integration and result parsing"
           echo ""
 
 
