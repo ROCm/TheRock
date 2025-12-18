@@ -44,11 +44,17 @@ def configure_build(config):
                 "status": "success"
             })
     
-    logger.info("Build configuration complete", extra={
-        "config": config,
+    logger.info("Build configuration complete")
+    
+    # Display structured configuration details
+    config_details = {
+        "build_type": config.get("type", "release"),
+        "target": config.get("target", "all"),
+        "optimization_level": config.get("optimization", "O3"),
         "total_steps": len(steps),
         "cmake_flags": ["-DCMAKE_BUILD_TYPE=Release", "-DGPU_TARGETS=gfx942"]
-    })
+    }
+    logger.log_dict(config_details, message="📊 Configuration Details:")
 
 
 def compile_components(components):
@@ -124,12 +130,16 @@ def compile_components(components):
                 "errors": 0
             })
     
-    logger.info("Compilation phase completed", extra={
+    logger.info("Compilation phase completed")
+    
+    # Display structured compilation metrics
+    compilation_metrics = {
         "total_components": len(components),
         "total_source_files": total_source_files,
         "total_objects": total_objects,
         "all_compiled": True
-    })
+    }
+    logger.log_dict(compilation_metrics, message="📊 Compilation Metrics:")
 
 
 def run_tests(components):
@@ -211,13 +221,17 @@ def run_tests(components):
                     "remaining_components": len(components) - i - 1
                 })
     
-    logger.info("Testing phase completed", extra={
+    logger.info("Testing phase completed")
+    
+    # Display structured test metrics
+    test_metrics = {
         "total_components": len(components),
         "total_tests": total_test_count,
         "passed": passed_tests,
         "failed": failed_tests,
-        "success_rate_pct": (passed_tests / total_test_count * 100) if total_test_count > 0 else 0
-    })
+        "success_rate_pct": round((passed_tests / total_test_count * 100), 2) if total_test_count > 0 else 0
+    }
+    logger.log_dict(test_metrics, message="📊 Test Metrics:")
 
 
 def main():

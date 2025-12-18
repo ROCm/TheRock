@@ -47,11 +47,15 @@ def download_packages(packages):
                 "status": "downloaded"
             })
     
-    logger.info("All packages downloaded successfully", extra={
+    logger.info("All packages downloaded successfully")
+    
+    # Display structured download metrics
+    download_metrics = {
         "total_packages": len(packages),
         "total_size_mb": sum(50 + (i * 25) for i in range(1, len(packages) + 1)),
         "operation": "download_complete"
-    })
+    }
+    logger.log_dict(download_metrics, message="📊 Download Metrics:")
 
 
 def install_packages(packages):
@@ -102,11 +106,16 @@ def install_packages(packages):
                 "install_path": f"/opt/rocm/lib/{package}"
             })
     
-    logger.info("All packages installed successfully", extra={
+    logger.info("All packages installed successfully")
+    
+    # Display structured installation metrics
+    install_metrics = {
         "total_packages": len(packages),
         "operation": "install_complete",
-        "total_files_installed": sum(150 + (i * 50) for i in range(1, len(packages) + 1))
-    })
+        "total_files_installed": sum(150 + (i * 50) for i in range(1, len(packages) + 1)),
+        "install_prefix": "/opt/rocm"
+    }
+    logger.log_dict(install_metrics, message="📊 Installation Metrics:")
 
 
 def verify_installation(packages):
@@ -170,12 +179,16 @@ def verify_installation(packages):
                 })
     
     # Summary log with structured data
-    logger.info("Verification phase completed", extra={
+    logger.info("Verification phase completed")
+    
+    # Display structured verification metrics
+    verification_metrics = {
         "total_packages": len(packages),
         "passed": passed_count,
         "failed": failed_count,
-        "success_rate_pct": (passed_count / len(packages)) * 100 if packages else 0
-    })
+        "success_rate_pct": round((passed_count / len(packages)) * 100, 2) if packages else 0
+    }
+    logger.log_dict(verification_metrics, message="📊 Verification Metrics:")
 
 
 def main():
