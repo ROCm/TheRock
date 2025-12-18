@@ -56,6 +56,10 @@ endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+set(LLVM_LINK_LLVM_DYLIB ON)
+# we have never enabled benchmarks,
+# diabling more explicitly after a bug fix enabled.
+set(LLVM_INCLUDE_BENCHMARKS OFF)
 set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
 
 # Packaging.
