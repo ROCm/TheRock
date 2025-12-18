@@ -87,10 +87,10 @@ Depending on the state of the subprojects in your development branch for this pr
 ### Accessing the Workflow
 
 1. Navigate to the [Build portable Linux artifacts workflow](https://github.com/ROCm/TheRock/actions/workflows/build_portable_linux_artifacts.yml)
-2. Click **"Run workflow"** button (top right)
-3. Select your development branch from the previous step in the **"Use workflow from"** dropdown.
-4. It is important to leave the first input as `dev`.
-5. The main input that will be different than the default options will be the `amdgpu_families` input. Please only select the GPU architectures relevant to the development or debugging effort.
+1. Click **"Run workflow"** button (top right)
+1. Select your development branch from the previous step in the **"Use workflow from"** dropdown.
+1. It is important to leave the first input as `dev`.
+1. The main input that will be different than the default options will be the `amdgpu_families` input. Please only select the GPU architectures relevant to the development or debugging effort.
 
 ### Example: Single GPU Family
 
