@@ -8,7 +8,19 @@ import shutil
 import sys
 from pathlib import Path
 
+
 SCRIPT_DIR = Path(__file__).resolve().parent
+currentFuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
+
+
+def print_function_name():
+    """Print the name of the calling function.
+
+    Parameters: None
+
+    Returns: None
+    """
+    print("In function:", currentFuncName(1))
 
 
 def read_package_json_file():
