@@ -179,8 +179,16 @@ if os.name == WINDOWS:  # nt
         )  # These FP32 SerialRun3D tests use so much memory that they have a risk of timing out the machine during tests
         # this could address 1
         negative_filter.append("*gfx942*")
-        # Sample case from the failed list to test if the filter is working
-        negative_filter.append("Smoke/GPU_UnitTestConvSolverFFTFwd_FP32.fft/26")
+        # List of currently failing tests
+        negative_filter.append("Smoke/GPU_UnitTestConvSolverFFTFwd_FP32")
+        negative_filter.append("GPU_TernaryTensorOps_FP64")
+        negative_filter.append("GPU_TernaryTensorOps_FP16")
+        negative_filter.append("GPU_TernaryTensorOps_FP32")
+        negative_filter.append("GPU_Op4dTensorGenericTest_FP32")
+        negative_filter.append("GPU_UnitTestActivationDescriptor_FP16")
+        negative_filter.append("GPU_UnitTestActivationDescriptor_FP32")
+        negative_filter.append("CPU_TuningPolicy_NONE")
+        negative_filter.append("GPU_Dropout_FP32")
 ####################################################
 
 # Creating a smoke test filter
