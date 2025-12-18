@@ -49,21 +49,36 @@ jobs:
           echo "  Scenarios: Success + Failure cases"
           echo ""
       
-      - name: 📋 Run Core Logging Demos
+      - name: 📋 Run Package Installer Demo
         run: |
-          echo "::group::📝 Core Logging Framework Demos"
+          echo "::group::📦 Package Installer Demo"
           echo "=========================================="
           echo "  TheRock Unified Logging Framework"
-          echo "  Sample 1: Package Installer"
-          echo "  Sample 2: Build System"
+          echo "  Sample: Package Installer"
           echo "=========================================="
           echo ""
           
           cd build_tools/_therock_utils
-          python3 run_logging_demos.py
+          python3 sample_package_installer.py
           
           echo ""
-          echo "✅ Core demos completed!"
+          echo "✅ Package installer demo completed!"
+          echo "::endgroup::"
+      
+      - name: 🔨 Run Build System Demo
+        run: |
+          echo "::group::🔨 Build System Demo"
+          echo "=========================================="
+          echo "  TheRock Unified Logging Framework"
+          echo "  Sample: Build System"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/_therock_utils
+          python3 sample_build_system.py
+          
+          echo ""
+          echo "✅ Build system demo completed!"
           echo "::endgroup::"
       
       - name: 🧪 Run rocROLLER GTest Demo (Success Case)
