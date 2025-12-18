@@ -109,6 +109,13 @@ a branch name following one of these patterns:
 These naming schemes allow for long-lived branches to be more easily sorted and
 possibly cleaned up by repository maintainers.
 
+List of long-lived branches:
+
+- `compiler/amd-mainline`
+- `compiler/amd-staging`
+- `main`
+- `release/*`
+
 > [!TIP]
 > Most developer workflows are compatible with pull requests coming from forks.
 > Some good reasons to create branches in the shared repository are:
