@@ -36,7 +36,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     sys.stdout.flush()
@@ -131,7 +131,7 @@ def fetch_nested_submodules(args, projects):
             get_submodule_path(nested_submodule, cwd=parent_dir)
             for nested_submodule in nested_submodules
         ]
-        exec(
+        run_command(
             ["git", "submodule", "update", "--init"]
             + update_args
             + ["--"]
@@ -154,7 +154,7 @@ def run(args):
     if args.remote:
         update_args += ["--remote"]
     if args.update_submodules:
-        exec(
+        run_command(
             ["git", "submodule", "update", "--init"]
             + update_args
             + ["--"]
@@ -173,7 +173,7 @@ def run(args):
     # then meaningless. Here on each fetch, we reset the flag so that if
     # patches are aged out, the tree is restored to normal.
     submodule_paths = [get_submodule_path(name) for name in projects]
-    exec(
+    run_command(
         ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
         cwd=THEROCK_DIR,
     )
@@ -206,7 +206,7 @@ def pull_large_files(dvc_projects, projects):
         dvc_config_file = project_dir / ".dvc" / "config"
         if dvc_config_file.exists():
             print(f"dvc detected in {project_dir}, running dvc pull")
-            exec(["dvc", "pull"], cwd=project_dir)
+            run_command(["dvc", "pull"], cwd=project_dir)
         else:
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
 
@@ -247,7 +247,7 @@ def apply_patches(args, projects):
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches")
-        exec(
+        run_command(
             [
                 "git",
                 "-c",
@@ -261,7 +261,7 @@ def apply_patches(args, projects):
             cwd=project_dir,
         )
         # Since it is in a patched state, make it invisible to changes.
-        exec(
+        run_command(
             ["git", "update-index", "--skip-worktree", "--", submodule_path],
             cwd=THEROCK_DIR,
         )
