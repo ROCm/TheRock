@@ -14,10 +14,9 @@ logging.basicConfig(level=logging.INFO)
 class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
-        # TODO(#2616): Enable full tests once known machine issues are resolved
+        # TODO(#2616): Enable tests once known machine issues are resolved
         cmd = [
-            f"{THEROCK_BIN_DIR}/rccl-UnitTests",
-            "--gtest_filter=*InPlace*:*OutOfPlace*",
+            f"{THEROCK_BIN_DIR}/rccl-UnitTests"
         ]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(

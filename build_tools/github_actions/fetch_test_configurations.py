@@ -183,7 +183,8 @@ test_matrix = {
         "fetch_artifact_args": "--rccl --tests",
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
-        "platform": ["linux"],
+        # TODO(#2616): Enable tests once known machine issues are resolved
+        "platform": [],
         "total_shards": 1,
     },
     # hipDNN tests
