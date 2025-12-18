@@ -172,12 +172,6 @@ jobs:
         with:
           python-version: 3.12
 
-      # safe.directory must be set before Runner Health Status
-      - name: Adjust git config
-        run: |
-          git config --global --add safe.directory $PWD
-          git config fetch.parallel 10
-
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
@@ -190,10 +184,6 @@ jobs:
 
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
-
-      - name: Runner health status
-        run: |
-          ./build_tools/health_status.py
 
       - name: Fetch sources
         timeout-minutes: 30
