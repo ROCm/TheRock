@@ -17,7 +17,7 @@ class TestRCCL:
         environ_vars = os.environ.copy()
         environ_vars["UT_MIN_GPUS"] = "2"
         environ_vars["UT_MAX_GPUS"] = "2"
-        environ_vars["UT_POW2_GPUS=1"] = "1"
+        environ_vars["UT_POW2_GPUS"] = "1"
         environ_vars["UT_PROCESS_MASK"] = "1"
         cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
