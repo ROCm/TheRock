@@ -9,7 +9,7 @@
 
 This guide explains how to use TheRock's GitHub Actions workflows to trigger ROCm and PyTorch development builds for specific GPU architectures with custom submodule branches or commits for debugging and development. Your GitHub account must have access to manually trigger workflows in TheRock repo to follow this guide.
 
-TheRock provides the `build_portable_linux_artifacts.yml` workflow for building ROCm SDK artifacts. Once completed, this workflow automatically triggers the PyTorch wheel build via `build_portable_linux_pytorch_wheels.yml`.
+TheRock provides the `release_portable_linux_packages.yml` workflow for building ROCm SDK packages. Once completed, this workflow automatically triggers the PyTorch wheel build via `release_portable_linux_pytorch_wheels.yml`.
 
 Note that the full stack build can take several hours, depending on system availability.
 
