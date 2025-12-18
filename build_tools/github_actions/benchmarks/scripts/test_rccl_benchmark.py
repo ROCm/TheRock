@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))         # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
+from utils.mpi_helper import MPIHelper
 
 
 class RCCLBenchmark(BenchmarkBase):
@@ -25,82 +26,8 @@ class RCCLBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name='rccl', display_name='RCCL')
         self.log_file = self.script_dir / "rccl_bench.log"
-        self.mpi_path = None
+        self.mpi_helper = MPIHelper(install_dir=self.script_dir / "openmpi")
         self.ngpu = self._detect_gpu_count()
-    
-    def _detect_gpu_count(self) -> int:
-        """Detect the number of available GPUs."""
-        try:
-            result = subprocess.run(
-                ['rocm-smi', '--showgpus'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            # Count GPU lines in output
-            gpu_count = len([line for line in result.stdout.split('\n') if 'GPU[' in line])
-            return max(1, gpu_count)
-        except Exception as e:
-            log.warning(f"Could not detect GPU count: {e}. Defaulting to 1.")
-            return 1
-    
-    def _setup_mpi(self) -> bool:
-        """Setup MPI - check for existing installation or install if needed."""
-        # Check system MPI installations
-        for mpi_bin in ["/usr/bin", "/usr/lib64/openmpi/bin", "/opt/openmpi/bin"]:
-            if Path(mpi_bin, "mpirun").exists():
-                self.mpi_path = mpi_bin
-                log.info(f"Found system MPI at: {self.mpi_path}")
-                return True
-        
-        # Check local build or build if needed
-        mpi_install_dir = self.script_dir / "openmpi"
-        mpirun = mpi_install_dir / "bin" / "mpirun"
-        
-        if mpirun.exists():
-            self.mpi_path = str(mpirun.parent)
-            log.info(f"Using local MPI at: {self.mpi_path}")
-            return True
-        
-        # Build MPI locally
-        log.info("Building OpenMPI locally (this may take several minutes)...")
-        mpi_version = "4.1.4"
-        mpi_url = f"https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-{mpi_version}.tar.gz"
-        mpi_src_dir = self.script_dir / f"openmpi-{mpi_version}"
-        
-        try:
-            # Download and extract
-            tar_file = self.script_dir / f"openmpi-{mpi_version}.tar.gz"
-            subprocess.run(["wget", "-q", "-O", str(tar_file), mpi_url], check=True, timeout=300)
-            subprocess.run(["tar", "-xzf", str(tar_file), "-C", str(self.script_dir)], check=True, timeout=60)
-            tar_file.unlink()
-            
-            # Configure, build, and install
-            ncpus = subprocess.run(["nproc"], capture_output=True, text=True).stdout.strip() or "4"
-            common_opts = {"cwd": str(mpi_src_dir), "stdout": subprocess.DEVNULL, "stderr": subprocess.PIPE}
-            
-            subprocess.run(["./configure", f"--prefix={mpi_install_dir}", "--enable-mpi-cxx", 
-                          "--with-rocm", "--disable-man-pages"], check=True, timeout=600, **common_opts)
-            subprocess.run(["make", f"-j{ncpus}"], check=True, timeout=1800, **common_opts)
-            subprocess.run(["make", "install"], check=True, timeout=300, **common_opts)
-            
-            # Cleanup
-            subprocess.run(["rm", "-rf", str(mpi_src_dir)], check=False)
-            
-            if mpirun.exists():
-                self.mpi_path = str(mpirun.parent)
-                log.info(f"OpenMPI built successfully at: {self.mpi_path}")
-                return True
-            
-            log.error("MPI build failed - mpirun not found after installation")
-            
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
-            log.error(f"MPI build failed: {e}")
-        except Exception as e:
-            log.error(f"Unexpected error during MPI build: {e}")
-        
-        log.warning("MPI unavailable - RCCL tests may not run optimally")
-        return False
     
     def run_benchmarks(self) -> None:
         """Run RCCL benchmarks and save output to log file."""
@@ -110,7 +37,7 @@ class RCCLBenchmark(BenchmarkBase):
             config_data = json.load(f)
         
         # Setup MPI
-        self._setup_mpi()
+        self.mpi_helper.setup()
         
         # Get configuration
         benchmarks = config_data.get("benchmarks", [])
@@ -154,23 +81,21 @@ class RCCLBenchmark(BenchmarkBase):
                         env_vars = {"HSA_FORCE_FINE_GRAIN_PCIE": "1"}
                         
                         # Construct benchmark command with MPI
-                        if self.mpi_path:
+                        mpirun = self.mpi_helper.get_mpirun_command()
+                        if mpirun:
                             # Update environment with MPI paths
-                            mpi_lib_path = str(Path(self.mpi_path).parent / "lib")
-                            env_vars["PATH"] = f"{self.mpi_path}:{os.environ.get('PATH', '')}"
-                            env_vars["LD_LIBRARY_PATH"] = f"{mpi_lib_path}:{os.environ.get('LD_LIBRARY_PATH', '')}"
+                            env_vars.update(self.mpi_helper.get_env_vars())
                             
                             # Run with MPI - use one process per GPU
-                            mpirun_binary = str(Path(self.mpi_path) / "mpirun")
                             cmd = [
-                                mpirun_binary,
+                                mpirun,
                                 "-np", str(self.ngpu),
                                 "--allow-run-as-root",
                                 str(bench_binary),
                                 "-b", min_size,
                                 "-e", max_size,
                                 "-f", step_factor,
-                                "-g", "1",  # Each MPI process handles 1 GPU
+                                "-g", str(self.ngpu),
                                 "-o", operation,
                                 "-d", dtype,
                                 "-n", test_iters,

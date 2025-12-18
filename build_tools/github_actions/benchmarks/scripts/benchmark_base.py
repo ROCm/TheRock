@@ -11,7 +11,7 @@ from prettytable import PrettyTable
 # Add parent directory to path for utils import
 sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
-from utils import BenchmarkClient
+from utils import BenchmarkClient, HardwareDetector
 from utils.logger import log
 from github_actions_utils import gha_append_step_summary
 
@@ -77,6 +77,21 @@ class BenchmarkBase:
         
         process.wait()
         return process.returncode
+    
+    def _detect_gpu_count(self) -> int:
+        """Detect the number of available GPUs using HardwareDetector.
+        
+        Returns:
+            Number of GPUs detected, or 1 if detection fails
+        """
+        try:
+            detector = HardwareDetector()
+            gpu_list = detector.detect_gpu()
+            gpu_count = len(gpu_list)
+            return max(1, gpu_count)
+        except Exception as e:
+            log.warning(f"Could not detect GPU count: {e}. Defaulting to 1.")
+            return 1
     
     def create_test_result(self, test_name: str, subtest_name: str, status: str,
                           score: float, unit: str, flag: str, **kwargs) -> Dict[str, Any]:
