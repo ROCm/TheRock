@@ -56,8 +56,10 @@ TheRock provides a streamlined workflow for building JAX with ROCm support, leve
 
 - Checkout rocm-jax
 
-  - `git clone https://github.com/ROCm/rocm-jax.git`
-  - `cd rocm-jax`
+  ```bash
+  git clone https://github.com/ROCm/rocm-jax.git
+  cd rocm-jax
+  ```
 
 - Choose versions and TheRock Source
 
@@ -135,7 +137,7 @@ After building wheels locally, you can test them:
   pip install jax/jax_rocm_plugin/wheelhouse/*.whl
 
   # Install JAX from PyPI to match the version
-  pip install --extra-index-url https://pypi.org/simple jax==${JAX_VERSION}
+  pip install --extra-index-url https://pypi.org/simple jax==<jax_version>
   ```
 
 - Run Test jax wheels
