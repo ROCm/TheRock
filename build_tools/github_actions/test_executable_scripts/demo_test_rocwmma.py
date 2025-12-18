@@ -117,22 +117,10 @@ with logger.timed_operation("rocwmma_ctest_execution"):
         test_duration = random.uniform(0.5, 2.0)
         time.sleep(test_duration / 10)  # Speed up for demo
         
-        # Simulate test results
-        if random.random() < 0.03:  # 3% chance of failure
-            test_result = "Failed"
-            failed_tests += 1
-            logger.error(f"   ❌ {test_result}")
-            logger.error(f"      Reason: Matrix dimensions mismatch")
-            logger.error(f"      Duration: {test_duration:.2f}s")
-        elif random.random() < 0.02:  # 2% chance of skip
-            test_result = "Skipped"
-            skipped_tests += 1
-            logger.warning(f"   ⚠️  {test_result}")
-            logger.warning(f"      Reason: GPU architecture not supported")
-        else:
-            test_result = "Passed"
-            passed_tests += 1
-            logger.info(f"   ✅ {test_result} ({test_duration:.2f}s)")
+        # Simulate test results (all pass for demo)
+        test_result = "Passed"
+        passed_tests += 1
+        logger.info(f"   ✅ {test_result} ({test_duration:.2f}s)")
         
         total_duration += test_duration
 

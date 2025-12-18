@@ -9,7 +9,6 @@ without requiring actual GPU hardware or compiled binaries.
 import os
 import sys
 import time
-import random
 from pathlib import Path
 
 # Add _therock_utils to path for unified logging
@@ -104,21 +103,11 @@ with logger.timed_operation("rocroller_test_execution"):
         test_start = time.time()
         time.sleep(random.uniform(0.05, 0.2))
         
-        # Simulate test results (most pass, some might fail)
+        # Simulate test results (all pass for demo)
         test_result = "PASSED"
-        if random.random() < 0.05:  # 5% chance of failure for realism
-            test_result = "FAILED"
-            failed_tests += 1
-            logger.error(f"   ❌ {test_name}: {test_result}")
-            logger.error(f"      Error: Expected value 42, got 41")
-        elif random.random() < 0.02:  # 2% chance of skip
-            test_result = "SKIPPED"
-            skipped_tests += 1
-            logger.warning(f"   ⚠️  {test_name}: {test_result}")
-        else:
-            passed_tests += 1
-            test_duration = (time.time() - test_start) * 1000
-            logger.info(f"   ✅ {test_name}: {test_result} ({test_duration:.1f}ms)")
+        passed_tests += 1
+        test_duration = (time.time() - test_start) * 1000
+        logger.info(f"   ✅ {test_name}: {test_result} ({test_duration:.1f}ms)")
 
 logger.info("")
 logger.info("=" * 60)
