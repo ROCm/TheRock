@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 """Configures metadata for a CI workflow run.
 
@@ -277,7 +277,7 @@ def generate_multi_arch_matrix(
 ) -> List[dict]:
     """Generate matrix grouped by build_variant with structured per-family data.
 
-    In multi-arch mode, instead of creating one entry per (family × build_variant),
+    In multi-arch mode, instead of creating one entry per (family ├ù build_variant),
     we create one entry per build_variant containing all families that support it.
     This allows multi_arch_build_portable_linux.yml to run generic stages once
     and matrix over families only for per-arch stages.
@@ -533,7 +533,7 @@ def matrix_generator(
         print(f"Generated test list: {str(unique_test_names)}")
         return matrix_output, unique_test_names
 
-    # Expand selected target names back to a matrix (cross-product of families × variants).
+    # Expand selected target names back to a matrix (cross-product of families ├ù variants).
     matrix_output = []
     for target_name in unique_target_names:
         # Filter targets to only those matching the requested platform.
