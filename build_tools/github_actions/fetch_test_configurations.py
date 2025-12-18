@@ -240,9 +240,9 @@ def run():
     # Determine which test matrix to use
     if is_benchmark_workflow:
         # For benchmark workflow, use ONLY benchmark_matrix
+        # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
         logging.info("Using benchmark_matrix only (benchmark tests)")
         selected_matrix = benchmark_matrix.copy()
-        # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
     else:
         # For regular workflow, use ONLY test_matrix
         logging.info("Using test_matrix only (regular tests)")
