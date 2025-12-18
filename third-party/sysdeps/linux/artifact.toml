@@ -4,7 +4,7 @@ unmatched_exclude = [
   "lib/rocm_sysdeps/share/man/**",
 ]
 
-# elfutils
+# binutils
 [components.dev."third-party/sysdeps/linux/binutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/binutils/build/stage"]
 
