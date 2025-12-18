@@ -107,6 +107,7 @@ jobs:
         inputs.benchmark_runs_on != ''
       }}
     uses: ./.github/workflows/test_benchmarks.yml
+    secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}

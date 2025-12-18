@@ -49,6 +49,9 @@ jobs:
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      # API configuration for benchmark results submission
+      API_URL: ${{ secrets.API_URL }}
+      API_FALLBACK_URL: ${{ secrets.API_FALLBACK_URL }}
     steps:
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
