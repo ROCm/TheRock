@@ -69,7 +69,7 @@ def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
 
 
 def get_system_py_command(use_uv: bool) -> list[str]:
-    return ["uv"] if use_uv else [sys.run_commandutable, "-m"]
+    return ["uv"] if use_uv else [sys.executable, "-m"]
 
 
 def find_venv_python(venv_path: Path) -> Path | None:
@@ -99,7 +99,7 @@ def create_venv(venv_dir: Path, py_cmd: list[str] | None = None):
     # Create with 'python -m venv' as needed.
     python_exe = find_venv_python(venv_dir_resolved)
     if python_exe:
-        log(f"  Found existing python run_commandutable at '{python_exe}', skipping creation")
+        log(f"  Found existing python executable '{python_exe}', skipping creation")
         log("  Run again with --clean to clear the existing directory instead")
     else:
         run_command(py_cmd + ["venv", str(venv_dir_resolved)])

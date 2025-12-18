@@ -209,7 +209,7 @@ def do_hipify(args: argparse.Namespace):
     print(f"Hipifying {repo_dir}")
     build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
     if build_amd_path.exists():
-        run_command([sys.run_commandutable, build_amd_path], cwd=repo_dir)
+        run_command([sys.executable, build_amd_path], cwd=repo_dir)
 
 
 def tag_hipify_diffbase(module_path: Path):
