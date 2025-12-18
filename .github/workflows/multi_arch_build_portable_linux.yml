@@ -7,6 +7,7 @@
 # 4. comm-libs (per-arch) - RCCL (parallel to math-libs)
 # 5. dctools-core (generic) - RDC (parallel to math-libs)
 # 6. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
+# 7. media (generic) - sysdeps-amd-mesa, rocdecode (todo), rocjpeg (todo)
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
 
@@ -636,6 +637,110 @@ jobs:
           ccache -s -v
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Push stage artifacts
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
+            --stage ${STAGE_NAME} \
+            --build-dir build
+
+  # ==========================================================================
+  # STAGE: media (generic)
+  # ==========================================================================
+  media:
+    name: Stage - Media
+    needs: foundation
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 180  # 3 hours
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      STAGE_NAME: media
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Configure AWS Credentials
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Fetch inbound artifacts
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |
+          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
+            --stage ${STAGE_NAME} \
+            --output-dir build \
+            --bootstrap
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+
+      - name: Get stage configuration
+        id: stage_config
+        run: |
+          python build_tools/configure_stage.py \
+            --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
+            --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+
+      - name: Configure
+        run: |
+          cmake -B build -S . -GNinja \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            ${{ steps.stage_config.outputs.cmake_args }}
+
+      - name: Build stage
+        run: |
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "CCache Stats:"
+          ccache -s -v
+          echo "Artifacts:"
+          ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Configure AWS Credentials
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Push stage artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
