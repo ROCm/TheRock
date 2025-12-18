@@ -86,7 +86,7 @@ Depending on the state of the subprojects in your development branch for this pr
 
 ### Accessing the Workflow
 
-1. Navigate to the [Build portable Linux artifacts workflow](https://github.com/ROCm/TheRock/actions/workflows/build_portable_linux_artifacts.yml)
+1. Navigate to the [Release portable Linux packages workflow](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml)
 1. Click **"Run workflow"** button (top right)
 1. Select your development branch from the previous step in the **"Use workflow from"** dropdown.
 1. It is important to leave the first input as `dev`.
