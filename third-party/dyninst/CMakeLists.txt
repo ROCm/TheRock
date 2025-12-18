@@ -15,11 +15,10 @@ therock_cmake_subproject_declare(therock-dyninst
   RUNTIME_DEPS
     therock-boost
     therock-tbb
+    ${THEROCK_BUNDLED_BINUTILS}
     ${THEROCK_BUNDLED_ELFUTILS}
   INSTALL_RPATH_DIRS
     lib/rocm_sysdeps/lib
-  CMAKE_ARGS
-    -DLibIberty_ROOT_DIR="/opt/rh/gcc-toolset-13/root/usr"
 )
 therock_cmake_subproject_provide_package(therock-dyninst Dyninst lib/cmake)
 therock_cmake_subproject_activate(therock-dyninst)
