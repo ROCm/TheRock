@@ -84,7 +84,7 @@ DEFAULT_LOG_DIR = Path.cwd() / "logs"
 # ============================================================================
 
 class ColoredFormatter(logging.Formatter):
-    """Formatter with color support for console output"""
+    """Formatter with color support for console output and structured data display"""
     
     # ANSI color codes
     COLORS = {
@@ -96,9 +96,18 @@ class ColoredFormatter(logging.Formatter):
     }
     RESET = "\033[0m"
     
-    def __init__(self, fmt: str, use_color: bool = True):
+    # Fields that are part of standard log record or context (not extra data)
+    STANDARD_FIELDS = {
+        'name', 'msg', 'args', 'created', 'filename', 'funcName', 'levelname',
+        'levelno', 'lineno', 'module', 'msecs', 'message', 'pathname', 'process',
+        'processName', 'relativeCreated', 'thread', 'threadName', 'exc_info',
+        'exc_text', 'stack_info', 'asctime', 'component', 'operation'
+    }
+    
+    def __init__(self, fmt: str, use_color: bool = True, show_structured_data: bool = True):
         super().__init__(fmt)
         self.use_color = use_color and not IS_WINDOWS and sys.stdout.isatty()
+        self.show_structured_data = show_structured_data
     
     def format(self, record: logging.LogRecord) -> str:
         if self.use_color:
@@ -108,6 +117,18 @@ class ColoredFormatter(logging.Formatter):
             record.levelname = f"{color}{levelname}{self.RESET}"
         
         result = super().format(record)
+        
+        # Extract and display structured data (extra fields)
+        if self.show_structured_data:
+            extra_data = {}
+            for key, value in record.__dict__.items():
+                if key not in self.STANDARD_FIELDS and not key.startswith('_'):
+                    extra_data[key] = value
+            
+            if extra_data:
+                # Format structured data as key=value pairs
+                structured_str = " | ".join(f"{k}={v}" for k, v in sorted(extra_data.items()))
+                result = f"{result} | {structured_str}"
         
         if self.use_color:
             # Reset level name for other handlers
@@ -247,7 +268,7 @@ def configure_root_logger(
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
-    console_formatter = ColoredFormatter(LOG_FORMAT, use_color=use_colors)
+    console_formatter = ColoredFormatter(LOG_FORMAT, use_color=use_colors, show_structured_data=True)
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
     
@@ -258,7 +279,7 @@ def configure_root_logger(
         
         file_handler = logging.FileHandler(log_path, encoding="utf-8")
         file_handler.setLevel(level)
-        file_formatter = logging.Formatter(LOG_FORMAT)
+        file_formatter = ColoredFormatter(LOG_FORMAT, use_color=False, show_structured_data=True)
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
     
