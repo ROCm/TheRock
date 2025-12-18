@@ -12,7 +12,6 @@ on:
   # Auto-trigger on push
   push:
     branches:
-      - 'users/rponnuru/logging_poc'
       - 'users/rponnuru/logging_poc_2'
 
 permissions:
