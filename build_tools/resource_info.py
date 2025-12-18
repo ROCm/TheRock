@@ -50,7 +50,7 @@ def therock_components(pwd: str, cmd_str: str) -> str:
     """ when not clear to infer which component this compile belongs to."""
     comp = "unknown"
 
-    # Infer from build directory (PWD). Can be edited, added as needed
+    # Can be edited, added as needed
     if "/core/" in pwd:
         comp = "core"
     elif "/compiler/" in pwd:
@@ -368,7 +368,7 @@ def generate_summaries(log_dir: str) -> None:
 
 def main() -> int:
     log_dir = os.environ.get("THEROCK_BUILD_PROF_LOG_DIR",
-                             "/build/log/therock-build-prof")
+                             "build/log/therock-build-prof")
 
     # 1) Run the compiler & log per-command stats
     rc = run_and_log_command(log_dir)
