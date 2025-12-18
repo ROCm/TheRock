@@ -1,0 +1,34 @@
+2025-12-17 19:21:12,498 - therock.__main__ - INFO - ======================================================================
+2025-12-17 19:21:12,499 - therock.__main__ - INFO - 🧪 GTEST DEMO - Unified Logging Framework
+2025-12-17 19:21:12,558 - therock.__main__ - INFO - ======================================================================
+2025-12-17 19:21:12,558 - therock.__main__ - INFO - Setting up GTest environment
+2025-12-17 19:21:12,558 - therock.__main__ - INFO - Test configuration loaded
+2025-12-17 19:21:12,632 - therock.__main__ - INFO - ✅ Completed operation: environment_setup (72.27ms)
+2025-12-17 19:21:12,639 - therock.__main__ - INFO - Discovering tests...
+2025-12-17 19:21:12,774 - therock.__main__ - INFO - ✅ Completed operation: test_discovery (134.93ms)
+2025-12-17 19:21:12,777 - therock.__main__ - INFO - Found 4 tests in shard 1/4
+2025-12-17 19:21:12,777 - therock.__main__ - INFO - Starting test execution
+2025-12-17 19:21:13,056 - therock.__main__ - WARNING - Test failed: GEMM.SquareMatrix
+2025-12-17 19:21:13,180 - therock.__main__ - INFO - ✅ Completed operation: gtest_execution (402.62ms)
+2025-12-17 19:21:13,185 - therock.__main__ - INFO - ======================================================================
+2025-12-17 19:21:13,185 - therock.__main__ - INFO - TEST RESULTS
+2025-12-17 19:21:13,185 - therock.__main__ - INFO - ======================================================================
+2025-12-17 19:21:13,186 - therock.__main__ - INFO - Summary:
+{
+  "total": 4,
+  "passed": 3,
+  "failed": 1,
+  "pass_rate": "75.0%"
+}
+2025-12-17 19:21:13,186 - therock.__main__ - ERROR - ❌ 1 test(s) failed:
+2025-12-17 19:21:13,188 - therock.__main__ - ERROR -   - GEMM.SquareMatrix
+2025-12-17 19:21:13,189 - therock.__main__ - INFO - 
+Demonstrating exception logging...
+2025-12-17 19:21:13,189 - therock.__main__ - ERROR - GTest execution completed with failures
+Traceback (most recent call last):
+  File "C:\Users\rponnuru\TheRock\build_tools\_therock_utils\sample_gtest_demo.py", line 130, in main
+    raise RuntimeError(f"Test suite failed: {len(failed_tests)} test(s) failed")
+RuntimeError: Test suite failed: 1 test(s) failed
+2025-12-17 19:21:13,190 - therock.__main__ - INFO - ======================================================================
+2025-12-17 19:21:13,190 - therock.__main__ - INFO - GTest demo completed - check logs/gtest_demo.log for details
+2025-12-17 19:21:13,190 - therock.__main__ - INFO - ======================================================================

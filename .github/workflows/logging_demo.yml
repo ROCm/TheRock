@@ -1,10 +1,12 @@
 name: Logging Framework Demo
 
 # Demo workflow for TheRock standardized logging framework
-# Demonstrates three sample applications using the unified logging framework:
+# Demonstrates five sample applications using the unified logging framework:
 # 1. Package Installer
 # 2. Build System
 # 3. GTest Runner
+# 4. rocROLLER GTest Integration (Mock)
+# 5. rocWMMA CTest Integration (Mock)
 on:
   # Manual trigger
   workflow_dispatch:
@@ -39,7 +41,7 @@ jobs:
           echo ""
           echo "Trigger: ${{ github.event_name }}"
           echo "Branch: ${{ github.ref_name }}"
-          echo "Demo: Package Installer + Build System + GTest Runner"
+          echo "Demos: Package Installer + Build System + GTest + rocROLLER + rocWMMA"
           echo ""
       
       - name: 📋 Run Logging Framework Demo
@@ -60,6 +62,49 @@ jobs:
           echo "✅ All demos completed!"
           echo "::endgroup::"
       
+      - name: 🧪 Run Mock rocROLLER GTest Demo
+        run: |
+          echo "::group::🧪 rocROLLER GTest Demo (Mock)"
+          echo "=========================================="
+          echo "  Demonstrating GTest Integration"
+          echo "  with Unified Logging Framework"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/github_actions/test_executable_scripts
+          python3 demo_test_rocroller.py
+          
+          echo ""
+          echo "✅ rocROLLER demo completed!"
+          echo "::endgroup::"
+        env:
+          TEST_TYPE: smoke
+          SHARD_INDEX: 1
+          TOTAL_SHARDS: 1
+          RUNNER_OS: Linux
+      
+      - name: 🔬 Run Mock rocWMMA CTest Demo
+        run: |
+          echo "::group::🔬 rocWMMA CTest Demo (Mock)"
+          echo "=========================================="
+          echo "  Demonstrating CTest Integration"
+          echo "  with Unified Logging Framework"
+          echo "=========================================="
+          echo ""
+          
+          cd build_tools/github_actions/test_executable_scripts
+          python3 demo_test_rocwmma.py
+          
+          echo ""
+          echo "✅ rocWMMA demo completed!"
+          echo "::endgroup::"
+        env:
+          TEST_TYPE: regression
+          SHARD_INDEX: 1
+          TOTAL_SHARDS: 1
+          AMDGPU_FAMILIES: gfx942
+          RUNNER_OS: Linux
+      
       - name: ✅ Demo Summary
         if: always()
         run: |
@@ -72,6 +117,8 @@ jobs:
           echo "  1. Package Installer (install & verify)"
           echo "  2. Build System (configure, compile & test)"
           echo "  3. GTest Runner (execute, parse & filter)"
+          echo "  4. rocROLLER GTest Demo (mock GPU tests)"
+          echo "  5. rocWMMA CTest Demo (mock GPU tests)"
           echo ""
           echo "Status: ${{ job.status }}"
           echo ""
@@ -83,6 +130,9 @@ jobs:
           echo "  - Automatic timing with timed_operation"
           echo "  - Exception handling with log_exception"
           echo "  - GTest integration and result parsing"
+          echo "  - CTest integration with sharding"
+          echo "  - Test filtering (smoke/regression/full)"
+          echo "  - Performance metrics tracking"
           echo ""
 
 

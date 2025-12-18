@@ -1,0 +1,253 @@
+# TheRock Logging Framework Configuration Demo
+# =============================================
+#
+# This file demonstrates how to configure the unified logging framework
+# for different test scenarios including GTest and CTest applications.
+#
+# Usage:
+#   The logging framework is configured programmatically in Python,
+#   but this YAML demonstrates the conceptual configuration structure.
+
+# ============================================================================
+# Global Logging Configuration
+# ============================================================================
+logging:
+  version: 1.0
+  framework: TheRockLogger
+  
+  # Default log levels
+  levels:
+    development: DEBUG
+    ci: INFO
+    production: WARNING
+  
+  # Log output configuration
+  outputs:
+    console:
+      enabled: true
+      use_colors: true  # Disabled automatically on Windows or non-TTY
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    
+    file:
+      enabled: true
+      directory: "logs"
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+      rotation: daily  # Future enhancement
+      retention_days: 7  # Future enhancement
+
+# ============================================================================
+# Component-Specific Configuration
+# ============================================================================
+components:
+  
+  # GTest Application Configuration
+  gtest:
+    description: "Google Test framework integration"
+    sample_script: "sample_gtest_demo.py"
+    
+    logging:
+      component: "gtest_demo"
+      operation: "test_execution"
+      level: INFO
+      log_file: "logs/gtest_demo.log"
+    
+    configuration:
+      # GTest environment variables
+      environment:
+        GTEST_SHARD_INDEX: 0
+        GTEST_TOTAL_SHARDS: 4
+        GTEST_BRIEF: 1
+        GTEST_COLOR: "yes"
+      
+      # Test runner settings
+      runner:
+        capture_output: true
+        parse_results: true
+        track_timing: true
+    
+    sample_tests:
+      - name: "MatrixMultiply.BasicFloat"
+        expected_duration_ms: 50
+      - name: "GEMM.SquareMatrix"
+        expected_duration_ms: 75
+    
+    logging_features:
+      - "Test discovery with timing"
+      - "Per-test execution tracking"
+      - "Result parsing and aggregation"
+      - "Failed test reporting"
+      - "Exception handling"
+  
+  # CTest Application Configuration
+  ctest:
+    description: "CMake Test framework integration"
+    sample_script: "sample_ctest_demo.py"
+    
+    logging:
+      component: "ctest_demo"
+      operation: "test_execution"
+      level: INFO
+      log_file: "logs/ctest_demo.log"
+    
+    configuration:
+      # CTest command-line options
+      options:
+        test_dir: "/path/to/build/component/test"
+        parallel: 8
+        timeout: 300
+        output_on_failure: true
+        repeat: "until-pass:3"
+      
+      # Test runner settings
+      runner:
+        capture_output: true
+        parse_results: true
+        track_timing: true
+    
+    sample_tests:
+      - name: "rocfft_UnitTest"
+        subtests: 100
+        expected_duration_sec: 0.15
+      - name: "rocfft_accuracy_test_pow2"
+        subtests: 150
+        expected_duration_sec: 0.20
+    
+    logging_features:
+      - "Test suite discovery"
+      - "Parallel execution tracking"
+      - "Per-suite result aggregation"
+      - "Subtest counting and reporting"
+      - "Timeout handling"
+
+# ============================================================================
+# Sample Test Scenarios
+# ============================================================================
+scenarios:
+  
+  smoke_test:
+    description: "Quick validation tests (subset of full suite)"
+    test_type: "smoke"
+    components: ["gtest", "ctest"]
+    duration_target: "< 5 minutes"
+    
+    logging:
+      level: INFO
+      emphasis: "failures_only"
+  
+  full_test:
+    description: "Complete test suite"
+    test_type: "full"
+    components: ["gtest", "ctest"]
+    duration_target: "< 60 minutes"
+    
+    logging:
+      level: INFO
+      emphasis: "summary_and_failures"
+  
+  debug_test:
+    description: "Detailed debugging with verbose output"
+    test_type: "debug"
+    components: ["gtest", "ctest"]
+    
+    logging:
+      level: DEBUG
+      emphasis: "all_details"
+      capture_stdout: true
+      capture_stderr: true
+
+# ============================================================================
+# Logging Framework Features
+# ============================================================================
+features:
+  structured_logging:
+    description: "Support for extra fields and structured data"
+    example: |
+      logger.info("Test completed", extra={
+          "test_name": "GEMM.SquareMatrix",
+          "duration_ms": 45.2,
+          "status": "passed"
+      })
+  
+  timing_operations:
+    description: "Automatic timing with context managers"
+    example: |
+      with logger.timed_operation("test_execution"):
+          run_tests()
+      # Automatically logs: "Completed operation: test_execution (1234.56ms)"
+  
+  exception_handling:
+    description: "Unified exception logging with traceback"
+    example: |
+      try:
+          risky_operation()
+      except Exception as e:
+          logger.log_exception(e, "Operation failed")
+  
+  result_parsing:
+    description: "Parse and report test results"
+    parsers:
+      - gtest: "Extracts [PASSED], [FAILED] counts and test names"
+      - ctest: "Extracts test counts, durations, and failures"
+  
+  github_actions_integration:
+    description: "CI/CD friendly output (future enhancement)"
+    features:
+      - "Collapsible log groups"
+      - "Error annotations"
+      - "Warning annotations"
+
+# ============================================================================
+# Usage Examples
+# ============================================================================
+usage:
+  run_gtest_demo:
+    command: "python sample_gtest_demo.py"
+    description: "Run GTest sample with unified logging"
+  
+  run_ctest_demo:
+    command: "python sample_ctest_demo.py"
+    description: "Run CTest sample with unified logging"
+  
+  run_all_demos:
+    command: "python run_logging_demos.py"
+    description: "Run all logging demos (installer, build, gtest, ctest)"
+  
+  configure_custom_logger:
+    code: |
+      from logging_config import get_logger, configure_root_logger
+      import logging
+      
+      # Configure root logger
+      configure_root_logger(
+          level=logging.INFO,
+          log_file="logs/mytest.log",
+          use_colors=True
+      )
+      
+      # Get component logger
+      logger = get_logger(
+          __name__,
+          component="mycomponent",
+          operation="test"
+      )
+      
+      logger.info("Test starting")
+
+# ============================================================================
+# Real-World Integration Examples
+# ============================================================================
+real_world_examples:
+  rocwmma_test:
+    file: "build_tools/github_actions/test_executable_scripts/test_rocwmma.py"
+    features:
+      - "CTest execution with sharding"
+      - "GPU family configuration"
+      - "Smoke vs full test selection"
+  
+  rocroller_test:
+    file: "build_tools/github_actions/test_executable_scripts/test_rocroller.py"
+    features:
+      - "GTest execution with sharding"
+      - "Binary discovery and validation"
+      - "Cross-platform path handling"
+
