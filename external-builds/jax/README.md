@@ -131,12 +131,8 @@ After building wheels locally, you can test them:
 - Install JAX wheels
 
   ```bash
-  # Set environment variables
-  export JAX_VERSION="<JAX_VERSION>"
-  export WHEEL_DIR="jax_rocm_plugin/wheelhouse"
-
   # Install the built wheels
-  pip install ${WHEEL_DIR}/*.whl
+  pip install jax/jax_rocm_plugin/wheelhouse/*.whl
 
   # Install JAX from PyPI to match the version
   pip install --extra-index-url https://pypi.org/simple jax==${JAX_VERSION}
