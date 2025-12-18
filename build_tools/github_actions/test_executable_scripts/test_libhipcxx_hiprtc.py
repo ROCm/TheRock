@@ -9,8 +9,6 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1))
-
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
