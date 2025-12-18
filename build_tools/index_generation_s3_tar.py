@@ -43,7 +43,7 @@ def extract_gpu_details(files):
     # Examples: gfx90a, gfx1150, gfx_ip, gfxX.
     gpu_family_pattern = re.compile(r"gfx(?:\d+[A-Za-z]*|\w+)", re.IGNORECASE)
     gpu_families = set()
-    for file_name, *_ in files: 
+    for file_name, *_ in files:
         match = gpu_family_pattern.search(file_name)
         if match:
             gpu_families.add(match.group(0))
@@ -87,7 +87,11 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                 files.append(
                     (
                         os.path.basename(key),
-                        int(obj.get("LastModified", datetime.now(timezone.utc)).timestamp()),
+                        int(
+                            obj.get(
+                                "LastModified", datetime.now(timezone.utc)
+                            ).timestamp()
+                        ),
                         int(obj.get("Size", 0)),
                     )
                 )
