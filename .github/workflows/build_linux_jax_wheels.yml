@@ -95,6 +95,14 @@ on:
         description: rocm-jax repository ref/branch to check out
         type: string
         default: rocm-jaxlib-v0.8.0
+      repository:
+        description: "Repository to checkout. Defaults to `ROCm/TheRock`."
+        type: string
+        default: "ROCm/TheRock"
+      ref:
+        description: "Branch, tag or SHA to checkout."
+        type: string
+        default: ""
 
 permissions:
   id-token: write
