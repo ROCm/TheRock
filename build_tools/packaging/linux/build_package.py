@@ -736,7 +736,7 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
 
     artifactory = pkg_info.get("Artifactory")
     if artifactory is None:
-        print("Artifactory key is missing. Meta package?")
+        print(f'The "Artifactory" key is missing for {pkg_name}. Is this a meta package?')
         return sourcedir_list
 
     for artifact in artifactory:
