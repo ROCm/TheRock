@@ -132,7 +132,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ needs.setup.outputs.amdgpu_family }}
       GPU_MODEL: ${{ needs.setup.outputs.gpu_model }}
       HIP_VISIBLE_DEVICES: 0
-      ROCM_VERSION: '7.0'
+      ROCM_VERSION: 'latest'
       TEST_TYPE: ${{ inputs.test_type || 'smoke' }}
       THEROCK_BIN_DIR: ${{ github.workspace }}/artifacts/bin
       THEROCK_BUILD_DIR: ${{ github.workspace }}/build
@@ -303,7 +303,7 @@ jobs:
           echo "- Component: ${{ matrix.component }}" >> $GITHUB_STEP_SUMMARY
           echo "- Python Version: ${{ inputs.python_version || '3.12' }}" >> $GITHUB_STEP_SUMMARY
           echo "- Test Type: ${{ inputs.test_type || 'smoke' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- ROCm Version: 7.0" >> $GITHUB_STEP_SUMMARY
+          echo "- ROCm Version: $(cat /opt/rocm/.info/version 2>/dev/null || echo 'latest')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Unified Logging Features Tested:**" >> $GITHUB_STEP_SUMMARY
           echo "- ✨ Single LOG_FORMAT across all outputs" >> $GITHUB_STEP_SUMMARY

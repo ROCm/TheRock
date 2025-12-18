@@ -1,4 +1,4 @@
-name: Test rocROLLER and rocWMMA with Unified Logging (Docker)
+name: Test rocROLLER and rocWMMA with Unified Logging (PyTorch ROCm Docker)
 
 on:
   push:
@@ -46,10 +46,10 @@ concurrency:
 
 jobs:
   test_rocroller_rocwmma_docker:
-    name: Test ${{ matrix.component }} with Unified Logging (ROCm 7.0 Docker)
+    name: Test ${{ matrix.component }} with Unified Logging (PyTorch ROCm Docker)
     runs-on: ubuntu-latest
     container:
-      image: rocm/pytorch:rocm7.0_ubuntu24.04_py3.12_pytorch_release_2.7.0
+      image: rocm/pytorch:latest
       options: --ipc host
         --group-add video
         --device /dev/kfd
@@ -68,7 +68,7 @@ jobs:
     
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
-      ROCM_VERSION: '7.0'
+      ROCM_VERSION: 'latest'
       TEST_TYPE: ${{ inputs.test_type || 'smoke' }}
       THEROCK_BIN_DIR: ${{ github.workspace }}/artifacts/bin
       THEROCK_BUILD_DIR: ${{ github.workspace }}/build
@@ -86,9 +86,9 @@ jobs:
         with:
           python-version: ${{ matrix.python_version }}
       
-      - name: Verify ROCm 7.0 Installation
+      - name: Verify ROCm Installation
         run: |
-          echo "=== Verifying ROCm 7.0 in Docker Container ==="
+          echo "=== Verifying ROCm in Docker Container ==="
           rocm-smi --showproductname || echo "ROCm SMI not available (expected without GPU)"
           hipcc --version || echo "hipcc not found"
           cat /opt/rocm/.info/version || echo "ROCm version info not found"
@@ -96,6 +96,9 @@ jobs:
           echo "=== Python Environment ==="
           python --version
           which python
+          echo ""
+          echo "=== PyTorch Version ==="
+          python -c "import torch; print(f'PyTorch: {torch.__version__}')" || echo "PyTorch check failed"
       
       - name: Install Python Dependencies for Unified Logging
         run: |
@@ -188,8 +191,8 @@ jobs:
           echo "- Component: ${{ matrix.component }}" >> $GITHUB_STEP_SUMMARY
           echo "- Python Version: ${{ matrix.python_version }}" >> $GITHUB_STEP_SUMMARY
           echo "- Test Type: $TEST_TYPE" >> $GITHUB_STEP_SUMMARY
-          echo "- ROCm Version: 7.0" >> $GITHUB_STEP_SUMMARY
-          echo "- Container: rocm/pytorch:rocm7.0_ubuntu24.04_py3.12_pytorch_release_2.7.0" >> $GITHUB_STEP_SUMMARY
+          echo "- Container: rocm/pytorch:latest" >> $GITHUB_STEP_SUMMARY
+          echo "- ROCm Version: $(cat /opt/rocm/.info/version 2>/dev/null || echo 'unknown')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Unified Logging Features Tested:**" >> $GITHUB_STEP_SUMMARY
           echo "- ✨ Single LOG_FORMAT across all outputs" >> $GITHUB_STEP_SUMMARY
