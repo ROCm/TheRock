@@ -20,8 +20,8 @@ and thus leave less room for interpretation than in upstream repositories.
 | Project / feature | Linux support | Windows support  |
 | ----------------- | ------------- | ---------------- |
 | jaxlib            | ✅ Supported  | ❌ Not supported |
-| jax_rocmX_pjrt    | ✅ Supported  | ❌ Not supported |
-| jax_rocmX_plugin  | ✅ Supported  | ❌ Not supported |
+| jax_rocm7_pjrt    | ✅ Supported  | ❌ Not supported |
+| jax_rocm7_plugin  | ✅ Supported  | ❌ Not supported |
 
 ### Supported JAX versions
 
@@ -41,16 +41,16 @@ See the following table for supported version:
 This repository builds the ROCm-enabled JAX artifacts:
 
 - jaxlib (ROCm)
-- jax_rocmX_pjrt (PJRT runtime for ROCm)
-- jax_rocmX_plugin (JAX runtime plugin for ROCm)
+- jax_rocm7_pjrt (PJRT runtime for ROCm)
+- jax_rocm7_plugin (JAX runtime plugin for ROCm)
 
-We support simple flow. The path uses TheRock tarballs for ROCm install.
+TheRock provides a streamlined workflow for building JAX with ROCm support, leveraging TheRock tarballs for ROCm installation.
 
 ### Prerequisites
 
 - **OS**: Linux (supported distributions with ROCm)
 - **Python**: 3.12 recommended
-- **Compiler**: clang (provided via TheRock tarball or system)
+- **Compiler**: clang-6.0 (provided via TheRock tarball or system)
 
 ### Steps
 
@@ -62,8 +62,7 @@ We support simple flow. The path uses TheRock tarballs for ROCm install.
 - Choose versions and TheRock Source
 
   - Pick Python version
-  - Pick a TheRock tarball URL, a local tarball file path or a directory containing ROCm installation
-  - the TAR url paths for nightly `https://rocm.nightlies.amd.com/tarball/`
+  - Pick a TheRock tarball URL, a local tarball file path, or a directory containing a ROCm installation (nightly tarballs are available at `https://rocm.nightlies.amd.com/tarball/`)
 
 - Build all wheels using a tarball URL:
 
@@ -75,9 +74,6 @@ We support simple flow. The path uses TheRock tarballs for ROCm install.
   --therock-path="<tar.gz path>" \
   dist_wheels
   ```
-
-  example for `therock-path=https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0a20251120.tar.gz`
-  `rocm_version=7.10.0a20251120`
 
 - Locate built wheels
   After successfull build, wheel will be available in:
@@ -95,32 +91,22 @@ We support simple flow. The path uses TheRock tarballs for ROCm install.
 
 After building wheels locally, you can test them:
 
-- Checkout TheRock Repo
-
-  ```bash
-  git clone https://github.com/ROCm/TheRock.git
-  cd TheRock
-  ```
-
-- Checkout rocm-jax repo
-
-  - `git clone https://github.com/rocm/rocm-jax.git jax`
-  - `cd jax`
-  - `git checkout rocm-jaxlib-v<JAX_VERSION>`
 
 - Checkout jax test repo
 
-  - `cd jax`
-  - `git clone https://github.com/rocm/jax.git jax_tests`
-  - `cd jax_tests`
-  - `git checkout rocm-jaxlib-v<JAX_VERSION>`
+  ```bash
+  git clone https://github.com/rocm/jax.git jax_tests
+  cd jax_tests
+  git checkout rocm-jaxlib-v<JAX_VERSION>
+  ```
 
 - Create a virtual environment
 
   ```bash
-   python3 -m venv jax_test_env
-   source jax_test_env/bin/activate
-   python3 build_tools/setup_venv.py jax_test_env/.bin
+  cd ..
+  python3 -m venv jax_test_env
+  source jax_test_env/bin/activate
+  python3 build_tools/setup_venv.py jax_test_env/.bin
   ```
 
 - Install requriements
@@ -133,24 +119,20 @@ After building wheels locally, you can test them:
 
   ```bash
   python build_tools/install_rocm_from_artifacts.py \
-  --release "<rocm_version>" \
-  --artifact-group "<amdgpu_family>" \
-  --output-dir "/opt/rocm-<rocm_version>"
+    --release "<rocm_version>" \
+    --artifact-group "<amdgpu_family>" \
+    --output-dir "/opt/rocm-<rocm_version>"
   ```
 
-- Extract JAX_VERSION from the rocm-jax repo
+> Example: 
+> For detailed instructions and example usage, see the [official TheRock documentation](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-tarballs-using-install_rocm_from_artifactspy).
 
-  ```bash
-  JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
-  | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
-  ```
 
 - Install JAX wheels
 
   ```bash
   # Set environment variables
   export JAX_VERSION="<JAX_VERSION>"
-  export ROCM_VERSION="<rocm_version>"
   export WHEEL_DIR="jax_rocm_plugin/wheelhouse"
 
   # Install the built wheels
@@ -163,10 +145,10 @@ After building wheels locally, you can test them:
 - Run Test jax wheels
 
   ```bash
-  pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
-  pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
-  pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
-  pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
+  pytest jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
+  pytest jax_tests/tests/core_test.py -q --log-cli-level=INFO
+  pytest jax_tests/tests/util_test.py -q --log-cli-level=INFO
+  pytest jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
   ```
 
 > [!NOTE]
