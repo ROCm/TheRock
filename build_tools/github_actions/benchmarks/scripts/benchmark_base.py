@@ -42,12 +42,13 @@ class BenchmarkBase:
         # Initialize test client (will be set in run())
         self.client = None
     
-    def execute_command(self, cmd: List[str], log_file_handle: IO) -> int:
+    def execute_command(self, cmd: List[str], log_file_handle: IO, env: Dict[str, str] = None) -> int:
         """Execute a command and stream output to log file.
         
         Args:
             cmd: Command list to execute
             log_file_handle: File handle to write output
+            env: Optional environment variables to set
         
         Returns:
             Exit code from the command
@@ -55,13 +56,19 @@ class BenchmarkBase:
         log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
         log_file_handle.write(f"{shlex.join(cmd)}\n")
         
+        # Merge custom env with current environment
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
+        
         process = subprocess.Popen(
             cmd,
             cwd=self.therock_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
+            bufsize=1,
+            env=process_env
         )
         
         for line in process.stdout:

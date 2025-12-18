@@ -1,0 +1,28 @@
+{
+    "benchmarks": [
+        "all_reduce_perf",
+        "all_gather_perf",
+        "broadcast_perf",
+        "reduce_perf",
+        "reduce_scatter_perf",
+        "alltoall_perf",
+        "scatter_perf",
+        "gather_perf"
+    ],
+    "data_types": ["float", "double", "half"],
+    "min_size": "8",
+    "max_size": "128M",
+    "step_factor": "2",
+    "warmup_iters": "75",
+    "test_iters": "1000",
+    "operations": ["sum"],
+    "gpu_overrides": {
+        "gfx110X": {
+            "max_size": "256M"
+        },
+        "gfx94X-dcgpu": {
+            "max_size": "512M"
+        }
+    }
+}
+
