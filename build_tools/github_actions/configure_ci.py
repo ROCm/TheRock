@@ -462,12 +462,21 @@ def matrix_generator(
         requested_test_names = []
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
+            # if a GPU target label was added, we add the GPU target to the build and test matrix
             if "gfx" in label:
                 target = label.split("-")[0]
                 requested_target_names.append(target)
+            # If a test label was added, we run the full test for the specified test
             if "test:" in label:
                 _, test_name = label.split(":")
                 requested_test_names.append(test_name)
+            # If the "skip-ci" label was added, we skip all builds and tests
+            # We don't want to check for anymore labels
+            if "skip-ci" == label:
+                selected_target_names = []
+                selected_test_names = []
+                break
+
         selected_target_names.extend(
             filter_known_names(requested_target_names, "target", lookup_matrix)
         )

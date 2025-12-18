@@ -56,7 +56,7 @@ def copy_dlls_exe_path():
         dlls_pattern = ["amdhip64*.dll", "amd_comgr*.dll", "hiprtc*.dll"]
         dlls_to_copy = []
         for pattern in dlls_pattern:
-            dlls_to_copy.extend(f"{THEROCK_BIN_DIR}.glob(pattern)")
+            dlls_to_copy.extend(THEROCK_BIN_DIR.glob(pattern))
         for dll in dlls_to_copy:
             try:
                 shutil.copy(dll, CATCH_TESTS_PATH)

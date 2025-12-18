@@ -137,7 +137,7 @@ These instructions mostly mirror the instructions in the root
 > choco install ccache -y
 > choco install python -y
 > choco install strawberryperl -y
-> choco install --no-progress -y pkgconfiglite
+> choco install pkgconfiglite -y
 > ```
 
 > [!TIP]

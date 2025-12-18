@@ -100,7 +100,7 @@ submodules = ["rccl", "rccl-tests"]
 description = "Additional profiler submodules"
 submodules = ["rocprof-trace-decoder"]
 
-[source_sets.rocm-media]
+[source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
 disable_platforms = ["windows"]
@@ -158,6 +158,10 @@ artifact_groups = ["iree-libs"]
 description = "Profiler applications (depends on profiler-core)"
 artifact_groups = ["profiler-apps"]
 
+[build_stages.media]
+description = "Media Libraries"
+artifact_groups = ["media"]
+
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
 # ==============================================================================
@@ -166,7 +170,6 @@ artifact_groups = ["profiler-apps"]
 [artifact_groups.third-party-sysdeps]
 description = "Critical system dependencies (always needed)"
 type = "generic"
-source_sets = ["rocm-media"]  # rocm-media disabled on Windows via source_set
 
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
@@ -255,6 +258,14 @@ type = "generic"
 artifact_group_deps = ["hip-runtime"]
 source_sets = ["iree-libs"]
 
+[artifact_groups.media]
+description = "Media Libraries"
+type = "generic"
+artifact_group_deps = ["third-party-sysdeps", "base"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# amd-mesa disabled on Windows via source_set
+source_sets = ["amd-mesa", "rocm-systems"]
+
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
 # ==============================================================================
@@ -268,6 +279,13 @@ artifact_group = "third-party-sysdeps"
 type = "target-neutral"
 artifact_deps = []  # No dependencies on other artifacts
 feature_group = "CORE"  # Part of core, enabled by default
+
+[artifacts.sysdeps-amd-mesa]
+artifact_group = "media"
+type = "target-neutral"
+artifact_deps = ["sysdeps"]
+feature_group = "MEDIA"
+disable_platforms = ["windows"]
 
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
