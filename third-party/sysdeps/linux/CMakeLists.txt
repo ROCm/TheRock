@@ -12,7 +12,6 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_B
 
 # System deps that depend on the above.
 add_subdirectory(elfutils)
-add_subdirectory(amd-mesa)
 
 # Core sysdeps: This artifact includes libraries that are widely used and are typically
 # available on base systems. All of these should be small, fast to build, and high
@@ -40,12 +39,15 @@ therock_provide_artifact(sysdeps
 )
 
 # Optional sysdep: amd-mesa
-therock_provide_artifact(sysdeps-amd-mesa
-  TARGET_NEUTRAL
-  DESCRIPTOR artifact-amd-mesa.toml
-  COMPONENTS
-    dev
-    lib
-  SUBPROJECT_DEPS
-    therock-amd-mesa
-)
+if(THEROCK_ENABLE_MEDIA)
+  add_subdirectory(amd-mesa)
+  therock_provide_artifact(sysdeps-amd-mesa
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amd-mesa.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-amd-mesa
+  )
+endif()
