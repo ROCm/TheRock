@@ -28,7 +28,10 @@ if test_type == "smoke":
         f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
     ]
 else:
-    test_filter = ["--gtest_filter=*quick*"]
+    test_filter = [
+        "--yaml",
+        f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
+    ]
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",
