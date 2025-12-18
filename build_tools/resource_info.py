@@ -4,7 +4,7 @@ Tooling for TheRock build system. The goal is to have single unified view across
 
 Features:
 - Acts as CMake compiler launcher (C/C++).
-- Logs per-command timing + memory usage to /tmp/therock-build-resources (or THEROCK_BUILD_PROF_LOG_DIR).
+- Logs per-command timing + memory usage to /build/log/therock-build-resources (or THEROCK_BUILD_PROF_LOG_DIR).
 - Aggregates all logs into:
     - comp-summary.csv  (per-component summary)
     - comp-summary.md   (Markdown table per-component)
@@ -15,8 +15,8 @@ Usage in CMake configure:
 
   cmake -S . -B build -GNinja \
     -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
-    -DCMAKE_C_COMPILER_LAUNCHER="${PWD}/build_tools/therock_build_observability.py" \
-    -DCMAKE_CXX_COMPILER_LAUNCHER="${PWD}/build_tools/therock_build_observability.py"
+    -DCMAKE_C_COMPILER_LAUNCHER="${PWD}/build_tools/resource_info.py" \
+    -DCMAKE_CXX_COMPILER_LAUNCHER="${PWD}/build_tools/resource_info.py"
 
 
   cmake --build build 
@@ -25,7 +25,7 @@ Usage in CMake configure:
 
 
 Output: 
-    End summary for observability of build resources gets created in /tmp/comp-summary.md /tmp/comp-summary.csv file 
+    End summary for observability of build resources gets created in /build/log/comp-summary.md /build/log/comp-summary.csv file 
 
 
 """
@@ -39,13 +39,14 @@ import resource
 import subprocess
 import shlex
 from typing import Dict, Tuple
+from pathlib import Path
 
 
 # -------------------------
 # Component classification
 # -------------------------
 
-def guess_component_from_pwd_and_cmd(pwd: str, cmd_str: str) -> str:
+def therock_components(pwd: str, cmd_str: str) -> str:
     """ when not clear to infer which component this compile belongs to."""
     comp = "unknown"
 
@@ -104,12 +105,12 @@ def run_and_log_command(log_dir: str) -> int:
     cmd_args = sys.argv[1:]
     cmd_str = " ".join(shlex.quote(arg) for arg in cmd_args)
 
-    comp = guess_component_from_pwd_and_cmd(pwd, cmd_str)
+    comp = therock_components(pwd, cmd_str)
 
-    # Unique log filename. note that the log files are not getting saved anywhere else other than /tmp and can be cleared post reporting operation 
+    # Unique log filenames per component 
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     rand = random.randint(0, 999999)
-    log_file = os.path.join(log_dir, f"build-{ts}-{rand}-{comp}.log")
+    log_file = Path(log_dir) / f"build-{ts}-{rand}-{comp}.log"
 
     # Measure before compiler execution
     start_wall = time.monotonic()
@@ -244,7 +245,7 @@ def generate_summaries(log_dir: str) -> None:
       - Any failure is masked so builds never break.
     """
     # Simple file-based lock to avoid concurrent summary writers
-    lock_path = os.path.join(log_dir, ".summary.lock")
+    lock_path = Path(log_dir) / ".summary.lock"
     try:
         # O_CREAT | O_EXCL -> fail if already exists
         fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -291,7 +292,7 @@ def generate_summaries(log_dir: str) -> None:
         rows.sort(key=lambda r: r[4], reverse=True)
 
         # 1) Write CSV
-        csv_path = os.path.join(log_dir, "comp-summary.csv")
+        csv_path = Path(log_dir) / "comp-summary.csv"
         try:
             with open(csv_path, "w", encoding="utf-8") as f:
                 headers = [
@@ -321,7 +322,7 @@ def generate_summaries(log_dir: str) -> None:
             pass
 
         # 2) Write Markdown table
-        md_path = os.path.join(log_dir, "comp-summary.md")
+        md_path = Path(log_dir) / "comp-summary.md"
         try:
             with open(md_path, "w", encoding="utf-8") as f:
                 headers = [
@@ -367,7 +368,7 @@ def generate_summaries(log_dir: str) -> None:
 
 def main() -> int:
     log_dir = os.environ.get("THEROCK_BUILD_PROF_LOG_DIR",
-                             "/tmp/therock-build-prof")
+                             "/build/log/therock-build-prof")
 
     # 1) Run the compiler & log per-command stats
     rc = run_and_log_command(log_dir)
