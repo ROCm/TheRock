@@ -175,7 +175,9 @@ type = "generic"
 description = "Optional system dependency: amd-mesa"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps"]
-source_sets = ["amd-mesa"]  # amd-mesa disabled on Windows via source_set
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# amd-mesa disabled on Windows via source_set
+source_sets = ["amd-mesa", "rocm-systems"]
 
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
