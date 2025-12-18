@@ -118,7 +118,8 @@ jobs:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           # for testing
-          extra_cmake_options: "-DTHEROCK_ENABLE_CORE=ON -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_ALL=OFF"
+          extra_cmake_options: "-DTHEROCK_ENABLE_CORE=ON -DTHEROCK_ENABLE_ALL=OFF"
+          # extra_cmake_options: "-DTHEROCK_ENABLE_CORE=ON -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_ALL=OFF"
           # extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |

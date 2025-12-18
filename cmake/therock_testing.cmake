@@ -18,13 +18,25 @@ function(therock_test_validate_shared_lib)
     cmake_path(ABSOLUTE_PATH ARG_PATH BASE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endif()
 
+  execute_process(
+    COMMAND ${CMAKE_C_COMPILER} --print-runtime-dir
+    OUTPUT_VARIABLE CLANG_RUNTIME_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+
+  set(ASAN_PRELOAD
+    "${CLANG_RUNTIME_DIR}/linux/libclang_rt.asan-x86_64.so"
+  )
+
   foreach(lib_name ${ARG_LIB_NAMES})
     add_test(
       NAME therock-validate-shared-lib-${lib_name}
       COMMAND
-        ${THEROCK_SANITIZER_LAUNCHER}
-        "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/validate_shared_library.py"
-        "${ARG_PATH}/${lib_name}"
+        env
+          LD_PRELOAD=${ASAN_PRELOAD}
+          ${THEROCK_SANITIZER_LAUNCHER}
+          "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/validate_shared_library.py"
+          "${ARG_PATH}/${lib_name}"
     )
   endforeach()
 endfunction()
