@@ -9,12 +9,15 @@ See also the
 [Roadmap for support](ROADMAP.md) and
 [Build artifacts overview](docs/development/artifacts.md) pages.
 
-> [!WARNING]
-> These instructions assume familiarity with how to use ROCm. Please see
-> https://rocm.docs.amd.com/ for general information about the ROCm software
-> platform. In addition, Linux users, please be aware of the [prerequisites](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access), including enabling GPU access, needed to run ROCm.
+> [!IMPORTANT]
+> These instructions assume familiarity with how to use ROCm.
+> Please see https://rocm.docs.amd.com/ for general information about the ROCm software
+> platform.
 >
-> **Note: these install steps are a substitute for those on that website**.
+> Prerequisites:
+>
+> - We recommend installing the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation) on Linux and [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+> - Linux users, please be aware of [Configuring permissions for GPU access](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access) needed for ROCm
 
 Table of contents:
 
@@ -35,7 +38,7 @@ Table of contents:
 We recommend installing ROCm and projects like PyTorch via `pip`, the
 [Python package installer](https://packaging.python.org/en/latest/guides/tool-recommendations/).
 
-We currently support Python 3.10, 3.11, 3.12, and 3.13.
+We currently support Python 3.11, 3.12, and 3.13.
 
 > [!TIP]
 > We highly recommend working within a [Python virtual environment](https://docs.python.org/3/library/venv.html):
@@ -277,6 +280,16 @@ also install `torch`, `torchaudio`, and `torchvision`.
 > The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
 > be installed automatically for you and you do not need to explicitly install
 > ROCm first.
+
+> [!TIP]
+> If you previously installed PyTorch with the `pytorch-triton-rocm` package,
+> please uninstall it before installing the new packages:
+>
+> ```bash
+> pip uninstall pytorch-triton-rocm
+> ```
+>
+> The triton package is now named `triton`.
 
 #### torch for gfx94X-dcgpu
 
