@@ -56,7 +56,6 @@ endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
 set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
-set(LLVM_LINK_LLVM_DYLIB ON)
 # we have never enabled benchmarks,
 # diabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
