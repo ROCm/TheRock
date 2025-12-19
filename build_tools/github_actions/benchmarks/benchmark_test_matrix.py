@@ -29,6 +29,8 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
     # SOLVER benchmark tests
     "rocsolver_bench": {
@@ -39,6 +41,8 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
     # RAND benchmark tests
     "rocrand_bench": {
@@ -49,6 +53,8 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
     # FFT benchmark tests
     "rocfft_bench": {
@@ -59,5 +65,7 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
 }

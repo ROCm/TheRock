@@ -22,8 +22,12 @@ permissions:
 
 jobs:
   test_component:
-    name: 'Test ${{ fromJSON(inputs.component).job_name }} (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})'
+    name: >-
+      Test ${{ fromJSON(inputs.component).job_name }}
+      ${{ fromJSON(inputs.component).total_shards > 1 && format('(shard {0} of {1})', matrix.shard, fromJSON(inputs.component).total_shards) || '' }}
+      ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
+    continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
     timeout-minutes: 210
     container:
       image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
