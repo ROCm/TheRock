@@ -63,6 +63,10 @@ users who want early previews of upcoming releases, and QA/test team members.
 | dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock)                                                                                                                              |
 | dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
 
+With the exception of "dev releases", each release distribution channel only
+contains release artifacts of the matching release type. The "dev releases"
+channel _can_ contain any type of release.
+
 ## Python package versions
 
 Python package versions are handled by scripts:
@@ -70,14 +74,14 @@ Python package versions are handled by scripts:
 - [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
   - [`build_tools/tests/compute_rocm_package_version_test.py`](/build_tools/tests/compute_rocm_package_version_test.py)
 
-The script produces these versions for each distribution channel:
+The script produces these versions for each release type:
 
-| Distribution channel | Version format    | Version example                                                                                                                                                     |
-| -------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| stable releases      | `X.Y.Z`           | `7.10.0`                                                                                                                                                            |
-| prereleases          | `X.Y.ZrcN`        | `7.10.0rc0`<br>(The first release candidate for that stable release)                                                                                                |
-| nightly releases     | `X.Y.ZaYYYYMMDD`  | `7.10.0a20251124`<br>(The nightly release on 2025-11-24)                                                                                                            |
-| dev builds/releases  | `X.Y.Z.dev0+NNNN` | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| Release type | Version format    | Version example                                                                                                                                                     |
+| ------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| stable       | `X.Y.Z`           | `7.10.0`                                                                                                                                                            |
+| prerelease   | `X.Y.ZrcN`        | `7.10.0rc0`<br>(The first release candidate for that stable release)                                                                                                |
+| nightly      | `X.Y.ZaYYYYMMDD`  | `7.10.0a20251124`<br>(The nightly release on 2025-11-24)                                                                                                            |
+| dev          | `X.Y.Z.dev0+NNNN` | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 
 Each distribution channel (and GPU family within that channel) is currently
 hosted on a separate release index that can be passed to `pip` or `uv` via
@@ -218,23 +222,23 @@ Native package versions are handled by scripts:
 - [`build_tools/compute_rocm_native_package_version.py`](/build_tools/compute_rocm_native_package_version.py)
   - [`build_tools/tests/compute_rocm_native_package_version_test.py`](/build_tools/tests/compute_rocm_native_package_version_test.py)
 
-The script produces these versions for rpm packages for each distribution channel:
+The script produces these versions for rpm packages for each release type:
 
-| Distribution channel | Version format              | Version example                                                                                                                        |
-| -------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| stable releases      | `X.Y.Z`                     | `7.10.0`                                                                                                                               |
-| prereleases          | `X.Y.Z~rcN`                 | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
-| nightly releases     | `X.Y.Z~YYYYMMDD`            | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
-| dev builds/releases  | `X.Y.Z~YYYYMMDDg<git-hash>` | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| Release type | Version format              | Version example                                                                                                                        |
+| ------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| stable       | `X.Y.Z`                     | `7.10.0`                                                                                                                               |
+| prerelease   | `X.Y.Z~rcN`                 | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
+| nightly      | `X.Y.Z~YYYYMMDD`            | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
+| dev          | `X.Y.Z~YYYYMMDDg<git-hash>` | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 
-The script produces these versions for debian packages for each distribution channel:
+The script produces these versions for debian packages for each release type:
 
-| Distribution channel | Version format      | Version example                                                        |
-| -------------------- | ------------------- | ---------------------------------------------------------------------- |
-| stable releases      | `X.Y.Z`             | `7.10.0`                                                               |
-| prereleases          | `X.Y.Z~preN`        | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
-| nightly releases     | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
-| dev builds/releases  | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4)            |
+| Release type | Version format      | Version example                                                        |
+| ------------ | ------------------- | ---------------------------------------------------------------------- |
+| stable       | `X.Y.Z`             | `7.10.0`                                                               |
+| prerelease   | `X.Y.Z~preN`        | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
+| nightly      | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
+| dev          | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4)            |
 
 ## Native Windows package versions
 
