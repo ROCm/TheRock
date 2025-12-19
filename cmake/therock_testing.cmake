@@ -21,14 +21,12 @@ function(therock_test_validate_shared_lib)
   separate_arguments(CMAKE_C_COMPILER_LIST UNIX_COMMAND "${CMAKE_C_COMPILER}")
 
   execute_process(
-    COMMAND ${CMAKE_C_COMPILER_LIST} -print-resource-dir
-    OUTPUT_VARIABLE CLANG_RESOURCE_DIR
+    COMMAND ${CMAKE_C_COMPILER} --print-file-name=libclang_rt.asan-x86_64.so
+    OUTPUT_VARIABLE ASAN_RUNTIME_PATH
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
 
-  set(ASAN_PRELOAD
-    "${CLANG_RESOURCE_DIR}/lib/linux/libclang_rt.asan-x86_64.so"
-  )
+  set(ASAN_PRELOAD "${ASAN_RUNTIME_PATH}")
 
   foreach(lib_name ${ARG_LIB_NAMES})
     add_test(
