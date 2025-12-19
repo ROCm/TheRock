@@ -24,7 +24,7 @@ jobs:
   test_component:
     name: >-
       Test ${{ fromJSON(inputs.component).job_name }}
-      ${{ fromJSON(inputs.component).total_shards > 1 && format('(shard {0} of {1})', matrix.shard, fromJSON(inputs.component).total_shards) || '' }}
+      (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
