@@ -127,7 +127,6 @@ These instructions mostly mirror the instructions in the root
 
 > [!TIP]
 > These tools are available via package managers like winget on Windows:
->
 > ```bash
 > winget install --id Microsoft.VisualStudio.BuildTools --source winget --override "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
