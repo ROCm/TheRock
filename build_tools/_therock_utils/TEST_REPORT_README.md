@@ -4,10 +4,12 @@ Automated test reporting system for CI/CD nightly builds that aggregates results
 
 ## Overview
 
-This system collects test results from GTest and CTest frameworks, aggregates them, and generates:
+This system collects test results from **actual CI nightly test jobs** (GTest and CTest), aggregates them, and generates:
 - **HTML Reports**: Visual reports with test statistics and status
 - **JSON Reports**: Machine-readable data for analysis  
 - **GitHub Actions Summary**: Inline summary in workflow runs
+
+**Key Feature**: Captures output from **real test executables** (rocBLAS, rocWMMA, hipBLASLt, MIOpen, etc.) running in CI, not demo scripts.
 
 ## Components
 
@@ -50,7 +52,32 @@ python3 generate_test_report.py \
     --output-json report.json
 ```
 
-### 3. GitHub Actions Integration
+### 3. Test Capture Wrapper
+
+**File:** `capture_test_results.py`
+- Wraps actual test execution from CI jobs
+- Captures test output automatically
+- Parses with TestRunner and saves results
+
+**Usage:**
+```bash
+# For GTest executables
+python3 capture_test_results.py \
+    --component rocBLAS \
+    --test-type nightly \
+    --framework gtest \
+    --command "./build/rocblas-tests"
+
+# For CTest suites
+python3 capture_test_results.py \
+    --component rocWMMA \
+    --test-type nightly \
+    --framework ctest \
+    --command "ctest --output-on-failure" \
+    --cwd "./build/rocwmma"
+```
+
+### 4. GitHub Actions Integration
 
 **File:** `generate_github_summary.py`
 - Creates markdown summary for GitHub Actions
@@ -63,7 +90,7 @@ python3 generate_github_summary.py \
     --results-file test_report.json >> $GITHUB_STEP_SUMMARY
 ```
 
-### 4. Nightly Workflow
+### 5. Nightly Workflow
 
 **File:** `.github/workflows/nightly_test_report.yml`
 - Runs all test suites
@@ -102,22 +129,76 @@ graph LR
 
 ## Usage
 
-### Manual Test Execution
+### Option 1: Capture from Real CI Test Jobs (Recommended)
 
-1. **Run tests with TestRunner:**
+Use the wrapper script to run and capture actual test executables:
+
+```bash
+# Run rocBLAS tests
+python3 build_tools/_therock_utils/capture_test_results.py \
+    --component rocBLAS \
+    --test-type nightly \
+    --framework gtest \
+    --command "./build/rocblas-tests"
+# Creates: test_results_rocBLAS_nightly.json
+
+# Run rocWMMA CTest suite
+python3 build_tools/_therock_utils/capture_test_results.py \
+    --component rocWMMA \
+    --test-type nightly \
+    --framework ctest \
+    --command "ctest --output-on-failure" \
+    --cwd "./build/rocwmma"
+# Creates: test_results_rocWMMA_nightly.json
+
+# Generate report from all collected results
+python3 build_tools/_therock_utils/generate_test_report.py \
+    --results-dir ./ \
+    --output-html nightly_report.html
+```
+
+### Option 2: Parse Existing Test Output
+
+If you already have test output captured:
+
 ```python
 from test_runner import TestRunner
 
-runner = TestRunner(component="rocBLAS", test_type="smoke")
-runner.run_gtest(raw_output=gtest_output)
-# Automatically saves: test_results_rocBLAS_smoke.json
+# Read existing test output
+with open('test_output.txt', 'r') as f:
+    output = f.read()
+
+# Parse and save results
+runner = TestRunner(component="rocBLAS", test_type="nightly")
+runner.run_gtest(raw_output=output)
+# Automatically saves: test_results_rocBLAS_nightly.json
 ```
 
-2. **Generate report:**
+### Option 3: Integrate with Existing CI Scripts
+
+Add to your existing test script:
+
 ```bash
-python3 generate_test_report.py \
-    --results-dir ./ \
-    --output-html report.html
+#!/bin/bash
+
+# Your existing test execution
+./build/my-tests > test_output.txt 2>&1
+test_exit_code=$?
+
+# Parse and save results
+python3 -c "
+import sys
+sys.path.insert(0, 'build_tools/_therock_utils')
+from test_runner import TestRunner
+
+with open('test_output.txt', 'r') as f:
+    output = f.read()
+
+runner = TestRunner(component='MyComponent', test_type='nightly', operation='gtest')
+runner.run_gtest(raw_output=output)
+"
+
+exit $test_exit_code
 ```
 
 ### Automated Nightly Runs
