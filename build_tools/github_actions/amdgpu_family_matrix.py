@@ -198,7 +198,6 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
-            "expect_failure": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
