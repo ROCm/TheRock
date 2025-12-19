@@ -160,7 +160,9 @@ class SystemDetector:
         # Detect platform
         self.platform_info = PlatformDetector.detect()
         if verbose:
-            log.debug(f"Platform: {self.platform_info.os_name} {self.platform_info.os_version}")
+            log.debug(
+                f"Platform: {self.platform_info.os_name} {self.platform_info.os_version}"
+            )
 
         # Detect hardware
         self.hardware = HardwareDetector()
@@ -190,13 +192,19 @@ class SystemDetector:
         Raises:
             RuntimeError: If detect_all() hasn't been called
         """
-        if self.platform_info is None or self.hardware is None or self.rocm_info is None:
+        if (
+            self.platform_info is None
+            or self.hardware is None
+            or self.rocm_info is None
+        ):
             raise RuntimeError(
                 "System detection not complete. Call detect_all() first."
             )
 
         # Get CPU info
-        cpu = self.hardware.get_cpu() if self.hardware.get_is_cpu_initialized() else None
+        cpu = (
+            self.hardware.get_cpu() if self.hardware.get_is_cpu_initialized() else None
+        )
 
         # Get GPU info
         gpu_devices = []
@@ -212,9 +220,8 @@ class SystemDetector:
             hostname=self.platform_info.hostname,
             system_ip=PlatformDetector.get_system_ip(),
             sbios=self.platform_info.sbios,
-
             # CPU
-            cpu_model=cpu.getCpuModelName() if cpu else 'Unknown',
+            cpu_model=cpu.getCpuModelName() if cpu else "Unknown",
             cpu_cores=cpu.getCpuCores() if cpu else 0,
             cpu_sockets=cpu.getCpuSockets() if cpu else 0,
             cpu_ram_size=cpu.getCpuRamSize() if cpu else 0,
@@ -223,30 +230,32 @@ class SystemDetector:
             cpu_l1_cache=cpu.getCpuL1Cache() if cpu else 0,
             cpu_l2_cache=cpu.getCpuL2Cache() if cpu else 0,
             cpu_l3_cache=cpu.getCpuL3Cache() if cpu else 0,
-
             # GPU
             gpu_count=len(gpu_devices),
-            gpu_name=gpu_devices[0].product_name if gpu_devices else 'Unknown',
-            gpu_marketing_name=gpu_devices[0].product_name if gpu_devices else 'Unknown',
-            gpu_device_id=gpu_devices[0].device_id if gpu_devices else 'Unknown',
-            gpu_revision_id=gpu_devices[0].revision_id if gpu_devices else 'Unknown',
+            gpu_name=gpu_devices[0].product_name if gpu_devices else "Unknown",
+            gpu_marketing_name=(
+                gpu_devices[0].product_name if gpu_devices else "Unknown"
+            ),
+            gpu_device_id=gpu_devices[0].device_id if gpu_devices else "Unknown",
+            gpu_revision_id=gpu_devices[0].revision_id if gpu_devices else "Unknown",
             gpu_vram_size=gpu_devices[0].vram_size_gb if gpu_devices else 0,
             gpu_sys_clock=gpu_devices[0].sys_clock_mhz if gpu_devices else 0,
             gpu_mem_clock=gpu_devices[0].mem_clock_mhz if gpu_devices else 0,
-            gpu_vbios=gpu_devices[0].vbios if gpu_devices else 'Unknown',
-            gpu_partition_mode=gpu_devices[0].partition_mode if gpu_devices else 'Unknown',
-            gpu_xgmi_type=gpu_devices[0].xgmi_type if gpu_devices else 'Unknown',
-            gpu_host_driver=gpu_devices[0].host_driver if gpu_devices else 'Unknown',
+            gpu_vbios=gpu_devices[0].vbios if gpu_devices else "Unknown",
+            gpu_partition_mode=(
+                gpu_devices[0].partition_mode if gpu_devices else "Unknown"
+            ),
+            gpu_xgmi_type=gpu_devices[0].xgmi_type if gpu_devices else "Unknown",
+            gpu_host_driver=gpu_devices[0].host_driver if gpu_devices else "Unknown",
             gpu_firmwares=gpu_devices[0].firmwares if gpu_devices else [],
             gpu_devices=[adapter.product_name for adapter in gpu_devices],
-
             # ROCm
-            rocm_version=self.rocm_info['rocm_version'],
-            rocm_build_type=self.rocm_info['rocm_build_type'],
-            rocm_build_lib_type=self.rocm_info['rocm_build_lib_type'],
-            rocm_package_manager=self.rocm_info['rocm_package_manager'],
-            rocm_package_manager_version=self.rocm_info['rocm_package_manager_version'],
-            rocm_install_type=self.rocm_info['install_type']
+            rocm_version=self.rocm_info["rocm_version"],
+            rocm_build_type=self.rocm_info["rocm_build_type"],
+            rocm_build_lib_type=self.rocm_info["rocm_build_lib_type"],
+            rocm_package_manager=self.rocm_info["rocm_package_manager"],
+            rocm_package_manager_version=self.rocm_info["rocm_package_manager_version"],
+            rocm_install_type=self.rocm_info["install_type"],
         )
 
     def print_system_summary(self, context: SystemContext):
@@ -273,7 +282,9 @@ class SystemDetector:
         print(f"  Count:      {context.gpu_count}")
         print(f"  Device ID:  {context.gpu_device_id}")
         print(f"  VRAM:       {format_memory_size(int(context.gpu_vram_size))}")
-        print(f"  Clocks:     {format_clock_speed(context.gpu_sys_clock)} / {format_clock_speed(context.gpu_mem_clock)}")
+        print(
+            f"  Clocks:     {format_clock_speed(context.gpu_sys_clock)} / {format_clock_speed(context.gpu_mem_clock)}"
+        )
         print(f"  VBIOS:      {context.gpu_vbios}")
         print()
         print(f"ROCm:         {context.rocm_version}")
@@ -296,7 +307,9 @@ class SystemDetector:
 
         if context.gpu_count > 0:
             log.info(f"✓ GPU detected: {context.gpu_count} GPU(s)")
-            log.info(f"  GPU 0: {context.gpu_name} (Device ID: {context.gpu_device_id})")
+            log.info(
+                f"  GPU 0: {context.gpu_name} (Device ID: {context.gpu_device_id})"
+            )
         else:
             log.warning("⚠ No GPU detected")
 

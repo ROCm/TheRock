@@ -8,6 +8,7 @@ from dataclasses import dataclass
 @dataclass
 class PlatformInfo:
     """Platform information dataclass with OS, kernel, hostname, and BIOS details."""
+
     os_name: str = "Unknown"
     os_version: str = "Unknown"
     kernel: str = "Unknown"
@@ -48,14 +49,14 @@ class PlatformDetector:
             try:
                 # Method 1: WMIC (Windows Management Instrumentation Command-line)
                 result = subprocess.run(
-                    ['wmic', 'bios', 'get', 'smbiosbiosversion'],
+                    ["wmic", "bios", "get", "smbiosbiosversion"],
                     capture_output=True,
                     text=True,
                     timeout=5,
-                    shell=True
+                    shell=True,
                 )
                 if result.returncode == 0:
-                    lines = result.stdout.strip().split('\n')
+                    lines = result.stdout.strip().split("\n")
                     # Skip header line and get version
                     if len(lines) > 1:
                         bios_version = lines[1].strip()
@@ -67,10 +68,19 @@ class PlatformDetector:
             try:
                 # Method 2: PowerShell WMI query
                 result = subprocess.run(
-                    ['powershell', '-Command', 'Get-WmiObject', 'Win32_BIOS', '|', 'Select-Object', '-ExpandProperty', 'SMBIOSBIOSVersion'],
+                    [
+                        "powershell",
+                        "-Command",
+                        "Get-WmiObject",
+                        "Win32_BIOS",
+                        "|",
+                        "Select-Object",
+                        "-ExpandProperty",
+                        "SMBIOSBIOSVersion",
+                    ],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     return result.stdout.strip()
@@ -80,23 +90,26 @@ class PlatformDetector:
         # Linux detection
         elif os_type == "Linux":
             import logging
+
             logger = logging.getLogger(__name__)
 
             # Method 1: dmidecode (requires root/sudo)
             try:
                 logger.debug("Trying dmidecode for SBIOS...")
                 result = subprocess.run(
-                    ['dmidecode', '-s', 'bios-version'],
+                    ["dmidecode", "-s", "bios-version"],
                     capture_output=True,
                     text=True,
                     timeout=5,
-                    stderr=subprocess.PIPE
+                    stderr=subprocess.PIPE,
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     logger.debug(f"SBIOS from dmidecode: {result.stdout.strip()}")
                     return result.stdout.strip()
                 else:
-                    logger.debug(f"dmidecode failed: returncode={result.returncode}, stderr={result.stderr[:100]}")
+                    logger.debug(
+                        f"dmidecode failed: returncode={result.returncode}, stderr={result.stderr[:100]}"
+                    )
             except FileNotFoundError:
                 logger.debug("dmidecode command not found")
             except (subprocess.TimeoutExpired, PermissionError) as e:
@@ -105,7 +118,7 @@ class PlatformDetector:
             # Method 2: /sys/class/dmi/id/bios_version
             try:
                 logger.debug("Trying /sys/class/dmi/id/bios_version...")
-                with open('/sys/class/dmi/id/bios_version', 'r') as f:
+                with open("/sys/class/dmi/id/bios_version", "r") as f:
                     bios_content = f.read().strip()
                     if bios_content:
                         logger.debug(f"SBIOS from sysfs: {bios_content}")
@@ -120,7 +133,7 @@ class PlatformDetector:
             # Method 3: /sys/devices/virtual/dmi/id/bios_version
             try:
                 logger.debug("Trying /sys/devices/virtual/dmi/id/bios_version...")
-                with open('/sys/devices/virtual/dmi/id/bios_version', 'r') as f:
+                with open("/sys/devices/virtual/dmi/id/bios_version", "r") as f:
                     bios_content = f.read().strip()
                     if bios_content:
                         logger.debug(f"SBIOS from alternate sysfs: {bios_content}")
@@ -128,7 +141,9 @@ class PlatformDetector:
             except FileNotFoundError:
                 logger.debug("/sys/devices/virtual/dmi/id/bios_version not found")
             except PermissionError:
-                logger.debug("/sys/devices/virtual/dmi/id/bios_version permission denied")
+                logger.debug(
+                    "/sys/devices/virtual/dmi/id/bios_version permission denied"
+                )
             except IOError as e:
                 logger.debug(f"/sys/devices/virtual/dmi/id/bios_version error: {e}")
 
@@ -138,15 +153,16 @@ class PlatformDetector:
         elif os_type == "Darwin":
             try:
                 result = subprocess.run(
-                    ['system_profiler', 'SPHardwareDataType'],
+                    ["system_profiler", "SPHardwareDataType"],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
                 )
                 if result.returncode == 0:
                     # Parse for Boot ROM Version
                     import re
-                    match = re.search(r'Boot ROM Version:\s*(.+)', result.stdout)
+
+                    match = re.search(r"Boot ROM Version:\s*(.+)", result.stdout)
                     if match:
                         return match.group(1).strip()
             except Exception:
@@ -168,10 +184,10 @@ class PlatformDetector:
             s.settimeout(0)
             try:
                 # Connect to a public DNS server (doesn't send data)
-                s.connect(('8.8.8.8', 80))
+                s.connect(("8.8.8.8", 80))
                 ip_address = s.getsockname()[0]
             except Exception:
-                ip_address = '0.0.0.0'
+                ip_address = "0.0.0.0"
             finally:
                 s.close()
 
@@ -183,11 +199,11 @@ class PlatformDetector:
                 hostname = socket.gethostname()
                 ip_address = socket.gethostbyname(hostname)
                 # Avoid localhost
-                if ip_address.startswith('127.'):
-                    return '0.0.0.0'
+                if ip_address.startswith("127."):
+                    return "0.0.0.0"
                 return ip_address
             except Exception:
-                return '0.0.0.0'
+                return "0.0.0.0"
 
     @staticmethod
     def detect() -> PlatformInfo:
@@ -214,11 +230,12 @@ class PlatformDetector:
         try:
             if os_name == "Linux":
                 try:
-                    with open('/etc/os-release', 'r') as f:
+                    with open("/etc/os-release", "r") as f:
                         os_release = f.read()
 
                     # Extract NAME and VERSION_ID
                     import re
+
                     name_match = re.search(r'NAME="?([^"\n]+)"?', os_release)
                     version_match = re.search(r'VERSION_ID="?([^"\n]+)"?', os_release)
 
@@ -237,7 +254,9 @@ class PlatformDetector:
                     # Get more detailed version if available
                     win_ver = platform.win32_ver()
                     if win_ver[0]:
-                        os_version = f"{win_ver[0]} {win_ver[1]}"  # e.g., "10 10.0.19041"
+                        os_version = (
+                            f"{win_ver[0]} {win_ver[1]}"  # e.g., "10 10.0.19041"
+                        )
                 except Exception:
                     os_version = platform.release()
             elif os_name == "Darwin":
@@ -281,5 +300,5 @@ class PlatformDetector:
             kernel=kernel,
             hostname=hostname,
             architecture=architecture,
-            sbios=sbios
+            sbios=sbios,
         )

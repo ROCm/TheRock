@@ -12,9 +12,11 @@ class ConfigParser:
     """YAML configuration parser with validation and environment variable expansion."""
 
     # Pattern for environment variable substitution: ${VAR_NAME} or ${VAR_NAME:-default}
-    ENV_VAR_PATTERN = re.compile(r'\$\{([^}]+)\}')
+    ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
-    def __init__(self, config_file: str, validate: bool = True, expand_env_vars: bool = True):
+    def __init__(
+        self, config_file: str, validate: bool = True, expand_env_vars: bool = True
+    ):
         """Initialize config parser.
 
         Args:
@@ -40,7 +42,7 @@ class ConfigParser:
     def _load(self):
         """Load configuration from file with environment variable expansion and validation."""
         try:
-            with open(self.config_file, 'r') as f:
+            with open(self.config_file, "r") as f:
                 raw_config = yaml.safe_load(f)
 
             # Check if config is empty
@@ -100,7 +102,7 @@ class ConfigParser:
         Returns:
             Configuration value or default
         """
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         value = self.config_data
 
         for key in keys:
@@ -144,12 +146,13 @@ class ConfigParser:
         Raises:
             ConfigurationError: If required environment variable is not set
         """
+
         def replacer(match):
             var_expr = match.group(1)
 
             # Check for default value syntax: VAR:-default
-            if ':-' in var_expr:
-                var_name, default = var_expr.split(':-', 1)
+            if ":-" in var_expr:
+                var_name, default = var_expr.split(":-", 1)
                 var_name = var_name.strip()
                 default = default.strip()
                 return os.environ.get(var_name, default)

@@ -18,34 +18,34 @@ CONFIG_SCHEMA = {
                         "LogLevel": {
                             "type": "string",
                             "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                            "description": "Logging level"
+                            "description": "Logging level",
                         },
                         "LogToFile": {
                             "type": "boolean",
-                            "description": "Enable file logging"
+                            "description": "Enable file logging",
                         },
                         "LogDirectory": {
                             "type": "string",
                             "minLength": 1,
-                            "description": "Directory for log files"
+                            "description": "Directory for log files",
                         },
                         "LogMaxSizeMB": {
                             "type": "integer",
                             "minimum": 1,
-                            "description": "Maximum log file size in MB before rotation"
+                            "description": "Maximum log file size in MB before rotation",
                         },
                         "LogBackupCount": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Number of backup log files to keep"
+                            "description": "Number of backup log files to keep",
                         },
                         "ExecutionLabel": {
                             "type": "string",
-                            "description": "Label for this test execution"
+                            "description": "Label for this test execution",
                         },
                         "UploadTestResultsToAPI": {
                             "type": "boolean",
-                            "description": "Enable API result submission"
+                            "description": "Enable API result submission",
                         },
                         "ResultsAPI": {
                             "type": "object",
@@ -53,35 +53,35 @@ CONFIG_SCHEMA = {
                                 "URL": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "API endpoint URL"
+                                    "description": "API endpoint URL",
                                 },
                                 "APIKey": {
                                     "type": "string",
-                                    "description": "API authentication key"
+                                    "description": "API authentication key",
                                 },
                                 "Timeout": {
                                     "type": "integer",
                                     "minimum": 1,
                                     "maximum": 300,
-                                    "description": "API request timeout in seconds"
+                                    "description": "API request timeout in seconds",
                                 },
                                 "MaxRetries": {
                                     "type": "integer",
                                     "minimum": 0,
                                     "maximum": 10,
-                                    "description": "Maximum retry attempts"
+                                    "description": "Maximum retry attempts",
                                 },
                                 "RetryDelay": {
                                     "type": "integer",
                                     "minimum": 0,
                                     "maximum": 60,
-                                    "description": "Delay between retries in seconds"
-                                }
+                                    "description": "Delay between retries in seconds",
+                                },
                             },
-                            "required": ["URL"]
-                        }
+                            "required": ["URL"],
+                        },
                     },
-                    "required": ["LogLevel"]
+                    "required": ["LogLevel"],
                 },
                 "Results": {
                     "type": "object",
@@ -89,20 +89,20 @@ CONFIG_SCHEMA = {
                         "OutputDirectory": {
                             "type": "string",
                             "minLength": 1,
-                            "description": "Directory for result files"
+                            "description": "Directory for result files",
                         },
                         "SaveJSON": {
                             "type": "boolean",
-                            "description": "Save results in JSON format"
+                            "description": "Save results in JSON format",
                         },
                     },
-                    "required": ["OutputDirectory"]
-                }
+                    "required": ["OutputDirectory"],
+                },
             },
-            "required": ["Core", "Results"]
+            "required": ["Core", "Results"],
         }
     },
-    "required": ["Config"]
+    "required": ["Config"],
 }
 
 
@@ -122,7 +122,7 @@ class ConfigValidator:
         try:
             validate(instance=config, schema=CONFIG_SCHEMA)
         except ValidationError as e:
-            path = '.'.join(str(p) for p in e.path) if e.path else 'root'
+            path = ".".join(str(p) for p in e.path) if e.path else "root"
             raise ValueError(
                 f"Configuration validation failed:\n"
                 f"  Location: {path}\n"
@@ -148,8 +148,8 @@ class ConfigValidator:
 
         error_messages = []
         for error in errors:
-            path = '.'.join(str(p) for p in error.path) if error.path else 'root'
-            description = error.schema.get('description', '')
+            path = ".".join(str(p) for p in error.path) if error.path else "root"
+            description = error.schema.get("description", "")
             desc_str = f" ({description})" if description else ""
             error_messages.append(f"{path}: {error.message}{desc_str}")
 
@@ -175,33 +175,34 @@ class ConfigValidator:
             """Recursively print properties."""
             for key, value in props.items():
                 prefix = "  " * indent
-                prop_type = value.get('type', 'unknown')
-                desc = value.get('description', '')
-                required = value.get('required', [])
+                prop_type = value.get("type", "unknown")
+                desc = value.get("description", "")
+                required = value.get("required", [])
 
                 print(f"{prefix}{key} ({prop_type})")
                 if desc:
                     print(f"{prefix}  → {desc}")
 
-                if 'enum' in value:
+                if "enum" in value:
                     print(f"{prefix}  → Options: {', '.join(value['enum'])}")
 
-                if 'minimum' in value or 'maximum' in value:
-                    min_val = value.get('minimum', '-∞')
-                    max_val = value.get('maximum', '∞')
+                if "minimum" in value or "maximum" in value:
+                    min_val = value.get("minimum", "-∞")
+                    max_val = value.get("maximum", "∞")
                     print(f"{prefix}  → Range: {min_val} to {max_val}")
 
-                if 'properties' in value:
+                if "properties" in value:
                     if required:
                         print(f"{prefix}  → Required fields: {', '.join(required)}")
-                    print_properties(value['properties'], indent + 1)
+                    print_properties(value["properties"], indent + 1)
 
                 print()
 
-        config_props = CONFIG_SCHEMA['properties']['Config']['properties']
+        config_props = CONFIG_SCHEMA["properties"]["Config"]["properties"]
         print_properties(config_props)
 
 
 class ConfigurationError(Exception):
     """Configuration validation error."""
+
     pass

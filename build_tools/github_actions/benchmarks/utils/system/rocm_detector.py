@@ -19,7 +19,7 @@ def _get_rocm_tool_path(tool_name: str) -> str:
     Returns:
         str: Full path to tool if THEROCK_BIN_DIR is set, otherwise just tool name
     """
-    therock_bin_dir = os.getenv('THEROCK_BIN_DIR')
+    therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
     if therock_bin_dir:
         return os.path.join(therock_bin_dir, tool_name)
     return tool_name
@@ -31,11 +31,11 @@ def _get_rocm_path() -> str:
     Returns:
         str: ROCm base path (e.g., /opt/rocm-7.1.0 or /opt/rocm)
     """
-    therock_bin_dir = os.getenv('THEROCK_BIN_DIR')
+    therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
     if therock_bin_dir:
         # THEROCK_BIN_DIR is typically /opt/rocm-x.y.z/bin, so parent is /opt/rocm-x.y.z
         return os.path.dirname(therock_bin_dir)
-    return '/opt/rocm'
+    return "/opt/rocm"
 
 
 class ROCmDetector:
@@ -56,7 +56,7 @@ class ROCmDetector:
             "rocm_build_lib_type": "Unknown",
             "rocm_package_manager": "Unknown",
             "rocm_package_manager_version": "Unknown",
-            "install_type": "Unknown"
+            "install_type": "Unknown",
         }
 
         # Detect ROCm version
@@ -104,10 +104,10 @@ class ROCmDetector:
         try:
             # Method 1: Try $ROCM_PATH/.info/version-rocm (most complete - includes build number)
             rocm_path = _get_rocm_path()
-            version_rocm_file = os.path.join(rocm_path, '.info', 'version-rocm')
+            version_rocm_file = os.path.join(rocm_path, ".info", "version-rocm")
             logger.debug(f"Trying {version_rocm_file} file...")
             if os.path.exists(version_rocm_file):
-                with open(version_rocm_file, 'r') as f:
+                with open(version_rocm_file, "r") as f:
                     rocm_ver = f.read().strip()
                     if rocm_ver:
                         logger.debug(f"ROCm version from version-rocm file: {rocm_ver}")
@@ -120,24 +120,30 @@ class ROCmDetector:
         try:
             # Method 2: Try $ROCM_PATH/.info/version file
             rocm_path = _get_rocm_path()
-            version_file = os.path.join(rocm_path, '.info', 'version')
+            version_file = os.path.join(rocm_path, ".info", "version")
             logger.debug(f"Trying {version_file} file...")
             if os.path.exists(version_file):
-                with open(version_file, 'r') as f:
+                with open(version_file, "r") as f:
                     rocm_ver = f.read().strip()
                     if rocm_ver:
                         logger.debug(f"ROCm version from version file: {rocm_ver}")
                         # Check if it has build number, if not try to append from version-rocm
-                        if '-' not in rocm_ver:
-                            logger.debug(f"Version {rocm_ver} missing build number, trying to get full version...")
+                        if "-" not in rocm_ver:
+                            logger.debug(
+                                f"Version {rocm_ver} missing build number, trying to get full version..."
+                            )
                             # Try to get build number from version-rocm
-                            version_rocm_file = os.path.join(rocm_path, '.info', 'version-rocm')
+                            version_rocm_file = os.path.join(
+                                rocm_path, ".info", "version-rocm"
+                            )
                             if os.path.exists(version_rocm_file):
                                 try:
-                                    with open(version_rocm_file, 'r') as f2:
+                                    with open(version_rocm_file, "r") as f2:
                                         full_ver = f2.read().strip()
-                                        if full_ver and '-' in full_ver:
-                                            logger.debug(f"Using full version from version-rocm: {full_ver}")
+                                        if full_ver and "-" in full_ver:
+                                            logger.debug(
+                                                f"Using full version from version-rocm: {full_ver}"
+                                            )
                                             return full_ver
                                 except Exception:
                                     pass
@@ -149,24 +155,25 @@ class ROCmDetector:
 
         try:
             # Method 3: Try amd-smi version
-            amd_smi_cmd = _get_rocm_tool_path('amd-smi')
+            amd_smi_cmd = _get_rocm_tool_path("amd-smi")
             logger.debug(f"Trying {amd_smi_cmd} version for ROCm detection...")
             result = subprocess.run(
-                [amd_smi_cmd, 'version'],
-                capture_output=True,
-                text=True,
-                timeout=10
+                [amd_smi_cmd, "version"], capture_output=True, text=True, timeout=10
             )
             if result.returncode == 0:
                 logger.debug(f"amd-smi version output:\n{result.stdout[:500]}")
                 # Look for "ROCm version:" field
-                match = re.search(r'ROCm version:\s*(\S+)', result.stdout, re.IGNORECASE)
+                match = re.search(
+                    r"ROCm version:\s*(\S+)", result.stdout, re.IGNORECASE
+                )
                 if match:
                     rocm_ver = match.group(1)
                     logger.debug(f"ROCm version from amd-smi: {rocm_ver}")
                     return rocm_ver
             else:
-                logger.debug(f"amd-smi version failed with exit code {result.returncode}")
+                logger.debug(
+                    f"amd-smi version failed with exit code {result.returncode}"
+                )
         except FileNotFoundError:
             logger.debug("amd-smi command not found")
         except Exception as e:
@@ -174,17 +181,14 @@ class ROCmDetector:
 
         try:
             # Method 4: Try rocminfo
-            rocminfo_cmd = _get_rocm_tool_path('rocminfo')
+            rocminfo_cmd = _get_rocm_tool_path("rocminfo")
             logger.debug(f"Trying {rocminfo_cmd} for ROCm detection...")
             result = subprocess.run(
-                [rocminfo_cmd],
-                capture_output=True,
-                text=True,
-                timeout=10
+                [rocminfo_cmd], capture_output=True, text=True, timeout=10
             )
             if result.returncode == 0:
                 # Look for "Runtime Version" or similar
-                match = re.search(r'Runtime Version:\s*(\S+)', result.stdout)
+                match = re.search(r"Runtime Version:\s*(\S+)", result.stdout)
                 if match:
                     rocm_ver = match.group(1)
                     logger.debug(f"ROCm version from rocminfo: {rocm_ver}")
@@ -198,22 +202,21 @@ class ROCmDetector:
 
         try:
             # Method 5: Try rocm-smi --version
-            rocm_smi_cmd = _get_rocm_tool_path('rocm-smi')
+            rocm_smi_cmd = _get_rocm_tool_path("rocm-smi")
             logger.debug(f"Trying {rocm_smi_cmd} --version...")
             result = subprocess.run(
-                [rocm_smi_cmd, '--version'],
-                capture_output=True,
-                text=True,
-                timeout=5
+                [rocm_smi_cmd, "--version"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
-                match = re.search(r'version:\s*(\S+)', result.stdout, re.IGNORECASE)
+                match = re.search(r"version:\s*(\S+)", result.stdout, re.IGNORECASE)
                 if match:
                     rocm_ver = match.group(1)
                     logger.debug(f"ROCm version from rocm-smi: {rocm_ver}")
                     return rocm_ver
             else:
-                logger.debug(f"rocm-smi --version failed with exit code {result.returncode}")
+                logger.debug(
+                    f"rocm-smi --version failed with exit code {result.returncode}"
+                )
         except FileNotFoundError:
             logger.debug("rocm-smi command not found")
         except Exception as e:
@@ -232,13 +235,10 @@ class ROCmDetector:
         # Check for dpkg (Debian/Ubuntu)
         try:
             result = subprocess.run(
-                ['dpkg', '--version'],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ["dpkg", "--version"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
-                match = re.search(r'version\s+(\S+)', result.stdout)
+                match = re.search(r"version\s+(\S+)", result.stdout)
                 version = match.group(1) if match else "Unknown"
                 return ("dpkg", version)
         except Exception:
@@ -247,13 +247,10 @@ class ROCmDetector:
         # Check for rpm (RHEL/CentOS/SLES)
         try:
             result = subprocess.run(
-                ['rpm', '--version'],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ["rpm", "--version"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
-                match = re.search(r'version\s+(\S+)', result.stdout)
+                match = re.search(r"version\s+(\S+)", result.stdout)
                 version = match.group(1) if match else "Unknown"
                 return ("rpm", version)
         except Exception:
@@ -268,12 +265,9 @@ class ROCmDetector:
         try:
             # Check for dpkg package
             result = subprocess.run(
-                ['dpkg', '-l', 'rocm-dev'],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ["dpkg", "-l", "rocm-dev"], capture_output=True, text=True, timeout=5
             )
-            if result.returncode == 0 and 'ii' in result.stdout:
+            if result.returncode == 0 and "ii" in result.stdout:
                 return "package"
         except Exception:
             pass
@@ -281,10 +275,7 @@ class ROCmDetector:
         try:
             # Check for rpm package
             result = subprocess.run(
-                ['rpm', '-q', 'rocm-dev'],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ["rpm", "-q", "rocm-dev"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
                 return "package"
@@ -305,11 +296,11 @@ class ROCmDetector:
         # Check for debug symbols or debug libraries
         try:
             rocm_path = _get_rocm_path()
-            rocm_lib_path = os.path.join(rocm_path, 'lib')
+            rocm_lib_path = os.path.join(rocm_path, "lib")
             if os.path.exists(rocm_lib_path):
                 # Check if debug libraries exist
                 for file in os.listdir(rocm_lib_path):
-                    if 'debug' in file.lower() or file.endswith('.debug'):
+                    if "debug" in file.lower() or file.endswith(".debug"):
                         return "Debug"
 
                 # Default to TheRock if no debug indicators
@@ -324,15 +315,15 @@ class ROCmDetector:
         """Detect ROCm library type (static, shared, or both)."""
         try:
             rocm_path = _get_rocm_path()
-            rocm_lib_path = os.path.join(rocm_path, 'lib')
+            rocm_lib_path = os.path.join(rocm_path, "lib")
             if os.path.exists(rocm_lib_path):
                 has_static = False
                 has_shared = False
 
                 for file in os.listdir(rocm_lib_path):
-                    if file.endswith('.a'):
+                    if file.endswith(".a"):
                         has_static = True
-                    if file.endswith('.so') or '.so.' in file:
+                    if file.endswith(".so") or ".so." in file:
                         has_shared = True
 
                 if has_static and has_shared:

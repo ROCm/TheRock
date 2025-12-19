@@ -61,4 +61,3 @@ benchmark_matrix = {
         "total_shards": 1,
     },
 }
-

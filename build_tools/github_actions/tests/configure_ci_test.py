@@ -366,7 +366,7 @@ class ConfigureCITest(unittest.TestCase):
         self.assertEqual(
             actual_benchmark_labels,
             expected_benchmark_labels,
-            f"Nightly builds should include all benchmark test labels"
+            f"Nightly builds should include all benchmark test labels",
         )
 
     def test_windows_schedule_matrix_generator(self):
@@ -389,7 +389,7 @@ class ConfigureCITest(unittest.TestCase):
         self.assertEqual(
             actual_benchmark_labels,
             expected_benchmark_labels,
-            f"Nightly builds should include all benchmark test labels"
+            f"Nightly builds should include all benchmark test labels",
         )
 
     ###########################################################################
