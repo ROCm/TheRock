@@ -58,8 +58,8 @@ behavior is expected and intentional on unified memory architectures.
 
 Yes, you have two options to prioritize VRAM usage:
 
-* Increase the VRAM allocation in the BIOS settings.
-* Manually reduce the GTT size so it's smaller than the VRAM allocation (by
+- Increase the VRAM allocation in the BIOS settings.
+- Manually reduce the GTT size so it's smaller than the VRAM allocation (by
   default, GTT is set to 50% of system RAM).
 
 Note that on APUs, the performance difference between VRAM and GTT is generally
