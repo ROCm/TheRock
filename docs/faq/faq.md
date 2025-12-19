@@ -26,12 +26,6 @@ TheRock provides a more streamlined, frequently updated environment compared to
 traditional package-based ROCm installations. It offers greater flexibility in
 version management and easier access to cutting-edge features.
 
-### What are the system requirements for TheRock?
-
-TheRock requires a compatible AMD GPU, a Linux-based operating system, and
-sufficient system resources depending on your workload. Specific requirements
-vary based on the GPU architecture (gfx1151, gfx1201, etc.).
-
 ### Which GPU architectures are supported by TheRock?
 
 For the most complete and up-to-date information on supported GPU architectures,
@@ -39,55 +33,54 @@ please refer to the official TheRock [roadmap](https://github.com/ROCm/TheRock/b
 
 ## gfx1151 (Strix Halo) specific questions
 
-### Why does PyTorch use GTT instead of VRAM on gfx1151?
+### Why does PyTorch use Graphics Translation Table (GTT) instead of VRAM on gfx1151?
 
-On Strix Halo GPUs (gfx1151), memory is unified and split between GART (VRAM)
-and GTT. GART is a fixed amount of memory reserved exclusively for the GPU via
-BIOS, while GTT is dynamically allocated from system memory. PyTorch and other
-AI workloads typically prefer GTT because it allows flexible, large allocations
-without permanently reserving system memory for GPU-only use.
+On Strix Halo GPUs (gfx1151) memory access is handled through GPU Virtual Memory
+(GPUVM), which provides multiple GPU virtual address spaces identified by VMIDs
+(Virtual Memory IDs).
+
+On APUs like Strix Halo, where memory is physically unified, there is no
+discrete VRAM. Instead:
+
+- Some memory may be firmware-reserved and pinned for GPU use, while
+- GTT-backed memory is dynamically allocated from system RAM and mapped into
+  per-process GPU virtual address spaces.
+
+AI workloads typically prefer GTT-backed allocations because they allow large,
+flexible mappings without permanently reserving memory for GPU-only use.
+
+### What is the difference between Graphics Address Remapping Table (GART) and GTT?
+
+Within GPUVM, two commonly referenced limits exist:
+
+- GART defines the amount of platform address space (system RAM or Memory-Mapped
+  I/O) that can be mapped into the GPU virtual address space used by the kernel
+  driver. It is typically kept relatively small to limit GPU page-table size and
+  is mainly used for driver-internal operations.
+
+- GTT defines the amount of platform address space (system RAM) that can be
+  mapped into the GPU virtual address spaces used by user processes. This is the
+  memory pool visible to applications such as PyTorch and other AI workloads.
 
 ### Why is allocating to GTT beneficial compared to VRAM?
 
 Allocating large amounts of VRAM permanently removes that memory from general
-system use. Increasing GTT allows memory to remain available to both the OS and
-the GPU as needed, providing better flexibility for mixed workloads. This
-behavior is expected and intentional on unified memory architectures.
+system use. Increasing GTT allows memory to remain available to both the
+operating system and the GPU as needed, providing better flexibility for mixed
+workloads. This behavior is expected and intentional on unified memory
+architectures.
 
 ### Can I prioritize VRAM usage over GTT?
 
-Yes, you have two options to prioritize VRAM usage:
+Yes, if your VRAM is larget than GTT, applications will use VRAM instead.
+You have two options to prioritize VRAM usage:
 
-- Increase the VRAM allocation in the BIOS settings.
+- Increase the VRAM in the BIOS settings.
 - Manually reduce the GTT size so it's smaller than the VRAM allocation (by
   default, GTT is set to 50% of system RAM).
 
 Note that on APUs, the performance difference between VRAM and GTT is generally
-minimal, unlike on discrete GPUs where VRAM offers significantly better
-performance.
-
-### What is the difference between pages_limit and page_pool_size?
-
-The `pages_limit` option controls the maximum number of 4 KiB pages available
-for GPU memory allocation. The `page_pool_size` option pre-allocates memory
-exclusively for GPU use, reducing fragmentation and potentially improving
-performance. Setting `page_pool_size` equal to `pages_limit` typically yields
-the best performance for AI workloads.
-
-### How do I reduce GTT memory fragmentation?
-
-If `page_pool_size` is smaller than `pages_limit`, increasing the allocation
-granularity may help reduce fragmentation. For example, set
-`amdgpu.vm_fragment_size=8` (where the default of 4 equals 64 KiB and 9 equals
-2 MiB).
-
-### Is the amdgpu.gttsize parameter still relevant?
-
-The `amdgpu.gttsize` parameter is officially deprecated. On modern Linux
-systems, GTT allocation is managed by the Translation Table Maps (TTM) memory
-management subsystem using `pages_limit` and `page_pool_size`. However, some
-legacy applications may still reference `gttsize`, so it's recommended to keep
-it aligned with your configuration for compatibility.
+minimal.
 
 ## Troubleshooting
 
