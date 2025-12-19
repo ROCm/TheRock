@@ -26,7 +26,7 @@ The `strix_ai_comprehensive_tests.yml` workflow provides complete testing covera
 - ✅ Conditional job execution based on test category
 - ✅ Market segment filtering (automotive, industrial, robotics, healthcare)
 - ✅ Test type selection (functional, performance, full)
-- ✅ ROCm version selection (6.4.4, 7.0.2)
+- ✅ **Uses rocm/pytorch:latest Docker container with pre-installed ROCm**
 - ✅ GPU variant selection (gfx1150, gfx1151)
 - ✅ Automatic artifact upload (30-day retention)
 - ✅ Summary report generation
@@ -42,10 +42,6 @@ The `strix_ai_comprehensive_tests.yml` workflow provides complete testing covera
 ### **Strix Variant** (Required)
 - `gfx1150` - Strix Point
 - `gfx1151` - Strix Halo (default)
-
-### **ROCm Version** (Required)
-- `6.4.4` (default)
-- `7.0.2`
 
 ### **Test Category** (Required)
 Select which tests to run:
@@ -81,6 +77,33 @@ Select which tests to run:
 
 ---
 
+## ROCm Environment Setup
+
+### **Docker Container Approach**
+
+This workflow uses the **rocm/pytorch:latest** Docker container which includes:
+- ✅ **Pre-installed ROCm** - No manual installation needed
+- ✅ **PyTorch with ROCm support** - Ready to use
+- ✅ **GPU device access** - /dev/kfd and /dev/dri configured
+- ✅ **All ROCm tools** - rocminfo, hipconfig, rocprofv3 available
+
+**Container Configuration**:
+```yaml
+container:
+  image: rocm/pytorch:latest
+  options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+```
+
+**Benefits**:
+- No dependency on `install_rocm_from_artifacts.py`
+- No boto3 or AWS credentials needed
+- Consistent ROCm environment across runs
+- Faster job startup (no ROCm download/install)
+
+**Note**: This eliminates the `ModuleNotFoundError: No module named 'boto3'` error from manual ROCm installation.
+
+---
+
 ## Usage Examples
 
 ### **1. Quick Smoke Test (Default)**
@@ -90,7 +113,6 @@ Select which tests to run:
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: quick
   test_type: functional
 ```
@@ -104,7 +126,6 @@ Inputs:
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: vlm
   test_type: functional
 ```
@@ -118,7 +139,6 @@ Inputs:
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: vlm
   test_type: performance
 ```
@@ -132,7 +152,6 @@ Inputs:
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: vlm
   test_type: full
 ```
@@ -146,7 +165,6 @@ Inputs:
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: benchmarks
   market_segment: automotive
 ```
@@ -160,7 +178,6 @@ Inputs:
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: all
   test_type: full
   market_segment: all
@@ -175,7 +192,6 @@ Inputs:
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: profiling
 ```
 
@@ -183,26 +199,11 @@ Inputs:
 
 ---
 
-### **8. Test with ROCm 7.0.2**
-```yaml
-Inputs:
-  platform: linux
-  strix_variant: gfx1151
-  rocm_version: 7.0.2
-  test_category: vlm
-  test_type: functional
-```
-
-**Result**: Tests VLM models with ROCm 7.0.2 PyTorch Preview
-
----
-
-### **9. Strix Point (gfx1150) Testing**
+### **8. Strix Point (gfx1150) Testing**
 ```yaml
 Inputs:
   platform: linux
   strix_variant: gfx1150
-  rocm_version: 6.4.4
   test_category: quick
 ```
 
@@ -210,12 +211,11 @@ Inputs:
 
 ---
 
-### **10. Industrial Market Tests**
+### **9. Industrial Market Tests**
 ```yaml
 Inputs:
   platform: linux
   strix_variant: gfx1151
-  rocm_version: 6.4.4
   test_category: benchmarks
   market_segment: industrial
 ```
@@ -239,7 +239,6 @@ gh workflow run strix_ai_comprehensive_tests.yml \
   --ref users/rponnuru/strix_poc \
   -f platform=linux \
   -f strix_variant=gfx1151 \
-  -f rocm_version=6.4.4 \
   -f test_category=vlm \
   -f test_type=functional
 ```
@@ -407,14 +406,13 @@ on:
 Each job sets:
 ```bash
 AMDGPU_FAMILIES=gfx1151      # GPU variant
-ROCM_VERSION=6.4.4           # ROCm version
 TEST_CATEGORY=vlm            # Test category
 TEST_TYPE=functional         # Test type
 MARKET_SEGMENT=automotive    # Market segment (benchmarks)
 PYTHONUNBUFFERED=1           # Python output
-PATH=/opt/rocm/bin:$PATH     # ROCm binaries
-LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH  # ROCm libs
 ```
+
+**Note**: ROCm paths (PATH, LD_LIBRARY_PATH) are pre-configured in the rocm/pytorch container.
 
 ---
 

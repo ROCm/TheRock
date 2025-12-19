@@ -39,15 +39,6 @@ on:
           - gfx1151  # Strix Halo
         default: 'gfx1151'
       
-      rocm_version:
-        description: 'ROCm version'
-        required: true
-        type: choice
-        options:
-          - '6.4.4'
-          - '7.0.2'
-        default: '6.4.4'
-      
       test_category:
         description: 'Test category to run'
         required: true
@@ -109,13 +100,17 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || ((github.event.inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
     timeout-minutes: 60
     
+    # Use ROCm PyTorch container with ROCm pre-installed
+    container:
+      image: ${{ (github.event.inputs.platform || 'linux') == 'linux' && 'rocm/pytorch:latest' || null }}
+      options: ${{ (github.event.inputs.platform || 'linux') == 'linux' && '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0' || '' }}
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'vlm'
       TEST_TYPE: ${{ github.event.inputs.test_type || 'functional' }}
       PYTHONUNBUFFERED: 1
@@ -127,50 +122,37 @@ jobs:
           repository: "ROCm/TheRock"
           ref: ${{ github.ref }}
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm from Artifacts
+      - name: Display System Info
         run: |
-          echo "=== Installing ROCm ${{ env.ROCM_VERSION }} ==="
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "=== Strix VLM Test Run ==="
+          echo "Strix Variant: ${{ env.AMDGPU_FAMILIES }}"
+          echo "Test Type: ${{ env.TEST_TYPE }}"
+          python3 -c "import torch; print('PyTorch:', torch.__version__)"
       
-      - name: Verify GPU Access
+      - name: Verify ROCm and GPU
         run: |
-          echo "=== GPU Information ==="
-          /opt/rocm/bin/rocminfo | head -50
-          ls -la /dev/kfd /dev/dri
+          rocminfo | head -50 || true
+          ls -la /dev/kfd /dev/dri/ || true
       
-      - name: Install Dependencies
+      - name: Install AI/ML Dependencies
         run: |
-          pip install --upgrade pip
-          pip install pytest pytest-check
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.2
-          pip install transformers accelerate ultralytics opencv-python pillow timm einops
+          pip3 install --upgrade pip
+          pip3 install pytest pytest-check
+          pip3 install transformers accelerate ultralytics opencv-python pillow timm einops || true
       
       - name: Verify PyTorch GPU
         run: |
-          python3 -c "import torch; print('PyTorch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None')"
+          python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None'); exit(0 if torch.cuda.is_available() else 1)"
       
       - name: Run VLM Functional Tests
         if: env.TEST_TYPE == 'functional' || env.TEST_TYPE == 'full'
         run: |
-          pytest tests/strix_ai/vlm/ -v -s -m "functional" \
-            --junit-xml=test-results-vlm-functional.xml || exit 0
+          pytest tests/strix_ai/vlm/ -v -s -m "functional" --junit-xml=test-results-vlm-functional.xml || exit 0
       
       - name: Run VLM Performance Tests
         if: env.TEST_TYPE == 'performance' || env.TEST_TYPE == 'full'
         run: |
-          pytest tests/strix_ai/vlm/ -v -s -m "performance" \
-            --junit-xml=test-results-vlm-performance.xml || exit 0
+          pytest tests/strix_ai/vlm/ -v -s -m "performance" --junit-xml=test-results-vlm-performance.xml || exit 0
       
       - name: Upload VLM Test Results
         if: always()
@@ -187,8 +169,12 @@ jobs:
   strix_vla_tests:
     name: Strix VLA Tests (OpenVLA, Pi0)
     if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'vla'
-    runs-on: ${{ github.event.inputs.runner_label || ((github.event.inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
+    runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
+    
+    container:
+      image: ${{ (github.event.inputs.platform || 'linux') == 'linux' && 'rocm/pytorch:latest' || null }}
+      options: ${{ (github.event.inputs.platform || 'linux') == 'linux' && '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0' || '' }}
     
     defaults:
       run:
@@ -196,40 +182,27 @@ jobs:
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'vla'
-      TEST_TYPE: ${{ github.event.inputs.test_type || 'functional' }}
       PYTHONUNBUFFERED: 1
     
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip
-          pip install pytest pytest-check torch transformers auto-gptq
+          pip3 install --upgrade pip
+          pip3 install pytest pytest-check transformers auto-gptq || true
       
       - name: Run VLA Tests
         run: |
-          pytest tests/strix_ai/vla/ -v -s \
-            --junit-xml=test-results-vla.xml || exit 0
+          pytest tests/strix_ai/vla/ -v -s --junit-xml=test-results-vla.xml || exit 0
       
       - name: Upload VLA Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: strix-vla-test-results-${{ env.AMDGPU_FAMILIES }}
+          name: strix-vla-test-results
           path: test-results-vla*.xml
           retention-days: 30
 
@@ -242,13 +215,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'omni'
       PYTHONUNBUFFERED: 1
     
@@ -256,24 +232,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch transformers
+          pip3 install --upgrade pip pytest transformers || true
       
       - name: Run Omni Tests
         run: |
-          pytest tests/strix_ai/omni/ -v -s \
-            --junit-xml=test-results-omni.xml || exit 0
+          pytest tests/strix_ai/omni/ -v -s --junit-xml=test-results-omni.xml || exit 0
       
       - name: Upload Omni Test Results
         if: always()
@@ -292,13 +257,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'instruct'
       TEST_TYPE: ${{ github.event.inputs.test_type || 'functional' }}
       PYTHONUNBUFFERED: 1
@@ -307,24 +275,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch transformers accelerate
+          pip3 install --upgrade pip pytest transformers accelerate || true
       
       - name: Run Instruct Tests
         run: |
-          pytest tests/strix_ai/instruct/ -v -s \
-            --junit-xml=test-results-instruct.xml || exit 0
+          pytest tests/strix_ai/instruct/ -v -s --junit-xml=test-results-instruct.xml || exit 0
       
       - name: Upload Instruct Test Results
         if: always()
@@ -343,13 +300,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'segmentation'
       PYTHONUNBUFFERED: 1
     
@@ -357,24 +317,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch opencv-python pillow
+          pip3 install --upgrade pip pytest opencv-python pillow || true
       
       - name: Run Segmentation Tests
         run: |
-          pytest tests/strix_ai/segmentation/ -v -s \
-            --junit-xml=test-results-segmentation.xml || exit 0
+          pytest tests/strix_ai/segmentation/ -v -s --junit-xml=test-results-segmentation.xml || exit 0
       
       - name: Upload Segmentation Test Results
         if: always()
@@ -393,13 +342,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'asr'
       PYTHONUNBUFFERED: 1
     
@@ -407,24 +359,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch
+          pip3 install --upgrade pip pytest || true
       
       - name: Run ASR Tests
         run: |
-          pytest tests/strix_ai/asr/ -v -s \
-            --junit-xml=test-results-asr.xml || exit 0
+          pytest tests/strix_ai/asr/ -v -s --junit-xml=test-results-asr.xml || exit 0
       
       - name: Upload ASR Test Results
         if: always()
@@ -443,13 +384,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'diffusion'
       PYTHONUNBUFFERED: 1
     
@@ -457,24 +401,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch
+          pip3 install --upgrade pip pytest || true
       
       - name: Run Diffusion Tests
         run: |
-          pytest tests/strix_ai/diffusion/ -v -s \
-            --junit-xml=test-results-diffusion.xml || exit 0
+          pytest tests/strix_ai/diffusion/ -v -s --junit-xml=test-results-diffusion.xml || exit 0
       
       - name: Upload Diffusion Test Results
         if: always()
@@ -493,13 +426,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'llm'
       PYTHONUNBUFFERED: 1
     
@@ -507,24 +443,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch transformers
+          pip3 install --upgrade pip pytest transformers || true
       
       - name: Run LLM Tests
         run: |
-          pytest tests/strix_ai/llm/ -v -s \
-            --junit-xml=test-results-llm.xml || exit 0
+          pytest tests/strix_ai/llm/ -v -s --junit-xml=test-results-llm.xml || exit 0
       
       - name: Upload LLM Test Results
         if: always()
@@ -543,13 +468,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'optimization'
       PYTHONUNBUFFERED: 1
     
@@ -557,24 +485,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch transformers auto-gptq
+          pip3 install --upgrade pip pytest transformers auto-gptq || true
       
       - name: Run Optimization Tests
         run: |
-          pytest tests/strix_ai/optimization/ -v -s \
-            --junit-xml=test-results-optimization.xml || exit 0
+          pytest tests/strix_ai/optimization/ -v -s --junit-xml=test-results-optimization.xml || exit 0
       
       - name: Upload Optimization Test Results
         if: always()
@@ -593,13 +510,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 90
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'profiling'
       PYTHONUNBUFFERED: 1
     
@@ -607,29 +527,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
-        run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch transformers
-      
       - name: Verify rocprofv3
         run: |
           which rocprofv3 || echo "rocprofv3 not found"
           rocprofv3 --version || echo "rocprofv3 version check failed"
       
+      - name: Install Dependencies
+        run: |
+          pip3 install --upgrade pip pytest transformers || true
+      
       - name: Run Profiling Tests
         run: |
-          pytest tests/strix_ai/profiling/ -v -s \
-            --junit-xml=test-results-profiling.xml || exit 0
+          pytest tests/strix_ai/profiling/ -v -s --junit-xml=test-results-profiling.xml || exit 0
       
       - name: Upload Profiling Results and Traces
         if: always()
@@ -651,13 +560,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 120
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'benchmarks'
       MARKET_SEGMENT: ${{ github.event.inputs.market_segment || 'all' }}
       PYTHONUNBUFFERED: 1
@@ -666,43 +578,29 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch transformers ultralytics opencv-python
+          pip3 install --upgrade pip pytest transformers ultralytics opencv-python || true
       
       - name: Run Automotive Benchmarks
         if: env.MARKET_SEGMENT == 'all' || env.MARKET_SEGMENT == 'automotive'
         run: |
-          pytest tests/strix_ai/benchmarks/automotive_bench.py -v -s \
-            --junit-xml=benchmark-results-automotive.xml || exit 0
+          pytest tests/strix_ai/benchmarks/automotive_bench.py -v -s --junit-xml=benchmark-results-automotive.xml || exit 0
       
       - name: Run Industrial Benchmarks
         if: env.MARKET_SEGMENT == 'all' || env.MARKET_SEGMENT == 'industrial'
         run: |
-          pytest tests/strix_ai/benchmarks/industrial_bench.py -v -s \
-            --junit-xml=benchmark-results-industrial.xml || exit 0
+          pytest tests/strix_ai/benchmarks/industrial_bench.py -v -s --junit-xml=benchmark-results-industrial.xml || exit 0
       
       - name: Run Robotics Benchmarks
         if: env.MARKET_SEGMENT == 'all' || env.MARKET_SEGMENT == 'robotics'
         run: |
-          pytest tests/strix_ai/benchmarks/robotics_bench.py -v -s \
-            --junit-xml=benchmark-results-robotics.xml || exit 0
+          pytest tests/strix_ai/benchmarks/robotics_bench.py -v -s --junit-xml=benchmark-results-robotics.xml || exit 0
       
       - name: Run Healthcare Benchmarks
         if: env.MARKET_SEGMENT == 'all' || env.MARKET_SEGMENT == 'healthcare'
         run: |
-          pytest tests/strix_ai/benchmarks/healthcare_bench.py -v -s \
-            --junit-xml=benchmark-results-healthcare.xml || exit 0
+          pytest tests/strix_ai/benchmarks/healthcare_bench.py -v -s --junit-xml=benchmark-results-healthcare.xml || exit 0
       
       - name: Upload Benchmark Results
         if: always()
@@ -721,13 +619,16 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 30
     
+    container:
+      image: rocm/pytorch:latest
+      options: '--ipc host --group-add video --device /dev/kfd --device /dev/dri --group-add 110 --user 0:0'
+    
     defaults:
       run:
         shell: bash
     
     env:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
-      ROCM_VERSION: ${{ github.event.inputs.rocm_version || '6.4.4' }}
       TEST_CATEGORY: 'quick'
       PYTHONUNBUFFERED: 1
     
@@ -735,24 +636,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install ROCm and Dependencies
+      - name: Install Dependencies
         run: |
-          python build_tools/install_rocm_from_artifacts.py \
-            --release ${{ env.ROCM_VERSION }} \
-            --amdgpu-family ${{ env.AMDGPU_FAMILIES }} \
-            --output-dir /opt/rocm
-          echo "PATH=/opt/rocm/bin:$PATH" >> $GITHUB_ENV
-          pip install --upgrade pip pytest torch transformers ultralytics opencv-python pillow
+          pip3 install --upgrade pip pytest transformers ultralytics opencv-python pillow || true
       
       - name: Run Quick Smoke Tests
         run: |
-          pytest tests/strix_ai/ -v -s -m "quick" \
-            --junit-xml=test-results-quick-smoke.xml || exit 0
+          pytest tests/strix_ai/ -v -s -m "quick" --junit-xml=test-results-quick-smoke.xml || exit 0
       
       - name: Upload Quick Test Results
         if: always()
@@ -782,7 +672,6 @@ jobs:
           echo "## Test Execution Details" >> $GITHUB_STEP_SUMMARY
           echo "- **Platform**: ${{ github.event.inputs.platform || 'linux' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Strix Variant**: ${{ github.event.inputs.strix_variant || 'gfx1151' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **ROCm Version**: ${{ github.event.inputs.rocm_version || '6.4.4' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Test Category**: ${{ github.event.inputs.test_category || 'quick' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Test Type**: ${{ github.event.inputs.test_type || 'functional' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Market Segment**: ${{ github.event.inputs.market_segment || 'all' }}" >> $GITHUB_STEP_SUMMARY
@@ -801,5 +690,6 @@ jobs:
           echo "- Benchmark Tests: ${{ needs.strix_benchmark_tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Quick Tests: ${{ needs.strix_quick_tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note**: Using rocm/pytorch:latest container with pre-installed ROCm" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "Download test artifacts to view detailed XML results." >> $GITHUB_STEP_SUMMARY
-
