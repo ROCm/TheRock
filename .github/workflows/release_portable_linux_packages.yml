@@ -102,13 +102,13 @@ jobs:
         run: |
           # Compute rpm package version
           # This sets the 'rocm_rpm_package_version' output
-          python ./build_tools/compute_rocm_native_package_version.py \
+          python ./build_tools/compute_rocm_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
             --package-type="rpm"
           # Compute debian package version
           # This sets the 'rocm_deb_package_version' output
-          python ./build_tools/compute_rocm_native_package_version.py \
+          python ./build_tools/compute_rocm_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }} \
             --package-type="deb"
