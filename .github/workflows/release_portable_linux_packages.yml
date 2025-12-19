@@ -71,6 +71,8 @@ jobs:
       release_type: ${{ inputs.release_type || 'nightly' }}
     outputs:
       version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      rpm_version: ${{ steps.rocm_native_package_version.outputs.rocm_rpm_package_version }}
+      deb_version: ${{ steps.rocm_native_package_version.outputs.rocm_deb_package_version }}
       release_type: ${{ env.release_type }}
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
@@ -94,6 +96,22 @@ jobs:
           python ./build_tools/compute_rocm_package_version.py \
             --release-type=${{ env.release_type }} \
             --prerelease-version=${{ inputs.prerelease_version }}
+
+      - name: Compute native package version
+        id: rocm_native_package_version
+        run: |
+          # Compute rpm package version
+          # This sets the 'rocm_rpm_package_version' output
+          python ./build_tools/compute_rocm_package_version.py \
+            --release-type=${{ env.release_type }} \
+            --prerelease-version=${{ inputs.prerelease_version }} \
+            --package-type="rpm"
+          # Compute debian package version
+          # This sets the 'rocm_deb_package_version' output
+          python ./build_tools/compute_rocm_package_version.py \
+            --release-type=${{ env.release_type }} \
+            --prerelease-version=${{ inputs.prerelease_version }} \
+            --package-type="deb"
 
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
@@ -335,7 +353,7 @@ jobs:
           workflow: build_native_linux_packages.yml
           inputs: |
             { "artifact_group": "${{ matrix.target_bundle.amdgpu_family }}",
-              "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
+              "rocm_version": "${{ needs.setup_metadata.outputs.rpm_version }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
               "native_package_type": "rpm"
@@ -348,7 +366,7 @@ jobs:
           workflow: build_native_linux_packages.yml
           inputs: |
             { "artifact_group": "${{ matrix.target_bundle.amdgpu_family }}",
-              "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
+              "rocm_version": "${{ needs.setup_metadata.outputs.deb_version }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
               "native_package_type": "deb"

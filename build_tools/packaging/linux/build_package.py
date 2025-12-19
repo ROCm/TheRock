@@ -59,7 +59,7 @@ class PackageConfig:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 # Default install prefix
-DEFAULT_INSTALL_PREFIX = "/opt/rocm"
+DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
 
 
 ################### Debian package creation #######################
@@ -647,7 +647,17 @@ def update_package_name(pkg_name, config: PackageConfig):
     """
     print_function_name()
     if config.versioned_pkg:
-        pkg_suffix = config.rocm_version
+        # Split version passed to use only major and minor version for package name
+        # Split by dot and take first two components
+        # Package name will be rocm8.1 and discard all other version part
+        parts = config.rocm_version.split(".")
+        if len(parts) < 2:
+            raise ValueError(
+                f"Version string '{args.rocm_version}' does not have major.minor versions"
+            )
+        major = re.match(r"^\d+", parts[0])
+        minor = re.match(r"^\d+", parts[1])
+        pkg_suffix = f"{major.group()}.{minor.group()}"
     else:
         pkg_suffix = ""
 
@@ -832,10 +842,21 @@ def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
 
+    # Split version passed to use only major and minor version for prefix folder
+    # Split by dot and take first two components
+    parts = args.rocm_version.split(".")
+    if len(parts) < 2:
+        raise ValueError(
+            f"Version string '{args.rocm_version}' does not have major.minor versions"
+        )
+    major = re.match(r"^\d+", parts[0])
+    minor = re.match(r"^\d+", parts[1])
+    modified_rocm_version = f"{major.group()}.{minor.group()}"
+
     # Append rocm version to default install prefix
     # TBD: Do we need to append rocm_version to other prefix?
     if args.install_prefix == f"{DEFAULT_INSTALL_PREFIX}":
-        prefix = args.install_prefix + "-" + args.rocm_version
+        prefix = args.install_prefix + "-" + modified_rocm_version
 
     # Populate package config details from user arguments
     config = PackageConfig(
