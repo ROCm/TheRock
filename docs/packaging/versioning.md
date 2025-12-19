@@ -223,7 +223,7 @@ The script produces these versions for rpm packages for each distribution channe
 | Distribution channel | Version format              | Version example                                                                                                                        |
 | -------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | stable releases      | `X.Y.Z`                     | `7.10.0`                                                                                                                               |
-| prereleases          | `X.Y.Z~rcN`                 | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                 |
+| prereleases          | `X.Y.Z~rcN`                 | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
 | nightly releases     | `X.Y.Z~YYYYMMDD`            | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
 | dev builds/releases  | `X.Y.Z~YYYYMMDDg<git-hash>` | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 
