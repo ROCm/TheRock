@@ -84,7 +84,7 @@ hosted on a separate release index that can be passed to `pip` or `uv` via
 `--index-url`. For example:
 
 ```bash
-pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ rocm`
+pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ rocm
 ```
 
 See [RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
