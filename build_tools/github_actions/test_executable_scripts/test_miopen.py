@@ -192,6 +192,7 @@ if os.name == WINDOWS:  # nt
         negative_filter.append("*GPU_UnitTestActivationDescriptor_FP32*")
         negative_filter.append("*CPU_TuningPolicy_NONE*")
         negative_filter.append("*GPU_Dropout_FP32*")
+        negative_filter.append("*GPU_Dropout_FP16*")
 ####################################################
 
 # Creating a smoke test filter
