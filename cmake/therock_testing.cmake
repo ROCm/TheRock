@@ -20,11 +20,8 @@ function(therock_test_validate_shared_lib)
 
   separate_arguments(CMAKE_C_COMPILER_LIST UNIX_COMMAND "${CMAKE_C_COMPILER}")
 
-  message(STATUS "CMAKE_SOURCE_DIR = ${CMAKE_SOURCE_DIR}")
-  message(STATUS "Expected clang path = ${CMAKE_SOURCE_DIR}/lib/llvm/bin/clang")
-
   set(CLANG_EXECUTABLE
-    "${CMAKE_SOURCE_DIR}/lib/llvm/bin/clang"
+    "${CMAKE_SOURCE_DIR}/build/lib/llvm/bin/clang"
     CACHE FILEPATH "Clang executable"
   )
 
