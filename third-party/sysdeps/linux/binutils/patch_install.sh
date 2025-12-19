@@ -15,11 +15,6 @@ if [ -d "$PREFIX/lib64" ]; then
   cp -r $PREFIX/lib64/* $PREFIX/lib/
   rm -rf $PREFIX/lib64
 fi
-# Copy headers from the include sub-directory to root include directory
-if [ -d "$PREFIX/include/libiberty" ]; then
-  cp -r $PREFIX/include/libiberty/* $PREFIX/include/
-  rm -rf $PREFIX/include/libiberty
-fi
 
 # We don't want library descriptors or binaries.
 rm -f $PREFIX/lib/*.la

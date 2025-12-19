@@ -9,7 +9,7 @@ endif()
 if(NOT TARGET LibIberty::LibIberty)
   add_library(LibIberty::LibIberty STATIC IMPORTED)
   set_target_properties(LibIberty::LibIberty PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
+    INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include;${_IMPORT_PREFIX}/include/libiberty"
     IMPORTED_LOCATION "${_IMPORT_PREFIX}/lib/libiberty.a"
   )
 endif()
