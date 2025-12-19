@@ -127,6 +127,7 @@ These instructions mostly mirror the instructions in the root
 
 > [!TIP]
 > These tools are available via package managers like winget on Windows:
+>
 > ```bash
 > winget install --id Microsoft.VisualStudio.2022.BuildTools --source winget --override "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add
 > Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add
