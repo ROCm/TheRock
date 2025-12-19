@@ -104,6 +104,13 @@ set(ROCM_SYMLINK_LIBS OFF)
 
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
+# Kpack artifact splitting
+option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
+set(THEROCK_KPACK_DIR "" CACHE PATH "Path to rocm-kpack repository (required when THEROCK_KPACK_SPLIT_ARTIFACTS=ON)")
+if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
+  message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
+endif()
+
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
 
@@ -217,6 +224,8 @@ option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THERO
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
+# TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
+option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
@@ -244,10 +253,6 @@ if(NOT WIN32)
     "Enables composable kernel in MIOpen" ON
     "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 endif()
-
-cmake_dependent_option(THEROCK_ROCWMMA_USE_ROCBLAS
-  "Enables rocBLAS validation in rocWMMA" ON
-  "THEROCK_ENABLE_ROCWMMA;THEROCK_ENABLE_BLAS" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
@@ -344,6 +349,8 @@ endif()
 
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
+set(THEROCK_BUNDLED_GMP)
+set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
@@ -365,6 +372,8 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
@@ -412,6 +421,7 @@ add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
+add_subdirectory(iree-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

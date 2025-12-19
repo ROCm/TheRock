@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: true
         type: string
       s3_subdir:
@@ -30,7 +30,7 @@ on:
         required: true
         type: string
       rocm_version:
-        description: ROCm version to pip install
+        description: ROCm version to pip install (e.g. "7.10.0a20251124")
         type: string
       pytorch_git_ref:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
@@ -66,7 +66,7 @@ on:
         type: string
         default: "3.12"
       release_type:
-        description: The type of release to build ("nightly", "prerelease", or "dev")
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
       s3_subdir:
@@ -86,7 +86,7 @@ on:
         type: string
         default: "https://rocm.devreleases.amd.com/v2-staging"
       rocm_version:
-        description: ROCm version to pip install
+        description: ROCm version to pip install (e.g. "7.10.0a20251124")
         type: string
       pytorch_git_ref:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
@@ -103,12 +103,14 @@ permissions:
   id-token: write
   contents: read
 
+run-name: Build portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
+
 jobs:
   build_pytorch_wheels:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
@@ -135,7 +137,7 @@ jobs:
       triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -206,7 +208,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
@@ -234,7 +236,7 @@ jobs:
       bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -244,6 +246,9 @@ jobs:
         env:
           TARGET: ${{ inputs.amdgpu_family }}
           PLATFORM: "linux"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
@@ -276,14 +281,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
@@ -308,7 +313,7 @@ jobs:
             --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "pytorch_triton_rocm-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}

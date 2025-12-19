@@ -3,16 +3,21 @@
 This page describes how to install and use our release artifacts for ROCm and
 external builds like PyTorch. We produce build artifacts as part of our
 Continuous Integration (CI) build/test workflows as well as release artifacts as
-part of Continuous Delivery (CD) nightly releases. See also the
+part of Continuous Delivery (CD) nightly releases. For the development-status of GPU architecture support in TheRock, please see the [SUPPORTED_GPUS.md](./SUPPORTED_GPUS.md) document, which tracks readiness and onboarding progress for each AMD GPU architecture.
+
+See also the
 [Roadmap for support](ROADMAP.md) and
 [Build artifacts overview](docs/development/artifacts.md) pages.
 
-> [!WARNING]
-> These instructions assume familiarity with how to use ROCm. Please see
-> https://rocm.docs.amd.com/ for general information about the ROCm software
-> platform. In addition, Linux users, please be aware of the [prerequisites](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access), including enabling GPU access, needed to run ROCm.
+> [!IMPORTANT]
+> These instructions assume familiarity with how to use ROCm.
+> Please see https://rocm.docs.amd.com/ for general information about the ROCm software
+> platform.
 >
-> **Note: these install steps are a substitute for those on that website**.
+> Prerequisites:
+>
+> - We recommend installing the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation) on Linux and [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+> - Linux users, please be aware of [Configuring permissions for GPU access](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access) needed for ROCm
 
 Table of contents:
 
@@ -112,9 +117,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx950-dcgpu
@@ -128,9 +131,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx110X-all
@@ -147,9 +148,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx1151
@@ -163,9 +162,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx120X-all
@@ -180,9 +177,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ "rocm[libraries,devel]"
 ```
 
 ### Using ROCm Python packages
@@ -286,6 +281,16 @@ also install `torch`, `torchaudio`, and `torchvision`.
 > be installed automatically for you and you do not need to explicitly install
 > ROCm first.
 
+> [!TIP]
+> If you previously installed PyTorch with the `pytorch-triton-rocm` package,
+> please uninstall it before installing the new packages:
+>
+> ```bash
+> pip uninstall pytorch-triton-rocm
+> ```
+>
+> The triton package is now named `triton`.
+
 #### torch for gfx94X-dcgpu
 
 Supported devices in this family:
@@ -295,9 +300,7 @@ Supported devices in this family:
 | MI300A/MI300X | gfx942     |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx950-dcgpu
@@ -309,9 +312,7 @@ Supported devices in this family:
 | MI350X/MI355X | gfx950     |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx110X-all
@@ -326,9 +327,7 @@ Supported devices in this family:
 | AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx1151
@@ -340,9 +339,7 @@ Supported devices in this family:
 | AMD Strix Halo iGPU | gfx1151    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ --pre torch torchaudio torchvision
 ```
 
 #### torch for gfx120X-all
@@ -355,9 +352,7 @@ Supported devices in this family:
 | AMD RX 9070 / XT | gfx1201    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ --pre torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages

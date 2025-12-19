@@ -35,6 +35,7 @@
 #   [source_sets.<name>]
 #   description = "Human-readable description"
 #   submodules = ["submodule1", "submodule2"]  # Git submodule directory names
+#   disable_platforms = ["windows"]            # Optional: platforms where disabled
 #
 #   [build_stages.<name>]
 #   description = "Human-readable description"
@@ -55,11 +56,13 @@
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
 #   platform = "windows"                    # Optional: platform-specific artifact
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
+#   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
+#   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
 #
 # ==============================================================================
 
 [metadata]
-version = "1.0"
+version = "2.0"
 description = "TheRock artifact-based build topology"
 
 # ==============================================================================
@@ -96,6 +99,15 @@ submodules = ["rccl", "rccl-tests"]
 [source_sets.profiler-extras]
 description = "Additional profiler submodules"
 submodules = ["rocprof-trace-decoder"]
+
+[source_sets.amd-mesa]
+description = "ROCm media submodules (Mesa for VA-API)"
+submodules = ["amd-mesa"]
+disable_platforms = ["windows"]
+
+[source_sets.iree-libs]
+description = "IREE integration submodules"
+submodules = ["iree", "fusilli"]
 
 # ==============================================================================
 # BUILD STAGES - Pipeline jobs that build sets of artifact groups
@@ -138,13 +150,17 @@ artifact_groups = ["dctools-core"]
 # artifact_groups = ["dctools-rocm"]
 # depends_on = ["math-libs"]  # Will need math/ML libraries
 
-# [build_stages.iree-libs]
-# description = "IREE and Fusilli integration (parallel to compiler-runtime)"
-# artifact_groups = ["iree-libs"]
+[build_stages.iree-libs]
+description = "IREE and Fusilli integration"
+artifact_groups = ["iree-libs"]
 
 [build_stages.profiler-apps]
 description = "Profiler applications (depends on profiler-core)"
 artifact_groups = ["profiler-apps"]
+
+[build_stages.media]
+description = "Media Libraries"
+artifact_groups = ["media"]
 
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
@@ -154,7 +170,6 @@ artifact_groups = ["profiler-apps"]
 [artifact_groups.third-party-sysdeps]
 description = "Critical system dependencies (always needed)"
 type = "generic"
-source_sets = []  # No submodules - uses vendored/in-tree deps
 
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
@@ -165,7 +180,8 @@ source_sets = []  # No submodules - uses vendored/in-tree deps
 description = "Base ROCm infrastructure and CMake tools"
 type = "generic"
 artifact_group_deps = []
-source_sets = ["base"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["base", "rocm-systems"]
 
 [artifact_groups.core-runtime]
 description = "Core runtime (ROCR-Runtime, rocminfo)"
@@ -195,7 +211,8 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
 artifact_group_deps = ["hip-runtime", "profiler-core"]
-source_sets = ["rocm-libraries"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["rocm-libraries", "rocm-systems"]
 
 [artifact_groups.ml-libs]
 description = "Machine learning libraries"
@@ -207,7 +224,8 @@ source_sets = ["rocm-libraries", "ml-frameworks"]
 description = "Communication libraries"
 type = "per-arch"
 artifact_group_deps = ["hip-runtime"]
-source_sets = ["comm-libs"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["comm-libs", "rocm-systems"]
 
 [artifact_groups.profiler-core]
 description = "Core profiling libraries and annotation support"
@@ -219,7 +237,8 @@ source_sets = ["rocm-systems"]  # rocprofiler-sdk is in rocm-systems
 description = "Data center management tools with minimal dependencies"
 type = "generic"
 artifact_group_deps = ["core-runtime", "profiler-core"]
-source_sets = ["base"]  # RDC uses amdsmi from base
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from base
 
 # Future artifact groups
 # [artifact_groups.dctools-rocm]
@@ -233,10 +252,19 @@ type = "generic"
 artifact_group_deps = ["profiler-core", "compiler"]
 source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
 
-# [artifact_groups.iree-libs]
-# description = "IREE and Fusilli integration"
-# type = "generic"
-# artifact_group_deps = ["third-party-sysdeps", "base"]
+[artifact_groups.iree-libs]
+description = "IREE and Fusilli integration"
+type = "generic"
+artifact_group_deps = ["hip-runtime"]
+source_sets = ["iree-libs"]
+
+[artifact_groups.media]
+description = "Media Libraries"
+type = "generic"
+artifact_group_deps = ["third-party-sysdeps", "base"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# amd-mesa disabled on Windows via source_set
+source_sets = ["amd-mesa", "rocm-systems"]
 
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
@@ -251,6 +279,13 @@ artifact_group = "third-party-sysdeps"
 type = "target-neutral"
 artifact_deps = []  # No dependencies on other artifacts
 feature_group = "CORE"  # Part of core, enabled by default
+
+[artifacts.sysdeps-amd-mesa]
+artifact_group = "media"
+type = "target-neutral"
+artifact_deps = ["sysdeps"]
+feature_group = "MEDIA"
+disable_platforms = ["windows"]
 
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
@@ -271,6 +306,30 @@ artifact_group = "third-party-libs"
 type = "target-neutral"
 artifact_deps = []
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
+
+[artifacts.flatbuffers]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
+[artifacts.fmt]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
+[artifacts.nlohmann-json]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
+[artifacts.spdlog]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
 
 # --- Base Infrastructure ---
 
@@ -326,12 +385,21 @@ platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
+# --- hip-tests (per-arch) ---
+
+[artifacts.core-hiptests]
+artifact_group = "hip-runtime"
+type = "target-specific"
+artifact_deps = ["core-hip"]
+feature_group = "CORE"  # Part of core, enabled by default
+
 # --- Math Libraries (per-arch) ---
 
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
+split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
 artifact_group = "math-libs"
@@ -351,11 +419,11 @@ artifact_deps = ["core-runtime", "core-hip"]
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "blas"]
 
 [artifacts.support]
 artifact_group = "math-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = []
 
 # --- ML Libraries (per-arch) ---
@@ -381,12 +449,20 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
+# --- IREE Integration ---
+
+[artifacts.fusilli-plugin]
+artifact_group = "iree-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+disable_platforms = ["windows"]
+
 # --- Communication Libraries (per-arch) ---
 
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
@@ -409,7 +485,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "rocprofiler-sdk"]
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
@@ -419,7 +495,7 @@ disable_platforms = ["windows"]
 [artifacts.rdc]
 artifact_group = "dctools-core"
 type = "target-neutral"
-artifact_deps = ["rocprofiler-sdk", "sysdeps"]
+artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps"]
 feature_group = "DC_TOOLS"  # Part of DC tools, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 
