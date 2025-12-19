@@ -43,7 +43,11 @@ def extract_gpu_details(files):
     # Examples: gfx90a, gfx1150, gfx_ip, gfxX.
     gpu_family_pattern = re.compile(r"gfx(?:\d+[A-Za-z]*|\w+)", re.IGNORECASE)
     gpu_families = set()
-    for file_name, *_ in files:
+    # Each entry in `files` is a 3-tuple: (name: str, mtime: int, size: int).
+    # We only need the name here, but we must still unpack all three elements to avoid ValueError.
+    for filename in files:
+        # f is (name, mtime, size)
+        file_name = filename[0]
         match = gpu_family_pattern.search(file_name)
         if match:
             gpu_families.add(match.group(0))
@@ -77,7 +81,10 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     for page in page_iterator:
         for obj in page.get("Contents", []):
             key = obj["Key"]
+            # Only include files directly under the given prefix "directory"
             if key.endswith(".tar.gz") and os.path.dirname(key) == prefix:
+                # Preserve structure relative to the prefix, rather than using basename
+                display_name = key.removeprefix(f"{prefix}/") if prefix else key
                 # Append a tuple for each .tar.gz file found in the specified directory:
                 # (
                 #   filename (str, relative to prefix if set),
@@ -86,7 +93,7 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                 # )
                 files.append(
                     (
-                        os.path.basename(key),
+                        display_name,
                         int(
                             obj.get(
                                 "LastModified", datetime.now(timezone.utc)
@@ -107,8 +114,6 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         page_title = "ROCm SDK nightly tarballs"
     elif "prerelease" in bucket_lower:
         page_title = "ROCm SDK prerelease tarballs"
-    elif "release" in bucket_lower:
-        page_title = "ROCm SDK tarballs"
     else:
         page_title = "ROCm SDK tarballs"
 
