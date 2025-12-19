@@ -93,7 +93,7 @@ it aligned with your configuration for compatibility.
 
 ### How do I verify my GPU is recognized by TheRock?
 
-Run `rocminfo` or `rocm-smi` to verify that your GPU is detected and properly
+Run `rocminfo` or `amd-smi` to verify that your GPU is detected and properly
 initialized by the ROCm stack.
 
 ### What should I do if I encounter memory allocation errors?
@@ -104,5 +104,10 @@ verify that kernel parameters are correctly set. Review system logs using
 
 ### Where can I get help with TheRock?
 
-For additional support, consult the TheRock documentation, file issues on the
-project's repository, or reach out to the ROCm community forums.
+For additional support, consult the [TheRock documentation](https://github.com/ROCm/TheRock),
+file issues on the [TheRock project repository](https://github.com/ROCm/TheRock/issues),
+or engage with the ROCm community via
+[ROCm Discussions](https://github.com/ROCm/ROCm/discussions),
+the AMD ROCm section on the
+[AMD Community Forums](https://community.amd.com/),
+and the [AMD Developer Discord](https://discord.com/invite/amd-dev).
