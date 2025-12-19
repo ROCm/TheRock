@@ -64,6 +64,7 @@ therock_cmake_subproject_declare(amdsmi
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
+    "-DCMAKE_VERBOSE_MAKEFILE=OFF"
     -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
   BUILD_DEPS
     therock-googletest

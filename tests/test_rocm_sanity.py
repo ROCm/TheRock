@@ -124,11 +124,8 @@ class TestROCmSanity:
         check.equal(return_code, 0)
         check.is_true(output)
 
-
-class TestAmdSmiTests:
     @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
     def test_amdsmi_suite(self):
-        # Expected location of amdsmitst binary
         amdsmi_test_bin = (
             THEROCK_BIN_DIR.parent / "share" / "amd_smi" / "tests" / "amdsmitst"
         ).resolve()
@@ -158,21 +155,12 @@ class TestAmdSmiTests:
         ]
 
         gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
-
         cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]
 
-        # run in the directory where amdsmitst was found
-        cwd = amdsmi_test_bin.parent
+        process = run_command(cmd, cwd=str(amdsmi_test_bin.parent))
 
-        process = run_command(cmd, cwd=str(cwd))
-
-        stdout = process.stdout or ""
-        stderr = process.stderr or ""
-
-        combined = stdout + "\n" + stderr
-
+        combined = (process.stdout or "") + "\n" + (process.stderr or "")
         for line in combined.splitlines():
-            # Look for GTest summary line: [==========] X tests from ...
             if "[==========]" in line:
                 print(f"[amdsmitst-summary] {line}")
 
