@@ -69,15 +69,12 @@ logger.info("Installing package", extra={"package": name, "version": version})
 
 **Example of New Log Output:**
 ```
-2025-12-17 10:30:45 - therock.packaging.installer - INFO - Installing package: rocm-core
-2025-12-17 10:30:45 - therock.packaging.installer - DEBUG - Starting operation: Installing rocm-core
-2025-12-17 10:30:47 - therock.packaging.installer - INFO - ✅ Completed operation: Installing rocm-core (2300.50ms)
-2025-12-17 10:30:47 - therock.build.cmake - INFO - Building component: rocBLAS
-2025-12-17 10:30:50 - therock.test.runner - INFO - Test passed: test_gemm (0.5s)
-2025-12-17 10:30:51 - therock.test.runner - ERROR - Test failed: test_trsm
-2025-12-17 10:30:51 - therock.test.runner - ERROR - Assertion failed: expected 1.0, got 0.999
+2025-12-17 10:30:45 - therock.installer - INFO - Installing package: rocm-core
+2025-12-17 10:30:47 - therock.installer - INFO - ✅ Completed operation: Installing rocm-core (2300.50ms)
+2025-12-17 10:30:50 - therock.test - INFO - Test passed: test_gemm (0.5s)
+2025-12-17 10:30:51 - therock.test - ERROR - Test failed: test_trsm - Assertion failed
 ```
-✅ Clear who, what, when, and why with automatic timing!
+✅ Clear timestamps, context, and automatic timing!
 
 ---
 
@@ -118,218 +115,100 @@ logger.info("Installing package", extra={"package": name, "version": version})
 ## Key Features
 
 ### 1. Standard Leveled Logging
-
 ```python
-logger = get_logger(__name__, component="Build")
-
-logger.debug("Checking dependencies")
 logger.info("Starting compilation")
 logger.warning("Deprecated flag used")
 logger.error("Compilation failed")
 ```
 
-**Output:**
-```
-2025-12-17 10:30:45 - therock.build - DEBUG - Checking dependencies
-2025-12-17 10:30:46 - therock.build - INFO - Starting compilation
-2025-12-17 10:30:47 - therock.build - WARNING - Deprecated flag used
-2025-12-17 10:30:48 - therock.build - ERROR - Compilation failed
-```
-
-### 2. Automatic Timing with `timed_operation()`
-
+### 2. Timed Operations
 ```python
 with logger.timed_operation("Installing packages"):
     install_packages()
+# Automatically logs start/completion with duration_ms
 ```
 
-**Output:**
-```
-2025-12-17 10:30:45 - therock.installer - DEBUG - Starting operation: Installing packages
-2025-12-17 10:30:48 - therock.installer - INFO - ✅ Completed operation: Installing packages (3200.45ms)
-```
-*Automatically logs start (DEBUG) and completion (INFO) with duration in milliseconds*
-
-### 3. Structured Data with `log_dict()`
-
+### 3. Structured Data
 ```python
-logger.info("Build completed")
-
-build_metrics = {
-    "component": "rocBLAS",
-    "build_type": "Release",
-    "duration_sec": 45.3,
-    "source_files": 250,
-    "warnings": 0
-}
-logger.log_dict(build_metrics, message="📊 Build Metrics:")
+metrics = {"total_packages": 5, "duration_sec": 45.3}
+logger.log_dict(metrics, message="📊 Metrics:")
+# Displays JSON-formatted data
 ```
 
-**Output:**
-```
-2025-12-17 10:30:45 - therock.build - INFO - Build completed
-2025-12-17 10:30:45 - therock.build - INFO - 📊 Build Metrics:
-{
-  "build_type": "Release",
-  "component": "rocBLAS",
-  "duration_sec": 45.3,
-  "source_files": 250,
-  "warnings": 0
-}
-```
-*Clean standard logs + explicit JSON-formatted structured data when needed*
-
-### 4. Unified Exception Handling with `log_exception()`
-
+### 4. Exception Handling
 ```python
 try:
     build_package()
 except Exception as e:
-    logger.log_exception(e, "Build failed for component", extra={
-        "component": "rocBLAS",
-        "build_type": "Release"
-    })
+    logger.log_exception(e, "Build failed")
+# Captures full stack trace with context
 ```
-
-**Output:**
-```
-2025-12-17 10:30:45 - therock.build - ERROR - Build failed for component
-Traceback (most recent call last):
-  File "build.py", line 42, in build_package
-    run_cmake()
-  File "cmake.py", line 15, in run_cmake
-    raise RuntimeError("CMake configuration failed")
-RuntimeError: CMake configuration failed
-```
-*Captures full stack trace with contextual information*
 
 ### 5. Test Framework Integration
-
-The test runner automatically parses and logs results for both GTest and CTest:
-- ✅ Passed tests with timing
-- ❌ Failed tests with detailed error messages
-- ⏭️ Skipped tests with reasons
-- ⏱️ Individual test and total execution timing
-- 📊 Summary statistics (pass rate, failure count)
-- 🔍 Structured output for CI/CD analysis
+- Common parser for both GTest and CTest
+- Automatic result logging (passed/failed/skipped)
+- Performance metrics and summary statistics
 
 ---
 
-## Logging Types Demonstrated
+## Four Logging Types
 
-### Type 1: Standard Leveled Logging
-**Purpose:** Basic operational messages with consistent formatting  
-**Usage:** `logger.info()`, `logger.debug()`, `logger.warning()`, `logger.error()`  
-**Example:** Installation progress, configuration steps, warnings about deprecated features
-
-### Type 2: Timed Operations
-**Purpose:** Automatic execution duration tracking for performance analysis  
-**Usage:** `with logger.timed_operation("operation_name")`  
-**Example:** Build compilation time, package download duration, test execution time  
-**Metrics:** Automatically logs `duration_ms` for each operation
-
-### Type 3: Structured Data
-**Purpose:** Machine-readable metrics and data visualization  
-**Usage:** `logger.log_dict(data_dict, message="label")`  
-**Example:** File counts, package sizes, test results, success rates  
-**Format:** Clean JSON output separate from standard logs
-
-### Type 4: Exception Handling
-**Purpose:** Comprehensive error logging with full context  
-**Usage:** `logger.log_exception(exception, message, extra={...})`  
-**Example:** Build failures, test crashes, installation errors  
-**Captures:** Full stack trace, error type, contextual metadata
+| Type | Purpose | Usage |
+|------|---------|-------|
+| **Standard Logging** | Operational messages | `logger.info()`, `logger.error()` |
+| **Timed Operations** | Automatic duration tracking | `with logger.timed_operation("name")` |
+| **Structured Data** | JSON-formatted metrics | `logger.log_dict(metrics)` |
+| **Exception Handling** | Full stack traces | `logger.log_exception(e, "msg")` |
 
 ---
 
 ## How to Use
 
-### 1. Standard Logging
-
+### Basic Usage
 ```python
 from logging_config import get_logger
 
-# Get a logger for your component
-logger = get_logger(__name__, component="PackageInstaller", operation="install")
-
-# Log at different levels
-logger.debug("Checking package dependencies")
-logger.info("Installing package: rocm-core")
-logger.warning("Package signature verification skipped")
-logger.error("Installation failed: disk space insufficient")
+logger = get_logger(__name__, component="Build", operation="compile")
+logger.info("Starting compilation")
 ```
 
-### 2. Timed Operations
-
+### Timed Operations
 ```python
-# Automatic timing for operations
 with logger.timed_operation("Package Installation"):
-    download_package()
-    verify_package()
     install_package()
-
-# Nested timed operations
-with logger.timed_operation("Build Process"):
-    with logger.timed_operation("Configuration"):
-        run_cmake()
-    with logger.timed_operation("Compilation"):
-        run_make()
 ```
 
-### 3. Structured Data Display
-
+### Structured Data
 ```python
-# Use log_dict() to display structured metrics
-logger.info("Installation completed")
-
-install_metrics = {
-    "total_packages": 5,
-    "total_size_mb": 450,
-    "files_installed": 1250,
-    "duration_sec": 45.3
-}
-logger.log_dict(install_metrics, message="📊 Installation Metrics:")
+metrics = {"total_packages": 5, "duration_sec": 45.3}
+logger.log_dict(metrics, message="📊 Metrics:")
 ```
 
-### 4. Exception Handling
-
+### Exception Handling
 ```python
 try:
-    install_package(package_name)
+    build_package()
 except Exception as e:
-    logger.log_exception(e, f"Failed to install {package_name}", extra={
-        "package_name": package_name,
-        "error_type": type(e).__name__
-    })
+    logger.log_exception(e, "Build failed")
 ```
 
-### 5. Running Tests with Logging
-
+### Test Runner
 ```python
 from test_runner import TestRunner
 
-# GTest
-runner = TestRunner(component="rocBLAS", test_type="smoke", operation="gtest")
+runner = TestRunner(component="rocBLAS", test_type="smoke")
 exit_code = runner.run_gtest(raw_output=gtest_output)
-
-# CTest
-runner = TestRunner(component="rocWMMA", test_type="regression", operation="ctest")
-exit_code = runner.run_ctest(raw_output=ctest_output)
 ```
 
 ---
 
 ## Before vs After Comparison
 
-### Scenario: Building and Testing a Component
-
 **BEFORE (Inconsistent):**
 ```
 Starting build...
-rocBLAS
 Compiling...
 Done
-Running tests
 [  PASSED  ] 45 tests
 [  FAILED  ] 3 tests
 ```
@@ -337,37 +216,24 @@ Running tests
 
 **AFTER (Unified Logging):**
 ```
-2025-12-17 10:30:00 - therock.build.rocblas - INFO - Starting build
-2025-12-17 10:30:00 - therock.build.rocblas - DEBUG - Starting operation: Configuration
-2025-12-17 10:30:05 - therock.build.rocblas - INFO - ✅ Completed operation: Configuration (5200.34ms)
-2025-12-17 10:30:05 - therock.build.rocblas - DEBUG - Starting operation: Compilation
-2025-12-17 10:32:15 - therock.build.rocblas - INFO - ✅ Completed operation: Compilation (130000.12ms)
-2025-12-17 10:32:15 - therock.build.rocblas - INFO - Build completed
-2025-12-17 10:32:15 - therock.build.rocblas - INFO - 📊 Build Metrics:
+2025-12-17 10:30:00 - therock.build - INFO - Starting build
+2025-12-17 10:30:05 - therock.build - INFO - ✅ Completed operation: Configuration (5200ms)
+2025-12-17 10:32:15 - therock.build - INFO - ✅ Completed operation: Compilation (130000ms)
+2025-12-17 10:32:15 - therock.build - INFO - 📊 Build Metrics:
 {
   "source_files": 250,
-  "object_files": 250,
-  "output_size_kb": 2048,
-  "total_duration_sec": 135.2,
-  "warnings": 0
+  "duration_sec": 135.2
 }
-2025-12-17 10:32:15 - therock.test.rocblas - INFO - Running GTest suite
-2025-12-17 10:32:20 - therock.test.rocblas - INFO - Test: gemm_float - PASSED (0.5s)
-2025-12-17 10:32:21 - therock.test.rocblas - INFO - Test: gemm_double - PASSED (0.4s)
-2025-12-17 10:32:22 - therock.test.rocblas - ERROR - Test: trsm_float - FAILED
-2025-12-17 10:32:22 - therock.test.rocblas - ERROR - Assertion failed at line 42: expected 1.0, got 0.999
-2025-12-17 10:32:22 - therock.test.rocblas - INFO - Test execution completed
-2025-12-17 10:32:22 - therock.test.rocblas - INFO - 📊 Test Metrics:
+2025-12-17 10:32:20 - therock.test - INFO - Test: gemm_float - PASSED (0.5s)
+2025-12-17 10:32:22 - therock.test - ERROR - Test: trsm_float - FAILED
+2025-12-17 10:32:22 - therock.test - INFO - 📊 Test Metrics:
 {
   "total_tests": 48,
   "passed": 45,
-  "failed": 3,
-  "skipped": 0,
-  "success_rate_pct": 93.75,
-  "total_duration_sec": 7.2
+  "failed": 3
 }
 ```
-✅ Clear timestamps, context, automatic timing, structured metrics!
+✅ Clear timestamps, context, timing, and structured metrics!
 
 ---
 
@@ -386,37 +252,23 @@ Running tests
 
 ## Demo Workflow
 
-See all four logging types in action:
+**GitHub Actions:** `.github/workflows/logging_demo.yml`
 
-**GitHub Actions Workflow:** `.github/workflows/logging_demo.yml`
-- Runs automatically on push to `users/rponnuru/logging_poc_3`
-- **Core Samples:**
-  - Package Installer (download, install, verify with timed operations and structured metrics)
-  - Build System (configure, compile, test with nested timing and exception handling)
-- **Test Integration:**
-  - rocROLLER GTest demo (failure scenarios with detailed error logging)
-  - rocWMMA CTest demo (failure scenarios with GPU-specific test logging)
-
-**What's Demonstrated:**
-1. ✅ Standard leveled logging throughout all operations
-2. ⏱️ Timed operations with automatic duration tracking (`duration_ms`)
-3. 📊 Structured data display using `log_dict()` for metrics
-4. ⚠️ Exception handling with full stack traces and context
-5. 🧪 Common test framework integration for GTest and CTest
+Demonstrates all four logging types:
+- Package installer (download, install, verify)
+- Build system (configure, compile, test)
+- GTest integration (rocROLLER with failure scenarios)
+- CTest integration (rocWMMA with failure scenarios)
 
 ---
 
 ## POC Summary
 
-**Problem:** Inconsistent logging across components made debugging difficult and logs hard to analyze
+**Problem:** Inconsistent logging made debugging difficult
 
-**Solution:** Unified logging framework with four key capabilities:
-1. **Standard Logging** - Consistent format with timestamps and severity levels
-2. **Timed Operations** - Automatic performance tracking via context manager
-3. **Structured Data** - JSON-formatted metrics via `log_dict()` for analysis
-4. **Exception Handling** - Comprehensive error logging with full context
+**Solution:** Unified framework with standard logging, timed operations, structured data, and exception handling
 
-**Result:** Clean, consistent, professional logging across all TheRock components
+**Result:** Clean, consistent, professional logging across all components
 
 ---
 
