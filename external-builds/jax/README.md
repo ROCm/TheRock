@@ -10,8 +10,7 @@
 - [Nightly releases](#nightly-releases)
 - [Advanced build instructions](#advanced-build-instructions)
 
-These build procedures are meant to run as part of ROCm CI and development flows
-and thus leave less room for interpretation than in upstream repositories.
+These build procedures are meant to run as part of ROCm CI and development flows.
 
 ## Support status
 
@@ -28,7 +27,7 @@ and thus leave less room for interpretation than in upstream repositories.
 We support building various Jax versions compatible with the latest ROCm
 sources and release packages.
 
-Support for JAX is provided via the stable release branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax). Can build using the stable release branch (for example, `rocm-jaxlib-v0.8.0`) to suit your requirements.
+Support for JAX is provided via the stable release branch of [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax). JAX build using the stable release branch (for example, `rocm-jaxlib-v0.8.0`) to suit your requirements.
 
 See the following table for supported version:
 
