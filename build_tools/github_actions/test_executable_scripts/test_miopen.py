@@ -129,8 +129,8 @@ negative_filter.append("Smoke/GPU_BNOCLBWDLarge2D_BFP16*")  # 1 min 19 sec
 negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP32*")  # 1 min 23 sec
 negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP16*")  # 1 min 0 sec
 
-negative_filter.append("
-    Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16*"
+negative_filter.append(
+    "Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16*"
 )  # 0 min 52 sec
 negative_filter.append("Smoke/GPU_BNOCLBWDLargeFusedActivation2D_FP16*")  # 0 min 49 sec
 
