@@ -1,2 +1,1 @@
-"""Vision Language Action (VLA) tests for Strix platforms"""
-
+"""Vision-Language-Action tests for Strix"""

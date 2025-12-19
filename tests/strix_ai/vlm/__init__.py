@@ -1,2 +1,1 @@
-"""Vision Language Model (VLM) tests for Strix platforms"""
-
+"""Vision-Language Models tests for Strix"""

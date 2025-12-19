@@ -1,2 +1,1 @@
-"""Edge Inference Optimization tests for Strix platforms"""
-
+"""Quantization and optimization tests for Strix"""

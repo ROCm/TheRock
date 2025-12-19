@@ -1,4 +1,1 @@
-"""
-ROCProfiler tests for Strix AI/ML workloads
-"""
-
+"""ROCProfiler profiling tests for Strix"""

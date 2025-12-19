@@ -1,2 +1,1 @@
-"""Performance Benchmarking tests for Strix platforms"""
-
+"""Market segment benchmarks for Strix"""
