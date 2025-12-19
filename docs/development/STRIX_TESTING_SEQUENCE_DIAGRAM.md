@@ -2,7 +2,21 @@
 
 ## Overview
 
-This document provides a comprehensive sequence diagram showing the complete workflow for functional and performance testing on AMD Strix platforms once a ROCm build is selected.
+This document provides a comprehensive sequence diagram showing the complete workflow for Strix testing on AMD Strix platforms (gfx1150/1151) once a ROCm build is selected.
+
+The testing workflow consists of **7 distinct phases**:
+1. **ROCm Build Selection & Retrieval** - Download and install ROCm artifacts
+2. **Test Environment Setup** - Configure container, GPU access, and environment
+3. **AI/ML Dependencies Installation** - Install Python packages and verify GPU
+4. **Functional Testing** - Validate correctness of AI/ML models
+5. **Performance Testing** - Measure latency, throughput, and memory metrics
+6. **Deep Profiling** - Capture detailed GPU traces with ROCProfiler v3
+7. **Results Analysis & Reporting** - Aggregate results and generate reports
+
+**Key Separation**: This workflow clearly separates:
+- **Functional testing** (Phase 4): Focuses on correctness validation
+- **Performance testing** (Phase 5): Measures quantitative metrics (latency, throughput, memory)
+- **Profiling** (Phase 6): Deep GPU analysis with traces for optimization
 
 ---
 
@@ -88,7 +102,7 @@ sequenceDiagram
     
     %% Phase 4: Functional Testing
     rect rgb(255, 220, 220)
-        Note over GHA,Results: Phase 4: Functional Testing (AI/ML Models)
+        Note over GHA,Results: Phase 4: Functional Testing (Correctness Validation)
         GHA->>PyTest: Execute functional tests
         Note right of GHA: Categories:<br/>- VLM (CLIP, LLaVA)<br/>- VLA (OWL-ViT)<br/>- ViT (Vision Transformers)<br/>- CV (YOLO, DETR)<br/>- Optimization (Quantization)
         
@@ -109,15 +123,14 @@ sequenceDiagram
                 PyTest->>GPU: Run inference (warmup)
                 GPU-->>PyTest: Warmup complete
                 
-                PyTest->>GPU: Run inference (measured)
+                PyTest->>GPU: Run inference (test)
                 GPU-->>PyTest: Inference results
                 
                 PyTest->>PyTest: Validate output correctness
-                PyTest->>PyTest: Check memory usage
-                PyTest->>PyTest: Measure latency
+                Note right of PyTest: Checks:<br/>- Output shape correct<br/>- Output values valid<br/>- No NaN/Inf values<br/>- Expected classifications
                 
                 alt Test Passed
-                    PyTest->>Results: Record PASS + metrics
+                    PyTest->>Results: Record PASS
                 else Test Failed
                     PyTest->>Results: Record FAIL + error details
                 end
@@ -132,56 +145,115 @@ sequenceDiagram
         Results-->>GHA: Upload JUnit XML artifacts
     end
     
-    %% Phase 5: Performance Profiling
+    %% Phase 5: Performance Testing
+    rect rgb(255, 255, 220)
+        Note over GHA,Results: Phase 5: Performance Testing (Metrics Collection)
+        GHA->>PyTest: Execute performance tests
+        Note right of GHA: Focus: Latency, Throughput,<br/>Memory Usage, FPS
+        
+        loop For Each Model to Benchmark
+            PyTest->>PyTest: Load model configuration
+            PyTest->>GPU: Check AMDGPU_FAMILIES
+            
+            alt Strix GPU Detected
+                PyTest->>ROCm: Initialize HIP runtime
+                ROCm->>GPU: Allocate GPU memory
+                
+                PyTest->>PyTest: Load AI model
+                PyTest->>GPU: Transfer model to GPU
+                
+                PyTest->>GPU: Run warmup iterations (3-5x)
+                Note right of GPU: Warmup compiles kernels<br/>and stabilizes GPU state
+                GPU-->>PyTest: Warmup complete
+                
+                PyTest->>PyTest: Start performance counters
+                Note right of PyTest: Timers:<br/>- Inference latency<br/>- Total throughput<br/>- Memory usage
+                
+                loop Multiple Iterations (10-100x)
+                    PyTest->>GPU: Run inference iteration
+                    GPU-->>PyTest: Results
+                    PyTest->>PyTest: Record iteration time
+                end
+                
+                PyTest->>PyTest: Calculate statistics
+                Note right of PyTest: Metrics:<br/>- Mean latency<br/>- P50/P95/P99 latency<br/>- Throughput (FPS)<br/>- Peak memory usage<br/>- Memory allocated
+                
+                PyTest->>Results: Record performance metrics
+                Note right of Results: Output:<br/>- Latency: XXms<br/>- Throughput: XX FPS<br/>- Memory: X.XX GB
+                
+                PyTest->>GPU: Cleanup GPU memory
+            else Strix GPU Not Detected
+                PyTest->>Results: SKIP test (wrong GPU family)
+            end
+        end
+        
+        PyTest->>Results: Generate performance-results-*.xml
+        Results-->>GHA: Upload performance artifacts
+    end
+    
+    %% Phase 6: Profiling with ROCProfiler
     rect rgb(220, 255, 255)
-        Note over GHA,Results: Phase 5: Performance Profiling (ROCProfiler)
+        Note over GHA,Results: Phase 6: Deep Profiling (ROCProfiler v3)
         GHA->>PyTest: Execute profiling tests
-        Note right of GHA: Test file:<br/>test_strix_rocprofv3.py<br/>test_profile_existing_tests.py
+        Note right of GHA: Test files:<br/>test_strix_rocprofv3.py<br/>test_profile_existing_tests.py
         
         PyTest->>Profiler: Check rocprofv3 installation
         Profiler-->>PyTest: rocprofv3 available
+        
+        alt rocprofv3 Not Available
+            PyTest->>Results: SKIP profiling tests
+            Note right of Results: rocprofiler-sdk not installed
+        end
         
         loop For Each Model to Profile
             PyTest->>Profiler: Launch rocprofv3 wrapper
             Note right of Profiler: rocprofv3 --hip-trace<br/>--kernel-trace<br/>--memory-copy-trace<br/>--output-format pftrace<br/>-d traces/ -- python test.py
             
-            Profiler->>GPU: Enable tracing hooks
+            Profiler->>GPU: Enable GPU tracing hooks
+            Note right of GPU: Intercepts:<br/>- HIP API calls<br/>- Kernel launches<br/>- Memory operations
             GPU-->>Profiler: Tracing enabled
             
             Profiler->>PyTest: Execute profiled test
             PyTest->>ROCm: Load model and run inference
             
             ROCm->>GPU: Execute HIP kernels
-            GPU->>Profiler: Capture kernel timing
-            GPU->>Profiler: Capture memory operations
-            GPU->>Profiler: Capture GPU utilization
+            Note right of GPU: All GPU operations<br/>are now being traced
+            
+            GPU->>Profiler: Stream kernel timing data
+            GPU->>Profiler: Stream memory copy data
+            GPU->>Profiler: Stream API call data
+            GPU->>Profiler: Stream GPU utilization
             
             GPU-->>ROCm: Inference complete
             ROCm-->>PyTest: Results returned
             
             Profiler->>Profiler: Process trace data
+            Note right of Profiler: Processing:<br/>- Correlate events<br/>- Build timeline<br/>- Calculate statistics
+            
             Profiler->>Results: Write perfetto traces (.pftrace)
-            Note right of Results: Trace outputs:<br/>- HIP API calls<br/>- Kernel execution times<br/>- Memory copy operations<br/>- GPU utilization
+            Note right of Results: Trace contents:<br/>- HIP API timeline<br/>- Kernel execution timeline<br/>- Memory copy timeline<br/>- GPU occupancy graph
             
             PyTest->>Results: Validate trace files exist
             PyTest->>Results: Parse profiling metrics
             
+            PyTest->>PyTest: Extract key metrics
+            Note right of PyTest: Extracted metrics:<br/>- Total kernel time<br/>- Average kernel duration<br/>- Memory bandwidth<br/>- GPU occupancy %<br/>- HIP API overhead
+            
             alt Profiling Successful
-                PyTest->>Results: Record profiling metrics
-                Note right of Results: Metrics:<br/>- Kernel execution time<br/>- Memory bandwidth<br/>- GPU occupancy<br/>- API call overhead
+                PyTest->>Results: Record profiling metrics + traces
             else Profiling Failed
                 PyTest->>Results: Record profiling error
             end
         end
         
-        PyTest->>Results: Generate test-results-profiling-*.xml
+        PyTest->>Results: Generate profiling-results-*.xml
         Results-->>GHA: Upload profiling artifacts
-        Note right of Results: Artifacts:<br/>- XML test results<br/>- Perfetto trace files<br/>- Performance summary
+        Note right of Results: Artifacts:<br/>- XML test results<br/>- Perfetto trace files (.pftrace)<br/>- Kernel statistics<br/>- Memory bandwidth logs
     end
     
-    %% Phase 6: Results Analysis & Reporting
+    %% Phase 7: Results Analysis & Reporting
     rect rgb(240, 220, 255)
-        Note over GHA,Dev: Phase 6: Results Analysis & Reporting
+        Note over GHA,Dev: Phase 7: Results Analysis & Reporting
         GHA->>Results: Collect all test results
         Results->>Results: Parse JUnit XML files
         Results->>Results: Aggregate pass/fail counts
@@ -210,6 +282,17 @@ sequenceDiagram
 ---
 
 ## 📋 Detailed Phase Breakdown
+
+The complete testing workflow consists of 7 distinct phases:
+1. **ROCm Build Selection & Retrieval** - Download artifacts
+2. **Test Environment Setup** - Configure container and GPU
+3. **AI/ML Dependencies Installation** - Install Python packages
+4. **Functional Testing** - Validate correctness
+5. **Performance Testing** - Measure metrics (latency, throughput, memory)
+6. **Deep Profiling** - ROCProfiler v3 traces
+7. **Results Analysis & Reporting** - Aggregate and report
+
+---
 
 ### Phase 1: ROCm Build Selection & Retrieval
 
@@ -334,18 +417,105 @@ python3 -m pytest tests/strix_ai/ -v -s \
 4. Load AI model from Hugging Face
 5. Transfer model to GPU
 6. Run warmup iterations (kernel compilation)
-7. Run measured inference
-8. Validate output correctness
-9. Measure latency and memory usage
-10. Cleanup GPU memory
+7. Run inference test
+8. **Validate output correctness** (primary focus)
+   - Check output shape is correct
+   - Verify output values are valid (no NaN/Inf)
+   - Validate expected classifications/predictions
+9. Cleanup GPU memory
 
-**Output**: JUnit XML files (`test-results-*.xml`)
+**Output**: JUnit XML files (`test-results-*.xml`) with PASS/FAIL/SKIP status
 
 ---
 
-### Phase 5: Performance Profiling
+### Phase 5: Performance Testing
 
-**Purpose**: Profile AI/ML workloads using ROCProfiler v3 for performance analysis.
+**Purpose**: Measure performance metrics (latency, throughput, memory usage) for AI/ML workloads on Strix GPU.
+
+**Focus**: Quantitative performance measurements without deep profiling.
+
+**Test Execution**:
+```bash
+# Run performance benchmarks
+python3 -m pytest tests/strix_ai/benchmarks/ -v -s \
+    --junit-xml=performance-results.xml
+
+# Or run performance-focused tests in each category
+python3 -m pytest tests/strix_ai/ -v -s \
+    -m "performance" \
+    --junit-xml=performance-results.xml
+```
+
+**Test Steps for Each Model**:
+1. Check AMDGPU_FAMILIES environment variable
+2. Skip if not Strix GPU (gfx1150/1151)
+3. Initialize HIP runtime
+4. Load AI model from Hugging Face
+5. Transfer model to GPU
+6. **Run warmup iterations (3-5x)** - Compile kernels, stabilize GPU state
+7. **Start performance measurement**
+8. Run multiple inference iterations (10-100x)
+9. **Collect metrics**:
+   - **Latency**: Mean, P50, P95, P99 inference time
+   - **Throughput**: Frames per second (FPS) or samples/sec
+   - **Memory**: Peak GPU memory, total allocated
+   - **First-run overhead**: Time for initial compilation
+10. Cleanup GPU memory
+
+**Metrics Collected**:
+
+| Metric | Description | Unit | Target (Example) |
+|--------|-------------|------|------------------|
+| **Mean Latency** | Average inference time | milliseconds | < 50ms for CLIP |
+| **P95 Latency** | 95th percentile latency | milliseconds | < 75ms for CLIP |
+| **Throughput** | Samples processed per second | FPS / samples/sec | > 30 FPS for ViT |
+| **Peak Memory** | Maximum GPU memory used | GB | < 4GB |
+| **Memory Allocated** | Total GPU memory allocated | GB | < 6GB |
+| **First Run Time** | Initial execution (with compilation) | seconds | < 10s |
+
+**Output**: 
+- JUnit XML: `performance-results-*.xml`
+- Performance logs with detailed metrics
+- Comparison against baseline targets
+
+**Example Performance Test**:
+```python
+import torch
+import time
+from transformers import CLIPModel, CLIPProcessor
+
+# Load model
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").cuda()
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
+# Warmup
+for _ in range(5):
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+# Performance measurement
+latencies = []
+for _ in range(100):
+    start = time.time()
+    with torch.no_grad():
+        outputs = model(**inputs)
+    torch.cuda.synchronize()
+    latencies.append(time.time() - start)
+
+# Calculate metrics
+mean_latency = np.mean(latencies) * 1000  # ms
+p95_latency = np.percentile(latencies, 95) * 1000  # ms
+throughput = 1000 / mean_latency  # FPS
+peak_memory = torch.cuda.max_memory_allocated() / 1e9  # GB
+```
+
+---
+
+### Phase 6: Deep Profiling (ROCProfiler v3)
+
+**Purpose**: Profile AI/ML workloads using ROCProfiler v3 for detailed GPU performance analysis.
+
+**Focus**: Deep GPU tracing for bottleneck analysis and optimization.
 
 **Tool**: `rocprofv3` (ROCProfiler SDK)
 
@@ -353,6 +523,7 @@ python3 -m pytest tests/strix_ai/ -v -s \
 - Optimized for ROCm 6.2+ and Strix GPUs
 - Outputs Perfetto traces (viewable in Chrome)
 - Replaces legacy `rocprof` (roctracer)
+- Provides detailed GPU timeline visualization
 
 **Profiling Command**:
 ```bash
@@ -365,39 +536,99 @@ rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
 - No multi-GPU communication
 - RCCL is excluded from Strix builds
 
+**Test Execution**:
+```bash
+# Run profiling validation tests
+pytest tests/strix_ai/profiling/test_strix_rocprofv3.py -v -s \
+    --junit-xml=profiling-results-validation.xml
+
+# Run integration profiling tests
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py -v -s \
+    --junit-xml=profiling-results-integration.xml
+```
+
 **Test Files**:
-1. **`test_strix_rocprofv3.py`**: Validation tests
+1. **`test_strix_rocprofv3.py`**: ROCProfiler validation
    - Check rocprofv3 installation
    - Simple kernel profiling
    - PyTorch inference profiling
-   - CLIP model profiling
+   - CLIP model profiling with trace validation
 
-2. **`test_profile_existing_tests.py`**: Integration tests
-   - Profile existing VLM/ViT/CV/VLA tests
-   - Extract performance metrics
-   - Compare against baselines
+2. **`test_profile_existing_tests.py`**: Comprehensive model profiling
+   - Profile CLIP (VLM category)
+   - Profile ViT (Vision Transformer category)
+   - Profile YOLO (Computer Vision category)
+   - Profile OWL-ViT (VLA category)
+   - Extract and compare profiling metrics
 
-**Captured Metrics**:
-- HIP API call timing
-- Kernel execution time
-- Memory copy operations (Host ↔ Device)
-- GPU utilization
-- Memory bandwidth
+**Profiling Steps**:
+1. Verify rocprofv3 is installed
+2. Launch rocprofv3 wrapper with tracing flags
+3. Execute AI/ML model inference
+4. Capture GPU events:
+   - HIP API calls (launch overhead)
+   - Kernel executions (compute time)
+   - Memory operations (Host ↔ Device transfers)
+   - GPU state transitions
+5. Generate Perfetto trace files (.pftrace)
+6. Parse and extract key metrics
+7. Validate trace completeness
+
+**Captured Data in Traces**:
+
+| Data Type | Description | Use Case |
+|-----------|-------------|----------|
+| **HIP API Timeline** | All HIP function calls with timing | Identify API overhead |
+| **Kernel Timeline** | GPU kernel execution with duration | Find slow kernels |
+| **Memory Copy Timeline** | Host ↔ Device transfers | Identify memory bottlenecks |
+| **GPU Occupancy** | GPU utilization percentage | Check GPU efficiency |
+| **Kernel Launch Overhead** | Time between API call and execution | Optimize launch patterns |
+
+**Extracted Profiling Metrics**:
+- Total kernel execution time
+- Average kernel duration
+- Number of kernel launches
+- Memory bandwidth utilization
+- HIP API call overhead
+- GPU occupancy percentage
+- Longest running kernels (top 10)
+- Memory copy vs compute ratio
 
 **Output**:
-- JUnit XML: `test-results-profiling-*.xml`
+- JUnit XML: `profiling-results-*.xml`
 - Perfetto traces: `v3_traces/*.pftrace`
+- Kernel statistics: CSV or JSON format
+- Performance summary report
 
-**Viewing Traces**:
+**Viewing and Analyzing Traces**:
+
+**Option 1: Chrome Tracing (Built-in)**
 ```bash
-# Open in Chrome
+# Open Chrome browser
 # Navigate to: chrome://tracing
-# Load .pftrace file
+# Click "Load" button
+# Select .pftrace file from v3_traces/
 ```
+
+**Option 2: Perfetto Web UI**
+```bash
+# Navigate to: https://ui.perfetto.dev/
+# Drag and drop .pftrace file
+# More features than chrome://tracing
+```
+
+**Trace Analysis Workflow**:
+1. Open trace in Perfetto UI
+2. Zoom into inference section
+3. Identify kernel patterns
+4. Look for gaps (idle GPU time)
+5. Check memory copy overlaps
+6. Identify performance bottlenecks
+7. Compare against baseline traces
 
 ---
 
-### Phase 6: Results Analysis & Reporting
+### Phase 7: Results Analysis & Reporting
 
 **Purpose**: Aggregate results and provide comprehensive reporting.
 
@@ -491,10 +722,12 @@ python3 -c "import torch; print(torch.cuda.is_available())"
 # Should print: True
 ```
 
-### Step 5: Run Functional Tests
+### Step 5: Run Functional Tests (Correctness)
+
+**Purpose**: Validate that models run correctly on Strix GPU
 
 ```bash
-# Run all tests
+# Run all functional tests
 pytest tests/strix_ai/ -v
 
 # Run specific category
@@ -506,31 +739,98 @@ pytest tests/strix_ai/cv/ -v         # CV tests
 pytest tests/strix_ai/ -m "quick" -v
 ```
 
-### Step 6: Run Profiling Tests
+**Expected Output**: PASS/FAIL/SKIP for each test, validates correctness only
+
+---
+
+### Step 6: Run Performance Tests (Metrics)
+
+**Purpose**: Measure latency, throughput, and memory usage
+
+```bash
+# Run performance benchmarks
+pytest tests/strix_ai/benchmarks/ -v -s
+
+# Or run performance-focused tests
+pytest tests/strix_ai/ -v -s -m "performance"
+
+# Run specific model performance test
+pytest tests/strix_ai/vlm/test_clip.py::test_clip_performance -v -s
+```
+
+**Expected Output**:
+- Mean latency (ms)
+- P95/P99 latency (ms)
+- Throughput (FPS)
+- Peak memory usage (GB)
+
+**Example output**:
+```
+CLIP Performance:
+  Mean Latency: 45.2ms
+  P95 Latency: 68.3ms
+  Throughput: 22.1 FPS
+  Peak Memory: 2.8GB
+```
+
+---
+
+### Step 7: Run Profiling Tests (Deep Analysis)
+
+**Purpose**: Capture detailed GPU traces for optimization
 
 ```bash
 # Verify rocprofv3 is installed
 rocprofv3 --version
 
-# Run profiling tests
+# Run profiling validation tests
 pytest tests/strix_ai/profiling/test_strix_rocprofv3.py -v -s
 
-# Profile a specific model manually
+# Run comprehensive model profiling
+pytest tests/strix_ai/profiling/test_profile_existing_tests.py -v -s
+
+# Profile a specific model manually (advanced)
 rocprofv3 --hip-trace --kernel-trace --memory-copy-trace \
           --output-format pftrace -d ./my_traces -- \
-          python3 -m pytest tests/strix_ai/vlm/test_clip.py -v -s
+          python3 -m pytest tests/strix_ai/vlm/test_clip.py::test_clip_inference -v -s
 ```
 
-### Step 7: Analyze Results
+**Expected Output**:
+- Perfetto trace files (.pftrace)
+- Kernel statistics
+- Memory bandwidth logs
+- API overhead metrics
+
+---
+
+### Step 8: Analyze Results
 
 ```bash
-# View test results
+# View functional test results
 cat test-results-*.xml
 
-# View profiling traces
-# Open chrome://tracing in Chrome browser
-# Load .pftrace file from ./my_traces/
+# View performance metrics
+cat performance-results-*.xml
+
+# View profiling results
+cat profiling-results-*.xml
+
+# Open profiling traces in browser
+# Option 1: Chrome Tracing
+#   Navigate to: chrome://tracing
+#   Load .pftrace file from ./my_traces/
+#
+# Option 2: Perfetto UI (recommended)
+#   Navigate to: https://ui.perfetto.dev/
+#   Drag and drop .pftrace file
 ```
+
+**Trace Analysis Tips**:
+1. Look for long-running kernels
+2. Identify memory copy bottlenecks
+3. Check for GPU idle time (gaps)
+4. Verify kernel launch patterns
+5. Compare against baseline traces
 
 ---
 
@@ -603,29 +903,53 @@ graph TD
 
 ---
 
-## 📊 Performance Metrics Collected
+## 📊 Metrics Collected Across Phases
 
-### Functional Testing Metrics
+### Phase 4: Functional Testing Metrics
 
-| Metric | Description | Unit |
-|--------|-------------|------|
-| **Inference Latency** | Time to process one input | milliseconds |
-| **Throughput** | Inputs processed per second | FPS / samples/sec |
-| **First Run Time** | Initial execution (includes compilation) | seconds |
-| **Warmup Time** | Time for kernel compilation | seconds |
-| **Peak Memory** | Maximum GPU memory used | GB |
-| **Memory Allocated** | Total memory allocated | GB |
+**Focus**: Correctness validation
 
-### Profiling Metrics (rocprofv3)
-
-| Metric | Description | Source |
+| Metric | Description | Output |
 |--------|-------------|--------|
-| **Kernel Execution Time** | GPU kernel duration | HIP trace |
-| **Memory Copy Time** | Host ↔ Device transfer | Memory trace |
-| **API Call Overhead** | HIP API latency | HIP trace |
-| **GPU Utilization** | Percentage of time GPU active | Kernel trace |
-| **Memory Bandwidth** | Data transfer rate | Memory trace |
-| **Kernel Launch Count** | Number of kernels executed | Kernel trace |
+| **Test Status** | Pass/Fail/Skip | PASS/FAIL/SKIP |
+| **Output Correctness** | Validation of model predictions | Boolean |
+| **Error Messages** | Failure details and stack traces | String |
+| **Test Duration** | Total test execution time | seconds |
+
+### Phase 5: Performance Testing Metrics
+
+**Focus**: Quantitative performance measurements
+
+| Metric | Description | Unit | Target (Example) |
+|--------|-------------|------|------------------|
+| **Mean Latency** | Average inference time | milliseconds | < 50ms (CLIP) |
+| **P50 Latency** | Median inference time | milliseconds | < 45ms (CLIP) |
+| **P95 Latency** | 95th percentile latency | milliseconds | < 75ms (CLIP) |
+| **P99 Latency** | 99th percentile latency | milliseconds | < 100ms (CLIP) |
+| **Throughput** | Samples processed per second | FPS / samples/sec | > 30 FPS (ViT) |
+| **First Run Time** | Initial execution (with compilation) | seconds | < 10s |
+| **Warmup Time** | Time for kernel compilation | seconds | < 5s |
+| **Peak Memory** | Maximum GPU memory used | GB | < 4GB |
+| **Memory Allocated** | Total GPU memory allocated | GB | < 6GB |
+| **Batch Size** | Number of samples per batch | count | 1, 4, 8 |
+| **Iterations** | Number of test iterations | count | 100 |
+
+### Phase 6: Profiling Metrics (ROCProfiler v3)
+
+**Focus**: Deep GPU analysis and bottleneck identification
+
+| Metric | Description | Source | Use Case |
+|--------|-------------|--------|----------|
+| **Total Kernel Time** | Sum of all kernel execution times | Kernel trace | Overall compute time |
+| **Average Kernel Duration** | Mean time per kernel launch | Kernel trace | Kernel efficiency |
+| **Kernel Launch Count** | Number of kernels executed | Kernel trace | Launch overhead analysis |
+| **Memory Copy Time** | Host ↔ Device transfer duration | Memory trace | Memory bottleneck identification |
+| **HIP API Overhead** | Time spent in HIP API calls | HIP trace | API efficiency |
+| **GPU Utilization %** | Percentage of time GPU is active | Kernel trace | GPU efficiency |
+| **Memory Bandwidth** | Data transfer rate (GB/s) | Memory trace | Memory performance |
+| **Kernel Occupancy** | GPU occupancy per kernel | Kernel trace | Resource utilization |
+| **Longest Kernels** | Top 10 slowest kernels | Kernel trace | Optimization targets |
+| **Idle GPU Time** | Gaps between kernel executions | Timeline | Launch optimization |
 
 ---
 
@@ -735,40 +1059,123 @@ export AMDGPU_FAMILIES=gfx1151
 
 ## 🎓 Best Practices
 
-### 1. **Always Use rocprofv3 for Strix**
-- rocprofv3 is optimized for ROCm 6.2+ and Strix GPUs
-- Legacy rocprof (roctracer) is deprecated
-- Perfetto traces provide better visualization
+### General Testing
 
-### 2. **Include Warmup Iterations**
-- First run includes kernel compilation (slow)
-- Run 2-3 warmup iterations before measuring
-- Only measure steady-state performance
+### 1. **Separate Functional, Performance, and Profiling Concerns**
+- **Functional tests**: Focus on correctness validation only
+- **Performance tests**: Measure metrics with multiple iterations
+- **Profiling tests**: Deep analysis with ROCProfiler v3
+- Don't mix concerns - keep tests focused on one goal
+
+### 2. **Test on Actual Hardware**
+- Strix-specific optimizations only visible on real hardware
+- Use appropriate GPU runner labels
+- Verify AMDGPU_FAMILIES matches physical GPU (gfx1150 or gfx1151)
 
 ### 3. **Clean Up GPU Memory**
 - Call `torch.cuda.empty_cache()` after tests
 - Delete models explicitly: `del model`
 - Prevents OOM in subsequent tests
+- Essential when running multiple test categories
 
 ### 4. **Use Appropriate Precision**
 - Strix benefits from FP16 precision
 - Use `model.half()` or `torch.float16`
 - Reduces memory usage and improves performance
+- Test both FP32 and FP16 for accuracy validation
 
-### 5. **Test on Actual Hardware**
-- Strix-specific optimizations only visible on real hardware
-- Use appropriate GPU runner labels
-- Verify AMDGPU_FAMILIES matches physical GPU
+---
 
-### 6. **Archive Profiling Traces**
-- Always save profiling artifacts
+### Functional Testing
+
+### 5. **Focus on Correctness, Not Performance**
+- Validate output shapes, values, predictions
+- Check for NaN/Inf values in outputs
+- Don't measure latency in functional tests
+- Single iteration is sufficient for correctness
+
+### 6. **Use Representative Inputs**
+- Test with realistic input sizes
+- Include edge cases (empty, maximum size)
+- Test various data types and formats
+
+---
+
+### Performance Testing
+
+### 7. **Always Include Warmup Iterations**
+- First run includes kernel compilation (slow)
+- Run 3-5 warmup iterations before measuring
+- Only measure steady-state performance
+- Report warmup time separately
+
+### 8. **Run Multiple Iterations for Statistics**
+- 10-100 iterations for latency measurements
+- Calculate mean, median, P95, P99
+- Report standard deviation
+- Identify and remove outliers
+
+### 9. **Test Multiple Batch Sizes**
+- Test batch sizes: 1, 4, 8, 16
+- Measure throughput (FPS) vs latency trade-off
+- Identify optimal batch size for Strix
+- Consider memory constraints
+
+### 10. **Set Performance Baselines**
+- Establish target metrics for each model
+- Compare against previous runs
+- Alert on performance regressions
+- Document hardware configuration
+
+---
+
+### Profiling
+
+### 11. **Always Use rocprofv3 for Strix**
+- rocprofv3 is optimized for ROCm 6.2+ and Strix GPUs
+- Legacy rocprof (roctracer) is deprecated
+- Perfetto traces provide better visualization
+- Supports latest Strix GPU features
+
+### 12. **Profile After Performance Testing**
+- Use performance tests to identify slow models
+- Then profile those models for deep analysis
+- Don't profile everything - focus on bottlenecks
+- Profiling adds overhead, not suitable for benchmarking
+
+### 13. **Archive Profiling Traces**
+- Always save profiling artifacts (.pftrace)
 - Use 30-day retention for analysis
 - Include timestamps in artifact names
+- Compress traces for storage efficiency
 
-### 7. **Monitor Resource Usage**
+### 14. **Analyze Traces Methodically**
+- Look for long-running kernels first
+- Check for GPU idle time (gaps)
+- Verify memory copy patterns
+- Compare against baseline traces
+
+---
+
+### Workflow Management
+
+### 15. **Monitor Resource Usage**
 - Track memory usage across tests
 - Set timeouts for long-running tests
 - Use `--timeout-minutes` in workflows
+- Monitor test execution time trends
+
+### 16. **Use Test Markers Appropriately**
+- `@pytest.mark.quick` for smoke tests (< 10s)
+- `@pytest.mark.slow` for long tests (> 30s)
+- `@pytest.mark.performance` for performance tests
+- `@pytest.mark.profiling` for profiling tests
+
+### 17. **Progressive Testing Strategy**
+- Start with functional tests (quick validation)
+- Run performance tests on passing models
+- Profile only models with performance concerns
+- Saves time and resources
 
 ---
 
