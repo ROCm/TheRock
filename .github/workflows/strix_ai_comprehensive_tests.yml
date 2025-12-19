@@ -114,6 +114,10 @@ jobs:
       TEST_CATEGORY: 'vlm'
       TEST_TYPE: ${{ github.event.inputs.test_type || 'functional' }}
       PYTHONUNBUFFERED: 1
+      # ROCm environment variables for Strix GPU detection
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -131,8 +135,19 @@ jobs:
       
       - name: Verify ROCm and GPU
         run: |
+          echo "=== ROCm Environment Variables ==="
+          echo "HSA_OVERRIDE_GFX_VERSION: $HSA_OVERRIDE_GFX_VERSION"
+          echo "AMDGPU_FAMILIES: $AMDGPU_FAMILIES"
+          echo "ROCR_VISIBLE_DEVICES: $ROCR_VISIBLE_DEVICES"
+          echo ""
+          echo "=== ROCm Info ==="
           rocminfo | head -50 || true
+          echo ""
+          echo "=== GPU Devices ==="
           ls -la /dev/kfd /dev/dri/ || true
+          echo ""
+          echo "=== HIP Info ==="
+          hipconfig --version || true
       
       - name: Install AI/ML Dependencies
         run: |
@@ -142,7 +157,8 @@ jobs:
       
       - name: Verify PyTorch GPU
         run: |
-          python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None'); exit(0 if torch.cuda.is_available() else 1)"
+          echo "=== PyTorch GPU Detection ==="
+          python3 -c "import torch, sys; print('PyTorch:', torch.__version__); print('CUDA/ROCm available:', torch.cuda.is_available()); print('Device count:', torch.cuda.device_count() if torch.cuda.is_available() else 0); print('Device name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE'); sys.exit(0 if torch.cuda.is_available() else 1)" || { echo "ERROR: PyTorch cannot detect GPU - tests may fail or be skipped!"; exit 1; }
       
       - name: Run VLM Functional Tests
         if: env.TEST_TYPE == 'functional' || env.TEST_TYPE == 'full'
@@ -184,6 +200,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'vla'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -227,6 +246,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'omni'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -270,6 +292,9 @@ jobs:
       TEST_CATEGORY: 'instruct'
       TEST_TYPE: ${{ github.event.inputs.test_type || 'functional' }}
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -312,6 +337,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'segmentation'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -354,6 +382,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'asr'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -396,6 +427,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'diffusion'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -438,6 +472,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'llm'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -480,6 +517,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'optimization'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -522,6 +562,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'profiling'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -573,6 +616,9 @@ jobs:
       TEST_CATEGORY: 'benchmarks'
       MARKET_SEGMENT: ${{ github.event.inputs.market_segment || 'all' }}
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
@@ -631,6 +677,9 @@ jobs:
       AMDGPU_FAMILIES: ${{ github.event.inputs.strix_variant || 'gfx1151' }}
       TEST_CATEGORY: 'quick'
       PYTHONUNBUFFERED: 1
+      HSA_OVERRIDE_GFX_VERSION: ${{ github.event.inputs.strix_variant == 'gfx1150' && '11.0.0' || '11.0.1' }}
+      ROCR_VISIBLE_DEVICES: '0'
+      GPU_DEVICE_ORDINAL: '0'
     
     steps:
       - name: Checkout Repository
