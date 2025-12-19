@@ -18,8 +18,10 @@ function(therock_test_validate_shared_lib)
     cmake_path(ABSOLUTE_PATH ARG_PATH BASE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endif()
 
+  separate_arguments(CMAKE_C_COMPILER_LIST UNIX_COMMAND "${CMAKE_C_COMPILER}")
+
   execute_process(
-    COMMAND ${CMAKE_C_COMPILER} -print-resource-dir
+    COMMAND ${CMAKE_C_COMPILER_LIST} -print-resource-dir
     OUTPUT_VARIABLE CLANG_RESOURCE_DIR
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
