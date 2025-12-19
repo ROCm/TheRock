@@ -295,6 +295,9 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
+    list(APPEND OCL_CLR_CMAKE_ARGS
+      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+    )
   endif()
 
   therock_cmake_subproject_declare(ocl-clr
