@@ -158,7 +158,7 @@ def gha_query_workflow_run_information(github_repository: str, workflow_run_id: 
 
 
 def gha_query_last_successful_workflow_run(
-    github_repository: str, workflow_name: str, branch: str = "main"
+    github_repository: str = "ROCm/TheRock", workflow_name: str = "ci.yml", branch: str = "main"
 ) -> dict | None:
     """Find the last successful run of a specific workflow on the specified branch.
 
@@ -171,15 +171,13 @@ def gha_query_last_successful_workflow_run(
         The full workflow run object of the most recent successful run on the specified branch,
         or None if no successful runs are found.
     """
-    # Use GitHub API query parameters to pre-filter for successful runs and limit results
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&per_page=100"
+    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
+    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100"
     response = gha_send_request(url)
 
+    # Return the first (most recent) successful run
     if response and response.get("workflow_runs"):
-        # Filter for runs on the specified branch (GitHub API doesn't support branch filtering for workflows)
-        for run in response["workflow_runs"]:
-            if run.get("head_branch") == branch:
-                return run  # Return the first (most recent) successful run on the specified branch
+        return response["workflow_runs"][0]
     return None
 
 
