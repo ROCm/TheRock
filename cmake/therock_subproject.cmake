@@ -440,21 +440,14 @@ function(therock_cmake_subproject_declare target_name)
   list(REMOVE_DUPLICATES _private_install_rpath_dirs)
 
   # RPATH Executable and Library dir.
+  # Note: INSTALL_DESTINATION is intentionally NOT used here because artifact-flatten
+  # will flatten the directory structure. RPATH must be relative to the final flattened
+  # location (bin/, lib/) not the intermediate INSTALL_DESTINATION subdirectory.
   if(NOT ARG_INSTALL_RPATH_EXECUTABLE_DIR)
-    if(ARG_INSTALL_DESTINATION)
-      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR ARG_INSTALL_DESTINATION)
-      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
-    else()
-      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
-    endif()
+    set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
   endif()
   if(NOT ARG_INSTALL_RPATH_LIBRARY_DIR)
-    if(ARG_INSTALL_DESTINATION)
-      set(ARG_INSTALL_RPATH_LIBRARY_DIR ARG_INSTALL_DESTINATION)
-      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "lib")
-    else()
-      set(ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
-    endif()
+    set(ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
   endif()
 
   # Build pool determination.

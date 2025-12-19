@@ -24,12 +24,12 @@ fi
   --patchelf "${PATCHELF}" --add-prefix rocm_sysdeps_ \
   "${patch_targets[@]}"
 
-for target in "${patch_targets[@]}"; do
-  if [ -f "$target" ]; then
-    base_name=$(basename "$target")
-    "${PATCHELF}" --set-soname "$base_name" "$target"
-  fi
-done
+# for target in "${patch_targets[@]}"; do
+#   if [ -f "$target" ]; then
+#     base_name=$(basename "$target")
+#     "${PATCHELF}" --set-soname "$base_name" "$target"
+#   fi
+# done
 
 # pc files are not output with a relative prefix. Sed it to relative.
 if [ -d "$PREFIX/lib/pkgconfig" ]; then
