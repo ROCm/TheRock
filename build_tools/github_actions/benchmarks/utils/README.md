@@ -63,7 +63,12 @@ from utils.results.results_handler import ResultsHandler
 from utils.config import ConfigHelper, ConfigParser, ConfigValidator
 
 # System detection
-from utils.system import SystemDetector, HardwareDetector, ROCmDetector, PlatformDetector
+from utils.system import (
+    SystemDetector,
+    HardwareDetector,
+    ROCmDetector,
+    PlatformDetector,
+)
 
 # Results handling
 from utils.results import ResultsHandler, ResultsAPI
@@ -72,40 +77,49 @@ from utils.results import ResultsHandler, ResultsAPI
 ## Modules
 
 ### Root Level
+
 - **constants.py** - Framework constants and defaults
 - **exceptions.py** - Custom exception classes
 - **logger.py** - Logging configuration
 - **benchmark_client.py** - Main BenchmarkClient API
 
 ### Config
+
 Configuration loading, parsing, and validation.
+
 - **config_helper.py** - High-level config utilities
 - **config_parser.py** - YAML parser with environment variable expansion
 - **config_validator.py** - JSON Schema validation
 
 ### System
+
 Platform, hardware, and ROCm detection.
+
 - **system_detector.py** - Main orchestrator
 - **hardware.py** - CPU and GPU detection
 - **platform.py** - OS, kernel, SBIOS detection
 - **rocm_detector.py** - ROCm version and build info
 
 ### Results
+
 Test results formatting, saving, and API submission.
+
 - **results_handler.py** - Results formatting and local saving
 - **results_api.py** - REST API client
 
 ## Adding New Modules
 
 ### To Existing Subdirectory
+
 1. Create file in appropriate subdirectory
-2. Add exports to subdirectory's `__init__.py`
-3. Optionally add to `utils/__init__.py` for backward compatibility
+1. Add exports to subdirectory's `__init__.py`
+1. Optionally add to `utils/__init__.py` for backward compatibility
 
 ### New Subdirectory
+
 1. Create directory with `__init__.py`
-2. Add modules
-3. Update `utils/__init__.py` for commonly used classes
+1. Add modules
+1. Update `utils/__init__.py` for commonly used classes
 
 ## Testing
 

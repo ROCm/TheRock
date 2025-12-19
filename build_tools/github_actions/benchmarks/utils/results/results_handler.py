@@ -17,24 +17,24 @@ from ..constants import Constants, SEPARATOR_LINE
 
 class ResultsHandler:
     """Static methods for building, saving, and uploading test results."""
-    
+
     @staticmethod
     def build_deployment_info(config: Optional[Any] = None,
                               deployed_by: str = '',
                               execution_label: str = '',
                               ci_group: str = 'therock_pr') -> Dict[str, str]:
         """Build deployment information dict for test execution.
-        
+
         Args:
             config: Configuration object (optional)
             deployed_by: Username who ran the test
             execution_label: Execution label
             ci_group: CI/CD group identifier (default: therock_pr)
-        
+
         Returns:
             Dict: Deployment info with timestamp, user, label, command, and CI group
         """
-      
+
         # Build deployment info
         deployment_info = {
             "test_deployed_by": deployed_by,
@@ -45,18 +45,18 @@ class ResultsHandler:
             "execution_type": "automated",
             "ci_group": ci_group
         }
-        
+
         log.debug(f"Deployment info: deployed_by={deployed_by}, ci_group={ci_group}, command={deployment_info['testcase_command']}")
-        
+
         return deployment_info
-    
+
     @staticmethod
     def build_system_info_dict(system_context: Any) -> Dict[str, Any]:
         """Build system info dict from SystemContext for API payload.
-        
+
         Args:
             system_context: SystemContext object with detected system info
-        
+
         Returns:
             Dict: System information (OS, CPU, GPU details)
         """
@@ -95,38 +95,38 @@ class ResultsHandler:
                 'devices': system_context.gpu_devices
             }
         }
-    
+
     @staticmethod
     def save_local_results(results_data: Dict[str, Any],
                           output_dir: str,
                           timestamp: Optional[str] = None) -> Optional[Path]:
         """Save results to local JSON file with timestamp.
-        
+
         Args:
             results_data: Results data dict
             output_dir: Output directory path
             timestamp: Optional timestamp (auto-generated if None)
-        
+
         Returns:
             Path: Saved file path or None if failed
         """
         try:
             results_dir = Path(output_dir)
             results_dir.mkdir(parents=True, exist_ok=True)
-            
+
             if timestamp is None:
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
-            
+
             output_file = results_dir / f"results_{timestamp}.json"
             with open(output_file, 'w') as f:
                 json.dump(results_data, f, indent=2)
-            
+
             log.info(f"✓ Results saved: {output_file}")
             return output_file
         except Exception as e:
             log.error(f"Failed to save local results: {e}")
             return None
-    
+
     @staticmethod
     def upload_to_api(system_info: Dict[str, Any],
                      test_results: List[Dict[str, Any]],
@@ -136,7 +136,7 @@ class ResultsHandler:
                      deployment_info: Dict[str, str],
                      test_environment: str = Constants.TEST_ENV_BARE_METAL) -> bool:
         """Upload test results to API with system context.
-        
+
         Args:
             system_info: System info dict
             test_results: List of test result dicts
@@ -145,7 +145,7 @@ class ResultsHandler:
             rocm_info: ROCm info dict
             deployment_info: Deployment info dict
             test_environment: Environment type (bm/vm/docker)
-        
+
         Returns:
             bool: True if successful, False otherwise
         """
@@ -153,19 +153,19 @@ class ResultsHandler:
         if not api_config.get('enabled', False):
             log.debug("API submission disabled")
             return False
-        
+
         api_url = api_config.get('url', '')
         fallback_url = api_config.get('fallback_url', '')
         api_key = api_config.get('api_key', '')
-        
+
         if not api_url:
             log.warning("API URL not configured, skipping submission")
             return False
-        
+
         log.info(SEPARATOR_LINE)
         log.info("Submitting results to API...")
         log.info(SEPARATOR_LINE)
-        
+
         try:
             # Build API payload
             test_results_for_api = []
@@ -182,7 +182,7 @@ class ResultsHandler:
                     'start_time': result.get('start_time', ''),  # Test start timestamp
                     'log_path': result.get('log_path', '')  # Log file path
                 })
-            
+
             payload = build_results_payload(
                 system_info=system_info,
                 test_results=test_results_for_api,
@@ -191,25 +191,25 @@ class ResultsHandler:
                 build_info=rocm_info,
                 deployment_info=deployment_info
             )
-            
+
             log.debug(payload)
-            
+
             # Validate payload
             if not validate_payload(payload):
                 log.error("Payload validation failed, skipping API submission")
                 return False
-            
+
             # Submit to API
             api_client = ResultsAPI(api_url, api_key, fallback_url)
             success = api_client.submit_results(payload)
-            
+
             if success:
                 log.info("✓ Results submitted to API successfully")
                 return True
             else:
                 log.warning("⚠ Failed to submit results to API")
                 return False
-                
+
         except Exception as e:
             log.error(f"Unexpected error submitting to API: {e}")
             log.warning("Results not submitted - unexpected error")
@@ -232,7 +232,7 @@ class ResultsHandler:
         try:
             # Get ROCm version
             rocm_version = rocm_info.get('rocm_version', '')
-        
+
             # Validate API URL
             api_url = api_config.get('url', '')
             if not api_url:
@@ -268,7 +268,7 @@ class ResultsHandler:
             raise ValueError(f"Data error: {e}")
         except Exception as e:
             raise RuntimeError(f"Unexpected error: {e}")
-        
+
     @staticmethod
     def get_final_result_table(table: PrettyTable,
                             lkg_scores: Dict[Tuple[str, str], float]) -> PrettyTable:

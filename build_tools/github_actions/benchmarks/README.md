@@ -142,23 +142,23 @@ The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.p
 1. Initialize BenchmarkClient
    ↓ Auto-detect system (GPU, OS, ROCm version)
    ↓ Load configuration from config.yml
-   
+
 2. Run Benchmarks
    ↓ Execute benchmark binary
    ↓ Capture output to log file
-   
+
 3. Parse Results
    ↓ Extract metrics from log file
    ↓ Structure data according to schema
-   
+
 4. Upload Results
    ↓ Submit to API (with retry)
    ↓ Save JSON locally
-   
+
 5. Compare with LKG
    ↓ Fetch last known good results
    ↓ Calculate performance delta
-   
+
 6. Report Results
    ↓ Display formatted table
    ↓ Append to GitHub Actions step summary
@@ -195,15 +195,15 @@ class YourBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name='your_lib', display_name='YourLib')
         self.log_file = self.script_dir / "your_lib_bench.log"
-    
+
     def run_benchmarks(self) -> None:
         """Execute benchmark binary and log output."""
         # Load config if needed
         config_file = self.script_dir.parent / 'configs' / 'your_lib.json'
-        
+
         # Your benchmark execution logic here
         pass
-    
+
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
         """Parse log file and return (test_results, table)."""
         # Your parsing logic here

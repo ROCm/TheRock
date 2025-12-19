@@ -14,35 +14,35 @@ class PlatformInfo:
     hostname: str = "Unknown"
     architecture: str = "Unknown"
     sbios: str = "Unknown"
-    
+
     @property
     def kernel_release(self) -> str:
         """Get kernel release version (alias for kernel attribute)."""
         return self.kernel
-    
+
     def __str__(self):
         return f"{self.os_name} {self.os_version} (Kernel: {self.kernel})"
 
 
 class PlatformDetector:
     """Platform detector for OS, kernel, BIOS, and network information."""
-    
+
     @staticmethod
     def get_sbios_version() -> str:
         """Get SBIOS/BIOS version using dmidecode (Linux) or WMI (Windows).
-        
+
         Returns:
             str: SBIOS version or "Unknown" if detection fails
-            
+
         Note:
             Linux requires root/sudo for dmidecode; falls back to sysfs.
             Windows uses WMIC or PowerShell WMI queries.
         """
         import subprocess
         import platform
-        
+
         os_type = platform.system()
-        
+
         # Windows detection
         if os_type == "Windows":
             try:
@@ -63,7 +63,7 @@ class PlatformDetector:
                             return bios_version
             except Exception:
                 pass
-            
+
             try:
                 # Method 2: PowerShell WMI query
                 result = subprocess.run(
@@ -76,12 +76,12 @@ class PlatformDetector:
                     return result.stdout.strip()
             except Exception:
                 pass
-        
+
         # Linux detection
         elif os_type == "Linux":
             import logging
             logger = logging.getLogger(__name__)
-            
+
             # Method 1: dmidecode (requires root/sudo)
             try:
                 logger.debug("Trying dmidecode for SBIOS...")
@@ -101,7 +101,7 @@ class PlatformDetector:
                 logger.debug("dmidecode command not found")
             except (subprocess.TimeoutExpired, PermissionError) as e:
                 logger.debug(f"dmidecode error: {e}")
-            
+
             # Method 2: /sys/class/dmi/id/bios_version
             try:
                 logger.debug("Trying /sys/class/dmi/id/bios_version...")
@@ -116,7 +116,7 @@ class PlatformDetector:
                 logger.debug("/sys/class/dmi/id/bios_version permission denied")
             except IOError as e:
                 logger.debug(f"/sys/class/dmi/id/bios_version error: {e}")
-            
+
             # Method 3: /sys/devices/virtual/dmi/id/bios_version
             try:
                 logger.debug("Trying /sys/devices/virtual/dmi/id/bios_version...")
@@ -131,9 +131,9 @@ class PlatformDetector:
                 logger.debug("/sys/devices/virtual/dmi/id/bios_version permission denied")
             except IOError as e:
                 logger.debug(f"/sys/devices/virtual/dmi/id/bios_version error: {e}")
-            
+
             logger.debug("All SBIOS detection methods failed")
-        
+
         # macOS detection
         elif os_type == "Darwin":
             try:
@@ -151,13 +151,13 @@ class PlatformDetector:
                         return match.group(1).strip()
             except Exception:
                 pass
-        
+
         return "Unknown"
-    
+
     @staticmethod
     def get_system_ip() -> str:
         """Get system's primary IP address using socket routing.
-        
+
         Returns:
             str: IP address or '0.0.0.0' if detection fails
         """
@@ -174,9 +174,9 @@ class PlatformDetector:
                 ip_address = '0.0.0.0'
             finally:
                 s.close()
-            
+
             return ip_address
-            
+
         except Exception:
             # Fallback: try to get IP from hostname
             try:
@@ -188,11 +188,11 @@ class PlatformDetector:
                 return ip_address
             except Exception:
                 return '0.0.0.0'
-    
+
     @staticmethod
     def detect() -> PlatformInfo:
         """Detect complete platform information.
-        
+
         Returns:
             PlatformInfo: Platform details including OS, kernel, hostname, and BIOS
         """
@@ -203,25 +203,25 @@ class PlatformDetector:
         hostname = "Unknown"
         architecture = "Unknown"
         sbios = "Unknown"
-        
+
         # Get OS name
         try:
             os_name = platform.system()
         except Exception:
             pass
-        
+
         # Get OS version
         try:
             if os_name == "Linux":
                 try:
                     with open('/etc/os-release', 'r') as f:
                         os_release = f.read()
-                    
+
                     # Extract NAME and VERSION_ID
                     import re
                     name_match = re.search(r'NAME="?([^"\n]+)"?', os_release)
                     version_match = re.search(r'VERSION_ID="?([^"\n]+)"?', os_release)
-                    
+
                     if name_match:
                         os_name = name_match.group(1).strip()
                     if version_match:
@@ -250,31 +250,31 @@ class PlatformDetector:
                 os_version = platform.release()
         except Exception:
             pass
-        
+
         # Get kernel
         try:
             kernel = platform.release()
         except Exception:
             pass
-        
+
         # Get hostname
         try:
             hostname = socket.gethostname()
         except Exception:
             pass
-        
+
         # Get architecture
         try:
             architecture = platform.machine()
         except Exception:
             pass
-        
+
         # Get SBIOS version using helper method
         try:
             sbios = PlatformDetector.get_sbios_version()
         except Exception:
             pass
-        
+
         return PlatformInfo(
             os_name=os_name,
             os_version=os_version,

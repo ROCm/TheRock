@@ -12,10 +12,10 @@ from ..exceptions import ROCmVersionError
 
 def _get_rocm_tool_path(tool_name: str) -> str:
     """Get full path to ROCm tool using THEROCK_BIN_DIR.
-    
+
     Args:
         tool_name: Name of the tool ('rocm-smi', 'amd-smi', or 'rocminfo')
-    
+
     Returns:
         str: Full path to tool if THEROCK_BIN_DIR is set, otherwise just tool name
     """
@@ -27,7 +27,7 @@ def _get_rocm_tool_path(tool_name: str) -> str:
 
 def _get_rocm_path() -> str:
     """Get ROCm base path using THEROCK_BIN_DIR or fallback to /opt/rocm.
-    
+
     Returns:
         str: ROCm base path (e.g., /opt/rocm-7.1.0 or /opt/rocm)
     """
@@ -40,16 +40,16 @@ def _get_rocm_path() -> str:
 
 class ROCmDetector:
     """ROCm detector for version, build type, package manager, and compatibility validation."""
-    
+
     @staticmethod
     def detect_rocm_info() -> Dict[str, str]:
         """Detect ROCm build information.
-        
+
         Returns:
             Dictionary with ROCm build information
         """
         logger = logging.getLogger(__name__)
-        
+
         build_info = {
             "rocm_version": "Unknown",
             "rocm_build_type": "Unknown",
@@ -58,49 +58,49 @@ class ROCmDetector:
             "rocm_package_manager_version": "Unknown",
             "install_type": "Unknown"
         }
-        
+
         # Detect ROCm version
         rocm_version = ROCmDetector._detect_rocm_version()
         if rocm_version:
             build_info["rocm_version"] = rocm_version
             logger.debug(f"ROCm version: {rocm_version}")
-        
+
         # Detect package manager
         pkg_manager, pkg_version = ROCmDetector._detect_package_manager()
         if pkg_manager:
             build_info["rocm_package_manager"] = pkg_manager
             build_info["rocm_package_manager_version"] = pkg_version
             logger.debug(f"Package manager: {pkg_manager} {pkg_version}")
-        
+
         # Detect install type
         install_type = ROCmDetector._detect_install_type()
         if install_type:
             build_info["install_type"] = install_type
             logger.debug(f"Install type: {install_type}")
-        
+
         # Detect build type
         build_type = ROCmDetector._detect_build_type()
         if build_type:
             build_info["rocm_build_type"] = build_type
             logger.debug(f"Build type: {build_type}")
-        
+
         # Detect library type
         lib_type = ROCmDetector._detect_lib_type()
         if lib_type:
             build_info["rocm_build_lib_type"] = lib_type
             logger.debug(f"Library type: {lib_type}")
-        
+
         return build_info
-    
+
     @staticmethod
     def _detect_rocm_version() -> Optional[str]:
         """Detect ROCm version using multiple methods.
-        
+
         Returns:
             str: Version in format X.Y.Z-BUILD (e.g., "7.10.1-36") or None
         """
         logger = logging.getLogger(__name__)
-        
+
         try:
             # Method 1: Try $ROCM_PATH/.info/version-rocm (most complete - includes build number)
             rocm_path = _get_rocm_path()
@@ -116,7 +116,7 @@ class ROCmDetector:
                 logger.debug(f"{version_rocm_file} not found")
         except Exception as e:
             logger.debug(f"Error reading version-rocm file: {e}")
-        
+
         try:
             # Method 2: Try $ROCM_PATH/.info/version file
             rocm_path = _get_rocm_path()
@@ -146,7 +146,7 @@ class ROCmDetector:
                 logger.debug(f"{version_file} not found")
         except Exception as e:
             logger.debug(f"Error reading version file: {e}")
-        
+
         try:
             # Method 3: Try amd-smi version
             amd_smi_cmd = _get_rocm_tool_path('amd-smi')
@@ -171,7 +171,7 @@ class ROCmDetector:
             logger.debug("amd-smi command not found")
         except Exception as e:
             logger.debug(f"amd-smi version error: {e}")
-        
+
         try:
             # Method 4: Try rocminfo
             rocminfo_cmd = _get_rocm_tool_path('rocminfo')
@@ -195,7 +195,7 @@ class ROCmDetector:
             logger.debug("rocminfo command not found")
         except Exception as e:
             logger.debug(f"rocminfo error: {e}")
-        
+
         try:
             # Method 5: Try rocm-smi --version
             rocm_smi_cmd = _get_rocm_tool_path('rocm-smi')
@@ -218,14 +218,14 @@ class ROCmDetector:
             logger.debug("rocm-smi command not found")
         except Exception as e:
             logger.debug(f"rocm-smi error: {e}")
-        
+
         logger.debug("All ROCm version detection methods failed")
         return None
-    
+
     @staticmethod
     def _detect_package_manager() -> tuple:
         """Detect system package manager (dpkg or rpm) and version.
-        
+
         Returns:
             tuple: (package_manager_name, version) or ("Unknown", "Unknown")
         """
@@ -243,7 +243,7 @@ class ROCmDetector:
                 return ("dpkg", version)
         except Exception:
             pass
-        
+
         # Check for rpm (RHEL/CentOS/SLES)
         try:
             result = subprocess.run(
@@ -258,9 +258,9 @@ class ROCmDetector:
                 return ("rpm", version)
         except Exception:
             pass
-        
+
         return ("Unknown", "Unknown")
-    
+
     @staticmethod
     def _detect_install_type() -> Optional[str]:
         """Detect ROCm installation type (package manager or source build)."""
@@ -277,7 +277,7 @@ class ROCmDetector:
                 return "package"
         except Exception:
             pass
-        
+
         try:
             # Check for rpm package
             result = subprocess.run(
@@ -290,15 +290,15 @@ class ROCmDetector:
                 return "package"
         except Exception:
             pass
-        
+
         # Check if ROCm path exists (could be source or package)
         rocm_path = _get_rocm_path()
         if os.path.exists(rocm_path):
             # If package manager doesn't show it, likely source
             return "source"
-        
+
         return "Unknown"
-    
+
     @staticmethod
     def _detect_build_type() -> Optional[str]:
         """Detect ROCm build type (Release, Debug, or TheRock)."""
@@ -311,14 +311,14 @@ class ROCmDetector:
                 for file in os.listdir(rocm_lib_path):
                     if 'debug' in file.lower() or file.endswith('.debug'):
                         return "Debug"
-                
+
                 # Default to TheRock if no debug indicators
                 return "TheRock"
         except Exception:
             pass
-        
+
         return "Unknown"
-    
+
     @staticmethod
     def _detect_lib_type() -> Optional[str]:
         """Detect ROCm library type (static, shared, or both)."""
@@ -328,13 +328,13 @@ class ROCmDetector:
             if os.path.exists(rocm_lib_path):
                 has_static = False
                 has_shared = False
-                
+
                 for file in os.listdir(rocm_lib_path):
                     if file.endswith('.a'):
                         has_static = True
                     if file.endswith('.so') or '.so.' in file:
                         has_shared = True
-                
+
                 if has_static and has_shared:
                     return "both"
                 elif has_shared:
@@ -343,5 +343,5 @@ class ROCmDetector:
                     return "static"
         except Exception:
             pass
-        
+
         return None

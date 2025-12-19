@@ -19,10 +19,10 @@ from ..system import (
 
 class ResultsAPI:
     """API client for submitting test results with authentication and fallback support."""
-    
+
     def __init__(self, api_url: str, api_key: Optional[str] = None, fallback_url: Optional[str] = None):
         """Initialize API client.
-        
+
         Args:
             api_url: Base URL for the primary API
             api_key: Optional API key for authentication
@@ -32,23 +32,23 @@ class ResultsAPI:
         self.fallback_url = fallback_url.rstrip('/') if fallback_url else None
         self.api_key = api_key
         self.session = requests.Session()
-        
+
         if self.api_key:
             self.session.headers.update({
                 'Authorization': f'Bearer {self.api_key}'
             })
-        
+
         self.session.headers.update({
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         })
-    
+
     def submit_results(self, payload: Dict[str, Any]) -> bool:
         """Submit test results to API with fallback support.
-        
+
         Args:
             payload: Results payload dictionary
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -56,40 +56,40 @@ class ResultsAPI:
         primary_success = self._try_submit(self.api_url, payload, is_fallback=False)
         if primary_success:
             return True
-        
+
         # Try fallback URL if configured
         if self.fallback_url:
             log.warning(f"Primary API failed, trying fallback: {self.fallback_url}")
             return self._try_submit(self.fallback_url, payload, is_fallback=True)
-        
+
         return False
-    
+
     def _try_submit(self, base_url: str, payload: Dict[str, Any], is_fallback: bool = False) -> bool:
         """Try to submit results to a specific URL.
-        
+
         Args:
             base_url: Base URL to submit to
             payload: Results payload dictionary
             is_fallback: Whether this is a fallback attempt
-            
+
         Returns:
             True if successful, False otherwise
         """
         try:
             endpoint = f"{base_url}/api/v1/rock-ci-results"
             url_type = "fallback" if is_fallback else "primary"
-            
+
             log.debug(f"Payload size: {len(json.dumps(payload))} bytes")
-            
+
             response = self.session.post(
                 endpoint,
                 json=payload,
                 timeout=30
             )
-            
+
             # Raise HTTPError for bad status codes (4xx, 5xx)
             response.raise_for_status()
-            
+
             # If we reach here, request was successful
             log.info(f"✓ Results submitted successfully to {url_type} API")
             try:
@@ -98,33 +98,33 @@ class ResultsAPI:
             except Exception:
                 log.debug(f"Response text: {response.text[:500]}")
             return True
-                
+
         except requests.exceptions.Timeout as e:
             url_type = "fallback" if is_fallback else "primary"
             log.warning(f"✗ {url_type.capitalize()} API Request Timed Out: {e}")
             if not is_fallback:
                 log.debug("  Will try fallback URL if configured")
             return False
-            
+
         except requests.exceptions.ConnectionError as e:
             url_type = "fallback" if is_fallback else "primary"
             log.warning(f"✗ {url_type.capitalize()} API Connection Failed: {e}")
             if not is_fallback:
                 log.debug("  Will try fallback URL if configured")
             return False
-            
+
         except requests.exceptions.HTTPError as e:
             url_type = "fallback" if is_fallback else "primary"
             status_code = e.response.status_code if e.response else "Unknown"
             error_msg = e.response.text[:200] if e.response and e.response.text else str(e)
             log.warning(f"✗ {url_type.capitalize()} API Error ({status_code}): {error_msg}")
             return False
-            
+
         except json.JSONDecodeError as e:
             url_type = "fallback" if is_fallback else "primary"
             log.warning(f"✗ {url_type.capitalize()} API Invalid JSON Response: {e}")
             return False
-            
+
         except Exception as e:
             url_type = "fallback" if is_fallback else "primary"
             log.warning(f"✗ {url_type.capitalize()} API Unexpected Error: {e}")
@@ -140,7 +140,7 @@ def build_results_payload(
     deployment_info: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Build complete results payload with system info, test results, and metadata.
-    
+
     Args:
         system_info: System information (OS, CPU, GPU)
         test_results: List of test results
@@ -148,7 +148,7 @@ def build_results_payload(
         test_environment: Environment type (bare_metal, vm, docker)
         build_info: ROCm build information
         deployment_info: Test deployment information
-        
+
     Returns:
         Complete results payload for API submission
     """
@@ -160,7 +160,7 @@ def build_results_payload(
         "os_kernel_name": system_info.get('kernel', 'Unknown'),
         "hostname": system_info.get('hostname', 'Unknown'),
         "system_ip": system_info.get('system_ip', '0.0.0.0'),
-        
+
         # CPU Information
         "cpu_model_name": system_info.get('cpu', {}).get('model', 'Unknown'),
         "cpu_cores": system_info.get('cpu', {}).get('cores', 0),
@@ -172,7 +172,7 @@ def build_results_payload(
         "cpu_l1_cache": format_cache_size(system_info.get('cpu', {}).get('l1_cache', 0)),
         "cpu_l2_cache": format_cache_size(system_info.get('cpu', {}).get('l2_cache', 0)),
         "cpu_l3_cache": format_cache_size(system_info.get('cpu', {}).get('l3_cache', 0)),
-        
+
         # GPU Information
         "ngpu": system_info.get('gpu', {}).get('count', 0),
         "gpu_name": system_info.get('gpu', {}).get('name', 'Unknown'),
@@ -188,11 +188,11 @@ def build_results_payload(
         "vbios": system_info.get('gpu', {}).get('vbios', 'Unknown'),
         "host_driver": system_info.get('gpu', {}).get('host_driver', 'Unknown'),
         "gpu_firmwares": system_info.get('gpu', {}).get('firmwares', []),
-        
+
         # System BIOS
         "sbios": system_info.get('sbios', 'Unknown'),
     }
-    
+
     # Build test results
     formatted_results = []
     for result in test_results:
@@ -201,13 +201,13 @@ def build_results_payload(
         if not start_time:
             # Generate ISO format timestamp if not provided
             start_time = datetime.now().isoformat()
-        
+
         # Determine test result (PASS/FAIL)
         test_result = "PASS" if result.get('success', False) else "FAIL"
-        
+
         # Build test metrics array from result data
         test_metrics = []
-        
+
         # Check if result has score/metrics data
         if 'score' in result and result['score'] is not None:
             metric = {
@@ -220,9 +220,9 @@ def build_results_payload(
                 metric["metric_name"] = result['metric_name']
             if 'primary' in result:
                 metric["primary"] = result['primary']
-            
+
             test_metrics.append(metric)
-        
+
         # Also check for metrics array in result
         if 'metrics' in result and isinstance(result['metrics'], list):
             for m in result['metrics']:
@@ -236,16 +236,16 @@ def build_results_payload(
                         metric["metric_name"] = m['metric_name']
                     if 'primary' in m:
                         metric["primary"] = m['primary']
-                    
+
                     test_metrics.append(metric)
-        
+
         # API requires at least one metric for PASS results
         # If no metrics found and test passed, add execution time as default metric
         if not test_metrics and test_result == "PASS":
             # Try to get unit and flag from result, otherwise use defaults
             default_unit = result.get('unit', 'seconds')
             default_flag = result.get('flag', 'L')  # Lower is better for execution time
-            
+
             test_metrics.append({
                 "metric_name": "execution_time",
                 "score": result.get('duration', 0.0),
@@ -253,7 +253,7 @@ def build_results_payload(
                 "flag": default_flag,
                 "primary": True
             })
-        
+
         formatted_results.append({
             "test_result": test_result,  # Log parser result (PASS/FAIL)
             "test_start_time": start_time,  # Test start timestamp (ISO format)
@@ -262,7 +262,7 @@ def build_results_payload(
             "test_metrics": test_metrics,  # Metrics from log parser (score, unit, flag)
             "test_config": result.get('test_config', {})  # Test-specific configuration
         })
-    
+
     # Build build_info section
     if build_info is None:
         build_info = {
@@ -273,7 +273,7 @@ def build_results_payload(
             "rocm_package_manager_version": "Unknown",
             "install_type": "Unknown"
         }
-    
+
     # Build deployment_info section
     if deployment_info is None:
         deployment_info = {
@@ -284,7 +284,7 @@ def build_results_payload(
             "testcase_command": "",
             "execution_type": "manual"
         }
-    
+
     # Build complete payload
     payload = {
         "test_environment": test_environment,
@@ -293,13 +293,13 @@ def build_results_payload(
         "deployment_info": deployment_info,
         "results": formatted_results
     }
-    
+
     return payload
 
 
 def _load_schema() -> Dict[str, Any]:
     """Load JSON schema from file.
-    
+
     Returns:
         Dict containing the JSON schema
     """
@@ -310,10 +310,10 @@ def _load_schema() -> Dict[str, Any]:
 
 def validate_payload(payload: Dict[str, Any]) -> bool:
     """Validate results payload structure and required fields using JSON Schema.
-    
+
     Args:
         payload: Results payload to validate
-        
+
     Returns:
         True if valid, False otherwise
     """
