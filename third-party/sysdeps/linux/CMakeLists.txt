@@ -39,7 +39,6 @@ therock_provide_artifact(sysdeps
 )
 
 # Optional sysdep: amd-mesa
-set(THEROCK_ENABLE_SYSDEPS_AMD_MESA ON) # set build with mesa on by default
 if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
   add_subdirectory(amd-mesa)
   therock_provide_artifact(sysdeps-amd-mesa
