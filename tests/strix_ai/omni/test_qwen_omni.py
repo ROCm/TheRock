@@ -7,9 +7,6 @@ Market segment: Automotive
 
 import pytest
 import torch
-import time
-import numpy as np
-from PIL import Image
 
 
 @pytest.fixture(scope="module")
@@ -26,65 +23,33 @@ def check_strix_gpu():
     return torch.cuda.get_device_name(0)
 
 
-@pytest.fixture(scope="module")
-def multimodal_inputs():
-    """Create multimodal test inputs (image, audio, text)"""
-    image = Image.new('RGB', (224, 224), color='yellow')
-    # Audio would be numpy array or tensor
-    # Text is string
-    return {
-        'image': image,
-        'text': "What is happening?"
-    }
-
-
 @pytest.mark.omni
 @pytest.mark.automotive
-@pytest.mark.p2
+@pytest.mark.p0
 @pytest.mark.functional
 @pytest.mark.awq
-def test_qwen25_omni_load():
-    """Test: Load Qwen2.5-Omni 7B with AWQ"""
-    pytest.skip("Qwen2.5-Omni model - requires specific multimodal setup")
+def test_qwen25_omni_7b_awq_load(check_strix_gpu):
+    """Test: Load Qwen2.5-Omni 7B with AWQ quantization"""
+    pytest.skip("Qwen2.5-Omni-7B-AWQ model not yet available. "
+                "Test will be enabled when model is published.")
 
 
 @pytest.mark.omni
 @pytest.mark.automotive
-@pytest.mark.p2
+@pytest.mark.p0
 @pytest.mark.functional
 @pytest.mark.awq
-def test_qwen3_omni_load():
-    """Test: Load Qwen3-Omni 7B with AWQ"""
-    pytest.skip("Qwen3-Omni model - requires specific multimodal setup")
+def test_qwen3_omni_7b_awq_load(check_strix_gpu):
+    """Test: Load Qwen3-Omni 7B with AWQ quantization"""
+    pytest.skip("Qwen3-Omni-7B-AWQ model not yet available. "
+                "Test will be enabled when model is published.")
 
 
 @pytest.mark.omni
 @pytest.mark.automotive
-@pytest.mark.p2
-@pytest.mark.functional
-def test_qwen_omni_multimodal_inference(check_strix_gpu, multimodal_inputs):
-    """Test: Qwen Omni multimodal inference"""
-    # Placeholder for multimodal inference
-    # This would process audio-visual-text inputs together
-    pytest.skip("Qwen Omni multimodal inference - requires model setup")
-
-
-@pytest.mark.omni
-@pytest.mark.automotive
-@pytest.mark.p2
-@pytest.mark.performance
-def test_qwen_omni_latency(check_strix_gpu, multimodal_inputs):
-    """Test: Measure Qwen Omni latency"""
-    target_latency_ms = 300  # Target < 300ms
-    pytest.skip("Qwen Omni latency test - requires model setup")
-
-
-@pytest.mark.omni
-@pytest.mark.automotive
-@pytest.mark.p2
-@pytest.mark.performance
-def test_qwen_omni_memory(check_strix_gpu):
-    """Test: Measure Qwen Omni memory usage"""
-    target_memory_gb = 6.0  # Target < 6GB for 7B with AWQ
-    pytest.skip("Qwen Omni memory test - requires model setup")
-
+@pytest.mark.quick
+@pytest.mark.p0
+def test_qwen_omni_quick_smoke(check_strix_gpu):
+    """Quick smoke test for Qwen Omni models"""
+    pytest.skip("Qwen Omni models not yet available. "
+                "Test will be enabled when models are published.")

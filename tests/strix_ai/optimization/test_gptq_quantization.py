@@ -1,8 +1,8 @@
 """
 GPTQ Quantization Tests for Strix
 
-Tests for GPTQ (Generative Pre-trained Transformer Quantization) models.
-Validates quantization impact on accuracy, speed, and memory.
+Tests for GPTQ quantization on Strix GPUs.
+Market segments: All
 """
 
 import pytest
@@ -24,59 +24,33 @@ def check_strix_gpu():
 
 
 @pytest.mark.optimization
+@pytest.mark.automotive
+@pytest.mark.industrial
+@pytest.mark.robotics
+@pytest.mark.healthcare
+@pytest.mark.p0
 @pytest.mark.gptq
-@pytest.mark.p1
-@pytest.mark.functional
-def test_gptq_models_loadable(check_strix_gpu):
-    """Test: Verify GPTQ models can be loaded"""
-    # GPTQ models (primarily for VLA):
-    # - OpenVLA 7B GPTQ
-    
-    pytest.skip("GPTQ models loadable test - requires auto-gptq library")
+def test_gptq_quantization_basic(check_strix_gpu):
+    """Test: Basic GPTQ quantization functionality"""
+    pytest.skip("GPTQ quantization workflow not yet implemented for Strix. "
+                "Test will be enabled when quantization tools are configured.")
 
 
 @pytest.mark.optimization
+@pytest.mark.automotive
+@pytest.mark.p0
 @pytest.mark.gptq
-@pytest.mark.p1
 @pytest.mark.performance
-def test_gptq_speedup_vs_fp16():
-    """Test: Measure GPTQ speedup compared to FP16 baseline"""
-    # Expected speedup: 1.5-2x
-    
-    pytest.skip("GPTQ speedup test - requires FP16 baseline")
+def test_gptq_quantization_performance(check_strix_gpu):
+    """Test: GPTQ quantization performance gains"""
+    pytest.skip("GPTQ quantization workflow not yet implemented for Strix. "
+                "Test will be enabled when quantization tools are configured.")
 
 
 @pytest.mark.optimization
-@pytest.mark.gptq
-@pytest.mark.p1
-@pytest.mark.performance
-def test_gptq_memory_reduction():
-    """Test: Measure GPTQ memory reduction compared to FP16"""
-    # Expected reduction: ~2-4x
-    
-    pytest.skip("GPTQ memory reduction test - requires FP16 baseline")
-
-
-@pytest.mark.optimization
-@pytest.mark.gptq
-@pytest.mark.p1
-@pytest.mark.functional
-def test_gptq_accuracy_preservation():
-    """Test: Validate GPTQ accuracy vs FP16 baseline"""
-    pytest.skip("GPTQ accuracy test - requires FP16 baseline and dataset")
-
-
-@pytest.mark.optimization
-@pytest.mark.gptq
-@pytest.mark.p1
-@pytest.mark.functional
-def test_gptq_vs_awq_comparison():
-    """Test: Compare GPTQ vs AWQ for same model"""
-    # When both quantization methods are available,
-    # compare:
-    # - Speed (GPTQ vs AWQ)
-    # - Memory (GPTQ vs AWQ)
-    # - Accuracy (GPTQ vs AWQ)
-    
-    pytest.skip("GPTQ vs AWQ comparison - requires both quantizations")
-
+@pytest.mark.quick
+@pytest.mark.p0
+def test_gptq_quick_smoke(check_strix_gpu):
+    """Quick smoke test for GPTQ quantization"""
+    pytest.skip("GPTQ quantization not yet configured for Strix. "
+                "Test will be enabled when tools are available.")

@@ -1,14 +1,12 @@
 """
-crossformer ASR Model Tests for Strix
+Crossformer ASR Model Tests for Strix
 
-Tests for crossformer <0.3B speech recognition model.
-Market segments: Automotive, Robotics, Industrial
+Tests for crossformer <0.3B models.
+Market segments: Automotive, Industrial
 """
 
 import pytest
 import torch
-import time
-import numpy as np
 
 
 @pytest.fixture(scope="module")
@@ -25,62 +23,31 @@ def check_strix_gpu():
     return torch.cuda.get_device_name(0)
 
 
-@pytest.fixture(scope="module")
-def sample_audio():
-    """Create a sample audio waveform"""
-    sample_rate = 16000
-    duration = 1.0
-    samples = int(sample_rate * duration)
-    audio = np.zeros(samples, dtype=np.float32)
-    return audio, sample_rate
-
-
 @pytest.mark.asr
 @pytest.mark.automotive
-@pytest.mark.robotics
 @pytest.mark.industrial
-@pytest.mark.p1
+@pytest.mark.p0
 @pytest.mark.functional
-def test_crossformer_load():
+def test_crossformer_load(check_strix_gpu):
     """Test: Load crossformer ASR model"""
-    pytest.skip("crossformer model loading - requires icefall library setup")
+    pytest.skip("crossformer model not yet configured for Strix. "
+                "Test will be enabled when model is available via icefall.")
 
 
 @pytest.mark.asr
 @pytest.mark.automotive
-@pytest.mark.p1
+@pytest.mark.p0
 @pytest.mark.functional
-def test_crossformer_transcription(check_strix_gpu, sample_audio):
-    """Test: crossformer speech-to-text transcription"""
-    pytest.skip("crossformer transcription test - requires model setup")
+def test_crossformer_inference(check_strix_gpu):
+    """Test: Run ASR inference with crossformer"""
+    pytest.skip("crossformer model not yet configured for Strix. "
+                "Test will be enabled when model is available via icefall.")
 
 
 @pytest.mark.asr
-@pytest.mark.automotive
-@pytest.mark.p1
-@pytest.mark.performance
-def test_crossformer_latency(check_strix_gpu, sample_audio):
-    """Test: Measure crossformer latency"""
-    target_latency_ms = 100  # Target < 100ms
-    pytest.skip("crossformer latency test - requires model setup")
-
-
-@pytest.mark.asr
-@pytest.mark.automotive
-@pytest.mark.p1
-@pytest.mark.performance
-def test_crossformer_real_time_factor(check_strix_gpu, sample_audio):
-    """Test: Measure crossformer Real-Time Factor (RTF)"""
-    target_rtf = 0.1  # Target RTF < 0.1
-    pytest.skip("crossformer RTF test - requires model setup")
-
-
-@pytest.mark.asr
-@pytest.mark.automotive
-@pytest.mark.p1
-@pytest.mark.performance
-def test_crossformer_memory(check_strix_gpu):
-    """Test: Measure crossformer memory usage"""
-    target_memory_gb = 0.5  # Target < 0.5GB for <0.3B model
-    pytest.skip("crossformer memory test - requires model setup")
-
+@pytest.mark.quick
+@pytest.mark.p0
+def test_crossformer_quick_smoke(check_strix_gpu):
+    """Quick smoke test for crossformer"""
+    pytest.skip("crossformer model not yet configured for Strix. "
+                "Test will be enabled when model is available.")

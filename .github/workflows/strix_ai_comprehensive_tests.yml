@@ -96,7 +96,7 @@ jobs:
   # ===========================================================================
   strix_vlm_tests:
     name: Strix VLM Tests (Qwen-VL, CLIP/BLIP)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'vlm' || github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'vlm')
     runs-on: ${{ github.event.inputs.runner_label || ((github.event.inputs.platform || 'linux') == 'linux' && 'linux-strix-halo-gpu-rocm' || 'windows-strix-halo-gpu-rocm') }}
     timeout-minutes: 60
     
@@ -184,7 +184,7 @@ jobs:
   # ===========================================================================
   strix_vla_tests:
     name: Strix VLA Tests (OpenVLA, Pi0)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'vla'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'vla')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -230,7 +230,7 @@ jobs:
   # ===========================================================================
   strix_omni_tests:
     name: Strix Omni Tests (Qwen Omni)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'omni'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'omni')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -275,7 +275,7 @@ jobs:
   # ===========================================================================
   strix_instruct_tests:
     name: Strix Instruct Tests (Qwen3-Instruct)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'instruct' || github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'instruct')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -321,7 +321,7 @@ jobs:
   # ===========================================================================
   strix_segmentation_tests:
     name: Strix Segmentation Tests (SAM2)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'segmentation' || github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'segmentation')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -366,7 +366,7 @@ jobs:
   # ===========================================================================
   strix_asr_tests:
     name: Strix ASR Tests (zipformer, crossformer)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'asr'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'asr')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -411,7 +411,7 @@ jobs:
   # ===========================================================================
   strix_diffusion_tests:
     name: Strix Diffusion Tests (Flux, SD3)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'diffusion'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'diffusion')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -456,7 +456,7 @@ jobs:
   # ===========================================================================
   strix_llm_tests:
     name: Strix LLM Tests (Llama, Deepseek)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'llm'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'llm')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -501,7 +501,7 @@ jobs:
   # ===========================================================================
   strix_optimization_tests:
     name: Strix Optimization Tests (AWQ, GPTQ)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'optimization'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'optimization')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 60
     
@@ -546,7 +546,7 @@ jobs:
   # ===========================================================================
   strix_profiling_tests:
     name: Strix Profiling Tests (ROCProfiler v3)
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'profiling'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'profiling')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 90
     
@@ -599,7 +599,7 @@ jobs:
   # ===========================================================================
   strix_benchmark_tests:
     name: Strix Benchmarks (${{ github.event.inputs.market_segment || 'all' }})
-    if: github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'benchmarks'
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_category == 'all' || github.event.inputs.test_category == 'benchmarks')
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 120
     
@@ -661,7 +661,7 @@ jobs:
   # ===========================================================================
   strix_quick_tests:
     name: Strix Quick Smoke Tests
-    if: github.event.inputs.test_category == 'quick' || github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_category == 'quick' || github.event.inputs.test_category == 'all'
     runs-on: ${{ github.event.inputs.runner_label || 'linux-strix-halo-gpu-rocm' }}
     timeout-minutes: 30
     

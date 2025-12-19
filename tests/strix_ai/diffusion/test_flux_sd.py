@@ -1,13 +1,12 @@
 """
-Diffusion Model Tests for Strix (Flux, Stable Diffusion 3/3.5)
+Flux/Stable Diffusion Model Tests for Strix
 
-Tests for existing generative AI support on Strix Halo.
-Market segment: Industrial (Design, Visualization)
+Tests for Flux 4B and Stable Diffusion 2B models with AWQ/FP16.
+Market segments: Industrial, Healthcare
 """
 
 import pytest
 import torch
-import time
 
 
 @pytest.fixture(scope="module")
@@ -24,92 +23,43 @@ def check_strix_gpu():
     return torch.cuda.get_device_name(0)
 
 
-# ============================================================================
-# Flux-1-schnell Tests
-# ============================================================================
-
 @pytest.mark.diffusion
 @pytest.mark.industrial
-@pytest.mark.p2
+@pytest.mark.healthcare
+@pytest.mark.p0
 @pytest.mark.functional
-def test_flux_1_schnell_load():
-    """Test: Load Flux-1-schnell model"""
-    # Flux models typically use diffusers or ComfyUI
-    pytest.skip("Flux-1-schnell model - requires diffusers/ComfyUI setup")
+@pytest.mark.awq
+def test_flux_4b_awq_load(check_strix_gpu):
+    """Test: Load Flux 4B with AWQ quantization"""
+    pytest.skip("Flux-4B-AWQ model not yet available. "
+                "Test will be enabled when model is published.")
 
 
 @pytest.mark.diffusion
 @pytest.mark.industrial
-@pytest.mark.p2
+@pytest.mark.p0
 @pytest.mark.functional
-def test_flux_1_schnell_generation(check_strix_gpu):
-    """Test: Flux-1-schnell image generation"""
-    prompt = "a beautiful landscape"
-    
-    # Placeholder for image generation
-    # This would:
-    # 1. Load Flux-1-schnell pipeline
-    # 2. Generate image from prompt
-    # 3. Validate image quality
-    # 4. Check prompt adherence
-    
-    pytest.skip("Flux-1-schnell generation test - requires model setup")
+@pytest.mark.fp16
+def test_sd_2b_fp16_load(check_strix_gpu):
+    """Test: Load Stable Diffusion 2B with FP16"""
+    pytest.skip("Stable-Diffusion-2B-FP16 model not yet configured for Strix. "
+                "Test will be enabled when model is available.")
 
-
-# ============================================================================
-# Stable Diffusion 3 Tests
-# ============================================================================
 
 @pytest.mark.diffusion
 @pytest.mark.industrial
-@pytest.mark.p2
+@pytest.mark.p0
 @pytest.mark.functional
-def test_sd3_load():
-    """Test: Load Stable Diffusion 3 model"""
-    pytest.skip("Stable Diffusion 3 model - requires diffusers/ComfyUI setup")
+def test_flux_4b_inference(check_strix_gpu):
+    """Test: Run image generation with Flux 4B"""
+    pytest.skip("Flux-4B model not yet available. "
+                "Test will be enabled when model is published.")
 
 
 @pytest.mark.diffusion
-@pytest.mark.industrial
-@pytest.mark.p2
-@pytest.mark.functional
-def test_sd3_generation(check_strix_gpu):
-    """Test: Stable Diffusion 3 image generation"""
-    prompt = "a futuristic city"
-    pytest.skip("SD3 generation test - requires model setup")
-
-
-# ============================================================================
-# Stable Diffusion 3.5 XL Turbo Tests
-# ============================================================================
-
-@pytest.mark.diffusion
-@pytest.mark.industrial
-@pytest.mark.p2
-@pytest.mark.functional
-def test_sd35_turbo_load():
-    """Test: Load Stable Diffusion 3.5 XL Turbo model"""
-    pytest.skip("SD 3.5 XL Turbo model - requires diffusers/ComfyUI setup")
-
-
-@pytest.mark.diffusion
-@pytest.mark.industrial
-@pytest.mark.p2
-@pytest.mark.functional
-def test_sd35_turbo_generation(check_strix_gpu):
-    """Test: SD 3.5 XL Turbo image generation"""
-    prompt = "a cat"
-    pytest.skip("SD 3.5 XL Turbo generation test - requires model setup")
-
-
-@pytest.mark.diffusion
-@pytest.mark.industrial
-@pytest.mark.p2
-@pytest.mark.performance
-def test_sd35_turbo_speed(check_strix_gpu):
-    """Test: SD 3.5 XL Turbo generation speed"""
-    # Turbo models should be faster than standard SD
-    target_time_seconds = 5  # Target < 5 seconds for single image
-    
-    pytest.skip("SD 3.5 XL Turbo speed test - requires model setup")
-
+@pytest.mark.quick
+@pytest.mark.p0
+def test_diffusion_quick_smoke(check_strix_gpu):
+    """Quick smoke test for diffusion models"""
+    pytest.skip("Diffusion models not yet configured for Strix. "
+                "Test will be enabled when models are available.")
