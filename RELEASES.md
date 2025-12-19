@@ -281,6 +281,16 @@ also install `torch`, `torchaudio`, and `torchvision`.
 > be installed automatically for you and you do not need to explicitly install
 > ROCm first.
 
+> [!TIP]
+> If you previously installed PyTorch with the `pytorch-triton-rocm` package,
+> please uninstall it before installing the new packages:
+>
+> ```bash
+> pip uninstall pytorch-triton-rocm
+> ```
+>
+> The triton package is now named `triton`.
+
 #### torch for gfx94X-dcgpu
 
 Supported devices in this family:

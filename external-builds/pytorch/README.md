@@ -250,7 +250,7 @@ PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `pytorch-triton-rocm` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
+With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `triton` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
 
 Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
 

@@ -215,6 +215,7 @@ jobs:
             "--version=${{ needs.setup_metadata.outputs.version }}"
 
       - name: Grant ownership over output directory
+        if: ${{ !cancelled() }}
         run: |
           sudo chown -R $(whoami) ${{ env.OUTPUT_DIR }}
 
@@ -232,21 +233,21 @@ jobs:
           python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
 
       - name: Configure AWS Credentials
-        if: ${{ github.repository_owner == 'ROCm' }}
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
 
-      # TODO: upload logs even if the build fails (separate from artifact upload?)
       - name: Post Build Upload
-        if: ${{ github.repository_owner == 'ROCm' }}
+        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
         run: |
           python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group "${{ matrix.target_bundle.amdgpu_family }}" \
             --build-dir ${{ env.OUTPUT_DIR }}/build \
-            --upload
+            --upload \
+            --job-status ${{ job.status }}
 
       - name: Upload Releases to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}
