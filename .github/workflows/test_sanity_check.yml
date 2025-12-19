@@ -99,7 +99,6 @@ jobs:
         run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
 
       - name: Driver / GPU sanity check
-        if: ${{ runner.os == 'Linux' }}
         run: |
           python ./build_tools/print_driver_gpu_info.py
 

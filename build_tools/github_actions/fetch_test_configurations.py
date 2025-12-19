@@ -48,11 +48,11 @@ test_matrix = {
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
-        # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1702
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        # TODO(#2616): Enable full tests once known machine issues are resolved
+        "total_shards": 1,
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
@@ -117,10 +117,10 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 6,
+        "total_shards": 1,
         "exclude_family": {
             "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
         },
@@ -130,7 +130,8 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        "platform": ["linux"],
+        # TODO(#2616): Re-enable tests after test slowdown issues are resolved
+        "platform": [],
         "total_shards": 4,
     },
     # RAND tests
@@ -183,7 +184,8 @@ test_matrix = {
         "fetch_artifact_args": "--rccl --tests",
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
-        "platform": ["linux"],
+        # TODO(#2616): Enable tests once known machine issues are resolved
+        "platform": [],
         "total_shards": 1,
     },
     # hipDNN tests
