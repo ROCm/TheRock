@@ -48,7 +48,9 @@ if test_type == "smoke":
     ]
     cmd.extend([f"--gtest_filter={':'.join(smoke_tests)}-*LARFB*:*known_bug*"])
 else:
-    cmd.extend(["--gtest_filter=checkin*-*known_bug*:checkin_lapack/SYGVDX_INPLACE.__float/41"])
+    cmd.extend(
+        ["--gtest_filter=checkin*-*known_bug*:checkin_lapack/SYGVDX_INPLACE.__float/41"]
+    )
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)
