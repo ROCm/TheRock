@@ -13,7 +13,7 @@ Local installation (uses .deb/.rpm files from a directory):
     --artifact-group gfx94X-dcgpu \
     --release-type test \
     --version true/false \
-    --composite true/false \
+    --metapackage true/false \
     [--package-suffix asan] \
     [--bucket therock-deb-rpm-test]
 ```
@@ -27,7 +27,7 @@ Repository installation (uses run-id to fetch from remote repo):
     --release-type test \
     --bucket therock-deb-rpm-test \
     --version true/false \
-    --composite true/false \
+    --metapackage true/false \
     [--package-suffix asan]
 ```
 
@@ -69,7 +69,7 @@ class PackageInstaller(PackageManagerBase):
         release_type: str,
         bucket: Optional[str] = None,
         package_suffix: Optional[str] = None,
-        composite: bool = False,
+        metapackage: bool = False,
         loader = None,
     ):
         """
@@ -105,7 +105,7 @@ class PackageInstaller(PackageManagerBase):
             self.dest_dir = dest_dir
             self.run_id = run_id
             self.rocm_version = rocm_version
-            self.composite = composite
+            self.metapackage = metapackage
             self.version_flag = version_flag
             self.artifact_group = artifact_group
             self.release_type = release_type
@@ -163,7 +163,7 @@ class PackageInstaller(PackageManagerBase):
             logger.info(f"\n=== INSTALLATION PHASE ===")
             logger.info(f"Destination Directory: {self.dest_dir}")
             logger.info(f"ROCm Version: {self.rocm_version}")
-            logger.info(f"Composite Build: {self.composite}")
+            logger.info(f"Metapackage Build: {self.metapackage}")
 
             if self.upload == "post":
                 self.populate_repo_file(self.run_id)
@@ -647,7 +647,7 @@ def parse_arguments():
         "--package-json", required=True, help="Path to package JSON definition file"
     )
     parser.add_argument(
-        "--composite", default="false", help="Enable composite build mode (true/false)"
+        "--metapackage", default="false", help="Enable metapackage build mode (true/false)"
     )
     parser.add_argument(
         "--artifact-group", default="gfx000", help="GPU family identifier"
@@ -709,9 +709,9 @@ def main():
         try:
             loader = PackageLoader(args.package_json, args.rocm_version, args.artifact_group)
             packages = (
-                loader.load_composite_packages()
-                if args.composite.lower() == "true"
-                else loader.load_non_composite_packages()
+                loader.load_metapackage_packages()
+                if args.metapackage.lower() == "true"
+                else loader.load_non_metapackage_packages()
             )
         except FileNotFoundError as e:
             logger.error(f"Failed to load package definitions: {e}")
@@ -747,7 +747,7 @@ def main():
                 release_type=args.release_type,
                 bucket=args.bucket,
                 package_suffix=args.package_suffix,
-                composite=(args.composite.lower() == "true"),
+                metapackage=(args.metapackage.lower() == "true"),
                 loader=loader,
             )
         except Exception as e:

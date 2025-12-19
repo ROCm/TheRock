@@ -4,23 +4,23 @@
 # SPDX-License-Identifier: MIT
 
 """Uninstalls ROCm packages from the system using OS package managers.
-Composite uninstall (removes all composite packages in reverse order):
+Metapackage uninstall (removes all metapackages in reverse order):
 
 ```
 ./uninstall_package.py \
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
-    --composite true
+    --metapackage true
 ```
-Non-composite uninstall (removes only rocm-core and its versioned package):
+Non-metapackage uninstall (removes only rocm-core and its versioned package):
 
 ```
 ./uninstall_package.py \
     --package-json ./packages.json \
     --rocm-version 6.2.0 \
     --artifact-group gfx94X-dcgpu \
-    --composite false
+    --metapackage false
 ```
 
 """
@@ -40,7 +40,7 @@ class PackageUninstaller(PackageManagerBase):
     """
     Handles ROCm package uninstallation on the local system.
 
-    Depending on the mode, either removes all composite packages
+    Depending on the mode, either removes all metapackages
     in reverse order or just the core package.
     """
 
@@ -48,7 +48,7 @@ class PackageUninstaller(PackageManagerBase):
         self,
         package_list: List[PackageInfo],
         rocm_version: str,
-        composite: bool,
+        metapackage: bool,
         loader,
     ):
         """
@@ -66,7 +66,7 @@ class PackageUninstaller(PackageManagerBase):
                 raise ValueError("ROCm version is required")
             
             self.rocm_version = rocm_version
-            self.composite = composite
+            self.metapackage = metapackage
             self.loader = loader
             self.failed_packages = {}
             
@@ -90,9 +90,9 @@ class PackageUninstaller(PackageManagerBase):
         """
         Perform the uninstallation.
 
-        Composite mode:
+        Metapackage mode:
             - Uninstall all packages in reverse dependency order.
-        Non-composite mode:
+        Non-metapackage mode:
             - Only uninstall 'rocm-core' and its derived packages.
 
         Logs the progress and errors.
@@ -100,10 +100,10 @@ class PackageUninstaller(PackageManagerBase):
         try:
             logger.info(f"\n=== UNINSTALLATION PHASE ===")
             logger.info(f"ROCm Version: {self.rocm_version}")
-            logger.info(f"Composite Build: {self.composite}")
+            logger.info(f"Metapackage Build: {self.metapackage}")
 
             # Uninstall in reverse dependency order
-            if self.composite:
+            if self.metapackage:
                 for pkg in reversed(self.packages):
                     try:
                         logger.info(f"[REMOVE] Uninstalling {pkg.package}")
@@ -300,7 +300,7 @@ def parse_arguments():
         "--package-json", required=True, help="Path to package JSON definition file"
     )
     parser.add_argument(
-        "--composite", default="false", help="Composite build mode (true/false)"
+        "--metapackage", default="false", help="Metapackage build mode (true/false)"
     )
     parser.add_argument(
         "--artifact-group", default="gfx000", help="GPU family identifier"
@@ -335,9 +335,9 @@ def main():
         try:
             loader = PackageLoader(args.package_json, args.rocm_version, args.artifact_group)
             packages = (
-                loader.load_composite_packages()
-                if args.composite.lower() == "true"
-                else loader.load_non_composite_packages()
+                loader.load_metapackage_packages()
+                if args.metapackage.lower() == "true"
+                else loader.load_non_metapackage_packages()
             )
         except FileNotFoundError as e:
             logger.error(f"Failed to load package definitions: {e}")
@@ -353,14 +353,14 @@ def main():
             logger.warning("No packages to uninstall")
             return 0
 
-        logger.info(f"Uninstalling in {'composite' if args.composite.lower() == 'true' else 'non-composite'} mode")
+        logger.info(f"Uninstalling in {'metapackage' if args.metapackage.lower() == 'true' else 'non-metapackage'} mode")
 
         # Initialize uninstaller
         try:
             uninstaller = PackageUninstaller(
                 package_list=packages,
                 rocm_version=args.rocm_version,
-                composite=(args.composite.lower() == "true"),
+                metapackage=(args.metapackage.lower() == "true"),
                 loader=loader,
             )
         except Exception as e:

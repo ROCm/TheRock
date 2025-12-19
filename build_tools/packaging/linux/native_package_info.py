@@ -67,7 +67,7 @@ class PackageInfo:
         self.artifact = data.get("Artifact", "")
         self.artifact_subdir = data.get("Artifact_Subdir", "")
         self.gfxarch = str(data.get("Gfxarch", "False")).lower() == "true"
-        self.composite = data.get("Composite", "no")  # default to "no" if field missing
+        self.metapackage = data.get("Metapackage", "no")  # default to "no" if field missing
 
         # Added new contextual fields
         self.rocm_version = rocm_version
@@ -94,14 +94,14 @@ class PackageInfo:
             return ""
         return artifact_group.split("-")[0].lower()
 
-    def is_composite(self) -> bool:
+    def is_metapackage(self) -> bool:
         """
-        Check if the package is composite (i.e., bundles multiple artifacts).
+        Check if the package is metapackage (i.e., bundles multiple artifacts).
 
         Returns:
-        bool : True if composite, False otherwise.
+        bool : True if metapackage, False otherwise.
         """
-        return str(self.composite).strip().lower() == "yes"
+        return str(self.metapackage).strip().lower() == "yes"
 
     def summary(self) -> str:
         """
@@ -251,23 +251,23 @@ class PackageLoader:
             logger.exception(f"Unexpected error loading all packages: {e}")
             raise
 
-    def load_composite_packages(self) -> List[PackageInfo]:
+    def load_metapackage_packages(self) -> List[PackageInfo]:
         """
-        Filter and return only composite packages.
+        Filter and return only metapackages.
 
         Returns:
-        list of PackageInfo : Packages where composite=True.
+        list of PackageInfo : Packages where metapackage=True.
         """
-        return [pkg for pkg in self.load_all_packages() if pkg.is_composite()]
+        return [pkg for pkg in self.load_all_packages() if pkg.is_metapackage()]
 
-    def load_non_composite_packages(self) -> List[PackageInfo]:
+    def load_non_metapackage_packages(self) -> List[PackageInfo]:
         """
-        Filter and return only non-composite (base) packages.
+        Filter and return only non-metapackage (base) packages.
 
         Returns:
-        list of PackageInfo : Packages where composite=False.
+        list of PackageInfo : Packages where metapackage=False.
         """
-        return [pkg for pkg in self.load_all_packages() if not pkg.is_composite()]
+        return [pkg for pkg in self.load_all_packages() if not pkg.is_metapackage()]
 
     def get_package_by_name(self, name: str) -> Optional[PackageInfo]:
         """

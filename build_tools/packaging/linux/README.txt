@@ -27,20 +27,20 @@ For more options ./build_package.py -h
 
 Local install (from .deb/.rpm files):
 ./install_package.py --dest-dir ./PKG_DIR --package-json ./packages.json --rocm-version 6.2.0 --artifact-group gfx94X
--dcgpu --version true/false --composite true/false
+-dcgpu --version true/false --metapackage true/false
 
 Repo install (from remote repository using run-id):
 ./install_package.py --run-id 123456 --package-json ./packages.json --rocm-version 6.2.0 --artifact-group gfx94X-dcgp
-u --version true/false --composite true/false
+u --version true/false --metapackage true/false
 
 uninstaller.py
-Uninstalls ROCm packages using the OS package manager. Supports composite and non-composite uninstallation.
+Uninstalls ROCm packages using the OS package manager. Supports metapackage and non-metapackage uninstallation.
 Usage examples:
 
-Composite uninstall:
+Metapackage uninstall:
 ./uninstall_package.py --run-id 123456 --package-json ./packages.json --rocm-version 6.2.0 --artifact-group gfx94X-dc
-gpu --composite true
+gpu --metapackage true
 
-Non-composite uninstall:
+Non-metapackage uninstall:
 ./uninstall_package.py --run-id 123456 --package-json ./packages.json --rocm-version 6.2.0 --artifact-group gfx94X-dc
-gpu --composite false
+gpu --metapackage false

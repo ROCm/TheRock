@@ -101,16 +101,17 @@ def is_meta_package(pkg_info):
 
 def is_composite_package(pkg_info):
     """
-    Verifies whether composite key is enabled for a package.
+    Verifies whether metapackage key is enabled for a package.
+    (Legacy function name kept for backward compatibility - checks for Metapackage)
 
     Parameters:
     pkg_info (dict): A dictionary containing package details.
 
     Returns:
-    bool: True if composite key is defined, False otherwise.
+    bool: True if metapackage key is defined, False otherwise.
     """
 
-    return is_key_defined(pkg_info, "composite")
+    return is_key_defined(pkg_info, "metapackage")
 
 
 def is_rpm_stripping_disabled(pkg_info):
