@@ -132,14 +132,7 @@ These instructions mostly mirror the instructions in the root
 > winget install --id Microsoft.VisualStudio.BuildTools --source winget --override "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
 > winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
 > winget install cmake -v 3.31.0
-> winget install ninja-build.ninja ccache python strawberryperl
-> ```
-
-> [!TIP]
-> winget installation is recommended for dvc
-> [winget-cli](https://github.com/microsoft/winget-cli):
->
-> ```bash
+> winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 
