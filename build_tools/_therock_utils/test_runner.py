@@ -14,6 +14,8 @@ import subprocess
 import shlex
 import re
 import sys
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 from logging_config import get_logger, configure_root_logger
@@ -321,7 +323,8 @@ class TestRunner:
             "skipped": 0,
             "failed_tests": [],
             "skipped_tests": [],
-            "failure_details": {}  # Map of test_name -> failure reason
+            "failure_details": {},  # Map of test_name -> failure reason
+            "duration_sec": 0.0
         }
         
         current_test = None
@@ -442,7 +445,8 @@ class TestRunner:
             "skipped": 0,
             "failed_tests": [],
             "skipped_tests": [],
-            "failure_details": {}  # Map of test_name -> failure reason
+            "failure_details": {},  # Map of test_name -> failure reason
+            "duration_sec": 0.0
         }
         
         lines = output.splitlines()
@@ -558,6 +562,55 @@ class TestRunner:
             self.logger.info("✅ All tests passed!")
         else:
             self.logger.error("❌ Some tests failed!")
+        
+        # Save test results to JSON file for report generation
+        self.save_test_results(results)
+    
+    def save_test_results(self, results: Dict, output_dir: Optional[Path] = None):
+        """
+        Save test results to JSON file for report generation.
+        
+        Parameters:
+        -----------
+        results : dict
+            Test results dictionary from parsing
+        output_dir : Path, optional
+            Directory to save results (default: current directory)
+        """
+        # Determine output directory
+        if output_dir is None:
+            output_dir = Path.cwd()
+        else:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Determine test framework from operation
+        framework = getattr(self.logger, 'extra', {}).get('operation', 'unknown')
+        
+        # Create results dictionary with additional metadata
+        test_report = {
+            "component": self.component,
+            "test_type": self.test_type,
+            "framework": framework,
+            "timestamp": datetime.now().isoformat(),
+            "total": results.get("total", 0),
+            "passed": results.get("passed", 0),
+            "failed": results.get("failed", 0),
+            "skipped": results.get("skipped", 0),
+            "duration_sec": results.get("duration_sec", 0),
+            "failed_tests": results.get("failed_tests", []),
+            "skipped_tests": results.get("skipped_tests", [])
+        }
+        
+        # Generate output filename
+        output_file = output_dir / f"test_results_{self.component}_{self.test_type}.json"
+        
+        try:
+            with open(output_file, 'w') as f:
+                json.dump(test_report, f, indent=2)
+            self.logger.info(f"Test results saved to: {output_file}")
+        except Exception as e:
+            self.logger.warning(f"Failed to save test results to {output_file}: {e}")
 
 
 def main():

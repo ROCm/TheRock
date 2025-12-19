@@ -1,0 +1,127 @@
+name: Nightly Test Report
+
+# Workflow to run all tests and generate comprehensive reports
+# Runs nightly to track test results across configurations
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Run at 2 AM UTC daily
+  workflow_dispatch:  # Allow manual trigger
+  push:
+    branches:
+      - 'users/rponnuru/build_report'  # Auto-trigger for testing
+
+permissions:
+  contents: read
+
+jobs:
+  run_tests:
+    name: Run Tests and Generate Reports
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Display Test Info
+        run: |
+          echo "=========================================="
+          echo "  Nightly Test Report"
+          echo "=========================================="
+          echo ""
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Run ID: ${{ github.run_id }}"
+          echo ""
+      
+      # Run all test suites
+      - name: 🧪 Run rocROLLER GTest Suite
+        continue-on-error: true
+        run: |
+          echo "::group::🧪 rocROLLER GTest Suite"
+          cd build_tools/github_actions/test_executable_scripts
+          python3 demo_test_rocroller.py
+          echo "::endgroup::"
+        env:
+          TEST_TYPE: smoke
+          SHARD_INDEX: 1
+          TOTAL_SHARDS: 1
+          RUNNER_OS: Linux
+      
+      - name: 🔬 Run rocWMMA CTest Suite
+        continue-on-error: true
+        run: |
+          echo "::group::🔬 rocWMMA CTest Suite"
+          cd build_tools/github_actions/test_executable_scripts
+          python3 demo_test_rocwmma.py
+          echo "::endgroup::"
+        env:
+          TEST_TYPE: regression
+          SHARD_INDEX: 1
+          TOTAL_SHARDS: 1
+          AMDGPU_FAMILIES: gfx942
+          RUNNER_OS: Linux
+      
+      # Collect test result files
+      - name: 📊 Collect Test Results
+        if: always()
+        run: |
+          echo "Collecting test result files..."
+          mkdir -p test_results
+          find build_tools/github_actions/test_executable_scripts -name "test_results_*.json" -exec cp {} test_results/ \;
+          ls -la test_results/
+      
+      # Generate aggregated report
+      - name: 📈 Generate Test Report
+        if: always()
+        run: |
+          echo "Generating aggregated test report..."
+          cd build_tools/_therock_utils
+          python3 generate_test_report.py \
+            --results-dir ../../test_results \
+            --output-html ../../test_report.html \
+            --output-json ../../test_report.json
+      
+      # Upload artifacts
+      - name: 📦 Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_number }}
+          path: |
+            test_report.html
+            test_report.json
+            test_results/*.json
+          retention-days: 30
+      
+      # Create GitHub summary
+      - name: 📝 Create Test Summary
+        if: always()
+        run: |
+          echo "Generating GitHub Actions summary..."
+          python3 build_tools/_therock_utils/generate_github_summary.py \
+            --results-file test_report.json >> $GITHUB_STEP_SUMMARY
+      
+      # Display summary in logs
+      - name: 📊 Display Summary
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "  Test Report Generated"
+          echo "=========================================="
+          echo ""
+          echo "Reports available in artifacts:"
+          echo "  - test_report.html (Visual report)"
+          echo "  - test_report.json (Data export)"
+          echo "  - test_results/*.json (Individual results)"
+          echo ""
+          echo "Download URL:"
+          echo "  https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+
