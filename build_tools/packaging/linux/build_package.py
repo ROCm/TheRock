@@ -259,12 +259,17 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     rules_file = Path(deb_dir) / "rules"
     disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
+    # Get package name for changelog installation
+    pkg_name = update_package_name(pkg_info.get("Package"), config)
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
     context = {
         "disable_dwz": disable_dwz,
         "disable_dh_strip": disable_dh_strip,
+        "install_prefix": config.install_prefix,
+        "pkg_name": pkg_name,
     }
 
     with rules_file.open("w", encoding="utf-8") as f:
