@@ -169,7 +169,9 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1150": {
         "linux": {
-            "test-runs-on": "linux-gfx1150-gpu-rocm",
+            # TODO(#2614): Re-enable machine once it is stable
+            # Label is "linux-gfx1150-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx1150",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -184,13 +186,11 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1152",
-            "expect_failure": True,
             "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
-            "expect_failure": True,
             "build_variants": ["release"],
         },
     },
@@ -198,14 +198,12 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
-            "expect_failure": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
-            "expect_failure": True,
             "build_variants": ["release"],
         },
     },

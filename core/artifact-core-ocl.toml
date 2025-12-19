@@ -9,4 +9,9 @@ include = [
 [components.run."core/ocl-clr/stage"]
 include = [
   "bin/**",
+  "tests/**",
+]
+[components.tests."core/ocl-clr/stage"]
+include = [
+  "tests/**",
 ]

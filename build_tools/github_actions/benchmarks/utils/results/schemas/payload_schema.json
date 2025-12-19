@@ -3,7 +3,11 @@
   "title": "Test Results Payload Schema",
   "description": "Schema for validating test results payload submitted to the API",
   "type": "object",
-  "required": ["test_environment", "bm_config", "results"],
+  "required": [
+    "test_environment",
+    "bm_config",
+    "results"
+  ],
   "properties": {
     "test_environment": {
       "type": "string",
@@ -12,7 +16,11 @@
     "bm_config": {
       "type": "object",
       "description": "Bare metal/system configuration details",
-      "required": ["os_name", "cpu_model_name", "cpu_cores"],
+      "required": [
+        "os_name",
+        "cpu_model_name",
+        "cpu_cores"
+      ],
       "properties": {
         "os_name": {
           "type": "string",
@@ -44,11 +52,21 @@
       "description": "Array of test results",
       "items": {
         "type": "object",
-        "required": ["test_result", "test_start_time", "test_execution_time", "test_log", "test_metrics", "test_config"],
+        "required": [
+          "test_result",
+          "test_start_time",
+          "test_execution_time",
+          "test_log",
+          "test_metrics",
+          "test_config"
+        ],
         "properties": {
           "test_result": {
             "type": "string",
-            "enum": ["PASS", "FAIL"],
+            "enum": [
+              "PASS",
+              "FAIL"
+            ],
             "description": "Overall test result status"
           },
           "test_start_time": {
@@ -90,13 +108,22 @@
                   "description": "Whether this is the primary metric"
                 }
               },
-              "required": ["score", "unit", "flag"]
+              "required": [
+                "score",
+                "unit",
+                "flag"
+              ]
             }
           },
           "test_config": {
             "type": "object",
             "description": "Test configuration details",
-            "required": ["test_name", "sub_test_name", "python_version", "environment_dependencies"],
+            "required": [
+              "test_name",
+              "sub_test_name",
+              "python_version",
+              "environment_dependencies"
+            ],
             "properties": {
               "test_name": {
                 "type": "string",
@@ -125,4 +152,3 @@
     }
   }
 }
-
