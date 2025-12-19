@@ -225,6 +225,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 5,
     },
+    # rocprofiler tests
+    "rocprofiler-compute": {
+        "job_name": "rocprofiler_compute",
+        "fetch_artifact_args": "--rocprofiler-compute --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
