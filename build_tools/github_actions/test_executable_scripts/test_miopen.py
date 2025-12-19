@@ -165,7 +165,7 @@ if AMDGPU_FAMILIES == "gfx950-dcgpu":
 # 3- No CK convs or explicit GEMM.
 # I imagine naive and Winograd work.
 if os.name == WINDOWS:  # nt
-    if AMDGPU_FAMILIES in ["gfx1150", "gfx1151"]:
+    if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
         # These are ignored in miopen
         negative_filter.append(
             "Smoke/GPU_BNFWDTrainLargeFusedActivation2D_FP32.BnV2LargeFWD_TrainCKfp32Activation/NCHW_BNSpatial_testBNAPIV1_Dim_2_test_id_32"
