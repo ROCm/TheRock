@@ -37,7 +37,7 @@ vary based on the GPU architecture (gfx1151, gfx1201, etc.).
 For the most complete and up-to-date information on supported GPU architectures,
 please refer to the official TheRock [roadmap](https://github.com/ROCm/TheRock/blob/main/ROADMAP.md).
 
-## gfx1151 specific questions
+## gfx1151 (Strix Halo) specific questions
 
 ### Why does PyTorch use GTT instead of VRAM on gfx1151?
 
