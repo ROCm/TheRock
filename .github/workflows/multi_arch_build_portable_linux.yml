@@ -232,6 +232,13 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
@@ -336,6 +343,13 @@ jobs:
           ccache -s -v
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Push stage artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
@@ -443,6 +457,13 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
@@ -541,6 +562,13 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
@@ -637,6 +665,13 @@ jobs:
           ccache -s -v
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Push stage artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
