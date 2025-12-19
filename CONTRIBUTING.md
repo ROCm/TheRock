@@ -85,7 +85,7 @@ pull requests for review.
 For example:
 
 ```bash
-# Download.
+# Download (note: this is already included in requirements.txt).
 pip install pre-commit
 
 # Run locally on staged files.
