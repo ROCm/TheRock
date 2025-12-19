@@ -106,12 +106,33 @@ When we build external projects like
 package version with our own
 [local version identifier](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers).
 
-For example, for torch version `2.9.0` built with ROCm version `7.9.0` we
-generate a composite torch version `2.9.0+rocm7.9.0`.
+For example, for torch version `2.9.0` built with ROCm version `7.10.0` we
+generate a composite torch version `2.9.0+rocm7.10.0`. See this table for more
+possible version combinations:
 
-<!-- TODO: Document [stable, rc, and dev] local version identifiers. -->
+| ROCm release type | ROCm version example | Composite torch version example                                                    |
+| ----------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| stable            | `7.10.0`             | `2.9.0+rocm7.10.0`                                                                 |
+| nightly           | `7.10.0a20251124`    | `2.9.0+rocm7.10.0a20251124`                                                        |
+| dev               | `7.10.0.dev0+efed3c` | `2.9.0+devrocm7.10.0.dev0-efed3c`<br>_(Note the `devrocm` and `-` instead of `+`)_ |
 
-<!-- See https://github.com/ROCm/TheRock/pull/2392 which may change for dev -->
+These local version identifiers are specially constructed such that the expected
+version sorting of `stable > nightly > dev` is preserved. Note that per
+[the Local version identifiers spec](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers),
+comparison and ordering of local version identifiers goes segment by segment
+with special rules _different from the rules used for base versions_. This
+ordering can be tested like so:
+
+```python
+>>> from packaging.version import Version
+>>> stable = Version("2.9.0+rocm7.10.0")
+>>> nightly = Version("2.9.0+rocm7.10.0a20251124")
+>>> dev = Version("2.9.0+devrocm7.10.0.dev0-efed3c")
+>>> stable > nightly
+True
+>>> nightly > dev
+True
+```
 
 #### PyTorch versions
 
@@ -124,12 +145,12 @@ PyTorch packages versions are handled via scripts:
 
 The scripts produce these versions for each distribution channel:
 
-| Package name | Example release version | Example nightly version        |
-| ------------ | ----------------------- | ------------------------------ |
-| torch        | `2.7.1+rocm7.9.0rc1`    | `2.10.0a0+rocm7.10.0a20251024` |
-| torchaudio   | `2.7.1a0+rocm7.9.0rc1`  | `2.10.0a0+rocm7.10.0a20251024` |
-| torchvision  | `0.22.1+rocm7.9.0rc1`   | `0.24.0+rocm7.11.0a20251124`   |
-| triton       | `3.3.1+rocm7.9.0rc1`    | `3.5.1+rocm7.11.0a20251124`    |
+| Package name | Example release version (stable x stable) | Example nightly version (nightly x nightly) |
+| ------------ | ----------------------------------------- | ------------------------------------------- |
+| torch        | `2.9.1+rocm7.10.0`                        | `2.10.0a0+rocm7.10.0a20251024`              |
+| torchaudio   | `2.9.0+rocm7.10.0`                        | `2.10.0a0+rocm7.10.0a20251024`              |
+| torchvision  | `0.24.0+rocm7.10.0`                       | `0.24.0+rocm7.11.0a20251124`                |
+| triton       | `3.3.1+rocm7.10.0`                        | `3.5.1+rocm7.11.0a20251124`                 |
 
 #### JAX versions
 
