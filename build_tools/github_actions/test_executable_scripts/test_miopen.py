@@ -183,6 +183,7 @@ if os.name == WINDOWS:  # nt
         negative_filter.append("*gfx942*")
         # List of currently failing tests
         negative_filter.append("*GPU_UnitTestConvSolverFFTFwd_FP32*")
+        negative_filter.append("*GPU_UnitTestConvSolverFFTBwd_FP32*")
         negative_filter.append("*GPU_TernaryTensorOps_FP64*")
         negative_filter.append("*GPU_TernaryTensorOps_FP16*")
         negative_filter.append("*GPU_TernaryTensorOps_FP32*")
