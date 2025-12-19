@@ -58,9 +58,6 @@ class PackageConfig:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-# Directory for debian and RPM packaging
-DEBIAN_CONTENTS_DIR = None
-RPM_CONTENTS_DIR = None
 # Default install prefix
 DEFAULT_INSTALL_PREFIX = "/opt/rocm"
 
@@ -88,7 +85,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
     create_versioned_deb_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
     # Clean debian build directory
-    remove_dir(DEBIAN_CONTENTS_DIR)
+    remove_dir(Path(config.dest_dir) / config.pkg_type)
 
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
@@ -107,7 +104,7 @@ def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
     # Set versioned_pkg flag to False
     config.versioned_pkg = False
 
-    package_dir = Path(DEBIAN_CONTENTS_DIR) / f"{pkg_name}"
+    package_dir = Path(config.dest_dir) / config.pkg_type / pkg_name
     deb_dir = package_dir / "debian"
     # Create package directory and debian directory
     os.makedirs(deb_dir, exist_ok=True)
@@ -140,39 +137,40 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     """
     print_function_name()
     config.versioned_pkg = True
-    package_dir = Path(DEBIAN_CONTENTS_DIR) / f"{pkg_name}{config.rocm_version}"
+    package_dir = (
+        Path(config.dest_dir) / config.pkg_type / f"{pkg_name}{config.rocm_version}"
+    )
     deb_dir = package_dir / "debian"
     # Create package directory and debian directory
     os.makedirs(deb_dir, exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)
-
+    is_meta = is_meta_package(pkg_info)
     generate_changelog_file(pkg_info, deb_dir, config)
     generate_rules_file(pkg_info, deb_dir, config)
-    generate_install_file(pkg_info, deb_dir, config)
     generate_control_file(pkg_info, deb_dir, config)
-    # check the package is group of basic package or not
-    pkg_list = pkg_info.get("Includes")
 
-    if pkg_list is None:
-        pkg_list = [pkg_info.get("Package")]
     sourcedir_list = []
-    for pkg in pkg_list:
-        dir_list = filter_components_fromartifactory(
-            pkg, config.artifacts_dir, config.gfx_arch
-        )
-        sourcedir_list.extend(dir_list)
+    dir_list = filter_components_fromartifactory(
+        pkg_name, config.artifacts_dir, config.gfx_arch
+    )
+    sourcedir_list.extend(dir_list)
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
+    if not sourcedir_list and not is_meta:
+        sys.exit("Empty sourcedir_list and not a meta package, exiting")
+
     if not sourcedir_list:
-        sys.exit("Empty sourcedir_list, exiting")
+        print(f"Meta package")
+    else:
+        # Install file is required for non-meta packages
+        generate_install_file(pkg_info, deb_dir, config)
+        dest_dir = package_dir / Path(config.install_prefix).relative_to("/")
+        for source_path in sourcedir_list:
+            copy_package_contents(source_path, dest_dir)
 
-    dest_dir = package_dir / Path(config.install_prefix).relative_to("/")
-    for source_path in sourcedir_list:
-        copy_package_contents(source_path, dest_dir)
-
-    if config.enable_rpath:
-        convert_runpath_to_rpath(package_dir)
+        if config.enable_rpath:
+            convert_runpath_to_rpath(package_dir)
 
     package_with_dpkg_build(package_dir)
 
@@ -360,18 +358,23 @@ def copy_package_contents(source_dir, destination_dir):
     Returns: None
     """
     print_function_name()
-    if not os.path.isdir(source_dir):
+
+    source_dir = Path(source_dir)
+    destination_dir = Path(destination_dir)
+
+    if not source_dir.is_dir():
         print(f"Directory does not exist: {source_dir}")
         return
 
     # Ensure destination directory exists
-    os.makedirs(destination_dir, exist_ok=True)
+    destination_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy each item from source to destination
-    for item in os.listdir(source_dir):
-        src = os.path.join(source_dir, item)
-        dst = os.path.join(destination_dir, item)
-        if os.path.isdir(src) and not os.path.islink(dst):
+    for item in source_dir.iterdir():
+        src = item
+        dst = destination_dir / item.name
+
+        if src.is_dir() and not dst.is_symlink():
             shutil.copytree(
                 src,
                 dst,
@@ -379,10 +382,10 @@ def copy_package_contents(source_dir, destination_dir):
                 symlinks=True,
                 ignore_dangling_symlinks=True,
             )
-        elif os.path.islink(src):
+        elif src.is_symlink():
             # Copy the symlink itself (even if dangling)
-            link_target = os.readlink(src)
-            os.symlink(link_target, dst)
+            link_target = src.readlink()
+            dst.symlink_to(link_target)
         else:
             shutil.copy2(src, dst)
 
@@ -428,7 +431,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     """
     print_function_name()
     config.versioned_pkg = False
-    package_dir = Path(RPM_CONTENTS_DIR) / pkg_name
+    package_dir = Path(config.dest_dir) / config.pkg_type / pkg_name
     specfile = package_dir / "specfile"
     generate_spec_file(pkg_name, specfile, config)
     package_with_rpmbuild(specfile)
@@ -451,7 +454,9 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     """
     print_function_name()
     config.versioned_pkg = True
-    package_dir = Path(RPM_CONTENTS_DIR) / f"{pkg_name}{config.rocm_version}"
+    package_dir = (
+        Path(config.dest_dir) / config.pkg_type / f"{pkg_name}{config.rocm_version}"
+    )
     specfile = package_dir / "specfile"
     generate_spec_file(pkg_name, specfile, config)
     package_with_rpmbuild(specfile)
@@ -478,7 +483,7 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     create_versioned_rpm_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
     # Clean rpm build directory
-    remove_dir(RPM_CONTENTS_DIR)
+    remove_dir(Path(config.dest_dir) / config.pkg_type)
 
 
 def generate_spec_file(pkg_name, specfile, config: PackageConfig):
@@ -513,13 +518,10 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         requires_list = pkg_info.get("RPMRequires", [])
 
-        pkg_list = [pkg_name]
-
-        for pkg in pkg_list:
-            dir_list = filter_components_fromartifactory(
-                pkg, config.artifacts_dir, config.gfx_arch
-            )
-            sourcedir_list.extend(dir_list)
+        dir_list = filter_components_fromartifactory(
+            pkg_name, config.artifacts_dir, config.gfx_arch
+        )
+        sourcedir_list.extend(dir_list)
 
         # Filter out non-existing directories
         sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
@@ -606,26 +608,27 @@ def move_packages_to_destination(pkg_name, config: PackageConfig):
     # Create destination dir to move the packages created
     os.makedirs(config.dest_dir, exist_ok=True)
     print(f"Package name: {pkg_name}")
+    PKG_DIR = Path(config.dest_dir) / config.pkg_type
     if config.pkg_type.lower() == "deb":
-        artifacts = glob.glob(os.path.join(f"{DEBIAN_CONTENTS_DIR}", "*.deb"))
+        artifacts = list(PKG_DIR.glob("*.deb"))
         # Replace -devel with -dev for debian packages
         pkg_name = debian_replace_devel_name(pkg_name)
     else:
-        artifacts = glob.glob(
-            os.path.join(
-                f"{RPM_CONTENTS_DIR}", "*", f"RPMS/{platform.machine()}", "*.rpm"
-            )
-        )
+        artifacts = list(PKG_DIR.glob(f"*/RPMS/{platform.machine()}/*.rpm"))
 
     # Move deb/rpm files to the destination directory
     for file_path in artifacts:
-        file_name = os.path.basename(file_path)
+        file_path = Path(file_path)  # ensure it's a Path object
+        file_name = file_path.name  # basename equivalent
+
         if file_name.startswith(pkg_name):
-            dest_file = Path(config.dest_dir) / Path(file_path).name
-            # if file exists , update it
-            if os.path.exists(dest_file):
-                os.remove(dest_file)
-            shutil.move(file_path, config.dest_dir)
+            dest_file = Path(config.dest_dir) / file_name
+
+            # if file exists, remove it first
+            if dest_file.exists():
+                dest_file.unlink()
+
+            shutil.move(str(file_path), str(config.dest_dir))
 
 
 def update_package_name(pkg_name, config: PackageConfig):
@@ -732,6 +735,11 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
         artifact_suffix = "generic"
 
     artifactory = pkg_info.get("Artifactory")
+    if artifactory is None:
+        print(
+            f'The "Artifactory" key is missing for {pkg_name}. Is this a meta package?'
+        )
+        return sourcedir_list
 
     for artifact in artifactory:
         artifact_prefix = artifact["Artifact"]
@@ -797,34 +805,33 @@ def parse_input_package_list(pkg_name):
     return pkg_list
 
 
-def clean_package_build_dir(artifacts_dir):
+def clean_package_build_dir(config: PackageConfig):
     """Clean the package build directories
 
     If artifactory directory is provided, clean the same as well
 
     Parameters:
-    artifacts_dir : Directory where artifacts are stored
+    config: Configuration object containing package metadata
 
     Returns: None
     """
     print_function_name()
     PYCACHE_DIR = Path(SCRIPT_DIR) / "__pycache__"
-
-    remove_dir(RPM_CONTENTS_DIR)
-    remove_dir(DEBIAN_CONTENTS_DIR)
     remove_dir(PYCACHE_DIR)
-    remove_dir(artifacts_dir)
+
+    # NOTE: Remove only the build directory
+    # Make sure the destination directory is not removed
+    remove_dir(Path(config.dest_dir) / config.pkg_type)
+    # TBD:
+    # Currently RPATH packages are created by modifying the artifacts dir
+    # So artifacts dir clean up is required
+    # remove_dir(artifacts_dir)
 
 
 def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
-    global DEBIAN_CONTENTS_DIR, RPM_CONTENTS_DIR
-    DEBIAN_CONTENTS_DIR = dest_dir / "DEB"
-    RPM_CONTENTS_DIR = dest_dir / "RPM"
 
-    # Clean the packaging build directories
-    clean_package_build_dir("")
     # Append rocm version to default install prefix
     # TBD: Do we need to append rocm_version to other prefix?
     if args.install_prefix == f"{DEFAULT_INSTALL_PREFIX}":
@@ -833,7 +840,7 @@ def run(args: argparse.Namespace):
     # Populate package config details from user arguments
     config = PackageConfig(
         artifacts_dir=Path(args.artifacts_dir).resolve(),
-        dest_dir=dest_dir,
+        dest_dir=Path(dest_dir),
         pkg_type=args.pkg_type,
         rocm_version=args.rocm_version,
         version_suffix=args.version_suffix,
@@ -841,6 +848,10 @@ def run(args: argparse.Namespace):
         gfx_arch=args.target,
         enable_rpath=args.rpath_pkg,
     )
+
+    # Clean the packaging build directories
+    clean_package_build_dir(config)
+
     pkg_list = parse_input_package_list(args.pkg_names)
     # Create deb/rpm packages
     package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
@@ -852,11 +863,7 @@ def run(args: argparse.Namespace):
             print("Create both DEB and RPM packages.")
             for creator in package_creators.values():
                 creator(pkg_name, config)
-    # TBD:
-    # Currently RPATH packages are created by modifying the artifacts dir
-    # So artifacts dir clean up is required
-    clean_package_build_dir("")
-    # clean_package_build_dir(config.artifacts_dir)
+    clean_package_build_dir(config)
 
 
 def main(argv: list[str]):
