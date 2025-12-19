@@ -405,12 +405,25 @@ on:
 
 Each job sets:
 ```bash
+# Test Configuration
 AMDGPU_FAMILIES=gfx1151      # GPU variant
 TEST_CATEGORY=vlm            # Test category
 TEST_TYPE=functional         # Test type
 MARKET_SEGMENT=automotive    # Market segment (benchmarks)
 PYTHONUNBUFFERED=1           # Python output
+
+# ROCm GPU Detection (Critical for Strix)
+HSA_OVERRIDE_GFX_VERSION=11.0.1  # 11.0.0 for gfx1150, 11.0.1 for gfx1151
+ROCR_VISIBLE_DEVICES=0           # GPU device visibility
+GPU_DEVICE_ORDINAL=0             # GPU device ordinal
 ```
+
+**ROCm Environment Variables Explained**:
+- **`HSA_OVERRIDE_GFX_VERSION`**: Critical for Strix GPU recognition. Tells ROCm runtime which GPU architecture to use.
+  - `11.0.0` for Strix Point (gfx1150)
+  - `11.0.1` for Strix Halo (gfx1151)
+- **`ROCR_VISIBLE_DEVICES`**: Controls which ROCm devices are visible to the application
+- **`GPU_DEVICE_ORDINAL`**: Specifies the GPU device ordinal for HIP/ROCm
 
 **Note**: ROCm paths (PATH, LD_LIBRARY_PATH) are pre-configured in the rocm/pytorch container.
 
