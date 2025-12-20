@@ -4,6 +4,7 @@
 
 import json
 import os
+import platform
 import shutil
 import sys
 from pathlib import Path
@@ -11,6 +12,12 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 currentFuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
+
+# -------------------------------
+# Global OS identification lists
+# -------------------------------
+DEBIAN_OS_IDS = {"ubuntu", "debian"}
+RPM_OS_IDS = {"rhel", "centos", "sles", "almalinux", "fedora", "rocky", "redhat"}
 
 
 def print_function_name():
@@ -21,6 +28,46 @@ def print_function_name():
     Returns: None
     """
     print("In function:", currentFuncName(1))
+
+
+def get_os_id(os_release_path="/etc/os-release"):
+    """
+    Detect the OS family of the current system.
+
+    Reads the OS release information from `/etc/os-release` to determine
+    whether the system belongs to Debian, RedHat, or SUSE family.
+    Falls back to generic Linux detection if `/etc/os-release` is not found.
+
+    Parameters:
+    os_release_path : str, optional
+        Path to the OS release file (default is "/etc/os-release").
+
+    Returns:
+    str :
+        OS family as one of: "debian", "redhat", "suse", "linux", or "unknown"
+
+    """
+    os_release = {}
+    try:
+        with open("/etc/os-release", "r") as f:
+            for line in f:
+                if "=" in line:
+                    k, v = line.strip().split("=", 1)
+                    os_release[k] = v.strip('"')
+    except FileNotFoundError:
+        system_name = platform.system().lower()
+        return "linux" if "linux" in system_name else "unknown"
+
+    os_id = os_release.get("ID", "").lower()
+    os_like = os_release.get("ID_LIKE", "").lower()
+
+    if os_id in DEBIAN_OS_IDS or any(x in os_like for x in DEBIAN_OS_IDS):
+        return os_id, "debian"
+
+    if os_id in RPM_OS_IDS or any(x in os_like for x in RPM_OS_IDS):
+        return os_id, "rpm"
+
+    return os_id, "unknown"
 
 
 def read_package_json_file():
