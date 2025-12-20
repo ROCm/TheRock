@@ -735,25 +735,39 @@ def main():
         else:
             # Default: install "amdrocm" package only
             logger.info("No package JSON provided. Defaulting to install 'amdrocm' metapackage.")
-            try:
-                os_id, os_family = get_os_id()
-            except Exception as e:
-                logger.error(f"Failed to detect operating system: {e}")
-                return 1
             
-            # Create a simple PackageInfo for "amdrocm"
-            amdrocm_data = {
-                "Package": "amdrocm",
-                "Version": "",
-                "Architecture": "amd64",
-                "BuildArch": "x86_64",
-                "DEBDepends": [],
-                "RPMRequires": [],
-                "Metapackage": "True",
-                "Gfxarch": "True"
-            }
-            packages = [PackageInfo(amdrocm_data, args.rocm_version, args.artifact_group, os_family, os_id)]
-            args.metapackage = "true"  # Set metapackage flag for consistency
+            # Create a temporary package JSON with just amdrocm
+            import tempfile
+            amdrocm_json = [
+                {
+                    "Package": "amdrocm",
+                    "Version": "",
+                    "Architecture": "amd64",
+                    "BuildArch": "x86_64",
+                    "DEBDepends": [],
+                    "RPMRequires": [],
+                    "Metapackage": "True",
+                    "Gfxarch": "True"
+                }
+            ]
+            
+            # Write temporary JSON file
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                    json.dump(amdrocm_json, temp_file)
+                    temp_json_path = temp_file.name
+                
+                # Create loader with temporary JSON
+                loader = PackageLoader(temp_json_path, args.rocm_version, args.artifact_group)
+                packages = loader.load_metapackage_packages()
+                args.metapackage = "true"  # Set metapackage flag for consistency
+                
+                # Clean up temp file
+                os.remove(temp_json_path)
+                
+            except Exception as e:
+                logger.exception(f"Error creating default package loader: {e}")
+                return 1
 
         if not packages:
             logger.warning("No packages to install")
