@@ -365,16 +365,20 @@ class PackageLoader:
                 all_pkg_names = set()
             
             # Get dependencies based on OS family
-            try:
-                deps = pkg.deb_depends if self.os_family == "debian" else pkg.rpm_requires
-                if not isinstance(deps, list):
-                    logger.warning(f"Dependencies for {pkg.package} is not a list, using empty list")
+            # For metapackages, skip dependencies as they will be pulled in automatically
+            if pkg.is_metapackage():
+                valid_deps = []
+            else:
+                try:
+                    deps = pkg.deb_depends if self.os_family == "debian" else pkg.rpm_requires
+                    if not isinstance(deps, list):
+                        logger.warning(f"Dependencies for {pkg.package} is not a list, using empty list")
+                        deps = []
+                except AttributeError as e:
+                    logger.warning(f"Package {pkg.package} missing dependency attributes: {e}")
                     deps = []
-            except AttributeError as e:
-                logger.warning(f"Package {pkg.package} missing dependency attributes: {e}")
-                deps = []
-            
-            valid_deps = [dep for dep in deps if dep in all_pkg_names]
+                
+                valid_deps = [dep for dep in deps if dep in all_pkg_names]
 
             # Combine current package + valid deps
             pkgs_to_process = valid_deps + [pkg.package]
