@@ -51,6 +51,15 @@ well as supporting scripts.
 
  -->
 
+<!-- ### Multi-distro rocm-runtime base Dockerfile -->
+
+<!-- TODO: add docs together with https://github.com/ROCm/TheRock/pull/2572
+
+base image for images that include ROCm and a base set of runtime dependencies
+
+See https://github.com/ROCm/TheRock/pull/2572#discussion_r2631985736
+-->
+
 ## Using published images
 
 <!-- TODO: document ghcr hosting, tags (e.g. `main`), -->
