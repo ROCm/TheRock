@@ -3,6 +3,7 @@
 
 
 import json
+import logging
 import os
 import platform
 import shutil
@@ -18,6 +19,22 @@ currentFuncName = lambda n=0: sys._getframe(n + 1).f_code.co_name
 # -------------------------------
 DEBIAN_OS_IDS = {"ubuntu", "debian"}
 RPM_OS_IDS = {"rhel", "centos", "sles", "almalinux", "fedora", "rocky", "redhat"}
+
+# Create a common logger
+logger = logging.getLogger("rocm_installer")
+logger.setLevel(logging.INFO)  # default level
+
+# Console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Formatter
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+ch.setFormatter(formatter)
+
+# Add handler if not already added
+if not logger.hasHandlers():
+    logger.addHandler(ch)
 
 
 def print_function_name():
