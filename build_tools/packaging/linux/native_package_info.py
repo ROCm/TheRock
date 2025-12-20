@@ -68,6 +68,7 @@ class PackageInfo:
         self.artifact_subdir = data.get("Artifact_Subdir", "")
         self.gfxarch = str(data.get("Gfxarch", "False")).lower() == "true"
         self.metapackage = data.get("Metapackage", "no")  # default to "no" if field missing
+        self.disable_packaging = data.get("DisablePackaging", "no")  # default to "no" if field missing
 
         # Added new contextual fields
         self.rocm_version = rocm_version
@@ -102,6 +103,16 @@ class PackageInfo:
         bool : True if metapackage, False otherwise.
         """
         value = str(self.metapackage).strip().lower()
+        return value in ("yes", "true", "1", "t", "y")
+
+    def is_packaging_disabled(self) -> bool:
+        """
+        Check if packaging is disabled for this package.
+
+        Returns:
+        bool : True if DisablePackaging is set, False otherwise.
+        """
+        value = str(self.disable_packaging).strip().lower()
         return value in ("yes", "true", "1", "t", "y")
 
     def summary(self) -> str:
@@ -252,10 +263,10 @@ class PackageLoader:
         Filter and return only metapackages.
 
         Returns:
-        list of PackageInfo : Packages where metapackage=True.
+        list of PackageInfo : Packages where metapackage=True and DisablePackaging is not set.
         """
         all_packages = self.load_all_packages()
-        metapackages = [pkg for pkg in all_packages if pkg.is_metapackage()]
+        metapackages = [pkg for pkg in all_packages if pkg.is_metapackage() and not pkg.is_packaging_disabled()]
         logger.info(f"Loaded {len(metapackages)} metapackage(s) from {len(all_packages)} total packages in {self.json_path}")
         return metapackages
 
@@ -264,10 +275,10 @@ class PackageLoader:
         Filter and return only non-metapackage (base) packages.
 
         Returns:
-        list of PackageInfo : Packages where metapackage=False.
+        list of PackageInfo : Packages where metapackage=False and DisablePackaging is not set.
         """
         all_packages = self.load_all_packages()
-        non_metapackages = [pkg for pkg in all_packages if not pkg.is_metapackage()]
+        non_metapackages = [pkg for pkg in all_packages if not pkg.is_metapackage() and not pkg.is_packaging_disabled()]
         logger.info(f"Loaded {len(non_metapackages)} non-metapackage(s) from {len(all_packages)} total packages in {self.json_path}")
         return non_metapackages
 
