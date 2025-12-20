@@ -30,12 +30,13 @@ override_dh_strip:
 {% endif %}
 
 override_dh_installchangelogs:
-	# Skip default documentation installation in /usr/share/doc
-	# Install changelog to custom location only
-	mkdir -p debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}
-	if [ -f debian/changelog ]; then \
-		cp debian/changelog debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}/changelog.Debian; \
-		gzip -9 -f debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}/changelog.Debian; \
+	# Skip the default documentation installation in /usr/share/doc
+	# Install the Debian changelog only to the custom location
+	install -d $(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}
+	if [ -f $(CURDIR)/debian/changelog ]; then \
+		install -m 644 $(CURDIR)/debian/changelog \
+			$(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}/changelog.Debian; \
+		gzip -9 -f $(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}/changelog.Debian; \
 	fi
 
 override_dh_installdocs:
