@@ -35,7 +35,7 @@ def capture(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
     ).decode()
 
 
-def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+def run_command(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     return subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
@@ -107,7 +107,7 @@ class FilesetToolTest(unittest.TestCase):
             Path(input_dir / "example" / "stage" / "include" / "foobar.h"), "foobar"
         )
 
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -146,7 +146,7 @@ class FilesetToolTest(unittest.TestCase):
             )
 
         # Archive it.
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -165,7 +165,7 @@ class FilesetToolTest(unittest.TestCase):
         self.assertEqual(expected_digest, actual_digest)
 
         # Flatten the raw directory and verify.
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,

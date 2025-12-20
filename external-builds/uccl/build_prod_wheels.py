@@ -55,7 +55,7 @@ script_dir = Path(__file__).resolve().parent
 is_windows = platform.system() == "Windows"
 
 
-def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
+def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     full_env = dict(os.environ)
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
@@ -100,7 +100,7 @@ def do_build(args: argparse.Namespace):
 
     # Build UCCL
     if uccl_dir:
-        exec(
+        run_command(
             [
                 "./build.sh",
                 "therock",
