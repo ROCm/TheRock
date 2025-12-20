@@ -83,6 +83,21 @@ amdgpu_family_info_matrix_presubmit = {
             "build_variants": ["release"],
         },
     },
+    "gfx120x": {
+        "linux": {
+            "test-runs-on": "linux-gfx1201-gpu-rocm",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+        },
+    },
 }
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
