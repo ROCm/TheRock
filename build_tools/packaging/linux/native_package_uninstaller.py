@@ -13,7 +13,7 @@ Metapackage uninstall (removes all metapackages in reverse order):
     --artifact-group gfx94X-dcgpu \
     --metapackage true
 ```
-Non-metapackage uninstall (removes only amdrocm-core and its versioned package):
+Non-metapackage uninstall (removes all non-metapackages in reverse order):
 
 ```
 ./uninstall_package.py \
@@ -41,7 +41,7 @@ class PackageUninstaller(PackageManagerBase):
     Handles ROCm package uninstallation on the local system.
 
     Depending on the mode, either removes all metapackages
-    in reverse order or just the core package.
+    in reverse order or all non-metapackages in reverse order.
     """
 
     def __init__(
@@ -91,9 +91,9 @@ class PackageUninstaller(PackageManagerBase):
         Perform the uninstallation.
 
         Metapackage mode:
-            - Uninstall all packages in reverse dependency order.
+            - Uninstall all metapackages in reverse dependency order.
         Non-metapackage mode:
-            - Only uninstall 'amdrocm-core' and its derived packages.
+            - Uninstall all non-metapackages in reverse dependency order.
 
         Logs the progress and errors.
         """
@@ -102,73 +102,45 @@ class PackageUninstaller(PackageManagerBase):
             logger.info(f"ROCm Version: {self.rocm_version}")
             logger.info(f"Metapackage Build: {self.metapackage}")
 
-            # Uninstall in reverse dependency order
-            if self.metapackage:
-                for pkg in reversed(self.packages):
-                    try:
-                        logger.info(f"[REMOVE] Uninstalling {pkg.package}")
-                        if not pkg:
-                            logger.warning("Encountered None package object, skipping")
-                            continue
-                            
-                        try:
-                            derived_name = self.loader.derive_package_names(pkg, True)
-                        except AttributeError as e:
-                            error_msg = f"Package object missing required attribute: {e}"
-                            logger.error(error_msg)
-                            self.failed_packages[pkg.package] = error_msg
-                            continue
-                        except Exception as e:
-                            error_msg = f"Error deriving package names: {type(e).__name__} - {str(e)}"
-                            logger.error(error_msg)
-                            self.failed_packages[pkg.package] = error_msg
-                            continue
-                        
-                        if derived_name:
-                            for derived_pkg in derived_name:
-                                self._run_uninstall_command(derived_pkg)
-                        else:
-                            logger.warning(f"No derived package names found for {pkg.package}")
-                            
-                    except (OSError, IOError) as e:
-                        error_msg = f"I/O error while uninstalling {pkg.package}: {e}"
-                        logger.error(error_msg)
-                        self.failed_packages[pkg.package] = error_msg
-                    except subprocess.CalledProcessError as e:
-                        error_msg = f"Command failed for {pkg.package}: {e.stderr if e.stderr else e.output}"
-                        logger.error(error_msg)
-                        self.failed_packages[pkg.package] = error_msg
-                    except Exception as e:
-                        error_msg = f"Unexpected error uninstalling {pkg.package}: {str(e)}"
-                        logger.exception(error_msg)
-                        self.failed_packages[pkg.package] = error_msg
-            else:
+            # Uninstall all packages in reverse dependency order
+            for pkg in reversed(self.packages):
                 try:
-                    pkg = self.loader.get_package_by_name("amdrocm-core")
+                    logger.info(f"[REMOVE] Uninstalling {pkg.package}")
                     if not pkg:
-                        error_msg = "amdrocm-core package not found in package list"
-                        logger.error(error_msg)
-                        self.failed_packages["amdrocm-core"] = error_msg
-                    else:
-                        logger.info(f"[REMOVE] Uninstalling amdrocm-core")
-                        try:
-                            derived_name = self.loader.derive_package_names(pkg, True)
-                        except Exception as e:
-                            error_msg = f"Error deriving package names for amdrocm-core: {str(e)}"
-                            logger.error(error_msg)
-                            self.failed_packages["amdrocm-core"] = error_msg
-                            derived_name = None
+                        logger.warning("Encountered None package object, skipping")
+                        continue
                         
-                        if derived_name:
-                            for derived_pkg in derived_name:
-                                self._run_uninstall_command(derived_pkg)
-                        else:
-                            logger.warning("No derived package names found for amdrocm-core")
-                            
+                    try:
+                        derived_name = self.loader.derive_package_names(pkg, True)
+                    except AttributeError as e:
+                        error_msg = f"Package object missing required attribute: {e}"
+                        logger.error(error_msg)
+                        self.failed_packages[pkg.package] = error_msg
+                        continue
+                    except Exception as e:
+                        error_msg = f"Error deriving package names: {type(e).__name__} - {str(e)}"
+                        logger.error(error_msg)
+                        self.failed_packages[pkg.package] = error_msg
+                        continue
+                    
+                    if derived_name:
+                        for derived_pkg in derived_name:
+                            self._run_uninstall_command(derived_pkg)
+                    else:
+                        logger.warning(f"No derived package names found for {pkg.package}")
+                        
+                except (OSError, IOError) as e:
+                    error_msg = f"I/O error while uninstalling {pkg.package}: {e}"
+                    logger.error(error_msg)
+                    self.failed_packages[pkg.package] = error_msg
+                except subprocess.CalledProcessError as e:
+                    error_msg = f"Command failed for {pkg.package}: {e.stderr if e.stderr else e.output}"
+                    logger.error(error_msg)
+                    self.failed_packages[pkg.package] = error_msg
                 except Exception as e:
-                    error_msg = f"Error processing amdrocm-core: {str(e)}"
+                    error_msg = f"Unexpected error uninstalling {pkg.package}: {str(e)}"
                     logger.exception(error_msg)
-                    self.failed_packages["amdrocm-core"] = error_msg
+                    self.failed_packages[pkg.package] = error_msg
                     
             logger.info("Uninstallation complete.")
             
