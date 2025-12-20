@@ -59,6 +59,7 @@ add_custom_target(
         -Dlibdir=lib
         -Dva-libs-path="/lib"
         -Dallow-fallback-for=libva # NOTE: Use local build of VA library
+        -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
         -Damd-decode-only=true # NOTE: enable decode only for TheRock
         "${CMAKE_CURRENT_BINARY_DIR}"

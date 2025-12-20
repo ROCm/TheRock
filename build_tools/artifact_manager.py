@@ -57,6 +57,11 @@ def log(msg: str):
     print(msg, flush=True)
 
 
+def _delay_for_retry(seconds: float):
+    """Sleep for retry delay. Mockable for testing."""
+    time.sleep(seconds)
+
+
 def _get_pyzstd():
     """Lazy import pyzstd with helpful error message."""
     try:
@@ -82,11 +87,21 @@ def _open_archive_for_read(path: Path) -> tarfile.TarFile:
         raise ValueError(f"Unknown archive format: {path}")
 
 
-def get_topology() -> BuildTopology:
-    """Load the BUILD_TOPOLOGY.toml from the repository root."""
+def get_default_topology_path() -> Path:
+    """Get the default BUILD_TOPOLOGY.toml path from the repository root."""
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent
-    topology_path = repo_root / "BUILD_TOPOLOGY.toml"
+    return repo_root / "BUILD_TOPOLOGY.toml"
+
+
+def get_topology(topology_path: Optional[Path] = None) -> BuildTopology:
+    """Load the BUILD_TOPOLOGY.toml.
+
+    Args:
+        topology_path: Path to topology file. If None, uses default location.
+    """
+    if topology_path is None:
+        topology_path = get_default_topology_path()
     if not topology_path.exists():
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {topology_path}")
     return BuildTopology(str(topology_path))
@@ -140,7 +155,7 @@ def download_artifact(request: DownloadRequest) -> Optional[Path]:
                 log(
                     f"  ++ Retry {attempt + 1}/{MAX_RETRIES} for {request.artifact_key}: {e}"
                 )
-                time.sleep(delay)
+                _delay_for_retry(delay)
             else:
                 log(f"  !! Failed to download {request.artifact_key}: {e}")
                 return None
@@ -163,7 +178,7 @@ class BootstrappingPopulator(ArtifactPopulator):
         cleaned_paths_lock: Optional[threading.Lock] = None,
     ):
         super().__init__(output_path=output_path, verbose=verbose, flatten=False)
-        self.created_markers: list[Path] = []
+        self.created_markers: List[Path] = []
         self._cleaned_paths = cleaned_paths if cleaned_paths is not None else set()
         self._lock = (
             cleaned_paths_lock if cleaned_paths_lock is not None else threading.Lock()
@@ -233,7 +248,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
 
 def do_fetch(args: argparse.Namespace):
     """Fetch inbound artifacts for a stage with parallel download and extract."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
     # Validate stage
     if args.stage not in topology.build_stages:
@@ -370,6 +385,23 @@ def do_fetch(args: argparse.Namespace):
     if download_dir.exists() and not args.no_extract:
         shutil.rmtree(download_dir)
 
+    # Fail if any downloads failed
+    total_requested = len(download_requests)
+    if downloaded_count < total_requested:
+        log(
+            f"ERROR: Only downloaded {downloaded_count}/{total_requested} artifacts - "
+            f"{total_requested - downloaded_count} failed"
+        )
+        sys.exit(1)
+
+    # Fail if any extractions failed (when extraction was requested)
+    if not args.no_extract and extracted_count < downloaded_count:
+        log(
+            f"ERROR: Only extracted {extracted_count}/{downloaded_count} artifacts - "
+            f"{downloaded_count - extracted_count} failed"
+        )
+        sys.exit(1)
+
 
 # =============================================================================
 # Push (Compress + Upload) with Parallel Processing
@@ -466,7 +498,7 @@ def upload_artifact(request: UploadRequest) -> bool:
                 log(
                     f"  ++ Retry {attempt + 1}/{MAX_RETRIES} for {request.artifact_key}: {e}"
                 )
-                time.sleep(delay)
+                _delay_for_retry(delay)
             else:
                 log(f"  !! Failed to upload {request.artifact_key}: {e}")
                 return False
@@ -475,7 +507,7 @@ def upload_artifact(request: UploadRequest) -> bool:
 
 def do_push(args: argparse.Namespace):
     """Push produced artifacts after building with parallel compress and upload."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
     # Validate stage
     if args.stage not in topology.build_stages:
@@ -619,6 +651,14 @@ def do_push(args: argparse.Namespace):
     if upload_dir.exists():
         shutil.rmtree(upload_dir)
 
+    # Fail if any artifacts failed to upload
+    if uploaded_count < total_artifacts:
+        log(
+            f"ERROR: Only uploaded {uploaded_count}/{total_artifacts} artifacts - "
+            f"{total_artifacts - uploaded_count} failed"
+        )
+        sys.exit(1)
+
 
 # =============================================================================
 # Info Commands
@@ -627,7 +667,7 @@ def do_push(args: argparse.Namespace):
 
 def do_info(args: argparse.Namespace):
     """Show information about stage artifact requirements."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
     stage = topology.build_stages.get(args.stage)
     if not stage:
@@ -669,7 +709,7 @@ def do_info(args: argparse.Namespace):
 
 def do_list_stages(args: argparse.Namespace):
     """List all build stages."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
     log("Build stages:")
     for stage in topology.get_build_stages():
@@ -687,8 +727,19 @@ def do_list_stages(args: argparse.Namespace):
 # =============================================================================
 
 
+def _add_common_args(parser: argparse.ArgumentParser):
+    """Add common arguments shared by all subcommands."""
+    parser.add_argument(
+        "--topology",
+        type=Path,
+        default=None,
+        help="Path to BUILD_TOPOLOGY.toml (default: auto-detect from repo root)",
+    )
+
+
 def _add_backend_args(parser: argparse.ArgumentParser):
     """Add common backend-related arguments to a subparser."""
+    _add_common_args(parser)
     parser.add_argument(
         "--run-id",
         type=str,
@@ -709,7 +760,7 @@ def _add_backend_args(parser: argparse.ArgumentParser):
     )
 
 
-def main():
+def main(argv: Optional[List[str]] = None):
     parser = argparse.ArgumentParser(
         description="Stage-aware artifact manager for multi-stage CI/CD pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -756,7 +807,7 @@ def main():
         "--extract-concurrency",
         type=int,
         default=None,
-        help="Number of concurrent extractions (default: CPU count)",
+        help="Number of concurrent extractions (default: auto)",
     )
     fetch_parser.set_defaults(func=do_fetch)
 
@@ -796,7 +847,7 @@ def main():
         "--compress-concurrency",
         type=int,
         default=None,
-        help="Number of concurrent compressions (default: CPU count)",
+        help="Number of concurrent compressions (default: auto)",
     )
     push_parser.add_argument(
         "--upload-concurrency",
@@ -810,6 +861,7 @@ def main():
     info_parser = subparsers.add_parser(
         "info", help="Show information about stage artifact requirements"
     )
+    _add_common_args(info_parser)
     info_parser.add_argument(
         "--stage", type=str, required=True, help="Build stage name"
     )
@@ -822,9 +874,10 @@ def main():
 
     # list-stages command
     list_parser = subparsers.add_parser("list-stages", help="List all build stages")
+    _add_common_args(list_parser)
     list_parser.set_defaults(func=do_list_stages)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Set environment variable if --local-staging-dir provided (only on fetch/push)
     local_staging_dir = getattr(args, "local_staging_dir", None)

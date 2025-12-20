@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       rocm_version:
-        description: ROCm version to append to the package(8.0.0, 8.0.1rc1, ... ).
+        description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
         required: true
         type: string
       native_package_type:
@@ -113,7 +113,7 @@ jobs:
             --target  ${{ inputs.artifact_group }} \
             --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
             --pkg-type ${{ inputs.native_package_type }} \
-            --version-suffix ${{ env.PACKAGE_SUFFIX }}
+            --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
