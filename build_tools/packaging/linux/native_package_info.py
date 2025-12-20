@@ -101,7 +101,17 @@ class PackageInfo:
         Returns:
         bool : True if metapackage, False otherwise.
         """
-        return str(self.metapackage).strip().lower() == "yes"
+        value = str(self.metapackage).strip().lower()
+        return value in (
+            "1",
+            "true",
+            "t",
+            "yes",
+            "y",
+            "on",
+            "enable",
+            "enabled",
+        )
 
     def summary(self) -> str:
         """
