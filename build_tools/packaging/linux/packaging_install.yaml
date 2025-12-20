@@ -1,6 +1,8 @@
 debian:
   test:
       s3: https://{{ bucket }}.s3.us-east-2.amazonaws.com/{{ artifact_group }}_{{ run_id }}
+  dev:
+      s3: https://{{ bucket }}.s3.us-east-2.amazonaws.com/{{ artifact_group }}_{{ run_id }}
   daily:
       s3:
   nightly:
