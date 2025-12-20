@@ -241,11 +241,6 @@ class PackageLoader:
                     logger.error(f"Error processing package entry {idx}: {type(e).__name__} - {str(e)}")
                     continue
             
-            if not packages:
-                logger.warning("No valid packages loaded from JSON")
-            else:
-                logger.info(f"Loaded {len(packages)} package(s) from {self.json_path}")
-            
             return packages
             
         except Exception as e:
@@ -259,7 +254,10 @@ class PackageLoader:
         Returns:
         list of PackageInfo : Packages where metapackage=True.
         """
-        return [pkg for pkg in self.load_all_packages() if pkg.is_metapackage()]
+        all_packages = self.load_all_packages()
+        metapackages = [pkg for pkg in all_packages if pkg.is_metapackage()]
+        logger.info(f"Loaded {len(metapackages)} metapackage(s) from {len(all_packages)} total packages in {self.json_path}")
+        return metapackages
 
     def load_non_metapackage_packages(self) -> List[PackageInfo]:
         """
@@ -268,7 +266,10 @@ class PackageLoader:
         Returns:
         list of PackageInfo : Packages where metapackage=False.
         """
-        return [pkg for pkg in self.load_all_packages() if not pkg.is_metapackage()]
+        all_packages = self.load_all_packages()
+        non_metapackages = [pkg for pkg in all_packages if not pkg.is_metapackage()]
+        logger.info(f"Loaded {len(non_metapackages)} non-metapackage(s) from {len(all_packages)} total packages in {self.json_path}")
+        return non_metapackages
 
     def get_package_by_name(self, name: str) -> Optional[PackageInfo]:
         """
