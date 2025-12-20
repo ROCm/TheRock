@@ -162,6 +162,9 @@ class PackageLoader:
             self.rocm_version = rocm_version
             self.artifact_group = artifact_group
             
+            # Cache for loaded packages (to avoid reloading and re-logging)
+            self._packages_cache = None
+            
             # Load JSON data
             try:
                 self._data = self._load_json()
@@ -219,6 +222,7 @@ class PackageLoader:
     def load_all_packages(self) -> List[PackageInfo]:
         """
         Load all package definitions from the JSON file.
+        Uses cached result if packages have already been loaded.
 
         Returns:
         list of PackageInfo : All packages with context applied.
@@ -226,6 +230,10 @@ class PackageLoader:
         Raises:
         ValueError : if package data is malformed
         """
+        # Return cached packages if already loaded
+        if self._packages_cache is not None:
+            return self._packages_cache
+        
         try:
             packages = []
             for idx, entry in enumerate(self._data):
@@ -250,11 +258,14 @@ class PackageLoader:
                     logger.error(f"Error processing package entry {idx}: {type(e).__name__} - {str(e)}")
                     continue
             
+            # Log only once when initially loading
             if not packages:
                 logger.warning("No valid packages loaded from JSON")
             else:
                 logger.info(f"Loaded {len(packages)} package(s) from {self.json_path}")
             
+            # Cache the result
+            self._packages_cache = packages
             return packages
             
         except Exception as e:
