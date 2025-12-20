@@ -644,10 +644,10 @@ def parse_arguments():
         "--version", default="false", help="Enable versioning output (true/false)"
     )
     parser.add_argument(
-        "--package-json", required=True, help="Path to package JSON definition file"
+        "--package-json", help="Path to package JSON definition file (optional, tightly coupled with --metapackage)"
     )
     parser.add_argument(
-        "--metapackage", default="false", help="Enable metapackage build mode (true/false)"
+        "--metapackage", help="Enable metapackage build mode (true/false, tightly coupled with --package-json)"
     )
     parser.add_argument(
         "--artifact-group", default="gfx000", help="GPU family identifier"
@@ -700,28 +700,60 @@ def main():
             logger.error("You must specify at least one of --dest-dir or --run-id")
             return 1
 
-        # Validate package JSON file exists
-        if not os.path.exists(args.package_json):
-            logger.error(f"Package JSON file not found: {args.package_json}")
+        # Validate tight coupling: --package-json and --metapackage must both be provided or both omitted
+        has_package_json = args.package_json is not None
+        has_metapackage = args.metapackage is not None
+        
+        if has_package_json != has_metapackage:
+            logger.error("--package-json and --metapackage are tightly coupled. Both must be provided or both must be omitted.")
             return 1
 
         # Load packages
-        try:
-            loader = PackageLoader(args.package_json, args.rocm_version, args.artifact_group)
-            packages = (
-                loader.load_metapackage_packages()
-                if args.metapackage.lower() == "true"
-                else loader.load_non_metapackage_packages()
-            )
-        except FileNotFoundError as e:
-            logger.error(f"Failed to load package definitions: {e}")
-            return 1
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in package file: {e}")
-            return 1
-        except Exception as e:
-            logger.exception(f"Error loading packages: {e}")
-            return 1
+        loader = None
+        if args.package_json and args.metapackage:
+            # Load packages from JSON file
+            if not os.path.exists(args.package_json):
+                logger.error(f"Package JSON file not found: {args.package_json}")
+                return 1
+            
+            try:
+                loader = PackageLoader(args.package_json, args.rocm_version, args.artifact_group)
+                packages = (
+                    loader.load_metapackage_packages()
+                    if args.metapackage.lower() == "true"
+                    else loader.load_non_metapackage_packages()
+                )
+            except FileNotFoundError as e:
+                logger.error(f"Failed to load package definitions: {e}")
+                return 1
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in package file: {e}")
+                return 1
+            except Exception as e:
+                logger.exception(f"Error loading packages: {e}")
+                return 1
+        else:
+            # Default: install "amdrocm" package only
+            logger.info("No package JSON provided. Defaulting to install 'amdrocm' metapackage.")
+            try:
+                os_id, os_family = get_os_id()
+            except Exception as e:
+                logger.error(f"Failed to detect operating system: {e}")
+                return 1
+            
+            # Create a simple PackageInfo for "amdrocm"
+            amdrocm_data = {
+                "Package": "amdrocm",
+                "Version": "",
+                "Architecture": "amd64",
+                "BuildArch": "x86_64",
+                "DEBDepends": [],
+                "RPMRequires": [],
+                "Metapackage": "True",
+                "Gfxarch": "True"
+            }
+            packages = [PackageInfo(amdrocm_data, args.rocm_version, args.artifact_group, os_family, os_id)]
+            args.metapackage = "true"  # Set metapackage flag for consistency
 
         if not packages:
             logger.warning("No packages to install")
@@ -736,6 +768,7 @@ def main():
 
         # Initialize installer
         try:
+            metapackage_flag = args.metapackage and args.metapackage.lower() == "true"
             installer = PackageInstaller(
                 package_list=packages,
                 dest_dir=args.dest_dir,
@@ -747,7 +780,7 @@ def main():
                 release_type=args.release_type,
                 bucket=args.bucket,
                 package_suffix=args.package_suffix,
-                metapackage=(args.metapackage.lower() == "true"),
+                metapackage=metapackage_flag,
                 loader=loader,
             )
         except Exception as e:
