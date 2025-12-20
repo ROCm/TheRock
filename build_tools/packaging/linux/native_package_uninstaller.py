@@ -297,10 +297,10 @@ def parse_arguments():
     """
     parser = argparse.ArgumentParser(description="ROCm Package Uninstaller")
     parser.add_argument(
-        "--package-json", required=True, help="Path to package JSON definition file"
+        "--package-json", help="Path to package JSON definition file (optional, tightly coupled with --metapackage)"
     )
     parser.add_argument(
-        "--metapackage", default="false", help="Metapackage build mode (true/false)"
+        "--metapackage", help="Metapackage build mode (true/false, tightly coupled with --package-json)"
     )
     parser.add_argument(
         "--artifact-group", default="gfx000", help="GPU family identifier"
@@ -326,41 +326,88 @@ def main():
     try:
         args = parse_arguments()
 
-        # Validate package JSON file exists
-        if not os.path.exists(args.package_json):
-            logger.error(f"Package JSON file not found: {args.package_json}")
+        # Validate tight coupling: --package-json and --metapackage must both be provided or both omitted
+        has_package_json = args.package_json is not None
+        has_metapackage = args.metapackage is not None
+        
+        if has_package_json != has_metapackage:
+            logger.error("--package-json and --metapackage are tightly coupled. Both must be provided or both must be omitted.")
             return 1
 
         # Load packages
-        try:
-            loader = PackageLoader(args.package_json, args.rocm_version, args.artifact_group)
-            packages = (
-                loader.load_metapackage_packages()
-                if args.metapackage.lower() == "true"
-                else loader.load_non_metapackage_packages()
-            )
-        except FileNotFoundError as e:
-            logger.error(f"Failed to load package definitions: {e}")
-            return 1
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in package file: {e}")
-            return 1
-        except Exception as e:
-            logger.exception(f"Error loading packages: {e}")
-            return 1
+        loader = None
+        if args.package_json and args.metapackage:
+            # Load packages from JSON file
+            if not os.path.exists(args.package_json):
+                logger.error(f"Package JSON file not found: {args.package_json}")
+                return 1
+            
+            try:
+                loader = PackageLoader(args.package_json, args.rocm_version, args.artifact_group)
+                packages = (
+                    loader.load_metapackage_packages()
+                    if args.metapackage.lower() == "true"
+                    else loader.load_non_metapackage_packages()
+                )
+            except FileNotFoundError as e:
+                logger.error(f"Failed to load package definitions: {e}")
+                return 1
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in package file: {e}")
+                return 1
+            except Exception as e:
+                logger.exception(f"Error loading packages: {e}")
+                return 1
+        else:
+            # Default: uninstall "amdrocm" package only
+            logger.info("No package JSON provided. Defaulting to uninstall 'amdrocm' metapackage.")
+            
+            # Create a temporary package JSON with just amdrocm
+            import tempfile
+            amdrocm_json = [
+                {
+                    "Package": "amdrocm",
+                    "Version": "",
+                    "Architecture": "amd64",
+                    "BuildArch": "x86_64",
+                    "DEBDepends": [],
+                    "RPMRequires": [],
+                    "Metapackage": "True",
+                    "Gfxarch": "True"
+                }
+            ]
+            
+            # Write temporary JSON file
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                    json.dump(amdrocm_json, temp_file)
+                    temp_json_path = temp_file.name
+                
+                # Create loader with temporary JSON
+                loader = PackageLoader(temp_json_path, args.rocm_version, args.artifact_group)
+                packages = loader.load_metapackage_packages()
+                args.metapackage = "true"  # Set metapackage flag for consistency
+                
+                # Clean up temp file
+                os.remove(temp_json_path)
+                
+            except Exception as e:
+                logger.exception(f"Error creating default package loader: {e}")
+                return 1
 
         if not packages:
             logger.warning("No packages to uninstall")
             return 0
 
-        logger.info(f"Uninstalling in {'metapackage' if args.metapackage.lower() == 'true' else 'non-metapackage'} mode")
+        logger.info(f"Uninstalling in {'metapackage' if args.metapackage and args.metapackage.lower() == 'true' else 'non-metapackage'} mode")
 
         # Initialize uninstaller
         try:
+            metapackage_flag = args.metapackage and args.metapackage.lower() == "true"
             uninstaller = PackageUninstaller(
                 package_list=packages,
                 rocm_version=args.rocm_version,
-                metapackage=(args.metapackage.lower() == "true"),
+                metapackage=metapackage_flag,
                 loader=loader,
             )
         except Exception as e:
