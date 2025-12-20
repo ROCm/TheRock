@@ -13,7 +13,7 @@ Metapackage uninstall (removes all metapackages in reverse order):
     --artifact-group gfx94X-dcgpu \
     --metapackage true
 ```
-Non-metapackage uninstall (removes only rocm-core and its versioned package):
+Non-metapackage uninstall (removes only amdrocm-core and its versioned package):
 
 ```
 ./uninstall_package.py \
@@ -93,7 +93,7 @@ class PackageUninstaller(PackageManagerBase):
         Metapackage mode:
             - Uninstall all packages in reverse dependency order.
         Non-metapackage mode:
-            - Only uninstall 'rocm-core' and its derived packages.
+            - Only uninstall 'amdrocm-core' and its derived packages.
 
         Logs the progress and errors.
         """
@@ -144,31 +144,31 @@ class PackageUninstaller(PackageManagerBase):
                         self.failed_packages[pkg.package] = error_msg
             else:
                 try:
-                    pkg = self.loader.get_package_by_name("rocm-core")
+                    pkg = self.loader.get_package_by_name("amdrocm-core")
                     if not pkg:
-                        error_msg = "rocm-core package not found in package list"
+                        error_msg = "amdrocm-core package not found in package list"
                         logger.error(error_msg)
-                        self.failed_packages["rocm-core"] = error_msg
+                        self.failed_packages["amdrocm-core"] = error_msg
                     else:
-                        logger.info(f"[REMOVE] Uninstalling rocm-core")
+                        logger.info(f"[REMOVE] Uninstalling amdrocm-core")
                         try:
                             derived_name = self.loader.derive_package_names(pkg, True)
                         except Exception as e:
-                            error_msg = f"Error deriving package names for rocm-core: {str(e)}"
+                            error_msg = f"Error deriving package names for amdrocm-core: {str(e)}"
                             logger.error(error_msg)
-                            self.failed_packages["rocm-core"] = error_msg
+                            self.failed_packages["amdrocm-core"] = error_msg
                             derived_name = None
                         
                         if derived_name:
                             for derived_pkg in derived_name:
                                 self._run_uninstall_command(derived_pkg)
                         else:
-                            logger.warning("No derived package names found for rocm-core")
+                            logger.warning("No derived package names found for amdrocm-core")
                             
                 except Exception as e:
-                    error_msg = f"Error processing rocm-core: {str(e)}"
+                    error_msg = f"Error processing amdrocm-core: {str(e)}"
                     logger.exception(error_msg)
-                    self.failed_packages["rocm-core"] = error_msg
+                    self.failed_packages["amdrocm-core"] = error_msg
                     
             logger.info("Uninstallation complete.")
             
