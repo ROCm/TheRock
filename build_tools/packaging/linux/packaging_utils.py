@@ -2,13 +2,17 @@
 # SPDX-License-Identifier: MIT
 
 
+import copy
 import json
 import logging
 import os
 import platform
+import re
 import shutil
 import sys
+import yaml
 from pathlib import Path
+from prettytable import PrettyTable
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -45,6 +49,56 @@ def print_function_name():
     Returns: None
     """
     print("In function:", currentFuncName(1))
+
+
+def print_dict_summary(failure_dict):
+    """
+    Prints a clean summary of failures without table formatting.
+    """
+
+    if not failure_dict:
+        logger.info("All packages installed successfully.")
+        return
+
+    lines = []
+    lines.append("====== Installation Failure Summary ======\n")
+
+    for pkg, reason in failure_dict.items():
+        clean_reason = reason.strip()
+        lines.append(f" Package: {pkg}")
+        lines.append(f"  Reason : {clean_reason}\n")
+
+    summary_output = "\n".join(lines)
+    logger.info("\n" + summary_output)
+
+
+def load_yaml_config(yaml_path: str, variables: dict = None) -> dict:
+    """
+    Load a YAML configuration file and replace placeholders dynamically.
+
+    :param yaml_path: Path to the YAML file.
+    :param variables: Dictionary of dynamic variables to substitute (e.g., artifact_group, run_id)
+    :return: Dictionary with all placeholders substituted.
+    """
+    if variables is None:
+        variables = {}
+
+    with open(yaml_path, "r") as f:
+        raw_config = yaml.safe_load(f)
+
+    pattern = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+
+    def replace_placeholders(obj):
+        if isinstance(obj, dict):
+            return {k: replace_placeholders(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [replace_placeholders(v) for v in obj]
+        elif isinstance(obj, str):
+            return pattern.sub(lambda m: variables.get(m.group(1), m.group(0)), obj)
+        else:
+            return obj
+
+    return replace_placeholders(copy.deepcopy(raw_config))
 
 
 def get_os_id(os_release_path="/etc/os-release"):
