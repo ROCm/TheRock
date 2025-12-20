@@ -223,7 +223,7 @@ class PackageInstaller(PackageManagerBase):
             if self.upload == "pre":
                 if self.os_family == "debian":
                     cmd = ["sudo", "dpkg", "-i", pkg_name]
-                elif self.os_family == "redhat":
+                elif self.os_family == "rpm":
                     cmd = ["sudo", "rpm", "-ivh", "--replacepkgs", pkg_name]
                 elif self.os_family == "suse":
                     cmd = [
@@ -243,7 +243,7 @@ class PackageInstaller(PackageManagerBase):
             elif self.upload == "post":
                 if self.os_family == "debian":
                     cmd = ["sudo", "apt-get", "install", "-y", pkg_name]
-                elif self.os_family == "redhat":
+                elif self.os_family == "rpm":
                     cmd = ["sudo", "yum", "install", "-y", pkg_name]
                 elif self.os_family == "suse":
                     cmd = ["sudo", "zypper", "--non-interactive", "install", pkg_name]
@@ -383,7 +383,7 @@ class PackageInstaller(PackageManagerBase):
                     logger.error(error_msg)
                     raise RuntimeError(error_msg) from e
 
-            elif self.os_family == "redhat":
+            elif self.os_family == "rpm":
                 try:
                     logger.info("Detected RPM-based system. Setting up repo file.")
                     repo_file_path = "/etc/yum.repos.d/rocm.repo"
