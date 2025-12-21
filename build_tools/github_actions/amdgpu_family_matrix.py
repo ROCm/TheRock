@@ -94,7 +94,6 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
     },
