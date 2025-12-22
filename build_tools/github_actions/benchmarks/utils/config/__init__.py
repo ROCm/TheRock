@@ -5,9 +5,9 @@ from .config_parser import ConfigParser
 from .config_validator import ConfigValidator, ConfigurationError, CONFIG_SCHEMA
 
 __all__ = [
-    'ConfigHelper',
-    'ConfigParser',
-    'ConfigValidator',
-    'ConfigurationError',
-    'CONFIG_SCHEMA',
+    "ConfigHelper",
+    "ConfigParser",
+    "ConfigValidator",
+    "ConfigurationError",
+    "CONFIG_SCHEMA",
 ]

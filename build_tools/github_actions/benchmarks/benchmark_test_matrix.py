@@ -8,7 +8,7 @@ Benchmark tests run only on nightly CI builds and are merged into test_matrix by
 from pathlib import Path
 
 # Note: these paths are relative to the repository root.
-SCRIPT_DIR = Path(__file__).resolve().parent / "scripts"
+SCRIPT_DIR = Path("build_tools") / "github_actions" / "benchmarks" / "scripts"
 
 
 def _get_benchmark_script_path(script_name: str) -> str:
@@ -29,6 +29,8 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
     # SOLVER benchmark tests
     "rocsolver_bench": {
@@ -39,6 +41,8 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
     # RAND benchmark tests
     "rocrand_bench": {
@@ -49,6 +53,8 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
     # FFT benchmark tests
     "rocfft_bench": {
@@ -59,6 +65,8 @@ benchmark_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
         "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
     },
     # Communication benchmark tests
     "rccl_bench": {
@@ -71,4 +79,3 @@ benchmark_matrix = {
         "total_shards": 1,
     },
 }
-

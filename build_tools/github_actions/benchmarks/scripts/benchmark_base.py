@@ -18,26 +18,26 @@ from github_actions_utils import gha_append_step_summary
 
 class BenchmarkBase:
     """Base class providing common benchmark logic.
-    
+
     Child classes must implement run_benchmarks() and parse_results().
     """
-    
+
     def __init__(self, benchmark_name: str, display_name: str = None):
         """Initialize benchmark test.
-        
+
         Args:
             benchmark_name: Internal benchmark name (e.g., 'rocfft')
             display_name: Display name for reports (e.g., 'ROCfft'), defaults to benchmark_name
         """
         self.benchmark_name = benchmark_name
         self.display_name = display_name or benchmark_name.upper()
-        
+
         # Environment variables
         self.therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
         self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.script_dir = Path(__file__).resolve().parent
-        self.therock_dir = self.script_dir.parent.parent.parent
+        self.therock_dir = self.script_dir.parent.parent.parent.parent
         
         # Initialize test client (will be set in run())
         self.client = None
@@ -96,7 +96,7 @@ class BenchmarkBase:
     def create_test_result(self, test_name: str, subtest_name: str, status: str,
                           score: float, unit: str, flag: str, **kwargs) -> Dict[str, Any]:
         """Create a standardized test result dictionary.
-        
+
         Args:
             test_name: Benchmark name
             subtest_name: Specific test identifier
@@ -105,14 +105,14 @@ class BenchmarkBase:
             unit: Unit of measurement (e.g., 'ms', 'GFLOPS', 'GB/s')
             flag: 'H' (higher is better) or 'L' (lower is better)
             **kwargs: Additional test-specific parameters (batch_size, ngpu, mode, etc.)
-            
+
         Returns:
             Dict[str, Any]: Test result dictionary with test data and configuration
         """
         # Extract common parameters with defaults
-        batch_size = kwargs.get('batch_size', 0)
-        ngpu = kwargs.get('ngpu', 1)
-        
+        batch_size = kwargs.get("batch_size", 0)
+        ngpu = kwargs.get("ngpu", 1)
+
         # Build test config with all parameters
         test_config = {
             "test_name": test_name,
@@ -120,14 +120,14 @@ class BenchmarkBase:
             "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
             "environment_dependencies": [],
             "batch_size": batch_size,
-            "ngpu": ngpu
+            "ngpu": ngpu,
         }
-        
+
         # Add any additional kwargs to test_config
         for key, value in kwargs.items():
-            if key not in ['batch_size', 'ngpu']:
+            if key not in ["batch_size", "ngpu"]:
                 test_config[key] = value
-        
+
         return {
             "test_name": test_name,
             "subtest": subtest_name,
@@ -137,15 +137,17 @@ class BenchmarkBase:
             "score": float(score),
             "unit": unit,
             "flag": flag,
-            "test_config": test_config
+            "test_config": test_config,
         }
-    
-    def calculate_statistics(self, test_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+
+    def calculate_statistics(
+        self, test_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """Calculate test statistics from results.
-        
+
         Args:
             test_results: List of test result dictionaries with 'status' key
-            
+
         Returns:
             Dictionary with:
                 - passed: Number of passed tests
@@ -153,41 +155,43 @@ class BenchmarkBase:
                 - total: Total number of tests
                 - overall_status: 'PASS' if no failures, else 'FAIL'
         """
-        passed = sum(1 for r in test_results if r.get('status') == 'PASS')
-        failed = sum(1 for r in test_results if r.get('status') == 'FAIL')
+        passed = sum(1 for r in test_results if r.get("status") == "PASS")
+        failed = sum(1 for r in test_results if r.get("status") == "FAIL")
         overall_status = "PASS" if failed == 0 else "FAIL"
-        
+
         return {
-            'passed': passed,
-            'failed': failed,
-            'total': len(test_results),
-            'overall_status': overall_status
+            "passed": passed,
+            "failed": failed,
+            "total": len(test_results),
+            "overall_status": overall_status,
         }
-    
-    def upload_results(self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]) -> bool:
+
+    def upload_results(
+        self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
+    ) -> bool:
         """Upload results to API and save locally."""
         log.info("Uploading Results to API")
         success = self.client.upload_results(
             test_name=f"{self.benchmark_name}_benchmark",
             test_results=test_results,
-            test_status=stats['overall_status'],
+            test_status=stats["overall_status"],
             test_metadata={
                 "artifact_run_id": self.artifact_run_id,
                 "amdgpu_families": self.amdgpu_families,
                 "benchmark_name": self.benchmark_name,
-                "total_subtests": stats['total'],
-                "passed_subtests": stats['passed'],
-                "failed_subtests": stats['failed']
+                "total_subtests": stats["total"],
+                "passed_subtests": stats["passed"],
+                "failed_subtests": stats["failed"],
             },
             save_local=True,
-            output_dir=str(self.script_dir / "results")
+            output_dir=str(self.script_dir / "results"),
         )
-        
+
         if success:
             log.info("✓ Results uploaded successfully")
         else:
             log.info("⚠ Results saved locally only (API upload disabled or failed)")
-        
+
         return success
     
     def compare_with_lkg(self, tables: Any) -> Any:
@@ -262,25 +266,25 @@ class BenchmarkBase:
     def run(self) -> int:
         """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
         log.info(f"Initializing {self.display_name} Benchmark Test")
-        
+
         # Initialize benchmark client and print system info
         self.client = BenchmarkClient(auto_detect=True)
         self.client.print_system_summary()
-        
+
         # Run benchmarks (implemented by child class)
         self.run_benchmarks()
-        
+
         # Parse results (implemented by child class)
         test_results, tables = self.parse_results()
         
         if not test_results:
             log.error("No test results found")
             return 1
-        
+
         # Calculate statistics
         stats = self.calculate_statistics(test_results)
         log.info(f"Test Summary: {stats['passed']} passed, {stats['failed']} failed")
-        
+
         # Upload results
         self.upload_results(test_results, stats)
         
@@ -293,14 +297,14 @@ class BenchmarkBase:
         # Determine final status
         final_status = self.determine_final_status(final_tables)
         log.info(f"Final Status: {final_status}")
-        
+
         # Return 0 only if PASS, otherwise return 1
         return 0 if final_status == "PASS" else 1
 
 
 def run_benchmark_main(benchmark_instance):
     """Run benchmark with standard error handling.
-    
+
     Raises:
         KeyboardInterrupt: If execution is interrupted by user
         Exception: If benchmark execution fails
@@ -315,6 +319,6 @@ def run_benchmark_main(benchmark_instance):
     except Exception as e:
         log.error(f"Execution failed: {e}")
         import traceback
+
         traceback.print_exc()
         raise
-

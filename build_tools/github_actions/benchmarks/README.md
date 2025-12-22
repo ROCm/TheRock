@@ -70,12 +70,12 @@ build_tools/github_actions/
 
 Benchmark tests run **only on nightly CI builds** to save time and resources on pull request validation:
 
-| Workflow Trigger | Benchmark Tests | Regular Tests |
-|------------------|-----------------|---------------|
-| **Pull Request (PR)** | Skipped | Run (smoke: 1 shard) |
+| Workflow Trigger           | Benchmark Tests                | Regular Tests          |
+| -------------------------- | ------------------------------ | ---------------------- |
+| **Pull Request (PR)**      | Skipped                        | Run (smoke: 1 shard)   |
 | **Nightly CI (scheduled)** | Run (in parallel, always full) | Run (full: all shards) |
-| **Push to main** | Skipped | Run (smoke: 1 shard) |
-| **Manual workflow** | Optional | Optional |
+| **Push to main**           | Skipped                        | Run (smoke: 1 shard)   |
+| **Manual workflow**        | Optional                       | Optional               |
 
 **Note:** Benchmarks always run with `total_shards=1` and do not use `test_type` or `test_labels` filtering.
 
@@ -102,21 +102,21 @@ ci_nightly.yml → ci_linux.yml
 
 The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.py`:
 
-| Test Name | Library | Platform | Timeout | Shards |
-|-----------|---------|----------|---------|--------|
-| `hipblaslt_bench` | hipBLASLt | Linux | 60 min | 1 |
-| `rocsolver_bench` | ROCsolver | Linux | 60 min | 1 |
-| `rocrand_bench` | ROCrand | Linux | 60 min | 1 |
-| `rocfft_bench` | ROCfft | Linux | 60 min | 1 |
+| Test Name         | Library   | Platform | Timeout | Shards |
+| ----------------- | --------- | -------- | ------- | ------ |
+| `hipblaslt_bench` | hipBLASLt | Linux    | 60 min  | 1      |
+| `rocsolver_bench` | ROCsolver | Linux    | 60 min  | 1      |
+| `rocrand_bench`   | ROCrand   | Linux    | 60 min  | 1      |
+| `rocfft_bench`    | ROCfft    | Linux    | 60 min  | 1      |
 
 ### Implementation Details
 
 1. **Nightly Trigger:** `configure_ci.py` adds benchmark test names to test labels
-2. **Parallel Jobs:** `ci_linux.yml` spawns two parallel jobs:
+1. **Parallel Jobs:** `ci_linux.yml` spawns two parallel jobs:
    - `test_artifacts` → Regular tests via `test_artifacts.yml`
    - `test_benchmarks` → Benchmarks via `test_benchmarks.yml`
-3. **Matrix Generation:** `fetch_test_configurations.py` uses `IS_BENCHMARK_WORKFLOW=true` flag to select only benchmarks from `benchmark_test_matrix.py`
-4. **Dedicated Runners:** Benchmarks can use dedicated GPU runners specified by `benchmark-runs-on` in `amdgpu_family_matrix.py`
+1. **Matrix Generation:** `fetch_test_configurations.py` uses `IS_BENCHMARK_WORKFLOW=true` flag to select only benchmarks from `benchmark_test_matrix.py`
+1. **Dedicated Runners:** Benchmarks can use dedicated GPU runners specified by `benchmark-runs-on` in `amdgpu_family_matrix.py`
 
 ## Architecture
 
@@ -142,23 +142,23 @@ The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.p
 1. Initialize BenchmarkClient
    ↓ Auto-detect system (GPU, OS, ROCm version)
    ↓ Load configuration from config.yml
-   
+
 2. Run Benchmarks
    ↓ Execute benchmark binary
    ↓ Capture output to log file
-   
+
 3. Parse Results
    ↓ Extract metrics from log file
    ↓ Structure data according to schema
-   
+
 4. Upload Results
    ↓ Submit to API (with retry)
    ↓ Save JSON locally
-   
+
 5. Compare with LKG
    ↓ Fetch last known good results
    ↓ Calculate performance delta
-   
+
 6. Report Results
    ↓ Display formatted table
    ↓ Append to GitHub Actions step summary
@@ -174,12 +174,14 @@ To add a new benchmark test to the nightly CI:
 Create `benchmarks/scripts/test_your_benchmark.py`. Reference existing benchmarks like `test_rocfft_benchmark.py` as a template.
 
 Key components:
+
 - Inherit from `BenchmarkBase` class
 - Implement `run_benchmarks()` - executes binary and logs output
 - Implement `parse_results()` - parses logs and returns structured data
 - Results are automatically uploaded to API via base class
 
 Example:
+
 ```python
 import sys
 from pathlib import Path
@@ -187,30 +189,32 @@ from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
-sys.path.insert(0, str(Path(__file__).parent))         # For benchmark_base
+sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
 
+
 class YourBenchmark(BenchmarkBase):
     def __init__(self):
-        super().__init__(benchmark_name='your_lib', display_name='YourLib')
+        super().__init__(benchmark_name="your_lib", display_name="YourLib")
         self.log_file = self.script_dir / "your_lib_bench.log"
-    
+
     def run_benchmarks(self) -> None:
         """Execute benchmark binary and log output."""
         # Load config if needed
-        config_file = self.script_dir.parent / 'configs' / 'your_lib.json'
-        
+        config_file = self.script_dir.parent / "configs" / "your_lib.json"
+
         # Your benchmark execution logic here
         pass
-    
+
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
         """Parse log file and return (test_results, table)."""
         # Your parsing logic here
         # Use self.create_test_result() to build result dictionaries
         pass
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run_benchmark_main(YourBenchmark())  # Handles sys.exit() internally
 ```
 
@@ -230,6 +234,7 @@ Edit `benchmarks/benchmark_test_matrix.py`:
 ```
 
 The benchmark will automatically be included in nightly CI runs:
+
 - `configure_ci.py` adds benchmark names to test labels
 - `ci_linux.yml` spawns `test_benchmarks` job
 - `test_benchmarks.yml` calls `fetch_test_configurations.py` with `IS_BENCHMARK_WORKFLOW=true`

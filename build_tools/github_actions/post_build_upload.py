@@ -258,7 +258,7 @@ def upload_manifest_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str)
     run_aws_cp(manifest_path, dest, content_type="application/json")
 
 
-def write_gha_build_summary(artifact_group: str, bucket_url: str):
+def write_gha_build_summary(artifact_group: str, bucket_url: str, job_status: str):
     log(f"Adding links to job summary to bucket {bucket_url}")
 
     log_index_url = f"{bucket_url}/logs/{artifact_group}/index.html"
@@ -269,8 +269,10 @@ def write_gha_build_summary(artifact_group: str, bucket_url: str):
         analysis_url = f"{bucket_url}/logs/{artifact_group}/build_time_analysis.html"
         gha_append_step_summary(f"[Build Time Analysis]({analysis_url})")
 
-    artifact_url = f"{bucket_url}/index-{artifact_group}.html"
-    gha_append_step_summary(f"[Artifacts]({artifact_url})")
+    # Only add artifact links if the job not failed
+    if not job_status or job_status == "success":
+        artifact_url = f"{bucket_url}/index-{artifact_group}.html"
+        gha_append_step_summary(f"[Artifacts]({artifact_url})")
 
     manifest_url = f"{bucket_url}/manifests/{artifact_group}/therock_manifest.json"
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
@@ -303,9 +305,11 @@ def run(args):
     log("----------------------")
     write_time_sync_log()
 
-    log("Upload build artifacts")
-    log("----------------------")
-    upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
+    # Upload artifacts only if the job not failed
+    if not args.job_status or args.job_status == "success":
+        log("Upload build artifacts")
+        log("----------------------")
+        upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
 
     log("Upload log")
     log("----------")
@@ -317,7 +321,7 @@ def run(args):
 
     log("Write github actions build summary")
     log("--------------------")
-    write_gha_build_summary(args.artifact_group, bucket_url)
+    write_gha_build_summary(args.artifact_group, bucket_url, args.job_status)
 
 
 if __name__ == "__main__":
@@ -343,6 +347,9 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
+    parser.add_argument(
+        "--job-status", type=str, help="Status of this Job ('success', 'failure')"
+    )
     args = parser.parse_args()
 
     # Check preconditions for provided arguments before proceeding.
