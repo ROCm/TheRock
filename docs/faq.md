@@ -1,8 +1,3 @@
----
-description: This page lists frequently asked questions about TheRock
-keywords: AMD, ROCm, TheRock, FAQ, frequently asked questions
----
-
 # Frequently asked questions
 
 This topic provides answers to frequently asked questions for TheRock users.
@@ -28,8 +23,10 @@ version management and easier access to cutting-edge features.
 
 ### Which GPU architectures are supported by TheRock?
 
-For the most complete and up-to-date information on supported GPU architectures,
-please refer to the official TheRock [roadmap](https://github.com/ROCm/TheRock/blob/main/ROADMAP.md).
+For the most complete and up-to-date information on supported GPU architectures
+and release history, please refer to the the [SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
+list, and the [RELEASES](https://github.com/ROCm/TheRock/blob/main/RELEASES.md)
+file.
 
 ## gfx1151 (Strix Halo) specific questions
 
