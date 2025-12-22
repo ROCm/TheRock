@@ -9,20 +9,12 @@
         "scatter_perf",
         "gather_perf"
     ],
-    "data_types": ["float", "double", "half"],
-    "min_size": "8",
-    "max_size": "128M",
+    "data_types": ["float"],
+    "min_size": "1G",
+    "max_size": "1G",
     "step_factor": "2",
     "warmup_iters": "75",
     "test_iters": "1000",
-    "operations": ["sum"],
-    "gpu_overrides": {
-        "gfx110X": {
-            "max_size": "256M"
-        },
-        "gfx94X-dcgpu": {
-            "max_size": "512M"
-        }
-    }
+    "operations": ["sum"]
 }
 
