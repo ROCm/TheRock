@@ -24,10 +24,10 @@ class ROCrandBenchmark(BenchmarkBase):
     """ROCrand benchmark test."""
 
     def __init__(self):
-        super().__init__(benchmark_name='rocrand', display_name='ROCrand')
+        super().__init__(benchmark_name="rocrand", display_name="ROCrand")
         self.therock_dir = self.script_dir.parent.parent.parent.parent
-        self.bench_bins = ['benchmark_rocrand_host_api', 'benchmark_rocrand_device_api']
-    
+        self.bench_bins = ["benchmark_rocrand_host_api", "benchmark_rocrand_device_api"]
+
     def run_benchmarks(self) -> None:
         """Run ROCrand benchmarks and save output to log files."""
         NUM_TRIALS = 1000  # Number of benchmark trials
