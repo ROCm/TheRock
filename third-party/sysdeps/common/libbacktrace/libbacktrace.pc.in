@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../..
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: libbacktrace
+Description: Backtrace library
+Version: @PROJECT_VERSION@
+
+Requires:
+Libs: -L${libdir}
+Cflags: -I${includedir} -fPIC
