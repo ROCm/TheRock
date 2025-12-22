@@ -193,9 +193,14 @@ def get_all_supported_devices(
             )
     else:
         # Mode 3: Specific GPU arch - validate it is visible and supported by the current PyTorch build.
+
+        # We have gfx1151 -> we want to match exactly gfx1151
+        # We have gfx950-dcgpu -> we need to match exactly gfx950
+        # So remove the suffix after '-'
+        pruned_amdgpu_family = amdgpu_family.split("-")[0]
         for idx, gpu in enumerate(visible_gpus):
             if gpu in supported_gpus:
-                if gpu == amdgpu_family or amdgpu_family in gpu:
+                if gpu == pruned_amdgpu_family or pruned_amdgpu_family in gpu:
                     selected_gpu_indices.append(idx)
                     selected_gpu_archs.append(gpu)
 

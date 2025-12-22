@@ -5,27 +5,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "sudo",
       "libc6",
       "python3 (>= 3.6.8)",
-      "python3-pip",
-      "python3-setuptools",
-      "python3-wheel"
-    ],
-    "RPMRequires": [
-      "sudo",
-      "python3 >= 3.6.8",
-      "python3-pip",
-      "python3-setuptools",
-      "python3-wheel"
-    ],
-    "RPMRecommends": [
-      "python3-argcomplete",
       "amdrocm-sysdeps"
     ],
-
-    "DEBRecommends": [
-      "python3-argcomplete",
+    "RPMRequires": [
+      "python3 >= 3.6.8",
       "amdrocm-sysdeps"
     ],
     "Maintainer": "AMD-SMILib Support <amd-smi.support@amd.com>",
