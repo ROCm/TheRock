@@ -46,6 +46,8 @@ on:
           - gfx90X-dcgpu
           - gfx94X-dcgpu
           - gfx950-dcgpu
+          - gfx1152
+          - gfx1153
         default: gfx94X-dcgpu
       release_type:
         description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
