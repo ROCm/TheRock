@@ -6,9 +6,13 @@
 """
 Packaging + repository upload tool.
 
+Dev mode:
+  /deb/<artifact_id>
+  /rpm/<artifact_id>
+
 Nightly mode:
-  /deb/<mmddyy>
-  /rpm/<mmddyy>
+  /deb/<YYYYMMDD>
+  /rpm/<YYYYMMDD>
 """
 
 import os
@@ -79,8 +83,8 @@ def find_package_dir():
         raise RuntimeError(f"Package directory not found: {base}")
     return base
 
-def mmddyy():
-    return datetime.datetime.utcnow().strftime("%m%d%y")
+def yyyymmdd():
+    return datetime.datetime.utcnow().strftime("%Y%m%d")
 
 def s3_object_exists(s3, bucket, key):
     try:
@@ -138,7 +142,6 @@ def create_rpm_repo(package_dir):
     run_command("createrepo_c .", cwd=arch_dir)
     generate_indexes_recursive(package_dir)
 
-
 def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     s3 = boto3.client("s3")
     print(f"Uploading to s3://{bucket}/{prefix}/")
@@ -175,20 +178,20 @@ def main():
     parser.add_argument("--artifact-id", required=True)
     parser.add_argument(
         "--job",
-        default="ci",
-        choices=["ci", "nightly"],
-        help="Enable nightly shared repo",
+        default="dev",
+        choices=["dev", "nightly"],
+        help="Enable dev or nightly shared repo",
     )
 
     args = parser.parse_args()
     package_dir = find_package_dir()
 
     if args.job == "nightly":
-        prefix = f"{args.pkg_type}/{mmddyy()}"
+        prefix = f"{args.pkg_type}/{yyyymmdd()}"
         dedupe = True
-    else:
-        prefix = f"{args.amdgpu_family}_{args.artifact_id}/{args.pkg_type}"
-        dedupe = False
+    elif args.job == "dev":
+        prefix = f"{args.pkg_type}/{args.artifact_id}"
+        dedupe = True
 
     if args.pkg_type == "deb":
         create_deb_repo(package_dir, args.s3_bucket)
@@ -196,7 +199,6 @@ def main():
         create_rpm_repo(package_dir)
 
     upload_to_s3(package_dir, args.s3_bucket, prefix, dedupe=dedupe)
-
 
 if __name__ == "__main__":
     main()
