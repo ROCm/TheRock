@@ -54,28 +54,138 @@ HTML_FOOT = """
 </html>
 """
 
+
 def generate_index_html(directory):
     rows = []
     try:
         for entry in os.scandir(directory):
             if entry.name.startswith("."):
                 continue
-            rows.append(
-                f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>'
-            )
+            rows.append(f'<tr><td><a href="{entry.name}">{entry.name}</a></td></tr>')
     except PermissionError:
         return
 
     with open(os.path.join(directory, "index.html"), "w") as f:
         f.write(HTML_HEAD + "\n".join(rows) + HTML_FOOT)
 
+
 def generate_indexes_recursive(root):
     for d, _, _ in os.walk(root):
         generate_index_html(d)
 
+
+def generate_index_from_s3(s3, bucket, prefix):
+    """Generate index.html files based on what's actually in S3.
+
+    This ensures index files accurately reflect the S3 repository state,
+    including files from previous uploads that may have been deduplicated.
+
+    Args:
+        s3: boto3 S3 client
+        bucket: S3 bucket name
+        prefix: S3 prefix (e.g., 'deb/20251222')
+    """
+    print(f"Generating indexes from S3: s3://{bucket}/{prefix}/")
+
+    # Get all objects under the prefix
+    paginator = s3.get_paginator("list_objects_v2")
+    all_objects = []
+
+    try:
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            if "Contents" not in page:
+                continue
+            all_objects.extend(page["Contents"])
+    except Exception as e:
+        print(f"Error listing S3 objects: {e}")
+        return
+
+    if not all_objects:
+        print(f"No objects found in s3://{bucket}/{prefix}/")
+        return
+
+    # Group objects by directory
+    directories = {}
+    for obj in all_objects:
+        key = obj["Key"]
+
+        # Skip existing index.html files
+        if key.endswith("index.html"):
+            continue
+
+        # Get the directory path relative to prefix
+        if key.startswith(prefix):
+            rel_path = key[len(prefix) :].lstrip("/")
+        else:
+            rel_path = key
+
+        # Determine directory and filename
+        if "/" in rel_path:
+            dir_path = "/".join(rel_path.split("/")[:-1])
+            filename = rel_path.split("/")[-1]
+        else:
+            dir_path = ""
+            filename = rel_path
+
+        if dir_path not in directories:
+            directories[dir_path] = []
+        directories[dir_path].append(filename)
+
+    # Generate index.html for each directory
+    uploaded_indexes = 0
+    for dir_path, files in sorted(directories.items()):
+        # Create HTML rows
+        rows = []
+
+        # Add subdirectories first
+        subdirs = set()
+        for other_dir in directories.keys():
+            if other_dir.startswith(dir_path + "/") and other_dir != dir_path:
+                # Get immediate subdirectory
+                remainder = other_dir[len(dir_path) :].lstrip("/")
+                if "/" in remainder:
+                    subdir = remainder.split("/")[0]
+                else:
+                    subdir = remainder
+                if subdir:
+                    subdirs.add(subdir)
+
+        for subdir in sorted(subdirs):
+            rows.append(f'<tr><td><a href="{subdir}/">{subdir}/</a></td></tr>')
+
+        # Add files
+        for filename in sorted(files):
+            rows.append(f'<tr><td><a href="{filename}">{filename}</a></td></tr>')
+
+        # Generate index.html content
+        index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
+
+        # Determine the S3 key for this index.html
+        if dir_path:
+            index_key = f"{prefix}/{dir_path}/index.html"
+        else:
+            index_key = f"{prefix}/index.html"
+
+        # Upload index.html to S3
+        try:
+            print(f"Uploading index: {index_key}")
+            s3.put_object(
+                Bucket=bucket,
+                Key=index_key,
+                Body=index_content.encode("utf-8"),
+                ContentType="text/html",
+            )
+            uploaded_indexes += 1
+        except Exception as e:
+            print(f"Error uploading index {index_key}: {e}")
+
+    print(f"Generated and uploaded {uploaded_indexes} index files from S3 state")
+
+
 def run_command(cmd, cwd=None):
     print(f"Running: {cmd}")
     subprocess.run(cmd, shell=True, check=True, cwd=cwd)
+
 
 def find_package_dir():
     base = os.path.join(os.getcwd(), "output", "packages")
@@ -83,8 +193,10 @@ def find_package_dir():
         raise RuntimeError(f"Package directory not found: {base}")
     return base
 
+
 def yyyymmdd():
     return datetime.datetime.utcnow().strftime("%Y%m%d")
+
 
 def s3_object_exists(s3, bucket, key):
     try:
@@ -94,6 +206,7 @@ def s3_object_exists(s3, bucket, key):
         if e.response["Error"]["Code"] == "404":
             return False
         raise
+
 
 def create_deb_repo(package_dir, origin):
     print("Creating APT repository...")
@@ -127,7 +240,8 @@ Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
 """
         )
 
-    generate_indexes_recursive(package_dir)
+    # Index generation now happens from S3 state after upload
+
 
 def create_rpm_repo(package_dir):
     print("Creating RPM repository...")
@@ -140,7 +254,9 @@ def create_rpm_repo(package_dir):
             shutil.move(os.path.join(package_dir, f), os.path.join(arch_dir, f))
 
     run_command("createrepo_c .", cwd=arch_dir)
-    generate_indexes_recursive(package_dir)
+
+    # Index generation now happens from S3 state after upload
+
 
 def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     s3 = boto3.client("s3")
@@ -152,6 +268,10 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
 
     for root, _, files in os.walk(source_dir):
         for fname in files:
+            # Skip index.html files - we'll generate them from S3 state
+            if fname == "index.html":
+                continue
+
             local = os.path.join(root, fname)
             rel = os.path.relpath(local, source_dir)
             key = os.path.join(prefix, rel).replace("\\", "/")
@@ -170,6 +290,10 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
 
     print(f"Uploaded: {uploaded}, Skipped: {skipped}")
 
+    # Generate index files based on actual S3 state after upload
+    generate_index_from_s3(s3, bucket, prefix)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
@@ -186,11 +310,9 @@ def main():
     args = parser.parse_args()
     package_dir = find_package_dir()
 
-    if args.job == "nightly":
-        prefix = f"{args.pkg_type}/{yyyymmdd()}"
-        dedupe = True
-    elif args.job == "dev":
-        prefix = f"{args.pkg_type}/{args.artifact_id}"
+    # TODO : Add the cases for release/prerelease
+    if args.job in ["nightly", "dev"]:
+        prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
         dedupe = True
 
     if args.pkg_type == "deb":
@@ -199,6 +321,7 @@ def main():
         create_rpm_repo(package_dir)
 
     upload_to_s3(package_dir, args.s3_bucket, prefix, dedupe=dedupe)
+
 
 if __name__ == "__main__":
     main()
