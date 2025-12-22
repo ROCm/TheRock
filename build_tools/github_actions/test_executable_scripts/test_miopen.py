@@ -161,7 +161,8 @@ if AMDGPU_FAMILIES == "gfx950-dcgpu":
 
 # Tests to be filtered for navi
 # 1- Ignore gfx942 tests
-# 2- There is no FP32 wmma on Navi, remove all FP32 conv tests
+# TODO: There is no FP32 wmma on Navi, remove all FP32 conv tests. These should already be skipped via applicability for
+# CK solvers
 if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
     # These are ignored in miopen
     negative_filter.append(
