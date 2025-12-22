@@ -85,6 +85,20 @@ def is_key_defined(pkg_info, key):
         return False
 
 
+def is_meta_package(pkg_info):
+    """
+    Verifies whether Metapackage key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if Metapackage key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "Metapackage")
+
+
 def is_composite_package(pkg_info):
     """
     Verifies whether composite key is enabled for a package.
@@ -168,11 +182,11 @@ def check_for_gfxarch(pkgname):
 
     Returns:
     bool : True if Gfxarch is set else False.
-           False if devel package
+            False if devel package
     """
-
-    if pkgname.endswith("-devel"):
-        return False
+    #  Disabling this for time being as per the requirements
+    #   if pkgname.endswith("-devel"):
+    #       return False
 
     pkg_info = get_package_info(pkgname)
     if str(pkg_info.get("Gfxarch", "false")).strip().lower() == "true":
@@ -200,13 +214,18 @@ def remove_dir(dir_name):
     """Remove the directory if it exists
 
     Parameters:
-    dir_name : Directory to be removed
+    dir_name : Path or str
+        Directory to be removed
 
     Returns: None
     """
-    if os.path.exists(dir_name) and os.path.isdir(dir_name):
-        shutil.rmtree(dir_name)
-        print(f"Removed directory: {dir_name}")
+    dir_path = Path(dir_name)
+
+    if dir_path.exists() and dir_path.is_dir():
+        shutil.rmtree(dir_path)
+        print(f"Removed directory: {dir_path}")
+    else:
+        print(f"Directory does not exist: {dir_path}")
 
 
 def version_to_str(version_str):

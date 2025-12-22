@@ -61,9 +61,11 @@ on:
 permissions:
   contents: read
 
+run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
+
 jobs:
   test_wheels:
-    name: Test PyTorch Wheels | ${{ inputs.amdgpu_family }}
+    name: Test PyTorch | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
@@ -149,34 +151,40 @@ jobs:
             -v
 
       - name: (Linux) Run PyTorch tests
-        if: ${{ contains(inputs.test_runs_on, 'linux') }}
+        if: ${{ runner.os == 'Linux' }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests.py -- \
             --continue-on-collection-errors \
             --import-mode=importlib \
             -v
 
+      # Windows testing is a recent addition and is being enabled incrementally.
+      # See https://github.com/ROCm/TheRock/issues/2258.
+      #
+      # Many tests are failing on torch 2.10+ so we limit testing to 2.9.
+      # (Obviously that's not ideal, but we need to start somewhere)
+      #
+      # HACK: The test process does not terminate on its own gracefully,
+      # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
+      # After killing the process we read the return code to signal it normally.
+      # See https://github.com/ROCm/TheRock/issues/999.
+      - name: (Windows) Run PyTorch tests
+        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
+        continue-on-error: true
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests.py -- \
+            --continue-on-collection-errors \
+            --import-mode=importlib \
+            -v
 
-      # TODO(#2258): Enable this code to run tests on Windows
-
-      # # HACK: The test process does not terminate on its own gracefully,
-      # # so we write to run_pytorch_tests_exit_code.txt and then kill the process.
-      # # After killing the process we read the return code to signal it normally.
-      # # See https://github.com/ROCm/TheRock/issues/999.
-      # - name: (Windows) Run PyTorch tests
-      #   if: ${{ runner.os == 'Windows' }}
-      #   continue-on-error: true
-      #   run: |
-      #     python ./external-builds/pytorch/run_pytorch_tests.py
-
-      # - name: (Windows) Read and propagate exit code
-      #   if: ${{ runner.os == 'Windows' }}
-      #   run: |
-      #     if [ -f run_pytorch_tests_exit_code.txt ]; then
-      #       EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
-      #       echo "Exit code from file: $EXIT_CODE"
-      #       exit $EXIT_CODE
-      #     else
-      #       echo "No run_pytorch_tests_exit_code.txt found"
-      #       exit 1
-      #     fi
+      - name: (Windows) Read and propagate exit code
+        if: ${{ runner.os == 'Windows' && contains(inputs.torch_version, '2.9') }}
+        run: |
+          if [ -f run_pytorch_tests_exit_code.txt ]; then
+            EXIT_CODE=$(cat run_pytorch_tests_exit_code.txt)
+            echo "Exit code from file: ${EXIT_CODE}"
+            exit ${EXIT_CODE}
+          else
+            echo "No run_pytorch_tests_exit_code.txt found"
+            exit 1
+          fi
