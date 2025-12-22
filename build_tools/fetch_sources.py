@@ -421,12 +421,6 @@ def main(argv):
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
     parser.add_argument(
-        "--include-math-libraries",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="Include math libraries that are part of ROCM",
-    )
-    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -473,6 +467,12 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
+    )
+    parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
     )
     parser.add_argument(
         "--system-projects",
