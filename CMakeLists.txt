@@ -248,11 +248,9 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
 
 # Optional sub-features that control behavior within artifacts
-if(NOT WIN32)
-  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
-    "Enables composable kernel in MIOpen" ON
-    "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
-endif()
+cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
+  "Enables composable kernel in MIOpen" ON
+  "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
