@@ -19,7 +19,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import List, Optional
+from typing import List
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -458,7 +458,6 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
-            "amdsmi",
             "half",
             "rccl",
             "rccl-tests",

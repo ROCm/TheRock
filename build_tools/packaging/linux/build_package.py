@@ -59,7 +59,7 @@ class PackageConfig:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 # Default install prefix
-DEFAULT_INSTALL_PREFIX = "/opt/rocm"
+DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
 
 
 ################### Debian package creation #######################
@@ -259,12 +259,17 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     rules_file = Path(deb_dir) / "rules"
     disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
+    # Get package name for changelog installation
+    pkg_name = update_package_name(pkg_info.get("Package"), config)
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
     context = {
         "disable_dwz": disable_dwz,
         "disable_dh_strip": disable_dh_strip,
+        "install_prefix": config.install_prefix,
+        "pkg_name": pkg_name,
     }
 
     with rules_file.open("w", encoding="utf-8") as f:
@@ -647,7 +652,17 @@ def update_package_name(pkg_name, config: PackageConfig):
     """
     print_function_name()
     if config.versioned_pkg:
-        pkg_suffix = config.rocm_version
+        # Split version passed to use only major and minor version for package name
+        # Split by dot and take first two components
+        # Package name will be rocm8.1 and discard all other version part
+        parts = config.rocm_version.split(".")
+        if len(parts) < 2:
+            raise ValueError(
+                f"Version string '{args.rocm_version}' does not have major.minor versions"
+            )
+        major = re.match(r"^\d+", parts[0])
+        minor = re.match(r"^\d+", parts[1])
+        pkg_suffix = f"{major.group()}.{minor.group()}"
     else:
         pkg_suffix = ""
 
@@ -832,10 +847,21 @@ def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
 
+    # Split version passed to use only major and minor version for prefix folder
+    # Split by dot and take first two components
+    parts = args.rocm_version.split(".")
+    if len(parts) < 2:
+        raise ValueError(
+            f"Version string '{args.rocm_version}' does not have major.minor versions"
+        )
+    major = re.match(r"^\d+", parts[0])
+    minor = re.match(r"^\d+", parts[1])
+    modified_rocm_version = f"{major.group()}.{minor.group()}"
+
     # Append rocm version to default install prefix
     # TBD: Do we need to append rocm_version to other prefix?
     if args.install_prefix == f"{DEFAULT_INSTALL_PREFIX}":
-        prefix = args.install_prefix + "-" + args.rocm_version
+        prefix = args.install_prefix + "-" + modified_rocm_version
 
     # Populate package config details from user arguments
     config = PackageConfig(
