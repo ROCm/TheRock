@@ -398,6 +398,7 @@ if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_activate(rocrtst)
 
     therock_provide_artifact(rocrtst
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-rocrtst.toml
       COMPONENTS
         dbg
