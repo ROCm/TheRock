@@ -21,6 +21,17 @@ def _get_benchmark_script_path(script_name: str) -> str:
 
 benchmark_matrix = {
     # BLAS benchmark tests
+    "rocblas_bench": {
+        "job_name": "rocblas_bench",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 90,
+        "test_script": f"python {_get_benchmark_script_path('test_rocblas_benchmark.py')}",
+        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
+        "platform": ["linux"],
+        "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
+    },
     "hipblaslt_bench": {
         "job_name": "hipblaslt_bench",
         "fetch_artifact_args": "--blas --tests",
