@@ -93,9 +93,6 @@ if(THEROCK_ENABLE_MIOPEN)
       message(WARNING "Unhandled MSVC_VERSION '${MSVC_VERSION}', Boost may not configure correctly")
     endif()
 
-    # TODO(#1407): re-enable MIOpen tests on Windows when they don't crash clang on CI builders
-    #   We also don't run MIOpen tests on Windows, see
-    #   build_tools/github_actions/fetch_test_configurations.py
     set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
   else()
     set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
