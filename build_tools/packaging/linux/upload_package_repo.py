@@ -6,13 +6,21 @@
 """
 Packaging + repository upload tool.
 
-Dev mode:
-  /deb/<artifact_id>
-  /rpm/<artifact_id>
+Usage:
+python ./build_tools/packaging/linux/upload_package_repo.py \
+             --pkg-type deb \
+             --s3-bucket therock-deb-rpm-test \
+             --amdgpu-family gfx94X-dcgpu \
+             --artifact-id 16418185899 \
+             --job nightly
 
-Nightly mode:
-  /deb/<YYYYMMDD>
-  /rpm/<YYYYMMDD>
+Dev upload location:
+  s3bucket/deb/<YYYYMMDD>-<artifact_id>
+  s3bucket/rpm/<YYYYMMDD>-<artifact_id>
+
+Nightly upload location:
+  s3bucket/deb/<YYYYMMDD>-<artifact_id>
+  s3bucket/rpm/<YYYYMMDD>-<artifact_id>
 """
 
 import os
