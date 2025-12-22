@@ -1,4 +1,4 @@
-"""Base class for benchmark tests with common functionality."""
+"""Base class for performance tests with common functionality."""
 
 import os
 import sys
@@ -7,28 +7,31 @@ from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
-sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
-from utils import BenchmarkClient
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # test_framework/
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))  # github_actions/
+from utils import TestClient
 from utils.logger import log
 from github_actions_utils import gha_append_step_summary
 
 
-class BenchmarkBase:
-    """Base class providing common benchmark logic.
+class PerfBase:
+    """Base class providing common test logic for performance tests.
 
     Child classes must implement run_benchmarks() and parse_results().
     """
 
-    def __init__(self, benchmark_name: str, display_name: str = None):
-        """Initialize benchmark test.
+    def __init__(self, test_name: str, display_name: str = None, test_type: str = "performance"):
+        """Initialize test.
 
         Args:
-            benchmark_name: Internal benchmark name (e.g., 'rocfft')
-            display_name: Display name for reports (e.g., 'ROCfft'), defaults to benchmark_name
+            test_name: Internal test name (e.g., 'rocfft')
+            display_name: Display name for reports (e.g., 'ROCfft'), defaults to test_name
+            test_type: Type of test - 'performance' or 'functional' (default: 'performance')
         """
-        self.benchmark_name = benchmark_name
-        self.display_name = display_name or benchmark_name.upper()
+        self.test_name = test_name
+        self.benchmark_name = test_name  # Backward compatibility alias
+        self.display_name = display_name or test_name.upper()
+        self.test_type = test_type
 
         # Environment variables
         self.therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
@@ -193,11 +196,12 @@ class BenchmarkBase:
         return final_status
 
     def run(self) -> int:
-        """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
-        log.info(f"Initializing {self.display_name} Benchmark Test")
+        """Execute test workflow and return exit code (0=PASS, 1=FAIL)."""
+        test_type_label = "Performance" if self.test_type == "performance" else "Functional"
+        log.info(f"Initializing {self.display_name} {test_type_label} Test")
 
-        # Initialize benchmark client and print system info
-        self.client = BenchmarkClient(auto_detect=True)
+        # Initialize test client and print system info
+        self.client = TestClient(auto_detect=True)
         self.client.print_system_summary()
 
         # Run benchmarks (implemented by child class)
@@ -231,17 +235,17 @@ class BenchmarkBase:
         return 0 if final_status == "PASS" else 1
 
 
-def run_benchmark_main(benchmark_instance):
-    """Run benchmark with standard error handling.
+def run_test_main(test_instance):
+    """Run test with standard error handling.
 
     Raises:
         KeyboardInterrupt: If execution is interrupted by user
-        Exception: If benchmark execution fails
+        Exception: If test execution fails
     """
     try:
-        exit_code = benchmark_instance.run()
+        exit_code = test_instance.run()
         if exit_code != 0:
-            raise RuntimeError(f"Benchmark failed with exit code {exit_code}")
+            raise RuntimeError(f"Test failed with exit code {exit_code}")
     except KeyboardInterrupt:
         log.warning("\nExecution interrupted by user")
         raise

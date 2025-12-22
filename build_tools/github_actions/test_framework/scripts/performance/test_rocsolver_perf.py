@@ -13,19 +13,19 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
-sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
-from benchmark_base import BenchmarkBase, run_benchmark_main
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # test_framework/
+sys.path.insert(0, str(Path(__file__).parent))  # performance/
+from perf_base import PerfBase, run_test_main
 from utils.logger import log
 
 
-class ROCsolverBenchmark(BenchmarkBase):
-    """ROCsolver benchmark test."""
+class ROCsolverPerf(PerfBase):
+    """ROCsolver performance test."""
 
     def __init__(self):
-        super().__init__(benchmark_name="rocsolver", display_name="ROCsolver")
-        self.log_file = self.script_dir / "rocsolver_bench.log"
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
+        super().__init__(test_name="rocsolver", display_name="ROCsolver", test_type="performance")
+        self.log_file = self.script_dir / "rocsolver_perf.log"
+        self.therock_dir = self.script_dir.parent.parent.parent.parent.parent
 
     def run_benchmarks(self) -> None:
         """Run ROCsolver benchmarks and save output to log file."""
@@ -154,4 +154,4 @@ class ROCsolverBenchmark(BenchmarkBase):
 
 
 if __name__ == "__main__":
-    run_benchmark_main(ROCsolverBenchmark())
+    run_test_main(ROCsolverPerf())

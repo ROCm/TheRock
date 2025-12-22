@@ -14,18 +14,18 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
-sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
-from benchmark_base import BenchmarkBase, run_benchmark_main
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # test_framework/
+sys.path.insert(0, str(Path(__file__).parent))  # performance/
+from perf_base import PerfBase, run_test_main
 from utils.logger import log
 
 
-class ROCrandBenchmark(BenchmarkBase):
-    """ROCrand benchmark test."""
+class ROCrandPerf(PerfBase):
+    """ROCrand performance test."""
 
     def __init__(self):
-        super().__init__(benchmark_name="rocrand", display_name="ROCrand")
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
+        super().__init__(test_name="rocrand", display_name="ROCrand", test_type="performance")
+        self.therock_dir = self.script_dir.parent.parent.parent.parent.parent
         self.bench_bins = ["benchmark_rocrand_host_api", "benchmark_rocrand_device_api"]
 
     def run_benchmarks(self) -> None:
@@ -187,4 +187,4 @@ class ROCrandBenchmark(BenchmarkBase):
 
 
 if __name__ == "__main__":
-    run_benchmark_main(ROCrandBenchmark())
+    run_test_main(ROCrandPerf())

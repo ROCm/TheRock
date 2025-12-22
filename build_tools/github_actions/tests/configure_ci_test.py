@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from test_framework.performance_test_matrix import performance_matrix
 
 therock_test_runner_dict = {
     "gfx110x": {
@@ -360,13 +360,13 @@ class ConfigureCITest(unittest.TestCase):
         self.assert_target_output_is_valid(
             target_output=linux_target_output, allow_xfail=True
         )
-        # For nightly runs, benchmark tests should be included in test labels
-        expected_benchmark_labels = set(benchmark_matrix.keys())
-        actual_benchmark_labels = set(linux_test_labels)
+        # For nightly runs, performance tests should be included in test labels
+        expected_performance_labels = set(performance_matrix.keys())
+        actual_performance_labels = set(linux_test_labels)
         self.assertEqual(
-            actual_benchmark_labels,
-            expected_benchmark_labels,
-            f"Nightly builds should include all benchmark test labels",
+            actual_performance_labels,
+            expected_performance_labels,
+            f"Nightly builds should include all performance test labels",
         )
 
     def test_windows_schedule_matrix_generator(self):
@@ -383,13 +383,13 @@ class ConfigureCITest(unittest.TestCase):
         self.assert_target_output_is_valid(
             target_output=windows_target_output, allow_xfail=True
         )
-        # For nightly runs, benchmark tests should be included in test labels
-        expected_benchmark_labels = set(benchmark_matrix.keys())
-        actual_benchmark_labels = set(windows_test_labels)
+        # For nightly runs, performance tests should be included in test labels
+        expected_performance_labels = set(performance_matrix.keys())
+        actual_performance_labels = set(windows_test_labels)
         self.assertEqual(
-            actual_benchmark_labels,
-            expected_benchmark_labels,
-            f"Nightly builds should include all benchmark test labels",
+            actual_performance_labels,
+            expected_performance_labels,
+            f"Nightly builds should include all performance test labels",
         )
 
     ###########################################################################

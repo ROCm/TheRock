@@ -13,27 +13,27 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
-sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
-from benchmark_base import BenchmarkBase, run_benchmark_main
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # test_framework/
+sys.path.insert(0, str(Path(__file__).parent))  # performance/
+from perf_base import PerfBase, run_test_main
 from utils.logger import log
 
 
-class ROCfftBenchmark(BenchmarkBase):
-    """ROCfft benchmark test."""
+class ROCfftPerf(PerfBase):
+    """ROCfft performance test."""
 
     def __init__(self):
-        super().__init__(benchmark_name="rocfft", display_name="ROCfft")
-        self.log_file = self.script_dir / "rocfft_bench.log"
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
+        super().__init__(test_name="rocfft", display_name="ROCfft", test_type="performance")
+        self.log_file = self.script_dir / "rocfft_perf.log"
+        self.therock_dir = self.script_dir.parent.parent.parent.parent.parent
 
     def run_benchmarks(self) -> None:
         """Run ROCfft benchmarks and save output to log file."""
         DEFAULT_BATCH_SIZE = 10  # Default batch size for benchmarks
         NUM_ITERATIONS = 20  # Number of benchmark iterations
 
-        # Load benchmark configuration
-        config_file = self.script_dir.parent / "configs" / "rocfft.json"
+        # Load performance test configuration
+        config_file = self.script_dir.parent.parent / "configs" / "performance" / "rocfft.json"
         with open(config_file, "r") as f:
             data = json.load(f)
 
@@ -220,4 +220,4 @@ class ROCfftBenchmark(BenchmarkBase):
 
 
 if __name__ == "__main__":
-    run_benchmark_main(ROCfftBenchmark())
+    run_test_main(ROCfftPerf())

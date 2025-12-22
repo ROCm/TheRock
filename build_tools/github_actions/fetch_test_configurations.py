@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from github_actions_utils import *
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from test_framework.performance_test_matrix import performance_matrix
 
 logging.basicConfig(level=logging.INFO)
 
@@ -241,10 +241,10 @@ def run():
 
     # Determine which test matrix to use
     if is_benchmark_workflow:
-        # For benchmark workflow, use ONLY benchmark_matrix
-        # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
-        logging.info("Using benchmark_matrix only (benchmark tests)")
-        selected_matrix = benchmark_matrix.copy()
+        # For performance workflow, use ONLY performance_matrix
+        # Performance tests don't use test_type/test_labels (all have total_shards=1, no filtering)
+        logging.info("Using performance_matrix only (performance tests)")
+        selected_matrix = performance_matrix.copy()
     else:
         # For regular workflow, use ONLY test_matrix
         logging.info("Using test_matrix only (regular tests)")

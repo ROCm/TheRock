@@ -13,19 +13,19 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
-sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
-from benchmark_base import BenchmarkBase, run_benchmark_main
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # test_framework/
+sys.path.insert(0, str(Path(__file__).parent))  # performance/
+from perf_base import PerfBase, run_test_main
 from utils.logger import log
 
 
-class HipblasltBenchmark(BenchmarkBase):
-    """hipBLASLt benchmark test."""
+class HipblasltPerf(PerfBase):
+    """hipBLASLt performance test."""
 
     def __init__(self):
-        super().__init__(benchmark_name="hipblaslt", display_name="hipBLASLt")
-        self.log_file = self.script_dir / "hipblaslt_bench.log"
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
+        super().__init__(test_name="hipblaslt", display_name="hipBLASLt", test_type="performance")
+        self.log_file = self.script_dir / "hipblaslt_perf.log"
+        self.therock_dir = self.script_dir.parent.parent.parent.parent.parent
 
     def run_benchmarks(self) -> None:
         """Run hipBLASLt benchmarks and save output to log file."""
@@ -36,8 +36,8 @@ class HipblasltBenchmark(BenchmarkBase):
         COMPUTE_TYPE = "f32_r"
         ACTIVATION_TYPE = "none"
 
-        # Load benchmark configuration
-        config_file = self.script_dir.parent / "configs" / "hipblaslt.json"
+        # Load performance test configuration
+        config_file = self.script_dir.parent.parent / "configs" / "performance" / "hipblaslt.json"
         with open(config_file, "r") as f:
             config_data = json.load(f)
 
@@ -270,4 +270,4 @@ class HipblasltBenchmark(BenchmarkBase):
 
 
 if __name__ == "__main__":
-    run_benchmark_main(HipblasltBenchmark())
+    run_test_main(HipblasltPerf())
