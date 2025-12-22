@@ -159,40 +159,35 @@ negative_filter.append(
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
     negative_filter.append("*DBSync*")
 
-# Tests to be filtered for navi on windows
-# TODO: From Brad:
-# 1- ignoring gfx942 tests is probably a good idea
-# 2- There is no FP32 wmma on Navi.
-#    I think we could start by removing all FP32 conv tests.
-# 3- No CK convs or explicit GEMM.
-# I imagine naive and Winograd work.
-if os.name == WINDOWS:  # nt
-    if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
-        # These are ignored in miopen
-        negative_filter.append(
-            "Smoke/GPU_BNFWDTrainLargeFusedActivation2D_FP32.BnV2LargeFWD_TrainCKfp32Activation/NCHW_BNSpatial_testBNAPIV1_Dim_2_test_id_32"
-        )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
-        negative_filter.append(
-            "Smoke/GPU_BNFWDTrainLarge2D_FP32.BnV2LargeFWD_TrainCKfp32/NCHW_BNSpatial_testBNAPIV2_Dim_2_test_id_64"
-        )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
-        # this could address 2
-        negative_filter.append(
-            "*SerialRun3D*"
-        )  # These FP32 SerialRun3D tests use so much memory that they have a risk of timing out the machine during tests
-        # this could address 1
-        negative_filter.append("*gfx942*")
-        # List of currently failing tests
-        negative_filter.append("*GPU_UnitTestConvSolverFFTFwd_FP32*")
-        negative_filter.append("*GPU_UnitTestConvSolverFFTBwd_FP32*")
-        negative_filter.append("*GPU_TernaryTensorOps_FP64*")
-        negative_filter.append("*GPU_TernaryTensorOps_FP16*")
-        negative_filter.append("*GPU_TernaryTensorOps_FP32*")
-        negative_filter.append("*GPU_Op4dTensorGenericTest_FP32*")
-        negative_filter.append("*GPU_UnitTestActivationDescriptor_FP16*")
-        negative_filter.append("*GPU_UnitTestActivationDescriptor_FP32*")
-        negative_filter.append("*CPU_TuningPolicy_NONE*")
-        negative_filter.append("*GPU_Dropout_FP32*")
-        negative_filter.append("*GPU_Dropout_FP16*")
+# Tests to be filtered for navi
+# 1- Ignore gfx942 tests
+# 2- There is no FP32 wmma on Navi, remove all FP32 conv tests
+if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
+    # These are ignored in miopen
+    negative_filter.append(
+        "Smoke/GPU_BNFWDTrainLargeFusedActivation2D_FP32.BnV2LargeFWD_TrainCKfp32Activation/NCHW_BNSpatial_testBNAPIV1_Dim_2_test_id_32"
+    )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
+    negative_filter.append(
+        "Smoke/GPU_BNFWDTrainLarge2D_FP32.BnV2LargeFWD_TrainCKfp32/NCHW_BNSpatial_testBNAPIV2_Dim_2_test_id_64"
+    )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
+    # this could address 2
+    negative_filter.append(
+        "*SerialRun3D*"
+    )  # These FP32 SerialRun3D tests use so much memory that they have a risk of timing out the machine during tests
+    # this could address 1
+    negative_filter.append("*gfx942*")
+    # List of currently failing tests
+    negative_filter.append("*GPU_UnitTestConvSolverFFTFwd_FP32*")
+    negative_filter.append("*GPU_UnitTestConvSolverFFTBwd_FP32*")
+    negative_filter.append("*GPU_TernaryTensorOps_FP64*")
+    negative_filter.append("*GPU_TernaryTensorOps_FP16*")
+    negative_filter.append("*GPU_TernaryTensorOps_FP32*")
+    negative_filter.append("*GPU_Op4dTensorGenericTest_FP32*")
+    negative_filter.append("*GPU_UnitTestActivationDescriptor_FP16*")
+    negative_filter.append("*GPU_UnitTestActivationDescriptor_FP32*")
+    negative_filter.append("*CPU_TuningPolicy_NONE*")
+    negative_filter.append("*GPU_Dropout_FP32*")
+    negative_filter.append("*GPU_Dropout_FP16*")
 ####################################################
 
 # Creating a smoke test filter
