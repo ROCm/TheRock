@@ -23,7 +23,7 @@ class HipblasltBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="hipblaslt", display_name="hipBLASLt")
         self.log_file = self.script_dir / "hipblaslt_bench.log"
-    
+
     def run_benchmarks(self) -> None:
         """Run hipBLASLt benchmarks and save output to log file."""
         BETA = 0
@@ -103,9 +103,9 @@ class HipblasltBenchmark(BenchmarkBase):
                         "--batch_count",
                         B,
                     ]
-                    
+
                     self.execute_command(cmd, f)
-        
+
         log.info("Benchmark execution complete")
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:

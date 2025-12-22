@@ -23,7 +23,7 @@ class ROCfftBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rocfft", display_name="ROCfft")
         self.log_file = self.script_dir / "rocfft_bench.log"
-    
+
     def run_benchmarks(self) -> None:
         """Run ROCfft benchmarks and save output to log file."""
         DEFAULT_BATCH_SIZE = 10  # Default batch size for benchmarks
@@ -62,9 +62,9 @@ class ROCfftBenchmark(BenchmarkBase):
                     "-N",
                     str(NUM_ITERATIONS),
                 ]
-                
+
                 self.execute_command(cmd, f)
-        
+
         log.info("Benchmark execution complete")
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:

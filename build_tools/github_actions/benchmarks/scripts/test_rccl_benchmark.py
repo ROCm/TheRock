@@ -76,9 +76,7 @@ class RCCLBenchmark(BenchmarkBase):
                         # Construct benchmark command with MPI
                         mpirun = self.mpi_helper.get_mpirun_command()
                         if not mpirun:
-                            raise RuntimeError(
-                                "mpirun not available after MPI setup"
-                            )
+                            raise RuntimeError("mpirun not available after MPI setup")
 
                         # Update environment with MPI paths
                         env_vars.update(self.mpi_helper.get_env_vars())

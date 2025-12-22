@@ -22,7 +22,7 @@ class ROCsolverBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rocsolver", display_name="ROCsolver")
         self.log_file = self.script_dir / "rocsolver_bench.log"
-    
+
     def run_benchmarks(self) -> None:
         """Run ROCsolver benchmarks and save output to log file."""
         log.info("Running ROCsolver Benchmarks")
@@ -43,9 +43,9 @@ class ROCsolverBenchmark(BenchmarkBase):
                 "-n",
                 "250",
             ]
-            
+
             self.execute_command(cmd, f)
-        
+
         log.info("Benchmark execution complete")
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
