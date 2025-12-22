@@ -96,7 +96,9 @@ amdgpu_family_info_matrix_postsubmit = {
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-gfx1201-gpu-rocm",
+            # TODO(#2683): Re-enable machine once it is stable
+            # Label is "linux-gfx120X-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -192,7 +194,9 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1153": {
         "linux": {
-            "test-runs-on": "linux-gfx1153-gpu-rocm",
+            # TODO(#2682): Re-enable machine once it is stable
+            # Label is "linux-gfx1153-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx1153",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
