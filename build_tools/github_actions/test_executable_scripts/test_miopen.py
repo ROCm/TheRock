@@ -191,9 +191,15 @@ if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
     negative_filter.append("*GPU_Dropout_FP16*")
 
     # TODO: We need to work to re-enable these
-    negative_filter.append("*GPU_GroupConv3D_BackwardData_FP16.GroupConv3D_BackwardData_half_Test*")
-    negative_filter.append("*GPU_GroupConv3D_BackwardData_BFP16.GroupConv3D_BackwardData_bfloat16_Test*")
-    negative_filter.append("*GPU_UnitTestConvSolverImplicitGemmGroupWrwXdlops_BFP16.ConvHipImplicitGemmGroupWrwXdlops*")
+    negative_filter.append(
+        "*GPU_GroupConv3D_BackwardData_FP16.GroupConv3D_BackwardData_half_Test*"
+    )
+    negative_filter.append(
+        "*GPU_GroupConv3D_BackwardData_BFP16.GroupConv3D_BackwardData_bfloat16_Test*"
+    )
+    negative_filter.append(
+        "*GPU_UnitTestConvSolverImplicitGemmGroupWrwXdlops_BFP16.ConvHipImplicitGemmGroupWrwXdlops*"
+    )
 
 ####################################################
 
