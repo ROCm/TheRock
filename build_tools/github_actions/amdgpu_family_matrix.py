@@ -92,7 +92,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "",
+            "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "build_variants": ["release"],
         },
