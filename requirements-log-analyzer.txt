@@ -1,0 +1,21 @@
+# Log Analyzer Requirements
+# Install with: pip install -r requirements-log-analyzer.txt
+
+# Core dependencies
+pandas>=2.0.0
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-openai>=0.0.5
+
+# Optional: Mistral AI support
+langchain-mistralai>=0.0.1
+
+# Optional: Local LLM support with Ollama
+langchain-community>=0.0.20
+
+# HTTP client with SSL support
+httpx>=0.24.0
+
+# For better parsing
+python-dateutil>=2.8.0
+

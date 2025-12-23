@@ -1,0 +1,32 @@
+2024-12-23 10:15:23 INFO Starting test execution on config MI300X-Ubuntu
+2024-12-23 10:15:24 INFO Loading test suite: performance_benchmarks
+2024-12-23 10:15:25 INFO Initializing GPU devices...
+2024-12-23 10:15:26 INFO Found 8x MI300X GPUs
+2024-12-23 10:15:27 INFO Starting benchmark: BabelStream-HIP
+2024-12-23 10:15:28 WARNING CUDA libraries not found, using HIP
+2024-12-23 10:15:30 INFO Compiling HIP kernels...
+2024-12-23 10:15:45 INFO Kernel compilation successful
+2024-12-23 10:15:46 INFO Running warmup iterations...
+2024-12-23 10:15:50 INFO Starting performance measurement
+2024-12-23 10:16:00 ERROR Failed to allocate GPU memory
+2024-12-23 10:16:00 ERROR HIPError: hipErrorOutOfMemory (2)
+2024-12-23 10:16:00 ERROR Requested: 128GB, Available: 64GB
+Traceback (most recent call last):
+  File "/opt/rocm/tests/BabelStream/main.py", line 145, in run_benchmark
+    result = benchmark.execute(config)
+  File "/opt/rocm/tests/BabelStream/benchmark.py", line 89, in execute
+    memory = self.allocate_memory(size)
+  File "/opt/rocm/tests/BabelStream/memory.py", line 34, in allocate_memory
+    ptr = hip.hipMalloc(size)
+RuntimeError: HIP error 2: out of memory
+
+2024-12-23 10:16:01 ERROR Benchmark failed: BabelStream-HIP
+2024-12-23 10:16:01 INFO Attempting memory cleanup...
+2024-12-23 10:16:02 INFO Retrying with reduced memory footprint...
+2024-12-23 10:16:05 ERROR Retry failed: insufficient memory
+2024-12-23 10:16:05 CRITICAL Test execution aborted
+2024-12-23 10:16:06 INFO Cleaning up resources...
+2024-12-23 10:16:07 INFO Test suite completed with errors
+2024-12-23 10:16:07 ERROR Exit code: 1
+2024-12-23 10:16:07 ERROR Summary: 0 passed, 1 failed, 0 skipped
+
