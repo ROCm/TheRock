@@ -1,0 +1,595 @@
+"""
+Performance Drop Analysis Tool using LangChain and Guardrails
+Analyzes test performance data for config-specific and user-specific drops
+"""
+
+import pandas as pd
+import json
+import os
+from typing import Dict, List, Any, Optional
+import sys
+
+# LangChain imports
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain.output_parsers import StructuredOutputParser, ResponseSchema
+from langchain.chains import LLMChain
+from langchain.callbacks import get_openai_callback
+
+# Guardrails imports
+try:
+    from guardrails import Guard
+    from guardrails.hub import ToxicLanguage, CompetitorCheck, RestrictToTopic
+    GUARDRAILS_AVAILABLE = True
+except ImportError:
+    GUARDRAILS_AVAILABLE = False
+    print("WARNING: Guardrails AI not installed. Running without guardrails.")
+    print("Install with: pip install guardrails-ai")
+
+
+class PerformanceGuardrails:
+    """Guardrails for performance analysis to ensure safe and relevant outputs"""
+    
+    def __init__(self):
+        self.allowed_topics = [
+            "performance analysis", "test infrastructure", "CI/CD systems",
+            "hardware performance", "software testing", "configuration management",
+            "resource allocation", "system optimization", "test execution",
+            "performance metrics", "debugging", "troubleshooting"
+        ]
+        
+        self.guard = None
+        if GUARDRAILS_AVAILABLE:
+            self._setup_guardrails()
+    
+    def _setup_guardrails(self):
+        """Setup guardrails for output validation"""
+        try:
+            # Create guardrails to ensure:
+            # 1. No toxic language
+            # 2. Stay on topic (performance analysis)
+            # 3. Professional and actionable output
+            self.guard = Guard().use_many(
+                ToxicLanguage(threshold=0.5, validation_method="sentence", on_fail="exception"),
+                RestrictToTopic(valid_topics=self.allowed_topics, disable_classifier=False, on_fail="reask")
+            )
+            print("✓ Guardrails initialized successfully")
+        except Exception as e:
+            print(f"WARNING: Could not initialize all guardrails: {e}")
+            self.guard = None
+    
+    def validate_output(self, text: str) -> tuple[bool, str, Optional[str]]:
+        """
+        Validate LLM output against guardrails
+        
+        Returns:
+            tuple: (is_valid, validated_text, error_message)
+        """
+        if not GUARDRAILS_AVAILABLE or self.guard is None:
+            return True, text, None
+        
+        try:
+            validated_output = self.guard.validate(text)
+            return True, validated_output.validated_output, None
+        except Exception as e:
+            return False, text, str(e)
+    
+    def validate_input(self, data: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+        """
+        Validate input data before processing
+        
+        Returns:
+            tuple: (is_valid, error_message)
+        """
+        # Check for required fields
+        required_fields = ['total_tests', 'total_configs']
+        for field in required_fields:
+            if field not in data:
+                return False, f"Missing required field: {field}"
+        
+        # Check for reasonable data ranges
+        if data['total_tests'] < 0 or data['total_configs'] < 0:
+            return False, "Invalid negative values in data"
+        
+        if data['total_configs'] > 10000:
+            return False, "Unreasonably large number of configurations"
+        
+        return True, None
+
+
+class PerformanceAnalyzer:
+    def __init__(self, csv_file_path: str, api_key: str = None, model: str = "gpt-4o"):
+        """
+        Initialize the Performance Analyzer with LangChain
+        
+        Args:
+            csv_file_path: Path to the CSV file containing test data
+            api_key: OpenAI API key (if None, will use OPENAI_API_KEY env variable)
+            model: Model to use (default: gpt-4o)
+        """
+        self.csv_file_path = csv_file_path
+        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
+        self.model_name = model
+        
+        # Initialize LangChain components
+        self.llm = ChatOpenAI(
+            model=model,
+            temperature=0.7,
+            max_tokens=4000,
+            openai_api_key=self.api_key
+        )
+        
+        # Initialize guardrails
+        self.guardrails = PerformanceGuardrails()
+        
+        self.df = None
+        self.config_columns = []
+        self.metadata_columns = ['Features', 'Test_Category', 'Test_Name', 
+                                'Software_Features', 'Hardware_Features', 
+                                'Test_Area', 'Test_Execution_Mode', 
+                                'Test_Plan_Name', 'Execution_Label']
+        
+    def load_data(self):
+        """Load and parse the CSV file"""
+        print(f"Loading data from {self.csv_file_path}...")
+        self.df = pd.read_csv(self.csv_file_path)
+        
+        # Identify config columns (all columns except metadata)
+        self.config_columns = [col for col in self.df.columns 
+                              if col not in self.metadata_columns]
+        
+        print(f"✓ Loaded {len(self.df)} test cases across {len(self.config_columns)} configurations")
+        
+    def extract_config_details(self, config_name: str) -> Dict[str, str]:
+        """Extract hardware, OS, user, and deployment type from config name"""
+        parts = config_name.split('|')
+        if len(parts) >= 5:
+            return {
+                'machine': parts[0].strip(),
+                'os': parts[1].strip(),
+                'hardware': parts[2].strip(),
+                'gpu_count': parts[3].strip(),
+                'user': parts[4].strip(),
+                'deployment': parts[5].strip() if len(parts) > 5 else 'unknown'
+            }
+        return {}
+    
+    def analyze_performance_drops(self) -> Dict[str, Any]:
+        """Analyze performance drops across configurations"""
+        analysis_results = {
+            'total_tests': len(self.df),
+            'total_configs': len(self.config_columns),
+            'zero_test_configs': [],
+            'low_performance_configs': [],
+            'config_comparison': [],
+            'user_performance': {},
+            'hardware_performance': {},
+            'os_performance': {}
+        }
+        
+        # Analyze each configuration
+        for config in self.config_columns:
+            config_details = self.extract_config_details(config)
+            config_data = self.df[config]
+            
+            # Convert to numeric, handling any non-numeric values
+            config_data = pd.to_numeric(config_data, errors='coerce').fillna(0)
+            
+            total_tests = config_data.sum()
+            zero_tests = (config_data == 0).sum()
+            avg_tests_per_suite = config_data.mean()
+            
+            # Track configs with zero or low performance
+            if total_tests == 0:
+                analysis_results['zero_test_configs'].append({
+                    'config': config,
+                    'details': config_details
+                })
+            elif avg_tests_per_suite < 1:
+                analysis_results['low_performance_configs'].append({
+                    'config': config,
+                    'total_tests': int(total_tests),
+                    'avg_per_suite': round(avg_tests_per_suite, 2),
+                    'zero_count': int(zero_tests),
+                    'details': config_details
+                })
+            
+            # Aggregate by user
+            if config_details.get('user'):
+                user = config_details['user']
+                if user not in analysis_results['user_performance']:
+                    analysis_results['user_performance'][user] = {
+                        'total_tests': 0,
+                        'configs': 0,
+                        'avg_per_config': 0
+                    }
+                analysis_results['user_performance'][user]['total_tests'] += int(total_tests)
+                analysis_results['user_performance'][user]['configs'] += 1
+            
+            # Aggregate by hardware
+            if config_details.get('hardware'):
+                hw = config_details['hardware']
+                if hw not in analysis_results['hardware_performance']:
+                    analysis_results['hardware_performance'][hw] = {
+                        'total_tests': 0,
+                        'configs': 0
+                    }
+                analysis_results['hardware_performance'][hw]['total_tests'] += int(total_tests)
+                analysis_results['hardware_performance'][hw]['configs'] += 1
+            
+            # Aggregate by OS
+            if config_details.get('os'):
+                os_name = config_details['os']
+                if os_name not in analysis_results['os_performance']:
+                    analysis_results['os_performance'][os_name] = {
+                        'total_tests': 0,
+                        'configs': 0
+                    }
+                analysis_results['os_performance'][os_name]['total_tests'] += int(total_tests)
+                analysis_results['os_performance'][os_name]['configs'] += 1
+        
+        # Calculate averages for user performance
+        for user, data in analysis_results['user_performance'].items():
+            data['avg_per_config'] = round(data['total_tests'] / data['configs'], 2)
+        
+        return analysis_results
+    
+    def identify_test_failures(self) -> List[Dict[str, Any]]:
+        """Identify tests that failed across multiple configurations"""
+        test_failures = []
+        
+        for idx, row in self.df.iterrows():
+            test_info = {
+                'test_category': row['Test_Category'],
+                'test_name': row['Test_Name'],
+                'features': row['Features']
+            }
+            
+            # Count zeros and low values across configs
+            numeric_data = pd.to_numeric(row[self.config_columns], errors='coerce').fillna(0)
+            zero_count = (numeric_data == 0).sum()
+            total_configs = len(self.config_columns)
+            
+            if zero_count > total_configs * 0.5:  # More than 50% configs have zero tests
+                test_failures.append({
+                    **test_info,
+                    'zero_configs': int(zero_count),
+                    'total_configs': total_configs,
+                    'failure_rate': round(zero_count / total_configs * 100, 2)
+                })
+        
+        return sorted(test_failures, key=lambda x: x['failure_rate'], reverse=True)
+    
+    def create_analysis_chain(self) -> LLMChain:
+        """Create LangChain chain for performance analysis"""
+        
+        # Define the system message
+        system_template = """You are an expert performance analyst specializing in test infrastructure and CI/CD systems. 
+You excel at identifying patterns in test data, diagnosing performance issues, and providing actionable recommendations.
+
+Your analysis should be:
+1. Professional and objective
+2. Data-driven with specific metrics
+3. Actionable with clear recommendations
+4. Focused on performance testing and infrastructure
+5. Free from speculation - only analyze what the data shows
+
+Format your response as a detailed markdown report with clear sections and bullet points."""
+
+        # Define the human message template
+        human_template = """
+Analyze the following performance test data and identify performance drops and issues.
+
+## Test Data Summary:
+- Total Test Suites: {total_tests}
+- Total Configurations: {total_configs}
+- Configurations with ZERO tests: {zero_configs_count}
+- Configurations with LOW performance: {low_configs_count}
+
+## Configuration-Specific Performance Issues:
+
+### Configs with Zero Tests:
+{zero_test_configs}
+
+### Configs with Low Performance:
+{low_performance_configs}
+
+## User-Specific Performance Analysis:
+
+Top Users by Average Tests per Config:
+{top_users}
+
+Bottom Users by Average Tests per Config:
+{bottom_users}
+
+## Hardware-Specific Performance Analysis:
+
+Top Hardware Platforms by Total Tests:
+{top_hardware}
+
+Bottom Hardware Platforms by Total Tests:
+{bottom_hardware}
+
+## Test Failures Across Configurations:
+
+Tests with highest failure rates (>50% configs have zero tests):
+{test_failures}
+
+## Analysis Requirements:
+
+Please provide a comprehensive report with the following sections:
+
+1. **Executive Summary**: 
+   - Overall health of the test infrastructure
+   - Key performance concerns
+
+2. **Configuration-Specific Issues**:
+   - Identify configs with critical performance drops
+   - Common patterns in failing configurations
+   - Potential root causes (hardware, OS, deployment type)
+
+3. **User-Specific Performance Analysis**:
+   - Users with consistently low test execution
+   - Potential capacity or resource issues
+   - Recommendations for workload distribution
+
+4. **Hardware/Platform Issues**:
+   - Hardware platforms with poor performance
+   - OS-specific issues
+   - GPU configuration problems
+
+5. **Test-Specific Failures**:
+   - Tests failing across multiple configs (potential test issues)
+   - Tests failing on specific platforms (compatibility issues)
+
+6. **Actionable Recommendations**:
+   - Immediate actions to address critical drops
+   - Long-term improvements for test infrastructure
+   - Resource allocation suggestions
+
+Please format your response as a detailed markdown report.
+"""
+
+        # Create the prompt template
+        system_message_prompt = SystemMessagePromptTemplate.from_template(system_template)
+        human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
+        chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
+        
+        # Create the chain
+        chain = LLMChain(llm=self.llm, prompt=chat_prompt, verbose=True)
+        
+        return chain
+    
+    def get_ai_analysis(self, analysis_data: Dict[str, Any], 
+                       test_failures: List[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
+        """
+        Get analysis from LLM using LangChain
+        
+        Returns:
+            tuple: (analysis_report, usage_stats)
+        """
+        print("\n" + "="*70)
+        print("Sending data to LLM for analysis...")
+        print(f"Model: {self.model_name}")
+        print("="*70)
+        
+        # Validate input data with guardrails
+        is_valid, error_msg = self.guardrails.validate_input(analysis_data)
+        if not is_valid:
+            raise ValueError(f"Input validation failed: {error_msg}")
+        
+        # Sort user performance by avg_per_config
+        sorted_users = sorted(
+            analysis_data['user_performance'].items(),
+            key=lambda x: x[1]['avg_per_config'],
+            reverse=True
+        )
+        
+        # Sort hardware performance
+        sorted_hardware = sorted(
+            analysis_data['hardware_performance'].items(),
+            key=lambda x: x[1]['total_tests'],
+            reverse=True
+        )
+        
+        # Prepare input variables for the chain
+        input_vars = {
+            'total_tests': analysis_data['total_tests'],
+            'total_configs': analysis_data['total_configs'],
+            'zero_configs_count': len(analysis_data['zero_test_configs']),
+            'low_configs_count': len(analysis_data['low_performance_configs']),
+            'zero_test_configs': json.dumps(analysis_data['zero_test_configs'][:10], indent=2),
+            'low_performance_configs': json.dumps(analysis_data['low_performance_configs'][:20], indent=2),
+            'top_users': json.dumps(dict(sorted_users[:10]), indent=2),
+            'bottom_users': json.dumps(dict(sorted_users[-10:]), indent=2),
+            'top_hardware': json.dumps(dict(sorted_hardware[:15]), indent=2),
+            'bottom_hardware': json.dumps(dict(sorted_hardware[-15:]), indent=2),
+            'test_failures': json.dumps(test_failures[:20], indent=2)
+        }
+        
+        try:
+            # Create the analysis chain
+            chain = self.create_analysis_chain()
+            
+            # Run the chain with callback to track usage
+            with get_openai_callback() as cb:
+                response = chain.invoke(input_vars)
+                
+                usage_stats = {
+                    'total_tokens': cb.total_tokens,
+                    'prompt_tokens': cb.prompt_tokens,
+                    'completion_tokens': cb.completion_tokens,
+                    'total_cost': cb.total_cost
+                }
+                
+                print(f"\n✓ Analysis complete")
+                print(f"  - Tokens used: {cb.total_tokens}")
+                print(f"  - Estimated cost: ${cb.total_cost:.4f}")
+            
+            # Extract the response text
+            report = response['text']
+            
+            # Validate output with guardrails
+            is_valid, validated_report, error_msg = self.guardrails.validate_output(report)
+            
+            if not is_valid:
+                print(f"\nWARNING: Guardrail validation failed: {error_msg}")
+                print("Proceeding with original output but please review carefully.")
+            else:
+                report = validated_report
+                print("✓ Output validated by guardrails")
+            
+            return report, usage_stats
+            
+        except Exception as e:
+            print(f"Error during LLM analysis: {e}")
+            raise
+    
+    def save_report(self, report: str, usage_stats: Dict[str, Any], 
+                   output_file: str = "performance_report.md"):
+        """Save the analysis report to a file"""
+        
+        # Add metadata header to report
+        metadata = f"""# Performance Analysis Report
+
+**Generated using:**
+- Framework: LangChain
+- Model: {self.model_name}
+- Guardrails: {"Enabled" if GUARDRAILS_AVAILABLE else "Disabled"}
+
+**Usage Statistics:**
+- Total Tokens: {usage_stats['total_tokens']}
+- Prompt Tokens: {usage_stats['prompt_tokens']}
+- Completion Tokens: {usage_stats['completion_tokens']}
+- Estimated Cost: ${usage_stats['total_cost']:.4f}
+
+---
+
+"""
+        
+        full_report = metadata + report
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(full_report)
+        print(f"\n✓ Report saved to: {output_file}")
+    
+    def save_raw_analysis(self, analysis_data: Dict[str, Any], 
+                         test_failures: List[Dict[str, Any]],
+                         output_file: str = "raw_analysis.json"):
+        """Save raw analysis data to JSON"""
+        combined_data = {
+            'analysis': analysis_data,
+            'test_failures': test_failures,
+            'metadata': {
+                'model': self.model_name,
+                'framework': 'LangChain',
+                'guardrails_enabled': GUARDRAILS_AVAILABLE
+            }
+        }
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(combined_data, f, indent=2)
+        print(f"✓ Raw analysis data saved to: {output_file}")
+    
+    def run_full_analysis(self, output_report: str = "performance_report.md",
+                         output_raw: str = "raw_analysis.json"):
+        """Run the complete analysis pipeline"""
+        print("="*70)
+        print("Performance Drop Analysis Tool")
+        print("Powered by LangChain + Guardrails")
+        print("="*70)
+        
+        # Step 1: Load data
+        self.load_data()
+        
+        # Step 2: Analyze performance drops
+        print("\nAnalyzing performance drops...")
+        analysis_data = self.analyze_performance_drops()
+        print(f"✓ Found {len(analysis_data['zero_test_configs'])} configs with zero tests")
+        print(f"✓ Found {len(analysis_data['low_performance_configs'])} configs with low performance")
+        
+        # Step 3: Identify test failures
+        print("\nIdentifying test failures...")
+        test_failures = self.identify_test_failures()
+        print(f"✓ Found {len(test_failures)} tests with high failure rates")
+        
+        # Step 4: Save raw analysis
+        self.save_raw_analysis(analysis_data, test_failures, output_raw)
+        
+        # Step 5: Get AI analysis using LangChain
+        ai_report, usage_stats = self.get_ai_analysis(analysis_data, test_failures)
+        
+        # Step 6: Save final report
+        self.save_report(ai_report, usage_stats, output_report)
+        
+        print("\n" + "="*70)
+        print("Analysis Complete!")
+        print("="*70)
+        print(f"\nGenerated files:")
+        print(f"  1. {output_report} - AI-generated analysis report")
+        print(f"  2. {output_raw} - Raw analysis data (JSON)")
+        
+        return ai_report, usage_stats
+
+
+def main():
+    """Main entry point"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description='Analyze test performance data using LangChain and Guardrails'
+    )
+    parser.add_argument(
+        'csv_file',
+        help='Path to the CSV file containing test data'
+    )
+    parser.add_argument(
+        '--api-key',
+        help='OpenAI API key (or set OPENAI_API_KEY environment variable)',
+        default=None
+    )
+    parser.add_argument(
+        '--output-report',
+        help='Output file for the analysis report',
+        default='performance_report.md'
+    )
+    parser.add_argument(
+        '--output-raw',
+        help='Output file for raw analysis data (JSON)',
+        default='raw_analysis.json'
+    )
+    parser.add_argument(
+        '--model',
+        help='OpenAI model to use',
+        default='gpt-4o',
+        choices=['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
+    )
+    
+    args = parser.parse_args()
+    
+    # Check if API key is available
+    if not args.api_key and not os.getenv('OPENAI_API_KEY'):
+        print("ERROR: OpenAI API key not provided!")
+        print("Please either:")
+        print("  1. Set the OPENAI_API_KEY environment variable")
+        print("  2. Use the --api-key argument")
+        sys.exit(1)
+    
+    # Check if CSV file exists
+    if not os.path.exists(args.csv_file):
+        print(f"ERROR: CSV file not found: {args.csv_file}")
+        sys.exit(1)
+    
+    # Run analysis
+    try:
+        analyzer = PerformanceAnalyzer(args.csv_file, args.api_key, args.model)
+        analyzer.run_full_analysis(
+            output_report=args.output_report,
+            output_raw=args.output_raw
+        )
+    except Exception as e:
+        print(f"\nERROR: Analysis failed: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
