@@ -81,7 +81,38 @@ def generate_indexes_recursive(root):
     for d, _, _ in os.walk(root):
         generate_index_html(d)
 
+def generate_top_index_from_s3(s3, bucket, prefix):
+    print(f"Generating top index from S3: s3://{bucket}/{prefix}/")
 
+    paginator = s3.get_paginator("list_objects_v2")
+    pages = paginator.paginate(Bucket=bucket, Prefix=f"{prefix}/", Delimiter="/")
+
+    rows = []
+
+    for page in pages:
+        for cp in page.get("CommonPrefixes", []):
+            folder = cp["Prefix"][len(prefix)+1:].rstrip("/")
+            rows.append(f'<tr><td><a href="{folder}/">{folder}/</a></td></tr>')
+          
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith("/"):
+                continue
+            name = key[len(prefix)+1:]
+            if "/" not in name:
+                rows.append(f'<tr><td><a href="{name}">{name}</a></td></tr>')
+
+    index_content = HTML_HEAD + "\n".join(rows) + HTML_FOOT
+    index_key = f"{prefix}/index.html"
+
+    print(f"Uploading top index: {index_key}")
+    s3.put_object(
+        Bucket=bucket,
+        Key=index_key,
+        Body=index_content.encode("utf-8"),
+        ContentType="text/html",
+    )
+  
 def generate_index_from_s3(s3, bucket, prefix):
     """Generate index.html files based on what's actually in S3.
 
@@ -300,14 +331,8 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
 
     # Generate index files based on actual S3 state after upload
     generate_index_from_s3(s3, bucket, prefix)
-    
-    # generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
-    # strip any trailing subfolder (everything after the first '/')
-    top_prefix = prefix.split("/")[0]
-    print(f"Updating top-level index for: s3://{bucket}/{top_prefix}/")
-    generate_index_from_s3(s3, bucket, top_prefix)
-
-
+    generate_top_index_from_s3(s3, bucket, top_prefix)
+  
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
