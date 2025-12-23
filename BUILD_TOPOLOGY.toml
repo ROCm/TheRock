@@ -369,7 +369,6 @@ type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
-disable_platforms = ["windows"]
 
 [artifacts.core-hip]
 artifact_group = "hip-runtime"
@@ -447,7 +446,6 @@ artifact_deps = []
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
-disable_platforms = ["windows"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
