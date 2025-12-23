@@ -254,7 +254,10 @@ class PerformanceAnalyzer:
         return analysis_results
     
     def identify_test_failures(self) -> List[Dict[str, Any]]:
-        """Identify tests that failed across multiple configurations"""
+        """
+        Identify tests that failed across multiple configurations.
+        Only considers configs where tests actually executed (non-zero).
+        """
         test_failures = []
         
         for idx, row in self.df.iterrows():
@@ -264,17 +267,33 @@ class PerformanceAnalyzer:
                 'features': row['Features']
             }
             
-            # Count zeros and low values across configs
+            # Get numeric data for all configs
             numeric_data = pd.to_numeric(row[self.config_columns], errors='coerce').fillna(0)
-            zero_count = (numeric_data == 0).sum()
-            total_configs = len(self.config_columns)
             
-            if zero_count > total_configs * 0.5:  # More than 50% configs have zero tests
+            # Count configs where test executed (non-zero)
+            executed_configs = (numeric_data > 0).sum()
+            
+            # Skip tests that never executed anywhere
+            if executed_configs == 0:
+                continue
+            
+            # Count configs where test was attempted but had zero results
+            # (configs where we expect it to run based on execution elsewhere)
+            zero_configs = (numeric_data == 0).sum()
+            
+            # Calculate failure rate based on configs where test could have run
+            # (total configs minus configs where it actually ran successfully)
+            failure_rate = (zero_configs / len(self.config_columns)) * 100
+            
+            # Only include tests with significant failure rates
+            if failure_rate > 50:  # More than 50% of configs have zero results
                 test_failures.append({
                     **test_info,
-                    'zero_configs': int(zero_count),
-                    'total_configs': total_configs,
-                    'failure_rate': round(zero_count / total_configs * 100, 2)
+                    'executed_on_configs': int(executed_configs),
+                    'failed_on_configs': int(zero_configs),
+                    'total_configs': len(self.config_columns),
+                    'failure_rate': round(failure_rate, 2),
+                    'success_rate': round((executed_configs / len(self.config_columns)) * 100, 2)
                 })
         
         return sorted(test_failures, key=lambda x: x['failure_rate'], reverse=True)
@@ -301,16 +320,12 @@ Analyze the following performance test data and identify performance drops and i
 
 ## Test Data Summary:
 - Total Test Suites: {total_tests}
-- Total Configurations: {total_configs}
-- Configurations with ZERO tests: {zero_configs_count}
+- Total Configurations Analyzed: {total_configs}
 - Configurations with LOW performance: {low_configs_count}
 
 ## Configuration-Specific Performance Issues:
 
-### Configs with Zero Tests:
-{zero_test_configs}
-
-### Configs with Low Performance:
+### Configs with Low Performance (Focus Area):
 {low_performance_configs}
 
 ## User-Specific Performance Analysis:
@@ -336,35 +351,39 @@ Tests with highest failure rates (>50% configs have zero tests):
 
 ## Analysis Requirements:
 
+Focus your analysis on configs where tests ARE running, not on configs with no tests.
+Calculate failure rates based on configs where tests were actually executed.
+
 Please provide a comprehensive report with the following sections:
 
 1. **Executive Summary**: 
-   - Overall health of the test infrastructure
-   - Key performance concerns
+   - Overall health of active test infrastructure
+   - Key performance concerns in running configurations
 
 2. **Configuration-Specific Issues**:
-   - Identify configs with critical performance drops
-   - Common patterns in failing configurations
+   - Identify configs with critical performance drops (where tests run but with low counts)
+   - Common patterns in underperforming configurations
    - Potential root causes (hardware, OS, deployment type)
 
 3. **User-Specific Performance Analysis**:
-   - Users with consistently low test execution
+   - Users with consistently low test execution rates
    - Potential capacity or resource issues
    - Recommendations for workload distribution
 
 4. **Hardware/Platform Issues**:
-   - Hardware platforms with poor performance
-   - OS-specific issues
+   - Hardware platforms with poor performance (where tests run)
+   - OS-specific issues affecting test execution
    - GPU configuration problems
 
 5. **Test-Specific Failures**:
-   - Tests failing across multiple configs (potential test issues)
-   - Tests failing on specific platforms (compatibility issues)
+   - Tests with low success rates across configs where they execute
+   - Tests with platform-specific compatibility issues
+   - Note: Focus on execution_rate and success_rate, not just presence/absence
 
 6. **Actionable Recommendations**:
-   - Immediate actions to address critical drops
+   - Immediate actions to improve performance on underperforming configs
    - Long-term improvements for test infrastructure
-   - Resource allocation suggestions
+   - Resource allocation and optimization suggestions
 
 Please format your response as a detailed markdown report.
 """
@@ -409,12 +428,11 @@ Please format your response as a detailed markdown report.
         )
         
         # Prepare input variables for the chain
+        # Focus on active configs and performance issues, not missing configs
         input_vars = {
             'total_tests': analysis_data['total_tests'],
             'total_configs': analysis_data['total_configs'],
-            'zero_configs_count': len(analysis_data['zero_test_configs']),
             'low_configs_count': len(analysis_data['low_performance_configs']),
-            'zero_test_configs': json.dumps(analysis_data['zero_test_configs'][:10], indent=2),
             'low_performance_configs': json.dumps(analysis_data['low_performance_configs'][:20], indent=2),
             'top_users': json.dumps(dict(sorted_users[:10]), indent=2),
             'bottom_users': json.dumps(dict(sorted_users[-10:]), indent=2),
@@ -520,13 +538,12 @@ Please format your response as a detailed markdown report.
         # Step 2: Analyze performance drops
         print("\nAnalyzing performance drops...")
         analysis_data = self.analyze_performance_drops()
-        print(f"[OK] Found {len(analysis_data['zero_test_configs'])} configs with zero tests")
-        print(f"[OK] Found {len(analysis_data['low_performance_configs'])} configs with low performance")
+        print(f"[OK] Analyzing {len(analysis_data['low_performance_configs'])} configs with low performance")
         
-        # Step 3: Identify test failures
-        print("\nIdentifying test failures...")
+        # Step 3: Identify test failures  
+        print("\nIdentifying test performance issues...")
         test_failures = self.identify_test_failures()
-        print(f"[OK] Found {len(test_failures)} tests with high failure rates")
+        print(f"[OK] Found {len(test_failures)} tests with low success rates across configs")
         
         # Step 4: Save raw analysis
         self.save_raw_analysis(analysis_data, test_failures, output_raw)
