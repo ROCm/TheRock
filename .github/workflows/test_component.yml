@@ -22,8 +22,12 @@ permissions:
 
 jobs:
   test_component:
-    name: 'Test ${{ fromJSON(inputs.component).job_name }} (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})'
+    name: >-
+      Test ${{ fromJSON(inputs.component).job_name }}
+      (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})
+      ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
+    continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
     timeout-minutes: 210
     container:
       image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
@@ -49,6 +53,11 @@ jobs:
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      # Benchmark results database API endpoints for performance metrics collection
+      # NOTE: These secrets are only required for benchmark results submission in nightly CI runs.
+      # For PR/push workflows, secret retrieval will fail gracefully and benchmarks will skip API submission.
+      BENCHMARK_DB_URL: ${{ secrets.BENCHMARK_DB_URL }}
+      BENCHMARK_DB_FALLBACK_URL: ${{ secrets.BENCHMARK_DB_FALLBACK_URL }}
     steps:
       - name: "Fetch 'build_tools' from repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

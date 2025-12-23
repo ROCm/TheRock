@@ -132,4 +132,5 @@ jobs:
             --pkg-type ${{ inputs.native_package_type }} \
             --s3-bucket therock-deb-rpm-test \
             --amdgpu-family ${{ inputs.artifact_group }} \
-            --artifact-id ${{ env.ARTIFACT_RUN_ID }}
+            --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
+            --job ${{ inputs.release_type }}

@@ -59,6 +59,7 @@ from amdgpu_family_matrix import (
     get_all_families_for_trigger_types,
 )
 from fetch_test_configurations import test_matrix
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 from github_actions_utils import *
 
@@ -247,7 +248,7 @@ def filter_known_names(
         ), "target_matrix must be provided for 'target' name_type"
         known_references = {"target": target_matrix}
     else:
-        known_references = {"test": test_matrix}
+        known_references = {"test": test_matrix, "benchmark": benchmark_matrix}
 
     filtered_names = []
     if name_type not in known_references:
@@ -510,6 +511,12 @@ def matrix_generator(
         )
         for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
+
+        # Add benchmark labels to selected_test_names so they're included in test labels for nightly runs
+        requested_benchmark_names = list(benchmark_matrix.keys())
+        selected_test_names.extend(
+            filter_known_names(requested_benchmark_names, "benchmark")
+        )
 
     # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))
