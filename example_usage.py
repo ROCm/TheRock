@@ -14,15 +14,19 @@ def example_basic_usage():
     # Path to your CSV file
     csv_file = r"C:\Users\rponnuru\Downloads\SubTestCountsMatrixView.csv"
     
-    # Make sure API key is set
-    if not os.getenv('OPENAI_API_KEY'):
-        print("ERROR: Please set OPENAI_API_KEY environment variable")
+    # API key - REPLACE WITH YOUR ACTUAL KEY or use environment variable
+    api_key = os.getenv('OPENAI_API_KEY') or "your-api-key-here"
+    
+    if api_key == "your-api-key-here":
+        print("ERROR: Please set your OPENAI_API_KEY")
+        print("Either set environment variable or edit this file with your key")
         return
     
-    # Create analyzer instance
+    # Create analyzer instance with the API key
     analyzer = PerformanceAnalyzer(
         csv_file_path=csv_file,
-        model="gpt-4o"  # or "gpt-4o-mini" for lower cost
+        api_key=api_key,  # Pass the API key directly
+        model="gpt-4o-mini"  # Using cheaper model for testing
     )
     
     # Run full analysis

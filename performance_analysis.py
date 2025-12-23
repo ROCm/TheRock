@@ -52,7 +52,7 @@ class PerformanceGuardrails:
                 ToxicLanguage(threshold=0.5, validation_method="sentence", on_fail="exception"),
                 RestrictToTopic(valid_topics=self.allowed_topics, disable_classifier=False, on_fail="reask")
             )
-            print("✓ Guardrails initialized successfully")
+            print("[OK] Guardrails initialized successfully")
         except Exception as e:
             print(f"WARNING: Could not initialize all guardrails: {e}")
             self.guard = None
@@ -141,7 +141,7 @@ class PerformanceAnalyzer:
                               if col not in self.metadata_columns]
         
         initial_count = len(self.df)
-        print(f"✓ Loaded {initial_count} test cases across {len(self.config_columns)} configurations")
+        print(f"[OK] Loaded {initial_count} test cases across {len(self.config_columns)} configurations")
         
         # Optionally drop rows where ALL config columns have zero tests
         if self.drop_zero_rows:
@@ -154,10 +154,10 @@ class PerformanceAnalyzer:
             
             dropped_count = initial_count - len(self.df)
             if dropped_count > 0:
-                print(f"✓ Dropped {dropped_count} test cases with zero tests across all configurations")
-                print(f"✓ Retained {len(self.df)} test cases with actual test data")
+                print(f"[OK] Dropped {dropped_count} test cases with zero tests across all configurations")
+                print(f"[OK] Retained {len(self.df)} test cases with actual test data")
             else:
-                print(f"✓ All test cases have at least one non-zero configuration")
+                print(f"[OK] All test cases have at least one non-zero configuration")
         
     def extract_config_details(self, config_name: str) -> Dict[str, str]:
         """Extract hardware, OS, user, and deployment type from config name"""
@@ -441,7 +441,7 @@ Please format your response as a detailed markdown report.
                     'total_cost': cb.total_cost
                 }
                 
-                print(f"\n✓ Analysis complete")
+                print(f"\n[OK] Analysis complete")
                 print(f"  - Tokens used: {cb.total_tokens}")
                 print(f"  - Estimated cost: ${cb.total_cost:.4f}")
             
@@ -453,7 +453,7 @@ Please format your response as a detailed markdown report.
                 print("Proceeding with original output but please review carefully.")
             else:
                 report = validated_report
-                print("✓ Output validated by guardrails")
+                print("[OK] Output validated by guardrails")
             
             return report, usage_stats
             
@@ -487,7 +487,7 @@ Please format your response as a detailed markdown report.
         
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(full_report)
-        print(f"\n✓ Report saved to: {output_file}")
+        print(f"\n[OK] Report saved to: {output_file}")
     
     def save_raw_analysis(self, analysis_data: Dict[str, Any], 
                          test_failures: List[Dict[str, Any]],
@@ -504,7 +504,7 @@ Please format your response as a detailed markdown report.
         }
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(combined_data, f, indent=2)
-        print(f"✓ Raw analysis data saved to: {output_file}")
+        print(f"[OK] Raw analysis data saved to: {output_file}")
     
     def run_full_analysis(self, output_report: str = "performance_report.md",
                          output_raw: str = "raw_analysis.json"):
@@ -520,13 +520,13 @@ Please format your response as a detailed markdown report.
         # Step 2: Analyze performance drops
         print("\nAnalyzing performance drops...")
         analysis_data = self.analyze_performance_drops()
-        print(f"✓ Found {len(analysis_data['zero_test_configs'])} configs with zero tests")
-        print(f"✓ Found {len(analysis_data['low_performance_configs'])} configs with low performance")
+        print(f"[OK] Found {len(analysis_data['zero_test_configs'])} configs with zero tests")
+        print(f"[OK] Found {len(analysis_data['low_performance_configs'])} configs with low performance")
         
         # Step 3: Identify test failures
         print("\nIdentifying test failures...")
         test_failures = self.identify_test_failures()
-        print(f"✓ Found {len(test_failures)} tests with high failure rates")
+        print(f"[OK] Found {len(test_failures)} tests with high failure rates")
         
         # Step 4: Save raw analysis
         self.save_raw_analysis(analysis_data, test_failures, output_raw)
