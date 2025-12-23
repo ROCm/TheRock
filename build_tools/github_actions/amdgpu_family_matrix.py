@@ -46,45 +46,61 @@ all_build_variants = {
 
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
-    "gfx94x": {
+    # "gfx94x": {
+    #     "linux": {
+    #         "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
+    #         # TODO: Add new benchmark-runs-on runner for benchmarks
+    #         "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
+    #         "family": "gfx94X-dcgpu",
+    #         "build_variants": ["release", "asan"],
+    #     }
+    # },
+    # "gfx110x": {
+    #     "linux": {
+    #         "test-runs-on": "linux-gfx110X-gpu-rocm",
+    #         "family": "gfx110X-all",
+    #         "bypass_tests_for_releases": True,
+    #         "build_variants": ["release"],
+    #         "sanity_check_only_for_family": True,
+    #     },
+    #     "windows": {
+    #         "test-runs-on": "windows-gfx110X-gpu-rocm",
+    #         "family": "gfx110X-all",
+    #         "bypass_tests_for_releases": True,
+    #         "build_variants": ["release"],
+    #         "sanity_check_only_for_family": True,
+    #     },
+    # },
+    # "gfx1151": {
+    #     "linux": {
+    #         "test-runs-on": "linux-gfx1151-gpu-rocm",
+    #         "family": "gfx1151",
+    #         "bypass_tests_for_releases": True,
+    #         "build_variants": ["release"],
+    #         "sanity_check_only_for_family": True,
+    #     },
+    #     "windows": {
+    #         "test-runs-on": "windows-gfx1151-gpu-rocm",
+    #         "family": "gfx1151",
+    #         "build_variants": ["release"],
+    #     },
+    # },
+    "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
-            # TODO: Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
-            "family": "gfx94X-dcgpu",
-            "build_variants": ["release", "asan"],
-        }
-    },
-    "gfx110x": {
-        "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-all",
+            # TODO(#2683): Re-enable machine once it is stable
+            # Label is "linux-gfx120X-gpu-rocm"
+            "test-runs-on": "",
+            "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx110X-gpu-rocm",
-            "family": "gfx110X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-    },
-    "gfx1151": {
-        "linux": {
-            "test-runs-on": "linux-gfx1151-gpu-rocm",
-            "family": "gfx1151",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "windows-gfx1151-gpu-rocm",
-            "family": "gfx1151",
+            "test-runs-on": "windows-gfx1201-gpu-rocm",
+            "family": "gfx120X-all",
             "build_variants": ["release"],
         },
-    },
+    },    
 }
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
