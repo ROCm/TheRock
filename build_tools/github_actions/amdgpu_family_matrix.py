@@ -56,13 +56,6 @@ amdgpu_family_info_matrix_presubmit = {
         }
     },
     "gfx110x": {
-        "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
-            "family": "gfx110X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
@@ -72,16 +65,25 @@ amdgpu_family_info_matrix_presubmit = {
         },
     },
     "gfx1151": {
-        "linux": {
-            "test-runs-on": "linux-gfx1151-gpu-rocm",
+        "windows": {
+            "test-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "build_variants": ["release"],
+        },
+    },
+    "gfx120x": {
+        "linux": {
+            # TODO(#2683): Re-enable machine once it is stable
+            # Label is "linux-gfx120X-gpu-rocm"
+            "test-runs-on": "",
+            "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx1151-gpu-rocm",
-            "family": "gfx1151",
+            "test-runs-on": "windows-gfx1201-gpu-rocm",
+            "family": "gfx120X-all",
             "build_variants": ["release"],
         },
     },
