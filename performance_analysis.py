@@ -257,6 +257,7 @@ class PerformanceAnalyzer:
         """
         Identify tests that failed across multiple configurations.
         Only considers configs where tests actually executed (non-zero).
+        Captures specific config names where tests failed.
         """
         test_failures = []
         
@@ -270,19 +271,21 @@ class PerformanceAnalyzer:
             # Get numeric data for all configs
             numeric_data = pd.to_numeric(row[self.config_columns], errors='coerce').fillna(0)
             
+            # Get lists of configs by status
+            executed_configs_list = [col for col in self.config_columns if numeric_data[col] > 0]
+            failed_configs_list = [col for col in self.config_columns if numeric_data[col] == 0]
+            
             # Count configs where test executed (non-zero)
-            executed_configs = (numeric_data > 0).sum()
+            executed_configs = len(executed_configs_list)
             
             # Skip tests that never executed anywhere
             if executed_configs == 0:
                 continue
             
-            # Count configs where test was attempted but had zero results
-            # (configs where we expect it to run based on execution elsewhere)
-            zero_configs = (numeric_data == 0).sum()
+            # Count configs where test had zero results
+            zero_configs = len(failed_configs_list)
             
             # Calculate failure rate based on configs where test could have run
-            # (total configs minus configs where it actually ran successfully)
             failure_rate = (zero_configs / len(self.config_columns)) * 100
             
             # Only include tests with significant failure rates
@@ -293,7 +296,9 @@ class PerformanceAnalyzer:
                     'failed_on_configs': int(zero_configs),
                     'total_configs': len(self.config_columns),
                     'failure_rate': round(failure_rate, 2),
-                    'success_rate': round((executed_configs / len(self.config_columns)) * 100, 2)
+                    'success_rate': round((executed_configs / len(self.config_columns)) * 100, 2),
+                    'configs_with_executions': executed_configs_list[:10],  # Limit to first 10 for readability
+                    'configs_with_failures': failed_configs_list[:10]  # Limit to first 10 for readability
                 })
         
         return sorted(test_failures, key=lambda x: x['failure_rate'], reverse=True)
@@ -344,9 +349,14 @@ Top Hardware Platforms by Total Tests:
 Bottom Hardware Platforms by Total Tests:
 {bottom_hardware}
 
-## Test Failures Across Configurations:
+## Test Performance Issues Across Configurations:
 
-Tests with highest failure rates (>50% configs have zero tests):
+Tests with highest failure rates (>50% configs have zero tests).
+For each test, you'll see:
+- Which specific configs successfully executed the test
+- Which specific configs failed to execute the test
+- Success rate and failure rate percentages
+
 {test_failures}
 
 ## Analysis Requirements:
@@ -377,7 +387,9 @@ Please provide a comprehensive report with the following sections:
 
 5. **Test-Specific Failures**:
    - Tests with low success rates across configs where they execute
+   - Identify patterns in configs_with_failures (common OS, hardware, users)
    - Tests with platform-specific compatibility issues
+   - Use the configs_with_executions and configs_with_failures lists to identify patterns
    - Note: Focus on execution_rate and success_rate, not just presence/absence
 
 6. **Actionable Recommendations**:
