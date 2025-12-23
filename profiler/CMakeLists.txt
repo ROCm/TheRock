@@ -35,8 +35,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
       amd-hip
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
-    BUILD_DEPS
-      therock-googletest
     RUNTIME_DEPS
       hip-clr
       amd-llvm
