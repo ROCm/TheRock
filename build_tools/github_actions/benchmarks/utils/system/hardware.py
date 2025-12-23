@@ -274,11 +274,11 @@ class HardwareDetector:
             try:
                 # Get CPU model name
                 cpu_output = subprocess.check_output(
-                    ["wmic", "cpu", "get", "Name"],
-                    text=True,
-                    stderr=subprocess.DEVNULL
+                    ["wmic", "cpu", "get", "Name"], text=True, stderr=subprocess.DEVNULL
                 ).strip()
-                lines = [line.strip() for line in cpu_output.split('\n') if line.strip()]
+                lines = [
+                    line.strip() for line in cpu_output.split("\n") if line.strip()
+                ]
                 if len(lines) > 1:
                     model_name = lines[1]  # First line is header "Name"
 
@@ -286,9 +286,11 @@ class HardwareDetector:
                 speed_output = subprocess.check_output(
                     ["wmic", "cpu", "get", "MaxClockSpeed"],
                     text=True,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
                 ).strip()
-                lines = [line.strip() for line in speed_output.split('\n') if line.strip()]
+                lines = [
+                    line.strip() for line in speed_output.split("\n") if line.strip()
+                ]
                 if len(lines) > 1 and lines[1].isdigit():
                     clock_speed_mhz = int(lines[1])
 
@@ -296,9 +298,11 @@ class HardwareDetector:
                 socket_output = subprocess.check_output(
                     ["wmic", "cpu", "get", "NumberOfCores"],
                     text=True,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
                 ).strip()
-                lines = [line.strip() for line in socket_output.split('\n') if line.strip()]
+                lines = [
+                    line.strip() for line in socket_output.split("\n") if line.strip()
+                ]
                 if len(lines) > 1 and lines[1].isdigit():
                     physical_cores = int(lines[1])
                     # If we have hyperthreading, sockets = logical cores / (physical cores * 2)
@@ -310,9 +314,11 @@ class HardwareDetector:
                 cache_output = subprocess.check_output(
                     ["wmic", "cpu", "get", "L2CacheSize"],
                     text=True,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
                 ).strip()
-                lines = [line.strip() for line in cache_output.split('\n') if line.strip()]
+                lines = [
+                    line.strip() for line in cache_output.split("\n") if line.strip()
+                ]
                 if len(lines) > 1 and lines[1].isdigit():
                     l2_cache_kb = int(lines[1])
 
@@ -320,9 +326,11 @@ class HardwareDetector:
                 cache_output = subprocess.check_output(
                     ["wmic", "cpu", "get", "L3CacheSize"],
                     text=True,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
                 ).strip()
-                lines = [line.strip() for line in cache_output.split('\n') if line.strip()]
+                lines = [
+                    line.strip() for line in cache_output.split("\n") if line.strip()
+                ]
                 if len(lines) > 1 and lines[1].isdigit():
                     l3_cache_kb = int(lines[1])
 
@@ -330,9 +338,11 @@ class HardwareDetector:
                 mem_output = subprocess.check_output(
                     ["wmic", "computersystem", "get", "TotalPhysicalMemory"],
                     text=True,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
                 ).strip()
-                lines = [line.strip() for line in mem_output.split('\n') if line.strip()]
+                lines = [
+                    line.strip() for line in mem_output.split("\n") if line.strip()
+                ]
                 if len(lines) > 1 and lines[1].isdigit():
                     ram_size_gb = int(lines[1]) // (1024 * 1024 * 1024)
 

@@ -110,6 +110,7 @@ The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.p
 | `rocfft_bench`    | ROCfft    | Linux, Windows | 60 min  | 1      |
 
 **GPU Family Support:**
+
 - **Linux:** gfx94x (MI300X/MI325X)
 - **Windows:** gfx1151 (RDNA3.5)
 
