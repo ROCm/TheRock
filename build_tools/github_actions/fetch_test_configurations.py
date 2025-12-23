@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from github_actions_utils import *
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 logging.basicConfig(level=logging.INFO)
 
@@ -234,21 +235,33 @@ def run():
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
+    is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
 
     logging.info(f"Selecting projects: {project_to_test}")
+
+    # Determine which test matrix to use
+    if is_benchmark_workflow:
+        # For benchmark workflow, use ONLY benchmark_matrix
+        # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
+        logging.info("Using benchmark_matrix only (benchmark tests)")
+        selected_matrix = benchmark_matrix.copy()
+    else:
+        # For regular workflow, use ONLY test_matrix
+        logging.info("Using test_matrix only (regular tests)")
+        selected_matrix = test_matrix.copy()
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in project_to_test.split(",")]
 
     output_matrix = []
-    for key in test_matrix:
-        job_name = test_matrix[key]["job_name"]
+    for key in selected_matrix:
+        job_name = selected_matrix[key]["job_name"]
 
         # If the test is disabled for a particular platform, skip the test
         if (
-            "exclude_family" in test_matrix[key]
-            and platform in test_matrix[key]["exclude_family"]
-            and amdgpu_families in test_matrix[key]["exclude_family"][platform]
+            "exclude_family" in selected_matrix[key]
+            and platform in selected_matrix[key]["exclude_family"]
+            and amdgpu_families in selected_matrix[key]["exclude_family"][platform]
         ):
             logging.info(
                 f"Excluding job {job_name} for platform {platform} and family {amdgpu_families}"
@@ -256,25 +269,28 @@ def run():
             continue
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
+        # Note: Benchmarks never use test_labels (always empty list)
         if test_labels and key not in test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
-        if platform in test_matrix[key]["platform"] and (
+        if platform in selected_matrix[key]["platform"] and (
             key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
-            job_config_data = test_matrix[key]
+            job_config_data = selected_matrix[key]
             job_config_data["test_type"] = test_type
             # For CI testing, we construct a shard array based on "total_shards" from "fetch_test_configurations.py"
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
+            # Note: Benchmarks always have total_shards=1 (no sharding)
             job_config_data["shard_arr"] = [
                 i + 1 for i in range(job_config_data["total_shards"])
             ]
 
             # If the test type is smoke tests, we only need one shard for the test job
+            # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
             if test_type == "smoke":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
