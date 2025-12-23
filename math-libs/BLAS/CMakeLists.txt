@@ -312,6 +312,7 @@ if(THEROCK_ENABLE_SPARSE)
       BUILD_DEPS
         rocm-cmake
         hipSPARSE
+        rocSPARSE
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
