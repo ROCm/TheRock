@@ -77,6 +77,14 @@ python performance_analysis.py path/to/your/data.csv \
     --output-raw my_analysis.json
 ```
 
+### Keep All Rows (Including Zero-Only Tests)
+
+By default, the tool drops test rows that have zero tests across ALL configurations to focus on meaningful data. To keep all rows:
+
+```bash
+python performance_analysis.py path/to/your/data.csv --keep-zero-rows
+```
+
 ### Example with the provided data
 
 ```bash
@@ -92,6 +100,7 @@ python performance_analysis.py "C:\Users\rponnuru\Downloads\SubTestCountsMatrixV
 | `--model` | OpenAI model to use | `gpt-4o` |
 | `--output-report` | Output markdown report file | `performance_report.md` |
 | `--output-raw` | Output raw JSON data file | `raw_analysis.json` |
+| `--keep-zero-rows` | Keep test rows with zero tests across all configs | `False` (drops by default) |
 
 ### Available Models
 

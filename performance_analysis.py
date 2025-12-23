@@ -98,7 +98,8 @@ class PerformanceGuardrails:
 
 
 class PerformanceAnalyzer:
-    def __init__(self, csv_file_path: str, api_key: str = None, model: str = "gpt-4o"):
+    def __init__(self, csv_file_path: str, api_key: str = None, model: str = "gpt-4o", 
+                 drop_zero_rows: bool = True):
         """
         Initialize the Performance Analyzer with LangChain
         
@@ -106,10 +107,12 @@ class PerformanceAnalyzer:
             csv_file_path: Path to the CSV file containing test data
             api_key: OpenAI API key (if None, will use OPENAI_API_KEY env variable)
             model: Model to use (default: gpt-4o)
+            drop_zero_rows: If True, drop rows with zero tests across all configs (default: True)
         """
         self.csv_file_path = csv_file_path
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
         self.model_name = model
+        self.drop_zero_rows = drop_zero_rows
         
         # Initialize LangChain components
         self.llm = ChatOpenAI(
@@ -138,7 +141,24 @@ class PerformanceAnalyzer:
         self.config_columns = [col for col in self.df.columns 
                               if col not in self.metadata_columns]
         
-        print(f"✓ Loaded {len(self.df)} test cases across {len(self.config_columns)} configurations")
+        initial_count = len(self.df)
+        print(f"✓ Loaded {initial_count} test cases across {len(self.config_columns)} configurations")
+        
+        # Optionally drop rows where ALL config columns have zero tests
+        if self.drop_zero_rows:
+            # Convert config columns to numeric, treating non-numeric as 0
+            config_data = self.df[self.config_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
+            
+            # Keep rows where at least one config has non-zero tests
+            rows_with_data = (config_data != 0).any(axis=1)
+            self.df = self.df[rows_with_data].reset_index(drop=True)
+            
+            dropped_count = initial_count - len(self.df)
+            if dropped_count > 0:
+                print(f"✓ Dropped {dropped_count} test cases with zero tests across all configurations")
+                print(f"✓ Retained {len(self.df)} test cases with actual test data")
+            else:
+                print(f"✓ All test cases have at least one non-zero configuration")
         
     def extract_config_details(self, config_name: str) -> Dict[str, str]:
         """Extract hardware, OS, user, and deployment type from config name"""
@@ -563,6 +583,12 @@ def main():
         default='gpt-4o',
         choices=['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
     )
+    parser.add_argument(
+        '--keep-zero-rows',
+        help='Keep test rows that have zero tests across all configurations',
+        action='store_true',
+        default=False
+    )
     
     args = parser.parse_args()
     
@@ -581,7 +607,12 @@ def main():
     
     # Run analysis
     try:
-        analyzer = PerformanceAnalyzer(args.csv_file, args.api_key, args.model)
+        analyzer = PerformanceAnalyzer(
+            csv_file_path=args.csv_file,
+            api_key=args.api_key,
+            model=args.model,
+            drop_zero_rows=not args.keep_zero_rows  # Invert the flag
+        )
         analyzer.run_full_analysis(
             output_report=args.output_report,
             output_raw=args.output_raw

@@ -144,6 +144,12 @@ python performance_analysis.py data.csv \
     --output-raw my_data.json
 ```
 
+### Keep All Test Rows (Including Zeros)
+By default, tests with zero executions across all configs are dropped. To keep them:
+```bash
+python performance_analysis.py data.csv --keep-zero-rows
+```
+
 ### Programmatic Usage
 ```python
 from performance_analysis import PerformanceAnalyzer

@@ -99,7 +99,8 @@ def example_data_exploration():
     csv_file = r"C:\Users\rponnuru\Downloads\SubTestCountsMatrixView.csv"
     
     # No API key needed for data exploration
-    analyzer = PerformanceAnalyzer(csv_file_path=csv_file)
+    # By default, rows with all zeros are dropped for cleaner analysis
+    analyzer = PerformanceAnalyzer(csv_file_path=csv_file, drop_zero_rows=True)
     
     # Load and analyze data
     analyzer.load_data()
@@ -140,6 +141,32 @@ def example_data_exploration():
     print("\nData exploration complete! Check exploration_data.json")
 
 
+def example_keep_zero_rows():
+    """Example keeping rows with all zeros"""
+    print("\nExample 5: Keep All Rows Including Zeros")
+    print("-" * 50)
+    
+    csv_file = r"C:\Users\rponnuru\Downloads\SubTestCountsMatrixView.csv"
+    
+    if not os.getenv('OPENAI_API_KEY'):
+        print("ERROR: Please set OPENAI_API_KEY environment variable")
+        return
+    
+    # Keep all rows, even those with zero tests across all configs
+    analyzer = PerformanceAnalyzer(
+        csv_file_path=csv_file,
+        model="gpt-4o-mini",
+        drop_zero_rows=False  # Keep zero rows
+    )
+    
+    report, usage_stats = analyzer.run_full_analysis(
+        output_report="report_with_zeros.md",
+        output_raw="data_with_zeros.json"
+    )
+    
+    print("Analysis complete with all rows included!")
+
+
 if __name__ == "__main__":
     print("Performance Analysis Tool - Usage Examples")
     print("=" * 70)
@@ -153,4 +180,6 @@ if __name__ == "__main__":
     # example_step_by_step()
     
     # example_data_exploration()  # No API key needed
+    
+    # example_keep_zero_rows()  # Include rows with all zeros
 
