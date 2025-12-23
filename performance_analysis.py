@@ -709,12 +709,40 @@ Please format your response as a detailed markdown report.
     
     def run_full_analysis(self, output_report: str = "performance_report.md",
                          output_raw: str = "raw_analysis.json",
-                         generate_test_report: bool = True):
-        """Run the complete analysis pipeline"""
+                         generate_test_report: bool = True,
+                         generate_ai_report: bool = True):
+        """
+        Run the complete analysis pipeline
+        
+        Args:
+            output_report: Output file for AI report
+            output_raw: Output file for raw JSON data
+            generate_test_report: If True, generate test-specific report (FREE)
+            generate_ai_report: If True, generate AI-powered report (COSTS MONEY)
+        
+        Returns:
+            tuple: (ai_report or None, usage_stats or None)
+        """
         print("="*70)
         print("Performance Drop Analysis Tool")
         print("Powered by LangChain + Guardrails")
         print("="*70)
+        
+        # Show cost information
+        if generate_ai_report:
+            print("[INFO] AI report generation enabled (costs ~$0.003 with gpt-4o-mini)")
+        else:
+            print("[INFO] AI report generation DISABLED (cost-saving mode)")
+        
+        if generate_test_report:
+            print("[INFO] Test-specific report enabled (FREE)")
+        else:
+            print("[INFO] Test-specific report DISABLED")
+        
+        if not generate_ai_report and not generate_test_report:
+            print("[WARNING] No reports will be generated, only raw JSON data")
+        
+        print()
         
         # Step 1: Load data
         self.load_data()
@@ -729,28 +757,35 @@ Please format your response as a detailed markdown report.
         test_failures = self.identify_test_failures()
         print(f"[OK] Found {len(test_failures)} tests with low success rates across configs")
         
-        # Step 4: Save raw analysis
+        # Step 4: Save raw analysis (always generated)
         self.save_raw_analysis(analysis_data, test_failures, output_raw)
         
-        # Step 5: Generate test-specific detailed report
+        # Step 5: Generate test-specific detailed report (FREE)
+        test_report_file = None
         if generate_test_report:
             test_report_file = output_report.replace('.md', '_test_specific.md')
             self.generate_test_specific_report(test_failures, test_report_file)
         
-        # Step 6: Get AI analysis using LangChain
-        ai_report, usage_stats = self.get_ai_analysis(analysis_data, test_failures)
-        
-        # Step 7: Save final report
-        self.save_report(ai_report, usage_stats, output_report)
+        # Step 6: Get AI analysis using LangChain (COSTS MONEY)
+        ai_report = None
+        usage_stats = None
+        if generate_ai_report:
+            ai_report, usage_stats = self.get_ai_analysis(analysis_data, test_failures)
+            self.save_report(ai_report, usage_stats, output_report)
         
         print("\n" + "="*70)
         print("Analysis Complete!")
         print("="*70)
         print(f"\nGenerated files:")
-        print(f"  1. {output_report} - AI-generated analysis report")
-        print(f"  2. {output_raw} - Raw analysis data (JSON)")
+        print(f"  1. {output_raw} - Raw analysis data (JSON) [ALWAYS GENERATED]")
+        
+        file_num = 2
         if generate_test_report:
-            print(f"  3. {test_report_file} - Test-specific detailed report")
+            print(f"  {file_num}. {test_report_file} - Test-specific detailed report [FREE]")
+            file_num += 1
+        
+        if generate_ai_report:
+            print(f"  {file_num}. {output_report} - AI-generated analysis report [COST: ${usage_stats['total_cost']:.4f}]")
         
         return ai_report, usage_stats
 
@@ -793,8 +828,41 @@ def main():
         action='store_true',
         default=False
     )
+    parser.add_argument(
+        '--report-type',
+        help='Type of report to generate',
+        choices=['both', 'ai-only', 'test-only', 'none'],
+        default='both',
+        metavar='TYPE'
+    )
+    parser.add_argument(
+        '--no-ai-report',
+        help='Skip AI report generation to save costs (same as --report-type test-only)',
+        action='store_true',
+        default=False
+    )
     
     args = parser.parse_args()
+    
+    # Determine report generation flags
+    if args.no_ai_report:
+        generate_ai = False
+        generate_test = True
+    elif args.report_type == 'both':
+        generate_ai = True
+        generate_test = True
+    elif args.report_type == 'ai-only':
+        generate_ai = True
+        generate_test = False
+    elif args.report_type == 'test-only':
+        generate_ai = False
+        generate_test = True
+    elif args.report_type == 'none':
+        generate_ai = False
+        generate_test = False
+    else:
+        generate_ai = True
+        generate_test = True
     
     # Check if API key is available
     if not args.api_key and not os.getenv('OPENAI_API_KEY'):
@@ -819,7 +887,9 @@ def main():
         )
         analyzer.run_full_analysis(
             output_report=args.output_report,
-            output_raw=args.output_raw
+            output_raw=args.output_raw,
+            generate_test_report=generate_test,
+            generate_ai_report=generate_ai
         )
     except Exception as e:
         print(f"\nERROR: Analysis failed: {e}")

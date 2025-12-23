@@ -174,13 +174,73 @@ def example_keep_zero_rows():
     print("Analysis complete with all rows included!")
 
 
+def example_cost_saving_test_only():
+    """Example: Generate only test-specific report (FREE - No AI cost)"""
+    print("\nExample 6: Cost-Saving Mode - Test Report Only (FREE)")
+    print("-" * 50)
+    
+    csv_file = r"C:\Users\rponnuru\Downloads\SubTestCountsMatrixView.csv"
+    
+    # No API key needed for test-only report!
+    analyzer = PerformanceAnalyzer(
+        csv_file_path=csv_file,
+        api_key="not-needed",  # API key not used for test report
+        model="gpt-4o-mini"
+    )
+    
+    # Only generate test-specific report, skip AI analysis
+    report, usage_stats = analyzer.run_full_analysis(
+        output_report="ignored.md",
+        output_raw="raw_data.json",
+        generate_test_report=True,  # FREE - detailed test metrics
+        generate_ai_report=False    # Skip AI to save costs
+    )
+    
+    print("\n[COST SAVED] No AI analysis = $0.00 cost!")
+    print("You still get:")
+    print("  - Detailed test-specific report with pass/fail ratios")
+    print("  - Pattern analysis (OS, hardware trends)")
+    print("  - Raw JSON data for further analysis")
+
+
+def example_ai_only():
+    """Example: Generate only AI report (skip test details)"""
+    print("\nExample 7: AI Report Only (Skip Test Details)")
+    print("-" * 50)
+    
+    csv_file = r"C:\Users\rponnuru\Downloads\SubTestCountsMatrixView.csv"
+    api_key = os.getenv('OPENAI_API_KEY') or "your-api-key-here"
+    
+    if api_key == "your-api-key-here":
+        print("ERROR: Please set your OPENAI_API_KEY")
+        return
+    
+    analyzer = PerformanceAnalyzer(
+        csv_file_path=csv_file,
+        api_key=api_key,
+        model="gpt-4o-mini",
+        verify_ssl=False
+    )
+    
+    # Only generate AI summary, skip detailed test report
+    report, usage_stats = analyzer.run_full_analysis(
+        output_report="ai_summary.md",
+        output_raw="raw_data.json",
+        generate_test_report=False,  # Skip detailed test metrics
+        generate_ai_report=True      # Only AI insights
+    )
+    
+    print(f"\n[COST] AI analysis: ${usage_stats['total_cost']:.4f}")
+    print("Generated: AI-powered insights report only")
+
+
 if __name__ == "__main__":
     print("Performance Analysis Tool - Usage Examples")
     print("=" * 70)
     
     # Uncomment the example you want to run:
     
-    example_basic_usage()
+    example_basic_usage()  # Both reports (AI + test-specific)
     
     # example_with_custom_api_key()
     
@@ -189,4 +249,8 @@ if __name__ == "__main__":
     # example_data_exploration()  # No API key needed
     
     # example_keep_zero_rows()  # Include rows with all zeros
+    
+    # example_cost_saving_test_only()  # FREE - No AI costs!
+    
+    # example_ai_only()  # Only AI insights
 
