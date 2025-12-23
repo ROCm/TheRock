@@ -97,13 +97,31 @@ python performance_analysis.py path/to/your/data.csv --report-type none
 
 **📖 See [COST_GUIDE.md](COST_GUIDE.md) for detailed cost comparison and recommendations.**
 
-### Keep All Rows (Including Zero-Only Tests)
+### Data Filtering (Zero-Test Removal)
 
-By default, the tool drops test rows that have zero tests across ALL configurations to focus on meaningful data. To keep all rows:
+By default, the tool performs intelligent data filtering to focus on meaningful results:
+
+1. **Drops config columns** where NO test case executed (empty configs)
+2. **Drops test rows** where the test didn't execute on ANY config (empty tests)
+
+**Example:**
+```
+Before: 350 tests × 120 configs (including 85 empty configs)
+After:  350 tests × 35 configs (only configs with test executions)
+Result: More accurate failure rates!
+```
+
+To keep ALL rows and columns (including zeros):
 
 ```bash
 python performance_analysis.py path/to/your/data.csv --keep-zero-rows
 ```
+
+**Why filter?**
+- ✅ More accurate failure rate calculations
+- ✅ Focus on configs that are actually active
+- ✅ Cleaner reports without empty data
+- ✅ Better insights into real performance issues
 
 ### Example with the provided data
 

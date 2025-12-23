@@ -30,11 +30,13 @@ python performance_analysis.py "C:\Users\rponnuru\Downloads\SubTestCountsMatrixV
 
 ## 📊 What You'll Get
 
-After running the analysis, you'll get three files:
+After running the analysis, you'll get up to three files:
 
-1. **performance_report.md** - AI-generated comprehensive report
-2. **raw_analysis.json** - Structured data for further processing
-3. **analysis_prompt.txt** - The prompt sent to the LLM (for debugging)
+1. **performance_report.md** - AI-generated comprehensive report (~$0.003)
+2. **performance_report_test_specific.md** - Detailed test metrics (FREE!)
+3. **raw_analysis.json** - Structured data for further processing (FREE)
+
+**💰 Cost Control:** Use `--no-ai-report` to generate only test metrics for $0.00!
 
 ## 💡 Example Output
 
@@ -69,11 +71,14 @@ The report includes:
 
 ## 📈 Cost Estimates
 
-| Model | Typical Cost |
-|-------|--------------|
-| gpt-4o | $0.10 - $0.50 |
-| gpt-4o-mini | $0.02 - $0.10 |
-| gpt-4-turbo | $0.15 - $0.70 |
+| Model | Typical Cost | Use Case |
+|-------|--------------|----------|
+| **Test Report Only** | **$0.00** | Daily monitoring (no API key needed!) |
+| gpt-4o-mini | ~$0.003 | Best value for AI insights |
+| gpt-4o | ~$0.015 | Most capable analysis |
+| gpt-4-turbo | ~$0.020 | High-quality insights |
+
+💡 **Tip:** Use `--no-ai-report` for FREE daily monitoring!
 
 ## 🔧 Troubleshooting
 
@@ -144,10 +149,21 @@ python performance_analysis.py data.csv \
     --output-raw my_data.json
 ```
 
-### Keep All Test Rows (Including Zeros)
-By default, tests with zero executions across all configs are dropped. To keep them:
+### Data Filtering (Smart Zero Removal)
+By default, the tool automatically cleans your data:
+- ✅ Drops **config columns** where NO test ran (e.g., 120→35 configs)
+- ✅ Drops **test rows** where test didn't execute anywhere
+- ✅ Results in more accurate failure rate calculations!
+
+To keep ALL data (including zeros):
 ```bash
 python performance_analysis.py data.csv --keep-zero-rows
+```
+
+**Example Impact:**
+```
+Before filtering: 0.83% pass rate (1/120 configs)
+After filtering:   2.86% pass rate (1/35 configs)  ← More accurate!
 ```
 
 ### Programmatic Usage
