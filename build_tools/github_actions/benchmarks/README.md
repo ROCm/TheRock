@@ -102,12 +102,16 @@ ci_nightly.yml → ci_linux.yml
 
 The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.py`:
 
-| Test Name         | Library   | Platform | Timeout | Shards |
-| ----------------- | --------- | -------- | ------- | ------ |
-| `hipblaslt_bench` | hipBLASLt | Linux    | 60 min  | 1      |
-| `rocsolver_bench` | ROCsolver | Linux    | 60 min  | 1      |
-| `rocrand_bench`   | ROCrand   | Linux    | 60 min  | 1      |
-| `rocfft_bench`    | ROCfft    | Linux    | 60 min  | 1      |
+| Test Name         | Library   | Platform       | Timeout | Shards |
+| ----------------- | --------- | -------------- | ------- | ------ |
+| `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | 1      |
+| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | 1      |
+| `rocrand_bench`   | ROCrand   | Linux, Windows | 60 min  | 1      |
+| `rocfft_bench`    | ROCfft    | Linux, Windows | 60 min  | 1      |
+
+**GPU Family Support:**
+- **Linux:** gfx94x (MI300X/MI325X)
+- **Windows:** gfx1151 (RDNA3.5)
 
 ### Implementation Details
 
@@ -228,8 +232,10 @@ Edit `benchmarks/benchmark_test_matrix.py`:
     "fetch_artifact_args": "--your-lib --tests",
     "timeout_minutes": 60,
     "test_script": f"python {_get_benchmark_script_path('test_your_benchmark.py')}",
-    "platform": ["linux"],
+    "platform": ["linux", "windows"],  # Supported platforms
     "total_shards": 1,
+    # TODO: Remove xfail once dedicated performance servers are added
+    "expect_failure": True,
 },
 ```
 
