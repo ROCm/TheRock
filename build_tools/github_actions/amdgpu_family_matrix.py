@@ -100,7 +100,7 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx120X-all",
             "build_variants": ["release"],
         },
-    },    
+    },
 }
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
