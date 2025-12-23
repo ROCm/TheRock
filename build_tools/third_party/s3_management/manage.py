@@ -288,7 +288,7 @@ class S3Index:
             # networkx 3.5+ requires Python 3.11+
             if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4-py3-none-any.whl", "networkx-3.4.1-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
                 attributes += ' data-requires-python="&gt;=3.10"'
-            elif "networkx-3." in obj.key and any(obj.key.endswith(f"networkx-3.{v}") for v in range(5, 20)) and obj.key.endswith("-py3-none-any.whl"):
+            elif obj.key.endswith("-py3-none-any.whl") and any(f"networkx-3.{v}-" in obj.key or f"networkx-3.{v}." in obj.key for v in range(5, 20)):
                 # networkx 3.5 and higher require Python 3.11+
                 attributes += ' data-requires-python="&gt;=3.11"'
 
