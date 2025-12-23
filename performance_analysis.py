@@ -7,6 +7,7 @@ import pandas as pd
 import json
 import os
 from typing import Dict, List, Any, Optional
+from collections import Counter
 import sys
 
 # LangChain imports
@@ -548,8 +549,167 @@ Please format your response as a detailed markdown report.
             json.dump(combined_data, f, indent=2)
         print(f"[OK] Raw analysis data saved to: {output_file}")
     
+    def generate_test_specific_report(self, test_failures: List[Dict[str, Any]], 
+                                      output_file: str = "test_specific_report.md"):
+        """
+        Generate a detailed test-specific report showing pass/fail ratios and drops
+        
+        Args:
+            test_failures: List of test failure data
+            output_file: Output markdown file name
+        """
+        print("\nGenerating test-specific detailed report...")
+        
+        report_lines = [
+            "# Test-Specific Performance Report",
+            "",
+            f"**Generated**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"**Total Tests Analyzed**: {len(test_failures)}",
+            "",
+            "This report provides detailed pass/fail analysis for each test case.",
+            "",
+            "---",
+            ""
+        ]
+        
+        # Sort tests by failure rate (worst first)
+        sorted_tests = sorted(test_failures, key=lambda x: x['failure_rate'], reverse=True)
+        
+        for idx, test in enumerate(sorted_tests, 1):
+            # Extract configuration details from failed/successful configs
+            failed_configs = test.get('configs_with_failures', [])
+            success_configs = test.get('configs_with_executions', [])
+            
+            report_lines.extend([
+                f"## {idx}. {test['test_name']}",
+                "",
+                f"**Category**: {test['test_category']}",
+                f"**Feature**: {test['features']}",
+                "",
+                "### Performance Summary",
+                "",
+                f"| Metric | Value |",
+                f"|--------|-------|",
+                f"| **Pass Ratio** | {test['success_rate']:.2f}% ({test['executed_on_configs']}/{test['total_configs']} configs) |",
+                f"| **Fail Ratio** | {test['failure_rate']:.2f}% ({test['failed_on_configs']}/{test['total_configs']} configs) |",
+                f"| **Performance Drop** | {test['failure_rate']:.2f}% of configs not executing |",
+                "",
+                f"### Execution Analysis",
+                "",
+                f"- **Successfully Executed On**: {test['executed_on_configs']} configurations",
+                f"- **Failed/Not Executed On**: {test['failed_on_configs']} configurations",
+                f"- **Total Configurations**: {test['total_configs']}",
+                "",
+            ])
+            
+            # Successful configs
+            if success_configs:
+                report_lines.extend([
+                    "### ✓ Configs Where Test PASSED",
+                    "",
+                    "| # | Configuration | OS | Hardware | User |",
+                    "|---|---------------|----|-----------|----|"
+                ])
+                
+                for i, config in enumerate(success_configs[:10], 1):
+                    details = self.extract_config_details(config)
+                    os_name = details.get('os', 'N/A')
+                    hardware = details.get('hardware', 'N/A')
+                    user = details.get('user', 'N/A')
+                    report_lines.append(f"| {i} | {config[:50]}... | {os_name} | {hardware} | {user} |")
+                
+                if len(success_configs) > 10:
+                    report_lines.append(f"\n*...and {len(success_configs) - 10} more configs*")
+                report_lines.append("")
+            
+            # Failed configs
+            if failed_configs:
+                report_lines.extend([
+                    "### ✗ Configs Where Test FAILED/NOT EXECUTED",
+                    "",
+                    "| # | Configuration | OS | Hardware | User |",
+                    "|---|---------------|----|-----------|----|"
+                ])
+                
+                for i, config in enumerate(failed_configs[:10], 1):
+                    details = self.extract_config_details(config)
+                    os_name = details.get('os', 'N/A')
+                    hardware = details.get('hardware', 'N/A')
+                    user = details.get('user', 'N/A')
+                    report_lines.append(f"| {i} | {config[:50]}... | {os_name} | {hardware} | {user} |")
+                
+                if len(failed_configs) > 10:
+                    report_lines.append(f"\n*...and {len(failed_configs) - 10} more configs*")
+                report_lines.append("")
+            
+            # Pattern analysis
+            report_lines.extend([
+                "### Pattern Analysis",
+                "",
+            ])
+            
+            # Analyze OS patterns
+            failed_os = [self.extract_config_details(c).get('os', 'Unknown') for c in failed_configs[:10]]
+            success_os = [self.extract_config_details(c).get('os', 'Unknown') for c in success_configs[:10]]
+            
+            failed_os_count = Counter(failed_os)
+            success_os_count = Counter(success_os)
+            
+            report_lines.extend([
+                "**Most Common OS in Failures:**",
+                ""
+            ])
+            for os_name, count in failed_os_count.most_common(3):
+                report_lines.append(f"- {os_name}: {count} configs")
+            
+            report_lines.extend([
+                "",
+                "**Most Common OS in Successes:**",
+                ""
+            ])
+            for os_name, count in success_os_count.most_common(3):
+                report_lines.append(f"- {os_name}: {count} configs")
+            
+            # Analyze hardware patterns
+            failed_hw = [self.extract_config_details(c).get('hardware', 'Unknown') for c in failed_configs[:10]]
+            success_hw = [self.extract_config_details(c).get('hardware', 'Unknown') for c in success_configs[:10]]
+            
+            failed_hw_count = Counter(failed_hw)
+            success_hw_count = Counter(success_hw)
+            
+            report_lines.extend([
+                "",
+                "**Most Common Hardware in Failures:**",
+                ""
+            ])
+            for hw, count in failed_hw_count.most_common(3):
+                report_lines.append(f"- {hw}: {count} configs")
+            
+            report_lines.extend([
+                "",
+                "**Most Common Hardware in Successes:**",
+                ""
+            ])
+            for hw, count in success_hw_count.most_common(3):
+                report_lines.append(f"- {hw}: {count} configs")
+            
+            report_lines.extend([
+                "",
+                "---",
+                ""
+            ])
+        
+        # Write report
+        report_content = "\n".join(report_lines)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(report_content)
+        
+        print(f"[OK] Test-specific report saved to: {output_file}")
+        return output_file
+    
     def run_full_analysis(self, output_report: str = "performance_report.md",
-                         output_raw: str = "raw_analysis.json"):
+                         output_raw: str = "raw_analysis.json",
+                         generate_test_report: bool = True):
         """Run the complete analysis pipeline"""
         print("="*70)
         print("Performance Drop Analysis Tool")
@@ -572,10 +732,15 @@ Please format your response as a detailed markdown report.
         # Step 4: Save raw analysis
         self.save_raw_analysis(analysis_data, test_failures, output_raw)
         
-        # Step 5: Get AI analysis using LangChain
+        # Step 5: Generate test-specific detailed report
+        if generate_test_report:
+            test_report_file = output_report.replace('.md', '_test_specific.md')
+            self.generate_test_specific_report(test_failures, test_report_file)
+        
+        # Step 6: Get AI analysis using LangChain
         ai_report, usage_stats = self.get_ai_analysis(analysis_data, test_failures)
         
-        # Step 6: Save final report
+        # Step 7: Save final report
         self.save_report(ai_report, usage_stats, output_report)
         
         print("\n" + "="*70)
@@ -584,6 +749,8 @@ Please format your response as a detailed markdown report.
         print(f"\nGenerated files:")
         print(f"  1. {output_report} - AI-generated analysis report")
         print(f"  2. {output_raw} - Raw analysis data (JSON)")
+        if generate_test_report:
+            print(f"  3. {test_report_file} - Test-specific detailed report")
         
         return ai_report, usage_stats
 
