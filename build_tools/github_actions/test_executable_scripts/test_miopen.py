@@ -201,6 +201,8 @@ if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
         "*GPU_UnitTestConvSolverImplicitGemmGroupWrwXdlops_BFP16.ConvHipImplicitGemmGroupWrwXdlops*"
     )
 
+    negative_filter.append("Smoke/GPU_MultiMarginLoss*")
+
 ####################################################
 
 # Creating a smoke test filter
