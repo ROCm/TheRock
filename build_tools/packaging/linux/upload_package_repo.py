@@ -300,6 +300,12 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
 
     # Generate index files based on actual S3 state after upload
     generate_index_from_s3(s3, bucket, prefix)
+    
+    # generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
+    # strip any trailing subfolder (everything after the first '/')
+    top_prefix = prefix.split("/")[0]
+    print(f"Updating top-level index for: s3://{bucket}/{top_prefix}/")
+    generate_index_from_s3(s3, bucket, top_prefix)
 
 
 def main():
