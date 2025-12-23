@@ -338,6 +338,8 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     EXTERNAL_SOURCE_DIR "${THEROCK_LIBHIPCXX_SOURCE_DIR}"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx"
     BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942  # Fixes issue with empty target list for unsupported architectures.
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
