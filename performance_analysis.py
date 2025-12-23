@@ -98,7 +98,7 @@ class PerformanceGuardrails:
 
 class PerformanceAnalyzer:
     def __init__(self, csv_file_path: str, api_key: str = None, model: str = "gpt-4o", 
-                 drop_zero_rows: bool = True):
+                 drop_zero_rows: bool = True, verify_ssl: bool = True):
         """
         Initialize the Performance Analyzer with LangChain
         
@@ -107,18 +107,30 @@ class PerformanceAnalyzer:
             api_key: OpenAI API key (if None, will use OPENAI_API_KEY env variable)
             model: Model to use (default: gpt-4o)
             drop_zero_rows: If True, drop rows with zero tests across all configs (default: True)
+            verify_ssl: If False, disable SSL verification (for corporate networks) (default: True)
         """
         self.csv_file_path = csv_file_path
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
         self.model_name = model
         self.drop_zero_rows = drop_zero_rows
+        self.verify_ssl = verify_ssl
         
-        # Initialize LangChain components
+        # Initialize LangChain components with SSL settings
+        import httpx
+        
+        if not verify_ssl:
+            print("[WARNING] SSL verification disabled - use only in trusted corporate networks")
+            # Create custom httpx client with SSL verification disabled
+            http_client = httpx.Client(verify=False)
+        else:
+            http_client = None  # Use default
+        
         self.llm = ChatOpenAI(
             model=model,
             temperature=0.7,
             max_tokens=4000,
-            openai_api_key=self.api_key
+            openai_api_key=self.api_key,
+            http_client=http_client
         )
         
         # Initialize guardrails

@@ -23,10 +23,13 @@ def example_basic_usage():
         return
     
     # Create analyzer instance with the API key
+    # NOTE: verify_ssl=False is for corporate networks with SSL inspection
+    # Set to True for production or if you have proper certificates
     analyzer = PerformanceAnalyzer(
         csv_file_path=csv_file,
         api_key=api_key,  # Pass the API key directly
-        model="gpt-4o-mini"  # Using cheaper model for testing
+        model="gpt-4o-mini",  # Using cheaper model for testing
+        verify_ssl=False  # Disable SSL verification for corporate networks
     )
     
     # Run full analysis
