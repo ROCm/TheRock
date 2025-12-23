@@ -11,10 +11,9 @@ import sys
 
 # LangChain imports
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from langchain.output_parsers import StructuredOutputParser, ResponseSchema
-from langchain.chains import LLMChain
-from langchain.callbacks import get_openai_callback
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_community.callbacks import get_openai_callback
 
 # Guardrails imports
 try:
@@ -280,8 +279,8 @@ class PerformanceAnalyzer:
         
         return sorted(test_failures, key=lambda x: x['failure_rate'], reverse=True)
     
-    def create_analysis_chain(self) -> LLMChain:
-        """Create LangChain chain for performance analysis"""
+    def create_analysis_prompt(self) -> ChatPromptTemplate:
+        """Create LangChain prompt template for performance analysis"""
         
         # Define the system message
         system_template = """You are an expert performance analyst specializing in test infrastructure and CI/CD systems. 
@@ -375,10 +374,7 @@ Please format your response as a detailed markdown report.
         human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
         chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
         
-        # Create the chain
-        chain = LLMChain(llm=self.llm, prompt=chat_prompt, verbose=True)
-        
-        return chain
+        return chat_prompt
     
     def get_ai_analysis(self, analysis_data: Dict[str, Any], 
                        test_failures: List[Dict[str, Any]]) -> tuple[str, Dict[str, Any]]:
@@ -428,12 +424,15 @@ Please format your response as a detailed markdown report.
         }
         
         try:
-            # Create the analysis chain
-            chain = self.create_analysis_chain()
+            # Create the analysis prompt
+            prompt = self.create_analysis_prompt()
+            
+            # Create the chain using LCEL (modern LangChain approach)
+            chain = prompt | self.llm | StrOutputParser()
             
             # Run the chain with callback to track usage
             with get_openai_callback() as cb:
-                response = chain.invoke(input_vars)
+                report = chain.invoke(input_vars)
                 
                 usage_stats = {
                     'total_tokens': cb.total_tokens,
@@ -445,9 +444,6 @@ Please format your response as a detailed markdown report.
                 print(f"\n✓ Analysis complete")
                 print(f"  - Tokens used: {cb.total_tokens}")
                 print(f"  - Estimated cost: ${cb.total_cost:.4f}")
-            
-            # Extract the response text
-            report = response['text']
             
             # Validate output with guardrails
             is_valid, validated_report, error_msg = self.guardrails.validate_output(report)
