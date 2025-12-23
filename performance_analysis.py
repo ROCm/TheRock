@@ -154,23 +154,42 @@ class PerformanceAnalyzer:
                               if col not in self.metadata_columns]
         
         initial_count = len(self.df)
-        print(f"[OK] Loaded {initial_count} test cases across {len(self.config_columns)} configurations")
+        initial_config_count = len(self.config_columns)
+        print(f"[OK] Loaded {initial_count} test cases across {initial_config_count} configurations")
         
-        # Optionally drop rows where ALL config columns have zero tests
+        # Optionally drop rows/columns with all zeros
         if self.drop_zero_rows:
             # Convert config columns to numeric, treating non-numeric as 0
             config_data = self.df[self.config_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
             
-            # Keep rows where at least one config has non-zero tests
-            rows_with_data = (config_data != 0).any(axis=1)
+            # Step 1: Drop COLUMNS (configs) where ALL test cases have zero
+            cols_with_data = (config_data != 0).any(axis=0)  # Check each column
+            zero_configs = [col for col in self.config_columns if not cols_with_data[col]]
+            
+            if zero_configs:
+                # Drop these config columns from both the dataframe and config_columns list
+                self.df = self.df.drop(columns=zero_configs)
+                self.config_columns = [col for col in self.config_columns if col not in zero_configs]
+                print(f"[OK] Dropped {len(zero_configs)} configurations with zero tests across all test cases")
+                
+                # Recalculate config_data after dropping columns
+                config_data = self.df[self.config_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
+            else:
+                print(f"[OK] All configurations have at least one non-zero test case")
+            
+            # Step 2: Drop ROWS (test cases) where ALL configs have zero tests
+            rows_with_data = (config_data != 0).any(axis=1)  # Check each row
             self.df = self.df[rows_with_data].reset_index(drop=True)
             
-            dropped_count = initial_count - len(self.df)
-            if dropped_count > 0:
-                print(f"[OK] Dropped {dropped_count} test cases with zero tests across all configurations")
+            dropped_rows = initial_count - len(self.df)
+            if dropped_rows > 0:
+                print(f"[OK] Dropped {dropped_rows} test cases with zero tests across all configurations")
                 print(f"[OK] Retained {len(self.df)} test cases with actual test data")
             else:
                 print(f"[OK] All test cases have at least one non-zero configuration")
+            
+            # Final summary
+            print(f"[OK] Final dataset: {len(self.df)} tests across {len(self.config_columns)} configurations")
         
     def extract_config_details(self, config_name: str) -> Dict[str, str]:
         """Extract hardware, OS, user, and deployment type from config name"""
