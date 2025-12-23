@@ -1,0 +1,18 @@
+# Minimal dependencies without Guardrails
+# Use this if you encounter Windows Long Path issues
+
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+
+# LangChain framework
+langchain>=0.1.0
+langchain-openai>=0.0.5
+openai>=1.0.0
+
+# Optional but recommended
+python-dotenv>=1.0.0
+
+# For better output formatting
+rich>=13.0.0
+
