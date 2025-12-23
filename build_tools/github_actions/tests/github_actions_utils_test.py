@@ -136,6 +136,33 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         self.assertEqual(external_repo, "")
         self.assertEqual(bucket, "therock-nightly-artifacts")
 
+    @unittest.skipUnless(
+        os.getenv("GITHUB_TOKEN"),
+        "GITHUB_TOKEN not set, skipping test that requires GitHub API access",
+    )
+    def test_gha_query_last_successful_workflow_run(self):
+        """Test querying for the last successful workflow run on a branch."""
+        # Test successful run found on main branch
+        result = gha_query_last_successful_workflow_run(
+            "ROCm/TheRock", "ci_nightly.yml", "main"
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["head_branch"], "main")
+        self.assertEqual(result["conclusion"], "success")
+        self.assertIn("id", result)
+
+        # Test no matching branch - should return None
+        result = gha_query_last_successful_workflow_run(
+            "ROCm/TheRock", "ci_nightly.yml", "nonexistent-branch-12345"
+        )
+        self.assertIsNone(result)
+
+        # Test non-existent workflow - should raise an exception
+        with self.assertRaises(Exception):
+            gha_query_last_successful_workflow_run(
+                "ROCm/TheRock", "nonexistent_workflow_12345.yml", "main"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
