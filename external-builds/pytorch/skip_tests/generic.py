@@ -11,6 +11,11 @@ skip_tests = {
         # ----------------
         # "binary_ufuncs": [ "test_cuda_tensor_pow_scalar_tensor_cuda" ]
         # ----------------
+        "binary_ufuncs": [
+            # NumPy 2.0 removed numpy.trapz function (issue #2674)
+            # This affects all platforms, Python versions, and PyTorch versions
+            "test_trapezoid_cuda",
+        ],
         "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
