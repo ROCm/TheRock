@@ -195,21 +195,6 @@ def update_submodules(repo_path, minimal_submodules=False):
         run_cmd("git submodule init", cwd=repo_path, check=False)
         run_cmd("git submodule sync --recursive", cwd=repo_path, check=False)
         run_cmd("git submodule update --init --recursive --force", cwd=repo_path)
-        
-        # Fix jthread submodule - the upstream josuttis/jthread repo doesn't have a
-        # CMakeLists.txt but the build system's verify_dependency_support() requires one.
-        # Create a stub CMakeLists.txt to satisfy the check.
-        jthread_submodule = repo_path / "deps" / "3rd_party" / "jthread" / "jthread"
-        jthread_cmake = jthread_submodule / "CMakeLists.txt"
-        if jthread_submodule.exists() and not jthread_cmake.exists():
-            log.info("Patching jthread submodule with stub CMakeLists.txt...")
-            jthread_cmake.write_text(
-                "# Stub CMakeLists.txt for jthread submodule\n"
-                "# The actual build is handled by the parent jthread/CMakeLists.txt wrapper\n"
-                "cmake_minimum_required(VERSION 3.16)\n"
-                "project(jthread_submodule)\n"
-            )
-            log.info("✓ jthread submodule patched")
     
     log.info("✓ Submodules updated")
 
@@ -226,6 +211,21 @@ def patch_rbt_cmake_issues(repo_path):
             content = content.replace("CONFIG QUIT)", "CONFIG QUIET)")
             cmdline_cmake.write_text(content)
             log.info("✓ CLI11 cmake typo fixed")
+    
+    # Fix jthread submodule - the upstream josuttis/jthread repo doesn't have a
+    # CMakeLists.txt but the build system's verify_dependency_support() requires one.
+    # Create a stub CMakeLists.txt to satisfy the check.
+    jthread_submodule = repo_path / "deps" / "3rd_party" / "jthread" / "jthread"
+    jthread_cmake = jthread_submodule / "CMakeLists.txt"
+    if jthread_submodule.exists() and not jthread_cmake.exists():
+        log.info("Patching jthread submodule with stub CMakeLists.txt...")
+        jthread_cmake.write_text(
+            "# Stub CMakeLists.txt for jthread submodule\n"
+            "# The actual build is handled by the parent jthread/CMakeLists.txt wrapper\n"
+            "cmake_minimum_required(VERSION 3.16)\n"
+            "project(jthread_submodule)\n"
+        )
+        log.info("✓ jthread submodule patched")
 
 
 def build_rbt(args):
