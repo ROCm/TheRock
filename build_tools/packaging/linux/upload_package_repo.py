@@ -118,7 +118,9 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
             old_repodata_dir = old_repo_dir / "repodata"
             old_repodata_dir.mkdir(parents=True, exist_ok=True)
 
-            print("Downloading existing repository metadata from S3...")
+            print(
+                f"Downloading existing repository metadata from S3: s3://{bucket}/{prefix}/x86_64/repodata/"
+            )
             repodata_files = []
             try:
                 paginator = s3.get_paginator("list_objects_v2")
@@ -134,8 +136,14 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                         s3.download_file(bucket, key, str(local_file))
                         repodata_files.append(filename)
                         print(f"  Downloaded: {filename}")
+                if repodata_files:
+                    print(
+                        f"✅ Found {len(repodata_files)} existing metadata files to merge"
+                    )
+                else:
+                    print("No existing metadata files found")
             except Exception as e:
-                print(f"Note: No existing repodata found (new repo?): {e}")
+                print(f"⚠️  No existing repodata found (new repo?): {e}")
 
             # Step 2: Generate repodata for NEW packages only (actually uploaded ones)
             rpm_packages = [p for p in uploaded_packages if p.endswith(".rpm")]
@@ -194,12 +202,16 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
             merged_repodata = merged_arch_dir / "repodata"
             if merged_repodata.exists():
                 print("Uploading merged repository metadata to S3...")
+                uploaded_metadata = []
                 for metadata_file in merged_repodata.iterdir():
                     if metadata_file.is_file():
                         s3_key = f"{prefix}/x86_64/repodata/{metadata_file.name}"
                         s3.upload_file(str(metadata_file), bucket, s3_key)
+                        uploaded_metadata.append(metadata_file.name)
                         print(f"  Uploaded: {metadata_file.name}")
-                print("✅ RPM repository metadata updated (merge complete)")
+                print(
+                    f"✅ RPM repository metadata updated: {len(uploaded_metadata)} files"
+                )
 
         elif pkg_type == "deb":
             # Efficient approach: Merge existing Packages file with new packages
@@ -211,16 +223,19 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
 
             # Step 1: Download existing Packages file from S3 (small file)
             existing_packages = dists_dir / "Packages.old"
+            packages_s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages"
             try:
-                print("Downloading existing Packages file from S3...")
-                s3.download_file(
-                    bucket,
-                    f"{prefix}/dists/stable/main/binary-amd64/Packages",
-                    str(existing_packages),
+                print(
+                    f"Downloading existing Packages file from S3: s3://{bucket}/{packages_s3_key}"
                 )
-                print("✅ Downloaded existing Packages file")
+                s3.download_file(bucket, packages_s3_key, str(existing_packages))
+                # Count existing packages
+                with open(existing_packages, "r") as f:
+                    content = f.read()
+                    pkg_count = content.count("\nPackage: ")
+                print(f"✅ Downloaded existing Packages file ({pkg_count} packages)")
             except Exception as e:
-                print(f"Note: No existing Packages file found (new repo?): {e}")
+                print(f"⚠️  No existing Packages file found (new repo?): {e}")
                 existing_packages = None
 
             # Step 2: Generate Packages entries for NEW packages only (actually uploaded ones)
@@ -298,6 +313,9 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                 old_packages = parse_packages_file(existing_packages)
                 new_packages_dict = parse_packages_file(new_packages)
 
+                print(f"  Old metadata: {len(old_packages)} packages")
+                print(f"  New metadata: {len(new_packages_dict)} packages")
+
                 # Merge: new packages override old ones with same filename
                 merged = old_packages.copy()
                 merged.update(new_packages_dict)  # New overwrites old
@@ -308,7 +326,7 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                         outfile.write(merged[filename])
                         outfile.write("\n")  # Blank line separator
 
-                print("✅ Merged Packages files")
+                print(f"✅ Merged Packages files: {len(merged)} total packages")
             else:  # First upload, no existing Packages file
                 print("First upload - using new Packages file")
                 shutil.copy2(new_packages, merged_packages)
@@ -320,17 +338,20 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
             packages_file = dists_dir / "Packages"
             packages_gz = dists_dir / "Packages.gz"
 
+            uploaded_count = 0
             if packages_file.exists():
                 s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages"
                 s3.upload_file(str(packages_file), bucket, s3_key)
-                print(f"  Uploaded: Packages")
+                print(f"  Uploaded: Packages to s3://{bucket}/{s3_key}")
+                uploaded_count += 1
 
             if packages_gz.exists():
                 s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages.gz"
                 s3.upload_file(str(packages_gz), bucket, s3_key)
-                print(f"  Uploaded: Packages.gz")
+                print(f"  Uploaded: Packages.gz to s3://{bucket}/{s3_key}")
+                uploaded_count += 1
 
-            print("✅ DEB repository metadata updated (merge complete)")
+            print(f"✅ DEB repository metadata updated: {uploaded_count} files")
 
 
 def generate_top_index_from_s3(s3, bucket, prefix):
@@ -650,6 +671,8 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
                 uploaded_packages.append(local)
 
     print(f"Uploaded: {uploaded}, Skipped: {skipped}")
+    if uploaded_packages:
+        print(f"Uploaded packages: {[Path(p).name for p in uploaded_packages]}")
 
     return s3, uploaded_packages  # Return S3 client and list of uploaded packages
 
