@@ -83,7 +83,7 @@ def generate_indexes_recursive(root):
         generate_index_html(d)
 
 
-def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, local_package_dir):
+def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_packages):
     """Regenerate repository metadata efficiently using merge approach.
 
     This uses mergerepo_c (RPM) or merges Packages files (DEB) to efficiently
@@ -94,7 +94,7 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, local_package
         bucket: S3 bucket name
         prefix: S3 prefix (e.g., 'rpm/20251222-12345')
         pkg_type: Package type ('rpm' or 'deb')
-        local_package_dir: Local directory with new packages
+        uploaded_packages: List of actually uploaded package file paths (avoids duplicates from deduplication)
     """
     import tempfile
 
@@ -137,21 +137,26 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, local_package
             except Exception as e:
                 print(f"Note: No existing repodata found (new repo?): {e}")
 
-            # Step 2: Generate repodata for NEW packages only (from local dir)
-            local_arch_dir = Path(local_package_dir) / "x86_64"
-            if local_arch_dir.exists() and list(local_arch_dir.glob("*.rpm")):
-                print("Generating metadata for new packages...")
-                # Copy new RPMs to temp dir
+            # Step 2: Generate repodata for NEW packages only (actually uploaded ones)
+            rpm_packages = [p for p in uploaded_packages if p.endswith(".rpm")]
+            if rpm_packages:
+                print(
+                    f"Generating metadata for {len(rpm_packages)} uploaded RPM packages..."
+                )
+                # Copy uploaded RPMs to temp dir
                 new_arch_dir = new_repo_dir / "x86_64"
                 new_arch_dir.mkdir(parents=True, exist_ok=True)
-                for rpm_file in local_arch_dir.glob("*.rpm"):
-                    shutil.copy2(rpm_file, new_arch_dir / rpm_file.name)
+                for rpm_file in rpm_packages:
+                    shutil.copy2(rpm_file, new_arch_dir / Path(rpm_file).name)
 
-                # Generate repodata for new packages
-                run_command("createrepo_c .", cwd=str(new_arch_dir))
-                print("✅ Generated metadata for new packages")
+                # Generate repodata for new packages with clean paths (no baseurl)
+                run_command(
+                    "createrepo_c --no-database --simple-md-filenames .",
+                    cwd=str(new_arch_dir),
+                )
+                print("✅ Generated metadata for uploaded packages")
             else:
-                print("No new RPM packages to process")
+                print("No new RPM packages uploaded (all deduplicated)")
                 return
 
             # Step 3: Merge repositories using mergerepo_c (no need to download all RPMs!)
@@ -161,8 +166,11 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, local_package
             if repodata_files:  # If we have existing metadata
                 print("Merging old and new repository metadata...")
                 # mergerepo_c merges repodata without needing actual RPM files!
+                # Use --no-database, --simple-md-filenames, and --omit-baseurl to ensure clean paths
                 run_command(
-                    f'mergerepo_c --repo "{old_repo_dir}" --repo "{new_repo_dir / "x86_64"}" --outputdir "{merged_arch_dir}"',
+                    f"mergerepo_c --no-database --simple-md-filenames --omit-baseurl "
+                    f'--repo "{old_repo_dir}" --repo "{new_repo_dir / "x86_64"}" '
+                    f'--outputdir "{merged_arch_dir}"',
                     cwd=str(temp_path),
                 )
                 print("✅ Merged repository metadata")
@@ -205,23 +213,25 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, local_package
                 print(f"Note: No existing Packages file found (new repo?): {e}")
                 existing_packages = None
 
-            # Step 2: Generate Packages entries for NEW packages only (from local dir)
-            local_pool_dir = Path(local_package_dir) / "pool" / "main"
-            if local_pool_dir.exists() and list(local_pool_dir.glob("*.deb")):
-                print("Generating Packages entries for new packages...")
-                # Copy new DEBs to temp dir
-                for deb_file in local_pool_dir.glob("*.deb"):
-                    shutil.copy2(deb_file, pool_dir / deb_file.name)
+            # Step 2: Generate Packages entries for NEW packages only (actually uploaded ones)
+            deb_packages = [p for p in uploaded_packages if p.endswith(".deb")]
+            if deb_packages:
+                print(
+                    f"Generating Packages entries for {len(deb_packages)} uploaded DEB packages..."
+                )
+                # Copy uploaded DEBs to temp dir
+                for deb_file in deb_packages:
+                    shutil.copy2(deb_file, pool_dir / Path(deb_file).name)
 
-                # Generate Packages entries for new packages
+                # Generate Packages entries for uploaded packages
                 new_packages = dists_dir / "Packages.new"
                 run_command(
                     f'dpkg-scanpackages -m pool/main /dev/null > "{new_packages}"',
                     cwd=str(temp_path),
                 )
-                print("✅ Generated Packages entries for new packages")
+                print("✅ Generated Packages entries for uploaded packages")
             else:
-                print("No new DEB packages to process")
+                print("No new DEB packages uploaded (all deduplicated)")
                 return
 
             # Step 3: Merge old and new Packages files
@@ -284,12 +294,14 @@ def generate_top_index_from_s3(s3, bucket, prefix):
         # Add subdirectories (CommonPrefixes returned by Delimiter)
         for cp in page.get("CommonPrefixes", []):
             folder = cp["Prefix"][len(prefix) + 1 :].rstrip("/")
-            rows.append(f'<tr><td><a href="{folder}/">{folder}/</a></td></tr>')
+            rows.append(
+                f'<tr><td><a href="{folder}/index.html">{folder}/</a></td></tr>'
+            )
 
         # Add files at this level only (no nested files)
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            if key.endswith("/"):
+            if key.endswith("/") or key.endswith("index.html"):
                 continue
             name = key[len(prefix) + 1 :]
             if "/" not in name:  # Only files at this level
@@ -382,8 +394,12 @@ def generate_index_from_s3(s3, bucket, prefix, max_depth=None):
         directories[""] = []
 
     # Generate index.html for each directory
+    # Sort by depth (deepest first), then alphabetically
+    # This ensures leaf directories are created before parent directories
     uploaded_indexes = 0
-    for dir_path, files in sorted(directories.items()):
+    for dir_path, files in sorted(
+        directories.items(), key=lambda x: (-x[0].count("/") if x[0] else 1, x[0])
+    ):
         # Check depth limit
         if max_depth is not None:
             # Calculate depth: empty string = 0, "a" = 0, "a/b" = 1, "a/b/c" = 2
@@ -397,18 +413,33 @@ def generate_index_from_s3(s3, bucket, prefix, max_depth=None):
         # Add subdirectories first
         subdirs = set()
         for other_dir in directories.keys():
-            if other_dir.startswith(dir_path + "/") and other_dir != dir_path:
-                # Get immediate subdirectory
-                remainder = other_dir[len(dir_path) :].lstrip("/")
-                if "/" in remainder:
-                    subdir = remainder.split("/")[0]
-                else:
-                    subdir = remainder
-                if subdir:
+            # Handle root directory (empty string) specially
+            if dir_path == "":
+                # Any other_dir is potentially a subdirectory of root
+                if other_dir:  # Not empty
+                    if "/" in other_dir:
+                        # Multi-level path: get first component
+                        subdir = other_dir.split("/")[0]
+                    else:
+                        # Single-level path: it's a direct child
+                        subdir = other_dir
                     subdirs.add(subdir)
+            else:
+                # Non-root: check if other_dir is under this dir_path
+                if other_dir.startswith(dir_path + "/") and other_dir != dir_path:
+                    # Get immediate subdirectory
+                    remainder = other_dir[len(dir_path) :].lstrip("/")
+                    if "/" in remainder:
+                        subdir = remainder.split("/")[0]
+                    else:
+                        subdir = remainder
+                    if subdir:
+                        subdirs.add(subdir)
 
         for subdir in sorted(subdirs):
-            rows.append(f'<tr><td><a href="{subdir}/">{subdir}/</a></td></tr>')
+            rows.append(
+                f'<tr><td><a href="{subdir}/index.html">{subdir}/</a></td></tr>'
+            )
 
         # Add files
         for filename in sorted(files):
@@ -515,9 +546,9 @@ def create_rpm_repo(package_dir):
         if f.endswith(".rpm"):
             shutil.move(os.path.join(package_dir, f), os.path.join(arch_dir, f))
 
-    # Generate initial repodata from local packages
+    # Generate initial repodata from local packages with clean paths (no baseurl)
     # This will be regenerated from S3 state after upload
-    run_command("createrepo_c .", cwd=arch_dir)
+    run_command("createrepo_c --no-database --simple-md-filenames .", cwd=arch_dir)
 
     # Index generation now happens from S3 state after upload
 
@@ -529,6 +560,7 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
 
     skipped = 0
     uploaded = 0
+    uploaded_packages = []  # Track actually uploaded package files
 
     for root, _, files in os.walk(source_dir):
         for fname in files:
@@ -552,9 +584,13 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
             s3.upload_file(local, bucket, key, ExtraArgs=extra)
             uploaded += 1
 
+            # Track uploaded packages for metadata generation
+            if fname.endswith(".deb") or fname.endswith(".rpm"):
+                uploaded_packages.append(local)
+
     print(f"Uploaded: {uploaded}, Skipped: {skipped}")
 
-    return s3  # Return S3 client for metadata regeneration
+    return s3, uploaded_packages  # Return S3 client and list of uploaded packages
 
 
 def main():
@@ -584,12 +620,15 @@ def main():
         create_rpm_repo(package_dir)
 
     # Upload packages and metadata to S3
-    s3_client = upload_to_s3(package_dir, args.s3_bucket, prefix, dedupe=dedupe)
+    s3_client, uploaded_packages = upload_to_s3(
+        package_dir, args.s3_bucket, prefix, dedupe=dedupe
+    )
 
     # Efficiently update repository metadata by merging with existing metadata
     # (avoids re-downloading all packages from S3)
+    # Only generates metadata for actually uploaded packages (avoids duplicates from deduplication)
     regenerate_repo_metadata_from_s3(
-        s3_client, args.s3_bucket, prefix, args.pkg_type, package_dir
+        s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages
     )
 
     # Generate index.html files from S3 state (recursive for specific upload)
