@@ -17,6 +17,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--run-github-repo RUN_GITHUB_REPO]
     [--aqlprofile | --no-aqlprofile]
     [--blas | --no-blas]
+    [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
     [--hipdnn | --no-hipdnn]
     [--miopen | --no-miopen]
@@ -190,6 +191,7 @@ def retrieve_artifacts_by_run_id(args):
         [
             args.aqlprofile,
             args.blas,
+            args.debug_tools,
             args.fft,
             args.hipdnn,
             args.miopen,
@@ -210,6 +212,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("aqlprofile")
         if args.blas:
             extra_artifacts.append("blas")
+        if args.debug_tools:
+            extra_artifacts.append("amd-dbgapi")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -373,6 +377,13 @@ def main(argv):
         "--blas",
         default=False,
         help="Include 'blas' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--debug-tools",
+        default=False,
+        help="Include ROCm debugging tools (amd-dbgapi, rocgdb and rocr-debug-agent) artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
