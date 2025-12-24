@@ -12,8 +12,8 @@ Usage:
   # Build with TheRock artifacts
   python build_tools/build_rbt_standalone.py --rocm-path ./build
 
-  # Build using system-installed dependencies (faster, no boost clone)
-  python build_tools/build_rbt_standalone.py --use-system-deps
+  # Build with minimal submodules (faster, skips full boost clone)
+  python build_tools/build_rbt_standalone.py --minimal-submodules
 
   # Clean build
   python build_tools/build_rbt_standalone.py --clean
@@ -22,16 +22,15 @@ Usage:
   python build_tools/build_rbt_standalone.py --debug
 
 Options:
-  --rocm-path PATH    Path to ROCm installation (default: $ROCM_PATH or /opt/rocm)
-  --install-path PATH Install location (default: same as rocm-path)
-  --use-system-deps   Use system-installed packages where possible instead of
-                      git submodules (skips boost clone, ~10x faster).
-                      Requires: nlohmann-json3-dev, libcli11-dev on Ubuntu/Debian
-  --clean             Clean build directory before building
-  --debug             Build debug version instead of release
-  --no-install        Skip installation step
-  --verbose           Show verbose CMake output
-  --help              Show this help message
+  --rocm-path PATH        Path to ROCm installation (default: $ROCM_PATH or /opt/rocm)
+  --install-path PATH     Install location (default: same as rocm-path)
+  --minimal-submodules    Use minimal submodule cloning (skips full boost clone,
+                          ~10x faster). Fully self-contained build.
+  --clean                 Clean build directory before building
+  --debug                 Build debug version instead of release
+  --no-install            Skip installation step
+  --verbose               Show verbose CMake output
+  --help                  Show this help message
 """
 
 import argparse
@@ -145,17 +144,17 @@ def patch_transferbench_cmake(repo_path, gpu_list):
         return False
 
 
-def update_submodules(repo_path, use_system_deps=False):
+def update_submodules(repo_path, minimal_submodules=False):
     """Update git submodules (required for TransferBench)
     
     Args:
         repo_path: Path to the rocm_bandwidth_test repository
-        use_system_deps: If True, only update essential submodules (TransferBench),
-                        skip 3rd party libs that can be installed via system packages
+        minimal_submodules: If True, only clone essential submodules with minimal
+                           boost components (skips full 180+ boost submodule tree)
     """
     log.info("Updating git submodules...")
     
-    if use_system_deps:
+    if minimal_submodules:
         # Only update essential submodules when using system deps
         # Skip: CLI11, json, jthread, Catch2 (use system packages or not needed)
         # Keep: fmt, spdlog (version requirements too strict for Ubuntu packages)
@@ -166,8 +165,10 @@ def update_submodules(repo_path, use_system_deps=False):
             "deps/3rd_party/spdlog",   # Required >= 1.15.0, Ubuntu has 1.9.2
             "deps/3rd_party/Catch2",   # Required >= 3.5.1, Ubuntu has 2.x
             "deps/3rd_party/jthread",  # For C++ < 20 compatibility (submodule includes wrapper)
+            "deps/3rd_party/CLI11",    # Small repo, clone for self-contained build
+            "deps/3rd_party/json",     # Small repo, clone for self-contained build
         ]
-        log.info("Using system dependencies - only updating essential submodules")
+        log.info("Using minimal submodule cloning - only essential components")
         for submodule in essential_submodules:
             # Initialize and update only this specific submodule
             run_cmd(f"git submodule init {submodule}", cwd=repo_path, check=False)
@@ -252,14 +253,13 @@ def build_rbt(args):
     log.info(f"Install Path: {install_dir}")
     log.info(f"Build Type:   {build_type}")
     log.info(f"Repository:   {repo_path}")
-    log.info(f"System Deps:  {'Yes' if args.use_system_deps else 'No (using submodules)'}")
+    log.info(f"Minimal Clone: {'Yes' if args.minimal_submodules else 'No (full recursive clone)'}")
     log.info("=" * 60)
     
-    if args.use_system_deps:
-        log.info("Using system dependencies (skipping boost, CLI11, json submodules).")
-        log.info("If build fails due to missing packages, install:")
-        log.info("  Ubuntu/Debian: sudo apt install nlohmann-json3-dev libcli11-dev")
-        log.info("  Fedora/RHEL:   sudo dnf install json-devel cli11-devel")
+    if args.minimal_submodules:
+        log.info("Using minimal submodule cloning (skips full boost clone).")
+        log.info("Cloning: TransferBench, fmt, spdlog, Catch2, CLI11, json, jthread")
+        log.info("Boost: Only 13 minimal components (vs 180+ in full clone)")
     
     # Verify ROCm installation
     hipcc = rocm_dir / "bin" / "hipcc"
@@ -278,7 +278,7 @@ def build_rbt(args):
         )
     
     # Update submodules
-    update_submodules(repo_path, use_system_deps=args.use_system_deps)
+    update_submodules(repo_path, minimal_submodules=args.minimal_submodules)
     
     # Fix known CMake issues in RBT repo
     patch_rbt_cmake_issues(repo_path)
@@ -368,28 +368,20 @@ def build_rbt(args):
         "-DAMD_APP_BUILD_TESTS=OFF",
     ]
     
-    # Use system-installed packages instead of git submodules
-    if args.use_system_deps:
-        log.info("Using system-installed dependencies (USE_LOCAL_* flags)")
-        # Note: RBT requires fmt >= 9.1.0 and spdlog >= 1.15.0, which are newer than
-        # what Ubuntu 22.04 provides. So we only use system packages for:
-        # - CLI11 (version compatible)
-        # - nlohmann_json (version compatible)
-        # - jthread (C++20 has std::jthread, not needed)
-        # - Catch2 (tests disabled)
-        # We still use submodules for:
-        # - fmt, spdlog (version requirements too strict)
-        # - boost (Ubuntu's boost lacks CMake CONFIG files, we clone minimal components)
+    # Use minimal submodule cloning instead of full recursive clone
+    if args.minimal_submodules:
+        log.info("Using minimal submodule cloning (skipping full boost clone)")
+        # Clone only essential submodules:
+        # - fmt, spdlog, Catch2, CLI11, json, jthread (small repos, quick to clone)
+        # - boost (only 13 minimal components instead of 180+)
+        # This avoids the multi-minute boost submodule recursion
+        # No external system package dependencies required!
         cmake_args.extend([
-            # These are safe to use from system packages
-            "-DUSE_LOCAL_NLOHMANN_JSON=ON", 
-            "-DUSE_LOCAL_CLI11=ON",
-            # jthread: C++20 has std::jthread built-in, no external lib needed
-            # Don't set USE_LOCAL_JTHREAD - let cmake auto-detect C++20 and skip it
-            # Use submodules for these (version/CMake compatibility issues)
-            "-DUSE_LOCAL_CATCH2=OFF",  # Ubuntu has 2.x, needs 3.5+
-            "-DUSE_LOCAL_BOOST=OFF",   # Ubuntu lacks CMake CONFIG files
+            # Use submodules for all (fully self-contained build)
+            "-DUSE_LOCAL_CATCH2=OFF",
+            "-DUSE_LOCAL_BOOST=OFF",
             "-DUSE_LOCAL_BOOST_STACKTRACE=OFF",
+            # Don't set USE_LOCAL_JTHREAD - let cmake auto-detect C++20 and skip it
         ])
     
     if use_toolchain:
@@ -457,7 +449,7 @@ def main():
 Examples:
   %(prog)s                              # Build with system ROCm
   %(prog)s --rocm-path ./build          # Build with TheRock artifacts
-  %(prog)s --use-system-deps            # Fast build using system packages
+  %(prog)s --minimal-submodules         # Fast build (minimal clone)
   %(prog)s --clean --debug              # Clean debug build
   %(prog)s --install-path /tmp/rbt      # Custom install location
 """
@@ -472,10 +464,11 @@ Examples:
         help="Installation path (default: same as rocm-path)"
     )
     parser.add_argument(
-        "--use-system-deps",
+        "--minimal-submodules",
         action="store_true",
-        help="Use system-installed packages where possible (skips boost clone, "
-             "~10x faster). Requires: nlohmann-json3-dev, libcli11-dev"
+        dest="minimal_submodules",
+        help="Use minimal submodule cloning (skips full boost clone, "
+             "~10x faster). Fully self-contained build."
     )
     parser.add_argument(
         "--clean",
