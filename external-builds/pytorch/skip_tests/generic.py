@@ -15,6 +15,12 @@ skip_tests = {
             # NumPy 2.0 removed numpy.trapz function (issue #2674)
             # This affects all platforms, Python versions, and PyTorch versions
             "test_trapezoid_cuda",
+            # Complex number pow operations have numerical accuracy issues (issue #2070)
+            # Affects all PyTorch versions (2.7, 2.8, 2.9, nightly)
+            "test_batch_vs_slicing___rpow___cuda_complex64",
+            "test_batch_vs_slicing__refs_pow_cuda_complex32",
+            "test_batch_vs_slicing__refs_pow_cuda_complex64",
+            "test_batch_vs_slicing_pow_cuda_complex64",
         ],
         "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
@@ -46,6 +52,9 @@ skip_tests = {
             #   * https://github.com/ROCm/pytorch/pull/2742
             #   * https://github.com/ROCm/pytorch/pull/2873
             "test_preferred_blas_library_settings",
+            # Numerical accuracy issue (issue #2070 and others)
+            # Failing across all PyTorch versions (2.7, 2.8, 2.9, 2.10, nightly)
+            "test_index_add_correctness",
             # ----------------
             # maybe failing
             # ----------------
@@ -63,6 +72,9 @@ skip_tests = {
             # 1 error generated when compiling for gfx942.
             # MIOpen Error: /therock/src/rocm-libraries/projects/miopen/src/hipoc/hipoc_program.cpp:299: Code object build failed. Source: MIOpenDropoutHIP.cpp
             "test_RNN_dropout_state",
+            # Same MIOpen issue as test_RNN_dropout_state (issue #2120)
+            # rocrand/rocrand_xorwow.h header not found during compilation
+            "test_cudnn_rnn_dropout_states_device",
             # AssertionError: "Input and parameter tensors are not at the same device" does not match "Expected all tensors
             # to be on the same device, but got weight is on cpu, different from other tensors on cuda:0 (when checking
             # argument in method wrapper_CUDA__miopen_rnn)"
