@@ -88,7 +88,7 @@ detailed instructions. That information is summarized here.
 
 ### Prerequisites and setup
 
-You will need a supported Python version (3.11+) on a system which we build the
+You will need a supported Python version (3.10+) on a system which we build the
 `rocm[libraries,devel]` packages for. See the
 [`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 and [Python Packaging](../../docs/packaging/python_packaging.md) documentation

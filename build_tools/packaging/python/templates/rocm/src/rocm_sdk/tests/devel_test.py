@@ -39,25 +39,22 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathBin(self):
-        output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--bin"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--bin"])
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected bin path {path} to exist")
 
     def testCLIPathCMake(self):
-        output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--cmake"],
-                capture=True,
-            )
-            .decode()
-            .strip()
-        )
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--cmake"])
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected cmake path {path} to exist")
         hip_file = path / "hip" / "hip-config.cmake"
@@ -66,17 +63,37 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathRoot(self):
-        output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected root path {path} to exist")
         bin_path = path / "bin"
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
+
+    def testCLIUsesDevelRootPath(self):
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
+        root_path_output = utils.exec(cmd, capture=True).decode().strip()
+        root_path = Path(root_path_output)
+
+        # CLI scripts by default run from _rocm_sdk_core.
+        # When the devel package is installed they should run from _rocm_sdk_devel.
+        rocmpath_output = (
+            utils.exec(["hipconfig", "--rocmpath"], capture=True).decode().strip()
+        )
+        rocmpath = Path(rocmpath_output)
+        self.assertEqual(
+            root_path,
+            rocmpath,
+            msg=f"Expected `hipconfig --rocmpath` to return {root_path}, not {rocmpath}",
+        )
 
     @unittest.skipIf(
         platform.system() == "Windows", "root LLVM symlink only exists on Linux"
@@ -84,25 +101,23 @@ class ROCmDevelTest(unittest.TestCase):
     def testRootLLVMSymlinkExists(self):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.
-        output = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
+        output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output) / "llvm" / "bin" / "clang++"
         self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
 
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
-        _ = (
-            utils.exec(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        # -P flag is only available in Python 3.11+
+        cmd = [sys.executable]
+        if sys.version_info >= (3, 11):
+            cmd.append("-P")
+        cmd.extend(["-m", "rocm_sdk", "path", "--root"])
+        _ = utils.exec(cmd, capture=True).decode().strip()
 
         # Ensure that the platform package exists now.
         mod_name = di.ALL_PACKAGES["devel"].get_py_package_name(
@@ -142,14 +157,14 @@ class ROCmDevelTest(unittest.TestCase):
                 # Internal rocprofiler-sdk libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
                 continue
-            if "libtest_linking_lib" in str(so_path):
-                # rocprim unit tests, not actual library files
-                continue
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
-                )
+                # -P flag is only available in Python 3.11+
+                cmd = [sys.executable]
+                if sys.version_info >= (3, 11):
+                    cmd.append("-P")
+                cmd.extend(["-c", command, str(so_path)])
+                subprocess.check_call(cmd)
