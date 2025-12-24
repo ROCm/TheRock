@@ -12,6 +12,9 @@ Usage:
   # Build with TheRock artifacts
   python build_tools/build_rbt_standalone.py --rocm-path ./build
 
+  # Build using system-installed dependencies (faster, no boost clone)
+  python build_tools/build_rbt_standalone.py --use-system-deps
+
   # Clean build
   python build_tools/build_rbt_standalone.py --clean
 
@@ -21,6 +24,9 @@ Usage:
 Options:
   --rocm-path PATH    Path to ROCm installation (default: $ROCM_PATH or /opt/rocm)
   --install-path PATH Install location (default: same as rocm-path)
+  --use-system-deps   Use system-installed packages where possible instead of
+                      git submodules (skips boost clone, ~10x faster).
+                      Requires: nlohmann-json3-dev, libcli11-dev on Ubuntu/Debian
   --clean             Clean build directory before building
   --debug             Build debug version instead of release
   --no-install        Skip installation step
@@ -139,16 +145,86 @@ def patch_transferbench_cmake(repo_path, gpu_list):
         return False
 
 
-def update_submodules(repo_path):
-    """Update git submodules (required for TransferBench)"""
+def update_submodules(repo_path, use_system_deps=False):
+    """Update git submodules (required for TransferBench)
+    
+    Args:
+        repo_path: Path to the rocm_bandwidth_test repository
+        use_system_deps: If True, only update essential submodules (TransferBench),
+                        skip 3rd party libs that can be installed via system packages
+    """
     log.info("Updating git submodules...")
     
-    # Initialize and sync submodules
-    run_cmd("git submodule init", cwd=repo_path, check=False)
-    run_cmd("git submodule sync --recursive", cwd=repo_path, check=False)
-    run_cmd("git submodule update --init --recursive --force", cwd=repo_path)
+    if use_system_deps:
+        # Only update essential submodules when using system deps
+        # Skip: CLI11, json, jthread, Catch2 (use system packages or not needed)
+        # Keep: fmt, spdlog (version requirements too strict for Ubuntu packages)
+        # Keep: boost (Ubuntu's boost doesn't have CMake CONFIG files)
+        essential_submodules = [
+            "deps/external/TransferBench",
+            "deps/3rd_party/fmt",      # Required >= 9.1.0, Ubuntu has 8.1.1
+            "deps/3rd_party/spdlog",   # Required >= 1.15.0, Ubuntu has 1.9.2
+            "deps/3rd_party/Catch2",   # Required >= 3.5.1, Ubuntu has 2.x
+            "deps/3rd_party/jthread",  # For C++ < 20 compatibility (submodule includes wrapper)
+        ]
+        log.info("Using system dependencies - only updating essential submodules")
+        for submodule in essential_submodules:
+            # Initialize and update only this specific submodule
+            run_cmd(f"git submodule init {submodule}", cwd=repo_path, check=False)
+            run_cmd(f"git submodule update --init --recursive --force {submodule}", 
+                   cwd=repo_path, check=False)
+        
+        # For boost, we need the submodule but Ubuntu's boost doesn't have CMake CONFIG
+        # files. Clone only the needed boost component submodules (not the full monorepo)
+        log.info("Initializing boost submodule (minimal components for stacktrace)...")
+        run_cmd("git submodule init deps/3rd_party/boost", cwd=repo_path, check=False)
+        # First checkout the boost root (non-recursive to avoid 180+ submodule downloads)
+        run_cmd("git submodule update --init deps/3rd_party/boost", cwd=repo_path, check=False)
+        # Now init only the components needed for stacktrace
+        boost_components = [
+            "config", "core", "assert", "static_assert", "type_traits", 
+            "predef", "array", "container_hash", "describe", "throw_exception",
+            "mp11", "winapi", "stacktrace"
+        ]
+        boost_base = repo_path / "deps" / "3rd_party" / "boost"
+        for comp in boost_components:
+            run_cmd(f"git submodule update --init libs/{comp}", cwd=boost_base, check=False)
+    else:
+        # Initialize and update all submodules
+        run_cmd("git submodule init", cwd=repo_path, check=False)
+        run_cmd("git submodule sync --recursive", cwd=repo_path, check=False)
+        run_cmd("git submodule update --init --recursive --force", cwd=repo_path)
+        
+        # Fix jthread submodule - the upstream josuttis/jthread repo doesn't have a
+        # CMakeLists.txt but the build system's verify_dependency_support() requires one.
+        # Create a stub CMakeLists.txt to satisfy the check.
+        jthread_submodule = repo_path / "deps" / "3rd_party" / "jthread" / "jthread"
+        jthread_cmake = jthread_submodule / "CMakeLists.txt"
+        if jthread_submodule.exists() and not jthread_cmake.exists():
+            log.info("Patching jthread submodule with stub CMakeLists.txt...")
+            jthread_cmake.write_text(
+                "# Stub CMakeLists.txt for jthread submodule\n"
+                "# The actual build is handled by the parent jthread/CMakeLists.txt wrapper\n"
+                "cmake_minimum_required(VERSION 3.16)\n"
+                "project(jthread_submodule)\n"
+            )
+            log.info("✓ jthread submodule patched")
     
     log.info("✓ Submodules updated")
+
+
+def patch_rbt_cmake_issues(repo_path):
+    """Fix known issues in RBT CMake files"""
+    
+    # Fix typo in main/cmdline/CMakeLists.txt: "QUIT" should be "QUIET"
+    cmdline_cmake = repo_path / "main" / "cmdline" / "CMakeLists.txt"
+    if cmdline_cmake.exists():
+        content = cmdline_cmake.read_text()
+        if "CONFIG QUIT)" in content:
+            log.info("Patching CLI11 cmake typo (QUIT -> QUIET)...")
+            content = content.replace("CONFIG QUIT)", "CONFIG QUIET)")
+            cmdline_cmake.write_text(content)
+            log.info("✓ CLI11 cmake typo fixed")
 
 
 def build_rbt(args):
@@ -176,7 +252,14 @@ def build_rbt(args):
     log.info(f"Install Path: {install_dir}")
     log.info(f"Build Type:   {build_type}")
     log.info(f"Repository:   {repo_path}")
+    log.info(f"System Deps:  {'Yes' if args.use_system_deps else 'No (using submodules)'}")
     log.info("=" * 60)
+    
+    if args.use_system_deps:
+        log.info("Using system dependencies (skipping boost, CLI11, json submodules).")
+        log.info("If build fails due to missing packages, install:")
+        log.info("  Ubuntu/Debian: sudo apt install nlohmann-json3-dev libcli11-dev")
+        log.info("  Fedora/RHEL:   sudo dnf install json-devel cli11-devel")
     
     # Verify ROCm installation
     hipcc = rocm_dir / "bin" / "hipcc"
@@ -195,7 +278,10 @@ def build_rbt(args):
         )
     
     # Update submodules
-    update_submodules(repo_path)
+    update_submodules(repo_path, use_system_deps=args.use_system_deps)
+    
+    # Fix known CMake issues in RBT repo
+    patch_rbt_cmake_issues(repo_path)
     
     # Detect GPUs and patch TransferBench
     if not args.skip_gpu_detect:
@@ -212,11 +298,50 @@ def build_rbt(args):
     
     build_dir.mkdir(parents=True, exist_ok=True)
     
-    # Set environment
-    env = {
-        "HIP_PLATFORM": "amd",
-        "ROCM_PATH": str(rocm_dir),
-    }
+    # Set environment variables globally so they're inherited by all child processes
+    # (including TransferBench's build_libamd_tb.sh script)
+    os.environ["HIP_PLATFORM"] = "amd"
+    os.environ["ROCM_PATH"] = str(rocm_dir)
+    os.environ["HIP_PATH"] = str(rocm_dir)
+    os.environ["HIP_CLANG_PATH"] = str(rocm_dir / "lib" / "llvm" / "bin")
+    
+    # For TheRock layout, device libraries are under lib/llvm/amdgcn/bitcode
+    # instead of the standard amdgcn/bitcode
+    device_lib_path = rocm_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
+    if device_lib_path.exists():
+        os.environ["HIP_DEVICE_LIB_PATH"] = str(device_lib_path)
+        log.info(f"Using TheRock device library path: {device_lib_path}")
+    else:
+        # Try standard ROCm layout
+        std_device_lib = rocm_dir / "amdgcn" / "bitcode"
+        if std_device_lib.exists():
+            os.environ["HIP_DEVICE_LIB_PATH"] = str(std_device_lib)
+    
+    # Add ROCm bin to PATH so hipcc can find clang
+    rocm_bin = str(rocm_dir / "bin")
+    llvm_bin = str(rocm_dir / "lib" / "llvm" / "bin")
+    current_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{rocm_bin}:{llvm_bin}:{current_path}"
+    
+    # Set library paths
+    lib_paths = [
+        str(rocm_dir / "lib"),
+        str(rocm_dir / "lib64"),
+        str(rocm_dir / "lib" / "llvm" / "lib"),
+    ]
+    current_ld = os.environ.get("LD_LIBRARY_PATH", "")
+    if current_ld:
+        lib_paths.append(current_ld)
+    os.environ["LD_LIBRARY_PATH"] = ":".join(lib_paths)
+    
+    log.info(f"Environment:")
+    log.info(f"  ROCM_PATH={os.environ['ROCM_PATH']}")
+    log.info(f"  HIP_PATH={os.environ['HIP_PATH']}")
+    log.info(f"  HIP_CLANG_PATH={os.environ['HIP_CLANG_PATH']}")
+    if "HIP_DEVICE_LIB_PATH" in os.environ:
+        log.info(f"  HIP_DEVICE_LIB_PATH={os.environ['HIP_DEVICE_LIB_PATH']}")
+    
+    env = None  # Use global environment
     
     # Check for toolchain file
     toolchain_file = repo_path / "cmake" / "rocm_clang_toolchain.cmake"
@@ -239,7 +364,33 @@ def build_rbt(args):
         # Linker flags for proper RPATH handling
         f'-DCMAKE_EXE_LINKER_FLAGS_INIT="-Wl,--enable-new-dtags,--build-id=sha1"',
         f'-DCMAKE_SHARED_LINKER_FLAGS_INIT="-Wl,--enable-new-dtags,--build-id=sha1"',
+        # Disable tests (Catch2 submodule not needed)
+        "-DAMD_APP_BUILD_TESTS=OFF",
     ]
+    
+    # Use system-installed packages instead of git submodules
+    if args.use_system_deps:
+        log.info("Using system-installed dependencies (USE_LOCAL_* flags)")
+        # Note: RBT requires fmt >= 9.1.0 and spdlog >= 1.15.0, which are newer than
+        # what Ubuntu 22.04 provides. So we only use system packages for:
+        # - CLI11 (version compatible)
+        # - nlohmann_json (version compatible)
+        # - jthread (C++20 has std::jthread, not needed)
+        # - Catch2 (tests disabled)
+        # We still use submodules for:
+        # - fmt, spdlog (version requirements too strict)
+        # - boost (Ubuntu's boost lacks CMake CONFIG files, we clone minimal components)
+        cmake_args.extend([
+            # These are safe to use from system packages
+            "-DUSE_LOCAL_NLOHMANN_JSON=ON", 
+            "-DUSE_LOCAL_CLI11=ON",
+            # jthread: C++20 has std::jthread built-in, no external lib needed
+            # Don't set USE_LOCAL_JTHREAD - let cmake auto-detect C++20 and skip it
+            # Use submodules for these (version/CMake compatibility issues)
+            "-DUSE_LOCAL_CATCH2=OFF",  # Ubuntu has 2.x, needs 3.5+
+            "-DUSE_LOCAL_BOOST=OFF",   # Ubuntu lacks CMake CONFIG files
+            "-DUSE_LOCAL_BOOST_STACKTRACE=OFF",
+        ])
     
     if use_toolchain:
         log.info(f"Using toolchain file: {toolchain_file}")
@@ -306,6 +457,7 @@ def main():
 Examples:
   %(prog)s                              # Build with system ROCm
   %(prog)s --rocm-path ./build          # Build with TheRock artifacts
+  %(prog)s --use-system-deps            # Fast build using system packages
   %(prog)s --clean --debug              # Clean debug build
   %(prog)s --install-path /tmp/rbt      # Custom install location
 """
@@ -318,6 +470,12 @@ Examples:
     parser.add_argument(
         "--install-path",
         help="Installation path (default: same as rocm-path)"
+    )
+    parser.add_argument(
+        "--use-system-deps",
+        action="store_true",
+        help="Use system-installed packages where possible (skips boost clone, "
+             "~10x faster). Requires: nlohmann-json3-dev, libcli11-dev"
     )
     parser.add_argument(
         "--clean",
