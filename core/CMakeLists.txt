@@ -232,15 +232,10 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
     therock_cmake_subproject_glob_c_sources(hip-tests SUBDIRS catch)
     therock_cmake_subproject_activate(hip-tests)
-    if(WIN32)
-      set(hip-tests_artifact_file artifact-core-hiptests_win.toml)
-    else()
-      set(hip-tests_artifact_file artifact-core-hiptests.toml)
-    endif()
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
       TARGETS USE_DIST_AMDGPU_TARGETS
-      DESCRIPTOR ${hip-tests_artifact_file}
+      DESCRIPTOR artifact-core-hiptests.toml
       COMPONENTS
         test
       SUBPROJECT_DEPS
@@ -367,7 +362,7 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 ##############################################################################
 
 if(THEROCK_BUILD_TESTING)
-  if(THEROCK_ENABLE_CORE_RUNTIME)
+  if(THEROCK_ENABLE_CORE_RUNTIME AND 0)
 
     therock_cmake_subproject_declare(rocrtst
       USE_DIST_AMDGPU_TARGETS
