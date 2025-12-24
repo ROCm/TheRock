@@ -382,8 +382,12 @@ def generate_index_from_s3(s3, bucket, prefix, max_depth=None):
         directories[""] = []
 
     # Generate index.html for each directory
+    # Sort by depth (deepest first), then alphabetically
+    # This ensures leaf directories are created before parent directories
     uploaded_indexes = 0
-    for dir_path, files in sorted(directories.items()):
+    for dir_path, files in sorted(
+        directories.items(), key=lambda x: (-x[0].count("/") if x[0] else 1, x[0])
+    ):
         # Check depth limit
         if max_depth is not None:
             # Calculate depth: empty string = 0, "a" = 0, "a/b" = 1, "a/b/c" = 2
