@@ -284,7 +284,7 @@ def generate_top_index_from_s3(s3, bucket, prefix):
         # Add subdirectories (CommonPrefixes returned by Delimiter)
         for cp in page.get("CommonPrefixes", []):
             folder = cp["Prefix"][len(prefix) + 1 :].rstrip("/")
-            rows.append(f'<tr><td><a href="{folder}/">{folder}/</a></td></tr>')
+            rows.append(f'<tr><td><a href="{folder}/index.html">{folder}/</a></td></tr>')
 
         # Add files at this level only (no nested files)
         for obj in page.get("Contents", []):
@@ -425,7 +425,7 @@ def generate_index_from_s3(s3, bucket, prefix, max_depth=None):
                         subdirs.add(subdir)
 
         for subdir in sorted(subdirs):
-            rows.append(f'<tr><td><a href="{subdir}/">{subdir}/</a></td></tr>')
+            rows.append(f'<tr><td><a href="{subdir}/index.html">{subdir}/</a></td></tr>')
 
         # Add files
         for filename in sorted(files):
