@@ -83,7 +83,9 @@ def generate_indexes_recursive(root):
         generate_index_html(d)
 
 
-def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_packages):
+def regenerate_repo_metadata_from_s3(
+    s3, bucket, prefix, pkg_type, uploaded_packages, job_type="nightly"
+):
     """Regenerate repository metadata efficiently using merge approach.
 
     This uses mergerepo_c (RPM) or merges Packages files (DEB) to efficiently
@@ -95,6 +97,7 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
         prefix: S3 prefix (e.g., 'rpm/20251222-12345')
         pkg_type: Package type ('rpm' or 'deb')
         uploaded_packages: List of actually uploaded package file paths (avoids duplicates from deduplication)
+        job_type: Job type for Release file metadata (default: 'nightly')
     """
     import tempfile
 
@@ -259,9 +262,28 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                 print("No new DEB packages uploaded (all deduplicated)")
                 # Still need to ensure old metadata is preserved!
                 if existing_packages and existing_packages.exists():
+                    import datetime
+
                     print("Preserving existing Packages file...")
                     shutil.copy2(existing_packages, dists_dir / "Packages")
                     run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
+
+                    # Generate Release file
+                    release_dir = temp_path / "dists" / "stable"
+                    release_dir.mkdir(parents=True, exist_ok=True)
+                    release_file = release_dir / "Release"
+
+                    with open(release_file, "w") as f:
+                        f.write(
+                            f"""Origin: AMD ROCm
+Label: ROCm {job_type} Packages
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
+"""
+                        )
 
                     packages_file = dists_dir / "Packages"
                     packages_gz = dists_dir / "Packages.gz"
@@ -275,6 +297,11 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                         s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages.gz"
                         s3.upload_file(str(packages_gz), bucket, s3_key)
                         print(f"  Uploaded: Packages.gz")
+
+                    if release_file.exists():
+                        s3_key = f"{prefix}/dists/stable/Release"
+                        s3.upload_file(str(release_file), bucket, s3_key)
+                        print(f"  Uploaded: Release")
                 return
 
             # Step 3: Merge old and new Packages files (with deduplication by filename)
@@ -334,7 +361,26 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
             # Compress Packages file
             run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
 
-            # Step 4: Upload merged Packages files to S3
+            # Step 4: Generate Release file
+            import datetime
+
+            release_dir = temp_path / "dists" / "stable"
+            release_dir.mkdir(parents=True, exist_ok=True)
+            release_file = release_dir / "Release"
+
+            with open(release_file, "w") as f:
+                f.write(
+                    f"""Origin: AMD ROCm
+Label: ROCm {job_type} Packages
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
+"""
+                )
+
+            # Step 5: Upload merged Packages files and Release to S3
             packages_file = dists_dir / "Packages"
             packages_gz = dists_dir / "Packages.gz"
 
@@ -349,6 +395,12 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                 s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages.gz"
                 s3.upload_file(str(packages_gz), bucket, s3_key)
                 print(f"  Uploaded: Packages.gz to s3://{bucket}/{s3_key}")
+                uploaded_count += 1
+
+            if release_file.exists():
+                s3_key = f"{prefix}/dists/stable/Release"
+                s3.upload_file(str(release_file), bucket, s3_key)
+                print(f"  Uploaded: Release to s3://{bucket}/{s3_key}")
                 uploaded_count += 1
 
             print(f"✅ DEB repository metadata updated: {uploaded_count} files")
@@ -654,6 +706,18 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
             rel = os.path.relpath(local, source_dir)
             key = os.path.join(prefix, rel).replace("\\", "/")
 
+            # Skip metadata files - they'll be regenerated/merged properly later
+            # For DEB: skip Packages, Packages.gz, Release in dists/
+            # For RPM: skip repodata/* files
+            if "/repodata/" in key or key.endswith("/repodata"):
+                print(f"Skipping metadata file (will regenerate): {fname}")
+                continue
+            if "/dists/" in key and (
+                fname in ["Packages", "Packages.gz", "Release", "InRelease"]
+            ):
+                print(f"Skipping metadata file (will regenerate): {fname}")
+                continue
+
             if dedupe and (fname.endswith(".deb") or fname.endswith(".rpm")):
                 if s3_object_exists(s3, bucket, key):
                     print(f"Skipping existing package: {fname}")
@@ -712,7 +776,7 @@ def main():
     # (avoids re-downloading all packages from S3)
     # Only generates metadata for actually uploaded packages (avoids duplicates from deduplication)
     regenerate_repo_metadata_from_s3(
-        s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages
+        s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages, args.job
     )
 
     # Generate index.html files from S3 state (recursive for specific upload)
