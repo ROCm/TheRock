@@ -157,6 +157,16 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                 print("✅ Generated metadata for uploaded packages")
             else:
                 print("No new RPM packages uploaded (all deduplicated)")
+                # Still need to ensure old metadata is preserved!
+                if repodata_files:
+                    print("Preserving existing repodata...")
+                    # Just re-upload the existing repodata we downloaded
+                    for metadata_file in old_repodata_dir.iterdir():
+                        if metadata_file.is_file():
+                            s3_key = f"{prefix}/x86_64/repodata/{metadata_file.name}"
+                            s3.upload_file(str(metadata_file), bucket, s3_key)
+                            print(f"  Uploaded: {metadata_file.name}")
+                    print("✅ RPM repository metadata preserved")
                 return
 
             # Step 3: Merge repositories using mergerepo_c (no need to download all RPMs!)
@@ -232,21 +242,72 @@ def regenerate_repo_metadata_from_s3(s3, bucket, prefix, pkg_type, uploaded_pack
                 print("✅ Generated Packages entries for uploaded packages")
             else:
                 print("No new DEB packages uploaded (all deduplicated)")
+                # Still need to ensure old metadata is preserved!
+                if existing_packages and existing_packages.exists():
+                    print("Preserving existing Packages file...")
+                    shutil.copy2(existing_packages, dists_dir / "Packages")
+                    run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
+
+                    packages_file = dists_dir / "Packages"
+                    packages_gz = dists_dir / "Packages.gz"
+
+                    if packages_file.exists():
+                        s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages"
+                        s3.upload_file(str(packages_file), bucket, s3_key)
+                        print(f"  Uploaded: Packages")
+
+                    if packages_gz.exists():
+                        s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages.gz"
+                        s3.upload_file(str(packages_gz), bucket, s3_key)
+                        print(f"  Uploaded: Packages.gz")
                 return
 
-            # Step 3: Merge old and new Packages files
+            # Step 3: Merge old and new Packages files (with deduplication by filename)
             merged_packages = dists_dir / "Packages"
 
             if existing_packages and existing_packages.exists():
                 print("Merging old and new Packages files...")
-                # Merge Packages files (no need to download all DEBs!)
+
+                def parse_packages_file(filepath):
+                    """Parse Packages file into dict keyed by Filename"""
+                    packages = {}
+                    with open(filepath, "r") as f:
+                        current_entry = []
+                        current_filename = None
+
+                        for line in f:
+                            if line.strip() == "":  # Blank line = end of entry
+                                if current_entry and current_filename:
+                                    packages[current_filename] = (
+                                        "\n".join(current_entry) + "\n"
+                                    )
+                                current_entry = []
+                                current_filename = None
+                            else:
+                                current_entry.append(line.rstrip())
+                                if line.startswith("Filename:"):
+                                    current_filename = line.split(":", 1)[1].strip()
+
+                        # Handle last entry (no trailing blank line)
+                        if current_entry and current_filename:
+                            packages[current_filename] = "\n".join(current_entry) + "\n"
+
+                    return packages
+
+                # Parse both files
+                old_packages = parse_packages_file(existing_packages)
+                new_packages_dict = parse_packages_file(new_packages)
+
+                # Merge: new packages override old ones with same filename
+                merged = old_packages.copy()
+                merged.update(new_packages_dict)  # New overwrites old
+
+                # Write merged Packages file
                 with open(merged_packages, "w") as outfile:
-                    # Add existing packages
-                    with open(existing_packages, "r") as infile:
-                        outfile.write(infile.read())
-                    # Add new packages
-                    with open(new_packages, "r") as infile:
-                        outfile.write(infile.read())
+                    for filename in sorted(merged.keys()):
+                        outfile.write(merged[filename])
+                        outfile.write("\n")  # Blank line separator
+
                 print("✅ Merged Packages files")
             else:  # First upload, no existing Packages file
                 print("First upload - using new Packages file")
