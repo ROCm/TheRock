@@ -13,10 +13,14 @@ skip_tests = {
         # ----------------
         "binary_ufuncs": [
             # NumPy 2.0 removed numpy.trapz function (issue #2674)
-            # This affects all platforms, Python versions, and PyTorch versions
+            # Upstream fix: PyTorch PR #169695 (already merged to main)
+            # TODO: Remove when fix is available in all supported PyTorch versions
             "test_trapezoid_cuda",
+            
             # Complex number pow operations have numerical accuracy issues (issue #2070)
-            # Affects all PyTorch versions (2.7, 2.8, 2.9, nightly)
+            # Root cause: Suspected LLVM/compiler issue with thrust::pow
+            # Affects all PyTorch versions (2.7, 2.8, 2.9, 2.10, nightly)
+            # Status: Under investigation by AMD, no upstream PyTorch issue yet
             "test_batch_vs_slicing___rpow___cuda_complex64",
             "test_batch_vs_slicing__refs_pow_cuda_complex32",
             "test_batch_vs_slicing__refs_pow_cuda_complex64",
@@ -52,8 +56,10 @@ skip_tests = {
             #   * https://github.com/ROCm/pytorch/pull/2742
             #   * https://github.com/ROCm/pytorch/pull/2873
             "test_preferred_blas_library_settings",
+            
             # Numerical accuracy issue (issue #2070 and others)
-            # Failing across all PyTorch versions (2.7, 2.8, 2.9, 2.10, nightly)
+            # Already skipped in version-specific files: 2.7, 2.8, 2.9, 2.10
+            # TODO: Check if upstream PyTorch issue exists for this specific test
             "test_index_add_correctness",
             # ----------------
             # maybe failing
@@ -63,6 +69,7 @@ skip_tests = {
             # ----------------
         ],
         "nn": [
+            # MIOpen JIT compilation failure (issue #2120)
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
             # MIOpen(HIP): Error [BuildHip] HIPRTC status = HIPRTC_ERROR_COMPILATION (6), source file: MIOpenDropoutHIP.cpp
             # MIOpen(HIP): Warning [BuildHip] In file included from /tmp/comgr-01c423/input/MIOpenDropoutHIP.cpp:32:
@@ -72,8 +79,10 @@ skip_tests = {
             # 1 error generated when compiling for gfx942.
             # MIOpen Error: /therock/src/rocm-libraries/projects/miopen/src/hipoc/hipoc_program.cpp:299: Code object build failed. Source: MIOpenDropoutHIP.cpp
             "test_RNN_dropout_state",
-            # Same MIOpen issue as test_RNN_dropout_state (issue #2120)
+            # MIOpen JIT compilation failure (issue #2120)
             # rocrand/rocrand_xorwow.h header not found during compilation
+            # Root cause: MIOpen infrastructure issue, not PyTorch
+            # Fix needed: MIOpen JIT needs to properly include rocrand headers
             "test_cudnn_rnn_dropout_states_device",
             # AssertionError: "Input and parameter tensors are not at the same device" does not match "Expected all tensors
             # to be on the same device, but got weight is on cpu, different from other tensors on cuda:0 (when checking
@@ -168,11 +177,12 @@ skip_tests = {
     },
     # Special notes for Windows:
     #   * Some tests hang and *must* be skipped for testing to complete.
-    #     That is likely related to processes not terminating on their own:
-    #     https://github.com/ROCm/TheRock/issues/999. Note that even if
-    #     _test cases_ themselves terminate, the parent process still
-    #     hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
-    #     force termination.
+    #     Related to processes not terminating on their own:
+    #     - TheRock issue #999
+    #     - Upstream PyTorch issue pytorch/pytorch#160759
+    #     Note that even if test cases themselves terminate, the parent
+    #     process still hangs. In run_pytorch_tests.py we exit with
+    #     `os.kill()` to force termination.
     #   * Linux has substantial testing on datacenter GPUs while Windows support
     #     is newer and skews towards consumer GPUs with lower specs. We disable
     #     some tests that are resource intensive or otherwise degrade CI
