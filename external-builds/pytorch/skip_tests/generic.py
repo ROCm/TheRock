@@ -16,7 +16,6 @@ skip_tests = {
             # Upstream fix: PyTorch PR #169695 (already merged to main)
             # TODO: Remove when fix is available in all supported PyTorch versions
             "test_trapezoid_cuda",
-            
             # Complex number pow operations have numerical accuracy issues (issue #2070)
             # Root cause: Suspected LLVM/compiler issue with thrust::pow
             # Affects all PyTorch versions (2.7, 2.8, 2.9, 2.10, nightly)
@@ -56,7 +55,6 @@ skip_tests = {
             #   * https://github.com/ROCm/pytorch/pull/2742
             #   * https://github.com/ROCm/pytorch/pull/2873
             "test_preferred_blas_library_settings",
-            
             # Numerical accuracy issue (issue #2070 and others)
             # Already skipped in version-specific files: 2.7, 2.8, 2.9, 2.10
             # TODO: Check if upstream PyTorch issue exists for this specific test
