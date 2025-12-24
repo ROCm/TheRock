@@ -289,7 +289,7 @@ def generate_top_index_from_s3(s3, bucket, prefix):
         # Add files at this level only (no nested files)
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            if key.endswith("/"):
+            if key.endswith("/") or key.endswith("index.html"):
                 continue
             name = key[len(prefix) + 1 :]
             if "/" not in name:  # Only files at this level
