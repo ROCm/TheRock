@@ -397,15 +397,28 @@ def generate_index_from_s3(s3, bucket, prefix, max_depth=None):
         # Add subdirectories first
         subdirs = set()
         for other_dir in directories.keys():
-            if other_dir.startswith(dir_path + "/") and other_dir != dir_path:
-                # Get immediate subdirectory
-                remainder = other_dir[len(dir_path) :].lstrip("/")
-                if "/" in remainder:
-                    subdir = remainder.split("/")[0]
-                else:
-                    subdir = remainder
-                if subdir:
+            # Handle root directory (empty string) specially
+            if dir_path == "":
+                # Any other_dir is potentially a subdirectory of root
+                if other_dir:  # Not empty
+                    if "/" in other_dir:
+                        # Multi-level path: get first component
+                        subdir = other_dir.split("/")[0]
+                    else:
+                        # Single-level path: it's a direct child
+                        subdir = other_dir
                     subdirs.add(subdir)
+            else:
+                # Non-root: check if other_dir is under this dir_path
+                if other_dir.startswith(dir_path + "/") and other_dir != dir_path:
+                    # Get immediate subdirectory
+                    remainder = other_dir[len(dir_path) :].lstrip("/")
+                    if "/" in remainder:
+                        subdir = remainder.split("/")[0]
+                    else:
+                        subdir = remainder
+                    if subdir:
+                        subdirs.add(subdir)
 
         for subdir in sorted(subdirs):
             rows.append(f'<tr><td><a href="{subdir}/">{subdir}/</a></td></tr>')
