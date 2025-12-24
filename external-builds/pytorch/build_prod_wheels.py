@@ -863,7 +863,7 @@ def do_build_pytorch_audio(
             "BUILD_SOX": "0",
         }
     )
-    
+
     # Windows-specific settings for PyTorch Audio
     if is_windows:
         env.update(
