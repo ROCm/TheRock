@@ -47,6 +47,7 @@ therock_cmake_subproject_declare(therock-grpc
     "-DCMAKE_INSTALL_RPATH=\\$ORIGIN:\\$ORIGIN/../lib"
     -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON
     -DCMAKE_SKIP_BUILD_RPATH=OFF
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
   RUNTIME_DEPS
     therock-zlib
