@@ -863,6 +863,14 @@ def do_build_pytorch_audio(
             "BUILD_SOX": "0",
         }
     )
+    
+    # Windows-specific settings for PyTorch Audio
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
 
     remove_dir_if_exists(pytorch_audio_dir / "dist")
     if args.clean:
