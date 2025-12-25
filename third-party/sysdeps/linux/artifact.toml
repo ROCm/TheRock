@@ -43,6 +43,12 @@ include = [
 [components.dev."third-party/sysdeps/linux/liblzma/build/stage"]
 [components.lib."third-party/sysdeps/linux/liblzma/build/stage"]
 
+# MPFR
+# Required by ROCgdb.
+[components.dev."third-party/sysdeps/linux/mpfr/build/stage"]
+[components.doc."third-party/sysdeps/linux/mpfr/build/stage"]
+[components.lib."third-party/sysdeps/linux/mpfr/build/stage"]
+
 # numactl
 [components.dev."third-party/sysdeps/linux/numactl/build/stage"]
 [components.lib."third-party/sysdeps/linux/numactl/build/stage"]
