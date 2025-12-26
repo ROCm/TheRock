@@ -256,8 +256,13 @@ class RASTestExecutor:
         logger.info(f"PASSED:  {len(self.passed_tests)}")
         logger.info(f"FAILED:  {len(self.failed_tests)}")
         logger.info(f"SKIPPED: {len(self.skipped_tests)}")
+        logger.info("-" * 60)
+        if self.passed_tests:
+            logger.info(f"Passed:  {', '.join(sorted(self.passed_tests))}")
         if self.failed_tests:
-            logger.error(f"Failed: {', '.join(self.failed_tests)}")
+            logger.error(f"Failed:  {', '.join(sorted(self.failed_tests))}")
+        if self.skipped_tests:
+            logger.info(f"Skipped: {', '.join(sorted(self.skipped_tests))}")
         return len(self.failed_tests) == 0
 
     def execute(self):
