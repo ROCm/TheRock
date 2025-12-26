@@ -60,15 +60,22 @@ RAS_TESTS = {
 class RASTestExecutor:
     """RAS Test Executor - runs RAS validation tests on AMD GPUs."""
     
-    def __init__(self, ras_package_url=None, devices=None, parallel=True):
+    def __init__(self, ras_package_url=None, devices=None, parallel=True, rocm_path=None):
         self.ras_package_url = ras_package_url or RAS_PACKAGE_BASE_URL_DEFAULT
         self.devices = devices or [0]
         self.parallel = parallel
+        self.rocm_path = rocm_path or os.environ.get("ROCM_PATH")
+        if not self.rocm_path:
+            raise RuntimeError("ROCM_PATH not set. Use --rocm-path or set ROCM_PATH environment variable")
+        self.amd_smi = os.path.join(self.rocm_path, "bin", "amd-smi")
         self.os_type = None
         self.package_extension = None
         self.passed_tests = []
         self.failed_tests = []
         self.skipped_tests = []
+        # Firmware schema states - detected from amd-smi
+        self.single_bit_enabled = False  # CE injection
+        self.double_bit_enabled = False  # UE injection
 
     def run_cmd(self, cmd, privilege=False):
         """Run a command and return the result."""
@@ -96,6 +103,37 @@ class RASTestExecutor:
             logger.info("Detected RPM-based OS")
         else:
             raise RuntimeError("Could not detect OS type")
+
+    def detect_ras_schemas(self):
+        """Detect firmware RAS schema states from amd-smi."""
+        logger.info(f"Using amd-smi: {self.amd_smi}")
+        result = subprocess.run([self.amd_smi, "static", "-r"], capture_output=True, text=True)
+        if result.returncode == 0:
+            self.single_bit_enabled = "SINGLE_BIT_SCHEMA: ENABLED" in result.stdout
+            self.double_bit_enabled = "DOUBLE_BIT_SCHEMA: ENABLED" in result.stdout
+        logger.info(f"Firmware: SINGLE_BIT(CE)={'ENABLED' if self.single_bit_enabled else 'DISABLED'}, "
+                    f"DOUBLE_BIT(UE)={'ENABLED' if self.double_bit_enabled else 'DISABLED'}")
+
+    def is_test_supported(self, test_name, cmd):
+        """Check if test can run based on firmware schema states."""
+        # PCIe uses different mechanism - always run
+        if "pcie" in test_name:
+            return True, ""
+        
+        # Extract error type: -t 2 (CE), -t 4 (UE), -t 8 (Poison)
+        type_match = re.search(r'-t\s*(\d+)', cmd)
+        if not type_match:
+            return True, ""
+        
+        err_type = int(type_match.group(1))
+        
+        # Check firmware schema states
+        if err_type == 2 and not self.single_bit_enabled:
+            return False, "SINGLE_BIT_SCHEMA disabled (CE blocked)"
+        if err_type == 4 and not self.double_bit_enabled:
+            return False, "DOUBLE_BIT_SCHEMA disabled (UE blocked)"
+        
+        return True, ""
 
     def install_ras_package(self):
         """Download and install amdgpuras package."""
@@ -152,8 +190,14 @@ class RASTestExecutor:
     def run_test(self, test_name, cmd, device_id):
         """Run a single test on a device."""
         full_name = f"{test_name}_gpu{device_id}"
-        cmd_with_device = f"{cmd} -d {device_id}" if "-d" not in cmd else re.sub(r'-d\s*\d+', f'-d {device_id}', cmd)
         
+        # Check if test is supported based on schemas
+        supported, reason = self.is_test_supported(test_name, cmd)
+        if not supported:
+            logger.info(f"[SKIP] {full_name} - {reason}")
+            return full_name, "skip"
+        
+        cmd_with_device = f"{cmd} -d {device_id}" if "-d" not in cmd else re.sub(r'-d\s*\d+', f'-d {device_id}', cmd)
         result = self.run_cmd(cmd_with_device, privilege=True)
         return full_name, self.parse_result(result, full_name)
 
@@ -216,6 +260,7 @@ class RASTestExecutor:
         logger.info(f"RAS Package URL: {self.ras_package_url}")
         try:
             self.detect_os_type()
+            self.detect_ras_schemas()
             self.install_ras_package()
             self.run_tests()
             self.run_eeprom_reset()
@@ -229,12 +274,14 @@ def main():
     parser = argparse.ArgumentParser(description="AMD GPU RAS Test Executor")
     parser.add_argument("--ras-package-url", default=os.environ.get("RAS_PACKAGE_URL", RAS_PACKAGE_BASE_URL_DEFAULT))
     parser.add_argument("--devices", default="0", help="Comma-separated GPU IDs (default: 0)")
+    parser.add_argument("--rocm-path", default=os.environ.get("ROCM_PATH"),
+                        help="Path to ROCm installation (required: --rocm-path or $ROCM_PATH)")
     parser.add_argument("--parallel", action="store_true", default=True)
     parser.add_argument("--no-parallel", dest="parallel", action="store_false")
     args = parser.parse_args()
     
     devices = [int(d.strip()) for d in args.devices.split(",")]
-    executor = RASTestExecutor(args.ras_package_url, devices, args.parallel)
+    executor = RASTestExecutor(args.ras_package_url, devices, args.parallel, args.rocm_path)
     sys.exit(executor.execute())
 
 
