@@ -142,13 +142,18 @@ class RASTestExecutor:
             base_url = self.ras_package_url.rstrip('/') + '/'
             api_url = base_url.replace('/ui/native/', '/artifactory/')
             
-            result = self.run_cmd(f"curl -fsSL {api_url}")
+            # Fetch directory listing
+            listing_file = os.path.join(tmp_dir, "listing.html")
+            result = self.run_cmd(f"wget -q -O {listing_file} {api_url}")
             if result.returncode != 0:
                 raise RuntimeError(f"Failed to fetch package listing: {result.stderr}")
             
+            with open(listing_file) as f:
+                content = f.read()
+            
             # Extract filename from href="filename.deb" or href="filename.rpm"
             pattern = rf'href="([^"]+{re.escape(self.package_extension)})"'
-            matches = re.findall(pattern, result.stdout, re.IGNORECASE)
+            matches = re.findall(pattern, content, re.IGNORECASE)
             if not matches:
                 raise RuntimeError(f"No {self.package_extension} package found")
             
@@ -158,7 +163,7 @@ class RASTestExecutor:
             
             # Download
             logger.info(f"Downloading {pkg_url}...")
-            if self.run_cmd(f"curl -fsSL -o {pkg_path} {pkg_url}").returncode != 0:
+            if self.run_cmd(f"wget -q -O {pkg_path} {pkg_url}").returncode != 0:
                 raise RuntimeError("Failed to download package")
             
             # Install
