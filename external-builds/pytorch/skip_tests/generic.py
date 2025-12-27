@@ -3,7 +3,7 @@
 #
 # Recent changes that affect Linux pipelines:
 # 1. test_trapezoid_cuda - NumPy 2.0 compatibility (affects Linux + Windows)
-# 2. Complex pow tests - Numerical accuracy issues (affects Linux + Windows)  
+# 2. Complex pow tests - Numerical accuracy issues (affects Linux + Windows)
 # 3. test_cudnn_rnn_dropout_states_device - MIOpen JIT failure (primarily Linux)
 # 4. Memory profiler tests - Missing dependencies in CI (Linux CI specific)
 # 5. Segfault tests - Consolidated from version-specific files (Linux confirmed)
@@ -86,7 +86,7 @@ skip_tests = {
             # Memory pool concurrency test
             # AssertionError: Scalars are not equal!
             "test_mempool_ctx_multithread",
-            # Memory compilation regions test  
+            # Memory compilation regions test
             # passes on single run, crashes if run in a group
             # TypeError: 'CustomDecompTable' object is not a mapping
             "test_memory_compile_regions",
