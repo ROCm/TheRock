@@ -447,7 +447,6 @@ artifact_deps = []
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
-disable_platforms = ["windows"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
