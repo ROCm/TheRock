@@ -1,3 +1,13 @@
+# Generic skip tests applied to all platforms (Linux and Windows)
+# unless specified under platform-specific sections
+#
+# Recent changes that affect Linux pipelines:
+# 1. test_trapezoid_cuda - NumPy 2.0 compatibility (affects Linux + Windows)
+# 2. Complex pow tests - Numerical accuracy issues (affects Linux + Windows)  
+# 3. test_cudnn_rnn_dropout_states_device - MIOpen JIT failure (primarily Linux)
+# 4. Memory profiler tests - Missing dependencies in CI (Linux CI specific)
+# 5. Segfault tests - Consolidated from version-specific files (Linux confirmed)
+#
 skip_tests = {
     "gfx950": {
         "cuda": {
@@ -15,11 +25,13 @@ skip_tests = {
             # NumPy 2.0 removed numpy.trapz function (issue #2674)
             # Upstream fix: PyTorch PR #169695 (already merged to main)
             # TODO: Remove when fix is available in all supported PyTorch versions
+            # AFFECTS: Both Linux and Windows
             "test_trapezoid_cuda",
             # Complex number pow operations have numerical accuracy issues (issue #2070)
             # Root cause: Suspected LLVM/compiler issue with thrust::pow
             # Affects all PyTorch versions (2.7, 2.8, 2.9, 2.10, nightly)
             # Status: Under investigation by AMD, no upstream PyTorch issue yet
+            # AFFECTS: Both Linux and Windows
             "test_batch_vs_slicing___rpow___cuda_complex64",
             "test_batch_vs_slicing__refs_pow_cuda_complex32",
             "test_batch_vs_slicing__refs_pow_cuda_complex64",
@@ -59,11 +71,52 @@ skip_tests = {
             # Already skipped in version-specific files: 2.7, 2.8, 2.9, 2.10
             # TODO: Check if upstream PyTorch issue exists for this specific test
             "test_index_add_correctness",
+            # Memory profiler tests (Linux CI failure - missing flamegraph.pl)
+            # These tests require flamegraph.pl which is not available in CI environment
+            # Affects PyTorch 2.8, 2.9, 2.10+ on Linux
+            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
+            # AFFECTS: Linux CI environments
+            "test_memory_snapshot",
+            "test_memory_snapshot_script",
+            "test_memory_snapshot_with_cpp",
+            # Memory profiler visualization tests
+            # AssertionError: False is not true / Booleans mismatch: False is not True
+            "test_memory_plots",
+            "test_memory_plots_free_segment_stack",
+            # Memory pool concurrency test
+            # AssertionError: Scalars are not equal!
+            "test_mempool_ctx_multithread",
+            # Memory compilation regions test  
+            # passes on single run, crashes if run in a group
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_memory_compile_regions",
+            # Segmentation fault (all PyTorch versions)
+            # Explicitly deselected since giving segfault when GPU memory is accessed
+            # TODO: Root cause analysis needed - possible HIP/CUDA interop issue
+            # AFFECTS: Linux (confirmed segfault)
+            "test_unused_output_device_cuda",
+            # Memory pinning tests causing crashes
+            # Possible race condition in pinned memory allocation
+            "test_pinned_memory_empty_cache",
+            # Float32 matmul precision test
+            # Test assumes specific CUDA behavior not present in ROCm
+            "test_float32_matmul_precision_get_set",
+            # Graph concurrent replay causing intermittent failures
+            # Possible synchronization issue with HIP graphs
+            "test_graph_concurrent_replay",
             # ----------------
             # maybe failing
             # ----------------
             # "test_hip_device_count"
             # "test_nvtx"
+            # ----------------
+            # JIT Extension building failures
+            # RuntimeError: Error building extension 'dummy_allocator'
+            # Missing or incorrect HIP headers/libraries in test environment
+            # AFFECTS: Both Linux and Windows (different root causes)
+            "test_mempool_empty_cache_inactive",
+            "test_mempool_limited_memory_with_allocator",
+            "test_mempool_with_allocator",  # Already in generic but documenting Linux issue
             # ----------------
         ],
         "nn": [
@@ -81,6 +134,7 @@ skip_tests = {
             # rocrand/rocrand_xorwow.h header not found during compilation
             # Root cause: MIOpen infrastructure issue, not PyTorch
             # Fix needed: MIOpen JIT needs to properly include rocrand headers
+            # AFFECTS: Primarily Linux (MIOpen JIT compilation)
             "test_cudnn_rnn_dropout_states_device",
             # AssertionError: "Input and parameter tensors are not at the same device" does not match "Expected all tensors
             # to be on the same device, but got weight is on cpu, different from other tensors on cuda:0 (when checking

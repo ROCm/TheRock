@@ -1,3 +1,5 @@
+# PyTorch 2.10 specific skip tests
+# Tests moved to generic.py have been removed to avoid duplication
 skip_tests = {
     "common": {
         "autograd": [
@@ -11,25 +13,6 @@ skip_tests = {
             "test_fp32_precision_with_tf32",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_invalid_status_for_legacy_api",
-            # passes on single run, crashes if run in a group
-            # TypeError: 'CustomDecompTable' object is not a mapping
-            "test_memory_compile_regions",
-            # AssertionError: False is not true
-            "test_memory_plots",
-            # AssertionError: Booleans mismatch: False is not True
-            "test_memory_plots_free_segment_stack",
-            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
-            "test_memory_snapshot",
-            # AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
-            "test_memory_snapshot_script",
-            # AssertionError: False is not true
-            "test_memory_snapshot_with_cpp",
-            # AssertionError: Scalars are not equal!
-            "test_mempool_ctx_multithread",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_mempool_empty_cache_inactive",
-            # RuntimeError: Error building extension 'dummy_allocator_v1'
-            "test_mempool_limited_memory_with_allocator",
             # OSError: libhiprtc.so: cannot open shared object file: No such file or directory
             # File "/home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/cuda/_utils.py", line 57, in _get_hiprtc_library
             # lib = ctypes.CDLL("libhiprtc.so")

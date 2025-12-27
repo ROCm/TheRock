@@ -1,39 +1,12 @@
-# NOTE: not tested. just combining pytorch_2.7.py and pytorch_2.10.py to see if that resolves the OOM errors
+# PyTorch 2.9 specific skip tests
+# Tests moved to generic.py have been removed to avoid duplication
+# NOTE: Originally combined pytorch_2.7.py and pytorch_2.10.py to resolve OOM errors
 skip_tests = {
     "common": {
         "autograd": [
             "test_side_stream_backward_overlap",
         ],
         "cuda": [
-            # Explicitly deselected since giving segfault
-            "test_unused_output_device_cuda",  # this test does not exist in nightly anymore
-            "test_pinned_memory_empty_cache",
-            "test_float32_matmul_precision_get_set",
-            # AssertionError: Tensor-likes are not close!
-            # Mismatched elements: 1 / 327680 (0.0%)
-            # Greatest absolute difference: 0.03125 at index (3, 114, 184) (up to 0.01 allowed)
-            # Greatest relative difference: 0.01495361328125 at index (3, 114, 184) (up to 0.01 allowed)
-            "test_index_add_correctness",
-            "test_graph_concurrent_replay",
-            # passes on single run, crashes if run in a group
-            # TypeError: 'CustomDecompTable' object is not a mapping
-            "test_memory_compile_regions",
-            # AssertionError: False is not true
-            "test_memory_plots",
-            # AssertionError: Booleans mismatch: False is not True
-            "test_memory_plots_free_segment_stack",
-            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
-            "test_memory_snapshot",
-            # AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
-            "test_memory_snapshot_script",
-            # AssertionError: False is not true
-            "test_memory_snapshot_with_cpp",
-            # AssertionError: Scalars are not equal!
-            "test_mempool_ctx_multithread",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_mempool_empty_cache_inactive",
-            # RuntimeError: Error building extension 'dummy_allocator_v1'
-            "test_mempool_limited_memory_with_allocator",
             # for whatever reason these are also flaky: if run standalone they pass?
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_fp32_precision_with_float32_matmul_precision",
