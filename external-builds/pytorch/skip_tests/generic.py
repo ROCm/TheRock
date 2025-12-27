@@ -15,6 +15,30 @@ skip_tests = {
             "test_autocast_torch_fp16",
         }
     },
+    "gfx1151": {
+        # Consumer GPU-specific failures
+        # gfx1151 has limited memory and different performance characteristics
+        "torch": [
+            # Memory pressure issues on gfx1151
+            # These tests use large tensors (e.g., v = torch.FloatTensor([64000., 32., 64000.]))
+            "test_grad_scale_will_not_overflow_cuda",
+            "test_grad_scaling_unscale_sparse_cuda_float32",
+        ],
+        "windows": {
+            # Windows + gfx1151 specific failures
+            "nn": [
+                # Additional convolution failures on Windows gfx1151
+                # Beyond the generic Windows test_Conv skip
+                "test_ConvTranspose2d_deterministic_cudnn",
+                "test_ConvTranspose3d_deterministic_cudnn",
+            ],
+            "cuda": [
+                # Memory allocation failures on consumer GPUs
+                "test_caching_allocator_record_stream_oom",
+                "test_cuda_memory_leak_detection",
+            ],
+        },
+    },
     "common": {
         # ----------------
         # might be failing
@@ -315,14 +339,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
-            # Flaky tests hanging on some gfx1151 machines...
-            # Maybe memory pressure? Tests use some large tensors:
-            #   v = torch.FloatTensor([64000., 32., 64000.])
-            # Move to gfx1151-specific skip list? Check if passing on Linux.
-            # We could also skip all test_grad_*.
-            "test_grad_scale_will_not_overflow_cuda",
-            "test_grad_scaling_unscale_sparse_cuda_float32",
+            "test_memory_format_operators_cuda",
         ],
     },
 }
