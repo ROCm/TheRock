@@ -172,13 +172,23 @@ jobs:
 
       # Checkout nightly sources from https://github.com/pytorch/pytorch
       # TODO: switch to 'nightly' to match our Linux workflows?
+      # TEMPORARY FIX (Issue #2628): Use stable commit before Windows CMake path escaping bug
+      # The commit 53319ff9e33e8b6cedde0af634571366cb043817 introduced a CMake parsing error
+      # where Windows paths like C:\home\... are not properly escaped, causing "Invalid character escape '\h'" errors
+      # This temporary fix uses the last known stable commit: 0bc5144aee9ee503ed74939a413b5fa0b04de315
+      # TODO: Remove this workaround once https://github.com/pytorch/pytorch/pull/168377 is fixed
       - name: Checkout PyTorch source repos (nightly branch)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
           git config --global core.longpaths true
+          # TEMPORARY: Using stable commit instead of nightly due to CMake path bug on Windows
+          # python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+          #   --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
+          #   --repo-hashtag nightly
+          echo "WARNING: Using stable commit 0bc5144 instead of nightly due to Windows CMake path bug (Issue #2628)"
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag nightly
+            --repo-hashtag 0bc5144aee9ee503ed74939a413b5fa0b04de315
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
             --repo-hashtag nightly

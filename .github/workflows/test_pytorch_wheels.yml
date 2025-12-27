@@ -111,13 +111,23 @@ jobs:
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
+      # TEMPORARY FIX (Issue #2628): For Windows, use stable commit before CMake path escaping bug
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
-          python external-builds/pytorch/pytorch_torch_repo.py checkout \
-            --gitrepo-origin https://github.com/pytorch/pytorch.git \
-            --repo-hashtag nightly \
-            --no-hipify --no-patch
+          # Check if we're on Windows and need to use the stable commit
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "WARNING: Windows detected - using stable commit 0bc5144 instead of nightly due to CMake path bug (Issue #2628)"
+            python external-builds/pytorch/pytorch_torch_repo.py checkout \
+              --gitrepo-origin https://github.com/pytorch/pytorch.git \
+              --repo-hashtag 0bc5144aee9ee503ed74939a413b5fa0b04de315 \
+              --no-hipify --no-patch
+          else
+            python external-builds/pytorch/pytorch_torch_repo.py checkout \
+              --gitrepo-origin https://github.com/pytorch/pytorch.git \
+              --repo-hashtag nightly \
+              --no-hipify --no-patch
+          fi
 
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ (inputs.pytorch_git_ref != 'nightly') }}

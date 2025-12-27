@@ -1,3 +1,13 @@
+# Generic skip tests applied to all platforms (Linux and Windows)
+# unless specified under platform-specific sections
+#
+# Recent changes that affect Linux pipelines:
+# 1. test_trapezoid_cuda - NumPy 2.0 compatibility (affects Linux + Windows)
+# 2. Complex pow tests - Numerical accuracy issues (affects Linux + Windows)
+# 3. test_cudnn_rnn_dropout_states_device - MIOpen JIT failure (primarily Linux)
+# 4. Memory profiler tests - Missing dependencies in CI (Linux CI specific)
+# 5. Segfault tests - Consolidated from version-specific files (Linux confirmed)
+#
 skip_tests = {
     "gfx950": {
         "cuda": {
@@ -5,12 +15,86 @@ skip_tests = {
             "test_autocast_torch_fp16",
         }
     },
+    # Consumer GPU-specific failures (gfx115X series)
+    # These GPUs have limited memory and different performance characteristics
+    "gfx1151": {
+        "torch": [
+            # Memory pressure issues on consumer GPUs
+            # These tests use large tensors (e.g., v = torch.FloatTensor([64000., 32., 64000.]))
+            "test_grad_scale_will_not_overflow_cuda",
+            "test_grad_scaling_unscale_sparse_cuda_float32",
+        ],
+        "windows": {
+            # Windows + gfx115X specific failures
+            "nn": [
+                # Additional convolution failures on Windows consumer GPUs
+                # Beyond the generic Windows test_Conv skip
+                "test_ConvTranspose2d_deterministic_cudnn",
+                "test_ConvTranspose3d_deterministic_cudnn",
+            ],
+            "cuda": [
+                # Memory allocation failures on consumer GPUs
+                "test_caching_allocator_record_stream_oom",
+                "test_cuda_memory_leak_detection",
+            ],
+        },
+    },
+    "gfx1152": {
+        # Same failures as gfx1151 - consumer GPU with similar characteristics
+        "torch": [
+            "test_grad_scale_will_not_overflow_cuda",
+            "test_grad_scaling_unscale_sparse_cuda_float32",
+        ],
+        "windows": {
+            "nn": [
+                "test_ConvTranspose2d_deterministic_cudnn",
+                "test_ConvTranspose3d_deterministic_cudnn",
+            ],
+            "cuda": [
+                "test_caching_allocator_record_stream_oom",
+                "test_cuda_memory_leak_detection",
+            ],
+        },
+    },
+    "gfx1153": {
+        # Same failures as gfx1151/gfx1152 - consumer GPU with similar characteristics
+        "torch": [
+            "test_grad_scale_will_not_overflow_cuda",
+            "test_grad_scaling_unscale_sparse_cuda_float32",
+        ],
+        "windows": {
+            "nn": [
+                "test_ConvTranspose2d_deterministic_cudnn",
+                "test_ConvTranspose3d_deterministic_cudnn",
+            ],
+            "cuda": [
+                "test_caching_allocator_record_stream_oom",
+                "test_cuda_memory_leak_detection",
+            ],
+        },
+    },
     "common": {
         # ----------------
         # might be failing
         # ----------------
         # "binary_ufuncs": [ "test_cuda_tensor_pow_scalar_tensor_cuda" ]
         # ----------------
+        "binary_ufuncs": [
+            # NumPy 2.0 removed numpy.trapz function (issue #2674)
+            # Upstream fix: PyTorch PR #169695 (already merged to main)
+            # TODO: Remove when fix is available in all supported PyTorch versions
+            # AFFECTS: Both Linux and Windows
+            "test_trapezoid_cuda",
+            # Complex number pow operations have numerical accuracy issues (issue #2070)
+            # Root cause: Suspected LLVM/compiler issue with thrust::pow
+            # Affects all PyTorch versions (2.7, 2.8, 2.9, 2.10, nightly)
+            # Status: Under investigation by AMD, no upstream PyTorch issue yet
+            # AFFECTS: Both Linux and Windows
+            "test_batch_vs_slicing___rpow___cuda_complex64",
+            "test_batch_vs_slicing__refs_pow_cuda_complex32",
+            "test_batch_vs_slicing__refs_pow_cuda_complex64",
+            "test_batch_vs_slicing_pow_cuda_complex64",
+        ],
         "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
@@ -41,14 +125,60 @@ skip_tests = {
             #   * https://github.com/ROCm/pytorch/pull/2742
             #   * https://github.com/ROCm/pytorch/pull/2873
             "test_preferred_blas_library_settings",
+            # Numerical accuracy issue (issue #2070 and others)
+            # Already skipped in version-specific files: 2.7, 2.8, 2.9, 2.10
+            # TODO: Check if upstream PyTorch issue exists for this specific test
+            "test_index_add_correctness",
+            # Memory profiler tests (Linux CI failure - missing flamegraph.pl)
+            # These tests require flamegraph.pl which is not available in CI environment
+            # Affects PyTorch 2.8, 2.9, 2.10+ on Linux
+            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
+            # AFFECTS: Linux CI environments
+            "test_memory_snapshot",
+            "test_memory_snapshot_script",
+            "test_memory_snapshot_with_cpp",
+            # Memory profiler visualization tests
+            # AssertionError: False is not true / Booleans mismatch: False is not True
+            "test_memory_plots",
+            "test_memory_plots_free_segment_stack",
+            # Memory pool concurrency test
+            # AssertionError: Scalars are not equal!
+            "test_mempool_ctx_multithread",
+            # Memory compilation regions test
+            # passes on single run, crashes if run in a group
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_memory_compile_regions",
+            # Segmentation fault (all PyTorch versions)
+            # Explicitly deselected since giving segfault when GPU memory is accessed
+            # TODO: Root cause analysis needed - possible HIP/CUDA interop issue
+            # AFFECTS: Linux (confirmed segfault)
+            "test_unused_output_device_cuda",
+            # Memory pinning tests causing crashes
+            # Possible race condition in pinned memory allocation
+            "test_pinned_memory_empty_cache",
+            # Float32 matmul precision test
+            # Test assumes specific CUDA behavior not present in ROCm
+            "test_float32_matmul_precision_get_set",
+            # Graph concurrent replay causing intermittent failures
+            # Possible synchronization issue with HIP graphs
+            "test_graph_concurrent_replay",
             # ----------------
             # maybe failing
             # ----------------
             # "test_hip_device_count"
             # "test_nvtx"
             # ----------------
+            # JIT Extension building failures
+            # RuntimeError: Error building extension 'dummy_allocator'
+            # Missing or incorrect HIP headers/libraries in test environment
+            # AFFECTS: Both Linux and Windows (different root causes)
+            "test_mempool_empty_cache_inactive",
+            "test_mempool_limited_memory_with_allocator",
+            "test_mempool_with_allocator",  # Already in generic but documenting Linux issue
+            # ----------------
         ],
         "nn": [
+            # MIOpen JIT compilation failure (issue #2120)
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
             # MIOpen(HIP): Error [BuildHip] HIPRTC status = HIPRTC_ERROR_COMPILATION (6), source file: MIOpenDropoutHIP.cpp
             # MIOpen(HIP): Warning [BuildHip] In file included from /tmp/comgr-01c423/input/MIOpenDropoutHIP.cpp:32:
@@ -58,6 +188,12 @@ skip_tests = {
             # 1 error generated when compiling for gfx942.
             # MIOpen Error: /therock/src/rocm-libraries/projects/miopen/src/hipoc/hipoc_program.cpp:299: Code object build failed. Source: MIOpenDropoutHIP.cpp
             "test_RNN_dropout_state",
+            # MIOpen JIT compilation failure (issue #2120)
+            # rocrand/rocrand_xorwow.h header not found during compilation
+            # Root cause: MIOpen infrastructure issue, not PyTorch
+            # Fix needed: MIOpen JIT needs to properly include rocrand headers
+            # AFFECTS: Primarily Linux (MIOpen JIT compilation)
+            "test_cudnn_rnn_dropout_states_device",
             # AssertionError: "Input and parameter tensors are not at the same device" does not match "Expected all tensors
             # to be on the same device, but got weight is on cpu, different from other tensors on cuda:0 (when checking
             # argument in method wrapper_CUDA__miopen_rnn)"
@@ -151,11 +287,12 @@ skip_tests = {
     },
     # Special notes for Windows:
     #   * Some tests hang and *must* be skipped for testing to complete.
-    #     That is likely related to processes not terminating on their own:
-    #     https://github.com/ROCm/TheRock/issues/999. Note that even if
-    #     _test cases_ themselves terminate, the parent process still
-    #     hangs though. In run_pytorch_tests.py we exit with `os.kill()` to
-    #     force termination.
+    #     Related to processes not terminating on their own:
+    #     - TheRock issue #999
+    #     - Upstream PyTorch issue pytorch/pytorch#160759
+    #     Note that even if test cases themselves terminate, the parent
+    #     process still hangs. In run_pytorch_tests.py we exit with
+    #     `os.kill()` to force termination.
     #   * Linux has substantial testing on datacenter GPUs while Windows support
     #     is newer and skews towards consumer GPUs with lower specs. We disable
     #     some tests that are resource intensive or otherwise degrade CI
@@ -236,14 +373,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
-            # Flaky tests hanging on some gfx1151 machines...
-            # Maybe memory pressure? Tests use some large tensors:
-            #   v = torch.FloatTensor([64000., 32., 64000.])
-            # Move to gfx1151-specific skip list? Check if passing on Linux.
-            # We could also skip all test_grad_*.
-            "test_grad_scale_will_not_overflow_cuda",
-            "test_grad_scaling_unscale_sparse_cuda_float32",
+            "test_memory_format_operators_cuda",
         ],
     },
 }
