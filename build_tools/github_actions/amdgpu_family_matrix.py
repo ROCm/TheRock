@@ -201,7 +201,6 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx1153",
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
