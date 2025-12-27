@@ -102,10 +102,12 @@ jobs:
       matrix:
         variant: ${{ fromJSON(needs.setup.outputs.windows_variants) }}
     uses: ./.github/workflows/ci_windows.yml
+    secrets: inherit
     with:
       amdgpu_families: ${{ matrix.variant.family }}
       artifact_group: ${{ matrix.variant.artifact_group }}
       test_runs_on: ${{ matrix.variant.test-runs-on }}
+      benchmark_runs_on: ${{ matrix.variant.benchmark-runs-on }}
       build_variant_label: ${{ matrix.variant.build_variant_label }}
       build_variant_suffix: ${{ matrix.variant.build_variant_suffix }}
       build_variant_cmake_preset: ${{ matrix.variant.build_variant_cmake_preset }}

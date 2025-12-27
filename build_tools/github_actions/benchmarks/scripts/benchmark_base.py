@@ -142,9 +142,9 @@ class BenchmarkBase:
         )
 
         if success:
-            log.info("✓ Results uploaded successfully")
+            log.info("Results uploaded successfully")
         else:
-            log.info("⚠ Results saved locally only (API upload disabled or failed)")
+            log.info("Results saved locally only (API upload disabled or failed)")
 
         return success
 
