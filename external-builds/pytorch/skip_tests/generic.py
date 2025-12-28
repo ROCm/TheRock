@@ -73,6 +73,17 @@ skip_tests = {
             ],
         },
     },
+    "gfx110X-all": {
+        # Datacenter GPU-specific failures
+        "nn": [
+            # Segmentation fault (core dump) on Linux
+            # Exit code 134 (SIGABRT) during test execution
+            # Confirmed on PyTorch 2.9, may affect other versions
+            # https://github.com/ROCm/TheRock/actions/runs/20554976437/job/59039577384
+            # Using broad pattern to catch all convolution tests as precaution
+            "test_Conv",  # Matches test_Conv1d, test_Conv2d, test_Conv3d, etc.
+        ],
+    },
     "common": {
         # ----------------
         # might be failing
