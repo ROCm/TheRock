@@ -219,10 +219,13 @@ jobs:
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --require-related-commit
 
+      - name: Install Python dependencies
+        run: |
+          pip install packaging boto3
+
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
         run: |
-          pip install packaging
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
