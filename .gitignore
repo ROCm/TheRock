@@ -20,9 +20,24 @@ __pycache__
 
 # Output directories.
 /build/
+/build-*/
 /install/
 /output-*/
 /out/
+/external-builds/
+
+# Build artifacts
+*.o
+*.so.*
+write-test.*
+
+# Python
+*.pyc
+.venv/
+
+# Caches
+.cache/
+ccache/
 
 # Personal build logs and artifacts
 build*.log
