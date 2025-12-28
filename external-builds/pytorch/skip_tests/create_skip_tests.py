@@ -153,12 +153,29 @@ def create_list(
 
     # Loop over all loaded skip_tests dictionaries from the different pytorch versions
     for skip_test_module_name, skip_tests in dict_skip_tests.items():
-        # Apply each filter (common, amdgpu_family)
+        # Apply each filter (common, amdgpu_family, platform)
         for filter_name in filters:
             if filter_name in skip_tests:
+                filter_config = skip_tests[filter_name]
+
+                # If this is a GPU filter and we have a platform filter, check for nested platform section
+                if (
+                    filter_name in amdgpu_family
+                    and platform
+                    and platform.lower() in filter_config
+                ):
+                    # Add tests from nested platform section (e.g., skip_tests["gfx1151"]["windows"])
+                    platform_config = filter_config[platform.lower()]
+                    for pytorch_test_module in platform_config.keys():
+                        selected_tests += platform_config[pytorch_test_module]
+
                 # For each pytorch test module (e.g., test_nn, test_torch) add all the tests
-                for pytorch_test_module in skip_tests[filter_name].keys():
-                    selected_tests += skip_tests[filter_name][pytorch_test_module]
+                for pytorch_test_module, tests in filter_config.items():
+                    # Skip nested platform sections (they're handled above)
+                    if pytorch_test_module in ["windows", "linux"]:
+                        continue
+                    if isinstance(tests, list):
+                        selected_tests += tests
 
     # Remove duplicates and return
     return list(set(selected_tests))

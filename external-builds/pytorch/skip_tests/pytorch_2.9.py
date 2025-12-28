@@ -16,6 +16,81 @@ skip_tests = {
             "test_invalid_status_for_legacy_api",
         ],
     },
+    "gfx1151": {
+        # Consumer GPU-specific failures for PyTorch 2.9
+        "cuda": [
+            # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
+            "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
+            # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
+            "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
+            # OSError: libhiprtc.so: cannot open shared object file: No such file or directory
+            "test_compile_kernel",
+            "test_compile_kernel_advanced",
+            "test_compile_kernel_as_custom_op",
+            "test_compile_kernel_cuda_headers",
+            "test_compile_kernel_custom_op_validation",
+            "test_compile_kernel_dlpack",
+            "test_compile_kernel_double_precision",
+            "test_compile_kernel_large_shared_memory",
+            "test_compile_kernel_template",
+        ],
+        "windows": {
+            # Windows + gfx1151 + PyTorch 2.9 specific failures
+            "cuda": [
+                # This test uses subprocess.run, so it hangs on Windows
+                "test_pinned_memory_use_background_threads",
+                # Windows fatal exception: access violation in serialization
+                "test_serialization_array_with_empty",
+                "test_serialization_array_with_storage",
+            ],
+        },
+    },
+    "gfx1152": {
+        # Same failures as gfx1151 - consumer GPU with PyTorch 2.9
+        "cuda": [
+            "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
+            "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
+            "test_compile_kernel",
+            "test_compile_kernel_advanced",
+            "test_compile_kernel_as_custom_op",
+            "test_compile_kernel_cuda_headers",
+            "test_compile_kernel_custom_op_validation",
+            "test_compile_kernel_dlpack",
+            "test_compile_kernel_double_precision",
+            "test_compile_kernel_large_shared_memory",
+            "test_compile_kernel_template",
+        ],
+        "windows": {
+            "cuda": [
+                "test_pinned_memory_use_background_threads",
+                "test_serialization_array_with_empty",
+                "test_serialization_array_with_storage",
+            ],
+        },
+    },
+    "gfx1153": {
+        # Same failures as gfx1151/gfx1152 - consumer GPU with PyTorch 2.9
+        "cuda": [
+            "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
+            "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
+            "test_compile_kernel",
+            "test_compile_kernel_advanced",
+            "test_compile_kernel_as_custom_op",
+            "test_compile_kernel_cuda_headers",
+            "test_compile_kernel_custom_op_validation",
+            "test_compile_kernel_dlpack",
+            "test_compile_kernel_double_precision",
+            "test_compile_kernel_large_shared_memory",
+            "test_compile_kernel_template",
+        ],
+        "windows": {
+            "cuda": [
+                "test_pinned_memory_use_background_threads",
+                "test_serialization_array_with_empty",
+                "test_serialization_array_with_storage",
+            ],
+        },
+    },
     "gfx942": {
         "autograd": [
             # fixed or just good with no caching?
