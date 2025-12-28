@@ -103,6 +103,7 @@ class ROCmCoreTest(unittest.TestCase):
             if (
                 "lib/rocprofiler-sdk/" in str(so_path)
                 or "libexec/rocprofiler-sdk/" in str(so_path)
+                or "librocprofiler-sdk" in str(so_path)
                 or "libpyrocpd" in str(so_path)
                 or "libpyroctx" in str(so_path)
             ):
