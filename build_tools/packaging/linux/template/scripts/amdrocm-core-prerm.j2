@@ -1,0 +1,49 @@
+#!/bin/bash
+
+binaries=( hipcc rocminfo amd-smi rocm_agent_enumerator rocm-smi rocprofv3  )
+
+is_debian_like() {
+    local id_like="$1"
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+do_update_alternatives(){
+    # skip update if program doesn't exist
+    command -v update-alternatives >/dev/null || return 0
+
+    {% if target == "deb" %}
+        PKG_INSTALL_PREFIX={{ install_prefix }}
+    {% else %}
+        PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    {% endif %}
+
+    for i in "${binaries[@]}"
+    do
+        update-alternatives --remove "$i" \
+            "$PKG_INSTALL_PREFIX/bin/$i"
+    done
+}
+
+if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
+then
+   case "$1" in
+       (remove|upgrade)
+           do_update_alternatives
+       ;;
+       (purge)
+           # nothing to do
+       ;;
+       (*)
+           exit 0
+       ;;
+   esac
+else
+    do_update_alternatives
+fi
