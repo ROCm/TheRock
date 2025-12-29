@@ -168,6 +168,7 @@ def retrieve_artifacts_by_run_id(args):
 
     # These artifacts are the "base" requirements for running tests.
     base_artifact_patterns = [
+        "core-hipinfo_run",
         "core-runtime_run",
         "core-runtime_lib",
         "sysdeps_lib",
@@ -193,6 +194,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hiptensor,
             args.miopen,
             args.miopen_plugin,
+            args.fusilli_plugin,
             args.prim,
             args.rand,
             args.rccl,
@@ -221,6 +223,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.extend("rand_dev")
         if args.miopen_plugin:
             extra_artifacts.append("miopen-plugin")
+        if args.fusilli_plugin:
+            extra_artifacts.append("fusilli-plugin")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
@@ -397,6 +401,13 @@ def main(argv):
         "--miopen-plugin",
         default=False,
         help="Include 'miopen-plugin' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--fusilli-plugin",
+        default=False,
+        help="Include 'fusilli-plugin' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

@@ -135,17 +135,20 @@ if(THEROCK_ENABLE_HIPDNN)
       amd-hip
     BUILD_DEPS
       therock-googletest
-      therock-flatbuffers
-      therock-nlohmann-json
-      therock-fmt
-      therock-spdlog
     RUNTIME_DEPS
       hip-clr
+      therock-flatbuffers
+      therock-fmt
+      therock-nlohmann-json
+      therock-spdlog
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
     .
   )
+
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_data_sdk lib/cmake/hipdnn_data_sdk)
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_plugin_sdk lib/cmake/hipdnn_plugin_sdk)
   therock_cmake_subproject_provide_package(hipDNN hipdnn_test_sdk lib/cmake/hipdnn_test_sdk)
   therock_cmake_subproject_provide_package(hipDNN hipdnn_sdk lib/cmake/hipdnn_sdk)
   therock_cmake_subproject_provide_package(hipDNN hipdnn_frontend lib/cmake/hipdnn_frontend)
