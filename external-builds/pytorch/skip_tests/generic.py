@@ -38,6 +38,22 @@ skip_tests = {
             "test_non_contig_pow_cuda_complex64",
         ],
     },
+    # Legacy datacenter GPUs
+    "gfx90X-dcgpu": {
+        # MI100 series datacenter GPUs
+        # Currently inheriting common skips, add specific skips as needed
+    },
+    # Consumer discrete GPUs (RDNA series)
+    "gfx101X-dgpu": {
+        # RDNA1 discrete GPUs (e.g., RX 5000 series)
+        # Gaming GPUs with limited compute capabilities
+        # Currently inheriting common skips
+    },
+    "gfx103X-dgpu": {
+        # RDNA2 discrete GPUs (e.g., RX 6000 series)
+        # Gaming GPUs with improved compute over RDNA1
+        # Currently inheriting common skips
+    },
     # Consumer GPU-specific failures (gfx115X series)
     # These GPUs have limited memory and different performance characteristics
     "gfx1150": {

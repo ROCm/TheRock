@@ -872,6 +872,11 @@ def do_build_pytorch_audio(
             }
         )
 
+    # Python 3.13+ compatibility
+    # Python 3.13 removed distutils, ensure we use setuptools
+    if sys.version_info >= (3, 13):
+        env["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"
+
     remove_dir_if_exists(pytorch_audio_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_audio_dir / "build")
@@ -892,6 +897,10 @@ def do_build_pytorch_vision(
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
+
+    # Python 3.13+ compatibility
+    if sys.version_info >= (3, 13):
+        env["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"
 
     env.update(
         {

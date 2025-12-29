@@ -190,13 +190,22 @@ jobs:
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
             --repo-hashtag 0bc5144aee9ee503ed74939a413b5fa0b04de315
           # IMPORTANT: When using a stable commit, we need matching Audio/Vision versions
-          # Using nightly for Audio/Vision as fallback since related_commits might not exist
+          # The stable commit's related_commits file may not have Audio/Vision entries
+          # So we explicitly specify all parameters and tell the script not to require related commits
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --repo-hashtag nightly
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --gitrepo-origin https://github.com/pytorch/audio.git \
+            --repo-hashtag nightly \
+            --patchset none \
+            --no-require-related-commit
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag nightly
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --gitrepo-origin https://github.com/pytorch/vision.git \
+            --repo-hashtag nightly \
+            --patchset none \
+            --no-require-related-commit
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
@@ -219,6 +228,12 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          # For Python 3.13+, ensure we have the latest setuptools
+          # Python 3.13 removed distutils, so we need setuptools>=70.0
+          if [[ "${{ inputs.python_version }}" == "3.13" ]]; then
+            echo "Python 3.13 detected - upgrading setuptools and wheel"
+            pip install --upgrade setuptools>=70.0 wheel
+          fi
           pip install packaging boto3
 
       - name: Determine optional arguments passed to `build_prod_wheels.py`
