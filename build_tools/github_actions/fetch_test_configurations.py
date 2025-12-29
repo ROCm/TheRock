@@ -106,6 +106,14 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 2,
     },
+    "rocprofsys": {
+        "job_name": "rocprofsys",
+        "fetch_artifact_args": "--prim --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocprofsys.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
