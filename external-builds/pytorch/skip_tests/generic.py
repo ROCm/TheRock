@@ -13,7 +13,18 @@ skip_tests = {
         "cuda": {
             "test_autocast_torch_bf16",
             "test_autocast_torch_fp16",
-        }
+        },
+        "binary_ufuncs": [
+            # Complex pow operations failing on gfx950
+            # Same issues as in common section but specific to gfx950
+            # https://github.com/ROCm/TheRock/actions/runs/20562157729/job/59055110341
+            "test_contig_vs_every_other___rpow___cuda_complex64",
+            "test_contig_vs_every_other__refs_pow_cuda_complex64",
+            "test_contig_vs_every_other_pow_cuda_complex64",
+            "test_non_contig___rpow___cuda_complex64",
+            "test_non_contig__refs_pow_cuda_complex64",
+            "test_non_contig_pow_cuda_complex64",
+        ],
     },
     # Consumer GPU-specific failures (gfx115X series)
     # These GPUs have limited memory and different performance characteristics

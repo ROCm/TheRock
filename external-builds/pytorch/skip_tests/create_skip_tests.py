@@ -174,8 +174,8 @@ def create_list(
                     # Skip nested platform sections (they're handled above)
                     if pytorch_test_module in ["windows", "linux"]:
                         continue
-                    if isinstance(tests, list):
-                        selected_tests += tests
+                    if isinstance(tests, (list, set)):
+                        selected_tests += list(tests)  # Convert sets to lists
 
     # Remove duplicates and return
     return list(set(selected_tests))
