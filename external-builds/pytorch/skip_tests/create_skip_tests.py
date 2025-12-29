@@ -166,8 +166,9 @@ def create_list(
                 ):
                     # Add tests from nested platform section (e.g., skip_tests["gfx1151"]["windows"])
                     platform_config = filter_config[platform.lower()]
-                    for pytorch_test_module in platform_config.keys():
-                        selected_tests += platform_config[pytorch_test_module]
+                    for pytorch_test_module, tests in platform_config.items():
+                        if isinstance(tests, (list, set)):
+                            selected_tests += list(tests)  # Convert sets to lists
 
                 # For each pytorch test module (e.g., test_nn, test_torch) add all the tests
                 for pytorch_test_module, tests in filter_config.items():
