@@ -127,7 +127,8 @@ artifact_groups = [
     "third-party-libs",
     "hip-runtime",
     "opencl-runtime",
-    "profiler-core"
+    "profiler-core",
+    "rocrtst"
 ]
 
 [build_stages.math-libs]
@@ -206,6 +207,12 @@ description = "OpenCL runtime"
 type = "generic"
 artifact_group_deps = ["core-runtime", "compiler"]
 source_sets = ["rocm-systems"]  # clr is in rocm-systems
+
+[artifact_groups.rocrtst]
+description = "Core runtime tests (ROCR-Runtime, rocminfo)"
+type = "per-arch"
+artifact_group_deps = ["opencl-runtime", "core-runtime"]
+source_sets = ["rocm-systems"]
 
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
@@ -378,6 +385,14 @@ artifact_deps = ["core-runtime", "amd-llvm"]
 feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
+[artifacts.rocrtst]
+artifact_group = "rocrtst"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-ocl"]
+feature_name = "CORE_RUNTIME_TESTS"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.core-hipinfo]
 artifact_group = "hip-runtime"
 type = "target-neutral"
@@ -472,6 +487,13 @@ artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
+
+[artifacts.aqlprofile]
+artifact_group = "profiler-core"
+type = "target-specific"
+artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
