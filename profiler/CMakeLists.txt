@@ -235,6 +235,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         ${THEROCK_BUNDLED_BINUTILS}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
+        therock-tbb
         therock-dyninst
         therock-nlohmann-json
     )
