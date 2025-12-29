@@ -29,25 +29,15 @@ cmd1 = [
     "install",
     "-r",
     f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements.txt",
+    "-r",
+    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements-test.txt",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd1)}")
 
 subprocess.run(cmd1, cwd=THEROCK_DIR, check=True, env=environ_vars)
 
-# Install pip requirements for tests
-cmd2 = [
-    "pip",
-    "install",
-    "-r",
-    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements-test.txt",
-]
-
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd2)}")
-
-subprocess.run(cmd2, cwd=THEROCK_DIR, check=True, env=environ_vars)
-
 # Run tests
-cmd3 = [
+cmd2 = [
     "ctest",
     "--test-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute",
@@ -57,6 +47,6 @@ cmd3 = [
     "--timeout",
     "1800",
 ]
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd3)}")
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd2)}")
 
-subprocess.run(cmd3, cwd=THEROCK_DIR, check=True, env=environ_vars)
+subprocess.run(cmd2, cwd=THEROCK_DIR, check=True, env=environ_vars)
