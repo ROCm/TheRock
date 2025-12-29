@@ -685,19 +685,19 @@ def do_build_pytorch(
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
-            if (
-                "gfx103" in env["PYTORCH_ROCM_ARCH"]
-                or "gfx1152" in env["PYTORCH_ROCM_ARCH"]
-                or "gfx1153" in env["PYTORCH_ROCM_ARCH"]
+
+            # no aotriton support for gfx103X
+            #
+            # temporarily disable aotriton for gfx1152/53 until pytorch
+            # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+            AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+            if any(
+                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
             ):
-                # no aotriton support for gfx103X
-                #
-                # temporarily disable aotriton for gfx1152/53 until pytorch
-                # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
                 use_flash_attention = "OFF"
-            print(
-                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
-            )
+                print(
+                    f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
+                )
         else:
             # Explicit override: user has set the flag to true/false
             if args.enable_pytorch_flash_attention_linux:
