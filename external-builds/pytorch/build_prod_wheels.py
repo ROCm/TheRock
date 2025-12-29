@@ -695,9 +695,9 @@ def do_build_pytorch(
                 arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
             ):
                 use_flash_attention = "OFF"
-                print(
-                    f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
-                )
+            print(
+                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
+            )
         else:
             # Explicit override: user has set the flag to true/false
             if args.enable_pytorch_flash_attention_linux:
