@@ -26,8 +26,40 @@ skip_tests = {
             "test_non_contig_pow_cuda_complex64",
         ],
     },
+    "gfx94X-dcgpu": {
+        # Datacenter GPU (MI300 series) specific issues
+        "binary_ufuncs": [
+            # Complex pow operations - similar to gfx950
+            "test_contig_vs_every_other___rpow___cuda_complex64",
+            "test_contig_vs_every_other__refs_pow_cuda_complex64",
+            "test_contig_vs_every_other_pow_cuda_complex64",
+            "test_non_contig___rpow___cuda_complex64",
+            "test_non_contig__refs_pow_cuda_complex64",
+            "test_non_contig_pow_cuda_complex64",
+        ],
+    },
     # Consumer GPU-specific failures (gfx115X series)
     # These GPUs have limited memory and different performance characteristics
+    "gfx1150": {
+        "torch": [
+            # Memory pressure issues on consumer GPUs
+            "test_grad_scale_will_not_overflow_cuda",
+            "test_grad_scaling_unscale_sparse_cuda_float32",
+        ],
+        "windows": {
+            # Windows + gfx115X specific failures
+            "nn": [
+                # Additional convolution failures on Windows consumer GPUs
+                "test_ConvTranspose2d_deterministic_cudnn",
+                "test_ConvTranspose3d_deterministic_cudnn",
+            ],
+            "cuda": [
+                # Memory allocation failures on consumer GPUs
+                "test_caching_allocator_record_stream_oom",
+                "test_cuda_memory_leak_detection",
+            ],
+        },
+    },
     "gfx1151": {
         "torch": [
             # Memory pressure issues on consumer GPUs
@@ -83,6 +115,30 @@ skip_tests = {
                 "test_cuda_memory_leak_detection",
             ],
         },
+    },
+    "gfx1154": {
+        # Similar to other gfx115X consumer GPUs
+        "torch": [
+            "test_grad_scale_will_not_overflow_cuda",
+            "test_grad_scaling_unscale_sparse_cuda_float32",
+        ],
+        "windows": {
+            "nn": [
+                "test_ConvTranspose2d_deterministic_cudnn",
+                "test_ConvTranspose3d_deterministic_cudnn",
+            ],
+            "cuda": [
+                "test_caching_allocator_record_stream_oom",
+                "test_cuda_memory_leak_detection",
+            ],
+        },
+    },
+    "gfx120X-all": {
+        # Next-gen datacenter GPU specific issues
+        "nn": [
+            # Similar Conv issues as gfx110X-all
+            "test_Conv",
+        ],
     },
     "gfx110X-all": {
         # Datacenter GPU-specific failures
