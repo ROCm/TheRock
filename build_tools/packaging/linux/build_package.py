@@ -149,6 +149,8 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     generate_changelog_file(pkg_info, deb_dir, config)
     generate_rules_file(pkg_info, deb_dir, config)
     generate_control_file(pkg_info, deb_dir, config)
+    if is_postinstallscripts_available(pkg_info):
+        generate_debian_postscripts(pkg_info, deb_dir, config)
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
@@ -158,10 +160,10 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list and not is_meta:
-        sys.exit("Empty sourcedir_list and not a meta package, exiting")
+        sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
 
     if not sourcedir_list:
-        print(f"Meta package")
+        print(f"{pkg_name} is a Meta package")
     else:
         # Install file is required for non-meta packages
         generate_install_file(pkg_info, deb_dir, config)
@@ -353,6 +355,47 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         f.write("\n")  # Adds a blank line. For fixing missing final newline
 
 
+def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
+    """Generate a Debian postinst/prerm file entry in `debian folder`.
+
+    Parameters:
+    pkg_info: Package details parsed from a JSON file
+    deb_dir: Directory where the `debian/control` file will be created
+    config: Configuration object containing package metadata
+
+    Returns: None
+    """
+    # Debian maintainer scripts that must be executable
+    EXEC_SCRIPTS = {"preinst", "postinst", "prerm", "postrm", "config"}
+    pkg_name = pkg_info.get("Package")
+    parts = config.rocm_version.split(".")
+    if len(parts) < 3:
+        raise ValueError(
+            f"Version string '{args.rocm_version}' does not have major.minor.patch versions"
+        )
+
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    # Prepare your context dictionary
+    context = {
+        "install_prefix": config.install_prefix,
+        "version_major": int(re.match(r"^\d+", parts[0]).group()),
+        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
+        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
+        "target": "deb",
+    }
+
+    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
+    # Collect all matching files
+    for script in EXEC_SCRIPTS:
+        pattern = f"{pkg_name}-{script}.j2"
+        for file in templates_root.glob(pattern):
+            script_file = Path(deb_dir) / script
+            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
+            with script_file.open("w", encoding="utf-8") as f:
+                f.write(template.render(context))
+            os.chmod(script_file, 0o755)
+
+
 def copy_package_contents(source_dir, destination_dir):
     """Copy package contents from artfactory to package build directory
 
@@ -515,6 +558,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = ""
     rpmsuggests = ""
     sourcedir_list = []
+    rpm_scripts = []
     if config.versioned_pkg:
         recommends_list = pkg_info.get("RPMRecommends", [])
         rpmrecommends = convert_to_versiondependency(recommends_list, config)
@@ -530,6 +574,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         # Filter out non-existing directories
         sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
+
+        if is_postinstallscripts_available(pkg_info):
+            rpm_scripts = generate_rpm_postscripts(pkg_info, config)
 
         if config.enable_rpath:
             for path in sourcedir_list:
@@ -570,10 +617,57 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "disable_rpm_strip": is_rpm_stripping_disabled(pkg_info),
         "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
+        "rpm_scripts": rpm_scripts,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
         f.write(template.render(context))
+
+
+def generate_rpm_postscripts(pkg_info, config: PackageConfig):
+    """Generate RPM postinst/prerm sections.
+
+    Parameters:
+    pkg_info: Package details parsed from a JSON file
+    config: Configuration object containing package metadata
+
+    Returns: rpm script sections for specfile
+    """
+    # RPM maintainer scripts
+    EXEC_SCRIPTS = {
+        "preinst": "%pre",
+        "postinst": "%post",
+        "prerm": "%preun",
+        "postrm": "%postun",
+    }
+    pkg_name = pkg_info.get("Package")
+    parts = config.rocm_version.split(".")
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    # Prepare your context dictionary
+    context = {
+        "install_prefix": config.install_prefix,
+        "version_major": int(re.match(r"^\d+", parts[0]).group()),
+        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
+        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
+        "target": "rpm",
+    }
+
+    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
+    # Collect all matching files
+    # This will hold rendered RPM script sections
+    rpm_script_sections = {}
+
+    for script, rpm_section in EXEC_SCRIPTS.items():
+        pattern = f"{pkg_name}-{script}.j2"
+
+        for file in templates_root.glob(pattern):
+            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
+            rendered = template.render(context)
+
+            # Store rendered script under its RPM section name
+            rpm_script_sections[rpm_section] = rendered
+
+    return rpm_script_sections
 
 
 def package_with_rpmbuild(spec_file):

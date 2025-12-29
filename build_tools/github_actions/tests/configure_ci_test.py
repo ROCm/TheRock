@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 therock_test_runner_dict = {
     "gfx110x": {
@@ -359,7 +360,14 @@ class ConfigureCITest(unittest.TestCase):
         self.assert_target_output_is_valid(
             target_output=linux_target_output, allow_xfail=True
         )
-        self.assertEqual(linux_test_labels, [])
+        # For nightly runs, benchmark tests should be included in test labels
+        expected_benchmark_labels = set(benchmark_matrix.keys())
+        actual_benchmark_labels = set(linux_test_labels)
+        self.assertEqual(
+            actual_benchmark_labels,
+            expected_benchmark_labels,
+            f"Nightly builds should include all benchmark test labels",
+        )
 
     def test_windows_schedule_matrix_generator(self):
         windows_target_output, windows_test_labels = configure_ci.matrix_generator(
@@ -375,7 +383,14 @@ class ConfigureCITest(unittest.TestCase):
         self.assert_target_output_is_valid(
             target_output=windows_target_output, allow_xfail=True
         )
-        self.assertEqual(windows_test_labels, [])
+        # For nightly runs, benchmark tests should be included in test labels
+        expected_benchmark_labels = set(benchmark_matrix.keys())
+        actual_benchmark_labels = set(windows_test_labels)
+        self.assertEqual(
+            actual_benchmark_labels,
+            expected_benchmark_labels,
+            f"Nightly builds should include all benchmark test labels",
+        )
 
     ###########################################################################
     # Tests for multi_arch mode
