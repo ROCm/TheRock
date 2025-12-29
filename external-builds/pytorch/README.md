@@ -173,6 +173,20 @@ mix/match build steps.
 
 ## Running/testing PyTorch
 
+### Prerequisites
+
+On Linux we run automated tests under our
+[`no_rocm_image_ubuntu24_04.Dockerfile`](dockerfiles/no_rocm_image_ubuntu24_04.Dockerfile)
+container. Docker is optional for developers and users. If you want to use our
+test image, run it like so:
+
+```bash
+sudo docker run -it \
+  --device=/dev/kfd --device=/dev/dri \
+  --ipc=host --group-add=video --group-add=render --group-add=110 \
+  ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+```
+
 ### Running ROCm and PyTorch sanity checks
 
 The simplest tests for a working PyTorch with ROCm install are:
@@ -187,24 +201,56 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 ### Running PyTorch smoketests
 
-We have additional smoketests that run some sample computations. See
-[smoke-tests](./smoke-tests/) for details, or just run:
+We have additional smoketests in [smoke-tests](./smoke-tests/) that run some
+sample computations. To run these tests:
 
 ```bash
+# Basic usage (no wrapper script)
 pytest -v smoke-tests
+
+# Wrapper script, passing through some useful pytest args:
+python run_pytorch_smoke_tests.py -- \
+  --log-cli-level=INFO \
+  -v
 ```
 
 ### Running full PyTorch tests
 
-See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation
+We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
+which runs PyTorch unit tests using pytest with additional test exclusion
+capabilities tailored for AMD ROCm GPUs. See the script for detailed
+instructions. Here are a few examples:
 
-<!-- TODO(erman-gurses): update docs here -->
+```bash
+# Basic usage (auto-detect everything, no extra args):
+python run_pytorch_tests.py
+
+# Typical usage on CI, passing through some useful pytest args:
+python run_pytorch_tests.py -- \
+  --continue-on-collection-errors \
+  --import-mode=importlib \
+  -v
+
+# Custom test selection with pytest -k:
+python run_pytorch_tests.py -k "test_nn and not test_dropout"
+
+# Explicit pytorch repo path (for test sources) and GPU family (for filtering)
+python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+```
+
+Tests can also be run by following the ROCm documentation at
+https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation.
+For example:
+
+```bash
+PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
+```
 
 ## Nightly releases
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `pytorch-triton-rocm` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
+With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `triton` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
 
 Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
 

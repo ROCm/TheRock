@@ -1,0 +1,85 @@
+#!/bin/bash
+
+is_debian_like() {
+    local id_like="$1"
+    case " $id_like " in
+        (*" debian "*|*" ubuntu "*)
+            return 0
+            ;;
+        (*)
+            return 1
+            ;;
+    esac
+}
+
+do_update_alternatives(){
+    # skip update if program doesn't exist
+    command -v update-alternatives >/dev/null || return 0
+    local binaries altscore now
+    now=$(date -u +%s)          # Number of seconds since 1 Jan 1970
+
+
+    # The reason for this approach rather than using the build number
+    # is to allow for jobs from different builds. In one build job the
+    # job number might be at 1200, whilst in a release job the number
+    # may be only 1. This approach assums that if you install a build
+    # with a different semantic version then the highest is the
+    # desired one, but if you install two with the same semver then
+    # the newest is the desired version.
+
+    # Build up a score. It needs to fit in 32 bits
+    altscore=$(({{ version_major }} - 3))
+    altscore=$((altscore * 14 + {{ version_minor }})) # Allow up to 14 minor
+    altscore=$((altscore * 14 + {{ version_patch }})) # Allow up to 14 patch
+
+    # So far if the version is less than 9 we have a number (altscore)
+    # that is less than 1175.  2**31/1175 is about 1.8 million. So
+    # multiply altscore by 1,000,000 and add in a factor of how many
+    # minutes have passed from an arbitary point in time (1,600,000,000
+    # seconds after 1 Jan 1970 or Sep 13 12:26:40 2020) on the
+    # basis that no one is going to be installing a new version more
+    # often than every minute. This does get things wrong if a million
+    # minutes pass and you are downgrading, but the chances of someone
+    # waiting almost 2 years between installing a version and the
+    # previous patch level is small.
+    altscore=$((altscore*1000000+(now-1600000000)/60))
+
+    binaries=( hipcc rocminfo amd-smi rocm_agent_enumerator rocm-smi rocprofv3 )
+
+    {% if target == "deb" %}
+       PKG_INSTALL_PREFIX={{ install_prefix }}
+    {% else %}
+       PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
+    {% endif %}
+
+    for i in "${binaries[@]}"
+    do
+        # No obvious recover strategy if things fail
+        # No manual or other slave pages to install
+        if [ -e $PKG_INSTALL_PREFIX/bin/"$i" ]
+        then
+            update-alternatives --install /usr/bin/"$i" "$i" \
+                                $PKG_INSTALL_PREFIX/bin/"$i" "$altscore"
+        else
+            echo "$PKG_INSTALL_PREFIX/bin/$i not found, but that is OK" >&2
+        fi
+    done
+    true
+}
+
+if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
+then
+    case "$1" in
+       (configure)
+       do_update_alternatives
+       ;;
+       (abort-upgrade|abort-remove|abort-deconfigure)
+           echo "$1"
+       ;;
+       (*)
+          exit 0
+       ;;
+    esac
+else
+    do_update_alternatives
+fi

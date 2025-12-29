@@ -22,4 +22,13 @@ therock_cmake_subproject_declare(therock-spdlog
 therock_cmake_subproject_provide_package(therock-spdlog spdlog lib/cmake)
 therock_cmake_subproject_activate(therock-spdlog)
 
+therock_provide_artifact(spdlog
+  TARGET_NEUTRAL
+  DESCRIPTOR artifact-spdlog.toml
+  COMPONENTS
+    dev
+  SUBPROJECT_DEPS
+    therock-spdlog
+)
+
 add_dependencies(therock-third-party therock-spdlog)

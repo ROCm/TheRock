@@ -16,7 +16,6 @@ override_dh_dwz:
 {% endif %}
 
 
-
 {% if disable_dh_strip %}
 override_dh_strip:
 	:
@@ -30,6 +29,19 @@ override_dh_strip:
 	PATH="$(CURDIR)/debian/.llvm-tools:$(PATH)" dh_strip --exclude=libompdevice.a
 {% endif %}
 
+override_dh_installchangelogs:
+	# Skip the default documentation installation in /usr/share/doc
+	# Install the Debian changelog only to the custom location
+	install -d $(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}
+	if [ -f $(CURDIR)/debian/changelog ]; then \
+		install -m 644 $(CURDIR)/debian/changelog \
+			$(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}/changelog.Debian; \
+		gzip -9 -f $(CURDIR)/debian/{{ pkg_name }}{{ install_prefix }}/share/doc/{{ pkg_name }}/changelog.Debian; \
+	fi
+
+override_dh_installdocs:
+  # Empty block skip default documentation installation in /usr/share/doc
+  :
 
 override_dh_shlibdeps:
 	@echo "Skipping dh_shlibdeps"

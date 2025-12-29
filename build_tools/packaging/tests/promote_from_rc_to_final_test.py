@@ -31,7 +31,7 @@ TEST SCENARIOS:
 
 PACKAGE TYPES TESTED:
   - ROCm SDK packages: rocm, rocm_sdk_core, rocm_sdk_devel, rocm_sdk_libraries_*
-  - PyTorch packages: torch, torchaudio, torchvision, pytorch_triton_rocm
+  - PyTorch packages: torch, torchaudio, torchvision, triton
   - Distribution tarballs: therock-dist-{platform}-gfx{arch}-{version}.tar.gz
 
 PREREQUISITES:
@@ -71,7 +71,7 @@ def checkPromotedFileNames(dir_path: Path, platform: str) -> tuple[bool, str]:
             "rocm_sdk_core-7.9.0-py3-none-linux_x86_64.whl",
             "rocm_sdk_devel-7.9.0-py3-none-linux_x86_64.whl",
             "rocm_sdk_libraries_gfx94x_dcgpu-7.9.0-py3-none-linux_x86_64.whl",
-            "pytorch_triton_rocm-3.3.1+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
+            "triton-3.3.1+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
             "torch-2.7.1+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
             "torchaudio-2.7.1a0+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
             "torchvision-0.22.1+rocm7.9.0-cp312-cp312-linux_x86_64.whl",
@@ -360,7 +360,7 @@ def getLinuxPackagesLinks() -> tuple[list[tuple[str, str]], Version, Version]:
         "rocm_sdk_core-7.9.0rc1-py3-none-linux_x86_64.whl",
         "rocm_sdk_devel-7.9.0rc1-py3-none-linux_x86_64.whl",
         "rocm_sdk_libraries_gfx94x_dcgpu-7.9.0rc1-py3-none-linux_x86_64.whl",
-        "pytorch_triton_rocm-3.3.1+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
+        "triton-3.3.1+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
         "torch-2.7.1+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
         "torchaudio-2.7.1a0+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",
         "torchvision-0.22.1+rocm7.9.0rc1-cp312-cp312-linux_x86_64.whl",

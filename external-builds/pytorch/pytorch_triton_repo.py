@@ -36,7 +36,7 @@ def do_checkout(args: argparse.Namespace):
             f"Could not find torch dir: {torch_dir} (did you check out torch first)"
         )
 
-    build_env = {"TRITON_WHEEL_NAME": "pytorch-triton-rocm"}
+    build_env = {}
     if args.repo_hashtag is None:
         if args.release:
             # Derive the commit pin based on --release.
