@@ -183,6 +183,39 @@ def gha_query_last_successful_workflow_run(
     return None
 
 
+def gha_query_workflow_runs(
+    github_repository: str,
+    workflow_name: str,
+    per_page: int = 20,
+    created_after: str | None = None,
+) -> list[dict]:
+    """Query workflow runs from the GitHub API.
+
+    Args:
+        github_repository: Repository in format "owner/repo"
+        workflow_name: Name of the workflow file (e.g., "ci.yml")
+        per_page: Number of results per page (max 100, default 20)
+        created_after: ISO 8601 timestamp to filter runs created after this time
+
+    Returns:
+        List of workflow run objects
+    """
+    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?per_page={per_page}"
+
+    if created_after:
+        url += f"&created=>={created_after}"
+
+    response = gha_send_request(url)
+
+    if response and response.get("workflow_runs"):
+        runs = response["workflow_runs"]
+        # If created_after is specified, filter results (API doesn't always respect the parameter perfectly)
+        if created_after:
+            runs = [run for run in runs if run.get("created_at", "") >= created_after]
+        return runs
+    return []
+
+
 def retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,

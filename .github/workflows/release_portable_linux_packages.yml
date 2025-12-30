@@ -378,3 +378,31 @@ jobs:
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
           key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+
+  triggered_workflows_summary:
+    name: Triggered Workflows
+    needs: [setup_metadata, portable_linux_packages]
+    if: always() && github.repository_owner == 'ROCm'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: 3.12
+
+      - name: Track triggered workflows
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          # Track child workflows triggered by this parent workflow
+          # Format: --workflows "DisplayName:workflow_file.yml:has_package_type,..."
+          # - DisplayName: Human-readable name for the summary table
+          # - workflow_file.yml: Exact workflow filename to query via GitHub API
+          # - has_package_type: true if workflow has RPM/DEB variants, false otherwise
+          python ./build_tools/github_actions/track_triggered_workflows.py \
+            --cutoff-minutes 10 \
+            --workflows "PyTorch Wheels:release_portable_linux_pytorch_wheels.yml:false,JAX Wheels:build_linux_jax_wheels.yml:false,Native Packages:build_native_linux_packages.yml:true"
