@@ -24,6 +24,7 @@ python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-pres
 
 python /therock/src/build_tools/health_status.py
 
+ccache -s
 # Build manylinux Python executables argument if MANYLINUX is set
 PYTHON_EXECUTABLES_ARG=""
 if [ "${MANYLINUX}" = "1" ] || [ "${MANYLINUX}" = "true" ]; then
@@ -36,4 +37,6 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist
+time cmake --build "$OUTPUT_DIR/build" --target amdsmi
+
+ccache -s
