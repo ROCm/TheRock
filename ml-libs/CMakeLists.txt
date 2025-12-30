@@ -202,7 +202,6 @@ if(THEROCK_ENABLE_HIPDNN)
   therock_cmake_subproject_activate(hipDNN)
 
   therock_provide_artifact(hipdnn
-    TARGET_NEUTRAL
     DESCRIPTOR artifact-hipdnn.toml
     COMPONENTS
       dbg
