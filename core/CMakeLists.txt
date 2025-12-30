@@ -367,7 +367,7 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 ##############################################################################
 
 if(THEROCK_BUILD_TESTING)
-  if(THEROCK_ENABLE_CORE_RUNTIME)
+  if(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
 
     therock_cmake_subproject_declare(rocrtst
       USE_DIST_AMDGPU_TARGETS
