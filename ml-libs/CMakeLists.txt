@@ -163,6 +163,7 @@ if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipDNN
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipDNN"
     BACKGROUND_BUILD
