@@ -1,0 +1,7 @@
+# rocrtst
+[components.dbg."core/rocrtst/stage"]
+[components.dev."core/rocrtst/stage"]
+[components.doc."core/rocrtst/stage"]
+[components.lib."core/rocrtst/stage"]
+[components.run."core/rocrtst/stage"]
+[components.test."core/rocrtst/stage"]

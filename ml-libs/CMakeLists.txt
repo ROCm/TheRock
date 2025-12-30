@@ -193,6 +193,7 @@ if(THEROCK_ENABLE_HIPDNN)
     .
   )
 
+  therock_cmake_subproject_provide_package(hipDNN hipdnn_data_sdk lib/cmake/hipdnn_data_sdk)
   therock_cmake_subproject_provide_package(hipDNN hipdnn_plugin_sdk lib/cmake/hipdnn_plugin_sdk)
   therock_cmake_subproject_provide_package(hipDNN hipdnn_test_sdk lib/cmake/hipdnn_test_sdk)
   therock_cmake_subproject_provide_package(hipDNN hipdnn_sdk lib/cmake/hipdnn_sdk)

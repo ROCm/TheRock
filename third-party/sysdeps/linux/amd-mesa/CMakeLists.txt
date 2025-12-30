@@ -3,6 +3,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork")
 
     therock_cmake_subproject_declare(therock-amd-mesa
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
@@ -58,6 +59,7 @@ add_custom_target(
         -Dlibdir=lib
         -Dva-libs-path="/lib"
         -Dallow-fallback-for=libva # NOTE: Use local build of VA library
+        -Dforce_fallback_for=libva # NOTE: Enforce local build, if public VA found
         -Dpkg_config_path="${CMAKE_CURRENT_BINARY_DIR}"/../../../libdrm/build/dist/lib/rocm_sysdeps/lib/pkgconfig
         -Damd-decode-only=true # NOTE: enable decode only for TheRock
         "${CMAKE_CURRENT_BINARY_DIR}"
