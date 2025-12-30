@@ -21,23 +21,8 @@ if old_pythonpath:
 else:
     os.environ["PYTHONPATH"] = test_dir
 
-logging.basicConfig(level=logging.INFO)
-
-# Install pip requirements
-cmd1 = [
-    "pip",
-    "install",
-    "-r",
-    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements.txt",
-    "-r",
-    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements-test.txt",
-]
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd1)}")
-
-subprocess.run(cmd1, cwd=THEROCK_DIR, check=True, env=environ_vars)
-
 # Run tests
-cmd2 = [
+cmd = [
     "ctest",
     "--test-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute",
@@ -47,6 +32,6 @@ cmd2 = [
     "--timeout",
     "1800",
 ]
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd2)}")
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
-subprocess.run(cmd2, cwd=THEROCK_DIR, check=True, env=environ_vars)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
