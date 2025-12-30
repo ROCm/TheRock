@@ -34,4 +34,4 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist
+time cmake --build "$OUTPUT_DIR/build" --target rocminfo
