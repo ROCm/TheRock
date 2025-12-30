@@ -369,7 +369,7 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 if(THEROCK_BUILD_TESTING)
   if(THEROCK_ENABLE_CORE_RUNTIME)
     if(THEROCK_ENABLE_OCL_RUNTIME)
-  
+
       therock_cmake_subproject_declare(rocrtst
         USE_DIST_AMDGPU_TARGETS
         EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
@@ -394,7 +394,7 @@ if(THEROCK_BUILD_TESTING)
       )
       therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
       therock_cmake_subproject_activate(rocrtst)
-  
+
       therock_provide_artifact(rocrtst
         TARGET_NEUTRAL
         DESCRIPTOR artifact-core-rocrtst.toml
@@ -408,7 +408,7 @@ if(THEROCK_BUILD_TESTING)
         SUBPROJECT_DEPS
           rocrtst
       )
-      
+
     endif(THEROCK_ENABLE_OCL_RUNTIME)
   endif(THEROCK_ENABLE_CORE_RUNTIME)
 endif(THEROCK_BUILD_TESTING)
