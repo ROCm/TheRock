@@ -57,3 +57,23 @@ cp -R {{ path }}/* $RPM_BUILD_ROOT{{ install_prefix }}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
+
+{% if rpm_scripts['%pre'] %}
+%pre
+{{ rpm_scripts['%pre'] }}
+{% endif %}
+
+{% if rpm_scripts['%post'] %}
+%post
+{{ rpm_scripts['%post'] }}
+{% endif %}
+
+{% if rpm_scripts['%preun'] %}
+%preun
+{{ rpm_scripts['%preun'] }}
+{% endif %}
+
+{% if rpm_scripts['%postun'] %}
+%postun
+{{ rpm_scripts['%postun'] }}
+{% endif %}

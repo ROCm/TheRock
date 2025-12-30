@@ -19,12 +19,12 @@ Config:
     # Results API Configuration
     UploadTestResultsToAPI: true
     ResultsAPI:
-      URL: "${API_URL}"                    # API URL from GitHub secrets
-      FallbackURL: "${API_FALLBACK_URL}"   # Fallback API URL from GitHub secrets
-      APIKey: "${API_KEY:-}"               # API key from environment (secure)
-      Timeout: 30                          # Request timeout in seconds
-      MaxRetries: 3                        # Maximum retry attempts
-      RetryDelay: 5                        # Delay between retries in seconds
+      URL: "${BENCHMARK_DB_URL}"                    # Primary benchmark results database endpoint
+      FallbackURL: "${BENCHMARK_DB_FALLBACK_URL}"   # Fallback benchmark results database endpoint
+      APIKey: "${API_KEY:-}"                        # API key from environment (secure)
+      Timeout: 30                                   # Request timeout in seconds
+      MaxRetries: 3                                 # Maximum retry attempts
+      RetryDelay: 5                                 # Delay between retries in seconds
 
   Results:
     # Local Results Output
