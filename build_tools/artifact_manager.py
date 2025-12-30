@@ -250,21 +250,27 @@ def do_fetch(args: argparse.Namespace):
     """Fetch inbound artifacts for a stage with parallel download and extract."""
     topology = get_topology(args.topology)
 
-    # Validate stage
-    if args.stage not in topology.build_stages:
-        log(f"ERROR: Stage '{args.stage}' not found")
-        log(f"Available stages: {', '.join(topology.build_stages.keys())}")
-        sys.exit(1)
+    # Determine which artifacts to fetch
+    if args.stage == "all":
+        # Fetch all artifacts in the topology
+        inbound = set(topology.artifacts.keys())
+        log(f"Fetching all {len(inbound)} artifacts")
+    else:
+        # Validate stage
+        if args.stage not in topology.build_stages:
+            log(f"ERROR: Stage '{args.stage}' not found")
+            log(f"Available stages: {', '.join(topology.build_stages.keys())}")
+            sys.exit(1)
 
-    # Get inbound artifacts for this stage
-    inbound = topology.get_inbound_artifacts(args.stage)
-    if not inbound:
-        log(f"Stage '{args.stage}' has no inbound artifacts")
-        return
+        # Get inbound artifacts for this stage
+        inbound = topology.get_inbound_artifacts(args.stage)
+        if not inbound:
+            log(f"Stage '{args.stage}' has no inbound artifacts")
+            return
 
-    log(
-        f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
-    )
+        log(
+            f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
+        )
 
     # Determine target families
     target_families = ["generic"]
@@ -774,7 +780,10 @@ def main(argv: Optional[List[str]] = None):
     )
     _add_backend_args(fetch_parser)
     fetch_parser.add_argument(
-        "--stage", type=str, required=True, help="Build stage name"
+        "--stage",
+        type=str,
+        default="all",
+        help="Build stage name (default: 'all' fetches all artifacts)",
     )
     fetch_parser.add_argument(
         "--amdgpu-families",
