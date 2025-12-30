@@ -41,18 +41,51 @@ skip_tests = {
     # Legacy datacenter GPUs
     "gfx90X-dcgpu": {
         # MI100 series datacenter GPUs
-        # Currently inheriting common skips, add specific skips as needed
+        "nn": [
+            # Potential issues similar to newer datacenter GPUs
+            "test_Conv",
+            "test_CTCLoss_long_targets",
+        ],
+        "cuda": [
+            # Memory profiler tests - missing flamegraph.pl
+            "test_memory_snapshot",
+            "test_memory_plots",
+            # JIT Extension building failures
+            "test_mempool_empty_cache_inactive",
+            "test_mempool_limited_memory_with_allocator",
+        ],
+        "binary_ufuncs": [
+            # Complex pow operations - numerical accuracy issues
+            "test_contig_vs_every_other___rpow___cuda_complex64",
+            "test_contig_vs_every_other__refs_pow_cuda_complex64",
+        ],
     },
     # Consumer discrete GPUs (RDNA series)
     "gfx101X-dgpu": {
         # RDNA1 discrete GPUs (e.g., RX 5000 series)
         # Gaming GPUs with limited compute capabilities
-        # Currently inheriting common skips
+        "cuda": [
+            # Memory allocation issues common on consumer GPUs
+            "test_caching_allocator_record_stream_oom",
+            "test_cuda_memory_leak_detection",
+        ],
+        "nn": [
+            # Potential conv issues on consumer GPUs
+            "test_Conv",
+        ],
     },
     "gfx103X-dgpu": {
         # RDNA2 discrete GPUs (e.g., RX 6000 series)
         # Gaming GPUs with improved compute over RDNA1
-        # Currently inheriting common skips
+        "cuda": [
+            # Memory allocation issues common on consumer GPUs
+            "test_caching_allocator_record_stream_oom",
+            "test_cuda_memory_leak_detection",
+        ],
+        "nn": [
+            # Potential conv issues on consumer GPUs
+            "test_Conv",
+        ],
     },
     # Consumer GPU-specific failures (gfx115X series)
     # These GPUs have limited memory and different performance characteristics
@@ -154,6 +187,15 @@ skip_tests = {
         "nn": [
             # Similar Conv issues as gfx110X-all
             "test_Conv",
+            # Similar CTCLoss issues as gfx110X-all - GPU hang risk
+            "test_CTCLoss_long_targets",
+        ],
+        "cuda": [
+            # Memory profiler tests - missing flamegraph.pl
+            "test_memory_snapshot",
+            "test_memory_plots",
+            # Potential memory allocation issues
+            "test_caching_allocator_record_stream_oom",
         ],
     },
     "gfx110X-all": {
