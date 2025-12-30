@@ -96,6 +96,25 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
   ##############################################################################
+  # rocprofiler-sdk-tests
+  ##############################################################################
+  therock_cmake_subproject_declare(rocprofiler-sdk-tests
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk/tests"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
+    BACKGROUND_BUILD
+    RUNTIME_DEPS
+      rocprofiler-sdk
+  )
+
+  therock_cmake_subproject_glob_c_sources(rocprofiler-sdk-tests
+    SUBDIRS .
+  )
+
+  therock_cmake_subproject_provide_package(rocprofiler-sdk-tests rocprofiler-sdk-tests lib/cmake/rocprofiler-sdk-tests)
+  therock_cmake_subproject_activate(rocprofiler-sdk-tests)
+
+  ##############################################################################
   # rocprofiler-compute
   ##############################################################################
   therock_cmake_subproject_declare(rocprofiler-compute
