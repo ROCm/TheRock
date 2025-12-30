@@ -15,12 +15,15 @@ mkdir -p "$PIP_CACHE_DIR"
 
 pip install -r /therock/src/requirements.txt
 
-python /therock/src/build_tools/health_status.py
+
 
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
 python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-presubmit" --dir "$(dirname $CCACHE_CONFIGPATH)" --local-path "$CACHE_DIR/ccache"
+
+python /therock/src/build_tools/health_status.py
+
 
 # Build manylinux Python executables argument if MANYLINUX is set
 PYTHON_EXECUTABLES_ARG=""
