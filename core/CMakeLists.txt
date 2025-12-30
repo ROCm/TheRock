@@ -361,3 +361,52 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   endif()
 
 endif(THEROCK_ENABLE_OCL_RUNTIME)
+
+##############################################################################
+# rocrtst for ROCR-Runtime
+##############################################################################
+
+if(THEROCK_BUILD_TESTING)
+  if(THEROCK_ENABLE_CORE_RUNTIME)
+
+    therock_cmake_subproject_declare(rocrtst
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DCMAKE_PREFIX_PATH="
+        "-DLLVM_DIR="
+        "-DROCM_DIR="
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      BUILD_DEPS
+        amd-llvm
+        amdsmi
+        ocl-clr
+      RUNTIME_DEPS
+        ROCR-Runtime
+        rocprofiler-register
+        ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_NUMACTL}
+    )
+    therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
+    therock_cmake_subproject_activate(rocrtst)
+
+    therock_provide_artifact(rocrtst
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-rocrtst.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        rocrtst
+    )
+
+  endif(THEROCK_ENABLE_CORE_RUNTIME)
+endif(THEROCK_BUILD_TESTING)
