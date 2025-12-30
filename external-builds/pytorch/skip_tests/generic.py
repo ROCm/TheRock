@@ -165,6 +165,11 @@ skip_tests = {
             # https://github.com/ROCm/TheRock/actions/runs/20554976437/job/59039577384
             # Using broad pattern to catch all convolution tests as precaution
             "test_Conv",  # Matches test_Conv1d, test_Conv2d, test_Conv3d, etc.
+            # GPU Hang during CTCLoss backward pass
+            # HW Exception causing Fatal Python error: Aborted
+            # Occurs in autograd backward engine during gradient computation
+            # https://github.com/ROCm/TheRock/actions/runs/20583465043/job/59117867695
+            "test_CTCLoss_long_targets",
         ],
     },
     "common": {
