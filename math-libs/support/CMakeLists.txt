@@ -23,6 +23,7 @@ therock_cmake_subproject_activate(mxDataGenerator)
 ################################################################################
 
 therock_provide_artifact(support
+  TARGET_NEUTRAL
   DESCRIPTOR artifact-support.toml
   COMPONENTS
     dev

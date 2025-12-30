@@ -202,6 +202,7 @@ if(THEROCK_ENABLE_HIPDNN)
   therock_cmake_subproject_activate(hipDNN)
 
   therock_provide_artifact(hipdnn
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-hipdnn.toml
     COMPONENTS
       dbg
@@ -250,6 +251,7 @@ if(THEROCK_ENABLE_MIOPEN_PLUGIN)
   therock_cmake_subproject_activate(MIOpen_plugin)
 
   therock_provide_artifact(miopen-plugin
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-miopen-plugin.toml
     COMPONENTS
       dbg
