@@ -490,13 +490,6 @@ feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
-[artifacts.aqlprofile]
-artifact_group = "profiler-core"
-type = "target-specific"
-artifact_deps = ["core-runtime"]
-feature_group = "PROFILER"
-disable_platforms = ["windows"]
-
 [artifacts.rocprofiler-compute]
 artifact_group = "profiler-core"
 type = "target-neutral"
