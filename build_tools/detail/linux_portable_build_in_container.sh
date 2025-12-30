@@ -20,10 +20,9 @@ pip install -r /therock/src/requirements.txt
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-presubmit" --dir "$(dirname $CCACHE_CONFIGPATH)" --local-path "$CACHE_DIR/ccache"
+python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-presubmit"
 
 python /therock/src/build_tools/health_status.py
-
 
 # Build manylinux Python executables argument if MANYLINUX is set
 PYTHON_EXECUTABLES_ARG=""
@@ -37,4 +36,4 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build" --target rocminfo
+time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist
