@@ -20,9 +20,6 @@ logging.basicConfig(level=logging.INFO)
 
 tests_to_exclude = [
     "*known_bug*",
-    "_/getrs*",
-    "_/getri_batched.solver*",
-    "_/gels_batched.solver*",
 ]
 
 exclusion_list = ":".join(tests_to_exclude)
