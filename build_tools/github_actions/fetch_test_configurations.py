@@ -46,7 +46,9 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 4,
         "exclude_family": {
-            "linux": ["gfx950-dcgpu"]  # issue: https://github.com/ROCm/TheRock/issues/2727
+            "linux": [
+                "gfx950-dcgpu"
+            ] # issue: https://github.com/ROCm/TheRock/issues/2727
         },
     },
     "hipblas": {
