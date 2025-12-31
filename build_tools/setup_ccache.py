@@ -27,6 +27,9 @@ import sys
 import subprocess
 
 THIS_DIR = Path(__file__).resolve().parent
+
+print(f"THIS_DIR: {THIS_DIR}")
+
 REPO_ROOT = THIS_DIR.parent
 POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
 POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
@@ -39,8 +42,8 @@ CONFIG_PRESETS_MAP = {
     # For initial implementation, pre and post submit will be the same
     "github-oss-presubmit": {
         "secondary_storage": CACHE_SRV,
-        "log_file": Path("/therock/output/") / "build/logs/ccache.log",
-        "stats_log": Path("/therock/output/") / "build/logs/ccache_stats.log",
+        "log_file": Path("/therock/output") / "build/logs/ccache.log",
+        "stats_log": Path("/therock/output") / "build/logs/ccache_stats.log",
         "max_size": "5G",
     },
     "github-oss-postsubmit": {
@@ -60,6 +63,7 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     # and inserts all ccache env var configs along side below's local defaults
     config_preset: str = args.config_preset
     selected_config = CONFIG_PRESETS_MAP[config_preset]
+    print(f"selected_config: {str(selected_config)}")
     for k, v in selected_config.items():
         lines.append(f"{k} = {v}")
         # Ensure full dir path for logs exists, else ccache will fail and stop CI
@@ -151,6 +155,9 @@ def run(args: argparse.Namespace):
     # Output options.
     print(f"export CCACHE_CONFIGPATH={config_file}")
 
+    print("echo ccache config before health status !!")
+    result = subprocess.run( 'ccache -p || true' , capture_output=True, text=True)
+    print(result.stdout) # Output: Hello, World!
 
 def main(argv: list[str]):
     p = argparse.ArgumentParser()
