@@ -173,7 +173,6 @@ jobs:
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
-      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       S3_SUBDIR_TAR: ${{ needs.setup_metadata.outputs.s3_subdir_tar }}
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"

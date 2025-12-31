@@ -23,9 +23,14 @@ export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 echo "####ccache config before call#####"
 ccache -p
 
+printenv | grep CCACHE_CONFIGPATH
+
+export CCACHE_CONFIGPATH=/therock/src/.ccache/ccache.conf
+
 python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-presubmit"
 
 python /therock/src/build_tools/health_status.py
+
 
 ccache -s
 # Build manylinux Python executables argument if MANYLINUX is set
