@@ -65,6 +65,7 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
     selected_config = CONFIG_PRESETS_MAP[config_preset]
     print(f"selected_config: {str(selected_config)}")
     for k, v in selected_config.items():
+        print(f"{k} = {v}")
         lines.append(f"{k} = {v}")
         # Ensure full dir path for logs exists, else ccache will fail and stop CI
         if k == "log_file" or k == "stats_log":

@@ -381,6 +381,12 @@ jobs:
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
           key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+
+      - name: check content of output folder
+        run: |
+          pwd
+          cat /etc/os-release || true
+          ls -alrtR ${{ env.OUTPUT_DIR }}
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
