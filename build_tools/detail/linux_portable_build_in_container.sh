@@ -1,7 +1,7 @@
 #!/bin/bash
 # See corresponding linux_portable_build.py which invokes this within a
 # container.
-set -e
+set -ex
 set -o pipefail
 trap 'kill -TERM 0' INT
 
@@ -10,6 +10,8 @@ mkdir -p "$OUTPUT_DIR/caches"
 
 export CCACHE_DIR="$OUTPUT_DIR/caches/container/ccache"
 export PIP_CACHE_DIR="$OUTPUT_DIR/caches/container/pip"
+export CCACHE_CONFIGPATH="/therock/src/.ccache/ccache.conf"
+
 mkdir -p "$CCACHE_DIR"
 mkdir -p "$PIP_CACHE_DIR"
 
@@ -22,10 +24,6 @@ export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
 echo "####ccache config before call#####"
 ccache -p
-
-printenv | grep CCACHE_CONFIGPATH
-
-export CCACHE_CONFIGPATH=/therock/src/.ccache/ccache.conf
 
 python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-presubmit"
 
