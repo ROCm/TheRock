@@ -45,6 +45,9 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocroller.py')}",
         "platform": ["linux"],
         "total_shards": 4,
+        "exclude_family": {
+            "linux": ["gfx950"]  # issue: https://github.com/ROCm/TheRock/issues/2727
+        },
     },
     "hipblas": {
         "job_name": "hipblas",
