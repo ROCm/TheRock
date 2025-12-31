@@ -123,7 +123,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type == 'dev' && format('{0}-access', inputs.release_type) || inputs.release_type }}
 
       - name: Upload Package repo to S3
         id: upload-packages
