@@ -101,8 +101,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_declare(rocprofiler-sdk-tests
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk/tests"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk-tests"
     BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
     RUNTIME_DEPS
       rocprofiler-sdk
   )
