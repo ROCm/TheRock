@@ -156,8 +156,8 @@ def run(args: argparse.Namespace):
     print(f"export CCACHE_CONFIGPATH={config_file}")
 
     print("echo ccache config before health status !!")
-    result = subprocess.run( 'ccache -p || true' , capture_output=True, text=True)
-    print(result.stdout) # Output: Hello, World!
+    result = subprocess.run( [ 'ccache', '-p', '||', 'true'] , capture_output=True, text=True)
+    print(result.stdout)
 
 def main(argv: list[str]):
     p = argparse.ArgumentParser()
