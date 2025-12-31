@@ -75,7 +75,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            # TODO(#2741): Re-enable machine once `amdsmi` test is fixed
+            # TODO(#2741): Re-enable machine once `amdsmi` test timeout is fixed
             # Label is "linux-gfx1151-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx1151",
