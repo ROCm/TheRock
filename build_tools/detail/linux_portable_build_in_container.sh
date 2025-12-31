@@ -20,6 +20,9 @@ pip install -r /therock/src/requirements.txt
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+echo "####ccache config before call#####"
+ccache -p
+
 python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-presubmit"
 
 python /therock/src/build_tools/health_status.py

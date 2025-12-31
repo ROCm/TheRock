@@ -215,6 +215,7 @@ jobs:
 
       - name: Build Projects
         run: |
+          echo "${{ github.workspace }}"
           ./build_tools/linux_portable_build.py \
             --image=${{ env.BUILD_IMAGE }} \
             --output-dir=${{ env.OUTPUT_DIR }} \
