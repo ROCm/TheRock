@@ -48,7 +48,7 @@ test_matrix = {
         "exclude_family": {
             "linux": [
                 "gfx950-dcgpu"
-            ] # issue: https://github.com/ROCm/TheRock/issues/2727
+            ]  # issue: https://github.com/ROCm/TheRock/issues/2727
         },
     },
     "hipblas": {
