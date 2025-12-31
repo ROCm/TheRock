@@ -361,7 +361,6 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --build-dir build
 
   # ==========================================================================
@@ -474,7 +473,6 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --build-dir build
 
   # ==========================================================================
