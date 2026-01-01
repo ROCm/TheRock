@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shlex
 import subprocess
 from pathlib import Path
@@ -11,10 +12,6 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
 def get_visible_gpu_count(env=None) -> int:
-    """
-    Returns the number of GPUs visible to HIP,
-    honoring HIP_VISIBLE_DEVICES if set.
-    """
     rocminfo = Path(THEROCK_BIN_DIR) / "rocminfo"
     rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
 
@@ -27,10 +24,12 @@ def get_visible_gpu_count(env=None) -> int:
         check=False,
     )
 
-    # Count only top-level GPU agent names
+    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
+
     return sum(
-        1 for line in result.stdout.splitlines()
-        if line.startswith("Name:") and line.split()[-1].startswith("gfx")
+        1 
+        for line in result.stdout.splitlines()
+        if pattern.match(line.strip())
     )
 
 class TestRCCL:
