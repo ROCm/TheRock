@@ -16,8 +16,8 @@ class TestRCCL:
         # Executing rccl gtest from rccl repo
         environ_vars = os.environ.copy()
         environ_vars["HIP_VISIBLE_DEVICES"] = "2"
-        environ_vars["UT_MIN_GPUS"] = "1"
-        environ_vars["UT_MAX_GPUS"] = "1"
+        environ_vars["UT_MIN_GPUS"] = "2"
+        environ_vars["UT_MAX_GPUS"] = "2"
         environ_vars["UT_POW2_GPUS"] = "1"
         environ_vars["UT_PROCESS_MASK"] = "1"
         cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
