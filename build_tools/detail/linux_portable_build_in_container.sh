@@ -11,6 +11,8 @@ mkdir -p "$OUTPUT_DIR/caches"
 export CCACHE_DIR="$OUTPUT_DIR/caches/container/ccache"
 export PIP_CACHE_DIR="$OUTPUT_DIR/caches/container/pip"
 export CCACHE_CONFIGPATH="/therock/src/.ccache/ccache.conf"
+export CCACHE_DEBUG=1
+export CCACHE_DEBUGDIR="/therock/output/ccache-debug"
 
 mkdir -p "$CCACHE_DIR"
 mkdir -p "$PIP_CACHE_DIR"
@@ -43,6 +45,6 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build" --target amdsmi
+time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist
 
 ccache -s
