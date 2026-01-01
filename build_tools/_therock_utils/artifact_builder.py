@@ -250,15 +250,16 @@ class ComponentBasedirDescriptor:
         if use_default_patterns:
             includes.extend(defaults.includes)
 
-        # Add kpack patterns for this artifact/component combination.
-        # Kpack file naming: {artifact}_{component}.kpm, {artifact}_{component}_{arch}.kpack
-        includes.append(f".kpack/{artifact_name}_{component.name}.kpm")
-        includes.append(f".kpack/{artifact_name}_{component.name}_*.kpack")
-
         excludes = _dup_list_or_str(record.get("exclude"))
         if use_default_patterns:
             excludes.extend(defaults.excludes)
         force_includes = _dup_list_or_str(record.get("force_include"))
+
+        # Add kpack patterns to force_includes so they don't interfere with
+        # the normal include pattern matching. If added to includes, they would
+        # cause files to be excluded when includes is otherwise empty.
+        force_includes.append(f".kpack/{artifact_name}_{component.name}.kpm")
+        force_includes.append(f".kpack/{artifact_name}_{component.name}_*.kpack")
 
         self.predicate = MatchPredicate(
             includes=includes,

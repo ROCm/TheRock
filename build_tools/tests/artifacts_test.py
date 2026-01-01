@@ -149,18 +149,19 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
             self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         bd = d.components["lib"].basedirs["stage/somedir"]
-        # Includes should have lib defaults plus kpack patterns
-        expected_includes = builder.ComponentDefaults.ALL["lib"].includes + [
-            ".kpack/test_lib.kpm",
-            ".kpack/test_lib_*.kpack",
-        ]
+        # Includes should have lib defaults only
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
-            expected_includes,
+            builder.ComponentDefaults.ALL["lib"].includes,
         )
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.excludes],
             builder.ComponentDefaults.ALL["lib"].excludes,
+        )
+        # Kpack patterns should be in force_includes
+        self.assertEqual(
+            [pattern.glob for pattern in bd.predicate.force_includes],
+            [".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
         self.assertFalse(bd.optional)
 
@@ -204,14 +205,19 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
             self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         bd = d.components["lib"].basedirs["stage/somedir"]
-        # Even with default_patterns=false, kpack patterns are always added
+        # With default_patterns=false, includes should be empty
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
-            [".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
+            [],
         )
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.excludes],
             [],
+        )
+        # Kpack patterns should still be in force_includes
+        self.assertEqual(
+            [pattern.glob for pattern in bd.predicate.force_includes],
+            [".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
 
     def testBasedirExplicitLists(self):
@@ -229,11 +235,7 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
             self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         bd = d.components["lib"].basedirs["stage/somedir"]
-        expected_includes = (
-            ["**/abc"]
-            + builder.ComponentDefaults.ALL["lib"].includes
-            + [".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"]
-        )
+        expected_includes = ["**/abc"] + builder.ComponentDefaults.ALL["lib"].includes
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
             expected_includes,
@@ -242,9 +244,10 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
             [pattern.glob for pattern in bd.predicate.excludes],
             ["**/def"],
         )
+        # Kpack patterns added to force_includes along with explicit ones
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.force_includes],
-            ["**/xyz"],
+            ["**/xyz", ".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
         self.assertTrue(bd.optional)
 
@@ -262,11 +265,7 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
             self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         bd = d.components["lib"].basedirs["stage/somedir"]
-        expected_includes = (
-            ["**/abc"]
-            + builder.ComponentDefaults.ALL["lib"].includes
-            + [".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"]
-        )
+        expected_includes = ["**/abc"] + builder.ComponentDefaults.ALL["lib"].includes
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
             expected_includes,
@@ -275,10 +274,60 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
             [pattern.glob for pattern in bd.predicate.excludes],
             ["**/def"],
         )
+        # Kpack patterns added to force_includes along with explicit ones
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.force_includes],
-            ["**/xyz"],
+            ["**/xyz", ".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
+
+    def testEmptyComponentMatchesEverything(self):
+        """Regression test: empty includes (no patterns) should match all files.
+
+        This is a critical invariant - when a component has no include patterns
+        (and default_patterns=false), it should match everything. Previously,
+        adding kpack patterns to 'includes' broke this because non-empty includes
+        require files to match at least one pattern. Kpack patterns are now in
+        force_includes to preserve this behavior.
+        """
+        self.write_indented(
+            "descriptor.toml",
+            r"""
+        [components.lib."stage/somedir"]
+        default_patterns = false
+        """,
+        )
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
+        bd = d.components["lib"].basedirs["stage/somedir"]
+
+        # Verify includes is empty (the critical invariant)
+        self.assertEqual([pattern.glob for pattern in bd.predicate.includes], [])
+
+        # Create test files of various types
+        stage_dir = self.temp_dir / "src" / "stage" / "somedir"
+        stage_dir.mkdir(parents=True)
+        (stage_dir / "bin").mkdir()
+        (stage_dir / "bin" / "executable").write_text("exe")
+        (stage_dir / "lib").mkdir()
+        (stage_dir / "lib" / "libfoo.so").write_text("lib")
+        (stage_dir / "random.txt").write_text("text")
+
+        # Use PatternMatcher to verify all files match
+        from _therock_utils.pattern_match import PatternMatcher
+
+        pm = PatternMatcher(
+            includes=[p.glob for p in bd.predicate.includes],
+            excludes=[p.glob for p in bd.predicate.excludes],
+            force_includes=[p.glob for p in bd.predicate.force_includes],
+        )
+        pm.add_basedir(stage_dir)
+
+        matched_files = set(relpath for relpath, _ in pm.matches())
+        # All files should match when includes is empty
+        self.assertIn("bin/executable", matched_files)
+        self.assertIn("lib/libfoo.so", matched_files)
+        self.assertIn("random.txt", matched_files)
 
 
 class ComponentScannerTest(TmpDirTestCase):
