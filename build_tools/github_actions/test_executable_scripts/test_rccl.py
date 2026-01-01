@@ -15,7 +15,7 @@ class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
         environ_vars = os.environ.copy()
-        environ_vars["HIP_VISIBLE_DEVICES"] = "2"
+        environ_vars["HIP_VISIBLE_DEVICES"] = "2,3"
         environ_vars["UT_MIN_GPUS"] = "2"
         environ_vars["UT_MAX_GPUS"] = "2"
         environ_vars["UT_POW2_GPUS"] = "1"
