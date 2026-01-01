@@ -26,7 +26,12 @@ def get_visible_gpu_count(env=None) -> int:
         env=env,
         check=False,
     )
-    return result.stdout.count("gfx")
+
+    # Count only top-level GPU agent names
+    return sum(
+        1 for line in result.stdout.splitlines()
+        if line.startswith("Name:") and line.split()[-1].startswith("gfx")
+    )
 
 class TestRCCL:
     def test_rccl_unittests(self):
