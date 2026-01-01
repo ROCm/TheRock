@@ -391,4 +391,7 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: ccache_log
-          path: ${{ env.OUTPUT_DIR }}/build/logs/ccache*
+          path: |
+            ${{ env.OUTPUT_DIR }}/build/logs/ccache.log
+            ${{ env.OUTPUT_DIR }}/build/logs/ccache_stats.log
+
