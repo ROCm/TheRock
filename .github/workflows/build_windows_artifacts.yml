@@ -28,6 +28,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_memory:
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
@@ -48,6 +51,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_memory:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -146,8 +152,18 @@ jobs:
           ccache -z
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-archives and therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+      - name: Build therock-archives and therock-dist with memory monitoring
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: |
+          # Start memory monitoring
+          & build_tools\github_actions\start_memory_monitor.ps1 -MonitorMemory "${{ inputs.monitor_memory }}"
+
+          # Build therock-archives and therock-dist
+          cmake --build "${env:BUILD_DIR}" --target therock-archives therock-dist -- -k 0
+
+          # Stop memory monitoring
+          & build_tools\github_actions\stop_memory_monitor.ps1 -MonitorMemory "${{ inputs.monitor_memory }}"
 
       - name: Report
         if: ${{ !cancelled() }}
