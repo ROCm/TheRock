@@ -10,11 +10,31 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
+def get_visible_gpu_count(env=None) -> int:
+    """
+    Returns the number of GPUs visible to HIP,
+    honoring HIP_VISIBLE_DEVICES if set.
+    """
+    result = subprocess.run(
+        ["rocminfo"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=False,
+    )
+    return result.stdout.count("gfx")
 
 class TestRCCL:
     def test_rccl_unittests(self):
         # Executing rccl gtest from rccl repo
         environ_vars = os.environ.copy()
+        # Expect at least 2 GPUs for RCCL collectives
+        gpu_count = get_visible_gpu_count(environ_vars)
+        logging.info(f"Visible GPU count: {gpu_count}")
+
+        if gpu_count < 2:
+            pytest.skip("Skipping RCCL unit tests: <2 GPUs visible")
         environ_vars["HIP_VISIBLE_DEVICES"] = "2,3"
         environ_vars["UT_MIN_GPUS"] = "2"
         environ_vars["UT_MAX_GPUS"] = "2"
