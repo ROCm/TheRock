@@ -46,7 +46,6 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6",
       "libstdc++6|libstdc++8",
       "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
@@ -55,10 +54,8 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "python3",
       "glibc",
       "libstdc++",
-      "libgcc",
       "amdrocm-sysdeps",
       "amdrocm-runtime"
     ],
@@ -127,7 +124,6 @@
       "python3",
       "glibc",
       "libstdc++",
-      "libgcc",
       "amdrocm-sysdeps",
       "amdrocm-llvm"
     ],
@@ -1618,6 +1614,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -1641,6 +1638,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {

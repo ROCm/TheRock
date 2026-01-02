@@ -387,7 +387,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-ocl"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
@@ -486,13 +486,6 @@ artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
-feature_group = "PROFILER"
-disable_platforms = ["windows"]
-
-[artifacts.aqlprofile]
-artifact_group = "profiler-core"
-type = "target-specific"
-artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
