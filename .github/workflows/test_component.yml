@@ -109,6 +109,8 @@ jobs:
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
+      # post-job step to pick up outputs
+
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.
       - name: Post-job cleanup processes on Windows
