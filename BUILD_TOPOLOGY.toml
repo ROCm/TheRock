@@ -404,7 +404,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -456,19 +456,19 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand"
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.miopen-plugin]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
 # --- IREE Integration ---
 
 [artifacts.fusilli-plugin]
 artifact_group = "iree-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
 disable_platforms = ["windows"]
 
