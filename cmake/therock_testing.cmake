@@ -31,6 +31,10 @@ function(therock_test_validate_shared_lib)
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
 
+  if(NOT CLANG_RUNTIME_DIR)
+    message("clang --print-runtime-dir returned empty: ${CLANG_RUNTIME_DIR}")
+  endif()
+
   set(ASAN_RUNTIME "${CLANG_RUNTIME_DIR}/libclang_rt.asan-x86_64.so")
 
   foreach(lib_name ${ARG_LIB_NAMES})
@@ -39,7 +43,7 @@ function(therock_test_validate_shared_lib)
       COMMAND
         env
         LD_PRELOAD=${ASAN_RUNTIME}
-        ${THEROCK_SANITIZER_LAUNCHER}       
+        LD_LIBRARY_PATH=${CLANG_RUNTIME_DIR}:$ENV{LD_LIBRARY_PATH}
           "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/validate_shared_library.py"
           "${ARG_PATH}/${lib_name}"
     )
