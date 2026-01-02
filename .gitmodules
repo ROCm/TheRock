@@ -41,7 +41,15 @@
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
 	branch = amd-mainline
-[submodule "amdsmi"]
-	path = base/amdsmi
-	url = https://github.com/ROCm/amdsmi.git
-	branch = amd-staging
+[submodule "amd-mesa"]
+	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
+	url = https://github.com/ROCm/mesa-fork.git
+	branch = amd-decode-only
+[submodule "iree"]
+	path = iree-libs/iree
+	url = https://github.com/iree-org/iree.git
+	branch = main
+[submodule "fusilli"]
+	path = iree-libs/fusilli
+	url = https://github.com/iree-org/fusilli.git
+	branch = main

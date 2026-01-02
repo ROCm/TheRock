@@ -18,6 +18,8 @@
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
   * BUILD_VARIANT (optional): The build variant to run (ex: release, asan)
+  * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
+  * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 
   Environment variables (for pull requests):
   * PR_LABELS (optional) : JSON list of PR label names.
@@ -54,12 +56,10 @@ from typing import Iterable, List, Optional
 import string
 from amdgpu_family_matrix import (
     all_build_variants,
-    amdgpu_family_info_matrix_presubmit,
-    amdgpu_family_info_matrix_postsubmit,
-    amdgpu_family_info_matrix_nightly,
     get_all_families_for_trigger_types,
 )
 from fetch_test_configurations import test_matrix
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 from github_actions_utils import *
 
@@ -125,6 +125,8 @@ SKIPPABLE_PATH_PATTERNS = [
     "*.gitignore",
     "*.md",
     "*.pre-commit-config.*",
+    ".github/dependabot.yml",
+    "*CODEOWNERS",
     "*LICENSE",
     # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
     # At time of writing, workflows run in this sequence:
@@ -246,7 +248,7 @@ def filter_known_names(
         ), "target_matrix must be provided for 'target' name_type"
         known_references = {"target": target_matrix}
     else:
-        known_references = {"test": test_matrix}
+        known_references = {"test": test_matrix, "benchmark": benchmark_matrix}
 
     filtered_names = []
     if name_type not in known_references:
@@ -451,7 +453,7 @@ def matrix_generator(
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
 
         # Add presubmit targets.
-        for target in amdgpu_family_info_matrix_presubmit:
+        for target in get_all_families_for_trigger_types(["presubmit"]):
             selected_target_names.append(target)
 
         # Extend with any additional targets that PR labels opt-in to running.
@@ -461,12 +463,21 @@ def matrix_generator(
         requested_test_names = []
         pr_labels = get_pr_labels(base_args)
         for label in pr_labels:
+            # if a GPU target label was added, we add the GPU target to the build and test matrix
             if "gfx" in label:
                 target = label.split("-")[0]
                 requested_target_names.append(target)
+            # If a test label was added, we run the full test for the specified test
             if "test:" in label:
                 _, test_name = label.split(":")
                 requested_test_names.append(test_name)
+            # If the "skip-ci" label was added, we skip all builds and tests
+            # We don't want to check for anymore labels
+            if "skip-ci" == label:
+                selected_target_names = []
+                selected_test_names = []
+                break
+
         selected_target_names.extend(
             filter_known_names(requested_target_names, "target", lookup_matrix)
         )
@@ -478,9 +489,8 @@ def matrix_generator(
             print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
 
             # Add presubmit and postsubmit targets.
-            for target in (
-                amdgpu_family_info_matrix_presubmit
-                | amdgpu_family_info_matrix_postsubmit
+            for target in get_all_families_for_trigger_types(
+                ["presubmit", "postsubmit"]
             ):
                 selected_target_names.append(target)
         else:
@@ -489,20 +499,24 @@ def matrix_generator(
             )
 
             # Non-main branch pushes use presubmit targets
-            for target in amdgpu_family_info_matrix_presubmit:
+            for target in get_all_families_for_trigger_types(["presubmit"]):
                 selected_target_names.append(target)
 
     if is_schedule:
         print(f"[SCHEDULE] Generating build matrix with {str(base_args)}")
 
         # For nightly runs, we run all builds and full tests
-        amdgpu_family_info_matrix_all = (
-            amdgpu_family_info_matrix_presubmit
-            | amdgpu_family_info_matrix_postsubmit
-            | amdgpu_family_info_matrix_nightly
+        amdgpu_family_info_matrix_all = get_all_families_for_trigger_types(
+            ["presubmit", "postsubmit", "nightly"]
         )
         for key in amdgpu_family_info_matrix_all:
             selected_target_names.append(key)
+
+        # Add benchmark labels to selected_test_names so they're included in test labels for nightly runs
+        requested_benchmark_names = list(benchmark_matrix.keys())
+        selected_test_names.extend(
+            filter_known_names(requested_benchmark_names, "benchmark")
+        )
 
     # Ensure the lists are unique
     unique_target_names = list(set(selected_target_names))

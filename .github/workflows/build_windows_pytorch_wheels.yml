@@ -56,6 +56,8 @@ on:
           - gfx110X-all
           - gfx1150
           - gfx1151
+          - gfx1152
+          - gfx1153
           - gfx120X-all
           - gfx90X-dcgpu
           - gfx94X-dcgpu
@@ -280,6 +282,9 @@ jobs:
         env:
           TARGET: ${{ inputs.amdgpu_family }}
           PLATFORM: "windows"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
