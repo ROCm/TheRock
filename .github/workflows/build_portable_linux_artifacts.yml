@@ -117,29 +117,14 @@ jobs:
           cmake_preset: ${{ inputs.build_variant_cmake_preset }}
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          # for testing
-          extra_cmake_options: "-DTHEROCK_ENABLE_CORE=ON -DTHEROCK_ENABLE_ALL=OFF"
-          # extra_cmake_options: "-DTHEROCK_ENABLE_CORE=ON -DTHEROCK_ENABLE_BLAS=ON -DTHEROCK_ENABLE_ALL=OFF"
-          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
       - name: Build therock-archives and therock-dist
         run: |
-          # Background telemetry loop
-          ( while true; do
-              echo "--- $(date) ---"
-              free -h
-              top -b -n1 | head -20
-              sleep 30
-            done ) &
-          TELEMETRY_PID=$!
-
           cmake --build build --target therock-archives therock-dist -- -k 0
-
-          # Stop telemetry loop
-          kill $TELEMETRY_PID
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}

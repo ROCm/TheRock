@@ -29,7 +29,7 @@ function(therock_test_validate_shared_lib)
       NAME therock-validate-shared-lib-${lib_name}
       COMMAND
         "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/validate_shared_library.py"
-        "${ARG_PATH}/${lib_name}"
+          "${ARG_PATH}/${lib_name}"
     )
   endforeach()
 endfunction()
