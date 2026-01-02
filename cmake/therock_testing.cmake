@@ -43,7 +43,6 @@ function(therock_test_validate_shared_lib)
       COMMAND
         env
         LD_PRELOAD=${ASAN_RUNTIME}
-        LD_LIBRARY_PATH=${CLANG_RUNTIME_DIR}:$ENV{LD_LIBRARY_PATH}   
         ${THEROCK_SANITIZER_LAUNCHER}       
           "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/validate_shared_library.py"
           "${ARG_PATH}/${lib_name}"
