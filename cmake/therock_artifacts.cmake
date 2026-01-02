@@ -162,6 +162,7 @@ function(therock_provide_artifact slice_name)
   set(_artifact_command
     COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact
           --root-dir "${THEROCK_BINARY_DIR}" --descriptor "${ARG_DESCRIPTOR}"
+          --artifact-name "${slice_name}"
   )
   set(_flatten_command_list)
   set(_manifest_files)
