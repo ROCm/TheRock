@@ -139,5 +139,11 @@ SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics
 ## zstd
 
 - Canonical method: `find_package(zstd)`
-- Import library: `zstd::libzstd_shared`
-- Alternatives: `pkg_check_modules(ZSTD libzstd)`
+- Import library: `zstd::libzstd` (preferred - INTERFACE target that wraps the concrete library)
+- Alternatives:
+  - `zstd::libzstd_shared` - explicit shared library target
+  - `pkg_check_modules(ZSTD libzstd)`
+- Note: Upstream zstd's CMake install generates both `zstd::libzstd` (INTERFACE) and
+  `zstd::libzstd_shared` (SHARED IMPORTED). The INTERFACE target forwards to the
+  appropriate concrete target, abstracting static vs shared selection. Prefer
+  `zstd::libzstd` for new code.
