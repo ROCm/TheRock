@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -79,13 +80,18 @@ SMOKE_TESTS = [
     "ZipIterator*",
 ]
 
+# Some platforms are less capable than others.
+ctest_parallel_count = 8
+if AMDGPU_FAMILIES == "gfx1153":
+    ctest_parallel_count = 4
+
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocthrust",
     "--output-on-failure",
     "--parallel",
-    "8",
+    f"{ctest_parallel_count}",
     "--timeout",
     "300",
     "--repeat",
