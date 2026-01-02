@@ -98,7 +98,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # rocprofiler-compute
   ##############################################################################
   therock_cmake_subproject_declare(rocprofiler-compute
-    DISABLE_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD
