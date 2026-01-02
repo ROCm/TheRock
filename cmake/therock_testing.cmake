@@ -26,24 +26,20 @@ function(therock_test_validate_shared_lib)
   )
 
   execute_process(
-    COMMAND ${CLANG_EXECUTABLE} --print-runtime-dir
-    OUTPUT_VARIABLE CLANG_RUNTIME_DIR
+    COMMAND ${CLANG_EXECUTABLE} --print-file-name=libclang_rt.asan-x86_64.so
+    OUTPUT_VARIABLE ASAN_RUNTIME_PATH
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
 
-  set(ASAN_RUNTIME "${CLANG_RUNTIME_DIR}/libclang_rt.asan-x86_64.so")
-
-  if(NOT EXISTS "${ASAN_RUNTIME}")
-    message(FATAL_ERROR "ASAN runtime not found: ${ASAN_RUNTIME}")
-  endif()
+  set(ASAN_PRELOAD "${ASAN_RUNTIME_PATH}")
 
   foreach(lib_name ${ARG_LIB_NAMES})
     add_test(
       NAME therock-validate-shared-lib-${lib_name}
       COMMAND
         env
-        LD_PRELOAD=${ASAN_RUNTIME}
-        ${THEROCK_SANITIZER_LAUNCHER}       
+          LD_PRELOAD=${ASAN_PRELOAD}
+          ${THEROCK_SANITIZER_LAUNCHER}
           "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/validate_shared_library.py"
           "${ARG_PATH}/${lib_name}"
     )
