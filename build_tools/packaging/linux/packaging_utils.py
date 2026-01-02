@@ -85,6 +85,20 @@ def is_key_defined(pkg_info, key):
         return False
 
 
+def is_postinstallscripts_available(pkg_info):
+    """
+    Verifies whether Postinstall key is enabled for a package.
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool: True if Postinstall key is defined, False otherwise.
+    """
+
+    return is_key_defined(pkg_info, "Postinstall")
+
+
 def is_meta_package(pkg_info):
     """
     Verifies whether Metapackage key is enabled for a package.
