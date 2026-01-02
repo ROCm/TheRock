@@ -50,7 +50,13 @@
 #
 #   [artifacts.<name>]
 #   artifact_group = "group-name"           # Required: which group this belongs to
-#   type = "target-neutral" | "target-specific"  # target-specific = per GPU arch
+#   type = "target-neutral" | "target-specific"
+#       target-neutral: Built once with all architecture targets. Use for host-only
+#           code, headers, or runtime libraries where a single multi-arch build
+#           is preferred.
+#       target-specific: Built separately per architecture family and kept separate
+#           for distribution. Use for kernel libraries where sharded builds
+#           improve CI parallelism and enable per-arch downloads.
 #   artifact_deps = ["dep1", "dep2"]        # Optional: other artifacts this depends on
 #   feature_name = "FEATURE_NAME"           # Optional: override auto-generated name
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
@@ -404,7 +410,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -456,19 +462,19 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand"
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.miopen-plugin]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
 # --- IREE Integration ---
 
 [artifacts.fusilli-plugin]
 artifact_group = "iree-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
 disable_platforms = ["windows"]
 

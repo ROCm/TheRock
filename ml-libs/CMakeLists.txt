@@ -163,6 +163,7 @@ if(THEROCK_ENABLE_HIPDNN)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipDNN
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipDNN"
     BACKGROUND_BUILD
@@ -201,6 +202,7 @@ if(THEROCK_ENABLE_HIPDNN)
   therock_cmake_subproject_activate(hipDNN)
 
   therock_provide_artifact(hipdnn
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-hipdnn.toml
     COMPONENTS
       dbg
@@ -249,6 +251,7 @@ if(THEROCK_ENABLE_MIOPEN_PLUGIN)
   therock_cmake_subproject_activate(MIOpen_plugin)
 
   therock_provide_artifact(miopen-plugin
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-miopen-plugin.toml
     COMPONENTS
       dbg
