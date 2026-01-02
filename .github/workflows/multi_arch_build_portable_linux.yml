@@ -10,6 +10,11 @@
 # 7. media (generic) - sysdeps-amd-mesa, rocdecode (todo), rocjpeg (todo)
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
+#
+# TODO: When kpack splitting is permanently enabled, change fetch commands to use
+# --generic-only instead of --amdgpu-families for efficiency. Subsequent build
+# stages only need generic (host) artifacts; device-specific kpacks are not
+# needed until final packaging.
 
 name: Multi-Arch Build (Linux)
 
@@ -356,7 +361,6 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --build-dir build
 
   # ==========================================================================
@@ -469,7 +473,6 @@ jobs:
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --build-dir build
 
   # ==========================================================================
