@@ -146,7 +146,6 @@ therock_cmake_subproject_activate(rocm-half)
 set(_optional_subproject_deps)
 if(NOT WIN32)
   # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
-  list(APPEND _optional_subproject_deps amdsmi)
   list(APPEND _optional_subproject_deps rocm_smi_lib)
   list(APPEND _optional_subproject_deps rocprofiler-register)
 endif()
