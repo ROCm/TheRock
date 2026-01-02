@@ -177,6 +177,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_MIOPEN=ON`         | Enables MIOpen                                |
 | `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`  | Enables MIOpen_plugin                         |
 | `-DTHEROCK_ENABLE_HIPDNN=ON`         | Enables hipDNN                                |
+| `-DTHEROCK_ENABLE_HIPTENSOR=ON`      | Enables hipTensor                             |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`        | Enables rocWMMA                               |
 | `-DTHEROCK_ENABLE_RDC=ON`            | Enables ROCm Data Center Tool (Linux only)    |
 | `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON` | Enables Fusilli Plugin                        |

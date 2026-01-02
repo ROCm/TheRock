@@ -1,0 +1,106 @@
+From 677f8a4a5aeb124f2444267f3a7edeacc7c7d3fd Mon Sep 17 00:00:00 2001
+From: Estevan Vedovelli <Estevan.Vedovelli@amd.com>
+Date: Fri, 28 Nov 2025 10:28:54 -0500
+Subject: [PATCH 1/3] [hipTensor] Use ROCm provided CMake install functions
+
+---
+ projects/hiptensor/CMakeLists.txt             | 36 +++++++++++++------
+ projects/hiptensor/Config.cmake.in            | 13 -------
+ projects/hiptensor/library/src/CMakeLists.txt |  7 ----
+ 3 files changed, 25 insertions(+), 31 deletions(-)
+ delete mode 100644 projects/hiptensor/Config.cmake.in
+
+diff --git a/projects/hiptensor/CMakeLists.txt b/projects/hiptensor/CMakeLists.txt
+index ff3290022f..ee248f377d 100644
+--- a/projects/hiptensor/CMakeLists.txt
++++ b/projects/hiptensor/CMakeLists.txt
+@@ -210,25 +210,39 @@ endif()
+ set ( VERSION_STRING "2.2.0" )
+ rocm_setup_version( VERSION ${VERSION_STRING} )
+ 
+-# configure a header file to pass the CMake version settings to the source
++# Configure a header file to pass the CMake version settings to the source
+ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/library/include/hiptensor/internal/hiptensor-version.h.in"
+                "${CMAKE_CURRENT_SOURCE_DIR}/library/include/hiptensor/internal/hiptensor-version.h" )
+ 
+-write_basic_package_version_file(
+-    "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfigVersion.cmake"
+-    VERSION "${VERSION_STRING}"
+-    COMPATIBILITY AnyNewerVersion
++# Define package dependencies for export
++set(PACKAGE_DEPENDS
++    PACKAGE hip
++    PACKAGE composable_kernel
+ )
+ 
+-configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in
+-     "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfig.cmake"
+-     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
+-     NO_CHECK_REQUIRED_COMPONENTS_MACRO
++set(PACKAGE_STATIC_DEPENDS
++    PACKAGE Threads
+ )
+ 
++# Export targets using ROCm automation
++rocm_export_targets(
++    TARGETS hiptensor
++    DEPENDS
++        ${PACKAGE_DEPENDS}
++    STATIC_DEPENDS
++        ${PACKAGE_STATIC_DEPENDS}
++)
++
++# Add architecture functions to the ROCm-generated config
++install(CODE "
++    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
++         \"\\n# Include hiptensor supported architectures functions\\n\")
++    file(APPEND \"\${CMAKE_INSTALL_PREFIX}/\${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor/hiptensorConfig.cmake\"
++         \"include(\\\"\\\${CMAKE_CURRENT_LIST_DIR}/hiptensorSupportedArchitectures.cmake\\\")\\n\")
++")
++
++# Install additional helper files
+ rocm_install(FILES
+-    "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfig.cmake"
+-    "${CMAKE_CURRENT_BINARY_DIR}/hiptensorConfigVersion.cmake"
+     "cmake/Functions/hiptensorSupportedArchitectures.cmake"
+     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
+ )
+diff --git a/projects/hiptensor/Config.cmake.in b/projects/hiptensor/Config.cmake.in
+deleted file mode 100644
+index 8e5dc0cf5f..0000000000
+--- a/projects/hiptensor/Config.cmake.in
++++ /dev/null
+@@ -1,13 +0,0 @@
+-@PACKAGE_INIT@
+-
+-set(_hiptensor_supported_components hiptensor)
+-
+-foreach(_comp ${hiptensor_FIND_COMPONENTS})
+-    if(NOT _comp IN_LIST _hiptensor_supported_components)
+-        set(hiptensor_FOUND False)
+-        set(hiptensor_NOT_FOUND_MESSAGE "Unsupported component: ${_comp}")
+-    endif()
+-    include("${CMAKE_CURRENT_LIST_DIR}/${_comp}Targets.cmake")
+-endforeach()
+-
+-include("${CMAKE_CURRENT_LIST_DIR}/hiptensorSupportedArchitectures.cmake")
+diff --git a/projects/hiptensor/library/src/CMakeLists.txt b/projects/hiptensor/library/src/CMakeLists.txt
+index 24c5fc8c78..d7c4699bf5 100644
+--- a/projects/hiptensor/library/src/CMakeLists.txt
++++ b/projects/hiptensor/library/src/CMakeLists.txt
+@@ -136,12 +136,5 @@ set_target_properties(hiptensor PROPERTIES POSITION_INDEPENDENT_CODE ON)
+ 
+ rocm_install_targets(
+     TARGETS hiptensor
+-    EXPORT hiptensorTargets
+     INCLUDE ${PROJECT_SOURCE_DIR}/library/include
+ )
+-
+-rocm_install (EXPORT hiptensorTargets
+-    FILE hiptensorTargets.cmake
+-    NAMESPACE hiptensor::
+-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hiptensor
+-)
+-- 
+2.43.0
+

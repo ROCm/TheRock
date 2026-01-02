@@ -1,0 +1,26 @@
+From 5f65643e4b34cc3cbef8d65331021bf41004ad34 Mon Sep 17 00:00:00 2001
+From: Estevan Vedovelli <Estevan.Vedovelli@amd.com>
+Date: Wed, 3 Dec 2025 13:21:25 -0500
+Subject: [PATCH 2/3] Remove specific PATHS from find_package for
+ composable_kernel
+
+---
+ projects/hiptensor/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/projects/hiptensor/CMakeLists.txt b/projects/hiptensor/CMakeLists.txt
+index ee248f377d..5d82e0c4f5 100644
+--- a/projects/hiptensor/CMakeLists.txt
++++ b/projects/hiptensor/CMakeLists.txt
+@@ -182,7 +182,7 @@ endif()
+ # disable warning about 'amdgpu-waves-per-eu'
+ add_compile_options(-Wno-pass-failed)
+ 
+-find_package( composable_kernel 1.0.0 REQUIRED PATHS $ENV{CK_DIR}/lib/cmake /opt/rocm /opt/rocm/ck COMPONENTS device_contraction_operations device_reduction_operations device_other_operations)
++find_package(composable_kernel 1.0.0 REQUIRED COMPONENTS device_contraction_operations device_reduction_operations device_other_operations)
+ rocm_package_add_dependencies("composable_kernel >= 1.0.0" COMPONENT tests)
+ 
+ # Configure library build
+-- 
+2.43.0
+

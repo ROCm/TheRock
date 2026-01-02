@@ -231,6 +231,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 5,
     },
+    # hipTensor tests
+    "hiptensor": {
+        "job_name": "hiptensor",
+        "fetch_artifact_args": "--hiptensor --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hiptensor.py')}",
+        "platform": ["linux"],
+        "total_shards": 4,
+    },
 }
 
 

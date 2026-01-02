@@ -436,18 +436,24 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
 
+[artifacts.composable-kernel]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip"]
+disable_platforms = ["windows"]
+
+[artifacts.hiptensor]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "composable-kernel"]
+disable_platforms = ["windows"]
+
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = []
 
 # --- ML Libraries (per-arch) ---
-
-[artifacts.composable-kernel]
-artifact_group = "ml-libs"
-type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
-disable_platforms = ["windows"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
