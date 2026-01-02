@@ -398,11 +398,17 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          # Get the start time of this workflow run via GitHub API (dynamic cutoff)
+          WORKFLOW_START=$(curl -s -H "Authorization: token ${{ github.token }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            | jq -r '.created_at')
+          echo "Workflow started at: $WORKFLOW_START"
+
           # Track child workflows triggered by this parent workflow
           # Format: --workflows "DisplayName:workflow_file.yml:has_package_type,..."
           # - DisplayName: Human-readable name for the summary table
           # - workflow_file.yml: Exact workflow filename to query via GitHub API
           # - has_package_type: true if workflow has RPM/DEB variants, false otherwise
           python ./build_tools/github_actions/track_triggered_workflows.py \
-            --cutoff-minutes 10 \
+            --cutoff-time "$WORKFLOW_START" \
             --workflows "PyTorch Wheels:release_portable_linux_pytorch_wheels.yml:false,JAX Wheels:build_linux_jax_wheels.yml:false,Native Packages:build_native_linux_packages.yml:true"

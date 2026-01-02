@@ -40,10 +40,10 @@ def main():
     """Generate triggered workflows summary table."""
     parser = argparse.ArgumentParser(description="Track triggered workflows status")
     parser.add_argument(
-        "--cutoff-minutes",
-        type=int,
-        default=10,
-        help="Show workflows triggered in last N minutes (default: 10)",
+        "--cutoff-time",
+        type=str,
+        default=None,
+        help="ISO 8601 timestamp to use as cutoff (e.g., '2024-01-01T00:00:00Z'). If not provided, uses current workflow start time from GITHUB_RUN_CREATED_AT env var.",
     )
     parser.add_argument(
         "--repository",
@@ -63,8 +63,16 @@ def main():
     github_repository = args.repository or os.getenv(
         "GITHUB_REPOSITORY", "ROCm/TheRock"
     )
-    cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=args.cutoff_minutes)
-    cutoff_time = cutoff_dt.isoformat().replace("+00:00", "Z")
+
+    # Use provided cutoff time, or workflow start time from env, or current time minus 30 min as fallback
+    if args.cutoff_time:
+        cutoff_time = args.cutoff_time
+    elif os.getenv("GITHUB_RUN_CREATED_AT"):
+        cutoff_time = os.getenv("GITHUB_RUN_CREATED_AT")
+    else:
+        # Fallback: use 30 minutes ago
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=30)
+        cutoff_time = cutoff_dt.isoformat().replace("+00:00", "Z")
 
     # Parse workflow specifications
     workflows = []
@@ -78,7 +86,7 @@ def main():
                 f"Warning: Invalid workflow spec '{workflow_spec}', expected format 'DisplayName:filename.yml:true/false'"
             )
 
-    print(f"Querying: {github_repository} ({args.cutoff_minutes} min ago)")
+    print(f"Querying: {github_repository} (cutoff: {cutoff_time})")
     print(
         f"Tracking {len(workflows)} workflow(s): {', '.join(w[1] for w in workflows)}"
     )
@@ -93,7 +101,7 @@ def main():
         runs = gha_query_workflow_runs(
             github_repository=github_repository,
             workflow_name=workflow_file,
-            per_page=40 if has_package_type else 20,
+            per_page=100 if has_package_type else 50,
             created_after=cutoff_time,
         )
 
