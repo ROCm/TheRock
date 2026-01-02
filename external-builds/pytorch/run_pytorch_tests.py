@@ -80,6 +80,7 @@ from pathlib import Path
 import pytest
 
 from pytorch_utils import (
+    get_unique_supported_devices,
     set_gpu_execution_policy,
     detect_pytorch_version,
 )
@@ -223,9 +224,8 @@ def main() -> int:
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
         # changing HIP_VISIBLE_DEVICES has no effect.
         # For unit tests, run only on the first supported device (policy="single")
-        ((first_arch, _),) = set_gpu_execution_policy(
-            args.amdgpu_family, policy="single"
-        )
+        unique_devices = get_unique_supported_devices(args.amdgpu_family)
+        ((first_arch, _),) = set_gpu_execution_policy(unique_devices, policy="single")
         print(f"Using AMDGPU family: {first_arch}")
 
         # Determine PyTorch version
