@@ -41,19 +41,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     list(APPEND _amdsmi_subproject_deps amdsmi)
   endif()
 
-  therock_provide_artifact(amdsmi
-    TARGET_NEUTRAL
-    DESCRIPTOR artifact-core-amdsmi.toml
-    COMPONENTS
-      dbg
-      dev
-      doc
-      lib
-      run
-    SUBPROJECT_DEPS
-      ${_amdsmi_subproject_deps}
-  )
-
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -121,6 +108,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       lib
       run
     SUBPROJECT_DEPS
+      ${_amdsmi_subproject_deps}
       ROCR-Runtime
       rocminfo
   )
@@ -217,6 +205,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       libhiprtc-builtins.so
       libhiprtc.so
   )
+
   if(WIN32)
     ##############################################################################
     # hipInfo (from hip-tests)
@@ -308,7 +297,6 @@ therock_cmake_subproject_declare(ocl-icd
   CMAKE_ARGS
     "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
     "-DOPENCL_ICD_LOADER_HEADERS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers/opencl2.2"
-
   INTERFACE_LINK_DIRS
     "lib"
   INTERFACE_INSTALL_RPATH_DIRS
