@@ -112,10 +112,10 @@ FAQ_HTML = """
 <h2>General FAQ</h2>
 
 <ol>
-  <li><b>RSS = Resident Set Size</b>
+  <li><b>rss = Resident Set Size</b>
     <p>
-      It means the amount of physical RAM actually in use by a process at its peak. High RSS means memory-heavy compilation or linking.
-      If RSS is high across many parallel jobs, we can hit swapping, cache thrashing, OOM kills in CI. High RSS often limits how much
+      It means the amount of physical RAM actually in use by a process at its peak. High rss means memory-heavy compilation or linking.
+      If rss is high across many parallel jobs, we can hit swapping, cache thrashing, OOM kills in CI. High rss often limits how much
       parallelism you can safely use (-j)
     </p>
   </li>
@@ -157,6 +157,43 @@ FAQ_HTML = """
     <p><b>Case 3&gt; avg_threads &gt; 1.0</b></p>
     <p><b>Meaning:</b> The process used multiple CPU cores simultaneously (e.g. LTO backends, LLVM worker threads).</p>
   </li>
+
+
+<li><b> What different sums mean ? </b>
+
+    <p><b>user_sum_min → time spent executing your code (compiler, linker, optimizer logic) </b></p>
+
+        <p><b>If this is high:</p>
+
+        <p><b>the build is compute-heavy</p>
+
+        <p><b>faster CPUs, fewer templates, or fewer TUs help</p>
+
+        <p><b>more parallelism may help if avg_threads > 1</p>
+
+    <p><b>sys_sum_min → time spent inside the operating system kernel<p><b>
+        
+        <p><b>If this is high:</p>
+
+        <p><b>you’re often I/O-bound</p>
+
+        <p><b>disk speed, filesystem, caching, or build directory layout matters</p>
+
+        <p><b>adding more CPUs will not help much</p>
+
+    <p><b>cpu_sum_min → total CPU time = user_sum_min + sys_sum_min<p><b>
+        
+        <p><b>How much CPU did this component cost overall?</p>
+
+        <p><b>It’s the best metric for:</p>
+
+        <p><b>capacity planning</p>
+
+        <p><b>CI cost estimation</p>
+
+        <p><b>“what’s expensive” comparisons between components</p>
+
+</li>
 </ol>
 
 <h3>Key mental model</h3>
