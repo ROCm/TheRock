@@ -128,7 +128,7 @@ FAQ_HTML = """
 
   <li><b>Wall time sum vs component span vs estimated elapsed</b>
     <p>
-      <b>wall_time_sum_min</b> is the <b>sum</b> of wall times across all commands for that component. In parallel builds this can be
+      <b>wall_time_sum</b> is the <b>sum</b> of wall times across all commands for that component. In parallel builds this can be
       far larger than the total build duration because many commands run concurrently.
     </p>
     <p>
@@ -139,7 +139,7 @@ FAQ_HTML = """
     <p>
       <b>wall_time_est_elapsed_min</b> is an <b>estimated elapsed contribution</b> computed from average build concurrency:
       we compute <code>avg_concurrency = sum(real_s) / build_span_s</code> using timestamps, and then estimate:
-      <code>wall_time_est_elapsed_min ≈ wall_time_sum_min / avg_concurrency</code>.
+      <code>wall_time_est_elapsed ≈ wall_time_sum / avg_concurrency</code>.
     </p>
     <p>
       That doesn’t mean the build is slower; it means processes are spending time waiting (I/O, scheduling, throttling, contention),
@@ -159,51 +159,51 @@ FAQ_HTML = """
   </li>
 
 
-<li><b> What different sums mean ? </b>
+<li><b> What user_sum, sys_sum mean and cpu_sum mean ? (Note: all times are in minutes) </b>
 
-    <p><b>user_sum_min → time spent executing your code (compiler, linker, optimizer logic) </b></p>
+    <p><b>user_sum → time spent executing your code (compiler, linker, optimizer logic) </b></p>
 
-        <p><b>If this is high:</p>
+        <p><b>If this is high:</b>
 
-        <p><b>the build is compute-heavy</p>
+        <p>a) the build is compute-heavy</p>
 
-        <p><b>faster CPUs, fewer templates, or fewer TUs help</p>
+        <p>b) faster CPUs, fewer templates, or fewer TUs help</p>
 
-        <p><b>more parallelism may help if avg_threads > 1</p>
+        <p>c) more parallelism may help if avg_threads > 1</p>
 
-    <p><b>sys_sum_min → time spent inside the operating system kernel<p><b>
+    <p><b>sys_sum → time spent inside the operating system kernel<p><b>
         
-        <p><b>If this is high:</p>
+        <p>a) If this is high:</p>
 
-        <p><b>you’re often I/O-bound</p>
+        <p>b) you’re often I/O-bound</p>
 
-        <p><b>disk speed, filesystem, caching, or build directory layout matters</p>
+        <p>c) disk speed, filesystem, caching, or build directory layout matters</p>
 
-        <p><b>adding more CPUs will not help much</p>
+        <p>d) adding more CPUs will not help much</p>
 
-    <p><b>cpu_sum_min → total CPU time = user_sum_min + sys_sum_min<p><b>
+    <p><b>cpu_sum → total CPU time = user_sum_min + sys_sum_min<p><b>
         
-        <p><b>How much CPU did this component cost overall?</p>
+        <p>a) How much CPU did this component cost overall?</p>
 
-        <p><b>It’s the best metric for:</p>
+        <p>b) It’s the best metric for:</p>
 
-        <p><b>capacity planning</p>
+        <p>c) capacity planning</p>
 
-        <p><b>CI cost estimation</p>
+        <p>d) CI cost estimation</p>
 
-        <p><b>“what’s expensive” comparisons between components</p>
+        <p>e) "what’s expensive" comparisons between components</p>
 
 </li>
 </ol>
 
 <h3>Key mental model</h3>
 <ul>
-  <li><b>wall_time_sum_min</b> → total summed command wall time (inflates with parallelism)</li>
-  <li><b>wall_time_span_min</b> → component elapsed window (closest to “actual component time”)</li>
-  <li><b>wall_time_est_elapsed_min</b> → concurrency-adjusted estimate</li>
-  <li><b>cpu_sum_min</b> → cost/compute spent</li>
-  <li><b>avg_threads</b> → CPU utilization ratio per component</li>
-  <li><b>RSS</b> → limits safe parallelism</li>
+  <li>a) wall_time_sum</b> → total summed command wall time (inflates with parallelism)</li>
+  <li>b) wall_time_span</b> → component elapsed window (closest to “actual component time”)</li>
+  <li>c) wall_time_est_elapsed</b> → concurrency-adjusted estimate</li>
+  <li>d) cpu_sum</b> → cost/compute spent</li>
+  <li>e) avg_threads</b> → CPU utilization ratio per component</li>
+  <li>f) rss</b> → limits safe parallelism</li>
 </ul>
 """
 
@@ -221,7 +221,7 @@ def therock_components(_pwd_unused: str, cmd_str: str) -> str:
             except Exception:
                 pass
 
-    # CMake target being built (preferred)
+    # CMake targets
     m = CMAKEFILES_TARGET_RE.search(cmd_str) or CMAKEFILES_TARGET_RE.search(lower_cmd)
     if m:
         target = m.group(1)
@@ -566,12 +566,12 @@ def generate_summaries(log_dir: str) -> None:
             with open(tmp_md_path, "w", encoding="utf-8") as f:
                 headers = [
                     "component",
-                    "wall_time_sum_min",
-                    "wall_time_span_min",
-                    "wall_time_est_elapsed_min",
-                    "cpu_sum_min",
-                    "user_sum_min",
-                    "sys_sum_min",
+                    "wall_time_sum",
+                    "wall_time_span",
+                    "wall_time_est_elapsed",
+                    "cpu_sum (minutes)",
+                    "user_sum (minutes)",
+                    "sys_sum (minutes)",
                     "avg_threads",
                     "max_rss_mb",
                     "max_rss_gb",
@@ -626,7 +626,7 @@ def generate_summaries(log_dir: str) -> None:
                 "  </style>\n"
                 "</head>\n<body>\n"
                 "<h1>TheRock Build Resource Observability Report</h1>\n"
-                "<h2>Build Resource Summary</h2>\n"
+                "<h2>Build Resource Utilization Summary</h2>\n"
                 f"{table_html}\n"
                 "<hr />\n"
                 f"{FAQ_HTML}\n"
