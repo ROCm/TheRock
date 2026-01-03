@@ -622,7 +622,7 @@ def generate_summaries(log_dir: str) -> None:
                 "    h1 { margin-bottom: 8px; }\n"
                 "    table { border-collapse: collapse; margin-top: 16px; }\n"
                 "    th { background: #f0f0f0; }\n"
-                "    th, td { padding: 8px 12px; text-align: left; }\n"
+                "    th, td { padding: 8px 12px; text-align: center; }\n"
                 "  </style>\n"
                 "</head>\n<body>\n"
                 "<h1>TheRock Build Resource Observability Report</h1>\n"
