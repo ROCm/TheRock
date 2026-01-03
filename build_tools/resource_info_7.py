@@ -171,9 +171,9 @@ FAQ_HTML = """
 
         <p>c) more parallelism may help if avg_threads > 1</p>
 
-    <p><b>sys_sum → time spent inside the operating system kernel<p><b>
+    <p><b>sys_sum → time spent inside the operating system kernel</b></p>
         
-        <p>a) If this is high:</p>
+        <p><b>a) If this is high:</b>
 
         <p>b) you’re often I/O-bound</p>
 
@@ -181,7 +181,7 @@ FAQ_HTML = """
 
         <p>d) adding more CPUs will not help much</p>
 
-    <p><b>cpu_sum → total CPU time = user_sum_min + sys_sum_min<p><b>
+    <p><b>cpu_sum → total CPU time = user_sum_min + sys_sum_min</b></p>
         
         <p>a) How much CPU did this component cost overall?</p>
 
@@ -198,12 +198,12 @@ FAQ_HTML = """
 
 <h3>Key mental model</h3>
 <ul>
-  <li>a) wall_time_sum</b> → total summed command wall time (inflates with parallelism)</li>
-  <li>b) wall_time_span</b> → component elapsed window (closest to “actual component time”)</li>
-  <li>c) wall_time_est_elapsed</b> → concurrency-adjusted estimate</li>
-  <li>d) cpu_sum</b> → cost/compute spent</li>
-  <li>e) avg_threads</b> → CPU utilization ratio per component</li>
-  <li>f) rss</b> → limits safe parallelism</li>
+  <li> wall_time_sum</b> → total summed command wall time (inflates with parallelism)</li>
+  <li> wall_time_span</b> → component elapsed window (closest to “actual component build time”)</li>
+  <li> wall_time_est_elapsed</b> → concurrency-adjusted estimate</li>
+  <li> cpu_sum</b> → cost/compute spent</li>
+  <li> avg_threads</b> → CPU utilization ratio per component</li>
+  <li> rss</b> → limits safe parallelism</li>
 </ul>
 """
 
@@ -566,9 +566,9 @@ def generate_summaries(log_dir: str) -> None:
             with open(tmp_md_path, "w", encoding="utf-8") as f:
                 headers = [
                     "component",
-                    "wall_time_sum",
-                    "wall_time_span",
-                    "wall_time_est_elapsed",
+                    "wall_time_sum (minutes)",
+                    "wall_time_span (minutes)",
+                    "wall_time_est_elapsed (minutes)",
                     "cpu_sum (minutes)",
                     "user_sum (minutes)",
                     "sys_sum (minutes)",
