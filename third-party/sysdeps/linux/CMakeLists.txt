@@ -11,6 +11,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zlib" "${CMAKE_CURRENT_B
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_BINARY_DIR}/zstd")
 
 # System deps that depend on the above.
+add_subdirectory(binutils)
 add_subdirectory(elfutils)
 
 # Core sysdeps: This artifact includes libraries that are widely used and are typically
@@ -26,6 +27,7 @@ therock_provide_artifact(sysdeps
     run
   SUBPROJECT_DEPS
     therock-bzip2
+    therock-binutils
     therock-elfutils
     therock-gmp
     therock-libbacktrace
