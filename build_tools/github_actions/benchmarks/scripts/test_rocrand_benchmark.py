@@ -7,6 +7,8 @@ Runs ROCrand benchmarks, collects results, and uploads to results API.
 import csv
 import io
 import re
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
@@ -23,6 +25,7 @@ class ROCrandBenchmark(BenchmarkBase):
 
     def __init__(self):
         super().__init__(benchmark_name="rocrand", display_name="ROCrand")
+        self.therock_dir = self.script_dir.parent.parent.parent.parent
         self.bench_bins = ["benchmark_rocrand_host_api", "benchmark_rocrand_device_api"]
 
     def run_benchmarks(self) -> None:
@@ -57,7 +60,23 @@ class ROCrandBenchmark(BenchmarkBase):
                     "--benchmark_format=csv",
                 ]
 
-                self.execute_command(cmd, f)
+                log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
+                f.write(f"{shlex.join(cmd)}\n")
+
+                process = subprocess.Popen(
+                    cmd,
+                    cwd=self.therock_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+
+                for line in process.stdout:
+                    log.info(line.strip())
+                    f.write(f"{line}\n")
+
+                process.wait()
 
         log.info("Benchmark execution complete")
 

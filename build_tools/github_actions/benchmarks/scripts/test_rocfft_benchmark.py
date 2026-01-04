@@ -6,6 +6,8 @@ Runs ROCfft benchmarks, collects results, and uploads to results API.
 
 import json
 import re
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
@@ -23,6 +25,7 @@ class ROCfftBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rocfft", display_name="ROCfft")
         self.log_file = self.script_dir / "rocfft_bench.log"
+        self.therock_dir = self.script_dir.parent.parent.parent.parent
 
     def run_benchmarks(self) -> None:
         """Run ROCfft benchmarks and save output to log file."""
@@ -63,7 +66,23 @@ class ROCfftBenchmark(BenchmarkBase):
                     str(NUM_ITERATIONS),
                 ]
 
-                self.execute_command(cmd, f)
+                log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
+                f.write(f"{shlex.join(cmd)}\n")
+
+                process = subprocess.Popen(
+                    cmd,
+                    cwd=self.therock_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+
+                for line in process.stdout:
+                    log.info(line.strip())
+                    f.write(f"{line}\n")
+
+                process.wait()
 
         log.info("Benchmark execution complete")
 
