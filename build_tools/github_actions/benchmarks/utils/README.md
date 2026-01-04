@@ -132,5 +132,5 @@ python build_tools/github_actions/benchmarks/scripts/test_rocfft_benchmark.py
 
 # Verify utils imports work
 cd build_tools/github_actions/benchmarks
-python -c "from utils.logger import log; print('✓ Utils imports working')"
+python -c "from utils.logger import log; print('Utils imports working')"
 ```

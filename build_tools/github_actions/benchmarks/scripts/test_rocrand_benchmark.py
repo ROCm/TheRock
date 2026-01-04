@@ -44,16 +44,10 @@ class ROCrandBenchmark(BenchmarkBase):
             bench_type = match.group(1)
             log_file = self.script_dir / f"{bench_type}_bench.log"
 
-            # Check if binary exists
-            bench_path = Path(self.therock_bin_dir) / bench_bin
-            if not bench_path.exists():
-                log.error(f"Benchmark binary not found: {bench_bin}")
-                continue
-
             # Run benchmark
             with open(log_file, "w+") as f:
                 cmd = [
-                    str(bench_path),
+                    f"{self.therock_bin_dir}/{bench_bin}",
                     "--trials",
                     str(NUM_TRIALS),
                     "--benchmark_color=false",
