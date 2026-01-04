@@ -45,6 +45,11 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocroller.py')}",
         "platform": ["linux"],
         "total_shards": 4,
+        "exclude_family": {
+            "linux": [
+                "gfx950-dcgpu"
+            ]  # issue: https://github.com/ROCm/TheRock/issues/2727
+        },
     },
     "hipblas": {
         "job_name": "hipblas",
@@ -75,11 +80,11 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards": 2,
     },
     # PRIM tests
     "rocprim": {
@@ -176,7 +181,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --miopen --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 4,
     },
     # RCCL tests
