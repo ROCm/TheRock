@@ -441,10 +441,20 @@ function(therock_cmake_subproject_declare target_name)
 
   # RPATH Executable and Library dir.
   if(NOT ARG_INSTALL_RPATH_EXECUTABLE_DIR)
-    set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
+    if(ARG_INSTALL_DESTINATION)
+      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR ARG_INSTALL_DESTINATION)
+      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
+    else()
+      set(ARG_INSTALL_RPATH_EXECUTABLE_DIR "bin")
+    endif()
   endif()
   if(NOT ARG_INSTALL_RPATH_LIBRARY_DIR)
-    set(ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
+    if(ARG_INSTALL_DESTINATION)
+      set(ARG_INSTALL_RPATH_LIBRARY_DIR ARG_INSTALL_DESTINATION)
+      cmake_path(APPEND ARG_INSTALL_RPATH_EXECUTABLE_DIR "lib")
+    else()
+      set(ARG_INSTALL_RPATH_LIBRARY_DIR "lib")
+    endif()
   endif()
 
   # Build pool determination.
