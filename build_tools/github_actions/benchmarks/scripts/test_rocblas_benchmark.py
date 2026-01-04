@@ -65,9 +65,9 @@ class ROCblasBenchmark(BenchmarkBase):
                             # Build ROCblas benchmark command
                             cmd = [
                                 f"{self.therock_bin_dir}/rocblas-bench",
-                                "-f",
+                                "--function",
                                 "gemm",
-                                "-r",
+                                "--precision",
                                 precision,
                                 "--initialization",
                                 "rand_int",
@@ -85,9 +85,9 @@ class ROCblasBenchmark(BenchmarkBase):
                                 str(ldc),
                                 "--transposeB",
                                 trans,
-                                "-i",
+                                "--iters",
                                 str(iterations),
-                                "-j",
+                                "--cold_iters",
                                 str(cold_iterations),
                             ]
 
@@ -131,9 +131,9 @@ class ROCblasBenchmark(BenchmarkBase):
                             # Build ROCblas GEMV benchmark command
                             cmd = [
                                 f"{self.therock_bin_dir}/rocblas-bench",
-                                "-f",
+                                "--function",
                                 "gemv",
-                                "-r",
+                                "--precision",
                                 precision,
                                 "--initialization",
                                 "rand_int",
@@ -145,9 +145,9 @@ class ROCblasBenchmark(BenchmarkBase):
                                 str(lda),
                                 "--transposeA",
                                 trans,
-                                "-i",
+                                "--iters",
                                 str(iterations),
-                                "-j",
+                                "--cold_iters",
                                 str(cold_iterations),
                             ]
                             self.execute_command(cmd, f)
@@ -182,9 +182,9 @@ class ROCblasBenchmark(BenchmarkBase):
                         # Build ROCblas GER benchmark command
                         cmd = [
                             f"{self.therock_bin_dir}/rocblas-bench",
-                            "-f",
+                            "--function",
                             "ger",
-                            "-r",
+                            "--precision",
                             precision,
                             "--initialization",
                             "rand_int",
@@ -194,9 +194,9 @@ class ROCblasBenchmark(BenchmarkBase):
                             str(n),
                             "--lda",
                             str(lda),
-                            "-i",
+                            "--iters",
                             str(iterations),
-                            "-j",
+                            "--cold_iters",
                             str(cold_iterations),
                         ]
                         self.execute_command(cmd, f)
@@ -223,17 +223,17 @@ class ROCblasBenchmark(BenchmarkBase):
                         # Build ROCblas DOT benchmark command
                         cmd = [
                             f"{self.therock_bin_dir}/rocblas-bench",
-                            "-f",
+                            "--function",
                             "dot",
-                            "-r",
+                            "--precision",
                             precision,
                             "--initialization",
                             "rand_int",
                             "-n",
                             str(n),
-                            "-i",
+                            "--iters",
                             str(iterations),
-                            "-j",
+                            "--cold_iters",
                             str(cold_iterations),
                         ]
                         self.execute_command(cmd, f)
@@ -265,9 +265,9 @@ class ROCblasBenchmark(BenchmarkBase):
                         # Build ROCblas GEMM_HPA_HGEMM benchmark command
                         cmd = [
                             f"{self.therock_bin_dir}/rocblas-bench",
-                            "-f",
+                            "--function",
                             "gemm_ex",
-                            "-r",
+                            "--precision",
                             gemm_hpa_hgemm_precision,
                             "-m",
                             str(m),
@@ -287,9 +287,9 @@ class ROCblasBenchmark(BenchmarkBase):
                             gemm_hpa_hgemm_compute_type,
                             "--transposeB",
                             trans,
-                            "-i",
+                            "--iters",
                             str(iterations),
-                            "-j",
+                            "--cold_iters",
                             str(cold_iterations),
                         ]
 
