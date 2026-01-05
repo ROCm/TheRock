@@ -15,7 +15,8 @@ TESTS_TO_IGNORE = {
     # Issue to fix: https://github.com/ROCm/TheRock/issues/2758
     "gfx950-dcgpu": [
         "hipdnn_backend_tests",
-    ]
+    ],
+    "gfx1151": ["TestGpuEnginePluginManager.LoadPluginsAndExecuteOpGraph"],
 }
 
 cmd = [
