@@ -1,8 +1,7 @@
 therock_subproject_fetch(therock-dyninst-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/dyninst/dyninst/archive/refs/tags/v13.0.0.tar.gz
-  # TODO: Replace with S3 bucket URL
-  URL https://github.com/dyninst/dyninst/archive/refs/tags/v13.0.0.tar.gz
+  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/dyninst-13.0.0.tar.gz
   URL_HASH SHA256=1bc48d26478b677a6c090c25586a447507bd1b4cf88d369bd61820005ce1be39
 )
 
