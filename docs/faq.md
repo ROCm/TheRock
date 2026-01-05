@@ -10,11 +10,6 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight, open-source build
 platform for HIP and ROCm, designed to provide a streamlined and up-to-date
 ROCm environment.
 
-### Who is TheRock intended for?
-
-TheRock is intended for developers, researchers, and advanced users who want
-access to the latest ROCm capabilities with a simplified and flexible setup.
-
 ### How does TheRock differ from standard ROCm installations?
 
 TheRock provides a more streamlined, frequently updated environment compared to
@@ -79,25 +74,26 @@ You have two options to prioritize VRAM usage:
 Note that on APUs, the performance difference between VRAM and GTT is generally
 minimal.
 
+For information on configuring GTT size, see the next question.
+
+### How do I configure shared memory allocation on Linux?
+
+For GPUs using unified memory (including gfx1151/Strix Halo APUs), you can adjust
+the Graphics Translation Table (GTT) size allocation. See the official ROCm
+documentation on [configuring shared memory](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installryz/native_linux/install-ryzen.html#configure-shared-memory).
+
+Note: This applies to Linux systems only and is relevant for any GPU using shared
+memory, not just Strix Halo.
+
 ## Troubleshooting
 
 ### How do I verify my GPU is recognized by TheRock?
 
-Run `rocminfo` or `amd-smi` to verify that your GPU is detected and properly
-initialized by the ROCm stack.
+See the [Verifying your installation](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#verifying-your-installation)
+section in RELEASES.md for platform-specific instructions.
 
 ### What should I do if I encounter memory allocation errors?
 
 Check your GTT configuration, ensure sufficient system memory is available, and
 verify that kernel parameters are correctly set. Review system logs using
 `dmesg | grep amdgpu` for specific error messages.
-
-### Where can I get help with TheRock?
-
-For additional support, consult the [TheRock documentation](https://github.com/ROCm/TheRock),
-file issues on the [TheRock project repository](https://github.com/ROCm/TheRock/issues),
-or engage with the ROCm community via
-[ROCm Discussions](https://github.com/ROCm/ROCm/discussions),
-the AMD ROCm section on the
-[AMD Community Forums](https://community.amd.com/),
-and the [AMD Developer Discord](https://discord.com/invite/amd-dev).
