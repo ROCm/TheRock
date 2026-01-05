@@ -55,8 +55,7 @@ function Wait-Process-Filter ([String]$RegexStr, [int] $Tries, [int] $Seconds = 
 
 #### Script Start ####
 
-# Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
-$regex_build_exe = "\build\.*[.]exe"
+$regex_build_exe = '\\build\\.*\.exe'
 
 # https://superuser.com/questions/749243/detect-if-powershell-is-running-as-administrator/756696#756696
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::
@@ -68,11 +67,10 @@ echo "[*] Checking if elevated: $isAdmin | current user: $currentUser"
 # etc. "C:\runner" vs "B:\actions-runner" so use the workspace env var
 if($ENV:GITHUB_WORKSPACE -ne $null) {
     echo "[*] GITHUB_WORKSPACE env var defined: $ENV:GITHUB_WORKSPACE"
-    $regex_build_exe = "$ENV:GITHUB_WORKSPACE\build\.*[.]exe"
+    $regex_build_exe = [regex]::Escape((Join-Path $ENV:GITHUB_WORKSPACE 'build')) + '\\.*\.exe'
 } else {
     echo "[*] GITHUB_WORKSPACE env var undefined, using default regex"
 }
-$regex_build_exe = $regex_build_exe.Replace("\","\\")
 echo "[*] Checking for running build executables filtered by .exe regex: $regex_build_exe"
 
 $IsAllStopped = $false
@@ -90,25 +88,24 @@ if($ps_list_begin_len -eq 0) {
 echo "[*] Found $ps_list_begin_len running build executable(s):"
 $ps_list | % { echo "    > $($_.MainModule.FileName)"}
 
-echo "[*] Attempting to stop executable(s) with WMI: "
-$ps_list | ForEach-Object {
-    #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
-    echo "    > $(Get-Process-Info $_)"
-    (Get-WmiObject win32_process -Filter "ProcessId = '$($_.id)'").Terminate() | Out-Null
+$ps_list = Get-Process-Filter -RegexStr $regex_build_exe
+if($ps_list.Count -gt 0) {
+    echo "[*] Attempting to stop any remaining executable(s) forcefully with 'Stop-Process':"
+    $ps_list | ForEach-Object {
+        #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
+        echo "    > $(Get-Process-Info $_)"
+        Stop-Process $_ -Force
+    }
 }
 $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
 
-
 # Second Attempt with `WMI` (if any processes are still running)
 if(!$IsAllStopped) {
-    $ps_list = Get-Process-Filter -RegexStr $regex_build_exe
-    if($ps_list.Count -gt 0) {
-        echo "[*] Attempting to stop any remaining executable(s) forcefully with 'Stop-Process':"
-        $ps_list | ForEach-Object {
-            #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
-            echo "    > $(Get-Process-Info $_)"
-            Stop-Process $_ -Force
-        }
+    echo "[*] Attempting to stop executable(s) with WMI: "
+    $ps_list | ForEach-Object {
+        #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
+        echo "    > $(Get-Process-Info $_)"
+        (Get-WmiObject win32_process -Filter "ProcessId = '$($_.id)'").Terminate() | Out-Null
     }
     $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
 }
