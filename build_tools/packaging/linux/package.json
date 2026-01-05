@@ -1571,7 +1571,7 @@
     "Gfxarch": "True"
   },
   {
-    "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages. Gfxarch should be false for meta packages",
+    "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
     "Version": "",
     "Architecture": "amd64",
