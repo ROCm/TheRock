@@ -171,14 +171,16 @@ jobs:
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       # Checkout nightly sources from https://github.com/pytorch/pytorch
-      # TODO: switch to 'nightly' to match our Linux workflows?
+      # Pin to known working commit until upstream nightly is stable again
+      # Working commit from 2025-12-27: 0bc5144aee9ee503ed74939a413b5fa0b04de315
       - name: Checkout PyTorch source repos (nightly branch)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
           git config --global core.longpaths true
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
-            --repo-hashtag nightly
+            --repo-hashtag 0bc5144aee9ee503ed74939a413b5fa0b04de315 \
+            --patchset nightly
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
             --repo-hashtag nightly

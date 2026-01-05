@@ -164,10 +164,12 @@ jobs:
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
       # Checkout nightly sources from https://github.com/pytorch/pytorch
+      # Pin to known working commit until upstream nightly is stable again
+      # Working commit from 2025-12-27: 0bc5144aee9ee503ed74939a413b5fa0b04de315
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag 0bc5144aee9ee503ed74939a413b5fa0b04de315 --patchset nightly
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout --patch --patchset nightly
