@@ -882,7 +882,8 @@ def do_build_pytorch_audio(
             "USE_ROCM": "1",
             "USE_CUDA": "0",
             "USE_FFMPEG": "1",
-            "USE_OPENMP": "1",
+            # Disable OpenMP on Windows - clang-cl has issues with OpenMP detection
+            "USE_OPENMP": "0" if is_windows else "1",
             "BUILD_SOX": "0",
         }
     )
