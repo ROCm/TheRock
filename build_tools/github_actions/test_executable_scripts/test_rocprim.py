@@ -78,8 +78,6 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--exclude-regex",
-    "|".join(TESTS_TO_IGNORE),
     "--timeout",
     "900",
     "--repeat",
