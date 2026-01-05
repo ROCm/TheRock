@@ -682,18 +682,20 @@ def do_build_pytorch(
         env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
+        # no aotriton support for gfx103X
+        #
+        # temporarily disable aotriton for gfx1152/53 until pytorch
+        # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+        is_aotriton_unsupported = any(
+            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+        )
+
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
 
-            # no aotriton support for gfx103X
-            #
-            # temporarily disable aotriton for gfx1152/53 until pytorch
-            # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
-            AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
-            if any(
-                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
-            ):
+            if is_aotriton_unsupported:
                 use_flash_attention = "OFF"
             print(
                 f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
@@ -745,9 +747,25 @@ def do_build_pytorch(
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = (
-            "1" if args.enable_pytorch_flash_attention_windows else "0"
+        # no aotriton support for gfx103X and temporarily disable aotriton
+        # for gfx1152/53 until pytorch uses a commit that enables it
+        # ( https://github.com/ROCm/aotriton/pull/142 )
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+        is_aotriton_unsupported = any(
+            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
         )
+
+        # Determine flash attention setting, disabling for unsupported architectures
+        if args.enable_pytorch_flash_attention_windows and not is_aotriton_unsupported:
+            use_flash_attention = "1"
+        else:
+            use_flash_attention = "0"
+
+        if is_aotriton_unsupported and args.enable_pytorch_flash_attention_windows:
+            print(
+                f"  Flash attention disabled: AOTriton does not support {env['PYTORCH_ROCM_ARCH']}"
+            )
+
         env.update(
             {
                 "USE_FLASH_ATTENTION": use_flash_attention,
@@ -763,9 +781,7 @@ def do_build_pytorch(
                 "BUILD_TEST": "0",
             }
         )
-        print(
-            f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
-        )
+        print(f"  Flash attention enabled: {use_flash_attention == '1'}")
 
     if not is_windows:
         # Prepend the ROCm sysdeps dir so that we use bundled libraries.
