@@ -385,7 +385,9 @@ def matrix_generator(
     if is_pull_request:
         active_trigger_types.append("presubmit")
     if is_push:
-        if base_args.get("branch_name") == "main":
+        if base_args.get("branch_name") == "main" or base_args.get(
+            "branch_name"
+        ).startswith("release/therock-"):
             active_trigger_types.extend(["presubmit", "postsubmit"])
         else:
             # Non-main branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
@@ -484,8 +486,10 @@ def matrix_generator(
 
     if is_push:
         branch_name = base_args.get("branch_name")
-        if branch_name == "main":
-            print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
+        if branch_name == "main" or branch_name.startswith("release/therock-"):
+            print(
+                f"[PUSH - {branch_name.upper()}] Generating build matrix with {str(base_args)}"
+            )
 
             # Add presubmit and postsubmit targets.
             for target in get_all_families_for_trigger_types(
@@ -716,7 +720,13 @@ if __name__ == "__main__":
 
     # For now, add default run for gfx94X-linux
     base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
-    base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
+    #  We only want the branch name portion of GITHUB_REF
+    # e.g. origin/main -> main or refs/heads/release/therock-7.10 -> release/therock-7.10
+    branch = os.environ.get("GITHUB_REF")
+    if branch.startswith("refs/heads/"):
+        base_args["branch_name"] = branch.removeprefix("refs/heads/")
+    else:
+        base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
