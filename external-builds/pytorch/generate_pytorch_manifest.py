@@ -15,20 +15,41 @@ from typing import Any, Dict, List, Optional
 
 
 def parse_wheel_name(filename: str) -> Dict[str, str]:
-    # Best-effort wheel parse:
-    #   {name}-{version}(-{build})?-{py}-{abi}-{plat}.whl
+    # Best-effort wheel parse per PEP 427:
+    #   {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
     if not filename.endswith(".whl"):
         return {}
+
     parts = filename[:-4].split("-")
     if len(parts) < 5:
         return {}
-    return {
-        "package_name": parts[0],
-        "package_version": parts[1],
-        "python_tag": parts[-3],
-        "abi_tag": parts[-2],
-        "platform_tag": parts[-1],
+
+    distribution = parts[0]
+    version = parts[1]
+
+    python_tag = parts[-3]
+    abi_tag = parts[-2]
+    platform_tag = parts[-1]
+
+    # Optional build tag:
+    # - Exactly 5 parts → no build tag
+    # - 6+ parts → everything between version and python_tag
+    build_tag = None
+    if len(parts) > 5:
+        build_tag = "-".join(parts[2:-3])
+
+    meta: Dict[str, str] = {
+        "distribution": distribution,
+        "version": version,
+        "python_tag": python_tag,
+        "abi_tag": abi_tag,
+        "platform_tag": platform_tag,
     }
+
+    if build_tag:
+        meta["build_tag"] = build_tag
+
+    return meta
 
 
 def capture(cmd: List[str], cwd: Optional[Path] = None) -> str:
