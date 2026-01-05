@@ -48,6 +48,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_activate(aqlprofile)
 
   therock_provide_artifact(aqlprofile
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
       dbg

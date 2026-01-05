@@ -545,7 +545,7 @@ disable_platforms = ["windows"]
 
 [artifacts.aqlprofile]
 artifact_group = "profiler-core"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
