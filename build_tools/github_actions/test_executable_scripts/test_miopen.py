@@ -244,4 +244,4 @@ else:
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]
 cmd2 = [f"{THEROCK_BIN_DIR}/miopen_gtest", "--gtest_list_tests"]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd2)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+subprocess.run(cmd2, cwd=THEROCK_DIR, check=True, env=environ_vars)
