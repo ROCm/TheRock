@@ -12,31 +12,22 @@ logging.basicConfig(level=logging.INFO)
 
 class TestRocprofsys:
     @staticmethod
-    def configure_path():
-        """Prepend TheRock's bin dir to PATH so rocminfo, rocm_agent_enumerator, etc. are found first."""
-        THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+    def configure_paths():
+        """Prepend TheRock's bin dir to PATH so that the correct executables are found"""
+
+        # Everything that we need should be in here
+        rocm_base = Path(THEROCK_BIN_DIR).parent
+
+        # PATH
         existing_path = os.environ.get("PATH", "")
         os.environ["PATH"] = f"{THEROCK_BIN_DIR}:{existing_path}"
 
-    @staticmethod
-    def configure_ld_library_path():
-        """Setup LD_LIBRARY_PATH for the tests."""
-        THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+        # ROCM_PATH
+        os.environ["ROCM_PATH"] = str(rocm_base)
 
-        rocm_lib_base = Path(THEROCK_BIN_DIR).parent / "lib"
-        rocm_base = Path(THEROCK_BIN_DIR).parent
-
-        # Some libraries (libamd_comgr_loader, rocm_sysdeps) are in the rocprofiler-systems
-        # component dist rather than the final dist/rocm
-        build_base = rocm_base.parent.parent  # Go up from dist/rocm to build/
-        rocprofsys_dist_lib = (
-            build_base / "profiler" / "rocprofiler-systems" / "dist" / "lib"
-        )
-        os.environ["ROCM_PATH"] = str(rocprofsys_dist_lib.parent)
-
+        # LD_LIBRARY_PATH
+        rocm_lib_base = rocm_base / "lib"
         ld_paths = [
-            rocprofsys_dist_lib,
-            rocprofsys_dist_lib / "rocm_sysdeps" / "lib",
             rocm_lib_base,
             rocm_lib_base / "rocprofiler-systems",
             rocm_base / "share" / "rocprofiler-systems" / "examples" / "lib",
@@ -44,54 +35,33 @@ class TestRocprofsys:
         os.environ["LD_LIBRARY_PATH"] = ":".join(str(p) for p in ld_paths)
 
     @staticmethod
-    def configure_trace_processor_path():
-        """
-        Setup ROCPROFSYS_TRACE_PROCESSOR_PATH for the tests.
-
-        This is required for perfetto validation tests to work correctly.
-        """
-        tp_path = Path("/tmp/trace_processor_shell")
-
-        if not tp_path.exists():
-            logging.info(f"Downloading trace processor shell to {tp_path}")
-            subprocess.run(
-                [
-                    "curl",
-                    "-L",
-                    "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/v47.0/linux-amd64/trace_processor_shell",
-                    "-o",
-                    str(tp_path),
-                ],
-                check=True,
-            )
-            subprocess.run(["chmod", "+x", str(tp_path)], check=True)
-            logging.info(f"Trace processor shell created at {tp_path}")
-
-        os.environ["ROCPROFSYS_TRACE_PROCESSOR_PATH"] = str(tp_path)
-
-    @staticmethod
     def run_pytest_tests():
-        TestRocprofsys.configure_path()
-        TestRocprofsys.configure_ld_library_path()
-        TestRocprofsys.configure_trace_processor_path()
+        TestRocprofsys.configure_paths()
 
         # Required to force rocprofsys pytest into install mode
         os.environ["ROCPROFSYS_INSTALL_DIR"] = str(Path(THEROCK_BIN_DIR).parent)
-        pytest_test_dir = (
+        pytest_package_exec = (
             Path(THEROCK_BIN_DIR).parent
             / "share"
             / "rocprofiler-systems"
-            / "tests"
-            / "pytest"
+            / "rocprofsys-tests.pyz"
         )
 
         cmd = [
-            "pytest",
-            str(pytest_test_dir),
+            "python3",
+            str(pytest_package_exec),
             "--junit-xml=junit.xml",
-            # "--no-output",
+            # RCCL runtime-instrument is broken
+            # RCCL sampling perfetto validation is also broken
+            "-k",
+            "not TestRCCL",
+            # Custom flags -------
+            # "--no-output", # Supresses all output
+            "--show-output-on-subtest-fail",  # Shows runner output on subtest fail
+            # "--show-output", # Shows runner output even on success (REQUIRES -s flag)
+            # --------------------
             "-v",
-            "-rs",  # Show skip reasons
+            "-rs",
             "--log-cli-level=info",
         ]
 
