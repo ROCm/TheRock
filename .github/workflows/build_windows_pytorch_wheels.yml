@@ -163,8 +163,17 @@ jobs:
       - name: Install requirements
         run: |
           pip install packaging
-          choco install --no-progress -y ninja --version 1.13.1
-          choco install --no-progress -y awscli
+          # Retry choco installs to handle Chocolatey rate limiting (429 errors)
+          for i in 1 2 3 4 5; do
+            choco install --no-progress -y ninja --version 1.13.1 && break
+            echo "Retry $i for ninja..."
+            sleep $((i * 30))
+          done
+          for i in 1 2 3 4 5; do
+            choco install --no-progress -y awscli && break
+            echo "Retry $i for awscli..."
+            sleep $((i * 30))
+          done
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
       # After other installs, so MSVC get priority in the PATH.
