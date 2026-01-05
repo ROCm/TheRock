@@ -63,9 +63,9 @@ users who want early previews of upcoming releases, and QA/test team members.
 | dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock)                                                                                                                              |
 | dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
 
-With the exception of "dev releases", each release distribution channel only
-contains release artifacts of the matching release type. The "dev releases"
-channel _can_ contain any type of release.
+With the exception of "dev releases", each distribution channel only contains
+release artifacts of the matching release type. The "dev releases" channel
+_can_ contain any type of release.
 
 ## Python package versions
 
@@ -117,8 +117,8 @@ possible version combinations:
 | dev               | `7.10.0.dev0+efed3c` | `2.9.0+devrocm7.10.0.dev0-efed3c`<br>_(Note the `devrocm` and `-` instead of `+`)_ |
 
 These local version identifiers are specially constructed such that the expected
-version sorting of `stable > nightly > dev` is preserved. Note that per
-[the Local version identifiers spec](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers),
+version sorting of `stable > nightly > dev` is preserved. Note that per the
+["Local version identifiers" specification](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers),
 comparison and ordering of local version identifiers goes segment by segment
 with special rules _different from the rules used for base versions_. This
 ordering can be tested like so:
