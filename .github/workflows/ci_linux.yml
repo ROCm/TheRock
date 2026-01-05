@@ -32,6 +32,10 @@ on:
         type: string
       sanity_check_only_for_family:
         type: boolean
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems)"
+        default: false
 
 permissions:
   contents: read
@@ -50,6 +54,7 @@ jobs:
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       expect_failure: ${{ inputs.expect_failure }}
+      external_source_checkout: ${{ inputs.external_source_checkout }}
     permissions:
       contents: read
       id-token: write

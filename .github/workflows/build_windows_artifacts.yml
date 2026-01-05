@@ -48,6 +48,10 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems)"
+        default: false
 
 permissions:
   contents: read
