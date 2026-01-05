@@ -82,7 +82,7 @@ else:
 # -----------------------------
 # Build command
 # -----------------------------
-cmd = [str(AMDSMITST_BIN)] + test_filter
+cmd = [str(AMDSMITST_BIN), "--gtest_output=json:report.json"] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 

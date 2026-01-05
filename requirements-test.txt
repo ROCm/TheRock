@@ -8,3 +8,5 @@ prettytable==3.12.0
 requests==2.32.4
 jsonschema==4.23.0
 packaging==25.0
+# Optimized JSON parser and serializer for test results
+orjson==3.11.5

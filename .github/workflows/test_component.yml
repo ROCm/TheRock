@@ -110,6 +110,15 @@ jobs:
           ${{ fromJSON(inputs.component).test_script }}
 
       # post-job step to pick up outputs
+      - name: Parse and upload test results
+        run: |
+          python ./build_tools/github_actions/parse_test_results.py \
+            --component-name ${{ fromJSON(inputs.component).job_name }} \
+            --test-type ${{ fromJSON(inputs.component).test_type }} \
+            --shard-index ${{ matrix.shard }} \
+            --total-shards ${{ fromJSON(inputs.component).total_shards }} \
+            --amdgpu_families ${{ env.AMDGPU_FAMILIES }} \
+            --artifact-run-id ${{ env.ARTIFACT_RUN_ID }} \
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.

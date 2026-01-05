@@ -34,7 +34,10 @@ elif test_type == "full":
     # TODO(#2616): Enable correct filter once known test set is reduced to appropriate amount
     test_filter.append("--gtest_filter=*quick*")
 
-cmd = [f"{THEROCK_BIN_DIR}/hipsparselt-test"] + test_filter
+cmd = [
+    f"{THEROCK_BIN_DIR}/hipsparselt-test",
+    "--gtest_output=json:report.json",
+] + test_filter
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)

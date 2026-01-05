@@ -36,6 +36,7 @@ else:
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",
+    "--gtest_output=json:report.json",
     "--matrices-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
 ] + test_filter

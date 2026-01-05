@@ -97,7 +97,7 @@ if test_filter_arg:
 else:
     test_filter_arg = f"--gtest_filter=-{_exclude_str}"
 
-cmd = [str(test_bin)]
+cmd = [str(test_bin), "--gtest_output=json:report.json"]
 if test_filter_arg:
     cmd.append(test_filter_arg)
 

@@ -32,7 +32,10 @@ else:
         "0.02",
     ]
 
-cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
+cmd = [
+    f"{THEROCK_BIN_DIR}/rocfft-test",
+    "--gtest_output=json:report.json",
+] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
     cmd,

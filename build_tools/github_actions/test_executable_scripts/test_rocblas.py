@@ -27,7 +27,10 @@ else:
     # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 
-cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
+cmd = [
+    f"{THEROCK_BIN_DIR}/rocblas-test",
+    "--gtest_output=json:report.json",
+] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
 subprocess.run(

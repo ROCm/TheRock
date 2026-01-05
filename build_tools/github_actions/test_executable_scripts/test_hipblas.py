@@ -29,6 +29,7 @@ exclusion_list = ":".join(tests_to_exclude)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/hipblas-test",
+    "--gtest_output=json:report.json",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.

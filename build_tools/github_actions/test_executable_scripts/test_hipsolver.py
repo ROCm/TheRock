@@ -41,6 +41,7 @@ exclusion_list = ":".join(tests_to_exclude)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/hipsolver-test",
+    "--gtest_output=json:report.json",
     f"--gtest_filter=-{exclusion_list}",
 ]
 

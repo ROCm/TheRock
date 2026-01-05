@@ -21,6 +21,7 @@ envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsolver-test",
+    "--gtest_output=json:report.json",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.

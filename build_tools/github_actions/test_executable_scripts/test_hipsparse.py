@@ -23,7 +23,7 @@ environ_vars["HIPSPARSE_CLIENTS_MATRICES_DIR"] = (
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
 )
 
-cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
+cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test", "--gtest_output=json:report.json"]
 
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
