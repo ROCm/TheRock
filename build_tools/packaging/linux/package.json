@@ -1495,6 +1495,7 @@
     "Artifactory": [
       {
         "Artifact": "hipdnn",
+        "Artifact_Gfxarch": "False",
         "Artifact_Subdir": [
           {
             "Name": "hipDNN",
@@ -1545,6 +1546,7 @@
     "Artifactory": [
       {
         "Artifact": "hipdnn",
+        "Artifact_Gfxarch": "False",
         "Artifact_Subdir": [
           {
             "Name": "hipDNN",
