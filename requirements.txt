@@ -13,3 +13,6 @@ boto3>=1.42.6
 # hipBLASLt deps
 joblib>=1.4.2
 msgpack>=1.1.0
+
+# KPACK
+zstandard>=0.19.0

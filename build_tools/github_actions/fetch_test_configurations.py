@@ -181,7 +181,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --miopen --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 4,
     },
     # RCCL tests

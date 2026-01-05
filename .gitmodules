@@ -53,3 +53,6 @@
 	path = iree-libs/fusilli
 	url = https://github.com/iree-org/fusilli.git
 	branch = main
+[submodule "rocm-kpack"]
+	path = base/rocm-kpack
+	url = https://github.com/ROCm/rocm-kpack.git
