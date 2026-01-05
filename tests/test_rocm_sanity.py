@@ -123,3 +123,45 @@ class TestROCmSanity:
         return_code = process.returncode
         check.equal(return_code, 0)
         check.is_true(output)
+
+    @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
+    def test_amdsmi_suite(self):
+        amdsmi_test_bin = (
+            THEROCK_BIN_DIR.parent / "share" / "amd_smi" / "tests" / "amdsmitst"
+        ).resolve()
+
+        assert (
+            amdsmi_test_bin.exists()
+        ), f"amdsmitst not found at expected location: {amdsmi_test_bin}"
+        assert os.access(
+            amdsmi_test_bin, os.X_OK
+        ), f"amdsmitst is not executable: {amdsmi_test_bin}"
+
+        include_tests = [
+            "amdsmitstReadOnly.*",
+            "amdsmitstReadWrite.FanReadWrite",
+            "amdsmitstReadWrite.TestOverdriveReadWrite",
+            "amdsmitstReadWrite.TestPciReadWrite",
+            "amdsmitstReadWrite.TestPowerReadWrite",
+            "amdsmitstReadWrite.TestPerfCntrReadWrite",
+            "amdsmitstReadWrite.TestEvtNotifReadWrite",
+            "AmdSmiDynamicMetricTest.*",
+        ]
+
+        exclude_tests = [
+            "amdsmitstReadOnly.TempRead",
+            "amdsmitstReadOnly.TestFrequenciesRead",
+            "amdsmitstReadWrite.TestPowerReadWrite",
+        ]
+
+        gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
+        cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]
+
+        process = run_command(cmd, cwd=str(amdsmi_test_bin.parent))
+
+        combined = (process.stdout or "") + "\n" + (process.stderr or "")
+        for line in combined.splitlines():
+            if "[==========]" in line:
+                print(f"[amdsmitst-summary] {line}")
+
+        check.equal(process.returncode, 0)

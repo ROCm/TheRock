@@ -83,7 +83,9 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         """,
         )
         with self.assertRaisesRegex(ValueError, "illegal key: 'foobar'"):
-            builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+            builder.ArtifactDescriptor.load_toml_file(
+                self.temp_dir / "descriptor.toml", artifact_name="test"
+            )
 
     def testComponentExtendsDefault(self):
         self.write_indented(
@@ -92,7 +94,9 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         [components.run]
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         self.assertListEqual(d.components["run"].extends, ["lib"])
 
     def testComponentExtends(self):
@@ -103,7 +107,9 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         extends = ["extras"]
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         self.assertListEqual(d.components["lib"].extends, ["extras"])
 
     def testComponentExtendsStr(self):
@@ -114,7 +120,9 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         extends = "extras"
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         self.assertListEqual(d.components["lib"].extends, ["extras"])
 
     def testBasedirUnrecognized(self):
@@ -126,7 +134,9 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         """,
         )
         with self.assertRaisesRegex(ValueError, "illegal key: 'foobar'"):
-            builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+            builder.ArtifactDescriptor.load_toml_file(
+                self.temp_dir / "descriptor.toml", artifact_name="test"
+            )
 
     def testBasedirDefaults(self):
         self.write_indented(
@@ -135,8 +145,11 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         [components.lib."stage/somedir"]
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         bd = d.components["lib"].basedirs["stage/somedir"]
+        # Includes should have lib defaults only
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
             builder.ComponentDefaults.ALL["lib"].includes,
@@ -144,6 +157,11 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.excludes],
             builder.ComponentDefaults.ALL["lib"].excludes,
+        )
+        # Kpack patterns should be in force_includes
+        self.assertEqual(
+            [pattern.glob for pattern in bd.predicate.force_includes],
+            [".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
         self.assertFalse(bd.optional)
 
@@ -155,7 +173,9 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         optional = "{platform.system().upper()}"
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         bd = d.components["lib"].basedirs["stage/somedir"]
         self.assertTrue(bd.optional)
 
@@ -167,7 +187,9 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         optional = "not{platform.system().upper()}"
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         bd = d.components["lib"].basedirs["stage/somedir"]
         self.assertFalse(bd.optional)
 
@@ -179,8 +201,11 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         default_patterns = false
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         bd = d.components["lib"].basedirs["stage/somedir"]
+        # With default_patterns=false, includes should be empty
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
             [],
@@ -188,6 +213,11 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.excludes],
             [],
+        )
+        # Kpack patterns should still be in force_includes
+        self.assertEqual(
+            [pattern.glob for pattern in bd.predicate.force_includes],
+            [".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
 
     def testBasedirExplicitLists(self):
@@ -201,19 +231,23 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         optional = true
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         bd = d.components["lib"].basedirs["stage/somedir"]
+        expected_includes = ["**/abc"] + builder.ComponentDefaults.ALL["lib"].includes
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
-            ["**/abc"] + builder.ComponentDefaults.ALL["lib"].includes,
+            expected_includes,
         )
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.excludes],
             ["**/def"],
         )
+        # Kpack patterns added to force_includes along with explicit ones
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.force_includes],
-            ["**/xyz"],
+            ["**/xyz", ".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
         self.assertTrue(bd.optional)
 
@@ -227,20 +261,73 @@ class ArtifactDescriptorTomlValidationTest(TmpDirTestCase):
         force_include = "**/xyz"
         """,
         )
-        d = builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
         bd = d.components["lib"].basedirs["stage/somedir"]
+        expected_includes = ["**/abc"] + builder.ComponentDefaults.ALL["lib"].includes
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.includes],
-            ["**/abc"] + builder.ComponentDefaults.ALL["lib"].includes,
+            expected_includes,
         )
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.excludes],
             ["**/def"],
         )
+        # Kpack patterns added to force_includes along with explicit ones
         self.assertEqual(
             [pattern.glob for pattern in bd.predicate.force_includes],
-            ["**/xyz"],
+            ["**/xyz", ".kpack/test_lib.kpm", ".kpack/test_lib_*.kpack"],
         )
+
+    def testEmptyComponentMatchesEverything(self):
+        """Regression test: empty includes (no patterns) should match all files.
+
+        This is a critical invariant - when a component has no include patterns
+        (and default_patterns=false), it should match everything. Previously,
+        adding kpack patterns to 'includes' broke this because non-empty includes
+        require files to match at least one pattern. Kpack patterns are now in
+        force_includes to preserve this behavior.
+        """
+        self.write_indented(
+            "descriptor.toml",
+            r"""
+        [components.lib."stage/somedir"]
+        default_patterns = false
+        """,
+        )
+        d = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="test"
+        )
+        bd = d.components["lib"].basedirs["stage/somedir"]
+
+        # Verify includes is empty (the critical invariant)
+        self.assertEqual([pattern.glob for pattern in bd.predicate.includes], [])
+
+        # Create test files of various types
+        stage_dir = self.temp_dir / "src" / "stage" / "somedir"
+        stage_dir.mkdir(parents=True)
+        (stage_dir / "bin").mkdir()
+        (stage_dir / "bin" / "executable").write_text("exe")
+        (stage_dir / "lib").mkdir()
+        (stage_dir / "lib" / "libfoo.so").write_text("lib")
+        (stage_dir / "random.txt").write_text("text")
+
+        # Use PatternMatcher to verify all files match
+        from _therock_utils.pattern_match import PatternMatcher
+
+        pm = PatternMatcher(
+            includes=[p.glob for p in bd.predicate.includes],
+            excludes=[p.glob for p in bd.predicate.excludes],
+            force_includes=[p.glob for p in bd.predicate.force_includes],
+        )
+        pm.add_basedir(stage_dir)
+
+        matched_files = set(relpath for relpath, _ in pm.matches())
+        # All files should match when includes is empty
+        self.assertIn("bin/executable", matched_files)
+        self.assertIn("lib/libfoo.so", matched_files)
+        self.assertIn("random.txt", matched_files)
 
 
 class ComponentScannerTest(TmpDirTestCase):
@@ -258,7 +345,7 @@ class ComponentScannerTest(TmpDirTestCase):
         """,
         )
         ad = builder.ArtifactDescriptor.load_toml_file(
-            self.temp_dir / "descriptor.toml"
+            self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
         self.assertSetEqual(scanner.matched_relpaths, set())
@@ -278,7 +365,7 @@ class ComponentScannerTest(TmpDirTestCase):
         )
         (self.temp_dir / "src").mkdir()
         ad = builder.ArtifactDescriptor.load_toml_file(
-            self.temp_dir / "descriptor.toml"
+            self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
         self.assertSetEqual(scanner.matched_relpaths, set())
@@ -314,7 +401,7 @@ class ComponentScannerTest(TmpDirTestCase):
         """,
         )
         ad = builder.ArtifactDescriptor.load_toml_file(
-            self.temp_dir / "descriptor.toml"
+            self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         self.touch("src/a/stage/lib/libfoo.so.1")
         self.touch("src/a/stage/lib/libfoo.a")
@@ -380,7 +467,7 @@ class ComponentScannerTest(TmpDirTestCase):
         """,
         )
         ad = builder.ArtifactDescriptor.load_toml_file(
-            self.temp_dir / "descriptor.toml"
+            self.temp_dir / "descriptor.toml", artifact_name="test"
         )
 
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
@@ -401,7 +488,7 @@ class ComponentScannerTest(TmpDirTestCase):
         """,
         )
         ad = builder.ArtifactDescriptor.load_toml_file(
-            self.temp_dir / "descriptor.toml"
+            self.temp_dir / "descriptor.toml", artifact_name="test"
         )
 
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
@@ -417,13 +504,115 @@ class ComponentScannerTest(TmpDirTestCase):
         """,
         )
         ad = builder.ArtifactDescriptor.load_toml_file(
-            self.temp_dir / "descriptor.toml"
+            self.temp_dir / "descriptor.toml", artifact_name="test"
         )
         self.touch("src/a/stage/not/default/dir/README.md")
 
         scanner = builder.ComponentScanner(self.temp_dir / "src", ad)
         with self.assertRaisesRegex(ValueError, "Unmatched artifact files"):
             scanner.verify()
+
+    def testKpackFileInclusion(self):
+        """Test that kpack files are automatically included based on artifact/component naming."""
+        # Create directory structure with .kpack files
+        stage_dir = self.temp_dir / "src" / "myproject" / "stage"
+        kpack_dir = stage_dir / ".kpack"
+        kpack_dir.mkdir(parents=True)
+
+        # Create kpack files matching artifact "myartifact" components "lib" and "test"
+        (kpack_dir / "myartifact_lib.kpm").write_text("manifest")
+        (kpack_dir / "myartifact_lib_gfx1100.kpack").write_text("lib code")
+        (kpack_dir / "myartifact_lib_gfx1101.kpack").write_text("lib code")
+        (kpack_dir / "myartifact_test.kpm").write_text("test manifest")
+        (kpack_dir / "myartifact_test_gfx1100.kpack").write_text("test code")
+        # Also create a kpack file for different artifact (should NOT be included)
+        (kpack_dir / "other_lib.kpm").write_text("other manifest")
+
+        # Create a regular file for lib component
+        (stage_dir / "lib").mkdir()
+        (stage_dir / "lib" / "libfoo.so").write_text("library")
+
+        # Write descriptor
+        self.write_indented(
+            "descriptor.toml",
+            r"""
+        [options]
+        unmatched_exclude = [".kpack/other_lib.kpm", ".kpack/myartifact_test*"]
+        [components.lib."myproject/stage"]
+        """,
+        )
+
+        # Load descriptor with artifact_name (patterns added at descriptor level)
+        descriptor = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="myartifact"
+        )
+        scanner = builder.ComponentScanner(self.temp_dir / "src", descriptor)
+
+        # Verify lib component has lib kpack files
+        lib_contents = scanner.components["lib"]
+        lib_files = set()
+        for bd, pm in lib_contents.basedir_contents.items():
+            for relpath, _ in pm.matches():
+                lib_files.add(relpath)
+
+        self.assertIn(".kpack/myartifact_lib.kpm", lib_files)
+        self.assertIn(".kpack/myartifact_lib_gfx1100.kpack", lib_files)
+        self.assertIn(".kpack/myartifact_lib_gfx1101.kpack", lib_files)
+        self.assertNotIn(
+            ".kpack/myartifact_test.kpm", lib_files
+        )  # test files not in lib
+        self.assertNotIn(".kpack/other_lib.kpm", lib_files)  # different artifact
+
+    def testKpackNoMatchingFiles(self):
+        """Test that scanner works when .kpack dir exists but has no matching files."""
+        stage_dir = self.temp_dir / "src" / "myproject" / "stage"
+        kpack_dir = stage_dir / ".kpack"
+        kpack_dir.mkdir(parents=True)
+
+        # Only create kpack files for a different artifact
+        (kpack_dir / "other_lib.kpm").write_text("other manifest")
+
+        self.write_indented(
+            "descriptor.toml",
+            r"""
+        [options]
+        unmatched_exclude = [".kpack/other_lib.kpm"]
+        [components.lib."myproject/stage"]
+        """,
+        )
+
+        descriptor = builder.ArtifactDescriptor.load_toml_file(
+            self.temp_dir / "descriptor.toml", artifact_name="myartifact"
+        )
+        scanner = builder.ComponentScanner(self.temp_dir / "src", descriptor)
+
+        # Should not fail, just have no kpack files
+        lib_contents = scanner.components["lib"]
+        lib_files = set()
+        for bd, pm in lib_contents.basedir_contents.items():
+            for relpath, _ in pm.matches():
+                lib_files.add(relpath)
+
+        self.assertNotIn(".kpack/other_lib.kpm", lib_files)
+
+    def testArtifactNameRequired(self):
+        """Test that artifact_name is required."""
+        self.write_indented(
+            "descriptor.toml",
+            r"""
+        [components.lib."myproject/stage"]
+        """,
+        )
+
+        # Test that load_toml_file requires artifact_name
+        with self.assertRaises(TypeError):
+            builder.ArtifactDescriptor.load_toml_file(self.temp_dir / "descriptor.toml")
+
+        # Test that empty artifact_name raises error
+        with self.assertRaisesRegex(ValueError, "artifact_name is required"):
+            builder.ArtifactDescriptor.load_toml_file(
+                self.temp_dir / "descriptor.toml", artifact_name=""
+            )
 
 
 if __name__ == "__main__":
