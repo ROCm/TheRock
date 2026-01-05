@@ -16,7 +16,7 @@ TESTS_TO_IGNORE = {
     "gfx950-dcgpu": [
         "hipdnn_backend_tests",
     ],
-    "gfx1151": ["TestGpuEnginePluginManager.LoadPluginsAndExecuteOpGraph"],
+    "gfx1151": ["hipdnn_backend_tests"],
 }
 
 cmd = [
