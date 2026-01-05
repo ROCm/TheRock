@@ -629,8 +629,8 @@ def main(base_args, linux_families, windows_families):
         # The matrix will have entries like:
         # {project_to_test, cmake_options, amdgpu_family, test_runs_on, ...}
 
-        # Generate GPU family variants first
-        multi_arch = base_args.get("multi_arch", False)
+    # Generate GPU family variants first
+    multi_arch = base_args.get("multi_arch", False)
     print(
         f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
     )
@@ -789,35 +789,10 @@ if __name__ == "__main__":
         print(f"Detected external repository: rocm-systems")
 
     if is_external_repo:
-        # For external repos, we need to use project-based detection
-        # The GPU family matrix will be loaded from therock_matrix.py if it exists
-        external_matrix_path = cwd / ".github" / "scripts" / "therock_matrix.py"
-
-        if external_matrix_path.exists():
-            # Add to path and import GPU family matrix
-            sys.path.insert(0, str(external_matrix_path.parent))
-
-            try:
-                import therock_matrix
-
-                print(f"Loaded GPU family matrix from external repo")
-
-                # Re-assign the matrix functions from the external module
-                from therock_matrix import (
-                    all_build_variants,
-                    get_all_families_for_trigger_types,
-                )
-
-                USING_EXTERNAL_MATRIX = True
-
-            except ImportError as e:
-                print(f"ERROR: Failed to import therock_matrix: {e}")
-                sys.exit(1)
-        else:
-            print(
-                f"WARNING: No therock_matrix.py found in external repo, using TheRock defaults"
-            )
-            USING_EXTERNAL_MATRIX = False
+        print("Using TheRock's matrix configuration for external repository")
+        # External repos use TheRock's GPU family matrix (no custom matrices needed)
+        # The project maps are centralized in external_repo_project_maps.py
+        USING_EXTERNAL_MATRIX = False
     else:
         # We're running for TheRock itself - already imported at top of file
         print("Using TheRock's own matrix configuration")
@@ -857,16 +832,11 @@ if __name__ == "__main__":
 
     # For external repos, call detect_external_projects first to get project-based matrix
     if is_external_repo and repo_name:
-        import subprocess
-        import json as json_lib
-
         # Call detect_external_projects.py to get project configurations
         print(f"\n=== Detecting projects for {repo_name} ===")
 
-        # Determine which platform we're configuring
-        platform = os.environ.get("PLATFORM", "linux")
-
         try:
+            # Run the detection script to get project configurations
             result = subprocess.run(
                 [
                     sys.executable,
@@ -879,11 +849,7 @@ if __name__ == "__main__":
                 capture_output=True,
                 text=True,
                 timeout=120,
-                env={
-                    **os.environ,
-                    "PLATFORM": platform,
-                    "PROJECTS": os.environ.get("PROJECTS", ""),
-                },
+                env=os.environ,  # Pass through all environment variables
             )
 
             if result.returncode != 0:
@@ -892,41 +858,51 @@ if __name__ == "__main__":
                 sys.exit(1)
 
             # Parse the output to get project configurations
-            output = result.stdout
-            print(output)
+            output_text = result.stdout
+            print(output_text)
 
-            # Extract JSON from output (last JSON block)
-            json_start = output.rfind("{")
+            # Extract JSON from output (should be at the end)
+            # Look for the last complete JSON object in the output
+            json_start = output_text.rfind("=== Project Detection Results ===")
             if json_start >= 0:
-                json_str = output[json_start:]
-                project_detection = json_lib.loads(json_str)
-                project_configs = project_detection.get("projects", [])
+                # Find the JSON object after the marker
+                json_start = output_text.find("{", json_start)
+                if json_start >= 0:
+                    json_str = output_text[json_start:]
+                    project_detection = json.loads(json_str)
+                    project_configs = project_detection.get("projects", [])
+                else:
+                    project_configs = []
+            else:
+                project_configs = []
 
-                print(f"\nFound {len(project_configs)} project configuration(s)")
+            print(f"\nFound {len(project_configs)} project configuration(s)")
 
-                # If no projects detected, skip builds entirely
-                if not project_configs:
-                    print("No projects to build - outputting empty matrix")
-                    output = {
-                        "linux_variants": json.dumps([]),
-                        "linux_test_labels": json.dumps([]),
-                        "windows_variants": json.dumps([]),
-                        "windows_test_labels": json.dumps([]),
-                        "enable_build_jobs": json.dumps(False),
-                        "test_type": "smoke",
-                    }
-                    gha_set_output(output)
-                    sys.exit(0)
+            # If no projects detected, skip builds entirely
+            if not project_configs:
+                print("No projects to build - outputting empty matrix")
+                output = {
+                    "linux_variants": json.dumps([]),
+                    "linux_test_labels": json.dumps([]),
+                    "windows_variants": json.dumps([]),
+                    "windows_test_labels": json.dumps([]),
+                    "enable_build_jobs": json.dumps(False),
+                    "test_type": "smoke",
+                }
+                gha_set_output(output)
+                sys.exit(0)
 
-                # Now generate GPU family matrix and cross-product with projects
-                # This will be handled in main() by modifying the matrix_generator
-                base_args["external_project_configs"] = project_configs
+            # Store project configs to be cross-producted with GPU families in main()
+            base_args["external_project_configs"] = project_configs
 
         except subprocess.TimeoutExpired:
             print("ERROR: detect_external_projects.py timed out")
             sys.exit(1)
         except Exception as e:
             print(f"ERROR: Failed to run detect_external_projects.py: {e}")
+            import traceback
+
+            traceback.print_exc()
             sys.exit(1)
     else:
         base_args["external_project_configs"] = None
