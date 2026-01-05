@@ -108,6 +108,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+      S3_BUCKET_ARTIFACTS: "therock-${{ inputs.release_type }}-artifacts"
       optional_build_prod_arguments: ""
     outputs:
       cp_version: ${{ env.cp_version }}
@@ -210,7 +211,14 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*" --include "*.whl"  --include "manifests/*.json"
+            --recursive --exclude "*" --include "*.whl"
+
+      - name: Upload PyTorch manifest to S3 artifacts
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/manifests/ \
+            s3://${{ env.S3_BUCKET_ARTIFACTS }}/external-builds/pytorch/${{ github.run_id }}/${{ inputs.amdgpu_family }}/ \
+            --recursive --exclude "*" --include "*.json"
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
