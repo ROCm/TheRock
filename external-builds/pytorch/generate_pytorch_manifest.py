@@ -2,7 +2,7 @@
 """
 Generate a manifest for PyTorch external builds.
 
-it ia called by build_prod_wheels.py after building wheels.
+it is called by build_prod_wheels.py after building wheels.
 """
 
 import argparse
