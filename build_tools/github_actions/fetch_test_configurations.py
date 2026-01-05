@@ -111,6 +111,7 @@ test_matrix = {
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocprofsys.py')}",
+        # Rocprofsys does not support windows
         "platform": ["linux"],
         "total_shards": 1,
     },
