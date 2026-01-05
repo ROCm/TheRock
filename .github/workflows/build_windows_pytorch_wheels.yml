@@ -162,6 +162,7 @@ jobs:
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
+          pip install packaging
           choco install --no-progress -y ninja --version 1.13.1
           choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
