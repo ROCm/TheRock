@@ -1,8 +1,7 @@
 therock_subproject_fetch(therock-tbb-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2022.3.0.tar.gz
-  # TODO: Update this to be the ROCm S3 bucket URL instead once uploaded
-  URL https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2022.3.0.tar.gz
+  URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/oneTBB-2022.3.0.tar.gz
   URL_HASH SHA256=01598a46c1162c27253a0de0236f520fd8ee8166e9ebb84a4243574f88e6e50a
 )
 
