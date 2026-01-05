@@ -3,11 +3,56 @@ name: Setup (New)
 on:
   workflow_call:
     inputs:
+      build_variant:
+        type: string
+        default: "release"
       container_image_linux:
         description: TheRock CI default container image for linux
         type: string
         required: false
         default: 'ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd'
+      multi_arch:
+        type: boolean
+        default: false
+        description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
+      linux_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of AMDGPU families to build and test on Linux. ex: gfx94X, gfx1201X-all"
+        default: ""
+      linux_amdgpu_families_predefined_groups:
+        type: string
+        description: "Insert comma-separated list of predefined group(s) of Linux GPU families found in build_tools/github_actions/new_amdgpu_family_matrix.py (e.g. amdgpu_presubmit)"
+        default: ""
+      linux_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
+      windows_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      windows_amdgpu_families_predefined_groups:
+        type: string
+        description: "Insert comma-separated list of predefined group(s) of Windows GPU families found in build_tools/github_actions/new_amdgpu_family_matrix.py (e.g. amdgpu_presubmit)"
+        default: ""
+      windows_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
+      artifact_run_id:
+        type: string
+        description: "If provided, the tests will run on this artifact ID"
+        default: ""
+      force_build:
+        type: boolean
+        description: "If enabled, the CI will always build the artifacts from scratch, otherwise it is determined by the file changes and use_prebuilt_artifacts"
+        default: false
+      no_tests:
+        type: boolean
+        description: "If enabled, the CI will not run any tests"
+        default: false
+      make_release:
+        type: boolean
+        description: "If enabled, the CI will make a release"
+        default: false
     outputs:
       amdgpu_family_matrix:
         description: Linux and Windows families for build, test and release.
@@ -15,6 +60,16 @@ on:
       container_image_linux:
         description: TheRock CI default container image for linux
         value: ${{ inputs.container_image_linux }}
+      rocm_package_version:
+        description: ROCm package version (primarily for Python packages).
+        value: ${{ jobs.setup.outputs.rocm_package_version }}
+      test_type:
+        description: The test type to run for component tests (i.e. smoke, full)
+        value: ${{ jobs.setup.outputs.test_type }}
+      artifact_run_id:
+        description: The artifact run id to use for the CI
+        value: ${{ inputs.artifact_run_id }}
+
 
 permissions:
   contents: read
@@ -28,9 +83,11 @@ jobs:
       BASE_REF: HEAD^
     outputs:
       amdgpu_family_matrix: ${{ steps.configure.outputs.amdgpu_family_matrix }}
+      rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      test_type: ${{ steps.configure.outputs.test_type }}
     steps:
-      - name: "Checking out repository"
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Checking out repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           # We need the parent commit to do a diff
           fetch-depth: 2
@@ -43,7 +100,7 @@ jobs:
         run: |
           echo "PR_LABELS=$(gh pr view ${PR_NUMBER} --json labels)" >> $GITHUB_ENV
 
-      - name: "Configuring CI options"
+      - name: Configuring CI options
         id: configure
         env:
           INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
@@ -55,4 +112,13 @@ jobs:
           INPUT_TASKS_FORCE_BUILD: ${{ github.event.inputs.force_build }}
           INPUT_TASKS_NO_TESTS: ${{ github.event.inputs.no_tests }}
           INPUT_TASKS_MAKE_RELEASE: ${{ github.event.inputs.make_release }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+          MULTI_ARCH: ${{ inputs.multi_arch }}
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: ./build_tools/github_actions/configure_amdgpu_matrix.py
+
+      - name: Compute package version
+        id: rocm_package_version
+        run: python ./build_tools/compute_rocm_package_version.py --release-type=dev

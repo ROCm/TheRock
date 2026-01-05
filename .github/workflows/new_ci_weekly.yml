@@ -83,18 +83,28 @@ jobs:
     name: 'Weekly: Linux CMake 4'
     needs: setup_cmake4
     if: >-
-      ${{ needs.setup_cmake4.outputs.amdgpu_family_matrix.linux != '[]' }}
+      ${{ fromJSON(needs.setup_cmake4.outputs.amdgpu_family_matrix).linux != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        linux_config: ${{ fromJSON(needs.setup_cmake4.outputs.amdgpu_family_matrix.linux) }}
+        linux_config: ${{ fromJSON(needs.setup_cmake4.outputs.amdgpu_family_matrix).linux }}
     uses: ./.github/workflows/new_ci_linux.yml
     secrets: inherit
     with:
-      amdgpu_families_config: ${{ matrix.linux_config }}
+      artifact_group: ${{ matrix.linux_config.artifact_group }}
+      amdgpu_family_config: ${{ toJSON(matrix.linux_config) }}
+      build_variant_label: ${{ matrix.linux_config.build_variant_label }}
+      build_variant_cmake_preset: ${{ matrix.linux_config.build_variant_cmake_preset }}
+      build_variant_suffix: ${{ matrix.linux_config.build_variant_suffix }}
+      test_labels: ""
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
-      container_image: ${{ fromJSON(needs.setup_cmake4.outputs.container_image_linux) }}
+      test_runs_on: ${{ matrix.linux_config.test.runs_on }}
+      expect_failure: ${{ matrix.linux_config.build.expect_failure }}
+      use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      rocm_package_version: "ADHOCBUILD"
+      test_type: "smoke"
+      sanity_check_only_for_family: ${{ matrix.linux_config.test.sanity_check_only_for_family == true }}
+      container_image: ${{ needs.setup_cmake4.outputs.container_image_linux }}
     permissions:
       contents: read
       id-token: write

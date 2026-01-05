@@ -230,6 +230,7 @@ def new_matrix_generator(
     platformMask: PlatformMask,
     taskMask: TaskMask,
     req_gpu_families_or_targets: List[str],
+    build_variants: str = "release",
 ):
     # TODO TODO move to main() those checks
     if not bool(platformMask):
@@ -275,7 +276,10 @@ def new_matrix_generator(
         f"Creating AMDGPU matrix for the AMDGPU targets and tasks {tasks}... ", end=""
     )
 
-    # assign to platform and task
+    # Import build variants from new_amdgpu_family_matrix
+    from new_amdgpu_family_matrix import all_build_variants
+
+    # assign to platform, task, and build variants
     full_matrix = {}
     for platform in platformMask:  # linux, windows
         platform_matrix = []
