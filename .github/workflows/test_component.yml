@@ -117,8 +117,8 @@ jobs:
             --test-type ${{ fromJSON(inputs.component).test_type }} \
             --shard-index ${{ matrix.shard }} \
             --total-shards ${{ fromJSON(inputs.component).total_shards }} \
-            --amdgpu_families ${{ env.AMDGPU_FAMILIES }} \
-            --artifact-run-id ${{ env.ARTIFACT_RUN_ID }} \
+            --amdgpu-families ${{ env.AMDGPU_FAMILIES }} \
+            --artifact-run-id ${{ env.ARTIFACT_RUN_ID }}
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.

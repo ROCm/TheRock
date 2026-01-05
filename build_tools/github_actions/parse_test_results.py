@@ -9,54 +9,43 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR", THEROCK_DIR / "build" / "bin"))
 PLATFORM = platform.system().lower()
 
-"""
-schema is:
-total_tests
-error_message
-component_name
-test_type
-shard_index
-total_shards
-amdgpu_families
-run_id
-failed_test_name
-"""
-
-
-def parse_gtest_results(result_file: Path):
+def parse_gtest_results(args, result_file: Path):
     with open(result_file, "rb") as f:
         file_bytes = f.read()
         gtest_data = orjson.loads(file_bytes)
     total_tests = gtest_data.get("tests", 0)
     for test_suite in gtest_data.get("testsuites", []):
-        # There are failures in the test suite
+        # If there are failures reported in the test suite
         if test_suite.get("failures", 0) > 0:
             for test_case in test_suite.get("testsuite", []):
                 test_name = test_case.get("name")
                 test_failure_messages = set()
                 if "failures" in test_case:
-                    for failure in test_case.get("failures", []):
-                        message = failure.get("failure", "")
+                    for test_failure in test_case.get("failures", []):
+                        message = test_failure.get("failure", "")
                         test_failure_messages.add(message)
-                    # data.append({
-                    #     "test_name": test_name,
-                    #     "failure_messages": "({})".format(", ".join(test_failure_messages)),
-                    #     "total_tests": total_tests
-                    # })
+                    data_to_insert = {
+                        "component_name": args.component_name,
+                        "test_type": args.test_type,
+                        "shard_index": args.shard_index,
+                        "total_shards": args.total_shards,
+                        "amdgpu_families": args.amdgpu_families,
+                        "artifact_run_id": args.artifact_run_id,
+                        "failed_test_name": test_name,
+                        "error_message": "({})".format(", ".join(test_failure_messages)),
+                        "total_tests": total_tests,
+                        "platform": PLATFORM,
+                    }
+                    print(data_to_insert)
 
 
 def main(args):
+    # Searching through the bin directory for test result files
     for file in os.listdir(THEROCK_BIN_DIR):
+        # For gtest JSON test report
         if file == "report.json":
-            parse_gtest_results(THEROCK_BIN_DIR / "report.json")
+            parse_gtest_results(args, THEROCK_BIN_DIR / "report.json")
             break
-    # collect test results, based on searching for pytest, ctest or gtest
-    # parse accordingly
-    # upload results
-
-    # gtest looks report.json
-    pass
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test result parser")
