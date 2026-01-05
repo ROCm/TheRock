@@ -147,7 +147,11 @@ ROCM_SYSTEMS_SUBTREE_TO_PROJECT_MAP = {
 
 ROCM_SYSTEMS_PROJECT_MAP = {
     "core": {
-        "cmake_options": ["-DTHEROCK_ENABLE_CORE=ON", "-DTHEROCK_ENABLE_HIP_RUNTIME=ON", "-DTHEROCK_ENABLE_ALL=OFF"],
+        "cmake_options": [
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
+            "-DTHEROCK_ENABLE_ALL=OFF",
+        ],
         "project_to_test": ["hip-tests"],
     },
     "profiler": {
@@ -159,7 +163,11 @@ ROCM_SYSTEMS_PROJECT_MAP = {
         "project_to_test": ["rdc-tests"],
     },
     "all": {
-        "cmake_options": ["-DTHEROCK_ENABLE_CORE=ON", "-DTHEROCK_ENABLE_PROFILER=ON", "-DTHEROCK_ENABLE_ALL=OFF"],
+        "cmake_options": [
+            "-DTHEROCK_ENABLE_CORE=ON",
+            "-DTHEROCK_ENABLE_PROFILER=ON",
+            "-DTHEROCK_ENABLE_ALL=OFF",
+        ],
         "project_to_test": ["hip-tests", "rocprofiler-tests"],
     },
 }
@@ -185,6 +193,7 @@ ROCM_SYSTEMS_ALL_BUILD_VARIANTS = None  # Use TheRock defaults
 # Project Collection Logic (shared by both repos)
 # =============================================================================
 
+
 def collect_projects_to_run(
     subtrees: list,
     platform: str,
@@ -194,10 +203,10 @@ def collect_projects_to_run(
     dependency_graph: dict,
 ) -> list:
     """Collects projects to run based on changed subtrees.
-    
+
     This function implements the core logic from the external repos' therock_matrix.py
     collect_projects_to_run() function.
-    
+
     Args:
         subtrees: List of changed subtree paths (e.g., ["projects/rocprim"])
         platform: Target platform ("linux" or "windows")
@@ -205,15 +214,15 @@ def collect_projects_to_run(
         project_map: Mapping of project names to build configurations
         additional_options: Optional components that get merged into other projects
         dependency_graph: Project dependencies that should be combined
-        
+
     Returns:
         List of project configurations with cmake_options and project_to_test
     """
     import copy
-    
+
     # Create a deep copy to avoid modifying the original
     project_map = copy.deepcopy(project_map)
-    
+
     projects = set()
     # collect the associated subtree to project
     for subtree in subtrees:
@@ -283,25 +292,27 @@ def collect_projects_to_run(
 
             cmake_flag_options = " ".join(project_map_data["cmake_options"])
             project_to_test_options = ",".join(project_map_data["project_to_test"])
-            
-            project_to_run.append({
-                "cmake_options": cmake_flag_options,
-                "project_to_test": project_to_test_options,
-            })
+
+            project_to_run.append(
+                {
+                    "cmake_options": cmake_flag_options,
+                    "project_to_test": project_to_test_options,
+                }
+            )
 
     return project_to_run
 
 
 def get_repo_config(repo_name: str) -> dict:
     """Returns the project map configuration for a given repository.
-    
+
     Args:
         repo_name: Repository name ("rocm-libraries" or "rocm-systems")
-        
+
     Returns:
-        Dictionary containing subtree_to_project_map, project_map, 
+        Dictionary containing subtree_to_project_map, project_map,
         additional_options, and dependency_graph
-        
+
     Raises:
         ValueError: If repo_name is not recognized
     """
