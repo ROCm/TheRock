@@ -193,10 +193,12 @@ jobs:
             --patchset nightly
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
-            --repo-hashtag nightly
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --require-related-commit
           python ./external-builds/pytorch/pytorch_vision_repo.py checkout \
             --checkout-dir ${{ env.CHECKOUT_ROOT }}/vision \
-            --repo-hashtag nightly
+            --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
+            --require-related-commit
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
