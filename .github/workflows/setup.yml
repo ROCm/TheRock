@@ -10,6 +10,18 @@ on:
         type: boolean
         default: false
         description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems)"
+        default: false
+      matrix_module_path:
+        type: string
+        description: "Path to therock_matrix.py in calling repo (for external repos)"
+        default: ""
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -52,7 +64,23 @@ jobs:
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
-      - name: Checking out repository
+      - name: Checkout calling repo (external)
+        if: ${{ inputs.external_source_checkout }}
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          path: source-repo
+          fetch-depth: 2
+
+      - name: Checkout TheRock (external)
+        if: ${{ inputs.external_source_checkout }}
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: ROCm/TheRock
+          path: TheRock
+          ref: ${{ inputs.therock_ref }}
+
+      - name: Checkout repository (internal)
+        if: ${{ !inputs.external_source_checkout }}
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           # We need the parent commit to do a diff
@@ -65,6 +93,15 @@ jobs:
           PR_NUMBER: ${{ github.event.number }}
         run: |
           echo "PR_LABELS=$(gh pr view ${PR_NUMBER} --json labels)" >> $GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install python dependencies
+        run: |
+          pip install pydantic requests
 
       - name: Configuring CI options
         id: configure
@@ -80,8 +117,22 @@ jobs:
           # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
           ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
           LOAD_TEST_RUNNERS_FROM_VAR: false
-        run: ./build_tools/github_actions/configure_ci.py
+          EXTERNAL_MATRIX_MODULE: ${{ inputs.external_source_checkout && format('{0}/source-repo/{1}', github.workspace, inputs.matrix_module_path) || '' }}
+          BASE_REF: HEAD^
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
+            cd source-repo
+            python ../TheRock/build_tools/github_actions/configure_ci.py ${EXTERNAL_MATRIX_MODULE:+--external-matrix-module "$EXTERNAL_MATRIX_MODULE"}
+          else
+            ./build_tools/github_actions/configure_ci.py
+          fi
 
       - name: Compute package version
         id: rocm_package_version
-        run: python ./build_tools/compute_rocm_package_version.py --release-type=dev
+        run: |
+          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
+            python ./TheRock/build_tools/compute_rocm_package_version.py --release-type=dev
+          else
+            python ./build_tools/compute_rocm_package_version.py --release-type=dev
+          fi
