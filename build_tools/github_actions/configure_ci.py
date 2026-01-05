@@ -616,8 +616,18 @@ def main(base_args, linux_families, windows_families):
     print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
     print(f"  is_pull_request: {is_pull_request}")
     print("")
-
-    multi_arch = base_args.get("multi_arch", False)
+    
+    # Check if we have external project configs (from detect_external_projects.py)
+    external_project_configs = base_args.get("external_project_configs")
+    
+    if external_project_configs:
+        print(f"Using external project configurations: {len(external_project_configs)} project(s)")
+        # For external repos, we cross-product: projects × GPU families
+        # The matrix will have entries like:
+        # {project_to_test, cmake_options, amdgpu_family, test_runs_on, ...}
+        
+        # Generate GPU family variants first
+        multi_arch = base_args.get("multi_arch", False)
     print(
         f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
     )
@@ -647,6 +657,43 @@ def main(base_args, linux_families, windows_families):
         multi_arch=multi_arch,
     )
     print("")
+    
+    # For external repos, cross-product project configs with GPU family variants
+    if external_project_configs:
+        print("\n=== Cross-producting projects with GPU families ===")
+        
+        # Cross-product Linux: projects × GPU families
+        linux_final_variants = []
+        for project_config in external_project_configs:
+            for gpu_variant in linux_variants_output:
+                combined = {
+                    **gpu_variant,  # GPU family info (family, test-runs-on, build_variant_*, artifact_group)
+                    "project_to_test": project_config["project_to_test"],
+                    "cmake_options": project_config["cmake_options"],
+                }
+                # Update artifact_group to include project
+                project_name = project_config["project_to_test"].split(",")[0]
+                combined["artifact_group"] = f"{project_name}-{gpu_variant.get('artifact_group', gpu_variant.get('family', 'unknown'))}"
+                linux_final_variants.append(combined)
+        
+        # Cross-product Windows: projects × GPU families  
+        windows_final_variants = []
+        for project_config in external_project_configs:
+            for gpu_variant in windows_variants_output:
+                combined = {
+                    **gpu_variant,
+                    "project_to_test": project_config["project_to_test"],
+                    "cmake_options": project_config["cmake_options"],
+                }
+                project_name = project_config["project_to_test"].split(",")[0]
+                combined["artifact_group"] = f"{project_name}-{gpu_variant.get('artifact_group', gpu_variant.get('family', 'unknown'))}"
+                windows_final_variants.append(combined)
+        
+        linux_variants_output = linux_final_variants
+        windows_variants_output = windows_final_variants
+        
+        print(f"Final Linux matrix: {len(linux_variants_output)} entries")
+        print(f"Final Windows matrix: {len(windows_variants_output)} entries")
 
     test_type = "smoke"
 
@@ -716,33 +763,50 @@ def main(base_args, linux_families, windows_families):
 if __name__ == "__main__":
     # Auto-detect if we're running for an external repository
     # When running from setup.yml with external_source_checkout=true, the working directory
-    # will be 'source-repo' which contains the external repo's .github/scripts/therock_matrix.py
+    # will be 'source-repo' which contains the external repo
     cwd = Path.cwd()
-    external_matrix_path = cwd / ".github" / "scripts" / "therock_matrix.py"
     
-    if external_matrix_path.exists():
-        # We're running for an external repo (rocm-libraries or rocm-systems)
-        print(f"Detected external repository matrix at: {external_matrix_path}")
+    # Detect repository by checking for .git/config or examining the path
+    is_external_repo = False
+    repo_name = None
+    
+    # Check if we're in rocm-libraries or rocm-systems directory
+    cwd_str = str(cwd).lower()
+    if "rocm-libraries" in cwd_str:
+        is_external_repo = True
+        repo_name = "rocm-libraries"
+        print(f"Detected external repository: rocm-libraries")
+    elif "rocm-systems" in cwd_str:
+        is_external_repo = True
+        repo_name = "rocm-systems"
+        print(f"Detected external repository: rocm-systems")
+    
+    if is_external_repo:
+        # For external repos, we need to use project-based detection
+        # The GPU family matrix will be loaded from therock_matrix.py if it exists
+        external_matrix_path = cwd / ".github" / "scripts" / "therock_matrix.py"
         
-        # Add to path and import
-        sys.path.insert(0, str(external_matrix_path.parent))
-        
-        try:
-            import therock_matrix
-            print(f"Loaded external matrix module successfully")
+        if external_matrix_path.exists():
+            # Add to path and import GPU family matrix
+            sys.path.insert(0, str(external_matrix_path.parent))
             
-            # Re-assign the matrix functions from the external module
-            # Note: external repos use therock_matrix which has same structure as amdgpu_family_matrix
-            from therock_matrix import (
-                all_build_variants,
-                get_all_families_for_trigger_types,
-            )
-            USING_EXTERNAL_MATRIX = True
-            print("Using external matrix configuration")
-            
-        except ImportError as e:
-            print(f"ERROR: Failed to import external matrix module: {e}")
-            sys.exit(1)
+            try:
+                import therock_matrix
+                print(f"Loaded GPU family matrix from external repo")
+                
+                # Re-assign the matrix functions from the external module
+                from therock_matrix import (
+                    all_build_variants,
+                    get_all_families_for_trigger_types,
+                )
+                USING_EXTERNAL_MATRIX = True
+                
+            except ImportError as e:
+                print(f"ERROR: Failed to import therock_matrix: {e}")
+                sys.exit(1)
+        else:
+            print(f"WARNING: No therock_matrix.py found in external repo, using TheRock defaults")
+            USING_EXTERNAL_MATRIX = False
     else:
         # We're running for TheRock itself - already imported at top of file
         print("Using TheRock's own matrix configuration")
@@ -779,5 +843,75 @@ if __name__ == "__main__":
     )
     base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
     base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
+
+    # For external repos, call detect_external_projects first to get project-based matrix
+    if is_external_repo and repo_name:
+        import subprocess
+        import json as json_lib
+        
+        # Call detect_external_projects.py to get project configurations
+        print(f"\n=== Detecting projects for {repo_name} ===")
+        
+        # Determine which platform we're configuring
+        platform = os.environ.get("PLATFORM", "linux")
+        
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(THIS_SCRIPT_DIR / "detect_external_projects.py"),
+                    "--repo-name", repo_name,
+                    "--base-ref", base_args["base_ref"],
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**os.environ, "PLATFORM": platform, "PROJECTS": os.environ.get("PROJECTS", "")},
+            )
+            
+            if result.returncode != 0:
+                print(f"ERROR: detect_external_projects.py failed:")
+                print(result.stderr)
+                sys.exit(1)
+            
+            # Parse the output to get project configurations
+            output = result.stdout
+            print(output)
+            
+            # Extract JSON from output (last JSON block)
+            json_start = output.rfind("{")
+            if json_start >= 0:
+                json_str = output[json_start:]
+                project_detection = json_lib.loads(json_str)
+                project_configs = project_detection.get("projects", [])
+                
+                print(f"\nFound {len(project_configs)} project configuration(s)")
+                
+                # If no projects detected, skip builds entirely
+                if not project_configs:
+                    print("No projects to build - outputting empty matrix")
+                    output = {
+                        "linux_variants": json.dumps([]),
+                        "linux_test_labels": json.dumps([]),
+                        "windows_variants": json.dumps([]),
+                        "windows_test_labels": json.dumps([]),
+                        "enable_build_jobs": json.dumps(False),
+                        "test_type": "smoke",
+                    }
+                    gha_set_output(output)
+                    sys.exit(0)
+                
+                # Now generate GPU family matrix and cross-product with projects
+                # This will be handled in main() by modifying the matrix_generator
+                base_args["external_project_configs"] = project_configs
+                
+        except subprocess.TimeoutExpired:
+            print("ERROR: detect_external_projects.py timed out")
+            sys.exit(1)
+        except Exception as e:
+            print(f"ERROR: Failed to run detect_external_projects.py: {e}")
+            sys.exit(1)
+    else:
+        base_args["external_project_configs"] = None
 
     main(base_args, linux_families, windows_families)
