@@ -52,10 +52,6 @@ on:
         type: boolean
         description: "Whether source is from external repo (rocm-libraries/systems)"
         default: false
-      matrix_module_path:
-        type: string
-        description: "Path to therock_matrix.py in calling repo (for external repos)"
-        default: ""
       therock_ref:
         type: string
         description: "TheRock git ref to use (for external repos)"
@@ -83,7 +79,6 @@ jobs:
     with:
       build_variant: "release"
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
-      matrix_module_path: ${{ inputs.matrix_module_path || '' }}
       therock_ref: ${{ inputs.therock_ref || '' }}
 
   linux_build_and_test:

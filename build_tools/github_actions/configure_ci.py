@@ -56,8 +56,8 @@ import sys
 from typing import Iterable, List, Optional
 import string
 
-# Import will be conditional based on --external-matrix-module parameter
-# Default to TheRock's own matrix
+# Import will be conditional - either TheRock's or external repo's matrix
+# Try to import TheRock's matrix first (will be used if running from TheRock)
 try:
     from amdgpu_family_matrix import (
         all_build_variants,
@@ -65,7 +65,7 @@ try:
     )
     USING_EXTERNAL_MATRIX = False
 except ImportError:
-    # Will be set if external matrix is loaded
+    # Will be set later if external matrix is loaded
     all_build_variants = None
     get_all_families_for_trigger_types = None
     USING_EXTERNAL_MATRIX = True
@@ -714,45 +714,39 @@ def main(base_args, linux_families, windows_families):
 
 
 if __name__ == "__main__":
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(
-        description="Configure CI workflow metadata for TheRock or external repos"
-    )
-    parser.add_argument(
-        "--external-matrix-module",
-        type=str,
-        default="",
-        help="Path to external therock_matrix.py module (for rocm-libraries/rocm-systems)",
-    )
-    args = parser.parse_args()
-
-    # Load external matrix module if specified
-    if args.external_matrix_module:
-        external_matrix_path = Path(args.external_matrix_module).resolve()
-        if not external_matrix_path.exists():
-            print(f"ERROR: External matrix module not found: {external_matrix_path}")
-            sys.exit(1)
-
-        # Add parent directory to path to enable import
+    # Auto-detect if we're running for an external repository
+    # When running from setup.yml with external_source_checkout=true, the working directory
+    # will be 'source-repo' which contains the external repo's .github/scripts/therock_matrix.py
+    cwd = Path.cwd()
+    external_matrix_path = cwd / ".github" / "scripts" / "therock_matrix.py"
+    
+    if external_matrix_path.exists():
+        # We're running for an external repo (rocm-libraries or rocm-systems)
+        print(f"Detected external repository matrix at: {external_matrix_path}")
+        
+        # Add to path and import
         sys.path.insert(0, str(external_matrix_path.parent))
         
-        # Import from external therock_matrix
         try:
             import therock_matrix
-            print(f"Loaded external matrix module from: {external_matrix_path}")
+            print(f"Loaded external matrix module successfully")
             
-            # External matrix uses different structure, we'll need to adapt
-            # For now, we'll use TheRock's structure but with external project mappings
-            # This is a simplified approach - full integration would require more work
+            # Re-assign the matrix functions from the external module
+            # Note: external repos use therock_matrix which has same structure as amdgpu_family_matrix
+            from therock_matrix import (
+                all_build_variants,
+                get_all_families_for_trigger_types,
+            )
             USING_EXTERNAL_MATRIX = True
-            
-            # External repos use therock_matrix which has a different structure
-            # We'll need to bridge between the two formats
-            print("NOTE: External matrix format detected - using adapted configuration")
+            print("Using external matrix configuration")
             
         except ImportError as e:
             print(f"ERROR: Failed to import external matrix module: {e}")
             sys.exit(1)
+    else:
+        # We're running for TheRock itself - already imported at top of file
+        print("Using TheRock's own matrix configuration")
+        USING_EXTERNAL_MATRIX = False
     
     base_args = {}
     linux_families = {}

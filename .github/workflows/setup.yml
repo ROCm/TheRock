@@ -14,10 +14,6 @@ on:
         type: boolean
         description: "Whether source is from external repo (rocm-libraries/systems)"
         default: false
-      matrix_module_path:
-        type: string
-        description: "Path to therock_matrix.py in calling repo (for external repos)"
-        default: ""
       therock_ref:
         type: string
         description: "TheRock git ref to use (for external repos)"
@@ -117,13 +113,12 @@ jobs:
           # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
           ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
           LOAD_TEST_RUNNERS_FROM_VAR: false
-          EXTERNAL_MATRIX_MODULE: ${{ inputs.external_source_checkout && format('{0}/source-repo/{1}', github.workspace, inputs.matrix_module_path) || '' }}
           BASE_REF: HEAD^
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
           if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
             cd source-repo
-            python ../TheRock/build_tools/github_actions/configure_ci.py ${EXTERNAL_MATRIX_MODULE:+--external-matrix-module "$EXTERNAL_MATRIX_MODULE"}
+            python ../TheRock/build_tools/github_actions/configure_ci.py
           else
             ./build_tools/github_actions/configure_ci.py
           fi
