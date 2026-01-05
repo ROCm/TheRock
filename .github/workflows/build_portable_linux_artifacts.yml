@@ -96,7 +96,7 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           echo "Detecting configuration for repo: $REPO"
-          
+
           if [[ "$REPO" == *"rocm-libraries"* ]]; then
             echo "cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR" >> $GITHUB_OUTPUT
             echo "patches_dir=rocm-libraries" >> $GITHUB_OUTPUT
@@ -191,7 +191,7 @@ jobs:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: >-
-            ${{ inputs.external_source_checkout && 
+            ${{ inputs.external_source_checkout &&
                 format('-D{0}={1}', steps.detect.outputs.cmake_source_var, github.workspace) || '' }}
             ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
