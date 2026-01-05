@@ -10,7 +10,7 @@ on:
         description: TheRock CI default container image for linux
         type: string
         required: false
-        default: 'ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd'
+        default: 'ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6'
       multi_arch:
         type: boolean
         default: false
