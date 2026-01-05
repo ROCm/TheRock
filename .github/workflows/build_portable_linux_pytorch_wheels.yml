@@ -56,6 +56,8 @@ on:
           - gfx110X-all
           - gfx1150
           - gfx1151
+          - gfx1152
+          - gfx1153
           - gfx120X-all
           - gfx90X-dcgpu
           - gfx94X-dcgpu
@@ -313,7 +315,7 @@ jobs:
             --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "pytorch_triton_rocm-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}

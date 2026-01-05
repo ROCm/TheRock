@@ -1,5 +1,6 @@
 # All system deps (alpha unless if different dependency order needed).
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/bzip2" "${CMAKE_CURRENT_BINARY_DIR}/bzip2")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/gmp" "${CMAKE_CURRENT_BINARY_DIR}/gmp")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/libbacktrace" "${CMAKE_CURRENT_BINARY_DIR}/libbacktrace")
 add_subdirectory(libcap)
 add_subdirectory(libdrm)
@@ -11,8 +12,10 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_B
 
 # System deps that depend on the above.
 add_subdirectory(elfutils)
-add_subdirectory(amd-mesa)
 
+# Core sysdeps: This artifact includes libraries that are widely used and are typically
+# available on base systems. All of these should be small, fast to build, and high
+# fanout to the codebase at large.
 therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
   DESCRIPTOR artifact.toml
@@ -24,6 +27,7 @@ therock_provide_artifact(sysdeps
   SUBPROJECT_DEPS
     therock-bzip2
     therock-elfutils
+    therock-gmp
     therock-libbacktrace
     therock-libcap
     therock-libdrm
@@ -32,5 +36,18 @@ therock_provide_artifact(sysdeps
     therock-sqlite3
     therock-zlib
     therock-zstd
-    therock-amd-mesa
 )
+
+# Optional sysdep: amd-mesa
+if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+  add_subdirectory(amd-mesa)
+  therock_provide_artifact(sysdeps-amd-mesa
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amd-mesa.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-amd-mesa
+  )
+endif()
