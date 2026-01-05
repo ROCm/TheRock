@@ -2,22 +2,23 @@
 # install_rocm_tarball.sh
 #
 # Downloads and installs ROCm from a tarball.
-# Supports nightlies, prereleases, and devreleases.
+# Supports nightlies, prereleases, devreleases, and stable releases.
 #
 # Usage:
 #   ./install_rocm_tarball.sh <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
 #
 # Arguments:
-#   VERSION          - Full version string (e.g., 7.11.0a20251211)
+#   VERSION          - Full version string (e.g., 7.11.0a20251211, 7.10.0)
 #   AMDGPU_FAMILY    - AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu)
-#   RELEASE_TYPE     - Release type: nightlies (default), prereleases, devreleases
+#   RELEASE_TYPE     - Release type: nightlies (default), prereleases, devreleases, stable
 #
 # Examples:
 #   ./install_rocm_tarball.sh 7.11.0a20251211 gfx110X-all
 #   ./install_rocm_tarball.sh 7.11.0a20251211 gfx94X-dcgpu nightlies
 #   ./install_rocm_tarball.sh 7.10.0rc2 gfx110X-all prereleases
+#   ./install_rocm_tarball.sh 7.10.0 gfx94X-dcgpu stable
 
-set -e
+set -eu
 
 # Parse arguments
 VERSION="${1:?Error: VERSION is required}"
@@ -27,8 +28,14 @@ RELEASE_TYPE="${3:-nightlies}"
 # URL-encode '+' as '%2B' in VERSION (required for devreleases)
 VERSION_ENCODED="${VERSION//+/%2B}"
 
-# Build tarball URL: https://rocm.{RELEASE_TYPE}.amd.com/tarball/therock-dist-linux-{FAMILY}-{VERSION}.tar.gz
-TARBALL_URL="https://rocm.${RELEASE_TYPE}.amd.com/tarball/therock-dist-linux-${AMDGPU_FAMILY}-${VERSION_ENCODED}.tar.gz"
+# Build tarball URL based on release type
+# - stable releases use: https://repo.amd.com/rocm/tarball/
+# - other releases use: https://rocm.{RELEASE_TYPE}.amd.com/tarball/
+if [ "$RELEASE_TYPE" = "stable" ]; then
+    TARBALL_URL="https://repo.amd.com/rocm/tarball/therock-dist-linux-${AMDGPU_FAMILY}-${VERSION_ENCODED}.tar.gz"
+else
+    TARBALL_URL="https://rocm.${RELEASE_TYPE}.amd.com/tarball/therock-dist-linux-${AMDGPU_FAMILY}-${VERSION_ENCODED}.tar.gz"
+fi
 
 echo "=============================================="
 echo "ROCm Tarball Installation"
@@ -85,4 +92,17 @@ echo "=============================================="
 echo "ROCm installed successfully to $ROCM_INSTALL_DIR"
 echo "ROCM_PATH=$ROCM_INSTALL_DIR"
 echo "PATH should include: $ROCM_INSTALL_DIR/bin"
+echo "=============================================="
+echo ""
+echo "Note: If running this script standalone (not in Docker),"
+echo "you need to set up environment variables manually."
+echo ""
+echo "Add these lines to your ~/.bashrc:"
+echo ""
+echo "  export ROCM_PATH=/opt/rocm"
+echo '  export PATH="$ROCM_PATH/bin:$PATH"'
+echo ""
+echo "Then run: source ~/.bashrc"
+echo ""
+echo "(In Docker, this is handled by ENV in the Dockerfile)"
 echo "=============================================="

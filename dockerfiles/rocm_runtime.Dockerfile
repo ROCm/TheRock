@@ -1,4 +1,4 @@
-# rocm-runtime.Dockerfile
+# rocm_runtime.Dockerfile
 #
 # ROCm Runtime Docker Image Builder
 # - Single Dockerfile supporting multiple Linux distributions via `BASE_IMAGE`.
@@ -32,9 +32,9 @@
 #
 # Build arguments
 # - BASE_IMAGE       : Base Docker image (default: ubuntu:24.04)
-# - VERSION          : Full version string (e.g., 7.11.0a20251211)
+# - VERSION          : Full version string (e.g., 7.11.0a20251211, 7.10.0)
 # - AMDGPU_FAMILY    : AMD GPU family (e.g., gfx110X-all, gfx94X-dcgpu)
-# - RELEASE_TYPE     : Release type (default: nightlies). Options: prereleases, devreleases
+# - RELEASE_TYPE     : Release type (default: nightlies). Options: prereleases, devreleases, stable
 #
 # Build examples:
 #
@@ -43,7 +43,7 @@
 #     --build-arg BASE_IMAGE=ubuntu:24.04 \
 #     --build-arg VERSION=7.11.0a20251211 \
 #     --build-arg AMDGPU_FAMILY=gfx110X-all \
-#     -f dockerfiles/rocm-runtime.Dockerfile \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
 #     -t rocm-nightly:ubuntu24.04-gfx110X-7.11.0a20251211 \
 #     dockerfiles/
 #
@@ -52,7 +52,7 @@
 #     --build-arg BASE_IMAGE=almalinux:8 \
 #     --build-arg VERSION=7.11.0a20251211 \
 #     --build-arg AMDGPU_FAMILY=gfx94X-dcgpu \
-#     -f dockerfiles/rocm-runtime.Dockerfile \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
 #     -t rocm-nightly:almalinux8-gfx94X-7.11.0a20251211 \
 #     dockerfiles/
 #
@@ -61,8 +61,18 @@
 #     --build-arg BASE_IMAGE=mcr.microsoft.com/azurelinux/base/core:3.0 \
 #     --build-arg VERSION=7.11.0a20251211 \
 #     --build-arg AMDGPU_FAMILY=gfx120X-all \
-#     -f dockerfiles/rocm-runtime.Dockerfile \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
 #     -t rocm-nightly:azurelinux3-gfx120X-7.11.0a20251211 \
+#     dockerfiles/
+#
+#   # Ubuntu 22.04 + gfx94X (stable release)
+#   docker build \
+#     --build-arg BASE_IMAGE=ubuntu:22.04 \
+#     --build-arg VERSION=7.10.0 \
+#     --build-arg AMDGPU_FAMILY=gfx94X-dcgpu \
+#     --build-arg RELEASE_TYPE=stable \
+#     -f dockerfiles/rocm_runtime.Dockerfile \
+#     -t rocm:ubuntu22.04-gfx94X-7.10.0 \
 #     dockerfiles/
 #
 # Run example:
