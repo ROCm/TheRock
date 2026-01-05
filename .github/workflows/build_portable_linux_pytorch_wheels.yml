@@ -170,8 +170,8 @@ jobs:
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag 0bc5144aee9ee503ed74939a413b5fa0b04de315 --patchset nightly
-          ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
-          ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout --patch --patchset nightly
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
