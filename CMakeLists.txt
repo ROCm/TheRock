@@ -106,7 +106,11 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 
 # Kpack artifact splitting
 option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
-set(THEROCK_KPACK_DIR "" CACHE PATH "Path to rocm-kpack repository (required when THEROCK_KPACK_SPLIT_ARTIFACTS=ON)")
+# TODO: Once rocm-kpack is moved into the rocm-systems repo, hard-code the path.
+# Check for unset OR empty to handle -DTHEROCK_KPACK_DIR="" edge case.
+if(NOT THEROCK_KPACK_DIR)
+  set(THEROCK_KPACK_DIR "${THEROCK_SOURCE_DIR}/base/rocm-kpack")
+endif()
 if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
   message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
 endif()
@@ -248,11 +252,9 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
 
 # Optional sub-features that control behavior within artifacts
-if(NOT WIN32)
-  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
-    "Enables composable kernel in MIOpen" ON
-    "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
-endif()
+cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
+  "Enables composable kernel in MIOpen" ON
+  "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF

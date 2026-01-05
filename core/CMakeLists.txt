@@ -178,6 +178,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     # hipInfo (from hip-tests)
     ##############################################################################
     therock_cmake_subproject_declare(hipInfo
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "hipInfo"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
       BACKGROUND_BUILD
@@ -239,7 +240,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     endif()
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
-      TARGETS USE_DIST_AMDGPU_TARGETS
+      TARGET_NEUTRAL
       DESCRIPTOR ${hip-tests_artifact_file}
       COMPONENTS
         test
@@ -367,7 +368,7 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 ##############################################################################
 
 if(THEROCK_BUILD_TESTING)
-  if(THEROCK_ENABLE_CORE_RUNTIME)
+  if(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
 
     therock_cmake_subproject_declare(rocrtst
       USE_DIST_AMDGPU_TARGETS
@@ -408,5 +409,5 @@ if(THEROCK_BUILD_TESTING)
         rocrtst
     )
 
-  endif(THEROCK_ENABLE_CORE_RUNTIME)
+  endif(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
 endif(THEROCK_BUILD_TESTING)

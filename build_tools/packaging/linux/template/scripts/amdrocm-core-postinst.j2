@@ -52,6 +52,11 @@ do_update_alternatives(){
        PKG_INSTALL_PREFIX="$RPM_INSTALL_PREFIX0"
     {% endif %}
 
+    # Install /opt/rocm/core soft link
+    update-alternatives --install "/opt/rocm/core" "core" "$PKG_INSTALL_PREFIX" "$altscore"
+    update-alternatives --install "/opt/rocm/core-{{ version_major }}" "core-{{ version_major }}" "$PKG_INSTALL_PREFIX" "$altscore"
+
+
     for i in "${binaries[@]}"
     do
         # No obvious recover strategy if things fail

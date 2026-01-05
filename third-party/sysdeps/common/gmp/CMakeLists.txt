@@ -71,6 +71,18 @@ endif()
 # patch the sources.
 set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
 
+# The important timestamped files we want to preserve.
+set(CRITICAL_FILES
+  "doc/gmp.info"
+  "doc/gmp.info-1"
+  "doc/gmp.info-2"
+)
+
+# Add the full path to the critical files.
+foreach(stamped_file ${CRITICAL_FILES})
+  list(APPEND TIMESTAMPED_FILES "${SOURCE_COPY_DIR}/${stamped_file}")
+endforeach()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -78,6 +90,12 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
+  COMMAND
+    # Unfortunately the source directory copy can change all of the timestamps
+    # and GMP's build system is particularly picky with them. As a workaround,
+    # touch a few critical files to make sure the build system is happy and does
+    # not want to call autotools or regenerate the documentation.
+    "${CMAKE_COMMAND}" -E touch ${TIMESTAMPED_FILES}
   #
   # OPTIONAL: Patching of the sources should happen here.
   #

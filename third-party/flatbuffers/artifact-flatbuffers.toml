@@ -1,2 +1,3 @@
 # flatbuffers
 [components.dev."third-party/flatbuffers/stage"]
+[components.run."third-party/flatbuffers/stage"]
