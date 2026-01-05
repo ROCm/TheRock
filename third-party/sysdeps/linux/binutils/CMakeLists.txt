@@ -6,8 +6,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_subproject_fetch(therock-binutils-sources
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: "http://ftpmirror.gnu.org/gnu/binutils/binutils-2.45.tar.gz"
-      # TODO: Update this to be the ROCm S3 bucket URL instead once uploaded
-      URL "http://ftpmirror.gnu.org/gnu/binutils/binutils-2.45.tar.gz"
+      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/binutils-2.45.tar.gz
       URL_HASH "SHA512=5c71ec80884c0b4c0f7a4f8600946f1f6feebe584261b63185b0942cba4062d5b6cf2337539132d0ca03505c0a74f3c2760bc62ed08843c3b7db03df7f5798ad"
       TOUCH "${_download_stamp}"
     )
