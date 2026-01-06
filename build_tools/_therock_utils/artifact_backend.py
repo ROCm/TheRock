@@ -184,7 +184,7 @@ class S3Backend(ArtifactBackend):
             if None not in (_access_key_id, _secret_access_key, _session_token):
                 self._s3_client = boto3.client(
                     "s3",
-                    verify=False,
+                    verify=True,
                     aws_access_key_id=_access_key_id,
                     aws_secret_access_key=_secret_access_key,
                     aws_session_token=_session_token,
@@ -192,7 +192,7 @@ class S3Backend(ArtifactBackend):
             else:
                 self._s3_client = boto3.client(
                     "s3",
-                    verify=False,
+                    verify=True,
                     config=Config(max_pool_connections=100, signature_version=UNSIGNED),
                 )
         return self._s3_client
