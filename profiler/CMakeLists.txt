@@ -203,7 +203,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-systems
   ##############################################################################
-  # During sanitizer builds, rocprofiler-systems requires gcc but the sanitizer uses clang. We skip if this is sanitizer build.
+  # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
+  # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS

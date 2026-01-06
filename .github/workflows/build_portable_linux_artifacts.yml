@@ -62,7 +62,7 @@ jobs:
     # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
     runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-u2404-hx176-cpu-rocm' || 'azure-linux-scale-rocm' }}
     continue-on-error: ${{ inputs.expect_failure }}
-    timeout-minutes: 1440 # 24 hour timeout
+    timeout-minutes: 1080 # 18 hour timeout
     permissions:
       id-token: write
     container:
@@ -117,7 +117,8 @@ jobs:
           cmake_preset: ${{ inputs.build_variant_cmake_preset }}
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: "THEROCK_ENABLE_ROCPROFSYS=ON -DTHEROCK_ENABLE_ALL=OFF"
+          # extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
