@@ -2,9 +2,11 @@
 
 import json
 import os
+import subprocess
+import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
@@ -85,7 +87,7 @@ class FunctionalBase:
         Args:
             test_name: Test name
             subtest_name: Specific test/suite identifier
-            status: Test status ('PASS' or 'FAIL')
+            status: Test status ('PASS', 'FAIL', 'ERROR', 'SKIP')
             **kwargs: Additional test-specific parameters (pass_count, fail_count, etc.)
 
         Returns:
@@ -119,22 +121,59 @@ class FunctionalBase:
             test_results: List of test result dictionaries with 'status' key
 
         Returns:
-            Dictionary with:
-                - passed: Number of passed tests
-                - failed: Number of failed tests
-                - total: Total number of tests
-                - overall_status: 'PASS' if no failures, else 'FAIL'
+            Dictionary with detailed statistics including all status types
         """
         passed = sum(1 for r in test_results if r.get("status") == "PASS")
         failed = sum(1 for r in test_results if r.get("status") == "FAIL")
-        overall_status = "PASS" if failed == 0 else "FAIL"
+        error = sum(1 for r in test_results if r.get("status") == "ERROR")
+        skipped = sum(1 for r in test_results if r.get("status") == "SKIP")
+        
+        # Overall status: PASS only if no failures/errors
+        overall_status = "PASS" if (failed == 0 and error == 0) else "FAIL"
 
         return {
             "passed": passed,
             "failed": failed,
+            "error": error,
+            "skipped": skipped,
             "total": len(test_results),
             "overall_status": overall_status,
         }
+
+    def create_summary_table(
+        self, stats: Dict[str, Any], num_suites: int
+    ) -> PrettyTable:
+        """Create overall summary table with all statistics.
+        
+        Args:
+            stats: Test statistics dictionary
+            num_suites: Number of test suites
+            
+        Returns:
+            PrettyTable with summary statistics
+        """
+        summary_table = PrettyTable()
+        summary_table.field_names = [
+            "Total TestSuites",
+            "Total TestCases",
+            "Passed",
+            "Failed",
+            "Errored",
+            "Skipped",
+            "Final Result"
+        ]
+        
+        summary_table.add_row([
+            num_suites,
+            stats["total"],
+            stats["passed"],
+            stats["failed"],
+            stats["error"],
+            stats["skipped"],
+            stats["overall_status"]
+        ])
+        
+        return summary_table
 
     def upload_results(
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
@@ -160,6 +199,8 @@ class FunctionalBase:
                 "total_tests": stats["total"],
                 "passed_tests": stats["passed"],
                 "failed_tests": stats["failed"],
+                "error_tests": stats["error"],
+                "skipped_tests": stats["skipped"],
             },
             save_local=True,
             output_dir=str(self.script_dir / "results"),
@@ -173,49 +214,41 @@ class FunctionalBase:
         return success
 
     def write_step_summary(
-        self, stats: Dict[str, Any], table: PrettyTable
+        self, stats: Dict[str, Any], detailed_table: PrettyTable, summary_table: PrettyTable
     ) -> None:
         """Write results to GitHub Actions step summary.
         
         Args:
             stats: Test statistics dictionary
-            table: PrettyTable with test results
+            detailed_table: PrettyTable with detailed test results
+            summary_table: PrettyTable with summary statistics
         """
-        status_emoji = "✅" if stats["overall_status"] == "PASS" else "❌"
-        
         gha_append_step_summary(
-            f"## {status_emoji} {self.display_name} - Functional Test Results\n\n"
-            f"**Status:** {stats['overall_status']} | "
-            f"**Passed:** {stats['passed']}/{stats['total']} | "
-            f"**Failed:** {stats['failed']}/{stats['total']}\n\n"
+            f"## {self.display_name} - Functional Test Results\n\n"
+            f"### Detailed Results\n\n"
+            f"```\n{detailed_table}\n```\n\n"
             f"<details>\n"
-            f"<summary>View detailed results ({stats['total']} tests)</summary>\n\n"
-            f"```\n{table}\n```\n\n"
+            f"<summary>View summary ({stats['total']} tests)</summary>\n\n"
+            f"```\n{summary_table}\n```\n\n"
             f"</details>"
         )
 
-    def run_tests(self) -> None:
-        """Run functional tests and save output to log file.
-        
-        Must be implemented by child classes.
-        
-        Raises:
-            NotImplementedError: If not overridden by child class
-        """
-        raise NotImplementedError("Child class must implement run_tests()")
-
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
-        """Parse test results from log file.
-        
-        Must be implemented by child classes.
-
-        Returns:
-            tuple: (test_results list, PrettyTable object)
-            
-        Raises:
-            NotImplementedError: If not overridden by child class
-        """
-        raise NotImplementedError("Child class must implement parse_results()")
+    def get_gpu_id(self) -> str:
+        """Detect GPU ID using rocminfo."""
+        try:
+            result = subprocess.run(
+                ["rocminfo"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # Extract GPU name (e.g., gfx906, gfx90a, gfx942)
+            match = re.search(r'Name:\s+(gfx\w+)', result.stdout)
+            if match:
+                return match.group(1)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            log.warning("Could not detect GPU ID, assuming default")
+        return "unknown"
 
     def run(self) -> int:
         """Execute functional test workflow and return exit code (0=PASS, 1=FAIL).
@@ -223,9 +256,7 @@ class FunctionalBase:
         Returns:
             0 if all tests passed, 1 if any test failed
         """
-        log.info("="*80)
         log.info(f"{self.display_name} - Starting Functional Test")
-        log.info("="*80)
 
         # Initialize test client and print system info
         self.client = TestClient(auto_detect=True)
@@ -235,7 +266,7 @@ class FunctionalBase:
         self.run_tests()
 
         # Parse results (implemented by child class)
-        test_results, table = self.parse_results()
+        test_results, detailed_table, num_suites = self.parse_results()
 
         if not test_results:
             raise TestExecutionError(
@@ -245,15 +276,17 @@ class FunctionalBase:
 
         # Calculate statistics
         stats = self.calculate_statistics(test_results)
-        log.info(f"\nTest Summary: {stats['passed']} passed, {stats['failed']} failed")
+        
+        # Create summary table
+        summary_table = self.create_summary_table(stats, num_suites)
 
         # Display results
-        log.info("\n" + "="*80)
-        log.info("TEST RESULTS")
-        log.info("="*80)
-        log.info(f"\n{table}")
+        log.info("DETAILED RESULTS")
+        log.info(f"\n{detailed_table}")
+        
+        log.info("\nSUMMARY")
+        log.info(f"\n{summary_table}")
         log.info(f"\nFinal Status: {stats['overall_status']}")
-        log.info("="*80)
 
         # Upload results (optional, may not be available in all environments)
         try:
@@ -263,7 +296,7 @@ class FunctionalBase:
 
         # Write to GitHub Actions step summary
         try:
-            self.write_step_summary(stats, table)
+            self.write_step_summary(stats, detailed_table, summary_table)
         except Exception as e:
             log.warning(f"Could not write GitHub Actions summary: {e}")
 
@@ -274,31 +307,19 @@ class FunctionalBase:
 def run_functional_test_main(test_instance):
     """Run functional test with standard error handling.
 
-    Args:
-        test_instance: Instance of FunctionalBase (or child class)
-        
-    Exits with:
-        0 on success (all tests passed)
-        1 on failure (any test failed or execution error)
-
     Raises:
         KeyboardInterrupt: If execution is interrupted by user
+        Exception: If test execution fails
     """
     try:
         exit_code = test_instance.run()
-        sys.exit(exit_code)
-
+        if exit_code != 0:
+            raise RuntimeError(f"Test failed with exit code {exit_code}")
     except KeyboardInterrupt:
         log.warning("\nExecution interrupted by user")
-        sys.exit(1)
-
-    except TestExecutionError as e:
-        log.error(f"Test Execution Error: {e}")
-        sys.exit(1)
-
+        raise
     except Exception as e:
         log.error(f"Unexpected error: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
-
+        raise

@@ -5,7 +5,6 @@ Tests MIOpenDriver convolution operations (Forward and Backward) to ensure
 correct functionality across different GPU architectures.
 """
 
-import json
 import os
 import re
 import shlex
@@ -49,24 +48,6 @@ class MIOpenDriverConvTest(FunctionalBase):
 
         # Load GPU-specific flags
         self.gpu_specific_flags = config.get("gpu_specific_flags", {})
-
-    def get_gpu_id(self) -> str:
-        """Detect GPU ID using rocminfo."""
-        try:
-            result = subprocess.run(
-                ["rocminfo"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            # Extract GPU name (e.g., gfx906, gfx90a, gfx942)
-            match = re.search(r'Name:\s+(gfx\w+)', result.stdout)
-            if match:
-                return match.group(1)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            log.warning("Could not detect GPU ID, assuming default")
-        
-        return "unknown"
 
     def run_tests(self) -> None:
         """Run MIOpen driver convolution tests and save output to log file."""
@@ -133,24 +114,21 @@ class MIOpenDriverConvTest(FunctionalBase):
 
         log.info("Test execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable, int]:
         """Parse test results from log file.
 
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            tuple: (test_results list, detailed PrettyTable, number of test suites)
         """
         log.info("Parsing Results")
 
-        # Setup table
-        field_names = [
+        # Setup detailed table - show each individual test case
+        detailed_table = PrettyTable()
+        detailed_table.field_names = [
             "TestSuite",
-            "CommandIndex",
-            "Status",
-            "PassCount",
-            "FailCount",
-            "TotalCommands"
+            "TestCase",
+            "Status"
         ]
-        table = PrettyTable(field_names)
 
         test_results = []
 
@@ -173,54 +151,58 @@ class MIOpenDriverConvTest(FunctionalBase):
 
                 suite_content = match.group(0)
                 
-                # Count commands and their results
-                total_commands = len(self.tests_cmd[test_suite])
-                pass_count = 0
-                fail_count = 0
-
-                # Look for "PASSED" or return code 0 indicators
-                # MIOpenDriver typically outputs success indicators
+                # Parse each command in the suite
                 for i, cmd_str in enumerate(self.tests_cmd[test_suite], 1):
                     # Build the command pattern to search for
                     miopen_driver = f"{self.therock_bin_dir}/MIOpenDriver"
                     full_cmd = f"{miopen_driver} {cmd_str}"
+                    test_case_name = f"{test_suite}_case{i}"
                     
-                    # Simple heuristic: if command appears and no error follows, assume pass
-                    # This is a simplified parser - adjust based on actual MIOpenDriver output
-                    if f"Command: {full_cmd}" in suite_content or cmd_str in suite_content:
-                        # Check for return code 0 or success indicators
-                        if "Return code: 0" in suite_content or "PASSED" in suite_content:
-                            pass_count += 1
-                            status = "PASS"
+                    # Find this specific command in the suite content
+                    cmd_pattern = re.escape(f"Command: {full_cmd}")
+                    cmd_match = re.search(cmd_pattern, suite_content)
+                    
+                    if cmd_match:
+                        # Extract content after this command until next command or end
+                        start_pos = cmd_match.end()
+                        next_cmd_match = re.search(r"\nCommand:", suite_content[start_pos:])
+                        if next_cmd_match:
+                            cmd_section = suite_content[start_pos:start_pos + next_cmd_match.start()]
                         else:
-                            fail_count += 1
+                            cmd_section = suite_content[start_pos:]
+                        
+                        # Check return code in THIS command's section only
+                        return_code_match = re.search(r"Return code:\s*(\d+)", cmd_section)
+                        if return_code_match:
+                            return_code = int(return_code_match.group(1))
+                            status = "PASS" if return_code == 0 else "FAIL"
+                        elif "PASSED" in cmd_section:
+                            status = "PASS"
+                        elif "FAILED" in cmd_section or "ERROR" in cmd_section:
                             status = "FAIL"
+                        else:
+                            status = "FAIL"  # Unknown result, assume fail
                     else:
-                        fail_count += 1
-                        status = "FAIL"
+                        status = "FAIL"  # Command not found in log
 
-                # Determine overall suite status
-                overall_status = "PASS" if fail_count == 0 else "FAIL"
+                    # Add each individual test case to detailed table
+                    detailed_table.add_row([
+                        test_suite,
+                        test_case_name,
+                        status
+                    ])
 
-                # Add to table
-                table.add_row([
-                    test_suite,
-                    f"1-{total_commands}",
-                    overall_status,
-                    pass_count,
-                    fail_count,
-                    total_commands
-                ])
-
-                # Add to results
-                test_results.append({
-                    "test_name": self.test_name,
-                    "subtest_name": test_suite,
-                    "status": overall_status,
-                    "pass_count": pass_count,
-                    "fail_count": fail_count,
-                    "total_commands": total_commands
-                })
+                    # Add each test case to results list using helper
+                    test_results.append(
+                        self.create_test_result(
+                            test_name=self.test_name,
+                            subtest_name=test_case_name,
+                            status=status,
+                            suite=test_suite,
+                            command_index=i,
+                            command=cmd_str
+                        )
+                    )
 
         except FileNotFoundError:
             raise TestExecutionError(
@@ -233,7 +215,8 @@ class MIOpenDriverConvTest(FunctionalBase):
                 action="Check file permissions and disk space"
             )
 
-        return test_results, table
+        num_suites = len(self.tests_list)
+        return test_results, detailed_table, num_suites
 
 
 if __name__ == "__main__":
