@@ -26,6 +26,7 @@ See [README.md](README.md) for full setup and [docs/development/development_guid
 ### Build Directory Layout
 
 Each component produces:
+
 ```
 build/component/
 ├── build/    # CMake build tree
@@ -40,16 +41,17 @@ Final unified output: `build/dist/rocm/` - combined ROCm installation.
 
 Every component exposes these targets (replace `component` with actual name like `hipify`, `clr`, `rocblas`):
 
-| Target | Purpose |
-|--------|---------|
-| `ninja component` | Full build (configure + build + stage + dist) |
-| `ninja component+build` | Rebuild after source changes |
-| `ninja component+dist` | Update artifacts without full rebuild |
-| `ninja component+expunge` | Clean slate - remove all intermediate files |
+| Target                    | Purpose                                       |
+| ------------------------- | --------------------------------------------- |
+| `ninja component`         | Full build (configure + build + stage + dist) |
+| `ninja component+build`   | Rebuild after source changes                  |
+| `ninja component+dist`    | Update artifacts without full rebuild         |
+| `ninja component+expunge` | Clean slate - remove all intermediate files   |
 
 ### Common Development Patterns
 
 **Iterate on a single component:**
+
 ```bash
 # After making changes to component source
 ninja -C build clr+build
@@ -59,6 +61,7 @@ ninja -C build clr+expunge && ninja -C build clr
 ```
 
 **Build subset of ROCm:**
+
 ```bash
 cmake -B build -GNinja \
   -DTHEROCK_ENABLE_ALL=OFF \
@@ -69,6 +72,7 @@ ninja -C build
 ```
 
 **Test a built component:**
+
 ```bash
 # Run tests from unified distribution
 LD_LIBRARY_PATH=build/dist/rocm/lib build/dist/rocm/bin/test_rocrand_basic
@@ -78,6 +82,7 @@ ctest --test-dir build
 ```
 
 **Faster rebuilds with ccache:**
+
 ```bash
 cmake -B build -GNinja \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -86,6 +91,7 @@ cmake -B build -GNinja \
 ```
 
 **Debug build for specific component:**
+
 ```bash
 cmake -B build -GNinja \
   -DCMAKE_BUILD_TYPE=Release \
@@ -95,12 +101,12 @@ cmake -B build -GNinja \
 
 ### Top-Level Targets
 
-| Target | Purpose |
-|--------|---------|
+| Target                 | Purpose                                       |
+| ---------------------- | --------------------------------------------- |
 | `ninja` / `ninja dist` | Build everything, populate `build/dist/rocm/` |
-| `ninja artifacts` | Generate artifact directories and manifests |
-| `ninja archives` | Create `.tar.xz` distribution archives |
-| `ninja expunge` | Remove all build artifacts |
+| `ninja artifacts`      | Generate artifact directories and manifests   |
+| `ninja archives`       | Create `.tar.xz` distribution archives        |
+| `ninja expunge`        | Remove all build artifacts                    |
 
 ### Submodule Management
 
@@ -111,6 +117,7 @@ cmake -B build -GNinja \
 ### IDE Support
 
 Generate combined compile_commands.json for IDE support:
+
 ```bash
 cmake --build build --target therock_merged_compile_commands
 ```
@@ -131,12 +138,14 @@ Hooks: Black (Python), clang-format (C++), mdformat (Markdown), actionlint (GitH
 See [docs/development/style_guide.md](docs/development/style_guide.md) for full guidelines.
 
 **Python:**
+
 - Use `pathlib.Path` for filesystem operations
 - Add type hints to function signatures
 - Use `argparse` for CLI with help text
 - Don't assume cwd - use script-relative paths
 
 **CMake:**
+
 - Dependencies at super-project level ([docs/development/dependencies.md](docs/development/dependencies.md))
 - Build phases: configure → build → stage → dist
 
