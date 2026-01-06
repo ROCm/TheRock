@@ -682,11 +682,11 @@ def do_build_pytorch(
         env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
 
-        # no aotriton support for gfx103X
+        # no aotriton support for gfx101X and gfx103X
         #
         # temporarily disable aotriton for gfx1152/53 until pytorch
         # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
-        AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103", "gfx1152", "gfx1153"]
         is_aotriton_unsupported = any(
             arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
         )
@@ -747,10 +747,10 @@ def do_build_pytorch(
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        # no aotriton support for gfx103X and temporarily disable aotriton
+        # no aotriton support for gfx101X and gfx103X and temporarily disable aotriton
         # for gfx1152/53 until pytorch uses a commit that enables it
         # ( https://github.com/ROCm/aotriton/pull/142 )
-        AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103", "gfx1152", "gfx1153"]
         is_aotriton_unsupported = any(
             arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
         )
