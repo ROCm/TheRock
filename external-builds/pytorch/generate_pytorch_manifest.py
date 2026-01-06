@@ -2,7 +2,7 @@
 """
 Generate a manifest for PyTorch external builds.
 
-it is called by build_prod_wheels.py after building wheels.
+It is called by build_prod_wheels.py after building wheels.
 """
 
 import argparse
@@ -45,7 +45,6 @@ def parse_wheel_name(filename: str) -> Dict[str, str]:
         "abi_tag": abi_tag,
         "platform_tag": platform_tag,
     }
-
     if build_tag:
         meta["build_tag"] = build_tag
 
@@ -105,16 +104,21 @@ def main() -> None:
     arch = platform.machine().lower()
     platform_id = f"{sys_platform}-{arch}"
 
-    run_id = os.getenv("GITHUB_RUN_ID")
-    job_id = os.getenv("GITHUB_JOB")
+    # GH Actions metadata is optional.
+    is_github = os.getenv("GITHUB_ACTIONS") == "true"
+
+    run_id = os.getenv("GITHUB_RUN_ID") if is_github else None
+    job_id = os.getenv("GITHUB_JOB") if is_github else None
 
     therock_repo = os.getenv("GITHUB_REPOSITORY")
     therock_server = os.getenv("GITHUB_SERVER_URL")
     therock_url = (
-        f"{therock_server}/{therock_repo}" if therock_server and therock_repo else None
+        f"{therock_server}/{therock_repo}"
+        if is_github and therock_server and therock_repo
+        else None
     )
-    therock_sha = os.getenv("GITHUB_SHA")
-    therock_ref = os.getenv("GITHUB_REF")
+    therock_sha = os.getenv("GITHUB_SHA") if is_github else None
+    therock_ref = os.getenv("GITHUB_REF") if is_github else None
 
     artifacts: List[Dict[str, Any]] = []
     for p in sorted(output_dir.rglob("*.whl")):
@@ -163,7 +167,10 @@ def main() -> None:
         "artifacts": artifacts,
     }
 
-    filename = f"therock_manifest-{args.artifact_group}-{platform_id}-{run_id}.json"
+    run_id_for_name = run_id or "local"
+    filename = (
+        f"therock_manifest-{args.artifact_group}-{platform_id}-{run_id_for_name}.json"
+    )
     out_path = manifest_dir / filename
     out_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
