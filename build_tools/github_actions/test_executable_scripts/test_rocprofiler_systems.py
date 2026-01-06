@@ -35,7 +35,7 @@ class TestRocprofsys:
         os.environ["LD_LIBRARY_PATH"] = ":".join(str(p) for p in ld_paths)
 
     @staticmethod
-    def run_pytest_tests():
+    def run_pytest_package():
         TestRocprofsys.configure_paths()
 
         # Required to force rocprofsys pytest into install mode
@@ -70,4 +70,4 @@ class TestRocprofsys:
 
 
 if __name__ == "__main__":
-    TestRocprofsys.run_pytest_tests()
+    TestRocprofsys.run_pytest_package()
