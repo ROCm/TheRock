@@ -191,7 +191,7 @@ artifact_group_deps = []
 source_sets = ["base", "rocm-systems"]
 
 [artifact_groups.core-runtime]
-description = "Core runtime (ROCR-Runtime, rocminfo)"
+description = "Core runtime (amdsmi, ROCR-Runtime, rocminfo)"
 type = "generic"
 artifact_group_deps = ["base", "third-party-sysdeps"]
 source_sets = ["rocm-systems"]
@@ -251,7 +251,7 @@ description = "Data center management tools with minimal dependencies"
 type = "generic"
 artifact_group_deps = ["core-runtime", "profiler-core"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from base
+source_sets = ["base", "core", "rocm-systems"]  # RDC uses amdsmi from core
 
 # Future artifact groups
 # [artifact_groups.dctools-rocm]
