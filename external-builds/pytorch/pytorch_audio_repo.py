@@ -70,7 +70,7 @@ def main(cl_args: list[str]):
             "--torch-dir",
             type=Path,
             default=THIS_DIR / "pytorch",
-            help="Directory of the torch checkout, for loading the related_commits file that can populate alternate default values for --gitrepo-origin, --repo-hashtag, and --patchset. If missing then fallback/upstream defaults will be used",
+            help="Directory of the torch checkout, for loading the related_commits file that can populate alternate default values for --gitrepo-origin and --repo-hashtag. If missing then fallback/upstream defaults will be used",
         )
 
     p = argparse.ArgumentParser("pytorch_audio_repo.py")
@@ -99,7 +99,6 @@ def main(cl_args: list[str]):
     (
         default_git_origin,
         default_git_hashtag,
-        _,  # patchset no longer used
         has_related_commit,
     ) = repo_management.read_pytorch_rocm_pins(
         args.torch_dir,
@@ -107,7 +106,6 @@ def main(cl_args: list[str]):
         project="torchaudio",
         default_origin=DEFAULT_ORIGIN,
         default_hashtag=DEFAULT_HASHTAG,
-        default_patchset=None,
     )
 
     if args.require_related_commit and not has_related_commit:

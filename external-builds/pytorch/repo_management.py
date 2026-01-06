@@ -232,8 +232,8 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
 
 
 # Reads the ROCm maintained "related_commits" file from the given pytorch dir.
-# If present, selects the given os and project, returning origin, hashtag and
-# "rocm-custom" patchset. Otherwise, returns the given defaults.
+# If present, selects the given os and project, returning origin and hashtag.
+# Otherwise, returns the given defaults.
 def read_pytorch_rocm_pins(
     pytorch_dir: Path,
     os: str,
@@ -241,8 +241,7 @@ def read_pytorch_rocm_pins(
     *,
     default_origin: str,
     default_hashtag: str | None,
-    default_patchset: str | None,
-) -> tuple[str, str | None, str | None, bool]:
+) -> tuple[str, str | None, bool]:
     related_commits_file = pytorch_dir / "related_commits"
     if related_commits_file.exists():
         lines = related_commits_file.read_text().splitlines()
@@ -259,7 +258,7 @@ def read_pytorch_rocm_pins(
             except ValueError:
                 print(f"WARNING: Could not parse related_commits line: {line}")
             if rec_os == os and rec_project == project:
-                return rec_origin, rec_commit, "rocm-custom", True
+                return rec_origin, rec_commit, True
 
     # Not found.
-    return default_origin, default_hashtag, default_patchset, False
+    return default_origin, default_hashtag, False
