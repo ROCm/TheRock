@@ -1,6 +1,6 @@
 # hipDNN Samples
-# No artifacts to archive at this time.
-# hipdnn samples build is just to ensure compilation succeeds in CI.
-
 [components.test."ml-libs/hipdnn_samples/stage"]
-# Need to have this here in order to correctly generate an artifact manifest.
+include = [
+  "*bn*",
+  "*conv*",
+]
