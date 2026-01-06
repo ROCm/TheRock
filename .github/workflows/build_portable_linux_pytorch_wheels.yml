@@ -36,10 +36,6 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
-      pytorch_patchset:
-        description: Patch directory name from where to apply existing patches.
-        required: true
-        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -95,11 +91,6 @@ on:
         required: true
         type: string
         default: "release/2.7"
-      pytorch_patchset:
-        description: Patch directory name from where to apply existing patches.
-        required: true
-        type: string
-        default: "rocm_2.7"
 
 permissions:
   id-token: write
@@ -170,13 +161,13 @@ jobs:
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
-          ./external-builds/pytorch/pytorch_triton_repo.py checkout --patch --patchset nightly
+          ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
         if: ${{ inputs.pytorch_git_ref != 'nightly' }}
         run: |
-          ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }} --patchset ${{ inputs.pytorch_patchset }}
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }}
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
