@@ -59,7 +59,6 @@ Each PyTorch version uses a combination of:
 
 - Git repository URLs for each project
 - Git "repo hashtags" (branch names, tag names, or commit refs) for each project
-- Optional patches to be applied on top of a git checkout
 
 See the following table for how each version is supported:
 
@@ -73,7 +72,7 @@ See the following table for how each version is supported:
 
 See also:
 
-- The [Alternate Branches / Patch Sets](#alternate-branches--patch-sets) section
+- The [Alternate branches and versions](#alternate-branches-and-versions) section
   for detailed information about configurations
 - The upstream PyTorch
   [release documentation](https://github.com/pytorch/pytorch/blob/main/RELEASE.md)
@@ -334,20 +333,17 @@ This section covers recommended practices for making changes to PyTorch and
 other repositories for use with the build scripts and integration with
 version control systems.
 
-### Removed Features
-
-**Patch File System (Removed)**: Previous versions of TheRock supported applying
-git patches to PyTorch repositories. This system has been removed as ROCm-specific
-changes are now maintained in downstream git forks (e.g., ROCm/pytorch release
-branches) rather than as patch files. This approach provides better tooling support,
-easier conflict resolution, and clearer version control.
-
 If you want to make changes to PyTorch source code, prefer in this order:
 
 1. Contributing to upstream `main` branches
-1. Contributing to upstream `release/` branches
-1. Maintaining downstream git forks with their own branches
-   - This allows for standard git workflows to merge, resolve conflicts, etc.
+1. Contributing to upstream `release/` branches while within the release window
+1. Contributing to downstream `release/` branches in forked repositories
+
+> [!NOTE]
+> We used to support applying git patches as part of checkout out PyTorch
+> repositories. This system has been removed as ROCm-specific changes are now
+> maintained in the https://github.com/ROCm/pytorch/ fork rather than as patch
+> files.
 
 ### Checking out PyTorch repositories
 
@@ -418,49 +414,30 @@ python pytorch_triton_repo.py checkout
 #### ROCm PyTorch release branches
 
 Because upstream PyTorch freezes at release but AMD needs to keep updating
-stable versions for a longer period of time, backport branches are maintained.
+stable versions for a longer period of time, backport branches are maintained in
+the fork at https://github.com/ROCm/pytorch.
+
+> [!TIP]
+> You are welcome to maintain your own branches that extend one of AMD's.
+> Change origins and tags as appropriate.
+
 In order to check out and build one of these, use the following instructions:
 
-In general, we regularly build PyTorch nightly from upstream sources and the
-most recent stable backport. Generally, backports are only supported on Linux
-at present.
-
-Backport branches have `related_commits` files that point to specific
-sub-project commits, so the main torch repo must be checked out first to
-have proper defaults.
-
-You are welcome to maintain your own branches that extend one of AMD's.
-Change origins and tags as appropriate.
-
-##### ROCm release v2.9.x branch
-
 ```bash
+# Other common --repo-hashtag values:
+#   release/2.10
+#   release/2.9
+#   release/2.8
+#   release/2.7
 python pytorch_torch_repo.py checkout \
   --gitrepo-origin https://github.com/ROCm/pytorch.git \
   --repo-hashtag release/2.9
+
+# Backport branches have `related_commits` files that point to specific
+# sub-project commits, so the main torch repo must be checked out first to
+# have proper defaults.
 python pytorch_audio_repo.py checkout --require-related-commit
 python pytorch_vision_repo.py checkout --require-related-commit
-python pytorch_triton_repo.py checkout
-```
 
-##### ROCm release v2.8.x branch
-
-```bash
-python pytorch_torch_repo.py checkout \
-  --gitrepo-origin https://github.com/ROCm/pytorch.git \
-  --repo-hashtag release/2.8
-python pytorch_audio_repo.py checkout --require-related-commit
-python pytorch_vision_repo.py checkout --require-related-commit
-python pytorch_triton_repo.py checkout
-```
-
-##### ROCm release v2.7.x branch
-
-```bash
-python pytorch_torch_repo.py checkout \
-  --gitrepo-origin https://github.com/ROCm/pytorch.git \
-  --repo-hashtag release/2.7
-python pytorch_audio_repo.py checkout --require-related-commit
-python pytorch_vision_repo.py checkout --require-related-commit
 python pytorch_triton_repo.py checkout
 ```

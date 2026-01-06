@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path, PurePosixPath
 import shlex
-import shutil
 import subprocess
 import sys
 import os
