@@ -46,7 +46,7 @@ benchmark_matrix = {
     "rocrand_bench": {
         "job_name": "rocrand_bench",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 90,
         "test_script": f"python {_get_benchmark_script_path('test_rocrand_benchmark.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,

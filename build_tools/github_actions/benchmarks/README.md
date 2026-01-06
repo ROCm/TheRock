@@ -109,10 +109,22 @@ The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.p
 | `rocrand_bench`   | ROCrand   | Linux, Windows | 60 min  | 1      |
 | `rocfft_bench`    | ROCfft    | Linux, Windows | 60 min  | 1      |
 
+
 **GPU Family Support:**
 
-- **Linux:** gfx94x (MI300X/MI325X)
-- **Windows:** gfx1151 (RDNA3.5)
+| GPU Family | Platform | Architecture        | Benchmark Supported | Benchmark CI Status |
+|------------|----------|---------------------|---------------------|---------------------|
+| `gfx94x`   | Linux    | MI300X/MI325X (CDNA3) | Yes               | Enabled (nightly CI) |
+| `gfx1151`  | Windows  | RDNA 3.5            | Yes                 | Enabled (nightly CI) |
+| `gfx950`   | Linux    | MI355X (CDNA4)      | Yes                 | Not enabled |
+| `gfx110x`  | Windows  | RDNA 2              | Yes                 | Not enabled |
+| `gfx110x`  | Linux    | RDNA 2              | Yes                 | Not enabled |
+| `gfx120x`  | Linux    | RDNA 3              | Yes                 | Not enabled |
+| `gfx120x`  | Windows  | RDNA 3              | Yes                 | Not enabled |
+| `gfx90x`   | Linux    | MI200 (CDNA2)       | Yes                 | Not enabled |
+| `gfx1151`  | Linux    | RDNA 3.5            | Yes                 | Not enabled |
+
+> **Note:** All benchmarks are **architecture-agnostic** and support any ROCm-compatible GPU. The table above lists GPU families actively used in CI testing. To add support for additional GPU families, update [`amdgpu_family_matrix.py`](../amdgpu_family_matrix.py) with appropriate `benchmark-runs-on` runners.
 
 ### Implementation Details
 
