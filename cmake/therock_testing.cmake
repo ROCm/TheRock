@@ -9,8 +9,8 @@ function(therock_test_validate_shared_lib)
     "LIB_NAMES"
   )
 
-  # Skip shared-library dlopen validation for ASAN builds
-  if(THEROCK_SANITIZER STREQUAL "ASAN")
+  # Skip shared-library dlopen validation for sanitizer builds.
+  if(NOT "${THEROCK_SANITIZER}" STREQUAL "")
     return()
   endif()
 
