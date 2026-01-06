@@ -76,6 +76,7 @@ jobs:
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
       RELEASE_TYPE: ${{ inputs.release_type || '' }}
+      S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
@@ -122,15 +123,15 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
       - name: Upload Package repo to S3
         id: upload-packages
         run: |
-          echo "Uploading to s3 bucket"
+          echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type ${{ inputs.native_package_type }} \
-            --s3-bucket therock-deb-rpm-test \
+            --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
             --job ${{ inputs.release_type }}

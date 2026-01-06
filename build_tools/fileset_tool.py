@@ -46,7 +46,9 @@ def do_artifact(args):
     """Produces an 'artifact directory', which is a slice of installed stage/
     directories, split into components (i.e. run, dev, dbg, doc, test).
     """
-    descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(args.descriptor)
+    descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(
+        args.descriptor, artifact_name=args.artifact_name
+    )
     scanner = artifact_builder.ComponentScanner(args.root_dir, descriptor)
     # Disable strict verification temporarily until debug builds are tested/fixed.
     # scanner.verify()
@@ -217,6 +219,12 @@ def main(cl_args: list[str]):
         type=Path,
         required=True,
         help="TOML file describing the artifact",
+    )
+    artifact_p.add_argument(
+        "--artifact-name",
+        type=str,
+        required=True,
+        help="Name of the artifact (e.g., rccl, blas) for kpack pattern matching",
     )
     artifact_p.add_argument(
         "component_dirs",
