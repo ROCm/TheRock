@@ -9,7 +9,7 @@ from prettytable import PrettyTable
 # Add parent directory to path for utils import
 sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
-from utils import BenchmarkClient
+from utils import TestClient
 from utils.logger import log
 from github_actions_utils import gha_append_step_summary
 
@@ -197,7 +197,7 @@ class BenchmarkBase:
         log.info(f"Initializing {self.display_name} Benchmark Test")
 
         # Initialize benchmark client and print system info
-        self.client = BenchmarkClient(auto_detect=True)
+        self.client = TestClient(auto_detect=True)
         self.client.print_system_summary()
 
         # Run benchmarks (implemented by child class)

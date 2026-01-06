@@ -7,7 +7,7 @@ Utility modules organized into logical subdirectories for maintainability and sc
 ```
 benchmarks/utils/
 ├── __init__.py              # Public exports
-├── benchmark_client.py      # Main BenchmarkClient API
+├── test_client.py           # Main TestClient API
 ├── constants.py             # Framework constants
 ├── exceptions.py            # Custom exceptions
 ├── logger.py                # Logging configuration
@@ -50,7 +50,7 @@ from utils.constants import Constants
 from utils.exceptions import ConfigurationError
 
 # Main API classes
-from utils.benchmark_client import BenchmarkClient
+from utils.test_client import TestClient
 from utils.system.system_detector import SystemDetector
 from utils.config.config_helper import ConfigHelper
 from utils.results.results_handler import ResultsHandler
@@ -81,7 +81,7 @@ from utils.results import ResultsHandler, ResultsAPI
 - **constants.py** - Framework constants and defaults
 - **exceptions.py** - Custom exception classes
 - **logger.py** - Logging configuration
-- **benchmark_client.py** - Main BenchmarkClient API
+- **test_client.py** - Main TestClient API
 
 ### Config
 
