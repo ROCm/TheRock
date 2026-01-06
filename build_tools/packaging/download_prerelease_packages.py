@@ -84,7 +84,6 @@ DIRECTORY STRUCTURE:
 
 PACKAGE CATEGORIES:
   Packages to promote (ROCm and PyTorch):
-    - pytorch-triton-rocm
     - rocm (sdist)
     - rocm-sdk-core
     - rocm-sdk-devel
@@ -92,6 +91,7 @@ PACKAGE CATEGORIES:
     - torch
     - torchaudio
     - torchvision
+    - triton
 
   Known dependencies:
     - filelock, fsspec, jinja2, markupsafe, mpmath, networkx
@@ -122,7 +122,6 @@ BYTES_TO_MB = 1024 * 1024  # Conversion factor from bytes to MB
 
 # Package categories
 PACKAGES_TO_PROMOTE = {
-    "pytorch_triton_rocm",
     "rocm",
     "rocm_sdk_core",
     "rocm_sdk_devel",
@@ -130,6 +129,7 @@ PACKAGES_TO_PROMOTE = {
     "torch",
     "torchaudio",
     "torchvision",
+    "triton",
 }
 
 DEPENDENCY_PACKAGES = {

@@ -157,6 +157,32 @@ def gha_query_workflow_run_information(github_repository: str, workflow_run_id: 
     return workflow_run
 
 
+def gha_query_last_successful_workflow_run(
+    github_repository: str = "ROCm/TheRock",
+    workflow_name: str = "ci.yml",
+    branch: str = "main",
+) -> dict | None:
+    """Find the last successful run of a specific workflow on the specified branch.
+
+    Args:
+        github_repository: Repository in format "owner/repo"
+        workflow_name: Name of the workflow file (e.g., "ci_nightly.yml")
+        branch: Branch to filter by (defaults to "main")
+
+    Returns:
+        The full workflow run object of the most recent successful run on the specified branch,
+        or None if no successful runs are found.
+    """
+    # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
+    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100"
+    response = gha_send_request(url)
+
+    # Return the first (most recent) successful run
+    if response and response.get("workflow_runs"):
+        return response["workflow_runs"][0]
+    return None
+
+
 def retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
@@ -221,7 +247,7 @@ def retrieve_bucket_info(
             workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
         )
         curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
-        commit_to_compare_dt = datetime.fromisoformat("2025-11-11 08:18:48 -0800")
+        commit_to_compare_dt = datetime.fromisoformat("2025-11-11T16:18:48+00:00")
     else:
         is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
         _log(f"  (implicit) is_pr_from_fork  : {is_pr_from_fork}")

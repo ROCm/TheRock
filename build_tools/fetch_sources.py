@@ -19,12 +19,15 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import List, Optional
+from typing import List
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
+ALWAYS_SUBMODULE_PATHS = [
+    "base/rocm-kpack",
+]
 
 
 def is_windows() -> bool:
@@ -51,7 +54,8 @@ def get_projects_from_topology(stage: str) -> List[str]:
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
 
     topology = BuildTopology(str(TOPOLOGY_PATH))
-    submodules = topology.get_submodules_for_stage(stage)
+    current_platform = platform.system().lower()
+    submodules = topology.get_submodules_for_stage(stage, platform=current_platform)
     return [s.name for s in submodules]
 
 
@@ -64,6 +68,13 @@ def get_available_stages() -> List[str]:
 
     topology = BuildTopology(str(TOPOLOGY_PATH))
     return [s.name for s in topology.get_build_stages()]
+
+
+def parse_nested_submodules(input):
+    """Parse nested submodules string like 'iree:flatcc,something' into ("iree", ["flatcc", "something"])."""
+    project, nested = input.split(":", 1)
+    nested_list = [n.strip() for n in nested.split(",")] if nested else []
+    return (project, nested_list)
 
 
 def get_enabled_projects(args) -> List[str]:
@@ -90,12 +101,53 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
+    if args.include_rocm_media:
+        projects.extend(args.rocm_media_projects)
+    if args.include_iree_libs:
+        projects.extend(args.iree_libs_projects)
     return projects
+
+
+def fetch_nested_submodules(args, projects):
+    """Fetch nested submodules for projects specified in --nested-submodules."""
+    update_args = []
+    if args.depth:
+        update_args += ["--depth", str(args.depth)]
+    if args.progress:
+        update_args += ["--progress"]
+    if args.jobs:
+        update_args += ["--jobs", str(args.jobs)]
+    if args.remote:
+        update_args += ["--remote"]
+
+    for parent, nested_submodules in dict(args.nested_submodules).items():
+        if len(nested_submodules) == 0:
+            continue
+
+        # Skip if parent project wasn't fetched
+        if parent not in projects:
+            continue
+
+        # Fetch the nested submodules
+        parent_dir = THEROCK_DIR / get_submodule_path(parent)
+        nested_submodule_paths = [
+            get_submodule_path(nested_submodule, cwd=parent_dir)
+            for nested_submodule in nested_submodules
+        ]
+        exec(
+            ["git", "submodule", "update", "--init"]
+            + update_args
+            + ["--"]
+            + nested_submodule_paths,
+            cwd=parent_dir,
+        )
 
 
 def run(args):
     projects = get_enabled_projects(args)
-    submodule_paths = [get_submodule_path(project) for project in projects]
+    submodule_paths = ALWAYS_SUBMODULE_PATHS + [
+        get_submodule_path(project) for project in projects
+    ]
     # TODO(scotttodd): Check for git lfs?
     update_args = []
     if args.depth:
@@ -116,6 +168,10 @@ def run(args):
         )
     if args.dvc_projects:
         pull_large_files(args.dvc_projects, projects)
+
+    # Fetch nested submodules
+    if args.update_submodules:
+        fetch_nested_submodules(args, projects)
 
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
@@ -238,7 +294,7 @@ def apply_patches(args, projects):
 
 # Gets the the relative path to a submodule given its name.
 # Raises an exception on failure.
-def get_submodule_path(name: str) -> str:
+def get_submodule_path(name: str, cwd=THEROCK_DIR) -> str:
     relpath = (
         subprocess.check_output(
             [
@@ -249,7 +305,7 @@ def get_submodule_path(name: str) -> str:
                 "--get",
                 f"submodule.{name}.path",
             ],
-            cwd=str(THEROCK_DIR),
+            cwd=cwd,
         )
         .decode()
         .strip()
@@ -354,6 +410,13 @@ def main(argv):
         default=None,
     )
     parser.add_argument(
+        "--nested-submodules",
+        nargs="+",
+        type=parse_nested_submodules,
+        default=[("iree", ["third_party/flatcc", "third_party/benchmark"])],
+        help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
+    )
+    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -384,11 +447,22 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
+        "--include-rocm-media",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include media projects that are part of ROCM",
+    )
+    parser.add_argument(
+        "--include-iree-libs",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include IREE and related libraries",
+    )
+    parser.add_argument(
         "--system-projects",
         nargs="+",
         type=str,
         default=[
-            "amdsmi",
             "half",
             "rccl",
             "rccl-tests",
@@ -410,14 +484,31 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
+        default=[
+            "composable_kernel",
+        ],
+    )
+    parser.add_argument(
+        "--rocm-media-projects",
+        nargs="+",
+        type=str,
         default=(
             []
             if is_windows()
             else [
                 # Linux only projects.
-                "composable_kernel",
+                "amd-mesa",
             ]
         ),
+    )
+    parser.add_argument(
+        "--iree-libs-projects",
+        nargs="+",
+        type=str,
+        default=[
+            "iree",
+            "fusilli",
+        ],
     )
     parser.add_argument(
         # projects that use DVC to manage large files
