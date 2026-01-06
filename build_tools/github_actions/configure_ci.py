@@ -385,10 +385,10 @@ def matrix_generator(
     is_long_lived_branch = False
     # Let's differentiate between full/complete matches and prefix matches for long-lived branches
     long_lived_full_match = ["main"]
-    long_livest_prefix_match = ["release/therock-"]
+    long_lived_prefix_match = ["release/therock-"]
     if base_args.get("branch_name") in long_lived_full_match or any(
         base_args.get("branch_name", "").startswith(prefix)
-        for prefix in long_livest_prefix_match
+        for prefix in long_lived_prefix_match
     ):
         is_long_lived_branch = True
 
