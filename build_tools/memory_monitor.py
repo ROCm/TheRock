@@ -6,15 +6,13 @@ memory statistics. When integrated with GitHub Actions workflows, it helps ident
 which build phase is causing out-of-memory errors.
 
 Thread Safety:
-    Uses threading.Event for stop signaling instead of boolean flags. This provides:
-    - Thread-safe communication between threads
-    - Immediate shutdown response via Event.wait() instead of sleep()
-    - Clear intent and standard Python threading patterns
+    Uses threading.Event for stop signaling to ensure thread-safe communication between threads
+    Immediate shutdown response via Event.wait()
 
 Graceful Shutdown:
-    - On Linux/Unix: Responds to SIGTERM/SIGINT via signal handlers
-    - On Windows: Checks for stop signal file (Windows has limited signal support)
-    - Both approaches call monitor.stop() which sets the stop_event and prints summary
+    On Linux/Unix: Responds to SIGTERM/SIGINT via signal handlers
+    On Windows: Checks for stop signal file (Windows has limited signal support)
+    Both approaches call monitor.stop() which sets the stop_event and prints summary
 
 Usage:
     # Monitor a single command:
