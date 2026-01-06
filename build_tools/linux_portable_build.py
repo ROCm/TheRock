@@ -5,13 +5,13 @@ Example usage:
 
     # Build for a specific family. Note that all options after the "--" are
     # passed verbatim to CMake.
-    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
+    python linux_portable_build.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 
     # Build with podman vs docker.
-    python linux_build_portable.py --docker=podman
+    python linux_portable_build.py --docker=podman
 
     # Enter an interactive shell set up like the build.
-    python linux_build_portable.py --interactive
+    python linux_portable_build.py --interactive
 
 Other options of note:
 

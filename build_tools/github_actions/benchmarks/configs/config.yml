@@ -1,0 +1,32 @@
+# Test Framework Configuration
+# Configuration for logging, API integration, and test execution
+
+Config:
+  Core:
+    # Logging Configuration
+    LogLevel: INFO              # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    LogToFile: true             # Enable file logging with rotation
+    LogDirectory: "./logs"      # Directory for log files
+    LogMaxSizeMB: 10            # Maximum log file size before rotation
+    LogBackupCount: 5           # Number of backup log files to keep
+
+    # Execution Metadata
+    # Environment variables with defaults (format: ${VAR:-default})
+    DeployedUser: "${DEPLOYED_USER:-therockbot}"
+    ExecutionLabel: "${EXECUTION_LABEL:-therock_nightly}"
+    CIGroup: "${CI_GROUP:-therock_nightly}"
+
+    # Results API Configuration
+    UploadTestResultsToAPI: true
+    ResultsAPI:
+      URL: "${BENCHMARK_DB_URL}"                    # Primary benchmark results database endpoint
+      FallbackURL: "${BENCHMARK_DB_FALLBACK_URL}"   # Fallback benchmark results database endpoint
+      APIKey: "${API_KEY:-}"                        # API key from environment (secure)
+      Timeout: 30                                   # Request timeout in seconds
+      MaxRetries: 3                                 # Maximum retry attempts
+      RetryDelay: 5                                 # Delay between retries in seconds
+
+  Results:
+    # Local Results Output
+    OutputDirectory: "./results"
+    SaveJSON: true

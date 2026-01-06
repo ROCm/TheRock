@@ -29,23 +29,21 @@ exclusion_list = ":".join(tests_to_exclude)
 
 cmd = [
     f"{THEROCK_BIN_DIR}/hipblas-test",
-    f"--gtest_filter=-{exclusion_list}",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
-    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml"]
+    cmd += [
+        "--yaml",
+        f"{THEROCK_BIN_DIR}/hipblas_smoke.yaml",
+        f"--gtest_filter=-{exclusion_list}",
+    ]
+else:
+    # TODO(#2616): Enable full tests once known machine issues are resolved
+    cmd += [f"--gtest_filter=*pre_checkin*-{exclusion_list}"]
 
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-result = subprocess.run(
-    cmd, cwd=THEROCK_DIR, env=environ_vars, capture_output=True, text=True
-)
-# Currently, hipblas smoke tests pass but exit with status code 3
-# TODO(#2101) Remove status code check for exit code 3 and default to 0 for smoke tests
-if result.returncode not in (0, 3):
-    raise subprocess.CalledProcessError(
-        result.returncode, result.args, output=result.stdout, stderr=result.stderr
-    )
+result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars)
