@@ -29,6 +29,10 @@ do_update_alternatives(){
         update-alternatives --remove "$i" \
             "$PKG_INSTALL_PREFIX/bin/$i"
     done
+
+    # Remove /opt/rocm/core soft link
+    update-alternatives --remove "core" "$PKG_INSTALL_PREFIX"
+    update-alternatives --remove "core-{{ version_major }}" "$PKG_INSTALL_PREFIX"
 }
 
 if [ -e /etc/os-release ] && source /etc/os-release && is_debian_like "${ID_LIKE:-$ID}"
