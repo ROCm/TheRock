@@ -380,17 +380,27 @@ def matrix_generator(
     # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
     selected_test_names = []
 
+    # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
+    # instead of just presubmit jobs (as for other branches)
+    is_long_lived_branch = False
+    # Let's differentiate between full/complete matches and prefix matches for long-lived branches
+    long_lived_full_match = ["main"]
+    long_livest_prefix_match = ["release/therock-"]
+    if base_args.get("branch_name") in long_lived_full_match or any(
+        base_args.get("branch_name", "").startswith(prefix)
+        for prefix in long_livest_prefix_match
+    ):
+        is_long_lived_branch = True
+
     # Determine which trigger types are active for proper matrix lookup
     active_trigger_types = []
     if is_pull_request:
         active_trigger_types.append("presubmit")
     if is_push:
-        if base_args.get("branch_name") == "main" or base_args.get(
-            "branch_name"
-        ).startswith("release/therock-"):
+        if is_long_lived_branch:
             active_trigger_types.extend(["presubmit", "postsubmit"])
         else:
-            # Non-main branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
+            # Non-long-lived branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
             active_trigger_types.append("presubmit")
     if is_schedule:
         active_trigger_types.extend(["presubmit", "postsubmit", "nightly"])
@@ -486,7 +496,7 @@ def matrix_generator(
 
     if is_push:
         branch_name = base_args.get("branch_name")
-        if branch_name == "main" or branch_name.startswith("release/therock-"):
+        if is_long_lived_branch:
             print(
                 f"[PUSH - {branch_name.upper()}] Generating build matrix with {str(base_args)}"
             )
@@ -501,7 +511,7 @@ def matrix_generator(
                 f"[PUSH - {branch_name}] Generating build matrix with {str(base_args)}"
             )
 
-            # Non-main branch pushes use presubmit targets
+            # Non-long-lived branch pushes use presubmit targets
             for target in get_all_families_for_trigger_types(["presubmit"]):
                 selected_target_names.append(target)
 
@@ -720,13 +730,9 @@ if __name__ == "__main__":
 
     # For now, add default run for gfx94X-linux
     base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
-    #  We only want the branch name portion of GITHUB_REF
-    # e.g. origin/main -> main or refs/heads/release/therock-7.10 -> release/therock-7.10
-    branch = os.environ.get("GITHUB_REF")
-    if branch.startswith("refs/heads/"):
-        base_args["branch_name"] = branch.removeprefix("refs/heads/")
-    else:
-        base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
+    branch = os.environ.get("GITHUB_REF_NAME", "")
+    if branch == "":
+        print("[WARNING] GITHUB_REF_NAME is not set!", file=sys.stderr)
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
