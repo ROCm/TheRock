@@ -5,11 +5,11 @@
 [submodule "HIPIFY"]
 	path = compiler/hipify
 	url = https://github.com/ROCm/HIPIFY.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "rccl"]
 	path = comm-libs/rccl
 	url = https://github.com/ROCm/rccl.git
@@ -36,7 +36,7 @@
 [submodule "spirv-llvm-translator"]
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
-	branch = amd-mainline
+	branch = amd-staging
 [submodule "amd-mesa"]
 	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
 	url = https://github.com/ROCm/mesa-fork.git
