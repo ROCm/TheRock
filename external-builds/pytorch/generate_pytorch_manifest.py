@@ -82,18 +82,80 @@ def main() -> None:
         default=None,
         help="Directory to write manifest into (default: <output-dir>/manifests)",
     )
+
     ap.add_argument(
         "--artifact-group",
         default="pytorch-wheels",
         help="Manifest artifact_group label",
     )
-    ap.add_argument("--rocm-sdk-version", default=None)
-    ap.add_argument("--pytorch-rocm-arch", default=None)
-    ap.add_argument("--version-suffix", default=None)
-    ap.add_argument("--pytorch-dir", type=Path, default=None)
-    ap.add_argument("--pytorch-audio-dir", type=Path, default=None)
-    ap.add_argument("--pytorch-vision-dir", type=Path, default=None)
-    ap.add_argument("--triton-dir", type=Path, default=None)
+
+    ap.add_argument(
+        "--rocm-sdk-version",
+        default=None,
+        help=(
+            "ROCm SDK version used during the build (e.g. '7.10.0a20251124'). "
+            "This reflects the ROCm runtime/toolchain the wheels were built against."
+        ),
+    )
+
+    ap.add_argument(
+        "--pytorch-rocm-arch",
+        default=None,
+        help=(
+            "ROCm GPU architecture(s) used for the PyTorch build "
+            "(typically the value passed via PYTORCH_ROCM_ARCH, e.g. 'gfx94X')."
+        ),
+    )
+
+    ap.add_argument(
+        "--version-suffix",
+        default=None,
+        help=(
+            "Version suffix appended to built Python package versions "
+            "(e.g. '+rocm7.10.0a20251124'). This is applied by the build system "
+            "and recorded here for traceability; it is not parsed from wheel filenames."
+        ),
+    )
+
+    ap.add_argument(
+        "--pytorch-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the PyTorch source checkout used for the build. "
+            "If provided, the manifest records the git commit and remote for provenance."
+        ),
+    )
+
+    ap.add_argument(
+        "--pytorch-audio-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the torchaudio source checkout used for the build. "
+            "Recorded in the manifest for source-level traceability."
+        ),
+    )
+
+    ap.add_argument(
+        "--pytorch-vision-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the torchvision source checkout used for the build. "
+            "Recorded in the manifest for source-level traceability."
+        ),
+    )
+
+    ap.add_argument(
+        "--triton-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the Triton source checkout used for the build (if applicable). "
+            "When provided, git metadata is captured in the manifest."
+        ),
+    )
     args = ap.parse_args()
 
     output_dir = args.output_dir.resolve()
