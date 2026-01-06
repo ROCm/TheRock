@@ -5,7 +5,6 @@ Tests MIOpenDriver convolution operations (Forward and Backward) to ensure
 correct functionality across different GPU architectures.
 """
 
-import os
 import re
 import shlex
 import subprocess
@@ -26,10 +25,9 @@ class MIOpenDriverConvTest(FunctionalBase):
 
     def __init__(self):
         super().__init__(
-            test_name="miopen_driver_conv",
-            display_name="MIOpen Driver Convolution"
+            test_name="miopen_driver_conv", display_name="MIOpen Driver Convolution"
         )
-        
+
         self.log_file = self.script_dir / "miopendriver_conv.log"
 
         # Load test configurations from JSON
@@ -38,13 +36,11 @@ class MIOpenDriverConvTest(FunctionalBase):
         # Parse test suites
         test_suites = config.get("test_suites", {})
         self.tests_cmd = {}
-        self.envs = {}
         self.tests_list = []
 
         for suite_name, suite_config in test_suites.items():
             self.tests_list.append(suite_name)
             self.tests_cmd[suite_name] = suite_config.get("commands", [])
-            self.envs[suite_name] = suite_config.get("algorithm", "")
 
         # Load GPU-specific flags
         self.gpu_specific_flags = config.get("gpu_specific_flags", {})
@@ -60,7 +56,7 @@ class MIOpenDriverConvTest(FunctionalBase):
         if not Path(miopen_driver).exists():
             raise TestExecutionError(
                 f"MIOpenDriver not found at {miopen_driver}",
-                action="Ensure MIOpen is installed correctly"
+                action="Ensure MIOpen is installed correctly",
             )
 
         with open(self.log_file, "w+") as f:
@@ -70,17 +66,18 @@ class MIOpenDriverConvTest(FunctionalBase):
                 f.write(f"Test Suite: {test_suite}\n")
                 f.write(f"{'='*80}\n\n")
 
-                # Set environment variable for specific algorithm
-                env = os.environ.copy()
-                env['MIOPEN_FIND_ENFORCE'] = self.envs[test_suite]
-
                 for cmd_str in self.tests_cmd[test_suite]:
                     # Build full command with MIOpenDriver path
                     full_cmd = f"{miopen_driver} {cmd_str}"
-                    
+
                     # Add GPU-specific flags if needed
-                    if 'Backward_Conv' in test_suite and gpu_id in self.gpu_specific_flags:
-                        backward_flags = self.gpu_specific_flags[gpu_id].get("backward_flags", "")
+                    if (
+                        "Backward_Conv" in test_suite
+                        and gpu_id in self.gpu_specific_flags
+                    ):
+                        backward_flags = self.gpu_specific_flags[gpu_id].get(
+                            "backward_flags", ""
+                        )
                         if backward_flags:
                             full_cmd = f"{full_cmd} {backward_flags}"
 
@@ -98,7 +95,6 @@ class MIOpenDriverConvTest(FunctionalBase):
                             stderr=subprocess.STDOUT,
                             text=True,
                             bufsize=1,
-                            env=env
                         )
 
                         for line in process.stdout:
@@ -124,11 +120,7 @@ class MIOpenDriverConvTest(FunctionalBase):
 
         # Setup detailed table - show each individual test case
         detailed_table = PrettyTable()
-        detailed_table.field_names = [
-            "TestSuite",
-            "TestCase",
-            "Status"
-        ]
+        detailed_table.field_names = ["TestSuite", "TestCase", "Status"]
 
         test_results = []
 
@@ -140,39 +132,44 @@ class MIOpenDriverConvTest(FunctionalBase):
             for test_suite in self.tests_list:
                 # Find the section for this test suite
                 pattern = re.compile(
-                    rf"Test Suite: {test_suite}.*?(?=Test Suite:|$)",
-                    re.DOTALL
+                    rf"Test Suite: {test_suite}.*?(?=Test Suite:|$)", re.DOTALL
                 )
                 match = pattern.search(content)
-                
+
                 if not match:
                     log.warning(f"Could not find results for {test_suite}")
                     continue
 
                 suite_content = match.group(0)
-                
+
                 # Parse each command in the suite
                 for i, cmd_str in enumerate(self.tests_cmd[test_suite], 1):
                     # Build the command pattern to search for
                     miopen_driver = f"{self.therock_bin_dir}/MIOpenDriver"
                     full_cmd = f"{miopen_driver} {cmd_str}"
                     test_case_name = f"{test_suite}_case{i}"
-                    
+
                     # Find this specific command in the suite content
                     cmd_pattern = re.escape(f"Command: {full_cmd}")
                     cmd_match = re.search(cmd_pattern, suite_content)
-                    
+
                     if cmd_match:
                         # Extract content after this command until next command or end
                         start_pos = cmd_match.end()
-                        next_cmd_match = re.search(r"\nCommand:", suite_content[start_pos:])
+                        next_cmd_match = re.search(
+                            r"\nCommand:", suite_content[start_pos:]
+                        )
                         if next_cmd_match:
-                            cmd_section = suite_content[start_pos:start_pos + next_cmd_match.start()]
+                            cmd_section = suite_content[
+                                start_pos : start_pos + next_cmd_match.start()
+                            ]
                         else:
                             cmd_section = suite_content[start_pos:]
-                        
+
                         # Check return code in THIS command's section only
-                        return_code_match = re.search(r"Return code:\s*(\d+)", cmd_section)
+                        return_code_match = re.search(
+                            r"Return code:\s*(\d+)", cmd_section
+                        )
                         if return_code_match:
                             return_code = int(return_code_match.group(1))
                             status = "PASS" if return_code == 0 else "FAIL"
@@ -186,11 +183,7 @@ class MIOpenDriverConvTest(FunctionalBase):
                         status = "FAIL"  # Command not found in log
 
                     # Add each individual test case to detailed table
-                    detailed_table.add_row([
-                        test_suite,
-                        test_case_name,
-                        status
-                    ])
+                    detailed_table.add_row([test_suite, test_case_name, status])
 
                     # Add each test case to results list using helper
                     test_results.append(
@@ -200,19 +193,19 @@ class MIOpenDriverConvTest(FunctionalBase):
                             status=status,
                             suite=test_suite,
                             command_index=i,
-                            command=cmd_str
+                            command=cmd_str,
                         )
                     )
 
         except FileNotFoundError:
             raise TestExecutionError(
                 f"Log file not found: {self.log_file}",
-                action="Ensure tests were executed successfully"
+                action="Ensure tests were executed successfully",
             )
         except OSError as e:
             raise TestExecutionError(
                 f"Error reading log file: {e}",
-                action="Check file permissions and disk space"
+                action="Check file permissions and disk space",
             )
 
         num_suites = len(self.tests_list)

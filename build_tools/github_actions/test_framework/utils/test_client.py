@@ -21,7 +21,7 @@ from .results import ResultsHandler
 
 class TestClient:
     """Client for system detection, result collection, and API upload.
-    
+
     Used by all test types (benchmark, performance, functional) for:
     - System information detection (OS, hardware, ROCm)
     - Test result collection and formatting

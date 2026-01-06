@@ -7,7 +7,9 @@ This module contains the functional_matrix dictionary which defines all function
 from pathlib import Path
 
 # Note: these paths are relative to the repository root.
-SCRIPT_DIR = Path("build_tools") / "github_actions" / "test_framework" / "functional" / "scripts"
+SCRIPT_DIR = (
+    Path("build_tools") / "github_actions" / "test_framework" / "functional" / "scripts"
+)
 
 
 def _get_script_path(script_name: str) -> str:
@@ -27,6 +29,6 @@ functional_matrix = {
         "test_script": f"python {_get_script_path('test_rocrand_benchmark.py')}",
         # TODO(lajagapp): Add windows support
         "platform": ["linux"],
-        "total_shards": 1
+        "total_shards": 1,
     },
 }

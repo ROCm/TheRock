@@ -5,6 +5,7 @@ Regression detection tests that compare current performance against Last Known G
 ## Purpose
 
 Benchmark tests detect **performance regressions** by comparing test results against established baselines:
+
 - **Result:** PASS (within tolerance) / FAIL (regression detected) / UNKNOWN (no baseline)
 - **Frequency:** Every nightly CI
 - **Use Case:** Automated CI gates to prevent performance degradation
@@ -13,12 +14,12 @@ Benchmark tests detect **performance regressions** by comparing test results aga
 
 ### Available Benchmark Tests
 
-| Test Script | Library | Description |
-|-------------|---------|-------------|
+| Test Script                   | Library   | Description                             |
+| ----------------------------- | --------- | --------------------------------------- |
 | `test_hipblaslt_benchmark.py` | hipBLASLt | Matrix multiplication benchmarks (GEMM) |
-| `test_rocfft_benchmark.py` | rocFFT | FFT benchmarks (1D, 2D, 3D transforms) |
-| `test_rocrand_benchmark.py` | rocRAND | Random number generation benchmarks |
-| `test_rocsolver_benchmark.py` | ROCsolver | Dense linear algebra benchmarks |
+| `test_rocfft_benchmark.py`    | rocFFT    | FFT benchmarks (1D, 2D, 3D transforms)  |
+| `test_rocrand_benchmark.py`   | rocRAND   | Random number generation benchmarks     |
+| `test_rocsolver_benchmark.py` | ROCsolver | Dense linear algebra benchmarks         |
 
 ### Running Locally
 
@@ -56,12 +57,12 @@ benchmark/
 
 Tests defined in `benchmark_matrix.py` for nightly CI:
 
-| Test Name | Library | Platform | Timeout | Artifacts Needed |
-|-----------|---------|----------|---------|------------------|
-| `hipblaslt_bench` | hipBLASLt | Linux | 60 min | `--blas --tests` |
-| `rocfft_bench` | rocFFT | Linux | 60 min | `--fft --rand --tests` |
-| `rocrand_bench` | rocRAND | Linux | 60 min | `--rand --tests` |
-| `rocsolver_bench` | ROCsolver | Linux | 60 min | `--blas --tests` |
+| Test Name         | Library   | Platform | Timeout | Artifacts Needed       |
+| ----------------- | --------- | -------- | ------- | ---------------------- |
+| `hipblaslt_bench` | hipBLASLt | Linux    | 60 min  | `--blas --tests`       |
+| `rocfft_bench`    | rocFFT    | Linux    | 60 min  | `--fft --rand --tests` |
+| `rocrand_bench`   | rocRAND   | Linux    | 60 min  | `--rand --tests`       |
+| `rocsolver_bench` | ROCsolver | Linux    | 60 min  | `--blas --tests`       |
 
 ## How Benchmark Tests Work
 
@@ -106,24 +107,24 @@ Tests defined in `benchmark_matrix.py` for nightly CI:
 ```python
 # Pseudocode
 current_score = 42.5  # TFLOPS
-lkg_baseline = 45.0   # TFLOPS from last successful run
-tolerance = 0.05      # 5% tolerance
+lkg_baseline = 45.0  # TFLOPS from last successful run
+tolerance = 0.05  # 5% tolerance
 
 if current_score < lkg_baseline * (1 - tolerance):
-    result = "FAIL"   # Performance regression!
+    result = "FAIL"  # Performance regression!
 elif lkg_baseline is None:
     result = "UNKNOWN"  # No baseline data yet
 else:
-    result = "PASS"   # Performance acceptable
+    result = "PASS"  # Performance acceptable
 ```
 
 ### 3. Result Statuses
 
-| Status | Meaning | Action |
-|--------|---------|--------|
-| **PASS** | Performance within tolerance of baseline | ✅ CI passes |
-| **FAIL** | Performance degraded beyond tolerance | ❌ CI fails, blocks merge |
-| **UNKNOWN** | No baseline data available (new test) | ⚠️ CI passes, baseline established |
+| Status      | Meaning                                  | Action                             |
+| ----------- | ---------------------------------------- | ---------------------------------- |
+| **PASS**    | Performance within tolerance of baseline | ✅ CI passes                       |
+| **FAIL**    | Performance degraded beyond tolerance    | ❌ CI fails, blocks merge          |
+| **UNKNOWN** | No baseline data available (new test)    | ⚠️ CI passes, baseline established |
 
 ## Adding a New Benchmark
 
@@ -148,29 +149,26 @@ from utils.logger import log
 
 class YourLibBenchmark(BenchmarkBase):
     """Benchmark tests for YourLib library."""
-    
+
     def __init__(self):
-        super().__init__(
-            benchmark_name="yourlib",
-            display_name="YourLib"
-        )
+        super().__init__(benchmark_name="yourlib", display_name="YourLib")
         self.benchmark_bin = "yourlib-bench"
         self.log_file = self.script_dir / "yourlib_bench.log"
-    
+
     def run_benchmarks(self) -> None:
         """Execute benchmark binary and log output."""
         # Your benchmark execution logic
         # Use self.run_command() to execute binaries
         pass
-    
+
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
         """Parse log file and return (test_results, results_table)."""
         test_results = []
         table = PrettyTable()
-        
+
         # Your parsing logic
         # Use self.create_test_result() to build result dictionaries
-        
+
         return test_results, table
 
 
@@ -193,7 +191,6 @@ Edit `benchmark_matrix.py`:
 },
 ```
 
-
 ### Step 3: Test Locally
 
 ```bash
@@ -209,13 +206,12 @@ python scripts/test_yourlib_benchmark.py
 Benchmark tests automatically run in nightly CI:
 
 1. **Trigger:** Nightly scheduled run
-2. **Execution:** Parallel with regular tests
-3. **Matrix:** Generated from `benchmark_matrix.py`
-4. **Runners:** Dedicated GPU runners (if configured)
-5. **Results:** Uploaded to results API, compared with LKG
+1. **Execution:** Parallel with regular tests
+1. **Matrix:** Generated from `benchmark_matrix.py`
+1. **Runners:** Dedicated GPU runners (if configured)
+1. **Results:** Uploaded to results API, compared with LKG
 
 See [main test framework README](../README.md) for full CI architecture.
-
 
 ## Related Documentation
 
@@ -223,4 +219,3 @@ See [main test framework README](../README.md) for full CI architecture.
 - [Shared Utils](../utils/README.md) - Utility modules reference
 - [Performance Tests](../performance/) - Performance characterization tests
 - [Functional Tests](../functional/) - Correctness validation tests
-

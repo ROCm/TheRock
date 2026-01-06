@@ -88,6 +88,7 @@ python test_framework/functional/scripts/test_rocblas_functional.py
 ### Available Tests
 
 **Benchmark Tests:**
+
 - `test_hipblaslt_benchmark.py` - hipBLASLt GEMM benchmarks
 - `test_rocfft_benchmark.py` - rocFFT transform benchmarks
 - `test_rocrand_benchmark.py` - rocRAND generation benchmarks
@@ -188,7 +189,6 @@ ci_nightly.yml → ci_linux.yml
 
 ```
 
-
 ### Workflow Integration Details
 
 ```
@@ -259,25 +259,25 @@ ci_nightly.yml → ci_linux.yml
 See detailed guide in [benchmark/README.md](benchmark/README.md#adding-a-new-benchmark)
 
 Quick steps:
+
 1. Create `benchmark/scripts/test_yourlib_benchmark.py`
-2. Inherit from `BenchmarkBase`, implement `run_benchmarks()` and `parse_results()`
-3. Add to `benchmark/benchmark_matrix.py`
-4. Test locally
+1. Inherit from `BenchmarkBase`, implement `run_benchmarks()` and `parse_results()`
+1. Add to `benchmark/benchmark_matrix.py`
+1. Test locally
 
 ### Adding a Performance Test
 
 1. Create `performance/scripts/test_yourlib_performance.py`
-2. Inherit from `PerformanceRunner` (to be implemented)
-3. Implement metrics collection and analysis
-4. Add to `performance/performance_matrix.py`
+1. Inherit from `PerformanceRunner` (to be implemented)
+1. Implement metrics collection and analysis
+1. Add to `performance/performance_matrix.py`
 
 ### Adding a Functional Test
 
 1. Create `functional/scripts/test_yourlib_functional.py`
-2. Inherit from `FunctionalRunner` (to be implemented)
-3. Implement validation logic
-4. Add to `functional/functional_matrix.py`
-
+1. Inherit from `FunctionalRunner` (to be implemented)
+1. Implement validation logic
+1. Add to `functional/functional_matrix.py`
 
 ### Getting Help
 
@@ -286,7 +286,6 @@ Quick steps:
 - **Performance tests:** See `performance/README.md` (to be created)
 - **Functional tests:** See `functional/README.md` (to be created)
 - **Utilities:** See [utils/README.md](utils/README.md)
-
 
 ## Related Files
 

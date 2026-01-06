@@ -22,7 +22,7 @@ class FunctionalBase:
     """Base class providing common functional test logic.
 
     Child classes must implement run_tests() and parse_results().
-    
+
     Unlike benchmarks (which measure performance), functional tests verify
     correctness and produce pass/fail results without performance metrics.
     """
@@ -35,7 +35,7 @@ class FunctionalBase:
             display_name: Display name for reports (e.g., 'MIOpen Driver Convolution')
         """
         self.test_name = test_name
-        self.display_name = display_name or test_name.replace('_', ' ').title()
+        self.display_name = display_name or test_name.replace("_", " ").title()
 
         # Environment variables
         self.therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
@@ -67,12 +67,12 @@ class FunctionalBase:
         except FileNotFoundError:
             raise TestExecutionError(
                 f"Configuration file not found: {config_file}",
-                action=f"Ensure {config_filename} exists in configs/ directory"
+                action=f"Ensure {config_filename} exists in configs/ directory",
             )
         except json.JSONDecodeError as e:
             raise TestExecutionError(
                 f"Invalid JSON in configuration file: {e}",
-                action=f"Check JSON syntax in {config_filename}"
+                action=f"Check JSON syntax in {config_filename}",
             )
 
     def create_test_result(
@@ -127,7 +127,7 @@ class FunctionalBase:
         failed = sum(1 for r in test_results if r.get("status") == "FAIL")
         error = sum(1 for r in test_results if r.get("status") == "ERROR")
         skipped = sum(1 for r in test_results if r.get("status") == "SKIP")
-        
+
         # Overall status: PASS only if no failures/errors
         overall_status = "PASS" if (failed == 0 and error == 0) else "FAIL"
 
@@ -144,11 +144,11 @@ class FunctionalBase:
         self, stats: Dict[str, Any], num_suites: int
     ) -> PrettyTable:
         """Create overall summary table with all statistics.
-        
+
         Args:
             stats: Test statistics dictionary
             num_suites: Number of test suites
-            
+
         Returns:
             PrettyTable with summary statistics
         """
@@ -160,30 +160,36 @@ class FunctionalBase:
             "Failed",
             "Errored",
             "Skipped",
-            "Final Result"
+            "Final Result",
         ]
-        
-        summary_table.add_row([
-            num_suites,
-            stats["total"],
-            stats["passed"],
-            stats["failed"],
-            stats["error"],
-            stats["skipped"],
-            stats["overall_status"]
-        ])
-        
+
+        # Set consistent column width for uniform appearance
+        for field in summary_table.field_names:
+            summary_table.min_width[field] = 17
+
+        summary_table.add_row(
+            [
+                num_suites,
+                stats["total"],
+                stats["passed"],
+                stats["failed"],
+                stats["error"],
+                stats["skipped"],
+                stats["overall_status"],
+            ]
+        )
+
         return summary_table
 
     def upload_results(
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
     ) -> bool:
         """Upload results to API and save locally.
-        
+
         Args:
             test_results: List of test result dictionaries
             stats: Test statistics dictionary
-            
+
         Returns:
             True if upload successful, False otherwise
         """
@@ -207,43 +213,34 @@ class FunctionalBase:
         )
 
         if success:
-            log.info("✓ Results uploaded successfully")
+            log.info("Results uploaded successfully")
         else:
-            log.info("⚠ Results saved locally only (API upload disabled or failed)")
+            log.info("Results saved locally only (API upload disabled or failed)")
 
         return success
 
     def write_step_summary(
-        self, stats: Dict[str, Any], detailed_table: PrettyTable, summary_table: PrettyTable
+        self, stats: Dict[str, Any], summary_table: PrettyTable
     ) -> None:
         """Write results to GitHub Actions step summary.
-        
+
         Args:
             stats: Test statistics dictionary
-            detailed_table: PrettyTable with detailed test results
             summary_table: PrettyTable with summary statistics
         """
         gha_append_step_summary(
             f"## {self.display_name} - Functional Test Results\n\n"
-            f"### Detailed Results\n\n"
-            f"```\n{detailed_table}\n```\n\n"
-            f"<details>\n"
-            f"<summary>View summary ({stats['total']} tests)</summary>\n\n"
-            f"```\n{summary_table}\n```\n\n"
-            f"</details>"
+            f"```\n{summary_table}\n```\n"
         )
 
     def get_gpu_id(self) -> str:
         """Detect GPU ID using rocminfo."""
         try:
             result = subprocess.run(
-                ["rocminfo"],
-                capture_output=True,
-                text=True,
-                check=True
+                ["rocminfo"], capture_output=True, text=True, check=True
             )
-            # Extract GPU name (e.g., gfx906, gfx90a, gfx942)
-            match = re.search(r'Name:\s+(gfx\w+)', result.stdout)
+            # Extract GPU name (e.g., gfx90a, gfx942)
+            match = re.search(r"Name:\s+(gfx\w+)", result.stdout)
             if match:
                 return match.group(1)
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -252,7 +249,7 @@ class FunctionalBase:
 
     def run(self) -> int:
         """Execute functional test workflow and return exit code (0=PASS, 1=FAIL).
-        
+
         Returns:
             0 if all tests passed, 1 if any test failed
         """
@@ -271,19 +268,19 @@ class FunctionalBase:
         if not test_results:
             raise TestExecutionError(
                 "No test results generated",
-                action="Check if tests executed properly and log file contains output"
+                action="Check if tests executed properly and log file contains output",
             )
 
         # Calculate statistics
         stats = self.calculate_statistics(test_results)
-        
+
         # Create summary table
         summary_table = self.create_summary_table(stats, num_suites)
 
         # Display results
         log.info("DETAILED RESULTS")
         log.info(f"\n{detailed_table}")
-        
+
         log.info("\nSUMMARY")
         log.info(f"\n{summary_table}")
         log.info(f"\nFinal Status: {stats['overall_status']}")
@@ -296,7 +293,7 @@ class FunctionalBase:
 
         # Write to GitHub Actions step summary
         try:
-            self.write_step_summary(stats, detailed_table, summary_table)
+            self.write_step_summary(stats, summary_table)
         except Exception as e:
             log.warning(f"Could not write GitHub Actions summary: {e}")
 
@@ -321,5 +318,6 @@ def run_functional_test_main(test_instance):
     except Exception as e:
         log.error(f"Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         raise
