@@ -23,3 +23,15 @@ therock_cmake_subproject_provide_package(therock-dyninst Dyninst lib/cmake)
 therock_cmake_subproject_activate(therock-dyninst)
 
 add_dependencies(therock-third-party therock-dyninst)
+
+therock_provide_artifact(dyninst
+  DESCRIPTOR artifact_dyninst.toml
+  TARGET_NEUTRAL
+  COMPONENTS
+    dbg
+    dev
+    lib
+    run
+  SUBPROJECT_DEPS
+    therock-dyninst
+)

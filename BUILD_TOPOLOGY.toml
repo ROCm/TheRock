@@ -300,6 +300,13 @@ artifact_deps = ["sysdeps"]
 feature_group = "MEDIA"
 disable_platforms = ["windows"]
 
+[artifacts.dyninst]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"

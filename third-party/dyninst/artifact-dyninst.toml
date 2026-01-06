@@ -1,0 +1,5 @@
+# dyninst
+[components.dbg."third-party/dyninst/stage"]
+[components.dev."third-party/dyninst/stage"]
+[components.lib."third-party/dyninst/stage"]
+[components.run."third-party/dyninst/stage"]
