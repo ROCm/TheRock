@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
 
 def is_windows():
     return "windows" == platform.system().lower()
@@ -125,6 +127,10 @@ class TestROCmSanity:
         check.is_true(output)
 
     @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
+    # TODO(#2789): Remove skip once amdsmi supports gfx1151
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
     def test_amdsmi_suite(self):
         amdsmi_test_bin = (
             THEROCK_BIN_DIR.parent / "share" / "amd_smi" / "tests" / "amdsmitst"

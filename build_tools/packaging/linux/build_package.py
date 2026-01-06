@@ -763,7 +763,8 @@ def update_package_name(pkg_name, config: PackageConfig):
     if config.enable_rpath:
         pkg_suffix = f"-rpath{pkg_suffix}"
 
-    if check_for_gfxarch(pkg_name):
+    pkg_info = get_package_info(pkg_name)
+    if is_gfxarch_package(pkg_info):
         # Remove -dcgpu from gfx_arch
         gfx_arch = config.gfx_arch.lower().split("-", 1)[0]
         pkg_name = pkg_name + pkg_suffix + "-" + gfx_arch
@@ -838,10 +839,7 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
     pkg_info = get_package_info(pkg_name)
     sourcedir_list = []
 
-    if is_key_defined(pkg_info, "Gfxarch"):
-        artifact_suffix = gfx_arch
-    else:
-        artifact_suffix = "generic"
+    dir_suffix = gfx_arch if is_gfxarch_package(pkg_info) else "generic"
 
     artifactory = pkg_info.get("Artifactory")
     if artifactory is None:
@@ -852,6 +850,16 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
 
     for artifact in artifactory:
         artifact_prefix = artifact["Artifact"]
+        # Package specific key: "Gfxarch"
+        # Artifact specific key: "Artifact_Gfxarch"
+        # If "Artifact_Gfxarch" key is specified use it for artifact directory suffix
+        # Else use the package "Gfxarch" for finding the suffix
+        if "Artifact_Gfxarch" in artifact:
+            print(f"{pkg_name} : Artifact_Gfxarch key exists for artifacts {artifact}")
+            is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
+            artifact_suffix = gfx_arch if is_gfxarch else "generic"
+        else:
+            artifact_suffix = dir_suffix
 
         for subdir in artifact["Artifact_Subdir"]:
             artifact_subdir = subdir["Name"]
