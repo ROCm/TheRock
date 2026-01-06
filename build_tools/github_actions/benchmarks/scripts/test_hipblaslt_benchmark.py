@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
+from utils.exceptions import BenchmarkExecutionError
 
 
 class HipblasltBenchmark(BenchmarkBase):
@@ -193,7 +194,10 @@ class HipblasltBenchmark(BenchmarkBase):
                     break
 
             if not header_line or header_index == -1:
-                log.warning("CSV header not found in log file")
+                log.warning(
+                    f"No CSV header in {self.log_file.name} - "
+                    f"benchmark may have crashed or failed"
+                )
                 return test_results, table
 
             for line in data[header_index + 1 :]:
@@ -261,10 +265,18 @@ class HipblasltBenchmark(BenchmarkBase):
                 )
 
         except FileNotFoundError:
-            log.error(f"Log file not found: {self.log_file}")
+            log.error(
+                f"Log file missing: {self.log_file} "
+                f"(binary likely failed to execute)"
+            )
+            # Return empty results - triggers BenchmarkExecutionError in run()
         except OSError as e:
-            log.error(f"Failed to read log file: {e}")
-            raise
+            log.error(f"Failed to read {self.log_file}: {e}")
+            raise BenchmarkExecutionError(
+                f"File I/O error: {e}\n"
+                f"Log: {self.log_file}\n"
+                f"Check permissions/disk space"
+            )
 
         return test_results, table
 

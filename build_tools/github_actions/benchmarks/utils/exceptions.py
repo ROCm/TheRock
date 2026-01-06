@@ -49,3 +49,37 @@ class RequirementNotMetError(FrameworkException):
     """System requirements not met (GPU, ROCm, minimum specs)."""
 
     pass
+
+
+class BenchmarkExecutionError(FrameworkException):
+    """Benchmark execution or parsing failure (infrastructure/setup issue).
+
+    Raised when benchmarks fail to run or results cannot be parsed.
+
+    Common causes:
+        - Binary not found or crashed during execution
+        - Log parsing failed (missing CSV headers/data)
+        - File I/O errors (permissions, disk space)
+        - Configuration errors
+
+    This is NOT a performance issue - the benchmark itself failed to execute properly.
+    """
+
+    pass
+
+
+class BenchmarkResultError(FrameworkException):
+    """Benchmark result validation failure (test/performance issue).
+
+    Raised when benchmarks execute successfully but results show failures.
+
+    Common causes:
+        - Performance regression detected (FAIL status)
+        - Missing baseline data (UNKNOWN status)
+        - Result validation errors
+        - Missing expected result columns
+
+    The benchmark executed successfully - this indicates a test failure or missing data.
+    """
+
+    pass

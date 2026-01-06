@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
 from utils import BenchmarkClient
 from utils.logger import log
+from utils.exceptions import BenchmarkExecutionError, BenchmarkResultError
 from github_actions_utils import gha_append_step_summary
 
 
@@ -172,10 +173,21 @@ class BenchmarkBase:
             f"</details>"
         )
 
-    def determine_final_status(self, final_table: PrettyTable) -> str:
-        """Determine final test status from results table."""
+    def determine_final_status(
+        self, final_table: PrettyTable
+    ) -> tuple[str, bool, bool]:
+        """Determine final test status from results table.
+
+        Returns:
+            tuple: (final_status, has_fail, has_unknown)
+        """
         if "FinalResult" not in final_table.field_names:
-            raise ValueError("The table does not have a 'FinalResult' column.")
+            raise BenchmarkResultError(
+                f"❌ {self.display_name} results missing 'FinalResult' column\n\n"
+                f"Issue: LKG comparison failed to add FinalResult column\n"
+                f"Available: {', '.join(final_table.field_names)}\n\n"
+                f"⚠️  This is a framework bug - please report with full logs"
+            )
 
         final_result_index = final_table.field_names.index("FinalResult")
         has_fail = any(row[final_result_index] == "FAIL" for row in final_table._rows)
@@ -190,7 +202,7 @@ class BenchmarkBase:
                 "Some results have UNKNOWN status (no LKG data available for comparison)"
             )
 
-        return final_status
+        return final_status, has_fail, has_unknown
 
     def run(self) -> int:
         """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
@@ -207,8 +219,19 @@ class BenchmarkBase:
         test_results, table = self.parse_results()
 
         if not test_results:
-            log.error("No test results found")
-            return 1
+            log.error("No test results found - benchmark execution or parsing failed")
+            raise BenchmarkExecutionError(
+                f"❌ {self.display_name} benchmark produced no results\n\n"
+                f"Possible causes:\n"
+                f"  • Binary crashed or not found\n"
+                f"  • Log parsing failed (no CSV output)\n"
+                f"  • All commands returned errors\n\n"
+                f"Check:\n"
+                f"  1. Review command output above for errors\n"
+                f"  2. Verify binaries exist: {self.therock_bin_dir}\n"
+                f"  3. Look for crashes/GPU errors in logs\n\n"
+                f"📖 Docs: build_tools/github_actions/benchmarks/README.md"
+            )
 
         # Calculate statistics
         stats = self.calculate_statistics(test_results)
@@ -224,30 +247,100 @@ class BenchmarkBase:
         self.write_step_summary(stats, final_table)
 
         # Determine final status
-        final_status = self.determine_final_status(final_table)
+        final_status, has_fail, has_unknown = self.determine_final_status(final_table)
         log.info(f"Final Status: {final_status}")
+
+        # Store failure details for error reporting
+        self._has_fail = has_fail
+        self._has_unknown = has_unknown
 
         # Return 0 only if PASS, otherwise return 1
         return 0 if final_status == "PASS" else 1
 
 
 def run_benchmark_main(benchmark_instance):
-    """Run benchmark with standard error handling.
+    """Run benchmark with clear error reporting.
+
+    Raises custom exceptions with actionable error messages for community contributors.
 
     Raises:
+        BenchmarkExecutionError: For execution/parsing failures (infrastructure issues)
+        BenchmarkResultError: For test failures (performance regressions)
         KeyboardInterrupt: If execution is interrupted by user
-        Exception: If benchmark execution fails
     """
     try:
         exit_code = benchmark_instance.run()
         if exit_code != 0:
-            raise RuntimeError(f"Benchmark failed with exit code {exit_code}")
+            # Get failure details
+            has_fail = getattr(benchmark_instance, "_has_fail", False)
+            has_unknown = getattr(benchmark_instance, "_has_unknown", False)
+
+            # Build specific error message based on failure type
+            if has_fail and has_unknown:
+                # Both performance regressions and missing baselines
+                error_msg = (
+                    f"❌ {benchmark_instance.display_name} benchmark: FAIL + UNKNOWN detected\n\n"
+                    f"Results:\n"
+                    f"  • FAIL: Performance regression detected\n"
+                    f"  • UNKNOWN: No baseline for comparison\n\n"
+                    f"Action:\n"
+                    f"  1. Check results table above for FAIL vs UNKNOWN tests\n"
+                    f"  2. Investigate FAIL tests for performance issues\n"
+                    f"  3. UNKNOWN is expected for new benchmarks\n\n"
+                    f"Exit code: {exit_code}"
+                )
+            elif has_fail:
+                # Only performance regressions
+                error_msg = (
+                    f"❌ {benchmark_instance.display_name} benchmark: Performance regression detected\n\n"
+                    f"Status: FAIL\n\n"
+                    f"Action:\n"
+                    f"  1. Review results table above for failing tests\n"
+                    f"  2. Compare scores with baseline values\n"
+                    f"  3. Check if your changes caused the regression\n"
+                    f"  4. Update baselines if regression is expected\n\n"
+                    f"Exit code: {exit_code}"
+                )
+            elif has_unknown:
+                # Only missing baselines
+                error_msg = (
+                    f"⚠️  {benchmark_instance.display_name} benchmark: UNKNOWN status\n\n"
+                    f"Reason: No baseline data available for comparison\n\n"
+                    f"This means:\n"
+                    f"  ✓ Benchmarks executed successfully\n"
+                    f"  ✓ Results generated (see table above)\n"
+                    f"  ⚠️  Cannot determine PASS/FAIL without baseline\n\n"
+                    f"Expected for:\n"
+                    f"  • New benchmarks or configurations\n"
+                    f"  • First run on new GPU family\n"
+                    f"  • Recently added benchmark suites\n\n"
+                    f"Next: Baseline will be established after merge\n\n"
+                    f"Exit code: {exit_code}"
+                )
+            else:
+                # Generic failure (shouldn't happen, but handle it)
+                error_msg = (
+                    f"❌ {benchmark_instance.display_name} benchmark failed\n\n"
+                    f"Exit code: {exit_code}\n\n"
+                    f"Review results table above for details"
+                )
+
+            raise BenchmarkResultError(error_msg)
+
     except KeyboardInterrupt:
-        log.warning("\nExecution interrupted by user")
+        log.warning("\n⚠ Execution interrupted by user")
+        raise
+    except (BenchmarkExecutionError, BenchmarkResultError):
+        # Re-raise our custom exceptions with their clear messages
         raise
     except Exception as e:
-        log.error(f"Execution failed: {e}")
+        # Unexpected errors - show full traceback for debugging
+        log.error(f"❌ Unexpected error: {e}")
         import traceback
 
         traceback.print_exc()
-        raise
+        raise BenchmarkExecutionError(
+            f"💥 Unexpected error in {benchmark_instance.display_name}: {e}\n\n"
+            f"⚠️  Framework bug - see traceback above\n"
+            f"📝 Please report this issue with full logs"
+        )

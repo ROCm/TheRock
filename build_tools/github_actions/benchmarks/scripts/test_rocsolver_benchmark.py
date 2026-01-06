@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
+from utils.exceptions import BenchmarkExecutionError
 
 
 class ROCsolverBenchmark(BenchmarkBase):
@@ -147,8 +148,17 @@ class ROCsolverBenchmark(BenchmarkBase):
                 )
             )
 
+        except FileNotFoundError:
+            log.error(
+                f"Log file not found: {self.log_file}\n"
+                f"This usually means benchmark binaries failed to execute or weren't found."
+            )
+            # Return empty results - will trigger BenchmarkExecutionError in run()
         except OSError as e:
-            raise ValueError(f"IO Error in Score Extractor: {e}")
+            log.error(
+                f"File I/O error while reading {self.log_file}: {e}\n"
+                f"Check file permissions and disk space. Skipping {self.benchmark_name} results."
+            )
 
         return test_results, table
 

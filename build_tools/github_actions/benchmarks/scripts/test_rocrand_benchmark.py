@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
+from utils.exceptions import BenchmarkExecutionError
 
 
 class ROCrandBenchmark(BenchmarkBase):
@@ -47,7 +48,11 @@ class ROCrandBenchmark(BenchmarkBase):
             # Check if binary exists
             bench_path = Path(self.therock_bin_dir) / bench_bin
             if not bench_path.exists():
-                log.error(f"Benchmark binary not found: {bench_bin}")
+                log.error(
+                    f"Binary not found: {bench_bin}\n"
+                    f"Path: {bench_path}\n"
+                    f"Skipping {bench_type}"
+                )
                 continue
 
             # Run benchmark
@@ -180,7 +185,10 @@ class ROCrandBenchmark(BenchmarkBase):
                     )
 
             except OSError as e:
-                log.error(f"IO Error reading {log_file}: {e}")
+                log.error(
+                    f"File I/O error while reading {log_file}: {e}\n"
+                    f"Check file permissions and disk space. Skipping {bench_type} results."
+                )
                 continue
 
         return test_results, table

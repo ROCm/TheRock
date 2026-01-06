@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
+from utils.exceptions import BenchmarkExecutionError
 
 
 class ROCfftBenchmark(BenchmarkBase):
@@ -213,8 +214,19 @@ class ROCfftBenchmark(BenchmarkBase):
                         )
                     )
 
+        except FileNotFoundError:
+            log.error(
+                f"Log file missing: {self.log_file} "
+                f"(binary likely failed to execute)"
+            )
+            # Return empty results - triggers BenchmarkExecutionError in run()
         except OSError as e:
-            raise ValueError(f"IO Error in Score Extractor: {e}")
+            log.error(f"Failed to read {self.log_file}: {e}")
+            raise BenchmarkExecutionError(
+                f"File I/O error: {e}\n"
+                f"Log: {self.log_file}\n"
+                f"Check permissions/disk space"
+            )
 
         return test_results, table
 
