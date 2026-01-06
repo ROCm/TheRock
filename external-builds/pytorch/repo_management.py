@@ -77,7 +77,7 @@ def git_config_ignore_submodules(repo_path: Path):
     """Sets the `submodule.<name>.ignore = true` git config option for all submodules.
 
     This causes all submodules to not show up in status or diff reports, which is
-    appropriate for our case, since we make arbitrary changes and patches to them.
+    appropriate for our case, since we make arbitrary changes to them with hipify.
     Note that pytorch seems to somewhat arbitrarily have some already set this way.
     We just set them all.
     """
