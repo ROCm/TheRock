@@ -1,6 +1,6 @@
 # TheRock Test Framework
 
-Unified testing framework for TheRock ROCm distribution, supporting benchmark, performance, and functional testing with automated execution, system detection, and results management.
+Unified testing framework for TheRock ROCm distribution, supporting benchmark and functional testing with automated execution, system detection, and results management.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ The test framework provides a unified infrastructure for multiple test types:
 
 ### Features
 
-- **Multi-Type Testing** - Benchmark, performance, and functional tests
+- **Multi-Type Testing** - Benchmark and functional tests
 - **Shared Infrastructure** - Common utilities, configuration, and results management
 - **System Auto-Detection** - Hardware, OS, GPU, and ROCm version detection
 - **Results Management** - Local storage (JSON) and API upload with retry logic
@@ -41,29 +41,17 @@ The test framework provides a unified infrastructure for multiple test types:
 
 **See:** [benchmark/README.md](benchmark/README.md)
 
-### 2. Performance Tests (`performance/`)
-
-**Purpose:** Comprehensive performance characterization with detailed metrics and analysis.
-
-- **Result:** Detailed metrics, scaling curves, bottleneck analysis
-- **Comparison:** Current vs hardware specs/targets
-- **Frequency:** Weekly, before releases, on-demand
-- **Use Case:** Performance optimization, hardware characterization
-- **Example:** "Achieved 42.5 TFLOPS (94% of peak)" + scaling analysis
-
-**Status:** Framework ready, tests to be implemented
-
-### 3. Functional Tests (`functional/`)
+### 2. Functional Tests (`functional/`)
 
 **Purpose:** Validate correctness, API contracts, and expected behavior.
 
 - **Result:** PASS/FAIL with detailed error messages
 - **Comparison:** Output vs expected results
-- **Frequency:** Every PR, nightly CI
+- **Frequency:** Every nightly CI
 - **Use Case:** Correctness validation, API testing
 - **Example:** "Matrix multiplication result matches expected output" → PASS
 
-**Status:** Framework ready, tests to be implemented
+**See:** [functional/README.md](functional/README.md)
 
 ## Quick Start
 
@@ -78,11 +66,8 @@ export AMDGPU_FAMILIES=gfx950-dcgpu
 # Run benchmark test
 python test_framework/benchmark/scripts/test_hipblaslt_benchmark.py
 
-# Run performance test (when implemented)
-python test_framework/performance/scripts/test_rocblas_performance.py
-
-# Run functional test (when implemented)
-python test_framework/functional/scripts/test_rocblas_functional.py
+# Run functional test
+python test_framework/functional/scripts/test_miopendriver_conv.py
 ```
 
 ### Available Tests
@@ -94,9 +79,9 @@ python test_framework/functional/scripts/test_rocblas_functional.py
 - `test_rocrand_benchmark.py` - rocRAND generation benchmarks
 - `test_rocsolver_benchmark.py` - ROCsolver linear algebra benchmarks
 
-**Performance Tests:** (to be implemented)
+**Functional Tests:**
 
-**Functional Tests:** (to be implemented)
+- `test_miopendriver_conv.py` - MIOpen driver convolution functional tests
 
 ## Project Structure
 
@@ -118,17 +103,14 @@ test_framework/
 │   ├── benchmark_matrix.py        # CI test matrix
 │   └── README.md                  # Benchmark-specific docs
 │
-├── performance/                    # Performance characterization tests
-│   ├── scripts/                   # Test implementations (to be added)
-│   ├── configs/                   # Test-specific configurations
-│   ├── performance_matrix.py      # CI test matrix
-│   └── README.md                  # (to be created)
-│
 ├── functional/                     # Functional/correctness tests
-│   ├── scripts/                   # Test implementations (to be added)
+│   ├── scripts/                   # Test implementations
+│   │   ├── functional_base.py     # Base class for functional tests
+│   │   └── test_miopendriver_conv.py  # MIOpen convolution tests
 │   ├── configs/                   # Test-specific configurations
+│   │   └── miopen_driver_conv.json
 │   ├── functional_matrix.py       # CI test matrix
-│   └── README.md                  # (to be created)│
+│   └── README.md                  # (to be created)
 │
 └── utils/                          # SHARED utilities for all test types
     ├── exceptions.py              # Custom exception classes
@@ -239,7 +221,6 @@ ci_nightly.yml → ci_linux.yml
 ┌─────────────────────────────────────────┐
 │ 4. Process Results (Type-Specific)      │
 │    Benchmark: Compare with LKG baseline │
-│    Performance: Analyze metrics/trends  │
 │    Functional: Validate correctness     │
 └──────────────┬──────────────────────────┘
                ↓
@@ -258,33 +239,15 @@ ci_nightly.yml → ci_linux.yml
 
 See detailed guide in [benchmark/README.md](benchmark/README.md#adding-a-new-benchmark)
 
-Quick steps:
-
-1. Create `benchmark/scripts/test_yourlib_benchmark.py`
-1. Inherit from `BenchmarkBase`, implement `run_benchmarks()` and `parse_results()`
-1. Add to `benchmark/benchmark_matrix.py`
-1. Test locally
-
-### Adding a Performance Test
-
-1. Create `performance/scripts/test_yourlib_performance.py`
-1. Inherit from `PerformanceRunner` (to be implemented)
-1. Implement metrics collection and analysis
-1. Add to `performance/performance_matrix.py`
-
 ### Adding a Functional Test
 
-1. Create `functional/scripts/test_yourlib_functional.py`
-1. Inherit from `FunctionalRunner` (to be implemented)
-1. Implement validation logic
-1. Add to `functional/functional_matrix.py`
+See detailed guide in [functional/README.md](functional/README.md#adding-a-new-benchmark)
 
 ### Getting Help
 
 - **Framework issues:** See this README
 - **Benchmark-specific:** See [benchmark/README.md](benchmark/README.md)
-- **Performance tests:** See `performance/README.md` (to be created)
-- **Functional tests:** See `functional/README.md` (to be created)
+- **Functional tests:** See [functional/README.md](functional/README.md)
 - **Utilities:** See [utils/README.md](utils/README.md)
 
 ## Related Files

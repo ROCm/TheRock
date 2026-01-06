@@ -217,5 +217,4 @@ See [main test framework README](../README.md) for full CI architecture.
 
 - [Test Framework README](../README.md) - Main framework documentation
 - [Shared Utils](../utils/README.md) - Utility modules reference
-- [Performance Tests](../performance/) - Performance characterization tests
-- [Functional Tests](../functional/) - Correctness validation tests
+- [Functional Tests](../functional/README.md) - Correctness validation tests

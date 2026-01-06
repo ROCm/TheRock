@@ -5,7 +5,7 @@ Utility modules organized into logical subdirectories for maintainability and sc
 ## Structure
 
 ```
-benchmarks/utils/
+test_framework/utils/
 ├── __init__.py              # Public exports
 ├── test_client.py           # Main TestClient API
 ├── constants.py             # Framework constants
@@ -36,13 +36,15 @@ benchmarks/utils/
 
 ## Usage
 
-### From Benchmark Scripts
+### From Test Scripts
 
-Benchmark scripts add `benchmarks/` to `sys.path`, then import:
+Test scripts (benchmark/functional) add `test_framework/` to `sys.path`, then import:
 
 ```python
-# Import path setup (already done in benchmark_base.py)
-sys.path.insert(0, str(Path(__file__).parent.parent))  # Adds benchmarks/ to path
+# Import path setup (already done in base classes)
+sys.path.insert(
+    0, str(Path(__file__).parent.parent.parent)
+)  # Adds test_framework/ to path
 
 # Core utilities
 from utils.logger import log
@@ -127,10 +129,7 @@ Test results formatting, saving, and API submission.
 # Run from project root
 cd /path/to/TheRock
 
-# Run a benchmark test (imports are handled internally)
-python build_tools/github_actions/benchmarks/scripts/test_rocfft_benchmark.py
-
 # Verify utils imports work
-cd build_tools/github_actions/benchmarks
+cd build_tools/github_actions/test_framework
 python -c "from utils.logger import log; print('✓ Utils imports working')"
 ```
