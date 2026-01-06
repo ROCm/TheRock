@@ -274,7 +274,6 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       amd-hip
     BUILD_DEPS
       hipDNN
-      hip-clr
       therock-flatbuffers
       therock-nlohmann-json
       therock-fmt
