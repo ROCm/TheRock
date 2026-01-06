@@ -220,8 +220,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
         -DROCPROFSYS_BUILD_DYNINST=ON
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
-      COMPILER_TOOLCHAIN
-        amd-hip
       RUNTIME_DEPS
         amdsmi
         aqlprofile
