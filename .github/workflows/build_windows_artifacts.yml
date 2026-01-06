@@ -152,7 +152,7 @@ jobs:
           ccache -z
           python3 build_tools/github_actions/build_configure.py
 
-      - name: Build therock-archives and therock-dist with memory monitoring
+      - name: Build therock-archives and therock-dist
         if: ${{ !cancelled() }}
         shell: powershell
         run: |

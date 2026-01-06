@@ -131,14 +131,11 @@ jobs:
       - name: Start memory monitoring
         if: ${{ inputs.monitor_memory }}
         id: memory-monitor
-        shell: bash
         continue-on-error: true
         env:
-          BUILD_DIR: ${{ env.BUILD_DIR }}
           JOB_NAME: ${{ github.job }}
           PHASE: "Build Phase"
         run: |
-          # Run the memory monitor start script and capture PID
           MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
           echo "monitor-pid=$MONITOR_PID" >> $GITHUB_OUTPUT
 
@@ -148,14 +145,11 @@ jobs:
 
       - name: Stop memory monitoring
         if: ${{ always() && inputs.monitor_memory && steps.memory-monitor.outputs.monitor-pid }}
-        shell: bash
         continue-on-error: true
         env:
           MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
-          BUILD_DIR: ${{ env.BUILD_DIR }}
           JOB_NAME: ${{ github.job }}
         run: |
-          # Run the memory monitor stop script
           bash build_tools/github_actions/stop_memory_monitor.sh
 
       - name: Test Packaging
