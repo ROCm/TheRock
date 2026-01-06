@@ -102,9 +102,7 @@ amdgpu_family_info_matrix_postsubmit = {
     },
     "gfx120x": {
         "linux": {
-            # TODO(#2683): Re-enable machine once it is stable
-            # Label is "linux-gfx120X-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
