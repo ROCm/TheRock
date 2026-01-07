@@ -1,0 +1,5 @@
+# dyninst
+[components.dbg."third-party/sysdeps/linux/dyninst/stage"]
+[components.dev."third-party/sysdeps/linux/dyninst/stage"]
+[components.lib."third-party/sysdeps/linux/dyninst/stage"]
+[components.run."third-party/sysdeps/linux/dyninst/stage"]

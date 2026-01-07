@@ -53,3 +53,19 @@ if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       therock-amd-mesa
   )
 endif()
+
+# Optional sysdep: dyninst
+if(THEROCK_ENABLE_SYSDEPS_DYNINST)
+  add_subdirectory(dyninst)
+  therock_provide_artifact(dyninst
+  DESCRIPTOR artifact_dyninst.toml
+  TARGET_NEUTRAL
+  COMPONENTS
+    dbg
+    dev
+    lib
+    run
+  SUBPROJECT_DEPS
+    therock-dyninst
+  )
+endif()
