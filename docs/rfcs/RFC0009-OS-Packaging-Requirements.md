@@ -190,7 +190,7 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-ccl | rocPRIM, rocThrust, hipCUB | libhipcxx |  |
 | amdrocm-profiler |  | rocm-systems, rocm-compute, rocprofiler-sdk, tracer |  |
 | amdrocm-profiler-base |  | rocprofiler-sdk, tracer |  |
-| amdrocm-base |  | AMD-SMI, rocminfo, version (rocm-core) |  |
+| amdrocm-base |  | rocminfo, version (rocm-core) |  |
 | amdrocm-CK |  |  | CK |
 | amdrocm-debugger |  | rocgdb |  |
 | amdrocm-math-comon or rocm-math-dev |  |  | CK, rocWMMA, rocRoller, Tensile, Origami |
