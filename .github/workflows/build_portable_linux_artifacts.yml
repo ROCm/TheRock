@@ -90,6 +90,15 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
+      - name: Set TheRock directory
+        id: therock_dir
+        run: |
+          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
+            echo "THEROCK_DIR=TheRock" >> $GITHUB_ENV
+          else
+            echo "THEROCK_DIR=." >> $GITHUB_ENV
+          fi
+
       - name: Auto-detect external source configuration
         if: ${{ inputs.external_source_checkout }}
         id: detect
@@ -130,30 +139,22 @@ jobs:
           repository: "ROCm/composable_kernel"
           path: "composable_kernel"
 
-      - name: Install python deps (external)
-        if: ${{ inputs.external_source_checkout }}
+      - name: Install python deps
         run: |
-          pip install -r TheRock/requirements.txt
-
-      - name: Install python deps (TheRock)
-        if: ${{ !inputs.external_source_checkout }}
-        run: |
-          pip install -r requirements.txt
+          pip install -r $THEROCK_DIR/requirements.txt
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Setup ccache
         run: |
-          SCRIPT_PATH="${{ inputs.external_source_checkout && 'TheRock/build_tools/setup_ccache.py' || './build_tools/setup_ccache.py' }}"
-          $SCRIPT_PATH \
+          $THEROCK_DIR/build_tools/setup_ccache.py \
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
       - name: Runner health status
         run: |
-          SCRIPT_PATH="${{ inputs.external_source_checkout && 'TheRock/build_tools/health_status.py' || './build_tools/health_status.py' }}"
-          $SCRIPT_PATH
+          $THEROCK_DIR/build_tools/health_status.py
 
       - name: Test build_tools
         if: ${{ !inputs.external_source_checkout }}
@@ -168,16 +169,16 @@ jobs:
         timeout-minutes: 30
         run: |
           if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            ./TheRock/build_tools/fetch_sources.py --jobs 12 --no-include-ml-frameworks ${{ steps.detect.outputs.fetch_exclusion }}
+            $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 --no-include-ml-frameworks ${{ steps.detect.outputs.fetch_exclusion }}
           else
-            ./build_tools/fetch_sources.py --jobs 12
+            $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12
           fi
 
       - name: Patch external repo
         if: ${{ inputs.external_source_checkout }}
         run: |
           # Apply patches from TheRock to the external repo
-          PATCHES_DIR="./TheRock/patches/amd-mainline/${{ steps.detect.outputs.patches_dir }}"
+          PATCHES_DIR="$THEROCK_DIR/patches/amd-mainline/${{ steps.detect.outputs.patches_dir }}"
           if [ -d "$PATCHES_DIR" ] && [ "$(ls -A $PATCHES_DIR/*.patch 2>/dev/null)" ]; then
             git -c user.name="therockbot" -c "user.email=therockbot@amd.com" \
               am --whitespace=nowarn $PATCHES_DIR/*.patch
@@ -196,11 +197,7 @@ jobs:
             ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
-          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            python3 TheRock/build_tools/github_actions/build_configure.py --manylinux
-          else
-            python3 build_tools/github_actions/build_configure.py --manylinux
-          fi
+          python3 $THEROCK_DIR/build_tools/github_actions/build_configure.py --manylinux
 
       - name: Build therock-archives and therock-dist
         run: |
@@ -239,8 +236,7 @@ jobs:
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
         run: |
-          SCRIPT_PATH="${{ inputs.external_source_checkout && 'TheRock/build_tools/analyze_build_times.py' || 'build_tools/analyze_build_times.py' }}"
-          python3 $SCRIPT_PATH --build-dir build
+          python3 $THEROCK_DIR/build_tools/analyze_build_times.py --build-dir build
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
@@ -252,8 +248,7 @@ jobs:
       - name: Post Build Upload
         if: always()
         run: |
-          SCRIPT_PATH="${{ inputs.external_source_checkout && 'TheRock/build_tools/github_actions/post_build_upload.py' || 'build_tools/github_actions/post_build_upload.py' }}"
-          python3 $SCRIPT_PATH \
+          python3 $THEROCK_DIR/build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group "${{ inputs.artifact_group }}" \
             --build-dir build \
