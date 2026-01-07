@@ -141,9 +141,9 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(OpenBLAS_BUILD)
 
-if (INTERFACE64)
-  set(SUFFIX64 64)
-  set(SUFFIX64_UNDERSCORE _64)
+if(INTERFACE64)
+  set(_SUFFIX64 64)
+  set(_SUFFIX64_UNDERSCORE _64)
 endif()
 
 # Note that we install to the top-level but want our development assets and Posix
@@ -164,11 +164,11 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas)
 # We would like this to be a library scoped to ROCm, so give it a custom
 # name.
 # TODO: Also set Linux symbol versioning flags.
-set_target_properties(openblas${SUFFIX64_UNDERSCORE}_shared PROPERTIES
+set_target_properties(openblas${_SUFFIX64_UNDERSCORE}_shared PROPERTIES
   # Private SONAME/DLL name.
-  OUTPUT_NAME rocm-openblas${SUFFIX64}
+  OUTPUT_NAME rocm-openblas${_SUFFIX64}
   # Install location in the library is hard-coded to include in the install root.
-  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas${SUFFIX64}>
+  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas${_SUFFIX64}>
 )
 
 # Some of the test targets do not build with an altered library name on
@@ -178,7 +178,7 @@ set_target_properties(openblas_utest_ext PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cblas-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/cblas${SUFFIX64}-config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cblas${_SUFFIX64}-config.cmake
   @ONLY
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas${SUFFIX64}-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS${SUFFIX64})
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas${_SUFFIX64}-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS${_SUFFIX64})
