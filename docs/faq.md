@@ -10,11 +10,20 @@ TheRock (The HIP Environment and ROCm Kit) is a lightweight, open-source build
 platform for HIP and ROCm, designed to provide a streamlined and up-to-date
 ROCm environment.
 
-### How does TheRock differ from standard ROCm installations?
+### What does TheRock provide compared to more traditional ROCm releases?
 
-TheRock provides a more streamlined, frequently updated environment compared to
-traditional package-based ROCm installations. It offers greater flexibility in
-version management and easier access to cutting-edge features.
+TheRock distributes several types of packages, built daily from the latest ROCm
+code. These user-space packages are designed to be easy to install, update, and
+even switch between versions.
+
+Key offerings include:
+
+- Nightly builds with cutting-edge features
+- Multiple package formats (Python wheels and portable tarballs)
+- Flexible version management without system-level dependencies
+
+Traditional ROCm releases prioritize stability and production use, while TheRock
+emphasizes rapid access to new developments for contributors and early adopters.
 
 ### Which GPU architectures are supported by TheRock?
 
@@ -31,6 +40,12 @@ On Strix Halo GPUs (gfx1151) memory access is handled through GPU Virtual Memory
 (GPUVM), which provides multiple GPU virtual address spaces identified by VMIDs
 (Virtual Memory IDs).
 
+GPUVM is the GPU's memory management unit that allows the GPU to remap VRAM and
+system memory into separate virtual address spaces for different applications,
+providing memory protection between them. Each virtual address space has its own
+page table and is identified by a VMID. VMIDs are dynamically allocated to
+processes as they submit work to the GPU.
+
 On APUs like Strix Halo, where memory is physically unified, there is no
 discrete VRAM. Instead:
 
@@ -40,6 +55,9 @@ discrete VRAM. Instead:
 
 AI workloads typically prefer GTT-backed allocations because they allow large,
 flexible mappings without permanently reserving memory for GPU-only use.
+
+For practical implementation details on virtual memory management APIs, see the
+[HIP Virtual Memory Management documentation](https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/hip_runtime_api/memory_management/virtual_memory.html).
 
 ### What is the difference between Graphics Address Remapping Table (GART) and GTT?
 
