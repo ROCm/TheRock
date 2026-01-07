@@ -62,6 +62,11 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# fPIC needed for rocprofiler-systems
+set(EXTRA_CFLAGS)
+string(APPEND EXTRA_CFLAGS " -fPIC")
+message(STATUS "EXTRA_CFLAGS=${EXTRA_CLFAGS}")
+
 # HACK: elfutils consults pkg-config for cflags for the compression libraries
 # but then does not seem to use them everywhere needed. So we just hard-code
 # paths.
@@ -70,6 +75,7 @@ string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/liblzma/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zlib/build/stage/lib/rocm_sysdeps/include")
 string(APPEND EXTRA_CPPFLAGS " -I${THEROCK_BINARY_DIR}/third-party/sysdeps/linux/zstd/build/stage/lib/rocm_sysdeps/include")
+string(APPEND EXTRA_CPPFLAGS " -fPIC")
 message(STATUS "EXTRA_CPPFLAGS=${EXTRA_CPPFLAGS}")
 
 add_custom_target(
@@ -96,6 +102,7 @@ add_custom_target(
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\'"
+      "CFLAGS=${EXTRA_CFLAGS}"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
