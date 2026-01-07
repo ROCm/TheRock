@@ -131,5 +131,5 @@ cd /path/to/TheRock
 
 # Verify utils imports work
 cd build_tools/github_actions/test_framework
-python -c "from utils.logger import log; print('✓ Utils imports working')"
+python -c "from utils.logger import log; print('Utils imports working')"
 ```
