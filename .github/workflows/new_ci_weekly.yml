@@ -38,6 +38,34 @@ on:
         type: string
         description: "If provided, the tests will run on this artifact ID"
         default: ""
+  workflow_call:
+    inputs:
+      linux_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      linux_amdgpu_families_predefined_groups:
+        type: string
+        description: "Insert comma-separated list of predefined group(s) of Linux GPU families found in build_tools/github_actions/new_amdgpu_family_matrix.py (e.g. amdgpu_presubmit)"
+        default: ""
+      linux_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
+      windows_amdgpu_families:
+        type: string
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
+        default: ""
+      windows_amdgpu_families_predefined_groups:
+        type: string
+        description: "Insert comma-separated list of predefined group(s) of Windows GPU families found in build_tools/github_actions/new_amdgpu_family_matrix.py (e.g. amdgpu_presubmit)"
+        default: ""
+      windows_use_prebuilt_artifacts:
+        type: boolean
+        description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
+      artifact_run_id:
+        type: string
+        description: "If provided, the tests will run on this artifact ID"
+        default: ""
 
 permissions:
   contents: read
@@ -51,29 +79,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  setup:
-    uses: ./.github/workflows/new_setup.yml
-    with:
-      # ci triggered via cron do not accept input values so we have to set them here
-      linux_amdgpu_families: ${{ github.event_name == 'schedule' && 'gfx1151' || github.event.inputs.linux_amdgpu_families }}
-      linux_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || github.event.inputs.linux_amdgpu_families_predefined_groups }}
-      linux_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || github.event.inputs.linux_use_prebuilt_artifacts }}
-      windows_amdgpu_families: ${{ github.event_name == 'schedule' && '' || github.event.inputs.windows_amdgpu_families }}
-      windows_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || github.event.inputs.windows_amdgpu_families_predefined_groups }}
-      windows_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || github.event.inputs.windows_use_prebuilt_artifacts }}
-      artifact_run_id: ${{ github.event_name == 'schedule' && '' || github.event.inputs.artifact_run_id }}
+  # setup:
+  #   uses: ./.github/workflows/new_setup.yml
+  #   with:
+  #     # ci triggered via cron do not accept input values so we have to set them here
+  #     linux_amdgpu_families: ${{ github.event_name == 'schedule' && 'gfx1151' || inputs.linux_amdgpu_families }}
+  #     linux_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || inputs.linux_amdgpu_families_predefined_groups }}
+  #     linux_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || inputs.linux_use_prebuilt_artifacts }}
+  #     windows_amdgpu_families: ${{ github.event_name == 'schedule' && '' || inputs.windows_amdgpu_families }}
+  #     windows_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || inputs.windows_amdgpu_families_predefined_groups }}
+  #     windows_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || inputs.windows_use_prebuilt_artifacts }}
+  #     artifact_run_id: ${{ github.event_name == 'schedule' && '' || inputs.artifact_run_id }}
 
   setup_cmake4:
     uses: ./.github/workflows/new_setup.yml
     with:
       # ci triggered via cron do not accept input values so we have to set them here
-      linux_amdgpu_families: ${{ github.event_name == 'schedule' && 'gfx1151' || github.event.inputs.linux_amdgpu_families }}
-      linux_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || github.event.inputs.linux_amdgpu_families_predefined_groups }}
-      linux_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || github.event.inputs.linux_use_prebuilt_artifacts }}
-      windows_amdgpu_families: ${{ github.event_name == 'schedule' && '' || github.event.inputs.windows_amdgpu_families }}
-      windows_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || github.event.inputs.windows_amdgpu_families_predefined_groups }}
-      windows_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || github.event.inputs.windows_use_prebuilt_artifacts }}
-      artifact_run_id: ${{ github.event_name == 'schedule' && '' || github.event.inputs.artifact_run_id }}
+      linux_amdgpu_families: ${{ github.event_name == 'schedule' && 'gfx1151' || inputs.linux_amdgpu_families }}
+      linux_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || inputs.linux_amdgpu_families_predefined_groups }}
+      linux_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || inputs.linux_use_prebuilt_artifacts }}
+      windows_amdgpu_families: ${{ github.event_name == 'schedule' && '' || inputs.windows_amdgpu_families }}
+      windows_amdgpu_families_predefined_groups: ${{ github.event_name == 'schedule' && '' || inputs.windows_amdgpu_families_predefined_groups }}
+      windows_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || inputs.windows_use_prebuilt_artifacts }}
+      artifact_run_id: ${{ github.event_name == 'schedule' && '' || inputs.artifact_run_id }}
       # ghcr.io/rocm/therock_build_manylinux_x86_64:users-lpromber-DockerCmake4
       container_image_linux: "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:57b5cd3769d7a865500690258a530d3db6a277234ebf3379945de7bce3973301"
       # we always want to build and not use artifacts
