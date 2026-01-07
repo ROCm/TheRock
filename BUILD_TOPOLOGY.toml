@@ -300,6 +300,34 @@ artifact_deps = ["sysdeps"]
 feature_group = "MEDIA"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-expat]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-gmp]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-mpfr]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps-gmp"]  # mpfr depends on gmp
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-ncurses]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"
