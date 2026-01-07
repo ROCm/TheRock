@@ -81,13 +81,62 @@ jobs:
       - name: "Checking out repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+      - name: Set TheRock directory
+        id: therock_dir
+        run: |
+          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
+            echo "THEROCK_DIR=TheRock" >> $GITHUB_ENV
+          else
+            echo "THEROCK_DIR=." >> $GITHUB_ENV
+          fi
+
+      - name: Auto-detect external source configuration
+        if: ${{ inputs.external_source_checkout }}
+        id: detect
+        run: |
+          REPO="${{ github.repository }}"
+          echo "Detecting configuration for repo: $REPO"
+
+          if [[ "$REPO" == *"rocm-libraries"* ]]; then
+            echo "cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR" >> $GITHUB_OUTPUT
+            echo "patches_dir=rocm-libraries" >> $GITHUB_OUTPUT
+            echo "fetch_exclusion=--no-include-rocm-libraries" >> $GITHUB_OUTPUT
+            echo "enable_dvc=true" >> $GITHUB_OUTPUT
+            echo "enable_ck=true" >> $GITHUB_OUTPUT
+            echo "Configured for rocm-libraries"
+          elif [[ "$REPO" == *"rocm-systems"* ]]; then
+            echo "cmake_source_var=THEROCK_ROCM_SYSTEMS_SOURCE_DIR" >> $GITHUB_OUTPUT
+            echo "patches_dir=rocm-systems" >> $GITHUB_OUTPUT
+            echo "fetch_exclusion=--no-include-rocm-systems" >> $GITHUB_OUTPUT
+            echo "enable_dvc=false" >> $GITHUB_OUTPUT
+            echo "enable_ck=false" >> $GITHUB_OUTPUT
+            echo "Configured for rocm-systems"
+          else
+            echo "ERROR: Unknown external repository: $REPO"
+            exit 1
+          fi
+
+      - name: Checkout TheRock repository
+        if: ${{ inputs.external_source_checkout }}
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: "ROCm/TheRock"
+          path: TheRock
+
+      - name: Checkout composable_kernel repository
+        if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_ck == 'true' }}
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: "ROCm/composable_kernel"
+          path: "composable_kernel"
+
       - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
         with:
           python-version: 3.12
 
       - name: Install python deps
         run: |
-          pip install -r requirements.txt
+          pip install -r $THEROCK_DIR/requirements.txt
 
       - name: Install requirements
         # The first two lines removes the default commmunity feed and uses the internal proxy feed
@@ -115,11 +164,16 @@ jobs:
       - name: Runner health status
         run: |
           ccache --zero-stats
-          python ./build_tools/health_status.py
+          python $THEROCK_DIR/build_tools/health_status.py
 
       - name: Test build_tools
+        if: ${{ !inputs.external_source_checkout }}
         run: |
           python -m pytest build_tools/tests build_tools/github_actions/tests
+
+      - name: DVC pull
+        if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
+        run: dvc pull
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -137,18 +191,37 @@ jobs:
           git config fetch.parallel 10
           git config --global core.symlinks true
           git config --global core.longpaths true
-          python ./build_tools/fetch_sources.py --jobs 12
+          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
+            python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 --no-include-ml-frameworks ${{ steps.detect.outputs.fetch_exclusion }}
+          else
+            python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12
+          fi
+
+      - name: Patch external repo
+        if: ${{ inputs.external_source_checkout }}
+        run: |
+          # Apply patches from TheRock to the external repo
+          PATCHES_DIR="$THEROCK_DIR/patches/amd-mainline/${{ steps.detect.outputs.patches_dir }}"
+          if [ -d "$PATCHES_DIR" ] && [ "$(ls -A $PATCHES_DIR/*.patch 2>/dev/null)" ]; then
+            git -c user.name="therockbot" -c "user.email=therockbot@amd.com" \
+              am --whitespace=nowarn $PATCHES_DIR/*.patch
+          else
+            echo "No patches found in $PATCHES_DIR or directory doesn't exist"
+          fi
 
       - name: Configure Projects
         env:
           cmake_preset: ${{ inputs.build_variant_cmake_preset }}
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: >-
+            ${{ inputs.external_source_checkout &&
+                format('-D{0}={1}', steps.detect.outputs.cmake_source_var, github.workspace) || '' }}
+            ${{ inputs.extra_cmake_options }}
         run: |
           # clear cache before build and after download
           ccache -z
-          python3 build_tools/github_actions/build_configure.py
+          python3 $THEROCK_DIR/build_tools/github_actions/build_configure.py
 
       - name: Build therock-archives and therock-dist
         run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
@@ -196,7 +269,7 @@ jobs:
       - name: Post Build Upload
         if: always()
         run: |
-          python3 build_tools/github_actions/post_build_upload.py \
+          python3 $THEROCK_DIR/build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group ${{ inputs.artifact_group }} \
             --build-dir ${{ env.BUILD_DIR }} \
