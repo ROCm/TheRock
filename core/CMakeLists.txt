@@ -9,12 +9,12 @@ if(WIN32)
   set(_system_toolchain "")
 endif()
 
-if(THEROCK_ENABLE_CORE_RUNTIME)
+if(THEROCK_ENABLE_CORE_AMDSMI)
 
   ################################################################################
   # amdsmi
   ################################################################################
-  set(_core_runtime_optional_artifact_deps)
+
   if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
 
     therock_cmake_subproject_declare(amdsmi
@@ -35,12 +35,28 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       INTERFACE_INSTALL_RPATH_DIRS
         lib
     )
-    therock_cmake_subproject_provide_package(amdsmi
-      amd_smi lib/cmake)
+    therock_cmake_subproject_provide_package(amdsmi amd_smi lib/cmake)
     therock_cmake_subproject_activate(amdsmi)
-    list(APPEND _core_runtime_optional_artifact_deps amdsmi)
 
-  endif()
+    # Provide as a standalone artifact.
+    # (Descriptor should be core/artifact-core-amdsmi.toml)
+    therock_provide_artifact(core-amdsmi
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-amdsmi.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        amdsmi
+    )
+
+  endif() # NOT WIN32
+endif(THEROCK_ENABLE_CORE_AMDSMI)
+
+if(THEROCK_ENABLE_CORE_RUNTIME)
 
   ##############################################################################
   # ROCR-Runtime
@@ -99,6 +115,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   therock_cmake_subproject_glob_c_sources(rocminfo SUBDIRS .)
   therock_cmake_subproject_activate(rocminfo)
 
+  # Keep core-runtime artifact semantics tight: just ROCR-Runtime + rocminfo.
   therock_provide_artifact(core-runtime
     TARGET_NEUTRAL
     DESCRIPTOR artifact-core-runtime.toml
@@ -109,7 +126,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       lib
       run
     SUBPROJECT_DEPS
-      ${_core_runtime_optional_artifact_deps}
       ROCR-Runtime
       rocminfo
   )
@@ -403,6 +419,15 @@ endif(THEROCK_ENABLE_OCL_RUNTIME)
 if(THEROCK_BUILD_TESTING)
   if(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
 
+    # rocrtst may optionally build against amdsmi when available (Linux).
+    set(_rocrtst_build_deps
+      amd-llvm
+      ocl-clr
+    )
+    if(TARGET amdsmi)
+      list(APPEND _rocrtst_build_deps amdsmi)
+    endif()
+
     therock_cmake_subproject_declare(rocrtst
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
@@ -415,9 +440,7 @@ if(THEROCK_BUILD_TESTING)
       COMPILER_TOOLCHAIN
         "${_system_toolchain}"
       BUILD_DEPS
-        amd-llvm
-        amdsmi
-        ocl-clr
+        ${_rocrtst_build_deps}
       RUNTIME_DEPS
         ROCR-Runtime
         rocprofiler-register
