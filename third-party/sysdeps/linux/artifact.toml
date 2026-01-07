@@ -17,22 +17,6 @@ include = [
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 
-# Expat
-# Required by ROCgdb
-[components.dev."third-party/sysdeps/linux/expat/build/stage"]
-[components.doc."third-party/sysdeps/linux/expat/build/stage"]
-[components.lib."third-party/sysdeps/linux/expat/build/stage"]
-# Include the executable contents.
-include = [
-  "**/bin/*"
-]
-
-# GMP
-# Required by ROCgdb.
-[components.dev."third-party/sysdeps/linux/gmp/build/stage"]
-[components.doc."third-party/sysdeps/linux/gmp/build/stage"]
-[components.lib."third-party/sysdeps/linux/gmp/build/stage"]
-
 # libbacktrace
 # Required by amd-dbgapi library.
 [components.dev."third-party/sysdeps/linux/libbacktrace/build/stage"]
@@ -52,22 +36,6 @@ include = [
 # liblzma
 [components.dev."third-party/sysdeps/linux/liblzma/build/stage"]
 [components.lib."third-party/sysdeps/linux/liblzma/build/stage"]
-
-# MPFR
-# Required by ROCgdb.
-[components.dev."third-party/sysdeps/linux/mpfr/build/stage"]
-[components.doc."third-party/sysdeps/linux/mpfr/build/stage"]
-[components.lib."third-party/sysdeps/linux/mpfr/build/stage"]
-
-# NCurses
-# Required by ROCgdb
-[components.dev."third-party/sysdeps/linux/ncurses/build/stage"]
-[components.doc."third-party/sysdeps/linux/ncurses/build/stage"]
-[components.lib."third-party/sysdeps/linux/ncurses/build/stage"]
-# Include the executable contents.
-include = [
-  "**/bin/*"
-]
 
 # numactl
 [components.dev."third-party/sysdeps/linux/numactl/build/stage"]

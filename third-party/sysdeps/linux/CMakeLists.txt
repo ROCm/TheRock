@@ -31,14 +31,10 @@ therock_provide_artifact(sysdeps
   SUBPROJECT_DEPS
     therock-bzip2
     therock-elfutils
-    therock-expat
-    therock-gmp
     therock-libbacktrace
     therock-libcap
     therock-libdrm
     therock-liblzma
-    therock-mpfr
-    therock-ncurses
     therock-numactl
     therock-sqlite3
     therock-zlib
@@ -56,5 +52,61 @@ if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
       lib
     SUBPROJECT_DEPS
       therock-amd-mesa
+  )
+endif()
+
+# Optional sysdep: expat
+if(THEROCK_ENABLE_SYSDEPS_EXPAT)
+  therock_provide_artifact(sysdeps-expat
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-expat.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-expat
+  )
+endif()
+
+# Optional sysdep: gmp
+if(THEROCK_ENABLE_SYSDEPS_GMP)
+  therock_provide_artifact(sysdeps-gmp
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-gmp.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-gmp
+  )
+endif()
+
+# Optional sysdep: mpfr (depends on gmp)
+if(THEROCK_ENABLE_SYSDEPS_MPFR)
+  therock_provide_artifact(sysdeps-mpfr
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-mpfr.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-mpfr
+  )
+endif()
+
+# Optional sysdep: ncurses
+if(THEROCK_ENABLE_SYSDEPS_NCURSES)
+  therock_provide_artifact(sysdeps-ncurses
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-ncurses.toml
+    COMPONENTS
+      dev
+      doc
+      lib
+    SUBPROJECT_DEPS
+      therock-ncurses
   )
 endif()
