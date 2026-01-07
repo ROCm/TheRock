@@ -17,6 +17,7 @@ amdgpu_family_info_matrix_all {
            "test": {                            #     test options
               "run_tests":                      #         boolean: True if the test should run
               "runs_on":                        #         string: Host name of the compute node where the test should run on
+              "benchmark_runs_on":              #         string: Host name of the compute node for benchmarks (optional)
             }
             "release": {                        #     release options
                "push_on_success":               #         boolean: True if the release should be performed
@@ -31,6 +32,7 @@ amdgpu_family_info_matrix_all {
             "test": {                           #     test options
               "run_tests":                      #         boolean: True if the test should run
               "runs_on":                        #         string: Host name of the compute node where the test should run on
+              "benchmark_runs_on":              #         string: Host name of the compute node for benchmarks (optional)
             }
             "release": {                        #     release options
                "push_on_success":               #         boolean: True if the release should be performed
@@ -69,6 +71,7 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #                 "test": {
 #                     "run_tests": False,
 #                     "runs_on": "",
+#                     "benchmark_runs_on": "",
 #                     "sanity_check_only_for_family": False,
 #                     "expect_pytorch_failure": False,
 #                 },
@@ -125,9 +128,11 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": "linux-mi325-1gpu-ossci-rocm-frac",
+                    # TODO: Add new benchmark_runs_on runner for benchmarks
+                    "benchmark_runs_on": "linux-mi325-1gpu-ossci-rocm-frac",
                 },
                 "release": {
-                    "push_on_success": False,
+                    "push_on_success": True,
                     "bypass_tests_for_releases": False,
                 },
             },
@@ -138,6 +143,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -155,6 +161,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": "linux-gfx110X-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -169,6 +176,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": "windows-gfx110X-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {"push_on_success": True, "bypass_tests_for_releases": True},
@@ -185,6 +193,7 @@ amdgpu_family_info_matrix_all = {
                     # TODO(#2614): Re-enable machine once it is stable
                     "run_tests": False,
                     "runs_on": "linux-gfx1150-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -199,6 +208,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -212,8 +222,9 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    "run_tests": False,
+                    "run_tests": True,
                     "runs_on": "linux-gfx1151-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -228,6 +239,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": "windows-gfx1151-gpu-rocm",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -244,6 +256,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -258,6 +271,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -274,6 +288,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "linux-gfx1153-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -289,6 +304,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -308,6 +324,7 @@ amdgpu_family_info_matrix_all = {
                     # Networking issue: https://github.com/ROCm/TheRock/issues/1660
                     # Label is "linux-mi355-1gpu-ossci-rocm"
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -321,6 +338,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {
                     "push_on_success": False,
@@ -338,6 +356,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": "linux-gfx1201-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -352,6 +371,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                 },
                 "release": {"push_on_success": True, "bypass_tests_for_releases": True},
             },
@@ -366,6 +386,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -380,6 +401,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                     "expect_pytorch_failure": True,
                 },
                 "release": {
@@ -399,6 +421,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                     "expect_pytorch_failure": True,
                 },
                 "release": {
@@ -413,6 +436,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": "",
+                    "benchmark_runs_on": "",
                     "expect_pytorch_failure": True,
                 },
                 "release": {
@@ -431,6 +455,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": "linux-gfx1030-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -445,6 +470,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": "windows-gfx1030-gpu-rocm",
+                    "benchmark_runs_on": "",
                     "sanity_check_only_for_family": True,
                     "expect_pytorch_failure": True,
                 },
