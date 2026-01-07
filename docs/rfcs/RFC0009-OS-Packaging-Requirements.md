@@ -199,7 +199,7 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-decode |  | rocDecode |  |
 | amdrocm-jpeg |  | rocJPEG |  |
 | amdrocm-file |  | hipFile, rocFile (future addition) |  |
-| amdrocm-rccl| | rccl |
+| amd-rccl| | rccl |
 | amdrocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa, subset of libVA) |  |
 | amdrocm-rdc|  | ROCm Datacenter | |
 ## Python Packaging Requirements
