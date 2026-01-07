@@ -129,6 +129,13 @@ add_custom_target(
       --with-shared
       --enable-widec
       --enable-pc-files
+      # Without this, it will attempt to install pcfiles in the path reported
+      # by pkgconfig (which is typically the system root, which is not what
+      # we want).
+      --with-pkg-config-libdir="${CMAKE_INSTALL_PREFIX}/lib/pkgconfig"
+      # Prevent build-time LDFLAGS (rpath, version-script) from leaking into
+      # the .pc files' Libs: line.
+      --disable-pkg-ldflags
       # Enable overwriting of header files in the default installation prefix.
       # This makes it so we install the ncurses headers in the include/
       # directory as opposed to a distinct subdirectory.
