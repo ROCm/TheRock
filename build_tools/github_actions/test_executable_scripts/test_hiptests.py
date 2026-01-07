@@ -77,7 +77,7 @@ def setup_env(env):
     # Windows
     #   tests load the dlls present in the local exe folder
     # Set ROCM Path, to find rocm_agent_enum etc
-    ROCM_PATH = f"{THEROCK_BIN_DIR}.resolve().parent"
+    ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
     env["ROCM_PATH"] = str(ROCM_PATH)
     if platform.system() == "Linux":
         HIP_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
