@@ -46,18 +46,17 @@ import copy
 import fnmatch
 import json
 import os
+import pprint
 import subprocess
 import sys
+from enum import Flag, auto
 from typing import Iterable, List, Optional
+
 from new_amdgpu_family_matrix import (
     amdgpu_family_predefined_groups,
     amdgpu_family_info_matrix_all,
 )
-
 from github_actions_utils import *
-
-from enum import Flag, auto
-import pprint
 
 # --------------------------------------------------------------------------- #
 # Filtering by modified paths
@@ -186,7 +185,7 @@ def get_pr_labels(github_event_args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
     data = json.loads(github_event_args["pr_labels"])
     labels = []
-    if not len(data) == 0:
+    if data:
         for label in data.get("labels", []):
             labels.append(label["name"])
     return labels
@@ -212,7 +211,7 @@ class TaskMask(Flag):
     RELEASE = auto()
 
 
-taskLabel = {
+task_label = {
     TaskMask.BUILD: {"label": "build", "amdgpu_family_label": ""},
     TaskMask.TEST: {"label": "test", "amdgpu_family_label": "test"},
     TaskMask.RELEASE: {"label": "release", "amdgpu_family_label": "release"},
@@ -224,7 +223,7 @@ class PlatformMask(Flag):
     WINDOWS = auto()
 
 
-platformLabel = {PlatformMask.LINUX: "linux", PlatformMask.WINDOWS: "windows"}
+platform_label = {PlatformMask.LINUX: "linux", PlatformMask.WINDOWS: "windows"}
 
 
 def get_build_config(amdgpu_matrix_entry, build_variant, platform_str, arch):
@@ -277,7 +276,7 @@ def get_build_config(amdgpu_matrix_entry, build_variant, platform_str, arch):
     return build_config
 
 
-def get_test_config(amdgpu_matrix_entry, plat_str, target):
+def get_test_config(amdgpu_matrix_entry, platform_str, target):
     # only run test if run_tests is True
     if not amdgpu_matrix_entry.get("run_tests", False):
         return None
@@ -296,6 +295,8 @@ def get_test_config(amdgpu_matrix_entry, plat_str, target):
     if "expect_pytorch_failure" not in test_config.keys():
         test_config["expect_pytorch_failure"] = False
 
+    # TODO TODO IMPORTANT: ADD code from amdgpu_family_matrix.py to autofill test machines
+
     # sanity check: check if we have some machine to run on, otherwise skip test job
     if not test_config["runs_on"] and not test_config["benchmark_runs_on"]:
         return None
@@ -303,7 +304,7 @@ def get_test_config(amdgpu_matrix_entry, plat_str, target):
     return test_config
 
 
-def get_release_config(amdgpu_matrix_entry, plat_str, target):
+def get_release_config(amdgpu_matrix_entry, platform_str, target):
     # only run releases if we want to also push them
     if not amdgpu_matrix_entry.get("push_on_success", False):
         return None
@@ -318,24 +319,24 @@ def get_release_config(amdgpu_matrix_entry, plat_str, target):
 
 
 def new_matrix_generator(
-    platformMask: PlatformMask,
-    taskMask: TaskMask,
+    platform_mask: PlatformMask,
+    task_mask: TaskMask,
     req_gpu_families_or_targets: List[str],
     build_variant: str = "release",
 ):
     # TODO TODO move to main() those checks
-    if not bool(platformMask):
+    if not bool(platform_mask):
         print("No platform set. Exiting")
         sys.exit(1)
-    if not bool(taskMask):
+    if not bool(task_mask):
         print("No task (build, test, release) set. Exiting")
         sys.exit(1)
 
-    # extract proper arch names for the requested famillies and targets, and platforms based on
+    # extract proper arch names for the requested families and targets, and platforms based on
     # the amdgpu_family_info_matrix_all from new_amdgpu_family_matrix.py
     gpu_matrix = {PlatformMask.LINUX: {}, PlatformMask.WINDOWS: {}}
     for platform in gpu_matrix.keys():
-        plat_str = platformLabel[platform]
+        platform_str = platform_label[platform]
         # get existing build targets
         for target in req_gpu_families_or_targets[platform]:
             # single gpu architecture
@@ -343,17 +344,17 @@ def new_matrix_generator(
                 print(f"target is a single gpu architecture {target}")
                 family = target[:-1] + "x"
                 gpu = amdgpu_family_info_matrix_all[family][target]
-                if plat_str in gpu.keys():
-                    gpu_matrix[platform][target] = gpu[plat_str]
+                if platform_str in gpu.keys():
+                    gpu_matrix[platform][target] = gpu[platform_str]
             elif "-" in target:
                 # gpu family like gfx110x-dgpu
                 family_parts = target.split("-")
                 family = amdgpu_family_info_matrix_all[family_parts[0]][family_parts[1]]
-                if plat_str in family.keys():
-                    gpu_matrix[platform][target] = family[plat_str]
+                if platform_str in family.keys():
+                    gpu_matrix[platform][target] = family[platform_str]
             else:
                 print(
-                    f"ERROR! No entry for {target} on {platformLabel[platform]} found - Skipping!",
+                    f"ERROR! No entry for {target} on {platform_label[platform]} found - Skipping!",
                     file=sys.stderr,
                 )
             # TODO TODO should we add also support for "gfx115x" and then add ALL subtargets of it? e.g. gfx1151, gfx115x-dcgpu, ..
@@ -364,7 +365,7 @@ def new_matrix_generator(
     print(f"    Linux:   {[ele for ele in gpu_matrix[PlatformMask.LINUX].keys()]}")
     print(f"    Windows: {[ele for ele in gpu_matrix[PlatformMask.WINDOWS].keys()]}")
     print("")
-    tasks = [taskLabel[mask]["label"] for mask in taskMask]
+    tasks = [task_label[mask]["label"] for mask in task_mask]
     print(
         f"Creating AMDGPU matrix for the AMDGPU targets and tasks {tasks}... ", end=""
     )
@@ -373,50 +374,50 @@ def new_matrix_generator(
 
     # assign to platform, task, and build variant
     full_matrix = {}
-    for platform in platformMask:  # linux, windows
+    for platform in platform_mask:  # linux, windows
         platform_matrix = []
-        plat_str = platformLabel[platform]
+        platform_str = platform_label[platform]
         for target in gpu_matrix[platform]:  # gfx94X-dcgpu, gfx1151, ...
             data = {"amdgpu_family": target}
 
-            if TaskMask.BUILD in taskMask:
+            if TaskMask.BUILD in task_mask:
                 build_config = get_build_config(
                     gpu_matrix[platform][target]["build"],
                     build_variant,
-                    plat_str,
+                    platform_str,
                     target,
                 )
                 if build_config:
-                    data[taskLabel[TaskMask.BUILD]["label"]] = build_config
+                    data[task_label[TaskMask.BUILD]["label"]] = build_config
                 else:
                     print(
-                        f"[WARNING] Skipping build job for {target} on {platformLabel[platform]} since build variant {build_variant} is not supported"
+                        f"[WARNING] Skipping build job for {target} on {platform_label[platform]} since build variant {build_variant} is not supported"
                     )
-            if TaskMask.TEST in taskMask:
+            if TaskMask.TEST in task_mask:
                 test_config = get_test_config(
-                    gpu_matrix[platform][target]["test"], plat_str, target
+                    gpu_matrix[platform][target]["test"], platform_str, target
                 )
                 if test_config:
-                    data[taskLabel[TaskMask.TEST]["label"]] = test_config
+                    data[task_label[TaskMask.TEST]["label"]] = test_config
                 else:
                     print(
-                        f"[WARNING] Skipping test job for {target} on {platformLabel[platform]}. Test config returned empty."
+                        f"[WARNING] Skipping test job for {target} on {platform_label[platform]}. Test config returned empty."
                     )
-            if TaskMask.RELEASE in taskMask:
+            if TaskMask.RELEASE in task_mask:
                 release_config = get_release_config(
-                    gpu_matrix[platform][target]["release"], plat_str, target
+                    gpu_matrix[platform][target]["release"], platform_str, target
                 )
                 if release_config:
-                    data[taskLabel[TaskMask.RELEASE]["label"]] = release_config
+                    data[task_label[TaskMask.RELEASE]["label"]] = release_config
                 else:
                     print(
-                        f"[WARNING] Skipping release job for {target} on {platformLabel[platform]}. Release config returned empty."
+                        f"[WARNING] Skipping release job for {target} on {platform_label[platform]}. Release config returned empty."
                     )
 
             # more than amdgpu_family as entry? Means we want to run some tasks, so add it
             if len(data.keys()) > 1:
                 platform_matrix += [data]
-        full_matrix[plat_str] = platform_matrix
+        full_matrix[platform_str] = platform_matrix
 
     print("done")
     return full_matrix
@@ -502,7 +503,7 @@ def get_requested_amdgpu_families(github_event_args):
     return req_gpu_families_or_targets
 
 
-def getTaskMask(github_event_args):
+def get_task_mask(github_event_args):
     enable_build_jobs = True
     if github_event_args["force_build"].upper() in ["YES", "ON", "TRUE"]:
         enable_build_jobs = True
@@ -518,14 +519,14 @@ def getTaskMask(github_event_args):
             #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
             enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
-    taskMask = TaskMask(0)
+    task_mask = TaskMask(0)
     if enable_build_jobs:
-        taskMask |= TaskMask.BUILD
+        task_mask |= TaskMask.BUILD
     if github_event_args["no_tests"].upper() in ["NO", "OFF", "FALSE"]:
-        taskMask |= TaskMask.TEST
+        task_mask |= TaskMask.TEST
     if github_event_args["make_release"].upper() in ["YES", "ON", "TRUE"]:
-        taskMask |= TaskMask.RELEASE
-    return taskMask
+        task_mask |= TaskMask.RELEASE
+    return task_mask
 
 
 if __name__ == "__main__":
@@ -534,13 +535,13 @@ if __name__ == "__main__":
     print_github_info(github_event_args)
 
     req_gpu_families_or_targets = get_requested_amdgpu_families(github_event_args)
-    taskMask = getTaskMask(github_event_args)
+    task_mask = get_task_mask(github_event_args)
 
-    platformMask = PlatformMask(0)
+    platform_mask = PlatformMask(0)
     if len(req_gpu_families_or_targets[PlatformMask.LINUX]) > 0:
-        platformMask |= PlatformMask.LINUX
+        platform_mask |= PlatformMask.LINUX
     if len(req_gpu_families_or_targets[PlatformMask.WINDOWS]) > 0:
-        platformMask |= PlatformMask.WINDOWS
+        platform_mask |= PlatformMask.WINDOWS
 
     if github_event_args["multi_arch"]:
         print("Multi-arch mode not supported yet. Exiting")
@@ -549,8 +550,8 @@ if __name__ == "__main__":
     # linux only "gfx94X-dcgpu", "gfx110X-dgpu",
     # export INPUT_LINUX_AMDGPU_FAMILIES="gfx94X-dcgpu, gfx110X-dgpu"
     full_matrix = new_matrix_generator(
-        platformMask=platformMask,
-        taskMask=taskMask,
+        platform_mask=platform_mask,
+        task_mask=task_mask,
         req_gpu_families_or_targets=req_gpu_families_or_targets,
         build_variant=github_event_args["build_variant"],
     )
