@@ -201,7 +201,7 @@ test_matrix = {
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
         "platform": ["linux", "windows"],
