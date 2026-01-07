@@ -42,6 +42,7 @@
   * Detailed information for CI maintainers
 """
 
+import copy
 import fnmatch
 import json
 import os
@@ -226,11 +227,101 @@ class PlatformMask(Flag):
 platformLabel = {PlatformMask.LINUX: "linux", PlatformMask.WINDOWS: "windows"}
 
 
+def get_build_config(amdgpu_matrix_entry, build_variant, platform_str, arch):
+    # amdgpu_matrix_entry is the "build" entry of a single arch and a given platform from new_amdgpu_family_matrix.py
+
+    # We have custom build variants for specific CI flows.
+    # For CI, we use the release build variant (for PRs, pushes to main, nightlies)
+    # For CI ASAN, we use the ASAN build variant (for pushes to main)
+    # In the case that the build variant is not requested, we skip it
+
+    # check if build_variant is available
+    if build_variant not in amdgpu_matrix_entry["build_variants"]:
+        print(
+            f"[WARNING] Build variant {build_variant} is not available for {arch} on {platform_str}"
+        )
+        return None
+
+    # get all build variants settings for the given platform
+    # Import build variants from new_amdgpu_family_matrix
+    from new_amdgpu_family_matrix import all_build_variants
+
+    build_variants_settings = all_build_variants[platform_str][build_variant]
+    if not build_variants_settings:
+        print(f"[ERROR] Build variant {build_variant} does not exist on {platform_str}")
+        return None
+
+    # copy build variants settings to the build_config
+    build_config = copy.deepcopy(build_variants_settings)
+
+    # Assign a computed "artifact_group" combining the family and variant.
+    artifact_group = arch
+    build_variant_suffix = build_variants_settings["build_variant_suffix"]
+    # only add build_variant_suffix if not empty
+    if build_variants_settings["build_variant_suffix"]:
+        artifact_group += f"-{build_variant_suffix}"
+    build_config["artifact_group"] = artifact_group
+
+    # set expect_failure
+    # If it is not set, default to False
+    # Otherwise any True overwrites it (either in the arch or by the build_variant)
+    build_config["expect_failure"] = build_variants_settings.get(
+        "expect_failure", False
+    ) or amdgpu_matrix_entry.get("expect_failure", False)
+
+    # Make future-proof: copy all other keys from amdgpu_matrix_entry to build_config
+    for key in amdgpu_matrix_entry.keys():
+        if key not in build_config.keys() and key != "build_variants":
+            build_config[key] = amdgpu_matrix_entry[key]
+
+    return build_config
+
+
+def get_test_config(amdgpu_matrix_entry, plat_str, target):
+    # only run test if run_tests is True
+    if not amdgpu_matrix_entry.get("run_tests", False):
+        return None
+
+    # copy test config
+    test_config = copy.deepcopy(amdgpu_matrix_entry)
+
+    # TODO TODO automate this. have default values in new_amdgpu_family_matrix.py
+    # set default values if not set
+    if "benchmark_runs_on" not in test_config.keys():
+        test_config["benchmark_runs_on"] = ""
+    if "runs_on" not in test_config.keys():
+        test_config["runs_on"] = ""
+    if "sanity_check_only_for_family" not in test_config.keys():
+        test_config["sanity_check_only_for_family"] = False
+    if "expect_pytorch_failure" not in test_config.keys():
+        test_config["expect_pytorch_failure"] = False
+
+    # sanity check: check if we have some machine to run on, otherwise skip test job
+    if not test_config["runs_on"] and not test_config["benchmark_runs_on"]:
+        return None
+
+    return test_config
+
+
+def get_release_config(amdgpu_matrix_entry, plat_str, target):
+    # only run releases if we want to also push them
+    if not amdgpu_matrix_entry.get("push_on_success", False):
+        return None
+
+    # copy release config
+    release_config = copy.deepcopy(amdgpu_matrix_entry)
+
+    if "bypass_tests_for_releases" not in release_config.keys():
+        release_config["bypass_tests_for_releases"] = False
+
+    return release_config
+
+
 def new_matrix_generator(
     platformMask: PlatformMask,
     taskMask: TaskMask,
     req_gpu_families_or_targets: List[str],
-    build_variants: str = "release",
+    build_variant: str = "release",
 ):
     # TODO TODO move to main() those checks
     if not bool(platformMask):
@@ -240,14 +331,16 @@ def new_matrix_generator(
         print("No task (build, test, release) set. Exiting")
         sys.exit(1)
 
+    # extract proper arch names for the requested famillies and targets, and platforms based on
+    # the amdgpu_family_info_matrix_all from new_amdgpu_family_matrix.py
     gpu_matrix = {PlatformMask.LINUX: {}, PlatformMask.WINDOWS: {}}
-
     for platform in gpu_matrix.keys():
         plat_str = platformLabel[platform]
         # get existing build targets
         for target in req_gpu_families_or_targets[platform]:
             # single gpu architecture
             if target[-1].isdigit():
+                print(f"target is a single gpu architecture {target}")
                 family = target[:-1] + "x"
                 gpu = amdgpu_family_info_matrix_all[family][target]
                 if plat_str in gpu.keys():
@@ -276,40 +369,51 @@ def new_matrix_generator(
         f"Creating AMDGPU matrix for the AMDGPU targets and tasks {tasks}... ", end=""
     )
 
-    # Import build variants from new_amdgpu_family_matrix
-    from new_amdgpu_family_matrix import all_build_variants
+    print(gpu_matrix)
 
-    # assign to platform, task, and build variants
+    # assign to platform, task, and build variant
     full_matrix = {}
     for platform in platformMask:  # linux, windows
         platform_matrix = []
         plat_str = platformLabel[platform]
         for target in gpu_matrix[platform]:  # gfx94X-dcgpu, gfx1151, ...
             data = {"amdgpu_family": target}
-            for mask, label, bool_label in [
-                (TaskMask.BUILD, "build", ""),
-                (TaskMask.TEST, "test", "run_tests"),
-                (TaskMask.RELEASE, "release", "push_on_success"),
-            ]:
-                data[taskLabel[mask]["label"]] = {}
-                if mask in taskMask and mask in TaskMask.BUILD:
-                    if "expect_failure" in gpu_matrix[platform][target][label].keys():
-                        data[taskLabel[mask]["label"]]["expect_failure"] = gpu_matrix[
-                            platform
-                        ][target][label]["expect_failure"]
-                    else:
-                        data[taskLabel[mask]["label"]]["expect_failure"] = False
-                if (
-                    mask in taskMask and not mask in TaskMask.BUILD
-                ):  # test or release. add all values underneath it
-                    if gpu_matrix[platform][target][label][bool_label]:
-                        for key in gpu_matrix[platform][target][label].keys():
-                            if key == bool_label:
-                                continue
-                            data[taskLabel[mask]["label"]][key] = gpu_matrix[platform][
-                                target
-                            ][label][key]
-            # more than amdgpu_family as entry means we want to add it
+
+            if TaskMask.BUILD in taskMask:
+                build_config = get_build_config(
+                    gpu_matrix[platform][target]["build"],
+                    build_variant,
+                    plat_str,
+                    target,
+                )
+                if build_config:
+                    data[taskLabel[TaskMask.BUILD]["label"]] = build_config
+                else:
+                    print(
+                        f"[WARNING] Skipping build job for {target} on {platformLabel[platform]} since build variant {build_variant} is not supported"
+                    )
+            if TaskMask.TEST in taskMask:
+                test_config = get_test_config(
+                    gpu_matrix[platform][target]["test"], plat_str, target
+                )
+                if test_config:
+                    data[taskLabel[TaskMask.TEST]["label"]] = test_config
+                else:
+                    print(
+                        f"[WARNING] Skipping test job for {target} on {platformLabel[platform]}. Test config returned empty."
+                    )
+            if TaskMask.RELEASE in taskMask:
+                release_config = get_release_config(
+                    gpu_matrix[platform][target]["release"], plat_str, target
+                )
+                if release_config:
+                    data[taskLabel[TaskMask.RELEASE]["label"]] = release_config
+                else:
+                    print(
+                        f"[WARNING] Skipping release job for {target} on {platformLabel[platform]}. Release config returned empty."
+                    )
+
+            # more than amdgpu_family as entry? Means we want to run some tasks, so add it
             if len(data.keys()) > 1:
                 platform_matrix += [data]
         full_matrix[plat_str] = platform_matrix
@@ -336,6 +440,8 @@ def get_github_event_args():
     github_event_args["windows_use_prebuilt_artifacts"] = (
         os.environ.get("WINDOWS_USE_PREBUILT_ARTIFACTS") == "true"
     )
+    github_event_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
+    github_event_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
 
     github_event_args["force_build"] = os.environ.get("INPUT_TASKS_FORCE_BUILD", "")
     github_event_args["no_tests"] = os.environ.get("INPUT_TASKS_NO_TESTS", "NO")
@@ -436,10 +542,17 @@ if __name__ == "__main__":
     if len(req_gpu_families_or_targets[PlatformMask.WINDOWS]) > 0:
         platformMask |= PlatformMask.WINDOWS
 
+    if github_event_args["multi_arch"]:
+        print("Multi-arch mode not supported yet. Exiting")
+        sys.exit(1)
+
     # linux only "gfx94X-dcgpu", "gfx110X-dgpu",
     # export INPUT_LINUX_AMDGPU_FAMILIES="gfx94X-dcgpu, gfx110X-dgpu"
     full_matrix = new_matrix_generator(
-        platformMask, taskMask, req_gpu_families_or_targets
+        platformMask=platformMask,
+        taskMask=taskMask,
+        req_gpu_families_or_targets=req_gpu_families_or_targets,
+        build_variant=github_event_args["build_variant"],
     )
 
     print("")
