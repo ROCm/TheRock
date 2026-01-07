@@ -52,6 +52,9 @@ add_custom_target(
     # We have to patch the sources so make a fresh copy.
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
+    "${CMAKE_COMMAND}" -E env
+      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --libdir="${CMAKE_INSTALL_PREFIX}/lib"
