@@ -303,7 +303,7 @@ disable_platforms = ["windows"]
 [artifacts.dyninst]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["sysdeps"]
 feature_group = "CORE"
 disable_platforms = ["windows"]
 

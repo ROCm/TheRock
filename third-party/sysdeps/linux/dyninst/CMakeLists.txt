@@ -13,10 +13,14 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   therock_cmake_subproject_declare(therock-dyninst
     BACKGROUND_BUILD
-    EXCLUDE_FROM_ALL
+    EXTERNAL_SOURCE_DIR .
+    FPRINT_SOURCE_DIR "${_source_dir}"
+    FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
+    BINARY_DIR build
     NO_MERGE_COMPILE_COMMANDS
     OUTPUT_ON_FAILURE
-    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+    CMAKE_ARGS
+      "-DSOURCE_DIR=${_source_dir}"
     RUNTIME_DEPS
       therock-boost
       therock-tbb
