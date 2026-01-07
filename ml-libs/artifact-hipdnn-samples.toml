@@ -1,6 +1,6 @@
 # hipDNN Samples
 [components.test."ml-libs/hipdnn_samples/stage"]
 include = [
-  "*bn*",
-  "*conv*",
+  "bin/**",
+  "bin/hipdnn_samples/CTestTestfile.cmake"
 ]
