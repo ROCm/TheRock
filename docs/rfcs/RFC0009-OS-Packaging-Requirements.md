@@ -204,7 +204,7 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 
 ## Python Packaging Requirements
 
-### Standard pip WHeels
+### Standard Python packages
 
 Today's pip cannot handle cross-architecture extras without vitrual environments. The new packaging requirements will support the following options:
 
