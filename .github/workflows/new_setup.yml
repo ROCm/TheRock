@@ -103,15 +103,15 @@ jobs:
       - name: Configuring CI options
         id: configure
         env:
-          INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
-          INPUT_LINUX_AMDGPU_FAMILIES_PREDEFINED_GROUPS: ${{ github.event.inputs.linux_amdgpu_families_predefined_groups }}
-          LINUX_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.linux_use_prebuilt_artifacts }}
-          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
-          INPUT_WINDOWS_AMDGPU_FAMILIES_PREDEFINED_GROUPS: ${{ github.event.inputs.windows_amdgpu_families_predefined_groups }}
-          WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
-          INPUT_TASKS_FORCE_BUILD: ${{ github.event.inputs.force_build }}
-          INPUT_TASKS_NO_TESTS: ${{ github.event.inputs.no_tests }}
-          INPUT_TASKS_MAKE_RELEASE: ${{ github.event.inputs.make_release }}
+          INPUT_LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+          INPUT_LINUX_AMDGPU_FAMILIES_PREDEFINED_GROUPS: ${{ inputs.linux_amdgpu_families_predefined_groups }}
+          LINUX_USE_PREBUILT_ARTIFACTS: ${{ inputs.linux_use_prebuilt_artifacts }}
+          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
+          INPUT_WINDOWS_AMDGPU_FAMILIES_PREDEFINED_GROUPS: ${{ inputs.windows_amdgpu_families_predefined_groups }}
+          WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ inputs.windows_use_prebuilt_artifacts }}
+          INPUT_TASKS_FORCE_BUILD: ${{ inputs.force_build }}
+          INPUT_TASKS_NO_TESTS: ${{ inputs.no_tests }}
+          INPUT_TASKS_MAKE_RELEASE: ${{ inputs.make_release }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}
           # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
