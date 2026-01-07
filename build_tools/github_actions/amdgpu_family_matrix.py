@@ -49,7 +49,7 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
-            # TODO: Add new benchmark-runs-on runner for benchmarks
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
@@ -76,9 +76,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            # TODO(#2741): Re-enable machine once `amdsmi` test timeout is fixed
-            # Label is "linux-gfx1151-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -87,6 +85,9 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             # TODO(#TBD): Re-enable tests once hipErrorLaunchFailure issues are resolved
             "test-runs-on": "",
+            "test-runs-on": "windows-gfx1151-gpu-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -178,9 +179,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1150": {
         "linux": {
-            # TODO(#2614): Re-enable machine once it is stable
-            # Label is "linux-gfx1150-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
