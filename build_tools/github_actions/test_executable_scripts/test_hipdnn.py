@@ -11,6 +11,11 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 logging.basicConfig(level=logging.INFO)
 
+TESTS_TO_IGNORE = {
+    # Issue to fix: https://github.com/ROCm/TheRock/issues/2798
+    "gfx1151": ["hipdnn_backend_tests"],
+}
+
 cmd = [
     "ctest",
     "--test-dir",
@@ -21,6 +26,10 @@ cmd = [
     "--timeout",
     "60",
 ]
+
+if AMDGPU_FAMILIES in TESTS_TO_IGNORE:
+    ignore_list = TESTS_TO_IGNORE[AMDGPU_FAMILIES]
+    cmd.extend(["--exclude-regex", "|".join(ignore_list)])
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
