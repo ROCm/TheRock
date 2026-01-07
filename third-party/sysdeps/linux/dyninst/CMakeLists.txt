@@ -42,3 +42,31 @@ ProcessorCount(PAR_JOBS)
 if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
+
+add_custom_target(
+  build ALL
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  COMMAND
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+  COMMAND
+    # We have to patch the sources so make a fresh copy.
+    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+  COMMAND
+    "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
+      --prefix "${CMAKE_INSTALL_PREFIX}"
+      --libdir="${CMAKE_INSTALL_PREFIX}/lib"
+      --includedir="${CMAKE_INSTALL_PREFIX}/include"
+  COMMAND
+    make -j ${PAR_JOBS} V=1
+  COMMAND
+    make install
+  COMMAND
+    "${CMAKE_COMMAND}" -E env
+      "PATCHELF=${PATCHELF}"
+      "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
+      "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
+    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+
+  DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh"
+)
