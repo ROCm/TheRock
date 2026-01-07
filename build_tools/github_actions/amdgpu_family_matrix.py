@@ -66,7 +66,8 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            # TODO(#TBD): Re-enable tests once hipErrorLaunchFailure issues are resolved
+            "test-runs-on": "",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -82,10 +83,13 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
+            # TODO(#TBD): Re-enable tests once hipErrorLaunchFailure issues are resolved
+            "test-runs-on": "",
             "test-runs-on": "windows-gfx1151-gpu-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
     },

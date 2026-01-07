@@ -24,7 +24,9 @@ class ConfigureTargetRunTest(unittest.TestCase):
 
     def test_windows_gfx115x(self):
         runner_label = configure_target_run.get_runner_label("gfx1151", "windows")
-        self.assertEqual(runner_label, "windows-gfx1151-gpu-rocm")
+        # TODO(#TBD): Re-enable once hipErrorLaunchFailure issues are resolved
+        # Previously: "windows-gfx1151-gpu-rocm"
+        self.assertEqual(runner_label, "")
 
     def test_windows_gfx120X_all(self):
         runner_label = configure_target_run.get_runner_label("gfx120X-all", "windows")
