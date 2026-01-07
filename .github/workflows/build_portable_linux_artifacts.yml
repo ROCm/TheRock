@@ -156,11 +156,6 @@ jobs:
         run: |
           $THEROCK_DIR/build_tools/health_status.py
 
-      - name: Test build_tools
-        if: ${{ !inputs.external_source_checkout }}
-        run: |
-          python -m pytest build_tools/tests build_tools/github_actions/tests
-
       - name: DVC pull
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
         run: dvc pull
@@ -185,6 +180,11 @@ jobs:
           else
             echo "No patches found in $PATCHES_DIR or directory doesn't exist"
           fi
+
+      - name: Test build_tools
+        if: ${{ !inputs.external_source_checkout }}
+        run: |
+          python -m pytest build_tools/tests build_tools/github_actions/tests
 
       - name: Configure Projects
         env:
