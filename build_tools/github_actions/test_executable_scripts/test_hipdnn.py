@@ -12,10 +12,7 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 logging.basicConfig(level=logging.INFO)
 
 TESTS_TO_IGNORE = {
-    # Issue to fix: https://github.com/ROCm/TheRock/issues/2758
-    "gfx950-dcgpu": [
-        "hipdnn_backend_tests",
-    ],
+    # Issue to fix: https://github.com/ROCm/TheRock/issues/2798
     "gfx1151": ["hipdnn_backend_tests"],
 }
 
