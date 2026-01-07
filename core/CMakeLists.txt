@@ -115,7 +115,6 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   therock_cmake_subproject_glob_c_sources(rocminfo SUBDIRS .)
   therock_cmake_subproject_activate(rocminfo)
 
-  # Keep core-runtime artifact semantics tight: just ROCR-Runtime + rocminfo.
   therock_provide_artifact(core-runtime
     TARGET_NEUTRAL
     DESCRIPTOR artifact-core-runtime.toml
