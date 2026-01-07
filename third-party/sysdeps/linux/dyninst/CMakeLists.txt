@@ -1,10 +1,14 @@
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   # When included in TheRock, we download sources and set up the sub-project.
+  set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
+  set(_download_stamp "${_source_dir}/download.stamp")
+
   therock_subproject_fetch(therock-dyninst-sources
-    CMAKE_PROJECT
+    SOURCE_DIR "${_source_dir}"
     # Originally mirrored from: https://github.com/dyninst/dyninst/archive/refs/tags/v13.0.0.tar.gz
     URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/dyninst-13.0.0.tar.gz
     URL_HASH SHA256=1bc48d26478b677a6c090c25586a447507bd1b4cf88d369bd61820005ce1be39
+    TOUCH "${_download_stamp}"
   )
 
   therock_cmake_subproject_declare(therock-dyninst
@@ -20,6 +24,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       ${THEROCK_BUNDLED_ELFUTILS}
     INSTALL_RPATH_DIRS
       lib/rocm_sysdeps/lib
+    EXTRA_DEPENDS
+      "${_download_stamp}"
   )
   therock_cmake_subproject_provide_package(therock-dyninst Dyninst lib/rocm_sysdeps/lib/cmake)
   therock_cmake_subproject_activate(therock-dyninst)
