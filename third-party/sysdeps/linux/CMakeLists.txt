@@ -58,7 +58,7 @@ endif()
 if(THEROCK_ENABLE_SYSDEPS_DYNINST)
   add_subdirectory(dyninst)
   therock_provide_artifact(dyninst
-  DESCRIPTOR artifact_dyninst.toml
+  DESCRIPTOR artifact-dyninst.toml
   TARGET_NEUTRAL
   COMPONENTS
     dbg
