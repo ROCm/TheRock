@@ -72,8 +72,8 @@ See the following table for how each version is supported:
 
 See also:
 
-- The [Alternate branches and versions](#alternate-branches-and-versions) section
-  for detailed information about configurations
+- The [Alternative branches and versions](#alternative-branches-and-versions)
+  section for detailed information about configurations
 - The upstream PyTorch
   [release documentation](https://github.com/pytorch/pytorch/blob/main/RELEASE.md)
 - Workflow source code:
@@ -375,7 +375,7 @@ Note the sequence of commits and tags that were created:
 - `main` is checked out initially and is tagged `THEROCK_UPSTREAM_DIFFBASE`
 - hipify is run and its changes are tagged `THEROCK_HIPIFY_DIFFBASE`
 
-### Alternate branches and versions
+### Alternative branches and versions
 
 #### PyTorch main branches
 
