@@ -243,7 +243,7 @@ WheelNext must detect local GPUs via:
 
 ## Versioning Requirements
 
-For versioning requirements on packaging see the following documentation: [TheRock Versioning Requirements for Packages](https://github.com/ROCm/TheRock/pull/2116)
+For versioning requirements on packaging see the following documentation: [TheRock package versioning](/docs/packaging/versioning.md)
 
 ## Windows Packaging Requirements
 
