@@ -19,16 +19,12 @@ on:
         type: string
       test_runs_on:
         type: string
-      expect_failure:
-        type: boolean
       use_prebuilt_artifacts:
         type: string
       rocm_package_version:
         type: string
       test_type:
         type: string
-      sanity_check_only_for_family:
-        type: boolean
       container_image:
         type: string
 
@@ -76,7 +72,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        inputs.expect_failure == false
+        fromJSON(inputs.amdgpu_family_config).build.expect_failure == false
         &&
         fromJSON(inputs.amdgpu_family_config).test.run_tests == true
       }}
@@ -88,7 +84,33 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
-      sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      sanity_check_only_for_family: ${{ fromJSON(inputs.amdgpu_family_config).test.sanity_check_only_for_family == true }}
+
+  test_linux_benchmarks:
+    needs: [build_portable_linux_artifacts]
+    name: Test Linux Benchmarks
+    # Run benchmarks if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    # - Benchmark runner is available (benchmark_runs_on is set)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        fromJSON(inputs.amdgpu_family_config).build.expect_failure == false &&
+        fromJSON(inputs.amdgpu_family_config).test.benchmark_runs_on != ''
+      }}
+    uses: ./.github/workflows/test_benchmarks.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ fromJSON(inputs.amdgpu_family_config).amdgpu_family }}
+      test_runs_on: ${{ fromJSON(inputs.amdgpu_family_config).test.benchmark_runs_on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
 
   build_portable_linux_python_packages:
     needs: [build_portable_linux_artifacts]
@@ -104,7 +126,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        inputs.expect_failure == false
+        fromJSON(inputs.amdgpu_family_config).build.expect_failure == false
       }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:

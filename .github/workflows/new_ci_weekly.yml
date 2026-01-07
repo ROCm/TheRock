@@ -75,7 +75,7 @@ jobs:
       windows_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || github.event.inputs.windows_use_prebuilt_artifacts }}
       artifact_run_id: ${{ github.event_name == 'schedule' && '' || github.event.inputs.artifact_run_id }}
       # ghcr.io/rocm/therock_build_manylinux_x86_64:users-lpromber-DockerCmake4
-      container_image_linux: "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:60d4208c75dfe3025d0744c336729088774758fa06eea5cc622787ba86416425"
+      container_image_linux: "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:57b5cd3769d7a865500690258a530d3db6a277234ebf3379945de7bce3973301"
       # we always want to build and not use artifacts
       force_build: "true"
 
@@ -99,11 +99,9 @@ jobs:
       test_labels: ""
       artifact_run_id: ${{ inputs.artifact_run_id }}
       test_runs_on: ${{ matrix.linux_config.test.runs_on }}
-      expect_failure: ${{ matrix.linux_config.build.expect_failure }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
       rocm_package_version: "ADHOCBUILD"
       test_type: "smoke"
-      sanity_check_only_for_family: ${{ matrix.linux_config.test.sanity_check_only_for_family == true }}
       container_image: ${{ needs.setup_cmake4.outputs.container_image_linux }}
     permissions:
       contents: read
