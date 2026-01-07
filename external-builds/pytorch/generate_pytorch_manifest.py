@@ -54,23 +54,73 @@ def parse_wheel_name(filename: str) -> Dict[str, str]:
 def capture(cmd: List[str], cwd: Optional[Path] = None) -> str:
     try:
         return subprocess.check_output(
-            cmd, cwd=str(cwd) if cwd else None, stderr=subprocess.STDOUT, text=True
+            cmd,
+            cwd=str(cwd) if cwd else None,
+            stderr=subprocess.STDOUT,
+            text=True,
         ).strip()
-    except Exception:
+    except FileNotFoundError:
+        print(
+            f"  [WARN] Command not found: {cmd[0]} (skipping: {' '.join(cmd)})",
+            flush=True,
+        )
+        return ""
+    except subprocess.CalledProcessError as e:
+        output = (e.output or "").strip()
+        print(
+            f"  [WARN] Command failed ({e.returncode}): {' '.join(cmd)}"
+            + (f"\n    output: {output}" if output else ""),
+            flush=True,
+        )
+        return ""
+    except Exception as e:
+        print(
+            f"  [WARN] Unexpected error running {' '.join(cmd)}: "
+            f"{type(e).__name__}: {e}",
+            flush=True,
+        )
         return ""
 
 
 def git_head(dirpath: Optional[Path]) -> Optional[Dict[str, str]]:
     if not dirpath:
+        print("  [WARN] git_head: no directory provided (skipping)", flush=True)
         return None
+
+    dirpath = dirpath.resolve()
+
+    if not dirpath.exists():
+        print(
+            f"  [WARN] git_head: directory does not exist: {dirpath} (skipping)",
+            flush=True,
+        )
+        return None
+
     if not (dirpath / ".git").exists():
+        # Common for source tarballs or vendored trees
+        print(
+            f"  [WARN] git_head: not a git checkout (no .git): {dirpath} (skipping)",
+            flush=True,
+        )
         return None
+
     commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath) or None
     desc = capture(["git", "describe", "--always", "--dirty"], cwd=dirpath) or None
     remote = capture(["git", "remote", "get-url", "origin"], cwd=dirpath) or None
-    if not (commit or remote or desc):
+
+    if not (commit or desc or remote):
+        print(
+            f"  [WARN] git_head: unable to determine git metadata for {dirpath}",
+            flush=True,
+        )
         return None
-    return {"dir": str(dirpath), "commit": commit, "describe": desc, "remote": remote}
+
+    return {
+        "dir": str(dirpath),
+        "commit": commit,
+        "describe": desc,
+        "remote": remote,
+    }
 
 
 def main() -> None:
