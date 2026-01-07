@@ -122,7 +122,7 @@ The general sequence for updating an image is this:
 1. Build and test images locally
    (see [Testing and debugging](#testing-and-debugging))
 1. Build and test images on CI
-   1. Push the Dockerfile changes to a shared branch and build staging packages
+   1. Push the Dockerfile changes to a shared branch and build test packages
       (see [Automated image publishing](#automated-image-publishing))
 
    1. Edit sha256 pins across the project to use the staging packages, like so:
