@@ -14,8 +14,8 @@ Functional tests validate **correctness and behavior** by checking that outputs 
 
 ### Available Functional Tests
 
-| Test Script                | Library | Description                                    |
-| -------------------------- | ------- | ---------------------------------------------- |
+| Test Script                 | Library | Description                                    |
+| --------------------------- | ------- | ---------------------------------------------- |
 | `test_miopendriver_conv.py` | MIOpen  | Convolution forward/backward correctness tests |
 
 ### Running Locally
@@ -49,8 +49,8 @@ functional/
 
 Tests defined in `functional_matrix.py` for CI:
 
-| Test Name           | Library | Platform | Timeout | Artifacts Needed |
-| ------------------- | ------- | -------- | ------- | ---------------- |
+| Test Name            | Library | Platform | Timeout | Artifacts Needed   |
+| -------------------- | ------- | -------- | ------- | ------------------ |
 | `miopen_driver_conv` | MIOpen  | Linux    | 30 min  | `--miopen --tests` |
 
 ## How Functional Tests Work
@@ -90,6 +90,7 @@ Tests defined in `functional_matrix.py` for CI:
 Functional tests generate two tables:
 
 **Detailed Table:** One row per test case
+
 ```
 +--------------+--------------------+--------+
 | TestSuite    | TestCase           | Status |
@@ -100,6 +101,7 @@ Functional tests generate two tables:
 ```
 
 **Summary Table:** Overall statistics
+
 ```
 +-------------------+-------------------+--------+--------+---------+---------+-------------------+
 | Total TestSuites  | Total TestCases   | Passed | Failed | Errored | Skipped |   Final Result    |
@@ -134,11 +136,10 @@ class YourTest(FunctionalBase):
 
     def __init__(self):
         super().__init__(
-            test_name="yourtest_functional",
-            display_name="YourTest Functional Test"
+            test_name="yourtest_functional", display_name="YourTest Functional Test"
         )
         self.log_file = self.script_dir / "yourtest_functional.log"
-        
+
         # Load test configuration from JSON
         config = self.load_config("yourtest_functional.json")
         self.test_cases = config.get("test_cases", [])
@@ -146,7 +147,7 @@ class YourTest(FunctionalBase):
     def run_tests(self) -> None:
         """Run functional tests and save output to log file."""
         log.info(f"Running {self.display_name}")
-        
+
         with open(self.log_file, "w+") as f:
             for test_case in self.test_cases:
                 cmd = test_case["command"]
@@ -157,22 +158,21 @@ class YourTest(FunctionalBase):
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable, int]:
         """Parse log file and return (detailed_table, num_suites)."""
         log.info("Parsing Results")
-        
+
         detailed_table = PrettyTable()
         detailed_table.field_names = ["TestCase", "Status"]
-        
+
         test_results = []
-        
+
         # Parse log file for each test case
         # Use self.create_test_result() to create result dictionaries
-        
+
         return test_results, detailed_table, num_suites
 
 
 if __name__ == "__main__":
     run_functional_test_main(YourTestFunctionalTest())
 ```
-
 
 ### Step 2: Add to Functional Matrix
 
@@ -216,4 +216,3 @@ See [main test framework README](../README.md) for full CI architecture.
 - [Test Framework README](../README.md) - Main framework documentation
 - [Shared Utils](../utils/README.md) - Utility modules reference
 - [Benchmark Tests](../benchmark/README.md) - Performance regression tests
-

@@ -57,12 +57,12 @@ benchmark/
 
 Tests defined in `benchmark_matrix.py` for nightly CI:
 
-| Test Name         | Library   | Platform        | Timeout | Artifacts Needed       |
-| ----------------- | --------- | --------------- | ------- | ---------------------- |
-| `hipblaslt_bench` | hipBLASLt | Linux, Windows  | 60 min  | `--blas --tests`       |
-| `rocfft_bench`    | rocFFT    | Linux, Windows  | 60 min  | `--fft --rand --tests` |
-| `rocrand_bench`   | rocRAND   | Linux, Windows  | 60 min  | `--rand --tests`       |
-| `rocsolver_bench` | ROCsolver | Linux, Windows  | 60 min  | `--blas --tests`       |
+| Test Name         | Library   | Platform       | Timeout | Artifacts Needed       |
+| ----------------- | --------- | -------------- | ------- | ---------------------- |
+| `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | `--blas --tests`       |
+| `rocfft_bench`    | rocFFT    | Linux, Windows | 60 min  | `--fft --rand --tests` |
+| `rocrand_bench`   | rocRAND   | Linux, Windows | 60 min  | `--rand --tests`       |
+| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | `--blas --tests`       |
 
 **GPU Family Support:**
 
