@@ -750,6 +750,8 @@ def update_package_name(pkg_name, config: PackageConfig):
     Returns: Updated package name
     """
     print_function_name()
+
+    pkg_suffix = ""
     if config.versioned_pkg:
         # Split version passed to use only major and minor version for package name
         # Split by dot and take first two components
@@ -757,29 +759,28 @@ def update_package_name(pkg_name, config: PackageConfig):
         parts = config.rocm_version.split(".")
         if len(parts) < 2:
             raise ValueError(
-                f"Version string '{args.rocm_version}' does not have major.minor versions"
+                f"Version string '{config.rocm_version}' does not have major.minor versions"
             )
         major = re.match(r"^\d+", parts[0])
         minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
-    else:
-        pkg_suffix = ""
 
     if config.enable_rpath:
         pkg_suffix = f"-rpath{pkg_suffix}"
 
     pkg_info = get_package_info(pkg_name)
+    updated_pkgname = pkg_name
+    if config.pkg_type.lower() == "deb":
+        updated_pkgname = debian_replace_devel_name(pkg_name)
+
+    updated_pkgname += pkg_suffix
+
     if is_gfxarch_package(pkg_info):
         # Remove -dcgpu from gfx_arch
         gfx_arch = config.gfx_arch.lower().split("-", 1)[0]
-        pkg_name = pkg_name + pkg_suffix + "-" + gfx_arch
-    else:
-        pkg_name = pkg_name + pkg_suffix
+        updated_pkgname += "-" + gfx_arch
 
-    if config.pkg_type.lower() == "deb":
-        pkg_name = debian_replace_devel_name(pkg_name)
-
-    return pkg_name
+    return updated_pkgname
 
 
 def debian_replace_devel_name(pkg_name):
@@ -794,8 +795,10 @@ def debian_replace_devel_name(pkg_name):
     Returns: Updated package name
     """
     print_function_name()
-    # Only required for debian developement package
-    pkg_name = pkg_name.replace("-devel", "-dev")
+    # Required for debian developement package
+    suffix = "-devel"
+    if pkg_name.endswith(suffix):
+        pkg_name = pkg_name[: -len(suffix)] + "-dev"
 
     return pkg_name
 
