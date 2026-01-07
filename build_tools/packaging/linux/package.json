@@ -54,14 +54,14 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "glibc",
-      "libstdc++",
       "amdrocm-sysdeps",
       "amdrocm-runtime"
     ],
     "RPMRecommends": [
       "gcc",
       "gcc-c++",
+      "glibc",
+      "libstdc++",
       "devtoolset-7-gcc-c++"
     ],
     "DEBRecommends": [
@@ -122,14 +122,14 @@
     ],
     "RPMRequires": [
       "python3",
-      "glibc",
-      "libstdc++",
       "amdrocm-sysdeps",
       "amdrocm-llvm"
     ],
     "RPMRecommends": [
       "gcc",
       "gcc-c++",
+      "glibc",
+      "libstdc++",
       "devtoolset-7-gcc-c++"
     ],
     "DEBRecommends": [
@@ -1054,10 +1054,12 @@
     ],
     "RPMRequires": [
       "libgcc",
-      "libstdc++",
       "python3",
-      "glibc",
       "amdrocm-runtime"
+    ],
+    "RPMRecommends": [
+      "libstdc++",
+      "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "The ROCm-base package contains essential ROCm utilities",
@@ -1590,7 +1592,8 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi"
+      "amdrocm-smi",
+      "amdrocm-hipify"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -1604,7 +1607,8 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi"
+      "amdrocm-smi",
+      "amdrocm-hipify"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core metapackage",
