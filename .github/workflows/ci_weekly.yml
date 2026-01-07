@@ -8,7 +8,8 @@ on:
 
 
 jobs:
-  donothing:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Skipped"
+  call_new_weekly_ci:
+    uses: ./.github/workflows/new_ci_weekly.yml
+    secrets: inherit
+    with:
+      linux_amdgpu_families: "gfx94X-dcgpu"
