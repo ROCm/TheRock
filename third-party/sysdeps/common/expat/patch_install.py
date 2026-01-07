@@ -6,6 +6,34 @@ import subprocess
 import sys
 
 
+def relativize_pc_file(pc_file: Path) -> None:
+    """Make a .pc file relocatable by using pcfiledir-relative paths.
+
+    Replaces the absolute prefix= line with a pcfiledir-relative path,
+    then replaces all other occurrences of the absolute prefix with ${prefix}.
+    Assumes the .pc file is located at $PREFIX/lib/pkgconfig/.
+    """
+    content = pc_file.read_text()
+
+    # Find the original absolute prefix value.
+    original_prefix = None
+    for line in content.splitlines():
+        if line.startswith("prefix="):
+            original_prefix = line[len("prefix=") :]
+            break
+
+    if not original_prefix:
+        return
+
+    # Replace the prefix line with pcfiledir-relative path.
+    # .pc files are in $PREFIX/lib/pkgconfig, so go up 2 levels.
+    content = content.replace(f"prefix={original_prefix}", "prefix=${pcfiledir}/../..")
+    # Replace all other occurrences of the absolute path with ${prefix}.
+    # Use trailing / to avoid partial matches.
+    content = content.replace(f"{original_prefix}/", "${prefix}/")
+    pc_file.write_text(content)
+
+
 # Fetch an environment variable or exit if it is not found.
 def get_env_or_exit(var_name):
     value = os.environ.get(var_name)
@@ -59,6 +87,13 @@ if platform.system() == "Linux":
         except subprocess.CalledProcessError as e:
             print(f"Error: Failed to patch {lib_path.name} (Exit: {e.returncode})")
             sys.exit(e.returncode)
+
+    # Fix .pc files to use relocatable paths.
+    pkgconfig_dir = lib_dir / "pkgconfig"
+    if pkgconfig_dir.exists():
+        for pc_file in pkgconfig_dir.glob("*.pc"):
+            relativize_pc_file(pc_file)
+
 elif platform.system() == "Windows":
     # Do nothing for now.
     sys.exit(0)
