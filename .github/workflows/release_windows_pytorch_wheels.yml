@@ -97,11 +97,11 @@ jobs:
           - pytorch_git_ref: nightly
             pytorch_patchset: nightly
           # Python 3.14 is supported for PyTorch 2.9 (preview) and nightly (full)
-          - python_version: "3.14"
-            pytorch_git_ref: release/2.9
+          - pytorch_git_ref: release/2.9
+            python_version: "3.14"
             pytorch_patchset: rocm_2.9
-          - python_version: "3.14"
-            pytorch_git_ref: nightly
+          - pytorch_git_ref: nightly
+            python_version: "3.14"
             pytorch_patchset: nightly
 
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
