@@ -201,7 +201,7 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-file |  | hipFile, rocFile (future addition) |  |
 | amdrocm-rccl| | rccl |
 | amdrocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa, subset of libVA) |  |
-
+| amdrocm-rdc|  | ROCm Datacenter | |
 ## Python Packaging Requirements
 
 ### Standard Python packages
