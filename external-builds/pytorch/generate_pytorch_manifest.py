@@ -31,9 +31,7 @@ def parse_wheel_name(filename: str) -> Dict[str, str]:
     abi_tag = parts[-2]
     platform_tag = parts[-1]
 
-    # Optional build tag:
-    # - Exactly 5 parts → no build tag
-    # - 6+ parts → everything between version and python_tag
+    # Optional build tag: present when there are >5 dash-separated fields.
     build_tag = None
     if len(parts) > 5:
         build_tag = "-".join(parts[2:-3])
@@ -97,7 +95,6 @@ def git_head(dirpath: Optional[Path]) -> Optional[Dict[str, str]]:
         return None
 
     if not (dirpath / ".git").exists():
-        # Common for source tarballs or vendored trees
         print(
             f"  [WARN] git_head: not a git checkout (no .git): {dirpath} (skipping)",
             flush=True,
@@ -123,88 +120,95 @@ def git_head(dirpath: Optional[Path]) -> Optional[Dict[str, str]]:
     }
 
 
+def _manifest_filename(
+    python_version: Optional[str],
+    pytorch_git_ref: Optional[str],
+) -> str:
+    py_part = f"py{python_version}" if python_version else "py"
+
+    # Match workflow semantics:
+    # - nightly: no digits
+    # - release/X.Y: encode as release-X.Y
+    if pytorch_git_ref == "nightly":
+        track = "nightly"
+    elif pytorch_git_ref and pytorch_git_ref.startswith("release/"):
+        track = pytorch_git_ref.replace("/", "-", 1)  # release/2.8 -> release-2.8
+    else:
+        # Fallback for unexpected values (keeps names stable and readable)
+        track = (pytorch_git_ref or "unknown").replace("/", "-")
+
+    return f"therock-manifest_torch_{py_part}_{track}.json"
+
+
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--output-dir", type=Path, required=True, help="Wheel output dir")
+    ap = argparse.ArgumentParser(
+        description="Generate a manifest JSON for built PyTorch wheels."
+    )
+    ap.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Directory containing built wheels (searched recursively).",
+    )
     ap.add_argument(
         "--manifest-dir",
         type=Path,
         default=None,
-        help="Directory to write manifest into (default: <output-dir>/manifests)",
+        help="Output directory for the manifest (default: <output-dir>/manifests).",
     )
-
     ap.add_argument(
         "--artifact-group",
         default="pytorch-wheels",
-        help="Manifest artifact_group label",
+        help="Manifest artifact_group value (default: pytorch-wheels).",
     )
-
     ap.add_argument(
         "--rocm-sdk-version",
         default=None,
-        help=(
-            "ROCm SDK version used during the build (e.g. '7.10.0a20251124'). "
-            "This reflects the ROCm runtime/toolchain the wheels were built against."
-        ),
+        help="ROCm SDK version used for the build (e.g. 7.11.0a20251124).",
     )
-
     ap.add_argument(
         "--pytorch-rocm-arch",
         default=None,
-        help=(
-            "ROCm GPU architecture(s) used for the PyTorch build "
-            "(typically the value passed via PYTORCH_ROCM_ARCH, e.g. 'gfx94X')."
-        ),
+        help="PYTORCH_ROCM_ARCH used for the build (e.g. gfx942 or gfx94X).",
     )
-
     ap.add_argument(
         "--version-suffix",
         default=None,
-        help=(
-            "Version suffix appended to built Python package versions "
-            "(e.g. '+rocm7.10.0a20251124'). This is applied by the build system "
-            "and recorded here for traceability; it is not parsed from wheel filenames."
-        ),
+        help="Version suffix applied to built packages (e.g. +rocm7.11.0a20251124).",
     )
-
+    ap.add_argument(
+        "--pytorch-git-ref",
+        default=None,
+        help="PyTorch ref used for the build (e.g. release/2.8 or nightly).",
+    )
+    ap.add_argument(
+        "--python-version",
+        default=None,
+        help="Python version used for the build (e.g. 3.11, 3.12).",
+    )
     ap.add_argument(
         "--pytorch-dir",
         type=Path,
         default=None,
-        help=(
-            "Path to the PyTorch source checkout used for the build. "
-            "If provided, the manifest records the git commit and remote for provenance."
-        ),
+        help="Path to the PyTorch source checkout (records git metadata if present).",
     )
-
     ap.add_argument(
         "--pytorch-audio-dir",
         type=Path,
         default=None,
-        help=(
-            "Path to the torchaudio source checkout used for the build. "
-            "Recorded in the manifest for source-level traceability."
-        ),
+        help="Path to the torchaudio source checkout (records git metadata if present).",
     )
-
     ap.add_argument(
         "--pytorch-vision-dir",
         type=Path,
         default=None,
-        help=(
-            "Path to the torchvision source checkout used for the build. "
-            "Recorded in the manifest for source-level traceability."
-        ),
+        help="Path to the torchvision source checkout (records git metadata if present).",
     )
-
     ap.add_argument(
         "--triton-dir",
         type=Path,
         default=None,
-        help=(
-            "Path to the Triton source checkout used for the build (if applicable). "
-            "When provided, git metadata is captured in the manifest."
-        ),
+        help="Path to the triton source checkout (records git metadata if present).",
     )
     args = ap.parse_args()
 
@@ -216,7 +220,6 @@ def main() -> None:
     arch = platform.machine().lower()
     platform_id = f"{sys_platform}-{arch}"
 
-    # GH Actions metadata is optional.
     is_github = os.getenv("GITHUB_ACTIONS") == "true"
 
     run_id = os.getenv("GITHUB_RUN_ID") if is_github else None
@@ -270,6 +273,8 @@ def main() -> None:
         "rocm_sdk_version": args.rocm_sdk_version,
         "pytorch_rocm_arch": args.pytorch_rocm_arch,
         "version_suffix": args.version_suffix,
+        "pytorch_git_ref": args.pytorch_git_ref,
+        "python_version": args.python_version,
         "therock": {
             "repo": therock_url,
             "commit": therock_sha,
@@ -278,7 +283,12 @@ def main() -> None:
         "sources": sources,
         "artifacts": artifacts,
     }
-    out_path = manifest_dir / "therock_torch_manifest.json"
+
+    filename = _manifest_filename(
+        python_version=args.python_version,
+        pytorch_git_ref=args.pytorch_git_ref,
+    )
+    out_path = manifest_dir / filename
     out_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

@@ -524,6 +524,10 @@ def do_build(args: argparse.Namespace):
             pytorch_rocm_arch,
             "--version-suffix",
             args.version_suffix,
+            "--python-version",
+            ".".join(platform.python_version().split(".")[:2]),
+            "--pytorch-git-ref",
+            args.pytorch_git_ref,
         ]
         if pytorch_dir:
             cmd += ["--pytorch-dir", pytorch_dir]

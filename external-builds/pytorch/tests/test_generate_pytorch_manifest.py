@@ -176,16 +176,26 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
         "gfx94X",
         "--version-suffix",
         "+rocm7.10.0a20251120",
+        "--python-version",
+        "3.12",
+        "--pytorch-git-ref",
+        "nightly",
     ]
 
     _run_main_with_args(m, argv)
 
     manifest_dir = out_dir / "manifests"
-    file = [manifest_dir / "therock_torch_manifest.json"]
-    assert file[0].exists()
-    assert len(file) == 1
 
-    data = json.loads(file[0].read_text(encoding="utf-8"))
+    # Ensure exactly one manifest file was created.
+    manifests = list(manifest_dir.glob("*.json"))
+    assert len(manifests) == 1, f"Expected exactly one manifest, found: {manifests}"
+
+    # Verify naming convention for nightly.
+    manifest_name = "therock-manifest_torch_py3.12_nightly.json"
+    manifest_path = manifest_dir / manifest_name
+    assert manifest_path.exists(), f"Expected manifest not found: {manifest_path}"
+
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert data["project"] == "TheRock"
     assert data["component"] == "pytorch"
     assert data["artifact_group"] == "pytorch-wheels"
@@ -200,3 +210,29 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
     labels = data["artifacts"][0]["labels"]
     assert labels["distribution"] == "torch"
     assert labels["version"] == "2.7.0"
+
+
+def test_manifest_filename_release_28(tmp_path: Path, gha_env):
+    m = _load_manifest_module()
+
+    out_dir = tmp_path / "dist"
+    out_dir.mkdir(parents=True)
+
+    (out_dir / "torch-2.8.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(b"x")
+
+    _run_main_with_args(
+        m,
+        [
+            "--output-dir",
+            str(out_dir),
+            "--python-version",
+            "3.12",
+            "--pytorch-git-ref",
+            "release/2.8",
+        ],
+    )
+
+    manifest_path = (
+        out_dir / "manifests" / "therock-manifest_torch_py3.12_release-2.8.json"
+    )
+    assert manifest_path.exists(), f"Missing manifest: {manifest_path}"
