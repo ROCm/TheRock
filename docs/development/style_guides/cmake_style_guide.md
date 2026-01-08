@@ -1,13 +1,15 @@
 # CMake Style Guide
 
-This guide documents CMake standards and best practices for TheRock and related ROCm build infrastructure projects.
+## General recommendations
 
 > [!TIP]
 > The "Mastering CMake" book hosted at
 > https://cmake.org/cmake/help/book/mastering-cmake/index.html is a good
 > resource.
 
-## CMake dependencies
+## Style guidelines
+
+### CMake dependencies
 
 See [../dependencies.md](../dependencies.md) for guidance on how to add dependencies
 between subprojects and third party sources.

@@ -1,6 +1,6 @@
 # Python Style Guide
 
-This guide documents Python coding standards and best practices for TheRock and related ROCm build infrastructure projects.
+## General recommendations
 
 We generally follow the [PEP 8 style guide](https://peps.python.org/pep-0008/)
 using the [_Black_ formatter](https://github.com/psf/black) (run automatically
@@ -8,204 +8,15 @@ as a [pre-commit hook](README.md#formatting-using-pre-commit-hooks)).
 
 The guidelines here extend PEP 8 for our projects.
 
-## Core Principles
+### Core principles
 
-### Fail-Fast Behavior
+- This guide reflects lessons learned from multiple production incidents
+- When in doubt, fail fast and loud
+- False positives (spurious errors) are better than false negatives (silent corruption)
 
-**Always fail immediately on errors. Never silently continue or produce incomplete results.**
+## Style guidelines
 
-Benefits:
-
-- Catches problems early before they cascade
-- Makes debugging easier by failing at the source of the problem
-- Prevents incomplete or corrupted artifacts
-- Makes build failures explicit and actionable
-
-✅ **Preferred:**
-
-```python
-if not path.exists():
-    raise FileNotFoundError(
-        f"Path does not exist: {path}\n"
-        f"This indicates a corrupted or incomplete artifact"
-    )
-
-# Let exceptions propagate - if we can't process, we must fail
-process_file(path)
-```
-
-❌ **Avoid:**
-
-```python
-if not path.exists():
-    print(f"Warning: Path does not exist: {path}")
-    continue  # Silently produces incomplete output
-
-try:
-    process_file(path)
-except Exception as e:
-    print(f"Warning: {e}")
-    # Continues with incomplete data
-```
-
-Key points:
-
-- If data is missing, corrupted, or unreadable → raise an exception
-- Don't catch exceptions unless you can meaningfully handle them
-- "Warnings" that indicate data problems should be errors
-- Incomplete artifacts are worse than failed builds
-
-### Use Dataclasses, Not Tuples
-
-**For non-trivial data with multiple fields, use dataclasses instead of tuples.**
-
-Benefits:
-
-- Self-documenting: Field names make code clearer
-- IDE-friendly: Autocomplete and type checking work
-- Refactoring-safe: Adding fields doesn't break positional unpacking
-- Less error-prone: Can't accidentally swap fields of the same type
-
-✅ **Preferred:**
-
-```python
-@dataclass
-class KpackInfo:
-    """Information about a created kpack file."""
-    kpack_path: Path
-    size: int
-    kernel_count: int
-
-def create_kpack_files(...) -> dict[str, KpackInfo]:
-    """Returns: Dict mapping arch to KpackInfo"""
-    return {"gfx1100": KpackInfo(kpack_path=path, size=12345, kernel_count=42)}
-```
-
-❌ **Avoid:**
-
-```python
-def create_kpack_files(...) -> dict[str, tuple[Path, int, int]]:
-    """Returns: Dict mapping arch to (kpack_path, size, kernel_count)"""
-    return {"gfx1100": (path, 12345, 42)}  # What's what?
-```
-
-When tuples are OK:
-
-- Simple pairs where meaning is obvious: `(x, y)`, `(min, max)`
-- Unpacking from standard library functions: `os.path.split()`
-- Single-use internal return values that are immediately unpacked
-
-### Type Hints
-
-**Always use specific type hints. Never use `Any` except in rare generic code.**
-
-**Use modern type hint syntax (Python 3.10+). We're on Python 3.13+.**
-
-Benefits:
-
-- Self-documenting: Function signatures clearly show expected types
-- Editor support: IDEs provide better autocomplete and error detection
-- Static analysis: Tools like `mypy` can catch type errors before runtime
-- Refactoring safety: Easier to refactor with confidence
-
-✅ **Preferred:**
-
-```python
-from rocm_kpack.database_handlers import DatabaseHandler
-
-
-def process(handlers: list[DatabaseHandler]) -> dict[str, KpackInfo]:
-    pass
-
-
-def get_value() -> str | None:
-    pass
-```
-
-❌ **Avoid:**
-
-```python
-from typing import Any, List, Dict, Optional
-
-
-def process(handlers: List[Any]) -> Dict[str, Any]:
-    pass
-
-
-def get_value() -> Optional[str]:
-    pass
-```
-
-Type hint best practices:
-
-- Use built-in generics: `list[T]`, `dict[K, V]`, `set[T]`, `tuple[T, ...]`
-- Use `T | None` instead of `Optional[T]`
-- Use `X | Y` instead of `Union[X, Y]`
-- Import the actual types you need (not from `typing` for basic containers)
-- Use specific return types (not `tuple`, use `tuple[Path, int]`)
-- For dict values with structure, define a dataclass
-
-#### Extract Complex Type Signatures
-
-**If a type signature is complex or repeated, extract it into a named type.**
-
-When to extract:
-
-- Type appears in multiple signatures → Use NamedTuple or TypeAlias
-- Tuple has 3+ fields → Use NamedTuple or dataclass
-- Type signature is hard to read at a glance → Extract it
-- You find yourself documenting what tuple fields mean → Use NamedTuple
-
-What to use:
-
-- **NamedTuple**: Immutable, lightweight, for simple data containers
-- **dataclass**: When you need methods, mutability, or inheritance
-- **TypeAlias**: For complex generic types that are reused
-
-✅ **Preferred:**
-
-```python
-class KernelInput(NamedTuple):
-    """Input data for preparing a kernel for packing.
-
-    Attributes:
-        relative_path: Path relative to archive root (e.g., "kernels/my_kernel")
-        gfx_arch: GPU architecture (e.g., "gfx1100")
-        hsaco_data: Raw HSACO binary data
-        metadata: Optional metadata dict to store in TOC
-    """
-
-    relative_path: str
-    gfx_arch: str
-    hsaco_data: bytes
-    metadata: dict[str, object] | None
-
-
-def parallel_prepare_kernels(
-    archive: PackedKernelArchive,
-    kernels: list[KernelInput],  # Self-documenting!
-    executor: Executor | None = None,
-) -> list[PreparedKernel]:
-    """Prepare multiple kernels in parallel..."""
-    for k in kernels:
-        # k.relative_path, k.gfx_arch, etc. - clear and IDE-friendly
-        ...
-```
-
-❌ **Avoid:**
-
-```python
-def parallel_prepare_kernels(
-    archive: PackedKernelArchive,
-    kernels: list[tuple[str, str, bytes, dict[str, object] | None]],
-    executor: Executor | None = None,
-) -> list[PreparedKernel]:
-    """What is this tuple again? Have to read the docstring..."""
-    for relative_path, gfx_arch, hsaco_data, metadata in kernels:
-        ...
-```
-
-### Error Handling and Distinction
+### Error handling and distinction
 
 **Distinguish between different error conditions. Don't treat all errors the same.**
 
@@ -263,7 +74,7 @@ Key points:
 - Return False only for legitimate "not found" cases
 - Use `from e` to preserve exception chain
 
-### No Timeouts on Basic Binutils
+### No timeouts on basic binutils
 
 **NEVER add timeouts to basic binutils operations (readelf, objcopy, etc.).**
 
@@ -392,7 +203,9 @@ Other optimizations:
 
 **Put all imports at the top of the file. Avoid inline imports except for rare special cases.**
 
-**Do NOT use `from __future__ import annotations`.** It will be many years before we can rely on this as a default and we'd rather write code in a compatible by default way.
+**Do NOT use `from __future__ import annotations`.** It will be many years
+before we can rely on this as a default and we'd rather write code in a
+compatible by default way.
 
 Benefits:
 
@@ -564,8 +377,6 @@ Key points:
 - Use relative paths or derive from `__file__` when appropriate
 - If a specific temp location is needed, make it configurable via environment variable
 
-## Style Guidelines
-
 ### Use `pathlib` for filesystem paths
 
 Use [`pathlib.Path`](https://docs.python.org/3/library/pathlib.html) for
@@ -615,7 +426,7 @@ if os.path.exists(os.path.join(base_dir, "build", "artifacts")):
     files = os.listdir(os.path.join(base_dir, "build", "artifacts"))
 ```
 
-## Don't make assumptions about the current working directory
+### Don't make assumptions about the current working directory
 
 Scripts should be runnable from the repository root, their script subdirectory,
 and other locations. They should not assume any particular current working
@@ -655,7 +466,7 @@ config_file = Path("build_tools/config.json")
 data_file = Path("../data/artifacts.tar.gz")
 ```
 
-## Use `argparse` for CLI flags
+### Use `argparse` for CLI flags
 
 Use [`argparse`](https://docs.python.org/3/library/argparse.html) for
 command-line argument parsing with clear help text and type conversion.
@@ -718,7 +529,7 @@ run_id = sys.argv[1]  # String, not validated
 output_dir = sys.argv[2]
 ```
 
-## Add type hints liberally
+### Type hints
 
 Add type hints (see [`typing`](https://docs.python.org/3/library/typing.html))
 to function signatures to improve code clarity and enable static analysis.
@@ -730,55 +541,111 @@ Benefits:
 - **Static analysis:** Tools like `mypy` can catch type errors before runtime
 - **Refactoring safety:** Easier to refactor with confidence
 
+**Use modern type hint syntax (Python 3.10+). We're on Python 3.13+.**
+
+Type hint best practices:
+
+- Use built-in generics: `list[T]`, `dict[K, V]`, `set[T]`, `tuple[T, ...]`
+- Use `T | None` instead of `Optional[T]`
+- Use `X | Y` instead of `Union[X, Y]`
+- Import the actual types you need (not from `typing` for basic containers)
+- Use specific return types (not `tuple`, use `tuple[Path, int]`)
+- For dict values with structure, define a dataclass
+
+#### Add specific type hints liberally
+
+**Use specific type hints. Never use `Any` except in rare generic code.**
+
 ✅ **Preferred:**
 
 ```python
-from pathlib import Path
-
-
 def fetch_artifacts(
     run_id: int,
     output_dir: Path,
     include_patterns: list[str],
     exclude_patterns: list[str] | None = None,
 ) -> list[Path]:
-    """Fetch artifacts matching the given patterns.
+    pass
 
-    Args:
-        run_id: GitHub Actions run ID
-        output_dir: Directory to save artifacts
-        include_patterns: Regex patterns to include
-        exclude_patterns: Regex patterns to exclude
 
-    Returns:
-        List of paths to downloaded artifacts
-    """
-    if exclude_patterns is None:
-        exclude_patterns = []
-
-    artifacts: list[Path] = []
-    for pattern in include_patterns:
-        # ... fetch logic
-        artifacts.append(result)
-    return artifacts
+def process(handlers: list[DatabaseHandler]) -> dict[str, KpackInfo]:
+    pass
 ```
 
 ❌ **Avoid:**
 
 ```python
+# What types are these? What does this return?
 def fetch_artifacts(run_id, output_dir, include_patterns, exclude_patterns=None):
-    # What types are these? What does this return?
-    if exclude_patterns is None:
-        exclude_patterns = []
+    pass
 
-    artifacts = []
-    for pattern in include_patterns:
-        # ... fetch logic
-        artifacts.append(result)
-    return artifacts
+
+# Avoid overly generic type units like 'Any'
+def process(handlers: List[Any]) -> Dict[str, Any]:
+    pass
 ```
 
-## Use `__main__` guard
+#### Extract complex type signatures
+
+**If a type signature is complex or repeated, extract it into a named type.**
+
+When to extract:
+
+- Type appears in multiple signatures → Use NamedTuple or TypeAlias
+- Tuple has 3+ fields → Use NamedTuple or dataclass
+- Type signature is hard to read at a glance → Extract it
+- You find yourself documenting what tuple fields mean → Use NamedTuple
+
+What to use:
+
+- **NamedTuple**: Immutable, lightweight, for simple data containers
+- **dataclass**: When you need methods, mutability, or inheritance
+- **TypeAlias**: For complex generic types that are reused
+
+✅ **Preferred:**
+
+```python
+class KernelInput(NamedTuple):
+    """Input data for preparing a kernel for packing.
+
+    Attributes:
+        relative_path: Path relative to archive root (e.g., "kernels/my_kernel")
+        gfx_arch: GPU architecture (e.g., "gfx1100")
+        hsaco_data: Raw HSACO binary data
+        metadata: Optional metadata dict to store in TOC
+    """
+
+    relative_path: str
+    gfx_arch: str
+    hsaco_data: bytes
+    metadata: dict[str, object] | None
+
+
+def parallel_prepare_kernels(
+    archive: PackedKernelArchive,
+    kernels: list[KernelInput],  # Self-documenting!
+    executor: Executor | None = None,
+) -> list[PreparedKernel]:
+    """Prepare multiple kernels in parallel..."""
+    for k in kernels:
+        # k.relative_path, k.gfx_arch, etc. - clear and IDE-friendly
+        ...
+```
+
+❌ **Avoid:**
+
+```python
+def parallel_prepare_kernels(
+    archive: PackedKernelArchive,
+    kernels: list[tuple[str, str, bytes, dict[str, object] | None]],
+    executor: Executor | None = None,
+) -> list[PreparedKernel]:
+    """What is this tuple again? Have to read the docstring..."""
+    for relative_path, gfx_arch, hsaco_data, metadata in kernels:
+        ...
+```
+
+### Use `__main__` guard
 
 Use [`__main__`](https://docs.python.org/3/library/__main__.html) to limit what
 code runs when a file is imported. Typically, Python files should define
@@ -843,7 +710,7 @@ result = fetch_artifacts(args.run_id)
 print(f"Downloaded {len(result)} artifacts")
 ```
 
-## Use named arguments for complicated function signatures
+### Use named arguments for complicated function signatures
 
 Using positional arguments for functions that accept many arguments is error
 prone. Use keyword arguments to make function calls explicit and
@@ -900,7 +767,7 @@ result = build_artifacts(
 process_files(input_dir, output_dir, True, False, True)
 ```
 
-## Code Review Checklist
+### Code Review Checklist
 
 Before submitting code, verify:
 
@@ -926,7 +793,7 @@ Before submitting code, verify:
 - [ ] Scripts have `__main__` guard
 - [ ] Complex function calls use named arguments
 
-## Testing Standards
+### Testing Standards
 
 **Tests should verify fail-fast behavior:**
 
@@ -948,9 +815,9 @@ def test_fails_on_missing_file(self, tmp_path):
 - Mock only external dependencies (network, expensive tools)
 - Integration tests should exercise the full path
 
-## Common Patterns
+## Common patterns
 
-### Pattern: Reading and Validating a File
+### Pattern: reading and validating a file
 
 ```python
 def read_config(path: Path) -> ConfigData:
@@ -973,7 +840,7 @@ def read_config(path: Path) -> ConfigData:
     return ConfigData(**data)
 ```
 
-### Pattern: Running Subprocess with Proper Error Handling
+### Pattern: running subprocess with proper error handling
 
 ```python
 def run_binutil(tool: Path, args: list[str], input_file: Path) -> str:
@@ -995,8 +862,87 @@ def run_binutil(tool: Path, args: list[str], input_file: Path) -> str:
         raise RuntimeError(f"Tool not found: {tool}") from e
 ```
 
-## Notes
+### Fail-fast behavior
 
-- This guide reflects lessons learned from production incidents where silent failures caused data corruption
-- When in doubt, fail fast and loud
-- False positives (spurious errors) are better than false negatives (silent corruption)
+**Always fail immediately on errors. Never silently continue or produce incomplete results.**
+
+Benefits:
+
+- Catches problems early before they cascade
+- Makes debugging easier by failing at the source of the problem
+- Prevents incomplete or corrupted artifacts
+- Makes build failures explicit and actionable
+
+✅ **Preferred:**
+
+```python
+if not path.exists():
+    raise FileNotFoundError(
+        f"Path does not exist: {path}\n"
+        f"This indicates a corrupted or incomplete artifact"
+    )
+
+# Let exceptions propagate - if we can't process, we must fail
+process_file(path)
+```
+
+❌ **Avoid:**
+
+```python
+if not path.exists():
+    print(f"Warning: Path does not exist: {path}")
+    continue  # Silently produces incomplete output
+
+try:
+    process_file(path)
+except Exception as e:
+    print(f"Warning: {e}")
+    # Continues with incomplete data
+```
+
+Key points:
+
+- If data is missing, corrupted, or unreadable → raise an exception
+- Don't catch exceptions unless you can meaningfully handle them
+- "Warnings" that indicate data problems should be errors
+- Incomplete artifacts are worse than failed builds
+
+### Use Dataclasses, not Tuples
+
+**For non-trivial data with multiple fields, use dataclasses instead of tuples.**
+
+Benefits:
+
+- Self-documenting: Field names make code clearer
+- IDE-friendly: Autocomplete and type checking work
+- Refactoring-safe: Adding fields doesn't break positional unpacking
+- Less error-prone: Can't accidentally swap fields of the same type
+
+✅ **Preferred:**
+
+```python
+@dataclass
+class KpackInfo:
+    """Information about a created kpack file."""
+    kpack_path: Path
+    size: int
+    kernel_count: int
+
+def create_kpack_files(...) -> dict[str, KpackInfo]:
+    """Returns: Dict mapping arch to KpackInfo"""
+    return {"gfx1100": KpackInfo(kpack_path=path, size=12345, kernel_count=42)}
+```
+
+❌ **Avoid:**
+
+```python
+def create_kpack_files(...) -> dict[str, tuple[Path, int, int]]:
+    """Returns: Dict mapping arch to (kpack_path, size, kernel_count)"""
+    return {"gfx1100": (path, 12345, 42)}  # What's what?
+```
+
+When tuples are OK:
+
+- Simple pairs where meaning is obvious: `(x, y)`, `(min, max)`
+- Unpacking from standard library functions: `os.path.split()`
+- Single-use internal return values that are immediately unpacked

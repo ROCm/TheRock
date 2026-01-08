@@ -1,8 +1,10 @@
 # GitHub Actions Style Guide
 
-This guide documents GitHub Actions workflow standards and best practices for TheRock and related ROCm build infrastructure projects.
+## General recommendations
 
-## Pin action `uses:` versions to commit SHAs
+## Style guidelines
+
+### Pin action `uses:` versions to commit SHAs
 
 Pin actions in
 [`jobs.<job_id>.steps[*].uses`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsuses)
@@ -36,7 +38,7 @@ Benefits:
 - uses: actions/setup-python@v6.0.0  # Tags can be moved (even for releases)
 ```
 
-## Pin action `runs-on:` labels to specific versions
+### Pin action `runs-on:` labels to specific versions
 
 Pin GitHub-hosted runner labels in
 [`jobs.<job_id>.runs-on`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idruns-on)
@@ -67,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest  # This could change outside of our control
 ```
 
-## Prefer Python scripts over inline Bash
+### Prefer Python scripts over inline Bash
 
 Where possible, put workflow logic in Python scripts.
 
@@ -113,7 +115,7 @@ Benefits:
     done
 ```
 
-## Use safe defaults for inputs
+### Use safe defaults for inputs
 
 Workflow inputs must have safe default values that work in common scenarios.
 
@@ -166,7 +168,7 @@ on:
         default: nightly  # Unsafe: publishes to production
 ```
 
-## Separate build and test stages
+### Separate build and test stages
 
 Use CPU runners to build from source and pass artifacts to test runners.
 

@@ -1,6 +1,6 @@
 # Bash Style Guide
 
-This guide documents Bash scripting standards and best practices for TheRock and related ROCm build infrastructure projects.
+## General recommendations
 
 > [!WARNING]
 > Bash is **strongly discouraged** for nontrivial usage in .yml GitHub Actions
@@ -17,7 +17,25 @@ Those sections are particularly noteworthy:
 - https://google.github.io/styleguide/shellguide.html#variable-expansion
 - https://google.github.io/styleguide/shellguide.html#quoting
 
-## Setting bash modes
+### When to use Bash
+
+Use Bash for:
+
+- Simple automation scripts with few conditionals
+- Wrapping existing command-line tools
+- Environment setup and configuration
+- Quick one-off tasks
+
+Avoid Bash for:
+
+- Complex logic with loops and conditionals
+- Data processing and transformation
+- Anything that needs to be tested thoroughly
+- Cross-platform scripts (prefer Python)
+
+## Style guidelines
+
+### Setting bash modes
 
 Scripts should generally set modes like
 
@@ -42,19 +60,3 @@ Explanation of each mode:
 
 See https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425 for
 an explanation of what each of these options does.
-
-## When to use Bash
-
-Use Bash for:
-
-- Simple automation scripts with few conditionals
-- Wrapping existing command-line tools
-- Environment setup and configuration
-- Quick one-off tasks
-
-Avoid Bash for:
-
-- Complex logic with loops and conditionals
-- Data processing and transformation
-- Anything that needs to be tested thoroughly
-- Cross-platform scripts (prefer Python)
