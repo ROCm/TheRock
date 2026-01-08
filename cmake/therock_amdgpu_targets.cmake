@@ -48,14 +48,17 @@ therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    rocprofiler-compute # TODO: Add GitHub Issue link here
 )
 therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rocprofiler-compute # TODO: Add GitHub Issue link here
 )
 therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rocprofiler-compute # TODO: Add GitHub Issue link here
 )
 
 # gfx94X family
