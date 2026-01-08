@@ -1089,6 +1089,11 @@ def main(argv: list[str]):
         default=True,
         help="Write a manifest JSON alongside built wheels (default True)",
     )
+    build_p.add_argument(
+        "--pytorch-git-ref",
+        default=None,
+        help="PyTorch git ref for manifest naming (e.g. release/2.8, nightly)",
+    )
     build_p.set_defaults(func=do_build)
 
     args = p.parse_args(argv)
