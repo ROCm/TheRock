@@ -62,7 +62,7 @@ jobs:
     # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
     runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-u2404-hx176-cpu-rocm' || 'azure-linux-scale-rocm' }}
     continue-on-error: ${{ inputs.expect_failure }}
-    timeout-minutes: 1080 # 18 hour timeout
+    timeout-minutes: 720 # 12 hour timeout
     permissions:
       id-token: write
     container:
