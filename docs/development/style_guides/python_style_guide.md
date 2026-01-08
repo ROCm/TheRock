@@ -517,7 +517,7 @@ When to split:
 - 100+ line methods → extract helper methods
 - Duplicate code → extract to shared function
 
-### No Duplicate Code
+### No duplicate code
 
 **Extract common code to shared functions.**
 
@@ -788,7 +788,7 @@ result = build_artifacts(
 process_files(input_dir, output_dir, True, False, True)
 ```
 
-#### No Magic Numbers
+#### No magic numbers
 
 **Don't use unexplained magic numbers, especially for estimates.**
 
@@ -890,7 +890,7 @@ Other optimizations:
 - Cache expensive computations when called repeatedly
 - Use generators for large datasets
 
-### Testing Standards
+### Testing standards
 
 **Tests should verify fail-fast behavior:**
 
