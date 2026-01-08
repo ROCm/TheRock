@@ -1580,6 +1580,7 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-base",
+      "amdrocm-sysdeps",
       "amdrocm-llvm",
       "amdrocm-runtime",
       "amdrocm-blas",
@@ -1594,6 +1595,7 @@
     ],
     "RPMRequires": [
       "amdrocm-base",
+      "amdrocm-sysdeps",
       "amdrocm-llvm",
       "amdrocm-runtime",
       "amdrocm-blas",
@@ -1640,7 +1642,6 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
-    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
