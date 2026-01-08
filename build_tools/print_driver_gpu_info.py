@@ -21,6 +21,9 @@ import subprocess
 import sys
 from typing import List, Optional
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+unsupported_amdsmi_families = ["gfx1151"]
+
 
 def log(*args, **kwargs):
     print(*args, **kwargs)
@@ -103,12 +106,14 @@ def run_sanity(os_name: str) -> None:
         )
     else:
         # Linux: amd-smi static + rocminfo
-        run_command_with_search(
-            label="amd-smi static",
-            command="amd-smi",
-            args=["static"],
-            extra_command_search_paths=[bin_dir],
-        )
+        # TODO(#2789): Remove conditional once amdsmi supports gfx1151
+        if AMDGPU_FAMILIES not in unsupported_amdsmi_families:
+            run_command_with_search(
+                label="amd-smi static",
+                command="amd-smi",
+                args=["static"],
+                extra_command_search_paths=[bin_dir],
+            )
         run_command_with_search(
             label="rocminfo",
             command="rocminfo",
